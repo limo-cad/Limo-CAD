@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MeshExportScope } from '../engine/types';
 import { useTranslation } from '../i18n';
 
 let pending: ((scope: MeshExportScope | null) => void) | null = null;
+let previousFocus: HTMLElement | null = null;
 const changeEvent = 'nbcad:mesh-export-options';
 
 /** Both File menus use this choice before opening the native save dialog. */
 export function requestMeshExportScope(): Promise<MeshExportScope | null> {
   if (pending) return Promise.resolve(null);
+  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   return new Promise((resolve) => {
     pending = resolve;
     window.dispatchEvent(new Event(changeEvent));
@@ -25,6 +27,7 @@ export function MeshExportDialog() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(() => pending !== null);
   const [scope, setScope] = useState<MeshExportScope>('assembly');
+  const dialog = useRef<HTMLElement>(null);
   useEffect(() => {
     const sync = () => {
       setOpen(pending !== null);
@@ -35,19 +38,32 @@ export function MeshExportDialog() {
   }, []);
   useEffect(() => {
     if (!open) return undefined;
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopPropagation();
-      finish(null);
+    const restoreFocus = previousFocus;
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        finish(null);
+      } else if (event.key === 'Tab') {
+        const controls = [...(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)') ?? [])];
+        if (!controls.length) return;
+        const index = controls.indexOf(document.activeElement as HTMLElement);
+        const next = index < 0 ? 0 : (index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length;
+        event.preventDefault();
+        event.stopPropagation();
+        controls[next].focus();
+      }
     };
-    window.addEventListener('keydown', escape, true);
-    return () => window.removeEventListener('keydown', escape, true);
+    window.addEventListener('keydown', keydown, true);
+    return () => {
+      window.removeEventListener('keydown', keydown, true);
+      if (restoreFocus?.isConnected) restoreFocus.focus({ preventScroll: true });
+    };
   }, [open]);
   if (!open) return null;
   return (
     <div data-native-viewport-dim="0.45" className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-5">
-      <section role="dialog" aria-modal="true" aria-labelledby="mesh-export-title" className="feature-dialog w-[450px] max-w-full bg-panel text-ink">
+      <section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="mesh-export-title" data-testid="mesh-export-options" className="feature-dialog w-[450px] max-w-full bg-panel text-ink">
         <header className="flex items-center justify-between border-b border-edge bg-header px-4 py-3">
           <h2 id="mesh-export-title" className="text-sm font-semibold">{t('meshExport.title')}</h2>
           <button type="button" aria-label={t('meshExport.close')} onClick={() => finish(null)}>×</button>
