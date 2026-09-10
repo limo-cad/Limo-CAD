@@ -59,7 +59,7 @@ use crate::dto::{
 };
 use crate::entity::EntityId;
 use crate::project::{
-    decode_project, ProjectCountersV2, ProjectDocumentV2, ProjectModelV5, ProjectPreferencesV2,
+    decode_project, ProjectCountersV2, ProjectDocumentV2, ProjectModelV6, ProjectPreferencesV2,
     PROJECT_FORMAT, PROJECT_SCHEMA_VERSION,
 };
 use crate::session::{
@@ -186,7 +186,7 @@ impl SketchManager {
                 "finish the active sketch before saving the project".to_string(),
             ));
         }
-        let model = ProjectModelV5 {
+        let model = ProjectModelV6 {
             format: PROJECT_FORMAT.to_string(),
             schema_version: PROJECT_SCHEMA_VERSION,
             document: ProjectDocumentV2 {

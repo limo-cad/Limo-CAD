@@ -71,3 +71,5 @@ Physical inspection is still needed for print fits, load/creep qualification and
 the purchased generator's measured mounting dimensions. A successful drawing
 export or exact geometric replay does not qualify a printed part's allowable
 load or establish a GD&T tolerance capability for a printer.
+
+Project schema 6 preserves these structural guards. Schema 1–5 files still load, but missing guards stay unverified: loading or resaving cannot establish which historical edge an ordinal meant. Explicitly reassociate those annotations before exporting the affected sheet. Older schema-5 readers reject new files instead of silently deleting the guards.

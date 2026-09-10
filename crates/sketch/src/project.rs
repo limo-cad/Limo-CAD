@@ -25,10 +25,11 @@ pub const LEGACY_PROJECT_FORMAT: &str = "tfcad-project";
 // Reader boundaries protect model semantics: schema 3 introduced reference
 // dimensions; schema 4 introduced gear coupling; schema 5 protects placed
 // drawing references from readers that would silently treat them as definitions.
-pub const PROJECT_SCHEMA_VERSION: u32 = 5;
+// Schema 6 protects structural drawing guards from readers that would drop them.
+pub const PROJECT_SCHEMA_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct ProjectModelV5 {
+pub(crate) struct ProjectModelV6 {
     pub format: String,
     pub schema_version: u32,
     pub document: ProjectDocumentV2,
@@ -114,7 +115,7 @@ pub(crate) struct ProjectPreferencesV2 {
     pub grid_snap: bool,
 }
 
-pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV5, String> {
+pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV6, String> {
     let mut header: serde_json::Value = serde_json::from_str(json)
         .map_err(|error| format!("model.json is not valid JSON: {error}"))?;
     let format = header
@@ -137,7 +138,7 @@ pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV5, String> {
             migrate_v2_to_v3(&mut header);
         }
         2 => migrate_v2_to_v3(&mut header),
-        3 | 4 => {}
+        3 | 4 | 5 => {}
         version if version == u64::from(PROJECT_SCHEMA_VERSION) => {}
         _ => {
             return Err(format!(
@@ -148,9 +149,11 @@ pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV5, String> {
 
     // New relation fields default to empty for schema 1-3 projects; drawing
     // occurrence selection defaults to definition space for schema 1-4.
+    // Schema 1-5 drawing guards remain absent: loading cannot establish historical
+    // association. Users must explicitly reassociate unverified references.
     // Raising the version prevents old readers from saving away model intent.
     header["schema_version"] = serde_json::Value::from(PROJECT_SCHEMA_VERSION);
-    let model: ProjectModelV5 = serde_json::from_value(header)
+    let model: ProjectModelV6 = serde_json::from_value(header)
         .map_err(|error| format!("invalid project model: {error}"))?;
     validate_project(&model)?;
     Ok(model)
@@ -199,7 +202,7 @@ fn migrate_v2_to_v3(model: &mut serde_json::Value) {
     model["schema_version"] = serde_json::Value::from(3);
 }
 
-pub(crate) fn validate_project(model: &ProjectModelV5) -> Result<(), String> {
+pub(crate) fn validate_project(model: &ProjectModelV6) -> Result<(), String> {
     if model.format != PROJECT_FORMAT || model.schema_version != PROJECT_SCHEMA_VERSION {
         return Err("project header does not match the supported schema".to_string());
     }
@@ -562,7 +565,7 @@ pub(crate) fn validate_project(model: &ProjectModelV5) -> Result<(), String> {
 }
 
 fn validate_feature_entry(
-    model: &ProjectModelV5,
+    model: &ProjectModelV6,
     feature_id: FeatureId,
     name: &str,
     kind: FeatureKind,
