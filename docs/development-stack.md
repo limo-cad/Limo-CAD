@@ -23,14 +23,15 @@ is the current source of truth for its order, approvals and CI. Its layers are:
 10. PR105: successful-history reuse, patterned joins and mesh-export isolation.
 11. PR106: exact authored coordinates, external-thread commands and script preflight.
 12. PR107: protected drawing references, exact inspection reuse and source markers.
-13. PR108: printable definition exports with atomic document ownership.
+13. PR108: printable definition exports, rejected-Open recovery and atomic file ownership.
 14. PR109: remove unused component placeholders for consumed construction bodies.
 15. PR110: the D-screw vise, fit coupon, print layout and manufacturing drawings.
 16. PR111: the vertical-axis turbine, four fit coupons and assembly/part drawings.
 17. PR112: shared live material presets, retained replay output and camera completion.
 18. PR113: one grouped control for retained construction-reference visibility.
 19. PR114: truthful final playback counts and stable completed-run feedback.
-20. PR115: export recovery after a project Open is proven to have changed nothing.
+20. PR115: script and presentation ownership across whole-document replacement.
+21. PR116: validation evidence and remaining release work.
 
 Each PR's diff is against the layer below it. GitHub applies main's review rules
 to every layer and can merge a reviewed prefix from the bottom. A draft layer
@@ -46,14 +47,18 @@ No approvals or repository protection rules are bypassed by using a stack.
 On September 10, GitHub rejected the asynchronous PR95–98 prefix merge for a
 qualifying write-access approval even though all four exact-head Jack reviews
 were approved and his admin permission was confirmed. No merge or branch rewrite
-occurred; the precise server-side cause is unconfirmed. The evidence is recorded
-with issue #14. PR108's later rejected-Open finding is addressed by the focused
-PR115 follow-up; its change-request review is retained for re-review. Do not
-silently dismiss it or rewrite already approved descendants to hide that history.
+occurred in that attempt; the precise server-side cause is unconfirmed. The
+evidence is recorded with issue #14. The subsequent review correction moves the
+approved rejected-Open fix from PR115 into PR108, so the requested change is fixed
+in its owning layer. PR115 now contains the separately reproduced script/document
+ownership corrections. Review history is retained, and changed heads need fresh
+approval.
 
-PR88 remains an independent diagnostics change against main. When it lands,
-carry its session-generation logic into the extracted MCP library while updating
-this stack; do not restore an older entire entrypoint over those fixes. The old
+PR88 merged into main as `39eb862`. The stack is rebased onto that revision, with
+its session-generation logic retained in the extracted MCP library and its thin
+entrypoint preserved. A native regression combines deferred script snapshots with
+observational session status: reading status cannot advance the loaded fence or
+reconstruct the model; a failed refresh cannot stamp the new fence. The old
 PR89 examples are superseded by the native recipes and Rust regressions in the
 collection, with their old branch/history preserved.
 
