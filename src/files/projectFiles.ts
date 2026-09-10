@@ -34,6 +34,7 @@ import {
 import { requestUnsavedDecision } from './unsavedChanges';
 import { requestMeshExportScope } from '../components/MeshExportDialog';
 import { runMeshExport } from './meshExportFlow';
+import { projectTransitions } from './projectTransitions';
 
 const PROJECT_TYPE: SaveType = {
   description: 'noBS CAD Project',
@@ -254,38 +255,47 @@ export async function openProject(options?: { filePath: string; discardChanges?:
   const opened = await chooseOpenFile(PROJECT_TYPE, options?.filePath);
   if (!opened) return false;
   const { modelJson } = readNbcadArchive(opened.bytes);
-  const engine = await getEngine();
-  const update = await engine.loadProjectModel(modelJson);
-  const [finishedSketches, datumPlanes, bodyAppearances, drawingDocument, assemblyDocument, assemblySolution, projectVisibility] = await Promise.all([
-    engine.finishedSketches(),
-    engine.datumPlaneDefinitions(),
-    engine.bodyAppearances(),
-    engine.drawingDocument(),
-    engine.assemblyDocument(),
-    engine.assemblySolution(),
-    engine.projectVisibility(),
-  ]);
-  // A legacy project is readable, but the next Save must choose a new
-  // `.nbcad` destination instead of silently overwriting the old container.
-  const reusableTarget = opened.name.toLowerCase().endsWith(NBCAD_EXTENSION)
-    ? opened.writableTarget
-    : null;
-  useAppStore
-    .getState()
-    .loadProjectState(
-      update,
-      finishedSketches,
-      datumPlanes,
-      opened.name,
-      bodyAppearances,
-      drawingDocument,
-      assemblyDocument,
-      projectVisibility,
-      assemblySolution,
-    );
-  await recordActiveProjectOpen(modelJson, reusableTarget);
-  if (!hasUnsavedProjects()) clearProjectRecovery();
-  return true;
+  // Native replacement precedes the store update below. Keep ownership held
+  // throughout both so another export cannot capture B with A's UI selection.
+  const releaseTransition = projectTransitions.begin();
+  let published = false;
+  try {
+    const engine = await getEngine();
+    const update = await engine.loadProjectModel(modelJson);
+    const [finishedSketches, datumPlanes, bodyAppearances, drawingDocument, assemblyDocument, assemblySolution, projectVisibility] = await Promise.all([
+      engine.finishedSketches(),
+      engine.datumPlaneDefinitions(),
+      engine.bodyAppearances(),
+      engine.drawingDocument(),
+      engine.assemblyDocument(),
+      engine.assemblySolution(),
+      engine.projectVisibility(),
+    ]);
+    // A legacy project is readable, but the next Save must choose a new
+    // `.nbcad` destination instead of silently overwriting the old container.
+    const reusableTarget = opened.name.toLowerCase().endsWith(NBCAD_EXTENSION)
+      ? opened.writableTarget
+      : null;
+    useAppStore
+      .getState()
+      .loadProjectState(
+        update,
+        finishedSketches,
+        datumPlanes,
+        opened.name,
+        bodyAppearances,
+        drawingDocument,
+        assemblyDocument,
+        projectVisibility,
+        assemblySolution,
+      );
+    published = true;
+    await recordActiveProjectOpen(modelJson, reusableTarget);
+    if (!hasUnsavedProjects()) clearProjectRecovery();
+    return true;
+  } finally {
+    releaseTransition(true, published);
+  }
 }
 
 export async function exportStep(selectedOnly: boolean): Promise<boolean> {
@@ -418,11 +428,13 @@ export function export3mf(selectedOnly: boolean): Promise<boolean> {
 }
 
 async function exportMesh(format: 'stl' | '3mf', selectedOnly: boolean): Promise<boolean> {
+  const transition = projectTransitions.capture();
   const state = useAppStore.getState();
   const bodyIds = meshExportBodyIds(selectedOnly);
-  const assertSelectionOwner = () => {
+  const assertSelectionOwner = async () => {
+    await projectTransitions.assertCurrent(transition);
     const current = useAppStore.getState();
-    if (current.activeProjectTabId !== state.activeProjectTabId || current.document !== state.document
+    if (current.solidBusy || current.activeProjectTabId !== state.activeProjectTabId || current.document !== state.document
       || current.solidScene !== state.solidScene || current.assemblyDocument !== state.assemblyDocument
       || current.bodyAppearances !== state.bodyAppearances) {
       throw new Error('The document changed while choosing mesh export options. Start the export again.');

@@ -22,6 +22,7 @@ import { SerialPlayback, presentOperation, presentation, wakePlayback } from './
 import { getSessionCamera } from './components/viewport/cameraApi';
 import { captureSessionSnapshot, synchronizeSnapshotVisibility } from './sessionSnapshot';
 import type { SolidUpdateDto } from './engine/types';
+import { projectTransitions } from './files/projectTransitions';
 import {
   useAppStore,
   type AppMode,
@@ -183,10 +184,14 @@ async function applyInboxNow(): Promise<void> {
   // inboxApplying also suppresses a second engine_revision bump if any store
   // subscription still notes mutations: native apply already advanced it.
   inboxApplying = true;
+  const releaseTransition = projectTransitions.begin();
+  let changed = true; // An uncertain native failure must invalidate captures.
+  let published = false;
   try {
     const drawingBefore=useAppStore.getState().drawingDocument;
     const drawingProject=currentHistoryProjectKey();
     const result = await invoke<InboxApplyResult>('mcp_session_bridge_apply_inbox');
+    changed = Boolean(result?.applied);
     if (result?.dead_lettered) {
       console.warn('[sessionBridge] inbox op dead-lettered; queue unblocked', result);
       // Keep polling so the next sequence can apply on a subsequent tick.
@@ -202,6 +207,7 @@ async function applyInboxNow(): Promise<void> {
         // Targeted / live refresh with dirty:true — never loadDocument (clears dirty).
         await useAppStore.getState().refreshAfterInboxApply(result.name);
       }
+      published = true;
       if(result.name?.startsWith('drawing_')&&result.name!=='drawing_select_sheet') {
         recordDrawingHistory(drawingProject,drawingBefore,useAppStore.getState().drawingDocument);
       }
@@ -223,6 +229,7 @@ async function applyInboxNow(): Promise<void> {
   } catch (error) {
     console.debug('[sessionBridge] inbox apply failed', error);
   } finally {
+    releaseTransition(changed, published);
     inboxApplying = false;
   }
 }

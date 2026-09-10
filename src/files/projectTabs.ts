@@ -26,6 +26,7 @@ import {
   type ProjectTabSummary,
 } from '../store/appStore';
 import type { SaveTarget } from './fileIO';
+import { projectTransitions } from './projectTransitions';
 
 interface ProjectTabRuntime {
   modelJson: string;
@@ -362,11 +363,16 @@ async function withProjectTransition(
 ): Promise<boolean> {
   const state = useAppStore.getState();
   if (state.solidBusy || state.historyEdit) return false;
+  const releaseTransition = projectTransitions.begin();
+  let published = false;
   state.setSolidBusy(true);
   try {
-    return await operation();
+    const result = await operation();
+    published = true;
+    return result;
   } finally {
     useAppStore.getState().setSolidBusy(false);
+    releaseTransition(true, published);
   }
 }
 
