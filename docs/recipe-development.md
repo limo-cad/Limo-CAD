@@ -23,14 +23,17 @@ and how to keep working from the current capability tip.
   sketches, reusable parts, connected assembly mates and geometric manufacturing
   checks. It remains a design candidate; full editable drafting, selected-occurrence
   editing, hardware/material selection and physical fabrication evidence remain.
-- **Printable windmill with optional generator:** the next manufacturing target.
-  Its [design brief](flagship-examples.md#printable-windmill) is committed, but a
+  Accepted at the current milestone; active example work now moves to the other two.
+- **Printable vertical-axis turbine with integrated generator:** the next manufacturing target.
+  Its [design brief](flagship-examples.md#printable-vertical-axis-turbine) is committed, but a
   runnable source has not yet been built. The recipe must retain printer-envelope
   and fit inputs, rotor motion, shaft/bearing retention and an accessible removable
   motor mount. Physical output and load claims require measured evidence.
-- **Small screw vise:** the proposed third flagship, with a committed brief and
-  no runnable source yet. It should demonstrate guided travel, a retained lead
-  screw and replaceable jaws, with purchased hardware and fit choices explicit.
+- **Functional screw vise:** the selected third flagship, with a committed brief
+  and no runnable source yet. It should demonstrate guided travel, a retained
+  printable lead screw, replaceable jaws and visible force/pressure calculations.
+  FDM with minimal supports and assembly is primary; CNC/molding are related
+  process variants. See the [engineering inputs](flagship-engineering.md).
 
 The windmill and vise are not placeholder catalog items. Add them when actual
 native sketches, features, joints and checks construct a useful design. Comprehensive

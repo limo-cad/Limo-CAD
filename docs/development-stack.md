@@ -47,8 +47,9 @@ Do not change protection rules to get a stack merged.
 
 ## Recipes are the learning and demonstration source
 
-The selected reference targets are the garden bench, a printable windmill with
-an optional motor/generator, and a small screw vise. Their construction sources,
+The selected reference targets are the garden bench, a printable vertical-axis
+turbine with an integrated motor/generator, and a functional screw vise. Their
+construction sources,
 editing checks, editable drawings and teaching notes belong together. See
 [recipe development](recipe-development.md) for actual readiness and the next
 work; a design brief is not a runnable catalog entry.

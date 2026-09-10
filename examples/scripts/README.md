@@ -43,8 +43,9 @@ is already blank. The script refuses to construct over an existing model.
 See [the native script format](../../docs/native-scripts.md). Each `.nbcad.jsonc` source
 replays construction; the generated `.nbcad` project retains the editable result.
 
-The three flagship targets are the bench, printable windmill/generator and small
-screw vise. Only the bench currently has a complete construction recipe. The
+The three flagship targets are the bench, printable vertical-axis turbine with
+integrated generator and functional FDM-first screw vise. Only the bench currently
+has a complete construction recipe. The
 windmill and vise remain [committed design briefs](../../docs/flagship-examples.md)
 until their real native recipes and checks are implemented. They are deliberately
 absent from the runnable catalog. No flagship yet has a complete approved drawing

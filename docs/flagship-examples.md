@@ -1,10 +1,17 @@
 # Flagship parametric examples
 
 These are development targets, not released or fabrication-qualified designs.
-The three examples are a printable windmill with an optional motor used as a
-generator, a timber garden bench, and a small screw vise. The vise is the
-proposed third example: it adds linear motion, screw/shaft fits and replaceable
-jaws to the rotating windmill and static timber assembly.
+The three examples are a printable vertical-axis wind turbine with an integrated
+motor used as a generator, a timber garden bench, and a functional screw vise.
+The vise adds screw-driven linear motion, load calculations and replaceable wear
+surfaces to the rotating turbine and static timber assembly.
+
+The bench is accepted at its current development milestone; it is not finished
+or fabrication-qualified. The active example work now moves to the turbine and
+vise. The user's 10 September decisions, proposed starting designs, material
+implications and calculation assumptions are recorded in
+[the engineering brief](flagship-engineering.md). Keep those decisions with the
+recipes and distinguish them from untested engineering proposals.
 
 The bench construction is executable today. The windmill and vise are committed
 design briefs, with no runnable recipe yet. Their next recipe PRs belong above
@@ -47,17 +54,25 @@ while the editing decision is pending; do not silently choose its product behavi
 - Iterate before release. Separate automated geometric checks from physical
   fabrication and functional evidence; neither substitutes for the other.
 
-## Printable windmill
+## Printable vertical-axis turbine
 
-This is a functional small windmill, not a decorative mesh. Break it into
+This is a functional near-ground science and development experiment with an
+integrated low-cost generator for supervised children's electrical demonstrations.
+It should teach tolerancing, additive manufacturing, rotating mates, parametric
+relations and mathematics. Electrical integration initially concerns the generator
+motor; additional controllers, storage and other electrical hardware are outside
+the first iteration. Break it into
 printable, replaceable parts with constrained rotor motion, shaft retention,
 bearing seats, accessible assembly fasteners and a removable generator mount.
 Printed parts plus explicitly documented purchased bearings, shaft and hardware
 are allowed; do not assume that every wear surface must be printed.
 
-Printer model, usable X/Y/Z envelope, filament, nozzle, intended airflow/location,
-rotor size, motor/generator, shaft/bearings and useful electrical load are open
-inputs. There is no single standard printer bed. Keep envelope and fit allowances
+The user's printer is a Bambu Lab X2D. Its main-nozzle envelope is
+256 x 256 x 260 mm; the shared dual-nozzle area is 235.5 x 256 x 256 mm.
+Aim provisionally for individual parts within 200 mm per axis, retaining margin,
+to cover more printers; this is not a universal compatibility guarantee.
+Exact filament grade/nozzle profile, qualified fits and loaded output remain
+unmeasured. Keep envelope and fit allowances
 as named design inputs and verify each oriented part fits with printing margins.
 Use fit coupons to select running, locating and bearing-seat allowances for the
 actual printer/material before committing a complete print. Distinguish radial
@@ -75,18 +90,32 @@ explains why mating parts need allowance and material/process effects matter.
 explains motor speed/voltage selection and generator loading; it is not a motor
 purchase recommendation.
 
-## Bench and vise
+## Bench and functional vise
 
 The existing garden bench provides native editable stock, repeated parts and
 construction checks (see garden-bench.md). Its full drawing package and
 component-context editing remain incomplete. Keep construction simple and
 accessible; retain material/fastener qualification as explicit open inputs.
 
-The proposed small screw vise should demonstrate a fixed jaw, guided moving jaw,
-retained lead screw, handle and replaceable jaw pads. Choose the physical size,
-materials and purchased thread hardware before manufacturing release. Verify
-travel limits, retention, assembly access and fit; do not claim a clamping load
-without physical validation.
+The vise should work as a tool and explain force, pressure, motion and durability.
+FDM is the primary manufacturing process, with minimal assembly and preferably
+no generated supports. Favor useful print-in-place and self-supporting geometry
+where it retains good load paths, fits and serviceability. A fixed jaw, guided
+moving jaw, retained printed lead screw/handle and replaceable wear surfaces form
+the starting architecture; a purchased metal screw is not silently substituted
+for the requested printable screw.
+
+The user suggested a semicircular shaft to print flat. Clarify whether this means
+one half-round rotating screw or two lengthwise halves joined into a round screw.
+These have different thread engagement, stiffness and joint requirements. A flat
+underside alone does not establish that the complete thread prints unsupported.
+Validate a short thread and guide-fit coupon before a full-length screw/frame.
+
+CNC and molded versions should preserve functional dimensions and interfaces,
+with process-specific variants for cutter access, draft, shrinkage and undercuts.
+Do not represent changing a material label as process qualification. Show the
+calculation inputs and uncertainty with the model; verify travel, retention,
+clamping force, creep and wear before publishing a working load or service life.
 
 ## Smaller capability demonstrations
 

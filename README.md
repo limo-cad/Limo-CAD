@@ -134,7 +134,8 @@ Use `--session SESSION_ID --new --present --speed 2` with a matching desktop/MCP
 build to watch construction in a new design tab while retaining the current one.
 The generated `.nbcad` remains an editable parametric project.
 
-The bench, printable windmill with optional generator, and small screw vise are
+The bench, printable vertical-axis turbine with integrated generator, and
+functional screw vise are
 the [three reference targets](docs/recipe-development.md). The bench is runnable;
 the windmill and vise currently have design briefs. Full flagship drafting and
 the learning interface are still in development. See the
