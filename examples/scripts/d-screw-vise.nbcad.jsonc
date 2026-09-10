@@ -2713,50 +2713,14 @@
     {
       "chapter": "Jaw: support and retention",
       "duration_ms": 1800,
-      "note": "The jaw rides on the flat base between two rails. A round chamber accepts the rotating screw head. A separate U keeper drops into a transverse slot behind the head; the main forward thrust is carried by the broad front shoulder."
-    },
-    {
-      "call": {
-        "arguments": {
-          "distance": 8.4,
-          "name": "xy datum at 8.4 mm",
-          "reference": {
-            "plane": "xy",
-            "type": "origin_plane"
-          }
-        },
-        "group": "solid/reference",
-        "operation": "construction_plane_offset"
-      },
-      "id": "datum_4"
-    },
-    {
-      "let": {
-        "datum_4_plane": {
-          "datum_id": {
-            "$select": {
-              "from": {
-                "$ref": "datum_4",
-                "pointer": ""
-              },
-              "path": "/planes",
-              "pointer": "/datum_id",
-              "take": "one",
-              "where": {
-                "/name": "xy datum at 8.4 mm"
-              }
-            }
-          },
-          "type": "datum_plane"
-        }
-      }
+      "note": "The jaw's Z8 bottom seats directly on the flat base between two rails. Keep side and roof running clearances in the guide channels without suspending the jaw on its screw. A round chamber accepts the rotating screw head. A separate U keeper drops into a transverse slot behind the head; the main forward thrust is carried by the broad front shoulder."
     },
     {
       "call": {
         "arguments": {
           "name": "Moving jaw / 60 mm gripping face",
           "plane": {
-            "$ref": "datum_4_plane",
+            "$ref": "datum_0_plane",
             "pointer": ""
           }
         },
@@ -2840,7 +2804,7 @@
       "call": {
         "arguments": {
           "extent": {
-            "distance": 43.6,
+            "distance": 44.0,
             "type": "distance"
           },
           "flip": false,
@@ -2896,8 +2860,8 @@
     {
       "call": {
         "arguments": {
-          "distance": 8.3,
-          "name": "xy datum at 8.3 mm",
+          "distance": 7.9,
+          "name": "xy datum at 7.9 mm",
           "reference": {
             "plane": "xy",
             "type": "origin_plane"
@@ -2906,22 +2870,22 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_5"
+      "id": "datum_4"
     },
     {
       "let": {
-        "datum_5_plane": {
+        "datum_4_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_5",
+                "$ref": "datum_4",
                 "pointer": ""
               },
               "path": "/planes",
               "pointer": "/datum_id",
               "take": "one",
               "where": {
-                "/name": "xy datum at 8.3 mm"
+                "/name": "xy datum at 7.9 mm"
               }
             }
           },
@@ -2934,7 +2898,7 @@
         "arguments": {
           "name": "Jaw guide left / running clearance",
           "plane": {
-            "$ref": "datum_5_plane",
+            "$ref": "datum_4_plane",
             "pointer": ""
           }
         },
@@ -3018,7 +2982,7 @@
       "call": {
         "arguments": {
           "extent": {
-            "distance": 4.1,
+            "distance": 4.5,
             "type": "distance"
           },
           "flip": false,
@@ -3045,7 +3009,7 @@
         "arguments": {
           "name": "Jaw guide right / running clearance",
           "plane": {
-            "$ref": "datum_5_plane",
+            "$ref": "datum_4_plane",
             "pointer": ""
           }
         },
@@ -3129,7 +3093,7 @@
       "call": {
         "arguments": {
           "extent": {
-            "distance": 4.1,
+            "distance": 4.5,
             "type": "distance"
           },
           "flip": false,
@@ -3164,15 +3128,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_6"
+      "id": "datum_5"
     },
     {
       "let": {
-        "datum_6_plane": {
+        "datum_5_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_6",
+                "$ref": "datum_5",
                 "pointer": ""
               },
               "path": "/planes",
@@ -3192,7 +3156,7 @@
         "arguments": {
           "name": "Jaw / circular thrust chamber",
           "plane": {
-            "$ref": "datum_6_plane",
+            "$ref": "datum_5_plane",
             "pointer": ""
           }
         },
@@ -3330,15 +3294,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_7"
+      "id": "datum_6"
     },
     {
       "let": {
-        "datum_7_plane": {
+        "datum_6_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_7",
+                "$ref": "datum_6",
                 "pointer": ""
               },
               "path": "/planes",
@@ -3358,7 +3322,7 @@
         "arguments": {
           "name": "Jaw / transverse keeper slot",
           "plane": {
-            "$ref": "datum_7_plane",
+            "$ref": "datum_6_plane",
             "pointer": ""
           }
         },
@@ -3469,7 +3433,7 @@
         "arguments": {
           "name": "Jaw / bottom-loaded M3 nut pocket",
           "plane": {
-            "$ref": "datum_4_plane",
+            "$ref": "datum_0_plane",
             "pointer": ""
           }
         },
@@ -3744,7 +3708,7 @@
       "call": {
         "arguments": {
           "extent": {
-            "distance": 3.4000000000000004,
+            "distance": 3.8000000000000007,
             "type": "distance"
           },
           "flip": false,
@@ -3779,15 +3743,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_8"
+      "id": "datum_7"
     },
     {
       "let": {
-        "datum_8_plane": {
+        "datum_7_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_8",
+                "$ref": "datum_7",
                 "pointer": ""
               },
               "path": "/planes",
@@ -3807,7 +3771,7 @@
         "arguments": {
           "name": "Jaw / retainer screw clearance",
           "plane": {
-            "$ref": "datum_8_plane",
+            "$ref": "datum_7_plane",
             "pointer": ""
           }
         },
@@ -3945,15 +3909,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_9"
+      "id": "datum_8"
     },
     {
       "let": {
-        "datum_9_plane": {
+        "datum_8_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_9",
+                "$ref": "datum_8",
                 "pointer": ""
               },
               "path": "/planes",
@@ -3973,7 +3937,7 @@
         "arguments": {
           "name": "Jaw / retainer head access",
           "plane": {
-            "$ref": "datum_9_plane",
+            "$ref": "datum_8_plane",
             "pointer": ""
           }
         },
@@ -4125,15 +4089,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_10"
+      "id": "datum_9"
     },
     {
       "let": {
-        "datum_10_plane": {
+        "datum_9_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_10",
+                "$ref": "datum_9",
                 "pointer": ""
               },
               "path": "/planes",
@@ -4153,7 +4117,7 @@
         "arguments": {
           "name": "Nut cartridge / removable wear part",
           "plane": {
-            "$ref": "datum_10_plane",
+            "$ref": "datum_9_plane",
             "pointer": ""
           }
         },
@@ -4303,15 +4267,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_11"
+      "id": "datum_10"
     },
     {
       "let": {
-        "datum_11_plane": {
+        "datum_10_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_11",
+                "$ref": "datum_10",
                 "pointer": ""
               },
               "path": "/planes",
@@ -4331,7 +4295,7 @@
         "arguments": {
           "name": "Nut cartridge / positive capture cross-hole",
           "plane": {
-            "$ref": "datum_11_plane",
+            "$ref": "datum_10_plane",
             "pointer": ""
           }
         },
@@ -4514,15 +4478,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_12"
+      "id": "datum_11"
     },
     {
       "let": {
-        "datum_12_plane": {
+        "datum_11_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_12",
+                "$ref": "datum_11",
                 "pointer": ""
               },
               "path": "/planes",
@@ -4542,7 +4506,7 @@
         "arguments": {
           "name": "Screw / nominal 20 mm cylinder",
           "plane": {
-            "$ref": "datum_12_plane",
+            "$ref": "datum_11_plane",
             "pointer": ""
           }
         },
@@ -4711,15 +4675,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_13"
+      "id": "datum_12"
     },
     {
       "let": {
-        "datum_13_plane": {
+        "datum_12_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_13",
+                "$ref": "datum_12",
                 "pointer": ""
               },
               "path": "/planes",
@@ -4739,7 +4703,7 @@
         "arguments": {
           "name": "Screw handle / integral flat paddle",
           "plane": {
-            "$ref": "datum_13_plane",
+            "$ref": "datum_12_plane",
             "pointer": ""
           }
         },
@@ -4858,15 +4822,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_14"
+      "id": "datum_13"
     },
     {
       "let": {
-        "datum_14_plane": {
+        "datum_13_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_14",
+                "$ref": "datum_13",
                 "pointer": ""
               },
               "path": "/planes",
@@ -4886,7 +4850,7 @@
         "arguments": {
           "name": "Screw / rear thrust collar",
           "plane": {
-            "$ref": "datum_14_plane",
+            "$ref": "datum_13_plane",
             "pointer": ""
           }
         },
@@ -5024,15 +4988,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_15"
+      "id": "datum_14"
     },
     {
       "let": {
-        "datum_15_plane": {
+        "datum_14_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_15",
+                "$ref": "datum_14",
                 "pointer": ""
               },
               "path": "/planes",
@@ -5052,7 +5016,7 @@
         "arguments": {
           "name": "Screw / retention neck",
           "plane": {
-            "$ref": "datum_15_plane",
+            "$ref": "datum_14_plane",
             "pointer": ""
           }
         },
@@ -5190,15 +5154,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_16"
+      "id": "datum_15"
     },
     {
       "let": {
-        "datum_16_plane": {
+        "datum_15_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_16",
+                "$ref": "datum_15",
                 "pointer": ""
               },
               "path": "/planes",
@@ -5218,7 +5182,7 @@
         "arguments": {
           "name": "Screw / captured thrust head",
           "plane": {
-            "$ref": "datum_16_plane",
+            "$ref": "datum_15_plane",
             "pointer": ""
           }
         },
@@ -5362,7 +5326,7 @@
         "arguments": {
           "name": "Keeper / transverse plate",
           "plane": {
-            "$ref": "datum_7_plane",
+            "$ref": "datum_6_plane",
             "pointer": ""
           }
         },
@@ -5512,15 +5476,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_17"
+      "id": "datum_16"
     },
     {
       "let": {
-        "datum_17_plane": {
+        "datum_16_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_17",
+                "$ref": "datum_16",
                 "pointer": ""
               },
               "path": "/planes",
@@ -5540,7 +5504,7 @@
         "arguments": {
           "name": "Keeper / circular neck clearance",
           "plane": {
-            "$ref": "datum_17_plane",
+            "$ref": "datum_16_plane",
             "pointer": ""
           }
         },
@@ -5678,15 +5642,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_18"
+      "id": "datum_17"
     },
     {
       "let": {
-        "datum_18_plane": {
+        "datum_17_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_18",
+                "$ref": "datum_17",
                 "pointer": ""
               },
               "path": "/planes",
@@ -5706,7 +5670,7 @@
         "arguments": {
           "name": "Keeper / downward installation throat",
           "plane": {
-            "$ref": "datum_18_plane",
+            "$ref": "datum_17_plane",
             "pointer": ""
           }
         },
@@ -5817,7 +5781,7 @@
         "arguments": {
           "name": "Keeper / M3 retainer clearance",
           "plane": {
-            "$ref": "datum_18_plane",
+            "$ref": "datum_17_plane",
             "pointer": ""
           }
         },
@@ -5947,7 +5911,7 @@
         "arguments": {
           "name": "Keeper / recessed socket-head seat",
           "plane": {
-            "$ref": "datum_9_plane",
+            "$ref": "datum_8_plane",
             "pointer": ""
           }
         },
@@ -6091,7 +6055,7 @@
         "arguments": {
           "name": "Retainer screw / purchased M3 x 40 envelope",
           "plane": {
-            "$ref": "datum_8_plane",
+            "$ref": "datum_7_plane",
             "pointer": ""
           }
         },
@@ -6252,7 +6216,7 @@
         "arguments": {
           "name": "Retainer screw / socket head envelope",
           "plane": {
-            "$ref": "datum_9_plane",
+            "$ref": "datum_8_plane",
             "pointer": ""
           }
         },
@@ -6390,15 +6354,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_19"
+      "id": "datum_18"
     },
     {
       "let": {
-        "datum_19_plane": {
+        "datum_18_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_19",
+                "$ref": "datum_18",
                 "pointer": ""
               },
               "path": "/planes",
@@ -6418,7 +6382,7 @@
         "arguments": {
           "name": "Retainer nut / purchased M3 envelope",
           "plane": {
-            "$ref": "datum_19_plane",
+            "$ref": "datum_18_plane",
             "pointer": ""
           }
         },
@@ -6759,15 +6723,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_20"
+      "id": "datum_19"
     },
     {
       "let": {
-        "datum_20_plane": {
+        "datum_19_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_20",
+                "$ref": "datum_19",
                 "pointer": ""
               },
               "path": "/planes",
@@ -6787,7 +6751,7 @@
         "arguments": {
           "name": "Retainer nut / simplified thread envelope",
           "plane": {
-            "$ref": "datum_20_plane",
+            "$ref": "datum_19_plane",
             "pointer": ""
           }
         },
@@ -7091,15 +7055,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_21"
+      "id": "datum_20"
     },
     {
       "let": {
-        "datum_21_plane": {
+        "datum_20_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_21",
+                "$ref": "datum_20",
                 "pointer": ""
               },
               "path": "/planes",
@@ -7119,7 +7083,7 @@
         "arguments": {
           "name": "Cartridge bolt / socket head envelope",
           "plane": {
-            "$ref": "datum_21_plane",
+            "$ref": "datum_20_plane",
             "pointer": ""
           }
         },
@@ -7257,15 +7221,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_22"
+      "id": "datum_21"
     },
     {
       "let": {
-        "datum_22_plane": {
+        "datum_21_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_22",
+                "$ref": "datum_21",
                 "pointer": ""
               },
               "path": "/planes",
@@ -7285,7 +7249,7 @@
         "arguments": {
           "name": "Cartridge nut / purchased M3 envelope",
           "plane": {
-            "$ref": "datum_22_plane",
+            "$ref": "datum_21_plane",
             "pointer": ""
           }
         },
@@ -7626,15 +7590,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_23"
+      "id": "datum_22"
     },
     {
       "let": {
-        "datum_23_plane": {
+        "datum_22_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_23",
+                "$ref": "datum_22",
                 "pointer": ""
               },
               "path": "/planes",
@@ -7654,7 +7618,7 @@
         "arguments": {
           "name": "Cartridge nut / simplified thread envelope",
           "plane": {
-            "$ref": "datum_23_plane",
+            "$ref": "datum_22_plane",
             "pointer": ""
           }
         },
@@ -7929,15 +7893,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_24"
+      "id": "datum_23"
     },
     {
       "let": {
-        "datum_24_plane": {
+        "datum_23_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_24",
+                "$ref": "datum_23",
                 "pointer": ""
               },
               "path": "/planes",
@@ -7957,7 +7921,7 @@
         "arguments": {
           "name": "Screw / D flat through axis",
           "plane": {
-            "$ref": "datum_24_plane",
+            "$ref": "datum_23_plane",
             "pointer": ""
           }
         },
@@ -13190,6 +13154,474 @@
     {
       "call": {
         "arguments": {
+          "first": {
+            "body_id": {
+              "$ref": "frame_body_id",
+              "pointer": ""
+            },
+            "edge_id": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -35.0,
+                        "/model_point/2": 0.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -35.0,
+                        "/model_point/2": 0.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "endpoint": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -35.0,
+                        "/model_point/2": 0.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/endpoint",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "fallback_point": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -35.0,
+                        "/model_point/2": 0.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/model_point",
+                "take": "first",
+                "where": {}
+              }
+            }
+          },
+          "mode": "horizontal",
+          "offset": -64.0,
+          "precision": 2,
+          "second": {
+            "body_id": {
+              "$ref": "frame_body_id",
+              "pointer": ""
+            },
+            "circle_center": true,
+            "edge_id": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "endpoint": "start",
+            "fallback_point": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/center_model",
+                "take": "first",
+                "where": {}
+              }
+            }
+          },
+          "sheet_id": {
+            "$ref": "vise_frame_sheet_id",
+            "pointer": ""
+          },
+          "view_id": {
+            "$ref": "vise_frame_end_view_id",
+            "pointer": ""
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_linear_dimension"
+      },
+      "id": "vise_frame_cross_hole_horizontal_dimension"
+    },
+    {
+      "call": {
+        "arguments": {
+          "first": {
+            "body_id": {
+              "$ref": "frame_body_id",
+              "pointer": ""
+            },
+            "edge_id": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -35.0,
+                        "/model_point/2": 0.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -35.0,
+                        "/model_point/2": 0.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "endpoint": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -35.0,
+                        "/model_point/2": 0.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/endpoint",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "fallback_point": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -35.0,
+                        "/model_point/2": 0.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/model_point",
+                "take": "first",
+                "where": {}
+              }
+            }
+          },
+          "mode": "vertical",
+          "offset": 12.0,
+          "precision": 2,
+          "second": {
+            "body_id": {
+              "$ref": "frame_body_id",
+              "pointer": ""
+            },
+            "circle_center": true,
+            "edge_id": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "endpoint": "start",
+            "fallback_point": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/center_model",
+                "take": "first",
+                "where": {}
+              }
+            }
+          },
+          "sheet_id": {
+            "$ref": "vise_frame_sheet_id",
+            "pointer": ""
+          },
+          "view_id": {
+            "$ref": "vise_frame_end_view_id",
+            "pointer": ""
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_linear_dimension"
+      },
+      "id": "vise_frame_cross_hole_vertical_dimension"
+    },
+    {
+      "call": {
+        "arguments": {
           "feature": {
             "body_id": {
               "$ref": "frame_body_id",
@@ -13366,7 +13798,7 @@
           },
           "leader_angle_deg": 145.0,
           "mode": "diameter",
-          "offset": 14.0,
+          "offset": 22.0,
           "precision": 2,
           "sheet_id": {
             "$ref": "vise_frame_sheet_id",
@@ -14827,7 +15259,7 @@
                           "$ref": "jaw_body_id",
                           "pointer": ""
                         },
-                        "/model_point/2": 8.4
+                        "/model_point/2": 8.0
                       }
                     }
                   }
@@ -14855,7 +15287,7 @@
                           "$ref": "jaw_body_id",
                           "pointer": ""
                         },
-                        "/model_point/2": 8.4
+                        "/model_point/2": 8.0
                       }
                     }
                   }
@@ -14883,7 +15315,7 @@
                           "$ref": "jaw_body_id",
                           "pointer": ""
                         },
-                        "/model_point/2": 8.4
+                        "/model_point/2": 8.0
                       }
                     }
                   }
@@ -14911,7 +15343,7 @@
                           "$ref": "jaw_body_id",
                           "pointer": ""
                         },
-                        "/model_point/2": 8.4
+                        "/model_point/2": 8.0
                       }
                     }
                   }
@@ -15830,7 +16262,7 @@
             "$ref": "vise_jaw_sheet_id",
             "pointer": ""
           },
-          "text": "The M3 screw retains the keeper against lift. Forward clamping thrust bears on the front chamber shoulder."
+          "text": "The frame top supports the jaw bottom; rail sides retain 0.4 mm clearance. The M3 screw retains the keeper against lift."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -16971,6 +17403,474 @@
         "operation": "drawing_add_linear_dimension"
       },
       "id": "vise_nut_height_dimension"
+    },
+    {
+      "call": {
+        "arguments": {
+          "first": {
+            "body_id": {
+              "$ref": "nut_body_id",
+              "pointer": ""
+            },
+            "edge_id": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -18.0,
+                        "/model_point/2": 10.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -18.0,
+                        "/model_point/2": 10.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "endpoint": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -18.0,
+                        "/model_point/2": 10.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/endpoint",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "fallback_point": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -18.0,
+                        "/model_point/2": 10.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/model_point",
+                "take": "first",
+                "where": {}
+              }
+            }
+          },
+          "mode": "horizontal",
+          "offset": -84.0,
+          "precision": 2,
+          "second": {
+            "body_id": {
+              "$ref": "nut_body_id",
+              "pointer": ""
+            },
+            "circle_center": true,
+            "edge_id": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "endpoint": "start",
+            "fallback_point": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/center_model",
+                "take": "first",
+                "where": {}
+              }
+            }
+          },
+          "sheet_id": {
+            "$ref": "vise_nut_sheet_id",
+            "pointer": ""
+          },
+          "view_id": {
+            "$ref": "vise_nut_end_view_id",
+            "pointer": ""
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_linear_dimension"
+      },
+      "id": "vise_nut_cross_hole_horizontal_dimension"
+    },
+    {
+      "call": {
+        "arguments": {
+          "first": {
+            "body_id": {
+              "$ref": "nut_body_id",
+              "pointer": ""
+            },
+            "edge_id": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -18.0,
+                        "/model_point/2": 10.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -18.0,
+                        "/model_point/2": 10.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "endpoint": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -18.0,
+                        "/model_point/2": 10.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/endpoint",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "fallback_point": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/anchors",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/model_point/1": -18.0,
+                        "/model_point/2": 10.0
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/model_point",
+                "take": "first",
+                "where": {}
+              }
+            }
+          },
+          "mode": "vertical",
+          "offset": -24.0,
+          "precision": 2,
+          "second": {
+            "body_id": {
+              "$ref": "nut_body_id",
+              "pointer": ""
+            },
+            "circle_center": true,
+            "edge_id": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "endpoint": "start",
+            "fallback_point": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/center_model",
+                "take": "first",
+                "where": {}
+              }
+            }
+          },
+          "sheet_id": {
+            "$ref": "vise_nut_sheet_id",
+            "pointer": ""
+          },
+          "view_id": {
+            "$ref": "vise_nut_end_view_id",
+            "pointer": ""
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_linear_dimension"
+      },
+      "id": "vise_nut_cross_hole_vertical_dimension"
     },
     {
       "call": {

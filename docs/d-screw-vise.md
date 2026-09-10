@@ -34,8 +34,11 @@ flats × 2.4 thick, consistent with the [Bossard nut drawing](https://media.dist
    transfer axial force into the frame.
 2. Turn the D screw through the circular female thread. The screw's phase is
    registered to the actual native helix, including its cutter start allowance.
-3. Load the small M3 nut from the underside of the jaw, hold it in its hexagonal
-   recess and slide the jaw onto its rails over the screw head.
+3. Load the small M3 nut from the underside of the jaw and hold it in its
+   hexagonal recess. Lower the jaw onto the rails 30 mm toward the fixed jaw
+   from its home position, clear of the screw head, then slide it left over
+   the head through its open rear chamber. It cannot drop directly over the
+   head through the closed chamber floor.
 4. Lower the keeper over the neck. Its U throat opens downward; the reverse
    orientation cannot be installed through the top opening.
 5. Fit the M3 retainer from above. Its recessed seat is at Z49; the 40 mm shaft
@@ -53,7 +56,10 @@ orientation would miss a handle sweeping through the base.
 
 The assembly has a Screw–Revolute–Slider loop. Only the screw angle is driven;
 the solver determines jaw travel and retention rotation. The nominal unloaded
-geometry uses 0.4 mm running/axial gaps. Physical backlash and elastic seating
+geometry uses 0.4 mm guide-side, guide-roof and axial gaps. The jaw bottom and
+frame top share the Z8 support datum in intended sliding contact, so gravity
+does not have to lower a suspended jaw and consume its neck clearance.
+Physical backlash and elastic seating
 under load are not simulated by this ideal kinematic joint.
 
 The cartridge cross-bolt positively arrests lifting throughout a complete

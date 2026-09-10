@@ -581,7 +581,7 @@ fn d_screw_vise_builds_editable_native_geometry() {
         2. * (half_width * (radius * radius - half_width * half_width).sqrt()
             + radius * radius * (half_width / radius).asin())
     };
-    let jaw_retainer_relief = 3_f64.sqrt() / 2. * 5.9_f64.powi(2) * 3.4
+    let jaw_retainer_relief = 3_f64.sqrt() / 2. * 5.9_f64.powi(2) * 3.8
         + pi * 1.7_f64.powi(2) * 1.8
         + 3. * (pi * 3.1_f64.powi(2) - circular_strip(3.1, 2.8));
     let keeper_retainer_relief = 35.4 * pi * 1.7_f64.powi(2) + 3. * circular_strip(3.1, 2.4);
@@ -601,10 +601,10 @@ fn d_screw_vise_builds_editable_native_geometry() {
         ),
         (
             "jaw",
-            [60., -30., 8.4],
+            [60., -30., 8.],
             [82., 30., 52.],
-            22. * 60. * 43.6
-                - 2. * 22. * 4.8 * 4.
+            22. * 60. * 44.
+                - 2. * 22. * 4.8 * 4.4
                 - 5.6 * 40.8 * 38.4
                 - 10.8 * pi * 14.4_f64.powi(2)
                 - jaw_retainer_relief,
@@ -682,6 +682,20 @@ fn d_screw_vise_builds_editable_native_geometry() {
     )
     .unwrap();
     no_overlap(&interference);
+    let support = interference["pairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|pair| {
+            (pair["body_a"] == exports["frame_body_id"] && pair["body_b"] == exports["jaw_body_id"])
+                || (pair["body_b"] == exports["frame_body_id"]
+                    && pair["body_a"] == exports["jaw_body_id"])
+        })
+        .unwrap();
+    assert!(
+        support["minimum_clearance_mm"].as_f64().unwrap() < 1e-6,
+        "jaw must seat on the base support datum: {support}"
+    );
     assert!(interference["pairs"]
         .as_array()
         .unwrap()
@@ -766,6 +780,31 @@ fn d_screw_vise_builds_editable_native_geometry() {
             .unwrap()["id"]
             .clone()
     };
+    // Lower the jaw to the right of the head, then slide it over the head
+    // through the open rear chamber. Its closed floor cannot drop over it.
+    for name in ["jaw_guide", "thrust_retention"] {
+        client.call(
+            "assembly_set_joint_enabled",
+            json!({"joint_id":joint_id(name),"enabled":false}),
+        );
+    }
+    for translation in [
+        [30., 0., 50.],
+        [30., 0., 25.],
+        [30., 0., 0.],
+        [20., 0., 0.],
+        [10., 0., 0.],
+        [0., 0., 0.],
+    ] {
+        client.call("assembly_set_occurrence_pose", json!({"occurrence_id":exports["jaw_occurrence_id"],"local_pose":{"translation":translation,"rotation":[0,0,0,1]}}));
+        no_overlap(&client.call("assembly_interference_check",json!({"occurrence_ids":[exports["frame_occurrence_id"],exports["screw_occurrence_id"],exports["jaw_occurrence_id"]],"clearance_threshold_mm":0})));
+    }
+    for name in ["jaw_guide", "thrust_retention"] {
+        client.call(
+            "assembly_set_joint_enabled",
+            json!({"joint_id":joint_id(name),"enabled":true}),
+        );
+    }
     // The cartridge has positive capture independent of the rotating D-thread.
     // Check its assembly sequence before the drive/jaw are installed, then its
     // free clearance and hard stops using only the actual retaining bodies.
@@ -922,13 +961,13 @@ fn d_screw_vise_builds_editable_native_geometry() {
             "Moving jaw / 60 mm gripping face",
             60_f64,
             64_f64,
-            4. * 22. * 43.6,
+            4. * 22. * 44.,
         ),
         (
             "Jaw guide left / running clearance",
             4.8,
             5.2,
-            -0.4 * 22. * 4.,
+            -0.4 * 22. * 4.4,
         ),
     ] {
         let sketch = client.call("sketch_edit", json!({"name":name}));

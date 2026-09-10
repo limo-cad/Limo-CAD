@@ -442,10 +442,10 @@ fn main() {
     }
     a.show("frame");
 
-    a.note("Jaw: support and retention", "The jaw rides on the flat base between two rails. A round chamber accepts the rotating screw head. A separate U keeper drops into a transverse slot behind the head; the main forward thrust is carried by the broad front shoulder.");
+    a.note("Jaw: support and retention", "The jaw's Z8 bottom seats directly on the flat base between two rails. Keep side and roof running clearances in the guide channels without suspending the jaw on its screw. A round chamber accepts the rotating screw head. A separate U keeper drops into a transverse slot behind the head; the main forward thrust is carried by the broad front shoulder.");
     a.box_shape(
         "Moving jaw / 60 mm gripping face",
-        [60., -30., 8.4],
+        [60., -30., 8.],
         [82., 30., 52.],
         "new_body",
         "jaw",
@@ -453,7 +453,7 @@ fn main() {
     for (id, y) in [("left", -23.4), ("right", 18.6)] {
         a.box_shape(
             &format!("Jaw guide {id} / running clearance"),
-            [59., y, 8.3],
+            [59., y, 7.9],
             [83., y + 4.8, 12.4],
             "cut",
             "jaw",
@@ -476,7 +476,7 @@ fn main() {
     );
     a.hexagon_z(
         "Jaw / bottom-loaded M3 nut pocket",
-        8.4,
+        8.,
         11.8,
         5.9,
         "cut",

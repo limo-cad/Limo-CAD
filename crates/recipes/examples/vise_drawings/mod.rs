@@ -138,6 +138,11 @@ fn radial(
     angle: f64,
     mode: &str,
 ) {
+    let offset = if key == "frame_cartridge_cross_hole" {
+        22.
+    } else {
+        14.
+    };
     let selected = first(
         reference(&view.projection, ""),
         "/circles",
@@ -154,9 +159,45 @@ fn radial(
                 "edge_id":field("/edge_id"),"edge_key":field("/edge_key"),
                 "fallback_center":field("/center_model"),"fallback_normal":field("/normal_model"),
                 "fallback_radius":field("/radius"),"closed":field("/closed")},
-            "mode":mode,"leader_angle_deg":angle,"offset":14.,"precision":2
+            "mode":mode,"leader_angle_deg":angle,"offset":offset,"precision":2
         }),
     );
+}
+
+fn cross_hole_location(a: &mut Author, sheet: &Value, view: &View, part: &str) {
+    let circle = first(
+        reference(&view.projection, ""),
+        "/circles",
+        json!({"/body_id":a.body_id(part),"/radius":1.7}),
+        "",
+    );
+    let field = |pointer| first(json!([circle.clone()]), "", json!({}), pointer);
+    let center = json!({"body_id":a.body_id(part),"edge_id":field("/edge_id"),
+        "edge_key":field("/edge_key"),"endpoint":"start","circle_center":true,
+        "fallback_point":field("/center_model")});
+    let (side, bottom, horizontal_offset, vertical_offset) = if part == "frame" {
+        (-35., 0., -64., 12.)
+    } else {
+        (-18., 10., -84., -24.)
+    };
+    let datum = anchor(
+        view,
+        a.body_id(part),
+        json!({"/model_point/1":side,"/model_point/2":bottom}),
+        None,
+    );
+    for (mode, offset) in [
+        ("horizontal", horizontal_offset),
+        ("vertical", vertical_offset),
+    ] {
+        a.call(
+            &format!("vise_{part}_cross_hole_{mode}_dimension"),
+            "drawing/dimensions",
+            "drawing_add_linear_dimension",
+            json!({"sheet_id":sheet,"view_id":view.id,"first":datum,"second":center,
+                "mode":mode,"offset":offset,"precision":2}),
+        );
+    }
 }
 
 // Circle centres provide a real axis for the longitudinal cut without inventing
@@ -324,7 +365,7 @@ pub(super) fn add(a: &mut Author) -> Vec<String> {
         (
             "jaw",
             "Moving jaw / thrust chamber and keeper seat",
-            [60., -30., 8.4],
+            [60., -30., 8.],
             [82., 30., 52.],
             1.6,
         ),
@@ -454,6 +495,7 @@ pub(super) fn add(a: &mut Author) -> Vec<String> {
         }
         match part {
             "frame" => {
+                cross_hole_location(a, &sheet, &end, part);
                 radial(
                     a,
                     &sheet,
@@ -533,10 +575,11 @@ pub(super) fn add(a: &mut Author) -> Vec<String> {
                     "PRINT: Broad end down as shown in the print layout. Keep rails and the thrust shoulder free of support scars.",
                     "FIT: 0.4 mm radial clearance around the 28 mm head. Keeper has 0.4 mm nominal axial clearance per side.",
                     "Load M3 nut from below before installing jaw. Its hex pocket resists rotation; the base prevents escape.",
-                    "The M3 screw retains the keeper against lift. Forward clamping thrust bears on the front chamber shoulder.",
+                    "The frame top supports the jaw bottom; rail sides retain 0.4 mm clearance. The M3 screw retains the keeper against lift.",
                 ]);
             }
             "nut" => {
+                cross_hole_location(a, &sheet, &end, part);
                 radial(
                     a,
                     &sheet,
