@@ -140,6 +140,7 @@ function currentDrawingViewBasis(
       derivation.reference.edge_key,
       scene,
       derivation.reference.occurrence_id,
+      derivation.reference.topology_signature,
     ) ?? [derivation.reference.fallback_start, derivation.reference.fallback_end]
     : [
       resolveModelAnchorPoint(derivation.first, scene) ?? derivation.first.fallback_point,
@@ -167,7 +168,7 @@ function resolveModelAnchorPoint(
   reference: DrawingTopologyAnchorRefDto,
   scene: SolidSceneDto,
 ): Vec3 | null {
-  const line = resolveModelLine(reference.body_id, reference.edge_id, reference.edge_key, scene, reference.occurrence_id);
+  const line = resolveModelLine(reference.body_id, reference.edge_id, reference.edge_key, scene, reference.occurrence_id, reference.topology_signature);
   if (!line) return null;
   if (!reference.circle_center) {
     return reference.endpoint === 'start' ? line[0] : line[1];
@@ -175,7 +176,7 @@ function resolveModelAnchorPoint(
   const body = scene.bodies.find((candidate) => candidate.id === reference.body_id && ((candidate as DrawingInstanceBody).drawingOccurrenceId ?? null) === (reference.occurrence_id ?? null));
   const edge = body?.edges.find((candidate) => candidate.id === reference.edge_id)
     ?? body?.edges.find((candidate) => candidate.key === reference.edge_key);
-  return edge ? fitCircleCenter(edge.points.map(pointTuple)) : null;
+  return edge?.circle ? pointTuple(edge.circle.center) : edge ? fitCircleCenter(edge.points.map(pointTuple)) : null;
 }
 
 function resolveModelLine(
@@ -184,8 +185,13 @@ function resolveModelLine(
   edgeKey: string,
   scene: SolidSceneDto,
   occurrenceId?: number | null,
+  topologySignature?: string | null,
 ): [Vec3, Vec3] | null {
   const body = scene.bodies.find((candidate) => candidate.id === bodyId && ((candidate as DrawingInstanceBody).drawingOccurrenceId ?? null) === (occurrenceId ?? null));
+  const currentSignature = body?.topology_signature ? `feature:${body.feature_id}:${body.topology_signature}` : null;
+  if ((topologySignature ?? null) !== currentSignature) {
+    throw new Error('Drawing reference is unverified or its topology changed; explicitly reassociate the derived view.');
+  }
   const edge = body?.edges.find((candidate) => candidate.id === edgeId)
     ?? body?.edges.find((candidate) => candidate.key === edgeKey);
   const first = edge?.points[0];
@@ -283,6 +289,8 @@ export function projectSceneForDrawing(
   return {
     visible,
     hidden,
+    topology_signatures: Object.fromEntries(selected.filter((body) => body.topology_signature)
+      .map((body) => [String(body.id), `feature:${body.feature_id}:${body.topology_signature}`])),
     anchors: projectedAnchors(selected, basis, visible, request.deflection),
     circles: projectedCircles(selected, basis, visible, request.deflection),
     section,

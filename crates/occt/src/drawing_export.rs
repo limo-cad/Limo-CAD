@@ -89,6 +89,7 @@ pub fn export_sheet(
         .iter()
         .find(|s| s.id == request.sheet_id)
         .ok_or("Drawing sheet does not exist")?;
+    nbcad_sketch::drawing_topology::validate_drawing_sheet_topology(sheet, scene)?;
     let mut paper = Paper {
         size: sheet_size(sheet),
         items: Vec::new(),
@@ -514,6 +515,7 @@ pub fn projection_request(
                     .ok_or("Derived view parent is missing")?;
                 let (pd, _, _) = resolve(parent, views, scene, assembly, path)?;
                 let anchor = |endpoint| DrawingTopologyAnchorRefDto {
+                    topology_signature: reference.topology_signature.clone(),
                     occurrence_id: reference.occurrence_id,
                     body_id: reference.body_id,
                     edge_id: reference.edge_id,

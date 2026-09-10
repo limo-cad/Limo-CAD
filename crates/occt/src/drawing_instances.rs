@@ -21,6 +21,8 @@ pub fn project_drawing(
     let mut projection = kernel.drawing_projection(&request)?;
     projection.anchors = drawing_projection_anchors(scene, &request, &projection)?;
     projection.circles = drawing_projection_circles(scene, &request, &projection)?;
+    projection.topology_signatures =
+        nbcad_sketch::drawing_topology::drawing_topology_signatures(scene);
     Ok(projection)
 }
 
@@ -199,6 +201,12 @@ pub fn resolve_drawing_anchor(
     assembly: &AssemblyDocumentDto,
     reference: &DrawingTopologyAnchorRefDto,
 ) -> Result<[f64; 3], OcctError> {
+    nbcad_sketch::drawing_topology::validate_drawing_reference_topology(
+        scene,
+        reference.body_id,
+        reference.topology_signature.as_deref(),
+    )
+    .map_err(OcctError)?;
     let edge = reference_edge(
         scene,
         reference.body_id,
@@ -271,6 +279,12 @@ pub fn resolve_drawing_line(
     assembly: &AssemblyDocumentDto,
     reference: &DrawingLineRefDto,
 ) -> Result<[[f64; 3]; 2], OcctError> {
+    nbcad_sketch::drawing_topology::validate_drawing_reference_topology(
+        scene,
+        reference.body_id,
+        reference.topology_signature.as_deref(),
+    )
+    .map_err(OcctError)?;
     let edge = reference_edge(
         scene,
         reference.body_id,

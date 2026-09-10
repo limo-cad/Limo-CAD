@@ -5137,6 +5137,7 @@ mod tests {
             bodies: [1_u64, 2]
                 .into_iter()
                 .map(|id| BodyDto {
+                    topology_signature: String::new(),
                     id: BodyId(id),
                     name: format!("Body{id}"),
                     feature_id: FeatureId(id),
@@ -5370,6 +5371,7 @@ mod tests {
             bodies: [1_u64, 2, 3]
                 .into_iter()
                 .map(|id| BodyDto {
+                    topology_signature: String::new(),
                     id: BodyId(id),
                     name: format!("Body{id}"),
                     feature_id: FeatureId(id),

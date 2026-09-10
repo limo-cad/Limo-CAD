@@ -24,6 +24,17 @@ matching the interactive editor. Scale converts model millimetres to paper
 millimetres. Dimensions resolve current edge IDs and stable keys. Diagnostic
 fallback points never become an accepted substitute for lost topology.
 
+Native edge keys are OCCT ordinals, so drawing references also capture the
+body's owning feature and exact structural connectivity signature. A normal
+dimensional edit can keep its associations; a changed edge/vertex/wire graph or
+owning feature requires explicit reassociation before export. The signature
+excludes dimensions and mesh quality. This is conservative invalidation, not
+complete OCCT historical naming across arbitrary Boolean edits or graph
+symmetries. Existing captured guards are never refreshed by an unrelated drawing
+edit. Legacy unguarded references must be explicitly recreated against current
+geometry; saved fallback coordinates never establish their identity. Unrelated
+sheets can still export when another sheet needs reassociation.
+
 `drawing_add_radial_dimension` accepts the circular reference from a projection,
 mapped to `fallback_center`, `fallback_normal` and `fallback_radius`. It allocates
 the annotation ID, as do the other dimension commands. A stale or excluded

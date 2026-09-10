@@ -35,6 +35,7 @@
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRepTools.hxx>
+#include <BRepTools_WireExplorer.hxx>
 #include <BRep_Tool.hxx>
 #include <BRep_Builder.hxx>
 #include <Bnd_Box.hxx>
@@ -2453,6 +2454,50 @@ rust::Vec<std::uint64_t> Kernel::body_ids() const {
   return result;
 }
 
+// An ordered connectivity fingerprint, deliberately excluding sizes/positions.
+// This rejects structural edits that can reuse OCCT edge ordinals; it is not
+// historical/topological naming across arbitrary Boolean changes.
+static std::string topology_signature(const TopoDS_Shape& shape) {
+  std::uint64_t hash = 14695981039346656037ULL;
+  const auto mix = [&hash](std::uint64_t value) {
+    for (unsigned int byte = 0; byte < 8; ++byte) {
+      hash ^= (value >> (byte * 8)) & 0xffU;
+      hash *= 1099511628211ULL;
+    }
+  };
+  TopTools_IndexedMapOfShape vertices, edges, faces;
+  TopExp::MapShapes(shape, TopAbs_VERTEX, vertices);
+  TopExp::MapShapes(shape, TopAbs_EDGE, edges);
+  TopExp::MapShapes(shape, TopAbs_FACE, faces);
+  mix(1);
+  mix(vertices.Extent()); mix(edges.Extent()); mix(faces.Extent());
+  for (int index = 1; index <= edges.Extent(); ++index) {
+    const TopoDS_Edge edge = TopoDS::Edge(edges.FindKey(index));
+    TopoDS_Vertex first, last;
+    TopExp::Vertices(edge, first, last, true);
+    mix(BRepAdaptor_Curve(edge).GetType());
+    mix(edge.Orientation());
+    mix(first.IsNull() ? 0 : vertices.FindIndex(first));
+    mix(last.IsNull() ? 0 : vertices.FindIndex(last));
+  }
+  for (int index = 1; index <= faces.Extent(); ++index) {
+    const TopoDS_Face face = TopoDS::Face(faces.FindKey(index));
+    mix(BRepAdaptor_Surface(face).GetType());
+    mix(face.Orientation());
+    for (TopExp_Explorer wire(face, TopAbs_WIRE); wire.More(); wire.Next()) {
+      mix(0xf1);
+      for (BRepTools_WireExplorer edge(TopoDS::Wire(wire.Current()), face);
+           edge.More(); edge.Next()) {
+        mix(edges.FindIndex(edge.Current()));
+        mix(edge.Current().Orientation());
+      }
+      mix(0xf2);
+    }
+    mix(0xf3);
+  }
+  return std::string("connectivity-v1:") + std::to_string(hash);
+}
+
 static FfiMesh mesh_shape(std::uint64_t body_id,
                           const TopoDS_Shape& shape,
                           double linear_deflection,
@@ -2500,6 +2545,7 @@ static FfiMesh mesh_shape(std::uint64_t body_id,
 
   FfiMesh output;
   output.body_id = body_id;
+  output.topology_signature = topology_signature(shape);
   TopTools_IndexedMapOfShape face_map;
   TopExp::MapShapes(shape, TopAbs_FACE, face_map);
   for (int face_index = 1; face_index <= face_map.Extent(); ++face_index) {

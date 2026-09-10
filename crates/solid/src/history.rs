@@ -1697,6 +1697,7 @@ impl SolidDocument {
                 .collect();
             bodies.push(BodyDto {
                 id: raw.body_id,
+                topology_signature: raw.topology_signature,
                 name,
                 feature_id,
                 mesh: MeshDto {
@@ -4987,6 +4988,7 @@ mod tests {
 
     fn raw_body(id: BodyId) -> KernelBodyDto {
         KernelBodyDto {
+            topology_signature: String::new(),
             body_id: id,
             positions: vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
             normals: vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0],

@@ -6256,7 +6256,7 @@ mod tests {
             .iter()
             .find(|a| a["occurrence_id"] == added["id"])
             .unwrap();
-        let reference:nbcad_sketch::DrawingTopologyAnchorRefDto=serde_json::from_value(json!({"occurrence_id":placed["occurrence_id"],"body_id":placed["body_id"],"edge_id":placed["edge_id"],"edge_key":placed["edge_key"],"endpoint":placed["endpoint"],"fallback_point":[999.,999.,999.]})).unwrap();
+        let reference:nbcad_sketch::DrawingTopologyAnchorRefDto=serde_json::from_value(json!({"topology_signature":projection["topology_signatures"][placed["body_id"].to_string()],"occurrence_id":placed["occurrence_id"],"body_id":placed["body_id"],"edge_id":placed["edge_id"],"edge_key":placed["edge_key"],"endpoint":placed["endpoint"],"fallback_point":[999.,999.,999.]})).unwrap();
         let resolved = nbcad_occt::resolve_drawing_anchor(
             &server.manager.solid_scene(),
             &server.manager.assembly_document(),

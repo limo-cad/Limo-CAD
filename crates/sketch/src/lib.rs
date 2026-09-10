@@ -17,6 +17,7 @@
 mod constraint;
 mod drawing;
 pub mod drawing_commands;
+pub mod drawing_topology;
 mod dto;
 mod entity;
 mod expr;

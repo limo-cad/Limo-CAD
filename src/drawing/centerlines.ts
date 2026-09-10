@@ -68,7 +68,7 @@ export function drawingCenterlineEdgeCandidates(
         depth: dot3(midpoint3(start, end), direction),
         candidate: {
           key: `${startAnchor.occurrence_id ?? 'definition'}:${body.id}:${edge.id}`,
-          reference: drawingLineRef(body.id, edge.id, edge.key, start, end, startAnchor.occurrence_id),
+          reference: drawingLineRef(body.id, edge.id, edge.key, start, end, startAnchor.occurrence_id, projection),
           paperStart,
           paperEnd,
           hidden,

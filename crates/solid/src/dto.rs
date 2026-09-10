@@ -1504,6 +1504,9 @@ pub struct CircularCurveDto {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KernelBodyDto {
     pub body_id: BodyId,
+    /// Exact native connectivity, without dimensional coordinates.
+    #[serde(default)]
+    pub topology_signature: String,
     pub positions: Vec<f32>,
     pub normals: Vec<f32>,
     pub indices: Vec<u32>,
@@ -1568,6 +1571,8 @@ fn default_true() -> bool {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BodyDto {
     pub id: BodyId,
+    #[serde(default)]
+    pub topology_signature: String,
     pub name: String,
     pub feature_id: FeatureId,
     pub mesh: MeshDto,

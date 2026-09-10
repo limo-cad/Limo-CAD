@@ -7103,6 +7103,7 @@ mod tests {
     #[test]
     fn native_picker_exposes_a_virtual_circular_connector_at_a_cylinder_opening() {
         let body = nbcad_solid::BodyDto {
+            topology_signature: String::new(),
             id: nbcad_core::BodyId(7),
             name: "Holed component".to_string(),
             feature_id: nbcad_core::FeatureId(3),

@@ -1096,6 +1096,7 @@ export interface EdgeDto extends KernelEdgeDto {
 }
 
 export interface BodyDto {
+  topology_signature?: string;
   id: number;
   name: string;
   feature_id: number;
@@ -1816,6 +1817,7 @@ export type DrawingChainDimensionLayout = 'chain' | 'baseline' | 'continued';
 export type DrawingOrdinateAxis = 'x' | 'y' | 'both';
 
 export interface DrawingTopologyAnchorRefDto {
+  topology_signature?: string | null;
   occurrence_id?: number | null;
   body_id: number;
   edge_id: number;
@@ -1827,6 +1829,7 @@ export interface DrawingTopologyAnchorRefDto {
 }
 
 export interface DrawingCircularRefDto {
+  topology_signature?: string | null;
   occurrence_id?: number | null;
   body_id: number;
   edge_id: number;
@@ -1839,6 +1842,7 @@ export interface DrawingCircularRefDto {
 
 /** Stable exact-topology reference to a straight model edge. */
 export interface DrawingLineRefDto {
+  topology_signature?: string | null;
   occurrence_id?: number | null;
   body_id: number;
   edge_id: number;
@@ -2227,6 +2231,7 @@ export interface DrawingProjectedCircleDto {
 }
 
 export interface DrawingProjectionDto {
+  topology_signatures?: Record<string, string>;
   visible: DrawingPolylineDto[];
   hidden: DrawingPolylineDto[];
   anchors: DrawingProjectionAnchorDto[];

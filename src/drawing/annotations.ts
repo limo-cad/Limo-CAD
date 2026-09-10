@@ -136,8 +136,10 @@ export interface ResolvedDrawingAttachment {
 
 export function drawingAnchorRef(
   anchor: DrawingProjectionAnchorDto,
+  projection?: DrawingProjectionDto,
 ): DrawingTopologyAnchorRefDto {
   return {
+    topology_signature: projection?.topology_signatures?.[String(anchor.body_id)],
     occurrence_id: anchor.occurrence_id,
     body_id: anchor.body_id,
     edge_id: anchor.edge_id,
@@ -149,8 +151,10 @@ export function drawingAnchorRef(
 
 export function drawingCircleCenterAnchorRef(
   circle: DrawingProjectedCircleDto,
+  projection?: DrawingProjectionDto,
 ): DrawingTopologyAnchorRefDto {
   return {
+    topology_signature: projection?.topology_signatures?.[String(circle.body_id)],
     occurrence_id: circle.occurrence_id,
     body_id: circle.body_id,
     edge_id: circle.edge_id,
@@ -163,8 +167,9 @@ export function drawingCircleCenterAnchorRef(
   };
 }
 
-export function drawingCircularRef(circle: DrawingProjectedCircleDto): DrawingCircularRefDto {
+export function drawingCircularRef(circle: DrawingProjectedCircleDto, projection?: DrawingProjectionDto): DrawingCircularRefDto {
   return {
+    topology_signature: projection?.topology_signatures?.[String(circle.body_id)],
     occurrence_id: circle.occurrence_id,
     body_id: circle.body_id,
     edge_id: circle.edge_id,
@@ -183,8 +188,10 @@ export function drawingLineRef(
   start: [number, number, number],
   end: [number, number, number],
   occurrenceId?: number | null,
+  projection?: DrawingProjectionDto,
 ): DrawingLineRefDto {
   return {
+    topology_signature: projection?.topology_signatures?.[String(bodyId)],
     occurrence_id: occurrenceId,
     body_id: bodyId,
     edge_id: edgeId,
@@ -212,6 +219,7 @@ export function resolveDrawingAnchor(
   view: DrawingViewDto,
   projection: DrawingProjectionDto,
 ): ResolvedDrawingAnchor | null {
+  if ((reference.topology_signature ?? null) !== (projection.topology_signatures?.[String(reference.body_id)] ?? null)) return null;
   if (reference.circle_center) {
     const exact = projection.circles.find((candidate) =>
       (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id && candidate.edge_id === reference.edge_id
@@ -353,6 +361,7 @@ export function resolveDrawingLine(
   view: DrawingViewDto,
   projection: DrawingProjectionDto,
 ): ResolvedDrawingLine | null {
+  if ((reference.topology_signature ?? null) !== (projection.topology_signatures?.[String(reference.body_id)] ?? null)) return null;
   const exactStart = projection.anchors.find((candidate) =>
     (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id
       && candidate.edge_id === reference.edge_id
@@ -442,6 +451,7 @@ export function resolveDrawingCircle(
   view: DrawingViewDto,
   projection: DrawingProjectionDto,
 ): ResolvedDrawingCircle | null {
+  if ((reference.topology_signature ?? null) !== (projection.topology_signatures?.[String(reference.body_id)] ?? null)) return null;
   const exact = projection.circles.find((candidate) =>
     (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id && candidate.edge_id === reference.edge_id,
   );

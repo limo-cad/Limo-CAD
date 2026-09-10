@@ -39,6 +39,7 @@ fn extrusion(sketch_name: &str) -> ExtrudeRequest {
 
 fn planar_body(body_id: BodyId, key: &str, z: f64) -> KernelBodyDto {
     KernelBodyDto {
+        topology_signature: String::new(),
         body_id,
         positions: vec![0.0, 0.0, z as f32, 20.0, 0.0, z as f32, 0.0, 20.0, z as f32],
         normals: vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0],

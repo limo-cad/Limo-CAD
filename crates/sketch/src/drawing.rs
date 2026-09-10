@@ -458,6 +458,8 @@ pub enum DrawingViewDerivationDto {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrawingTopologyAnchorRefDto {
     #[serde(default)]
+    pub topology_signature: Option<String>,
+    #[serde(default)]
     pub occurrence_id: Option<nbcad_assembly::OccurrenceId>,
     pub body_id: BodyId,
     pub edge_id: EdgeId,
@@ -592,6 +594,8 @@ pub enum DrawingOrdinateAxis {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrawingCircularRefDto {
     #[serde(default)]
+    pub topology_signature: Option<String>,
+    #[serde(default)]
     pub occurrence_id: Option<nbcad_assembly::OccurrenceId>,
     pub body_id: BodyId,
     pub edge_id: EdgeId,
@@ -607,6 +611,8 @@ pub struct DrawingCircularRefDto {
 /// explicit user-confirmed reassociation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrawingLineRefDto {
+    #[serde(default)]
+    pub topology_signature: Option<String>,
     #[serde(default)]
     pub occurrence_id: Option<nbcad_assembly::OccurrenceId>,
     pub body_id: BodyId,

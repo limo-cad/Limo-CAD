@@ -100,6 +100,7 @@ mod ffi {
 
     struct FfiMesh {
         body_id: u64,
+        topology_signature: String,
         positions: Vec<f32>,
         normals: Vec<f32>,
         indices: Vec<u32>,
@@ -705,6 +706,7 @@ fn projection_from_ffi(raw: ffi::FfiDrawingProjection) -> Result<DrawingProjecti
         bounds = [0.0; 4];
     }
     Ok(DrawingProjectionDto {
+        topology_signatures: Default::default(),
         visible,
         hidden,
         anchors: Vec::new(),
@@ -1501,6 +1503,7 @@ fn from_ffi_mesh(raw: ffi::FfiMesh) -> Result<KernelBodyDto, OcctError> {
 
     Ok(KernelBodyDto {
         body_id: nbcad_core::BodyId(raw.body_id),
+        topology_signature: raw.topology_signature,
         positions: raw.positions,
         normals: raw.normals,
         indices: raw.indices,

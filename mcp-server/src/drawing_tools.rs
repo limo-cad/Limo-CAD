@@ -8,7 +8,7 @@ fn choice(values: &[&str]) -> Value {
 pub fn specs() -> Vec<ToolSpec> {
     let id = json!({"type":"integer","minimum":1});
     let anchor = object_schema(
-        json!({"occurrence_id":{"oneOf":[id,{"type":"null"}]},"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"endpoint":choice(&["start","end"]),"fallback_point":vector(3),"circle_center":{"type":"boolean"}}),
+        json!({"topology_signature":{"type":["string","null"]},"occurrence_id":{"oneOf":[id,{"type":"null"}]},"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"endpoint":choice(&["start","end"]),"fallback_point":vector(3),"circle_center":{"type":"boolean"}}),
         &[
             "body_id",
             "edge_id",
@@ -19,7 +19,7 @@ pub fn specs() -> Vec<ToolSpec> {
     );
     let sheet = object_schema(json!({"sheet_id":id}), &["sheet_id"]);
     let circular = object_schema(
-        json!({"occurrence_id":{"oneOf":[id,{"type":"null"}]},"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"fallback_center":vector(3),"fallback_normal":vector(3),"fallback_radius":{"type":"number","exclusiveMinimum":0},"closed":{"type":"boolean"}}),
+        json!({"topology_signature":{"type":["string","null"]},"occurrence_id":{"oneOf":[id,{"type":"null"}]},"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"fallback_center":vector(3),"fallback_normal":vector(3),"fallback_radius":{"type":"number","exclusiveMinimum":0},"closed":{"type":"boolean"}}),
         &[
             "body_id",
             "edge_id",
@@ -31,7 +31,7 @@ pub fn specs() -> Vec<ToolSpec> {
         ],
     );
     let line = object_schema(
-        json!({"occurrence_id":{"oneOf":[id,{"type":"null"}]},"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"fallback_start":vector(3),"fallback_end":vector(3)}),
+        json!({"topology_signature":{"type":["string","null"]},"occurrence_id":{"oneOf":[id,{"type":"null"}]},"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"fallback_start":vector(3),"fallback_end":vector(3)}),
         &[
             "body_id",
             "edge_id",
