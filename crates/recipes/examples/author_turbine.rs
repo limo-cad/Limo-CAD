@@ -436,7 +436,7 @@ impl Author {
                     pred["/occurrence_id"] = occ_ref(part);
                     json!({"body_id":body_ref(part),"occurrence_id":occ_ref(part),"edge_id":select(r(&projection),"/anchors",pred.clone(),"first","/edge_id"),"edge_key":select(r(&projection),"/anchors",pred.clone(),"first","/edge_key"),"endpoint":select(r(&projection),"/anchors",pred.clone(),"first","/endpoint"),"fallback_point":select(r(&projection),"/anchors",pred,"first","/model_point")})
                 };
-                self.call("assembly_height","drawing/dimensions","drawing_add_linear_dimension",json!({"sheet_id":r("assembly_sheet_id"),"view_id":r(&view_id),"first":anchor("base",json!({"/model_point/0":90.,"/model_point/2":0.})),"second":anchor("shaft",json!({"/model_point/2":278.})),"mode":"vertical","offset":14.,"precision":2}));
+                self.call("assembly_height","drawing/dimensions","drawing_add_linear_dimension",json!({"sheet_id":r("assembly_sheet_id"),"view_id":r(&view_id),"first":anchor("base",json!({"/model_point/0":90.,"/model_point/2":0.})),"second":anchor("shaft",json!({"/model_point/2":281.})),"mode":"vertical","offset":14.,"precision":2}));
             } else {
                 let pred = json!({"/body_id":body_ref("cap"),"/occurrence_id":occ_ref("cap"),"/radius":99.});
                 let field =
@@ -729,7 +729,7 @@ fn main() {
     let mut a = Author::new();
     let g = 54.5 * std::f64::consts::FRAC_1_SQRT_2;
     a.note("The experiment","Build a two-stage vertical-axis Savonius turbine. PETG baseline; 180 mm bucket diameter and 200 mm combined bucket height. Generator and hardware are native representative parts pending specimen fit and physical testing.");
-    a.note("Repeated rotor stage","Concentric driving diameters define a bottom disc, shaft hub and two semicircular bucket walls. One stage definition appears twice, staggered by 90 degrees. Print each stage upright and the final cap separately.");
+    a.note("Repeated rotor stage","Concentric driving diameters define a bottom disc, shaft hub and two semicircular bucket walls. The clamp hub ends at 18 mm so only the 8 mm shaft divides the overlap above it. One stage definition appears twice, staggered by 90 degrees. Print each stage upright and the final cap separately.");
     let stage_plate = a.cylinder("stage", [0., 0.], 198., 0., 3., "new_body", None);
     a.bind(
         "stage_plate_feature",
@@ -741,7 +741,7 @@ fn main() {
             "/id",
         ),
     );
-    a.cylinder("stage_hub", [0., 0.], 24., 0., 100., "join", Some("stage"));
+    a.cylinder("stage_hub", [0., 0.], 24., 0., 18., "join", Some("stage"));
     a.cylinder("bucket", [40.5, 0.], 99., 0., 100., "new_body", None);
     a.cylinder(
         "bucket_inner",
@@ -782,10 +782,10 @@ fn main() {
         Some("stage"),
     );
     a.clamp("stage_clamp_bolt", "stage", -8., 10., 3.2, 4., 6.4);
-    a.component("stage", "Savonius stage / print twice", true, [0., 0., 70.]);
+    a.component("stage", "Savonius stage / print twice", true, [0., 0., 73.]);
     a.cylinder("cap", [0., 0.], 198., 0., 3., "new_body", None);
     a.cylinder("cap_bore", [0., 0.], 8.4, 0., 3., "cut", Some("cap"));
-    a.component("cap", "Rotor top endplate", true, [0., 0., 270.]);
+    a.component("cap", "Rotor top endplate", true, [0., 0., 273.]);
     a.note("Separate rotor bearings","Two spaced 608 bearing seats support the 8 mm shaft. The generator carries no rotor weight. Named clearances are provisional diametral allowances; print the coupons before the full assembly.");
     a.block("base", [-70., -65.], [90., 65.], 0., 8., "new_body", None);
     a.cylinder(
@@ -884,7 +884,7 @@ fn main() {
         false,
         [0., 0., 8.],
     );
-    a.cylinder("shaft", [0., 0.], 8., 0., 275., "new_body", None);
+    a.cylinder("shaft", [0., 0.], 8., 0., 278., "new_body", None);
     a.component(
         "shaft",
         "8 mm steel shaft / cut to length",
@@ -1142,14 +1142,14 @@ fn main() {
         "lower_stage_to_shaft",
         "shaft",
         "stage",
-        [0., 0., 275.],
-        275.,
+        [0., 0., 278.],
+        278.,
         0.,
         0.,
         "rigid",
         -208.,
     );
-    a.repeat("stage_upper", "stage", [0., 0., 170.]);
+    a.repeat("stage_upper", "stage", [0., 0., 173.]);
     a.joint(
         "staggered_second_stage",
         "stage",
@@ -1195,42 +1195,42 @@ fn main() {
         "inner_race_spacer",
         "shaft",
         "spacer",
-        [0., 0., 275.],
-        275.,
+        [0., 0., 278.],
+        278.,
         0.,
         0.,
         "rigid",
-        -263.,
+        -266.,
     );
     a.joint_offset(
         "thrust_washer",
         "shaft",
         "washer",
-        [0., 0., 275.],
-        275.,
+        [0., 0., 278.],
+        278.,
         0.,
         0.,
         "rigid",
-        -228.,
+        -231.,
     );
     a.joint_offset(
         "shaft_retention",
         "shaft",
         "collar",
-        [0., 0., 275.],
-        275.,
+        [0., 0., 278.],
+        278.,
         0.,
         0.,
         "rigid",
-        -275.,
+        -278.,
     );
-    a.repeat("collar_upper", "collar", [0., 0., 273.]);
+    a.repeat("collar_upper", "collar", [0., 0., 276.]);
     a.joint_offset(
         "top_cap_retention",
         "shaft",
         "collar_upper",
-        [0., 0., 275.],
-        275.,
+        [0., 0., 278.],
+        278.,
         0.,
         0.,
         "rigid",
@@ -1239,16 +1239,16 @@ fn main() {
     a.call("gear_coupling","assembly/joints","assembly_create_gear_relation",json!({"name":"Printed 72:18 spur pair","joint_a":at("rotor_rotation","/id"),"joint_b":at("generator_rotation","/id"),"teeth_a":72,"teeth_b":18,"reverse":true,"phase_deg":10}));
     a.note("Read the manufacturing intent","Each native part carries its own editable drawing with actual projected edges, diameter and height dimensions. Fits are provisional. Ages 8–12 with adult guidance; age 5 requires closer hands-on adult guidance. Keep fingers away from the rotor and use only supervised low-energy airflow.");
     for (name,height,diameters,note) in [
-        ("stage",100.,vec![198.,8.3],"PRINT2 / PETG / flat disc on bed. 180 bucket sweep; 2 mm walls; 18 mm bucket overlap. M3 clamp at height10. Print fit coupon before committing both stages. Second occurrence stagger90 degrees."),
+        ("stage",100.,vec![198.,8.3],"PRINT2 / PETG / flat disc on bed. 180 bucket sweep; 2 mm walls; 18 mm bucket overlap; hub height18 leaves flow space around the8 mm shaft above. M3 clamp at height10; hub and walls join the3 mm disc. Print fit coupon before committing both stages. Second occurrence stagger90 degrees."),
         ("cap",3.,vec![198.,8.4],"PRINT1 / flat on bed. Retain between upper stage and purchased upper8 mm shaft collar; no adhesive."),
         ("base",8.,vec![18.,3.4],"PRINT1 / bottom on bed.160 x130. M3 clearance3.4; underside6.4 x3.2 head recesses. Carrier centers+/-22; cradle(45.25,+/-23); guard109 bolt circle centered(10,0), holes staggered45 degrees. Deburr recesses and keep heads below base."),
         ("tower",42.,vec![52.,22.3,17.8],"PRINT1 / flange down. Two608 seats22.3 x7 at heights0 and35; insert lower bearing from below before fastening the base; relief17.8 between. Two M3 transverse split clamps. Clamp lightly; verify bearing rotation after fastening."),
         ("motor_mount",32.,vec![37.,32.6],"PRINT1 / flange down. Cavity starts14 above base. Nominal32 mm motor; measure specimen including shaft projection before print. Two M3 flange bolts and one transverse clamp; route wires through split before closing guard."),
         ("guard",57.,vec![120.,114.,3.4],"PRINT1 / upright. Four M3 clear bores,8 hex nut traps:5.8 across flats x3 deep open at bottom/top. Capture nuts before mounting. Bottom M3x12 socket screws; lid M3x8 low-profile heads no higher than1.65 above lid."),
-        ("guard_lid",3.,vec![120.,30.,3.4],"PRINT1 / flat. Axis opening offset(-10,0). Four M3x8 low-profile screws; head height<=1.65 keeps clearance below rotor disc. Check rotor clears every screw before motion."),
+        ("guard_lid",3.,vec![120.,30.,3.4],"PRINT1 / flat. Axis opening offset(-10,0). Four M3x8 low-profile screws; Rotor disc is5 mm above lid, leaving3.35 mm above heads no higher than1.65. Check rotor clears every screw before motion."),
         ("rotor_gear",12.,vec![8.3,24.],"PRINT1 / teeth flat. Module1;72 teeth;20 degree pressure angle; pitch72;3 mm face.0.10 mm tooth thinning. Split hub M3 screw/nut; center distance45.25. Do not glue to shaft."),
         ("pinion",6.,vec![2.2,12.],"PRINT1 / teeth flat. Module1;18 teeth;20 degree pressure angle; pitch18;3 mm face.0.10 mm tooth thinning. M2 split clamp at4.5 high. Round2 mm motor shaft; verify specimen projection and fit before printing."),
-        ("shaft",275.,vec![8.],"PURCHASE /8 mm straight steel shaft cut275 long, ends deburred. Separate608 bearings carry rotor loads. This is a representative purchased envelope; straightness and surface finish must suit the actual bearings."),
+        ("shaft",278.,vec![8.],"PURCHASE /8 mm straight steel shaft cut278 long, ends deburred. Separate608 bearings carry rotor loads. This is a representative purchased envelope; straightness and surface finish must suit the actual bearings."),
     ] { a.part_drawing(name,height,&diameters,note); }
     a.assembly_drawing();
     a.steps

@@ -1583,12 +1583,29 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
         .filter(|p| p["body_id"] == stage["body_id"])
         .collect::<Vec<_>>();
     assert_eq!(stage_instances.len(), 2);
-    assert_eq!(stage_instances[0]["translation"], json!([0., 0., 70.]));
-    assert_eq!(stage_instances[1]["translation"], json!([0., 0., 170.]));
+    assert_eq!(stage_instances[0]["translation"], json!([0., 0., 73.]));
+    assert_eq!(stage_instances[1]["translation"], json!([0., 0., 173.]));
     assert!(
         (stage_instances[1]["rotation"][2].as_f64().unwrap() - std::f64::consts::FRAC_1_SQRT_2)
             .abs()
             < 1e-10
+    );
+    let lid = parts.iter().find(|part| part["id"] == "guard_lid").unwrap();
+    let lid_pose = exports["final_solution"]["instance_body_poses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|pose| pose["body_id"] == lid["body_id"])
+        .unwrap();
+    let lid_top =
+        lid_pose["translation"][2].as_f64().unwrap() + mesh_measurement(body(&lid["body_id"])).1[2];
+    let running_clearance = stage_instances[0]["translation"][2].as_f64().unwrap()
+        + mesh_measurement(body(&stage["body_id"])).0[2]
+        - lid_top
+        - 1.65;
+    assert!(
+        running_clearance >= 3.,
+        "rotor must clear the selected lid screw heads by at least 3 mm: {running_clearance}"
     );
     for part in parts {
         let (min, max, volume) = mesh_measurement(body(&part["body_id"]));
@@ -1673,6 +1690,69 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
         "two independent native construction and drawing replays"
     );
     validate_turbine_edit_and_motion(&mut client, exports);
+    validate_turbine_open_overlap(exports);
+}
+
+fn validate_turbine_open_overlap(exports: &Value) {
+    // Real native witness solids test a continuous air corridor on either side
+    // of the shaft, above the short clamp hub. They exist only in this disposable
+    // test copy, never in the recipe, drawings or manufacturing artifacts.
+    let mut probe = Client::restore(&exports["final_model"]);
+    probe.call(
+        "sketch_begin",
+        json!({"name":"Overlap inspection witness","plane":{"type":"origin_plane","plane":"xy"}}),
+    );
+    probe.call("sketch_set_grid_snap", json!({"enabled":false}));
+    probe.call(
+        "sketch_add_rectangle",
+        json!({"mode":"two_point","p1":{"x":4.6,"y":-0.4},"p2":{"x":6.4,"y":0.4},"ctrl_held":true}),
+    );
+    probe.call("sketch_finish", json!({}));
+    let created = probe.call("solid_extrude", json!({"sketch_name":"Overlap inspection witness","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":65.},"taper_angle_deg":0.,"flip":false,"target_body_ids":[]}));
+    let original_ids = exports["final_scene"]["bodies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|body| &body["id"])
+        .collect::<Vec<_>>();
+    let witness_body = &created["scene"]["bodies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|body| !original_ids.contains(&&body["id"]))
+        .unwrap()["id"];
+    let component = probe.call("assembly_create_component", json!({"name":"Temporary overlap witness","body_ids":[witness_body],"absorb_promoted_bodies":true}));
+    let assembly = probe.call("assembly_document", json!({}));
+    let witness = &assembly["component_structure"]["occurrences"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|occurrence| occurrence["component_id"] == component["id"])
+        .unwrap()["id"];
+    let parts = exports["parts"].as_array().unwrap();
+    for x in [0., -11.] {
+        // Stage underside is 73 mm; witness spans local stage Z=25..90.
+        probe.call("assembly_set_occurrence_pose", json!({"occurrence_id":witness,"local_pose":{"translation":[x,0.,98.],"rotation":[0.,0.,0.,1.]}}));
+        for part_name in ["stage", "shaft"] {
+            let target =
+                &parts.iter().find(|part| part["id"] == part_name).unwrap()["occurrence_id"];
+            let report = probe.call(
+                "assembly_interference_check",
+                json!({"occurrence_ids":[witness,target],"clearance_threshold_mm":1.}),
+            );
+            assert_eq!(report["exact"], true);
+            let pairs = report["pairs"].as_array().unwrap();
+            assert_eq!(pairs.len(), 1);
+            assert_eq!(
+                pairs[0]["interfering"], false,
+                "open overlap against {part_name}: {report}"
+            );
+            assert!(
+                pairs[0]["minimum_clearance_mm"].as_f64().unwrap() >= 0.5,
+                "continuous overlap corridor against {part_name}: {report}"
+            );
+        }
+    }
 }
 
 fn validate_turbine_edit_and_motion(client: &mut Client, exports: &Value) {

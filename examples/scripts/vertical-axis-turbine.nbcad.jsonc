@@ -837,7 +837,7 @@
     {
       "chapter": "Repeated rotor stage",
       "duration_ms": 3000,
-      "note": "Concentric driving diameters define a bottom disc, shaft hub and two semicircular bucket walls. One stage definition appears twice, staggered by 90 degrees. Print each stage upright and the final cap separately."
+      "note": "Concentric driving diameters define a bottom disc, shaft hub and two semicircular bucket walls. The clamp hub ends at 18 mm so only the 8 mm shaft divides the overlap above it. One stage definition appears twice, staggered by 90 degrees. Print each stage upright and the final cap separately."
     },
     {
       "call": {
@@ -1167,7 +1167,7 @@
       "call": {
         "arguments": {
           "extent": {
-            "distance": 100.0,
+            "distance": 18.0,
             "type": "distance"
           },
           "flip": false,
@@ -2901,7 +2901,7 @@
             "translation": [
               0.0,
               0.0,
-              70.0
+              73.0
             ]
           },
           "occurrence_id": {
@@ -3338,7 +3338,7 @@
             "translation": [
               0.0,
               0.0,
-              270.0
+              273.0
             ]
           },
           "occurrence_id": {
@@ -9562,7 +9562,7 @@
       "call": {
         "arguments": {
           "extent": {
-            "distance": 275.0,
+            "distance": 278.0,
             "type": "distance"
           },
           "flip": false,
@@ -26234,7 +26234,7 @@
             "take": "first",
             "where": {
               "/plane/normal/2": 1.0,
-              "/plane/origin/2": 275.0
+              "/plane/origin/2": 278.0
             }
           }
         }
@@ -26301,7 +26301,7 @@
               "origin": [
                 0.0,
                 0.0,
-                67.0
+                70.0
               ],
               "primary_axis": [
                 0,
@@ -26410,7 +26410,7 @@
             "translation": [
               0.0,
               0.0,
-              170.0
+              173.0
             ]
           },
           "name": "stage upper"
@@ -27177,7 +27177,7 @@
             "take": "first",
             "where": {
               "/plane/normal/2": 1.0,
-              "/plane/origin/2": 275.0
+              "/plane/origin/2": 278.0
             }
           }
         }
@@ -27352,7 +27352,7 @@
             "take": "first",
             "where": {
               "/plane/normal/2": 1.0,
-              "/plane/origin/2": 275.0
+              "/plane/origin/2": 278.0
             }
           }
         }
@@ -27527,7 +27527,7 @@
             "take": "first",
             "where": {
               "/plane/normal/2": 1.0,
-              "/plane/origin/2": 275.0
+              "/plane/origin/2": 278.0
             }
           }
         }
@@ -27703,7 +27703,7 @@
             "translation": [
               0.0,
               0.0,
-              273.0
+              276.0
             ]
           },
           "name": "collar upper"
@@ -27736,7 +27736,7 @@
             "take": "first",
             "where": {
               "/plane/normal/2": 1.0,
-              "/plane/origin/2": 275.0
+              "/plane/origin/2": 278.0
             }
           }
         }
@@ -27803,7 +27803,7 @@
               "origin": [
                 0.0,
                 0.0,
-                270.0
+                273.0
               ],
               "primary_axis": [
                 0,
@@ -28425,7 +28425,7 @@
           "sheet_id": {
             "$ref": "stage_sheet_id"
           },
-          "text": "PRINT2 / PETG / flat disc on bed. 180 bucket sweep; 2 mm walls; 18 mm bucket overlap. M3\nclamp at height10. Print fit coupon before committing both stages. Second occurrence\nstagger90 degrees."
+          "text": "PRINT2 / PETG / flat disc on bed. 180 bucket sweep; 2 mm walls; 18 mm bucket overlap; hub\nheight18 leaves flow space around the8 mm shaft above. M3 clamp at height10; hub and walls\njoin the3 mm disc. Print fit coupon before committing both stages. Second occurrence\nstagger90 degrees."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -32303,7 +32303,7 @@
           "sheet_id": {
             "$ref": "guard_lid_sheet_id"
           },
-          "text": "PRINT1 / flat. Axis opening offset(-10,0). Four M3x8 low-profile screws; head height<=1.65\nkeeps clearance below rotor disc. Check rotor clears every screw before motion."
+          "text": "PRINT1 / flat. Axis opening offset(-10,0). Four M3x8 low-profile screws; Rotor disc is5 mm\nabove lid, leaving3.35 mm above heads no higher than1.65. Check rotor clears every screw\nbefore motion."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -33801,7 +33801,7 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 275.0
+                  "/model_point/2": 278.0
                 }
               }
             },
@@ -33814,7 +33814,7 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 275.0
+                  "/model_point/2": 278.0
                 }
               }
             },
@@ -33827,7 +33827,7 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 275.0
+                  "/model_point/2": 278.0
                 }
               }
             },
@@ -33840,7 +33840,7 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 275.0
+                  "/model_point/2": 278.0
                 }
               }
             }
@@ -33867,7 +33867,7 @@
           "sheet_id": {
             "$ref": "shaft_sheet_id"
           },
-          "text": "PURCHASE /8 mm straight steel shaft cut275 long, ends deburred. Separate608 bearings carry\nrotor loads. This is a representative purchased envelope; straightness and surface finish\nmust suit the actual bearings."
+          "text": "PURCHASE /8 mm straight steel shaft cut278 long, ends deburred. Separate608 bearings carry\nrotor loads. This is a representative purchased envelope; straightness and surface finish\nmust suit the actual bearings."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -34135,7 +34135,7 @@
                     "$ref": "shaft_body",
                     "pointer": "/id"
                   },
-                  "/model_point/2": 278.0,
+                  "/model_point/2": 281.0,
                   "/occurrence_id": {
                     "$ref": "shaft_occurrence",
                     "pointer": "/id"
@@ -34156,7 +34156,7 @@
                     "$ref": "shaft_body",
                     "pointer": "/id"
                   },
-                  "/model_point/2": 278.0,
+                  "/model_point/2": 281.0,
                   "/occurrence_id": {
                     "$ref": "shaft_occurrence",
                     "pointer": "/id"
@@ -34177,7 +34177,7 @@
                     "$ref": "shaft_body",
                     "pointer": "/id"
                   },
-                  "/model_point/2": 278.0,
+                  "/model_point/2": 281.0,
                   "/occurrence_id": {
                     "$ref": "shaft_occurrence",
                     "pointer": "/id"
@@ -34198,7 +34198,7 @@
                     "$ref": "shaft_body",
                     "pointer": "/id"
                   },
-                  "/model_point/2": 278.0,
+                  "/model_point/2": 281.0,
                   "/occurrence_id": {
                     "$ref": "shaft_occurrence",
                     "pointer": "/id"

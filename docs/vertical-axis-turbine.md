@@ -30,10 +30,14 @@ delays. These colors are visual designations, not vendor-qualified filaments.
 
 Two identical 100 mm stages form a 180 mm diameter, 200 mm bucket-height Savonius
 rotor. Each stage has a 198 mm bottom disc and two 2 mm semicircular bucket walls,
-with 18 mm overlap. The second occurrence is staggered 90 degrees; the final cap
+with 18 mm overlap. The 24 mm clamp hub ends 18 mm above the plate underside,
+leaving the real 8 mm shaft through the rest of the overlap region. The hub and
+both bucket walls join the 3 mm bottom disc, which transfers their load. This
+keeps the M3 clamp and its flat seats accessible without a full-height blockage.
+The second occurrence is staggered 90 degrees; the final cap
 is separate so each stage prints upright without a large unsupported roof.
 The assembled height exceeds 200 mm, while every printed definition fits within
-200 mm on each axis. The purchased shaft is 275 mm long.
+200 mm on each axis. The purchased shaft is 278 mm long; the assembly is 281 mm high.
 
 Each feature starts on a named datum. Circles have a located center and an
 editable diameter. Polygon edges have driving length/angle dimensions and
@@ -83,6 +87,9 @@ with its `body_ids` through MCP. Assembled placement is the default and includes
 all visible repeated occurrences. The stage, cap,
 base, carrier, cradle, guard, lid and gears have no broad unsupported ceilings.
 Horizontal holes and nut pockets still require slicer review and bridge coupons.
+The library does not yet include separate fit or bridge coupon files; those
+qualification specimens must be authored for the measured hardware and printer
+before this candidate is released for manufacturing.
 The 198 mm plates leave ample room on the stated X2D bed, but their 200 mm
 geometry envelope does not itself reserve a brim on a smaller printer.
 
@@ -109,9 +116,14 @@ geometry envelope does not itself reserve a brim on a smaller printer.
 5. Capture the eight M3 nuts in the guard before fastening it. Its bosses are
    staggered 45 degrees on the 109 mm bolt circle to clear both the generator
    cradle and gear sweep. Fit the lid with M3 x8 low-profile screws whose heads
-   stand no more than 1.65 mm above the lid; the rotor disc begins 2 mm above it.
+   stand no more than 1.65 mm above the lid. The rotor disc begins 5 mm above
+   the lid, leaving 3.35 mm nominal clearance above those heads. Check the
+   actual assembled stack and rotor runout before operation.
 6. Clamp the first stage, then the repeated stage at 90 degrees. Install the
-   cap and upper collar. Check axial retention, balance, guard clearance and
+   cap and upper collar. Stage undersides are at 73 and 173 mm; the cap spans
+   273–276 mm and the upper collar spans 276–281 mm. The shaft runs from 3 to
+   281 mm, engaging the full upper collar without moving the bearing/gear stack.
+   Check axial retention, balance, guard clearance and
    fastener access with the electrical load disconnected.
 
 The native TUR-BOM sheet lists the printed/purchased definitions and all clamp,
