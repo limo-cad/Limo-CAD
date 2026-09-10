@@ -1,8 +1,9 @@
 # Native command scripts
 
-The interpreter and examples are validated, while the app/preview integration in
-PR #99 remains draft. See [the interface review](script-interface-review.md) for
-the tested evidence and remaining work before promotion.
+The interpreter is reviewed separately from the app/preview integration in
+PR #99, which remains draft. Bundled construction recipes and their checks form
+the next layer. See [the interface review](script-interface-review.md) for the
+tested evidence and remaining work before promotion.
 
 A `.nbcad.jsonc` file is the reproducible construction source for a native design.
 A `.nbcad` file is the editable project produced by those commands. Keep both when
@@ -19,11 +20,9 @@ runtime.
 
 ## Open and run scripts in CAD
 
-The **Scripts** button opens the script workspace beside the current design. Each
-bundled example uses the shared command groups behind the ribbon and MCP
-interface. Choose a short capability lesson to learn an operation, or the complete
-bench to follow a larger design. The source remains readable JSONC with its comments,
-chapter notes and commands.
+The **Scripts** button opens the script workspace beside the current design.
+Load a commented source file to inspect its chapter notes and grouped commands.
+The recipe-library layer adds the bundled collection using this same adapter.
 
 The Source tab supports editing, validation through the Rust parser, and **Save
 script as…**. The file-path disclosure exposes the same loader to the semantic
@@ -42,8 +41,8 @@ The playback bar docks below the viewport. **Close** hides it without changing
 execution; **Show playback** restores it from the top bar, including after a run
 has completed or stopped.
 
-Short lessons can also provide an isolated miniature preview. The fillet lesson
-exports captioned frames before and after rounding the top rim. Preview execution
+Short lessons can also provide an isolated miniature preview by exporting
+captioned scene frames. Preview execution
 uses a separate headless engine, then displays its returned tessellation in the
 small preview surface; it does not borrow the active document, camera or native
 viewport’s feature-preview channel. Ribbon hover help can show the same lesson
@@ -51,8 +50,8 @@ where an example is associated with that operation. Hovering does not run the
 lesson in the active design.
 
 Preview is intentionally bounded to short source files: at most 80 construction
-steps and checks combined, and 2 MiB of source. Use **Run in new design** for the
-full bench. Both paths execute the same native command interpreter; a preview is
+steps and checks combined, and 2 MiB of source. Use **Run in new design** for a
+larger assembly. Both paths execute the same native command interpreter; a preview is
 not a replacement for the editable `.nbcad` project or the final validation gate.
 
 ## One execution path
@@ -63,7 +62,7 @@ interface operations. The MCP entry point is one call:
 ```json
 {
   "action": "script",
-  "path": "/absolute/path/to/garden-bench.nbcad.jsonc",
+  "path": "/absolute/path/to/design.nbcad.jsonc",
   "mode": "present",
   "validate": true
 }
@@ -226,12 +225,16 @@ same window and leaves a blank design for the next example. It never launches
 another desktop window.
 
 `cargo xtask test-mcp scripts-workspace --server MCP --session UUID --out DIRECTORY`
-drives the **Scripts** button, bundled fillet lesson and **Run in new design**
-through fresh semantic UI controls. It plays and fits the isolated preview, checks
-the editable sketch, extrusion and fillet, and confirms the original design
-remains unchanged in its retained tab. Closing and showing the completed playback
-controls and script dock must release and restore their viewport space. Add
-`--script /absolute/path/example.nbcad.jsonc` to exercise the visible file-path
-loader before selecting the bundled lesson. It leaves the finished lesson open
-in the same window and writes its native project and proof report to the output
-directory. Finish any active sketch or feature edit before starting this check.
+loads a small commented sketch-and-extrusion source through the visible file-path
+control. Loading must preserve the original model and tabs; **Run in new design**
+must retain the original and create an editable, fully constrained result in one
+new tab. The scenario also closes and restores the Scripts dock and completed
+playback controls, checking viewport space, retained source and completion state.
+It writes its temporary source, native result and proof report to the output
+directory. Finish active editing before running this check. It uses the named
+existing window and has no dependency on the bundled example catalog.
+Add `--script /absolute/path/source.nbcad.jsonc` to also check loading another
+source before the built-in fixture; the additional source is never executed.
+
+The recipe-library layer adds real-kernel preview and bundled-lesson acceptance
+scenarios alongside their authored sources, extending these adapter checks.

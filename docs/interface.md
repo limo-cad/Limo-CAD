@@ -159,8 +159,9 @@ motion coordinates instead of silently ignoring them. Reports include call argum
 and a model checkpoint. Workshop resets are explicit and require an empty
 document at the start. Do not run it over user work.
 
-For a richer editable design, run `cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --server <nbcad-mcp>`.
-This Rust runner interprets the commented command file through the shared interface.
+For a readable authored design, run `cargo xtask run-script FILE.nbcad.jsonc --server <nbcad-mcp>`.
+This Rust runner interprets the commented command file through the shared interface;
+the recipe-library layer carries the complete bench and focused feature lessons.
 Add `--repeat 2` for independent headless determinism checks, or use
 `--session <UUID> --present` to narrate and frame the construction in an existing window.
 See `native-scripts.md` for the format and playback controls.

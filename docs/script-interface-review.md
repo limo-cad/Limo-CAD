@@ -2,7 +2,9 @@
 
 PR [#99](https://github.com/jackControls/noBS-CAD/pull/99) is a saved, tested draft.
 The construction engine is usable; its product and learning interface still needs
-work. These are implementation gaps and release decisions, not failures hidden
+work. The Rust interpreter is a separate lower layer; bundled recipe sources,
+their catalog and the example-dependent acceptance checks are a separate upper
+layer. These are implementation gaps and release decisions, not failures hidden
 by the example's passing geometry checks.
 
 ## Validated implementation

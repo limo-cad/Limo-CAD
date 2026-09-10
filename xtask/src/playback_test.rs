@@ -58,6 +58,27 @@ fn viewport_size(inspected: &Value) -> Result<[f64; 2]> {
     ])
 }
 
+fn project_tabs(inspected: &Value) -> Vec<String> {
+    controls(inspected)
+        .filter(|control| control["role"] == "tab" && control["surface"] == "file-and-project-tabs")
+        .filter_map(|control| {
+            let label = control["label"].as_str()?;
+            // Active tabs append a rename hint; compare the document labels.
+            Some(
+                if control["selected"] == true {
+                    label
+                        .rsplit_once(" — ")
+                        .map(|(label, _)| label)
+                        .unwrap_or(label)
+                } else {
+                    label
+                }
+                .to_owned(),
+            )
+        })
+        .collect()
+}
+
 fn control(client: &mut Client, label: &str, value: Option<&str>) -> Result<Value> {
     // A different client may inspect while the script is running. Explicit
     // stale-ID rejection is safe to retry; successful clicks are never retried.
@@ -137,6 +158,70 @@ fn save(client: &mut Client, path: &Path) -> Result<()> {
     Ok(())
 }
 
+// This small fixture exercises the adapter, independently of a bundled catalog.
+// Real geometry checks for authored lessons belong alongside those recipes.
+fn workspace_source(completed_chapter: &str) -> Result<String> {
+    let source = json!({"version":1,"name":"Scripts workspace regression","starting_state":"empty","steps":[
+        {"chapter":"Locate the test profile","note":"Load this source without executing it, then run in its own design tab.","duration_ms":0},
+        {"id":"begin","call":{"group":"sketch/draw","operation":"sketch_begin","arguments":{"name":"Workspace stock","plane":{"type":"origin_plane","plane":"xy"}}}},
+        {"id":"profile","call":{"group":"sketch/draw","operation":"sketch_add_rectangle_locked","arguments":{"mode":"two_point","anchor":{"x":0,"y":0},"corner_hint":{"x":20,"y":10},"width_mm":20,"height_mm":10,"ctrl_held":true}}},
+        {"id":"locate","call":{"group":"sketch/constrain","operation":"sketch_add_constraint","arguments":{"type":"fix","entity":{"$select":{"from":{"$ref":"profile","pointer":"/sketch"},"path":"/entities","where":{"/kind":"point","/position/x":0,"/position/y":0},"take":"one","pointer":"/id"}}}}},
+        {"id":"finish","call":{"group":"sketch/draw","operation":"sketch_finish","arguments":{}}},
+        {"id":"extrude","call":{"group":"solid/build","operation":"solid_extrude","arguments":{"sketch_name":"Workspace stock","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":6},"taper_angle_deg":0,"flip":false,"target_body_ids":[]}}},
+        {"view":"isometric","fit":true,"duration_ms":0},
+        {"chapter":completed_chapter,"note":"The editable sketch and extrusion are complete.","duration_ms":0}
+    ],"checks":[
+        {"id":"scene","call":{"group":"solid/check","operation":"solid_scene","arguments":{}},"expect":{"/errors":[]}}
+    ],"exports":{"scene":{"$ref":"scene"}}});
+    Ok(format!(
+        "// Independent workspace adapter fixture. Dimensions are millimetres.\n{}\n",
+        serde_json::to_string_pretty(&source)?
+    ))
+}
+
+fn load_workspace_source(
+    client: &mut Client,
+    path: &Path,
+    original_session: &str,
+    original: &Value,
+    original_tabs: &[String],
+) -> Result<Value> {
+    // Textareas normalize all line endings to LF; comments and final lines stay.
+    let expected = fs::read_to_string(path)?
+        .replace("\r\n", "\n")
+        .replace('\r', "\n");
+    let opened = ui(client, json!({"action":"inspect"}))?;
+    if !controls(&opened).any(|control| control["label"] == "Script path") {
+        control(client, "Load from a file path", None)?;
+    }
+    control(client, "Script path", Some(&path.to_string_lossy()))?;
+    control(client, "Load script", None)?;
+    wait_until("the file-path loader", || {
+        let inspected = ui(client, json!({"action":"inspect"}))?;
+        let ready = controls(&inspected)
+            .any(|control| control["label"] == "Run in new design" && control["disabled"] == false)
+            .then_some(());
+        Ok(ready)
+    })?;
+    control(client, "Source", None)?;
+    let loaded = ui(client, json!({"action":"inspect"}))?;
+    ensure!(
+        controls(&loaded)
+            .any(|control| control["label"] == "Script source" && control["value"] == expected),
+        "The path loader did not expose the complete commented source: {}",
+        path.display()
+    );
+    ensure!(
+        loaded["active_session_id"] == original_session && model(client)? == *original,
+        "Loading a script changed the active design"
+    );
+    ensure!(
+        project_tabs(&loaded) == original_tabs,
+        "Loading a script changed the project tabs"
+    );
+    Ok(loaded)
+}
+
 fn workspace_inner(args: &[String]) -> Result<()> {
     let mut options = HashMap::new();
     let mut args = args.iter();
@@ -170,6 +255,12 @@ fn workspace_inner(args: &[String]) -> Result<()> {
             .trim_start_matches(r"\\?\")
             .to_string(),
     );
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+    let completed_chapter = format!("Workspace regression complete {stamp}");
+    let source = workspace_source(&completed_chapter)?;
+    let source_path = out.join(format!("workspace-{stamp}.nbcad.jsonc"));
+    fs::write(&source_path, &source)?;
+
     let mut client = Client::start(server)?;
     client.call("cad_attach", json!({"session_id":original_session}))?;
     let initial_ui = ui(&mut client, json!({"action":"inspect"}))?;
@@ -179,36 +270,13 @@ fn workspace_inner(args: &[String]) -> Result<()> {
     );
     let original = model(&mut client)?;
     fs::write(
-        out.join("original-model.json"),
+        out.join(format!("original-{stamp}-model.json")),
         serde_json::to_vec_pretty(&original)?,
     )?;
     ensure!(
         active_sketch(&mut client)?.is_null(),
         "Finish the current sketch before running this test; the original design was not changed"
     );
-    let project_tabs = |inspected: &Value| -> Vec<String> {
-        controls(inspected)
-            .filter(|control| {
-                control["role"] == "tab" && control["surface"] == "file-and-project-tabs"
-            })
-            // The active tab title appends its rename hint. Its document label
-            // remains the same when the new design makes this tab inactive.
-            .filter_map(|control| {
-                let label = control["label"].as_str()?;
-                Some(
-                    if control["selected"] == true {
-                        label
-                            .rsplit_once(" — ")
-                            .map(|(label, _)| label)
-                            .unwrap_or(label)
-                    } else {
-                        label
-                    }
-                    .to_owned(),
-                )
-            })
-            .collect()
-    };
     let original_tabs = project_tabs(&initial_ui);
     ensure!(
         !original_tabs.is_empty(),
@@ -217,138 +285,58 @@ fn workspace_inner(args: &[String]) -> Result<()> {
 
     control(&mut client, "Scripts", None)?;
     if let Some(path) = options.get("--script") {
-        // A textarea exposes CRLF and lone CR as LF. Compare that browser
-        // representation without trimming comments, whitespace or final lines.
-        let expected_source = fs::read_to_string(path)
-            .context("Read the optional script fixture")?
-            .replace("\r\n", "\n")
-            .replace('\r', "\n");
-        let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        if !controls(&inspected).any(|control| control["label"] == "Script path") {
-            control(&mut client, "Load from a file path", None)?;
-        }
-        control(&mut client, "Script path", Some(path))?;
-        control(&mut client, "Load script", None)?;
-        wait_until("the file-path loader", || {
+        load_workspace_source(
+            &mut client,
+            Path::new(path),
+            original_session,
+            &original,
+            &original_tabs,
+        )?;
+    }
+    let loaded = load_workspace_source(
+        &mut client,
+        &source_path,
+        original_session,
+        &original,
+        &original_tabs,
+    )?;
+    control(&mut client, "Script run mode", Some("present"))?;
+    control(&mut client, "Script speed", Some("2"))?;
+    // Exercise the actual adapter, not cad_interface/action:script.
+    control(&mut client, "Run in new design", None)?;
+    let finished = (|| -> Result<(String, Value, Value)> {
+        let running = wait_until("a retained new design tab", || {
+            let inspected = ui(&mut client, json!({"action":"inspect"}))?;
+            Ok(inspected["active_session_id"]
+                .as_str()
+                .filter(|session| *session != original_session)
+                .map(|_| inspected.clone()))
+        })?;
+        let final_session = running["active_session_id"]
+            .as_str()
+            .context("New design has no session")?
+            .to_owned();
+        let completed = wait_until("the native workspace script to complete", || {
+            let state = status(&mut client)?;
             let inspected = ui(&mut client, json!({"action":"inspect"}))?;
             let ready = controls(&inspected).any(|control| {
                 control["label"] == "Run in new design" && control["disabled"] == false
             });
-            Ok(ready.then_some(()))
+            Ok(
+                (state["finished"] == true && state["chapter"] == completed_chapter && ready)
+                    .then_some(state),
+            )
         })?;
-        control(&mut client, "Source", None)?;
-        let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        ensure!(
-            controls(&inspected).any(|control| control["label"] == "Script source"
-                && control["value"] == expected_source),
-            "The path loader did not expose the requested source"
-        );
-        ensure!(
-            inspected["active_session_id"] == original_session && model(&mut client)? == original,
-            "Loading a script path changed the active design"
-        );
-    }
-    const LESSON: &str = "Sketch, extrude, ease the edges";
-    wait_until("the bundled fillet lesson", || {
-        let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        let ready = controls(&inspected).any(|control| {
-            control["surface"] == "document/scripts"
-                && control["label"] == LESSON
-                && control["disabled"] == false
-        });
-        Ok(ready.then_some(()))
-    })?;
-    control(&mut client, LESSON, None)?;
-    wait_until("the loaded script controls", || {
-        let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        let ready = controls(&inspected)
-            .any(|control| control["label"] == "Run in new design" && control["disabled"] == false);
-        Ok(ready.then_some(()))
-    })?;
-    control(&mut client, "Source", None)?;
-    let loaded = ui(&mut client, json!({"action":"inspect"}))?;
-    let source = controls(&loaded)
-        .find(|control| control["label"] == "Script source")
-        .and_then(|control| control["value"].as_str())
-        .context("Loaded source is not readable through MCP")?
-        .to_owned();
-    ensure!(
-        source.contains(LESSON) && source.contains("solid_fillet"),
-        "The selected source is not the fillet lesson"
-    );
-    ensure!(
-        loaded["active_session_id"] == original_session && model(&mut client)? == original,
-        "Opening a lesson changed the active design"
-    );
-    control(&mut client, "Overview", None)?;
-    wait_until("the native isolated preview frames", || {
-        let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        let ready = controls(&inspected)
-            .any(|control| control["label"] == "Next preview step" && control["disabled"] == false);
-        Ok(ready.then_some(()))
-    })?;
-    control(&mut client, "Next preview step", None)?;
-    control(&mut client, "Fit preview model", None)?;
-    let previewed = ui(&mut client, json!({"action":"inspect"}))?;
-    ensure!(
-        controls(&previewed)
-            .any(|control| control["label"] == "Previous preview step"
-                && control["disabled"] == false),
-        "The miniature preview did not advance to its finished geometry"
-    );
-    ensure!(
-        previewed["active_session_id"] == original_session && model(&mut client)? == original,
-        "Playing or fitting the isolated preview changed the active design"
-    );
-    control(&mut client, "Script run mode", Some("present"))?;
-    control(&mut client, "Script speed", Some("2"))?;
-    // This is intentionally a semantic click, not cad_interface/action:script.
-    // It exercises the native app's load/inspect/new-document/run integration.
-    control(&mut client, "Run in new design", None)?;
-    let running = wait_until("a retained new design tab", || {
-        let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        Ok(inspected["active_session_id"]
-            .as_str()
-            .filter(|session| *session != original_session)
-            .map(|_| inspected.clone()))
-    })?;
-    let final_session = running["active_session_id"]
-        .as_str()
-        .context("New design has no session")?
-        .to_owned();
-    let mut started = false;
-    let completed = wait_until("the native workspace script to complete", || {
-        let state = status(&mut client)?;
-        started |= state["chapter"].as_str().is_some_and(|chapter| {
-            [
-                "Locate the stock",
-                "Give the profile thickness",
-                "Round only the top rim",
-                "Three editable features",
-            ]
-            .contains(&chapter)
-        });
-        ensure!(
-            !started || state["stopped"] != true,
-            "The workspace script stopped: {state}"
-        );
-        let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        let ready = controls(&inspected)
-            .any(|control| control["label"] == "Run in new design" && control["disabled"] == false);
-        Ok(
-            (state["finished"] == true && state["chapter"] == "Three editable features" && ready)
-                .then_some(state),
-        )
-    });
-    if completed.is_err() {
+        Ok((final_session, completed, model(&mut client)?))
+    })();
+    if finished.is_err() {
         let _ = ui(
             &mut client,
             json!({"action":"presentation","command":"stop",
-            "text":"Script workspace test stopped after a failed assertion. The current model is retained."}),
+            "text":"Workspace regression stopped after a failed assertion. The current model is retained."}),
         );
     }
-    let completed = completed?;
-    let final_model = model(&mut client)?;
+    let (final_session, completed, final_model) = finished?;
     let scene = client.call("solid_scene", json!({}))?;
     let sketches = client.call("sketch_finished", json!({}))?;
     let features = final_model
@@ -360,33 +348,29 @@ fn workspace_inner(args: &[String]) -> Result<()> {
             .iter()
             .map(|feature| feature["kind"].as_str())
             .collect::<Vec<_>>()
-            == vec![Some("sketch"), Some("extrude"), Some("fillet")],
-        "Unexpected feature history: {features:?}"
+            == vec![Some("sketch"), Some("extrude")],
+        "The workspace did not retain the sketch and extrusion: {features:?}"
     );
     ensure!(
         scene["errors"] == json!([])
             && scene["bodies"]
                 .as_array()
                 .is_some_and(|bodies| bodies.len() == 1),
-        "The completed lesson has invalid geometry: {scene}"
+        "The workspace fixture has invalid geometry: {scene}"
     );
     ensure!(
         sketches
             .as_array()
             .is_some_and(|sketches| sketches.len() == 1)
             && sketches[0]["dof"]["value"] == 0,
-        "The lesson did not retain its fully constrained sketch: {sketches}"
+        "The workspace did not retain its fully constrained sketch: {sketches}"
     );
     ensure!(
         final_model
             .pointer("/extrudes/0/extent/distance")
             .and_then(Value::as_f64)
-            == Some(12.0)
-            && final_model
-                .pointer("/fillets/0/radius")
-                .and_then(Value::as_f64)
-                == Some(2.0),
-        "The editable lesson parameters changed"
+            == Some(6.0),
+        "The editable extrusion distance changed"
     );
     let completed_ui = ui(&mut client, json!({"action":"inspect"}))?;
     let final_tabs = project_tabs(&completed_ui);
@@ -410,32 +394,30 @@ fn workspace_inner(args: &[String]) -> Result<()> {
     client.call("cad_attach", json!({"session_id":original_session}))?;
     ensure!(
         model(&mut client)? == original,
-        "Running the lesson changed the retained original project"
+        "Running the source changed the retained original project"
     );
     client.call("cad_attach", json!({"session_id":final_session}))?;
 
     let docked_size = viewport_size(&completed_ui)?;
     control(&mut client, "Close playback controls", None)?;
     let playback_closed_size = wait_until("viewport height released by closed playback", || {
-        let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        let size = viewport_size(&inspected)?;
+        let size = viewport_size(&ui(&mut client, json!({"action":"inspect"}))?)?;
         Ok((size[1] > docked_size[1] + 1.0).then_some(size))
     })?;
     let hidden = status(&mut client)?;
     ensure!(
         hidden["visible"] == false && hidden["finished"] == true,
-        "Closing completed playback changed its completion: {hidden}"
+        "Closing playback changed its completion: {hidden}"
     );
     control(&mut client, "Show playback controls", None)?;
     wait_until("the restored playback layout", || {
-        let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        let size = viewport_size(&inspected)?;
+        let size = viewport_size(&ui(&mut client, json!({"action":"inspect"}))?)?;
         Ok(((size[1] - docked_size[1]).abs() <= 1.0).then_some(()))
     })?;
     let shown = status(&mut client)?;
     ensure!(
         shown["visible"] == true && shown["finished"] == true,
-        "Showing completed playback lost its completion: {shown}"
+        "Showing playback lost its completion: {shown}"
     );
     for field in [
         "chapter",
@@ -456,8 +438,7 @@ fn workspace_inner(args: &[String]) -> Result<()> {
     control(&mut client, "Close scripts", None)?;
     let closed = wait_until("viewport width released by closed Scripts", || {
         let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        let size = viewport_size(&inspected)?;
-        Ok((size[0] > docked_size[0] + 1.0).then_some(inspected))
+        Ok((viewport_size(&inspected)?[0] > docked_size[0] + 1.0).then_some(inspected))
     })?;
     ensure!(
         !controls(&closed).any(|control| control["label"] == "Run in new design"),
@@ -465,8 +446,7 @@ fn workspace_inner(args: &[String]) -> Result<()> {
     );
     control(&mut client, "Scripts", None)?;
     wait_until("the restored Scripts layout", || {
-        let inspected = ui(&mut client, json!({"action":"inspect"}))?;
-        let size = viewport_size(&inspected)?;
+        let size = viewport_size(&ui(&mut client, json!({"action":"inspect"}))?)?;
         Ok(((size[0] - docked_size[0]).abs() <= 1.0).then_some(()))
     })?;
     control(&mut client, "Source", None)?;
@@ -474,26 +454,23 @@ fn workspace_inner(args: &[String]) -> Result<()> {
     ensure!(
         controls(&reopened)
             .any(|control| control["label"] == "Script source" && control["value"] == source),
-        "Closing/reopening the dock lost its loaded source"
+        "Closing/reopening Scripts lost its loaded source"
     );
     ensure!(
         model(&mut client)? == final_model,
         "Closing/reopening controls changed the finished model"
     );
-    control(&mut client, "Overview", None)?;
-    save(&mut client, &out.join("fillet-lesson.nbcad"))?;
+    save(&mut client, &out.join(format!("workspace-{stamp}.nbcad")))?;
     let report = json!({"passed":true,"original_session_id":original_session,"final_session_id":final_session,
-        "cases":["semantic-scripts-button","bundled-lesson-load","load-preserves-model","readable-source",
-            "isolated-preview-next-fit","native-run-in-new-design","editable-sketch-extrude-fillet","retained-original-tab",
-            "completed-playback-close-show","script-dock-close-show","docks-release-viewport-space"],
-        "script_path":options.get("--script"),"original_tabs":original_tabs,"final_tabs":final_tabs,"presentation":shown,
+        "cases":["semantic-scripts-button","path-load-with-comments","load-preserves-model-and-tabs","native-run-in-new-design",
+            "editable-sketch-extrude","retained-original-tab","completed-playback-close-show","script-dock-close-show","docks-release-viewport-space"],
+        "script_path":source_path,"additional_load_path":options.get("--script"),"source":source,"original_tabs":original_tabs,"final_tabs":final_tabs,"presentation":shown,
         "viewport_sizes":{"docked":docked_size,"playback_closed":playback_closed_size,"scripts_closed":viewport_size(&closed)?},
-        "final_model":final_model,"final_scene":scene,"final_sketches":sketches,
-        "loaded_ui":loaded,"completed_ui":completed_ui});
+        "final_model":final_model,"final_scene":scene,"final_sketches":sketches,"loaded_ui":loaded,"completed_ui":completed_ui});
     fs::write(out.join("report.json"), serde_json::to_vec_pretty(&report)?)?;
     fs::write(out.join("active-session.txt"), &final_session)?;
-    println!("PASS native Scripts loading, new-design replay, retained original, editable result, and Close/Show controls");
-    println!("Finished lesson session: {final_session}");
+    println!("PASS native Scripts path loading, retained original, editable new design, and Close/Show layout");
+    println!("Finished workspace session: {final_session}");
     println!("Proof and editable native result: {}", out.display());
     Ok(())
 }

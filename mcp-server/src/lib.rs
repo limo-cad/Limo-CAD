@@ -4024,16 +4024,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn embedded_preview_uses_real_kernel_and_enforces_small_script_limits() {
-        let source = include_str!("../../examples/scripts/fillet-basics.nbcad.jsonc");
-        let inspected = inspect_script(json!({"source":source})).unwrap();
-        assert_eq!(inspected["step_count"], 17);
-        let result = preview_script(source).unwrap();
-        let frames = result["exports"]["preview_frames"].as_array().unwrap();
-        assert_eq!(frames.len(), 2);
-        assert_eq!(frames[0]["scene"]["bodies"].as_array().unwrap().len(), 1);
-        assert_ne!(frames[0]["scene"], frames[1]["scene"]);
-
+    fn embedded_preview_enforces_small_script_limits() {
         let too_long = json!({"version":1,"name":"Long preview","steps":
             (0..81).map(|_|json!({"note":"Another step"})).collect::<Vec<_>>()});
         assert!(preview_script(&too_long.to_string())

@@ -12,15 +12,13 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         return crate::playback_test::run_workspace(&args.collect::<Vec<_>>())
             .map_err(anyhow::Error::msg);
     }
-    if suite == "garden-bench" {
-        return crate::replay::run(args);
-    }
     let script = match suite.as_str() {
         "contracts" => "contracts.mjs",
         "live" => "live.mjs",
         "controls" => "controls.mjs",
         "exit" => "exit.mjs",
         "bench" => "bench.mjs",
+        "garden-bench" => "garden-bench.mjs",
         "drawing" => "drawing.mjs",
         _ => bail!("Unknown MCP suite '{suite}'; use contracts, live, controls, playback, scripts-workspace, exit, bench, garden-bench, or drawing"),
     };

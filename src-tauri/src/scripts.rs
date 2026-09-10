@@ -86,32 +86,9 @@ pub async fn native_script_preview(
 
 #[tauri::command]
 pub fn native_script_examples() -> Value {
-    let mut examples = json!([
-        {
-            "id":"garden-bench",
-            "name":"Garden bench",
-            "summary":"Build and validate the complete parametric timber bench, its assembly, and manufacturing checks.",
-            "group":"document/scripts",
-            "operation":"cad_script",
-            "preview":false,
-            "source":include_str!("../../examples/scripts/garden-bench.nbcad.jsonc"),
-        },
-        {
-            "id":"fillet-basics",
-            "name":"Sketch, extrude, ease the edges",
-            "summary":"Make a dimensioned timber block, extrude 12 mm of stock, then round its four top edges by 2 mm.",
-            "group":"solid/refine",
-            "operation":"solid_fillet",
-            "preview":true,
-            "source":include_str!("../../examples/scripts/fillet-basics.nbcad.jsonc"),
-        }
-    ]);
-    for example in examples.as_array_mut().unwrap() {
-        let inspected = nbcad_mcp::inspect_script(json!({"source":example["source"]}))
-            .expect("bundled script must pass its shared preflight test");
-        example["operations"] = inspected["operations"].clone();
-    }
-    examples
+    // The recipe-library layer supplies the shared catalog. The adapter itself
+    // can inspect and run any source loaded by the user without bundled designs.
+    json!([])
 }
 
 #[cfg(test)]
@@ -128,14 +105,13 @@ mod tests {
     }
 
     #[test]
-    fn bundled_scripts_use_the_shared_preflight_parser() {
-        for example in native_script_examples().as_array().unwrap() {
-            let inspected =
-                native_script_inspect(example["source"].as_str().map(str::to_owned), None).unwrap();
-            assert!(inspected["step_count"].as_u64().unwrap() > 0);
-            assert!(!inspected["chapters"].as_array().unwrap().is_empty());
-            assert_eq!(example["operations"], inspected["operations"]);
-        }
+    fn source_inspection_uses_the_shared_preflight_parser() {
+        let inspected = native_script_inspect(
+            Some(r#"{"version":1,"name":"Loaded lesson","steps":[{"note":"Inspect before running"}]}"#.into()),
+            None,
+        ).unwrap();
+        assert_eq!(inspected["step_count"], 1);
+        assert_eq!(inspected["chapters"].as_array().unwrap().len(), 1);
         assert_eq!(
             native_script_inspect(Some("{}".into()), None).unwrap_err()["code"],
             "invalid_script"

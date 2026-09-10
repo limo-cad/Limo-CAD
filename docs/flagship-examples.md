@@ -79,9 +79,9 @@ without physical validation.
 
 ## Smaller capability demonstrations
 
-The [native script examples](../examples/scripts/README.md) are the authored
-construction sources: `fillet-basics.nbcad.jsonc` is a short first-part lesson and
-`garden-bench.nbcad.jsonc` is the complete bench. Run them with
+The [native script format](../examples/scripts/README.md) is the authored
+construction format. The recipe-library layer above playback carries the short
+fillet lesson and complete bench sources, plus future small feature lessons. Run a source with
 `cargo xtask run-script FILE --server MCP`; the same Rust interpreter supports
 headless comparison and live presentation. The older `cargo xtask test-mcp`
 workshop, drawing, live, controls and contracts drivers remain focused test entry

@@ -107,8 +107,8 @@ mutations and a restored baseline; it does not reconstruct parametric history
 from an imported B-rep. Use authored native scripts for new teaching examples.
 
 ```sh
-cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --server MCP --repeat 2 --out proof
-cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --server MCP --session UUID --new --present --speed 2 --compare proof/run-1.json --out live-proof
+cargo xtask run-script FILE.nbcad.jsonc --server MCP --repeat 2 --out proof
+cargo xtask run-script FILE.nbcad.jsonc --server MCP --session UUID --new --present --speed 2 --compare proof/run-1.json --out live-proof
 ```
 
 Preserve the user's current document first. `--new` creates a design tab in the

@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     fs,
     io::{BufRead, BufReader, Write},
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, ChildStdin, Command, Stdio},
     sync::mpsc::{self, Receiver},
     time::Duration,
@@ -225,11 +225,7 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     if !speed.is_finite() || !(0.1..=16.0).contains(&speed) {
         bail!("Speed must be from 0.1 to 16");
     }
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let path = fs::canonicalize(
-        file.map(PathBuf::from)
-            .unwrap_or_else(|| root.join("examples/scripts/garden-bench.nbcad.jsonc")),
-    )?;
+    let path = fs::canonicalize(file.ok_or_else(|| anyhow!("Supply a .nbcad.jsonc script path"))?)?;
     let server = required(&args, "--server")?;
     let repeat = args
         .get("--repeat")
