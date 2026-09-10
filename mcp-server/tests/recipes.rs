@@ -113,7 +113,10 @@ impl Client {
             input,
             replies,
             id: 0,
-            timeout: Duration::from_secs(60),
+            // A recipe call includes the complete native construction and
+            // drawing package. Keep the vise's existing bounded allowance
+            // when sharing this client with the turbine acceptance tests.
+            timeout: Duration::from_secs(600),
         };
         client.rpc("initialize", json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"recipe-regression","version":"1"}}));
         writeln!(

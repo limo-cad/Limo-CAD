@@ -7,7 +7,7 @@ Rendering changes the presentation, not the modeling operations or final checks.
 
 ## Review and merge order
 
-The [native GitHub stack map in PR100](https://github.com/jackControls/noBS-CAD/pull/100)
+The [native GitHub stack shown in PR #111](https://github.com/jackControls/noBS-CAD/pull/111)
 is the current source of truth for its order, approvals and CI. Its layers are:
 
 1. PR95: associative drawing dimensions.
@@ -18,11 +18,26 @@ is the current source of truth for its order, approvals and CI. Its layers are:
 6. PR99: MCP/native adapters, source loading and live presentation.
 7. PR102: authored parts and assemblies, shared catalog,
    teaching notes, camera directions and independent validation.
+8. PR103: driven mechanism coordinates and persistent gear relations.
+9. PR104: native associative drawing exports and placed assembly views.
+10. PR105: successful-history reuse, patterned joins and mesh-export isolation.
+11. PR106: exact authored coordinates, external-thread commands and script preflight.
+12. PR107: protected drawing references, exact inspection reuse and source markers.
+13. PR108: printable definition exports with atomic document ownership.
+14. PR109: remove unused component placeholders for consumed construction bodies.
+15. PR110: the D-screw vise, fit coupon, print layout and manufacturing drawings.
+16. PR111: the vertical-axis turbine, four fit coupons and assembly/part drawings.
 
 Each PR's diff is against the layer below it. GitHub applies main's review rules
 to every layer and can merge a reviewed prefix from the bottom. A draft layer
 does not prevent a ready prefix below it from landing. Use the native stack
 merge control; an ordinary feature-branch merge is not the release workflow.
+
+The recipe layers can be reviewed in parallel against their immediate parents;
+merge the approved prefix in order. PR99 remains draft for the interface and
+native-preview decisions documented in `script-interface-review.md`. Its status
+does not erase the independently reviewable geometry and recipe work above it.
+No approvals or repository protection rules are bypassed by using a stack.
 
 PR88 remains an independent diagnostics change against main. When it lands,
 carry its session-generation logic into the extracted MCP library while updating
@@ -52,7 +67,9 @@ turbine with an integrated motor/generator, and a functional screw vise. Their
 construction sources,
 editing checks, editable drawings and teaching notes belong together. See
 [recipe development](recipe-development.md) for actual readiness and the next
-work; a design brief is not a runnable catalog entry.
+work. All three now have runnable native sources. The two new manufacturing
+candidates include editable drawings and fit coupons; physical qualification
+and the bench's full drawing package remain open.
 
 Single-feature lessons use the same versioned JSONC format and catalog. Prefer a
 small, clear part that demonstrates a modeling decision, a meaningful parameter
