@@ -29,6 +29,7 @@ pub fn is_live_engine_query(method: &str) -> bool {
 pub enum PayloadKind {
     Empty,
     Object,
+    BodyAppearance,
     Field(&'static str),
     DatumSource(&'static str),
     EditDatumSource(&'static str),
@@ -721,7 +722,7 @@ pub static MUTATES: &[MutateSpec] = &[
     MutateSpec {
         name: "set_body_appearance",
         engine_method: "set_body_appearance",
-        payload: PayloadKind::Object,
+        payload: PayloadKind::BodyAppearance,
         execution: ExecutionKind::Direct,
     },
 ];
@@ -744,6 +745,10 @@ pub fn encode_payload(kind: PayloadKind, arguments: &Value) -> Result<String, St
         PayloadKind::Empty => Ok(String::new()),
         PayloadKind::Object => serde_json::to_string(arguments)
             .map_err(|error| format!("could not encode arguments: {error}")),
+        PayloadKind::BodyAppearance => {
+            serde_json::to_string(&nbcad_export::resolve_body_appearance(arguments)?)
+                .map_err(|error| format!("could not encode body appearance: {error}"))
+        }
         PayloadKind::Field(field) => {
             let value = arguments
                 .get(field)
@@ -882,6 +887,43 @@ mod tests {
         assert!(field.contains("Part"));
         let err = encode_payload(PayloadKind::Field("name"), &json!({})).unwrap_err();
         assert!(err.contains("missing required argument 'name'"));
+    }
+
+    #[test]
+    fn material_shorthand_and_explicit_appearance_use_the_shared_payload() {
+        let spec = lookup_mutate("set_body_appearance").unwrap();
+        let value: Value = serde_json::from_str(
+            &encode_payload(
+                spec.payload,
+                &json!({"body_id":7,"preset_id":"bambu.petg.hf.black"}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(value["color"], json!({"r":24,"g":24,"b":24,"a":255}));
+        assert_eq!(value["material_name"], "Bambu PETG HF");
+        assert_eq!(value["filament_type"], "PETG");
+        assert_eq!(value["brand"], "Bambu Lab");
+        assert_eq!(value["color_name"], "Black");
+        assert_eq!(value["filament_id"], "GFG00");
+        assert_eq!(value["density_g_cm3"], 1.27);
+        assert_eq!(value["diameter_mm"], 1.75);
+        let mut custom = value;
+        custom["preset_id"] = Value::Null;
+        custom["material_name"] = json!("Measured prototype material");
+        custom["color"] = json!({"r":20,"g":100,"b":140,"a":255});
+        let encoded: Value =
+            serde_json::from_str(&encode_payload(spec.payload, &custom).unwrap()).unwrap();
+        assert_eq!(
+            encoded, custom,
+            "explicit material metadata must remain editable"
+        );
+        assert!(encode_payload(
+            spec.payload,
+            &json!({"body_id":7,"preset_id":"missing-material"})
+        )
+        .unwrap_err()
+        .contains("unknown material preset_id"));
     }
 
     #[test]

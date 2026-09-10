@@ -4,7 +4,6 @@ use std::thread;
 use std::time::Duration;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use nbcad_core::BodyId;
 use nbcad_export::MeshExportRequest;
 use nbcad_mcp_mutate::{self, PayloadKind as Payload};
 use nbcad_occt::OcctKernel;
@@ -391,7 +390,12 @@ impl CadServer {
                 serde_json::to_value(self.manager.body_appearances())
                     .map_err(|error| format!("encode appearances: {error}"))?
             } else if name == "set_body_appearance" {
-                self.set_body_appearance_tool(arguments)?
+                let appearances = parse_engine_envelope(host::handle(
+                    &mut self.manager,
+                    engine_method,
+                    &payload,
+                ))?;
+                json!({"body_appearances":appearances})
             } else {
                 parse_engine_envelope(host::handle(&mut self.manager, engine_method, &payload))?
             }
@@ -1075,32 +1079,6 @@ impl CadServer {
             "byte_length": bytes.len(),
             "bytes_base64": BASE64.encode(bytes),
         }))
-    }
-
-    fn set_body_appearance_tool(&mut self, arguments: Value) -> Result<Value, String> {
-        let appearance = if let Some(preset_id) = arguments
-            .get("preset_id")
-            .and_then(Value::as_str)
-            .filter(|id| !id.is_empty())
-        {
-            let body_id = arguments
-                .get("body_id")
-                .and_then(Value::as_u64)
-                .ok_or_else(|| "set_body_appearance with preset_id requires body_id".to_string())?;
-            let preset = nbcad_export::find_preset(preset_id).ok_or_else(|| {
-                format!("unknown material preset_id '{preset_id}' (call material_catalog)")
-            })?;
-            preset.to_appearance(BodyId(body_id))
-        } else {
-            serde_json::from_value(arguments).map_err(|error| {
-                format!("invalid body appearance (or pass body_id + preset_id): {error}")
-            })?
-        };
-        let appearances = self
-            .manager
-            .set_body_appearance(appearance)
-            .map_err(|error| error.to_string())?;
-        Ok(json!({ "body_appearances": appearances }))
     }
 
     fn tessellate_tool(&mut self, arguments: Value) -> Result<Value, String> {
@@ -3546,7 +3524,7 @@ fn tool_specs() -> Vec<ToolSpec> {
             "Set body appearance",
             "Assign filament/color to a body. Prefer body_id + preset_id from material_catalog; or pass a full BodyAppearance object.",
             "set_body_appearance",
-            Payload::Object,
+            Payload::BodyAppearance,
             object_schema(
                 json!({
                     "body_id": {
@@ -6827,6 +6805,148 @@ mod tests {
                 .unwrap()[0..2],
             b"PK"
         );
+    }
+
+    #[test]
+    fn material_presets_match_through_headless_and_queued_native_dispatch() {
+        let _guard = session::ENV_LOCK.lock().unwrap();
+        let unique = session::test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("nbcad-material-parity-{unique}"));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let scene = write_one_box_session(&unique);
+        let body = scene["bodies"][0]["id"].clone();
+        let original = session::require_model_json(&unique).unwrap();
+        let mut owning_native_host = CadServer::new().unwrap();
+        owning_native_host
+            .call_tool("cad_load_project_model", json!({"model_json":original}))
+            .unwrap();
+        let mut headless = CadServer::new().unwrap();
+        headless
+            .call_tool("cad_load_project_model", json!({"model_json":original}))
+            .unwrap();
+        let mut attached = CadServer::new().unwrap();
+        attached
+            .call_tool("cad_attach", json!({"session_id":unique}))
+            .unwrap();
+        for (preset, channel, color_name) in [
+            ("bambu.petg.hf.black", 24, "Black"),
+            ("bambu.petg.hf.white", 245, "White"),
+        ] {
+            let arguments = json!({"body_id":body,"preset_id":preset});
+            headless
+                .call_tool("set_body_appearance", arguments.clone())
+                .unwrap();
+            let generation = session::read_heartbeat_generation(&unique).unwrap();
+            attached.call_tool("cad_submit",json!({"name":"set_body_appearance","arguments":arguments,"base_generation":generation})).unwrap();
+            session::apply_inbox_op(&unique, |name, arguments| {
+                // Exercise the actual desktop dispatcher contract: encode the
+                // shared mutation, then call the owning native host directly.
+                // Calling CadServer::call_tool here would hide headless-only
+                // normalization bugs such as the original preset regression.
+                let spec = nbcad_mcp_mutate::lookup_mutate(name).unwrap();
+                let encoded = nbcad_mcp_mutate::encode_payload(spec.payload, &arguments)?;
+                let result = parse_engine_envelope(host::handle(
+                    &mut owning_native_host.manager,
+                    spec.engine_method,
+                    &encoded,
+                ))?;
+                session::publish_applied_snapshot(
+                    &unique,
+                    &owning_native_host
+                        .manager
+                        .export_project_model()
+                        .map_err(|error| error.to_string())?,
+                )?;
+                Ok(result)
+            })
+            .unwrap();
+            let actual = owning_native_host.manager.export_project_model().unwrap();
+            assert_eq!(
+                actual,
+                headless.manager.export_project_model().unwrap(),
+                "full model parity for {preset}"
+            );
+            assert_eq!(
+                session::require_model_json(&unique).unwrap(),
+                actual,
+                "published live snapshot must retain the resolved material"
+            );
+            let model: Value = serde_json::from_str(&actual).unwrap();
+            let appearance = &model["body_appearances"][0];
+            assert_eq!(
+                appearance["color"],
+                json!({"r":channel,"g":channel,"b":channel,"a":255})
+            );
+            assert_eq!(appearance["material_name"], "Bambu PETG HF");
+            assert_eq!(appearance["filament_type"], "PETG");
+            assert_eq!(appearance["brand"], "Bambu Lab");
+            assert_eq!(appearance["color_name"], color_name);
+            assert_eq!(appearance["filament_id"], "GFG00");
+            assert_eq!(appearance["density_g_cm3"], 1.27);
+            let mut reopened = CadServer::new().unwrap();
+            reopened
+                .call_tool("cad_load_project_model", json!({"model_json":actual}))
+                .unwrap();
+            assert_eq!(
+                reopened.manager.export_project_model().unwrap(),
+                headless.manager.export_project_model().unwrap()
+            );
+        }
+        let extract = |export: Value| {
+            let bytes = BASE64
+                .decode(export["bytes_base64"].as_str().unwrap())
+                .unwrap();
+            let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+            let mut model = String::new();
+            std::io::Read::read_to_string(
+                &mut archive.by_name("3D/3dmodel.model").unwrap(),
+                &mut model,
+            )
+            .unwrap();
+            model
+        };
+        let live_mesh = extract(
+            owning_native_host
+                .call_tool("solid_export_3mf", json!({"slicer_target":"bambu_studio"}))
+                .unwrap(),
+        );
+        let headless_mesh = extract(
+            headless
+                .call_tool("solid_export_3mf", json!({"slicer_target":"bambu_studio"}))
+                .unwrap(),
+        );
+        assert_eq!(live_mesh, headless_mesh);
+        assert!(live_mesh.contains("F5F5F5"));
+
+        let before = owning_native_host.manager.export_project_model().unwrap();
+        let generation = session::read_heartbeat_generation(&unique).unwrap();
+        let invalid = json!({"body_id":body,"preset_id":"missing-material"});
+        assert!(headless
+            .call_tool("set_body_appearance", invalid.clone())
+            .is_err());
+        attached.call_tool("cad_submit",json!({"name":"set_body_appearance","arguments":invalid,"base_generation":generation})).unwrap();
+        let error = session::apply_inbox_op(&unique, |name, arguments| {
+            let spec = nbcad_mcp_mutate::lookup_mutate(name).unwrap();
+            let encoded = nbcad_mcp_mutate::encode_payload(spec.payload, &arguments)?;
+            parse_engine_envelope(host::handle(
+                &mut owning_native_host.manager,
+                spec.engine_method,
+                &encoded,
+            ))
+        })
+        .unwrap_err();
+        assert!(error.contains("unknown material preset_id"));
+        assert_eq!(
+            owning_native_host.manager.export_project_model().unwrap(),
+            before
+        );
+        assert_eq!(headless.manager.export_project_model().unwrap(), before);
+        assert_eq!(
+            session::read_heartbeat_generation(&unique).unwrap(),
+            generation
+        );
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

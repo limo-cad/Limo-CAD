@@ -2468,6 +2468,45 @@ mod tests {
     }
 
     #[test]
+    fn native_inbox_dispatch_resolves_material_presets_before_the_host() {
+        let engine = AppState::new();
+        dispatch_inbox_on_engine(
+            &engine,
+            "sketch_begin",
+            &json!({"name":"Material fixture","plane":{"type":"origin_plane","plane":"xy"}}),
+        )
+        .unwrap();
+        dispatch_inbox_on_engine(&engine,"sketch_add_rectangle",&json!({"mode":"two_point","p1":{"x":0.,"y":0.},"p2":{"x":10.,"y":10.},"ctrl_held":false})).unwrap();
+        dispatch_inbox_on_engine(&engine, "sketch_finish", &json!({})).unwrap();
+        let solid=dispatch_inbox_on_engine(&engine,"solid_extrude",&json!({"sketch_name":"Material fixture","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":5.},"taper_angle_deg":0.,"flip":false,"target_body_ids":[]})).unwrap();
+        let body = solid["scene"]["bodies"][0]["id"].clone();
+        let assigned = dispatch_inbox_on_engine(
+            &engine,
+            "set_body_appearance",
+            &json!({"body_id":body,"preset_id":"bambu.petg.hf.black"}),
+        )
+        .unwrap();
+        assert_eq!(assigned[0]["color"], json!({"r":24,"g":24,"b":24,"a":255}));
+        assert_eq!(assigned[0]["material_name"], "Bambu PETG HF");
+        assert_eq!(assigned[0]["brand"], "Bambu Lab");
+        assert_eq!(assigned[0]["filament_type"], "PETG");
+        assert_eq!(assigned[0]["filament_id"], "GFG00");
+        assert_eq!(assigned[0]["density_g_cm3"], 1.27);
+        let before = engine.engine_call("project_export_model", "");
+        let exported = parse_engine_envelope(before.clone()).unwrap();
+        let model: Value = serde_json::from_str(exported.as_str().unwrap()).unwrap();
+        assert_eq!(model["body_appearances"], assigned);
+        assert!(dispatch_inbox_on_engine(
+            &engine,
+            "set_body_appearance",
+            &json!({"body_id":body,"preset_id":"missing-material"})
+        )
+        .unwrap_err()
+        .contains("unknown material preset_id"));
+        assert_eq!(engine.engine_call("project_export_model", ""), before);
+    }
+
+    #[test]
     fn table_driven_accepted_mutates_dispatch_without_name_fallback() {
         // Every shared mutate must resolve to an engine method (no MCP-name
         // fallback). Spot-check a few that previously broke via name passthrough.

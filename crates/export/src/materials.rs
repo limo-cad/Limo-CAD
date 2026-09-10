@@ -88,6 +88,30 @@ pub fn find_preset(id: &str) -> Option<&'static MaterialPreset> {
     catalog_entries().iter().find(|preset| preset.id == id)
 }
 
+/// Resolve the catalog shorthand before dispatching the shared appearance
+/// mutation. Desktop inboxes and headless tools must send the same full value
+/// to the owning engine; deserializing a shorthand directly invents defaults.
+pub fn resolve_body_appearance(arguments: &serde_json::Value) -> Result<BodyAppearance, String> {
+    if let Some(preset_id) = arguments
+        .get("preset_id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|id| !id.is_empty())
+    {
+        let body_id = arguments
+            .get("body_id")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| "set_body_appearance with preset_id requires body_id".to_string())?;
+        let preset = find_preset(preset_id).ok_or_else(|| {
+            format!("unknown material preset_id '{preset_id}' (call material_catalog)")
+        })?;
+        Ok(preset.to_appearance(BodyId(body_id)))
+    } else {
+        serde_json::from_value(arguments.clone()).map_err(|error| {
+            format!("invalid body appearance (or pass body_id + preset_id): {error}")
+        })
+    }
+}
+
 pub fn brands() -> Vec<&'static str> {
     let mut out = Vec::new();
     for preset in catalog_entries() {

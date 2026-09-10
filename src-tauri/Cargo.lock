@@ -3977,6 +3977,7 @@ dependencies = [
 name = "nbcad-mcp-mutate"
 version = "0.1.0"
 dependencies = [
+ "nbcad-export",
  "serde_json",
 ]
 

@@ -20,7 +20,8 @@ use serde::{Deserialize, Serialize};
 pub use facade::ExportFacade;
 pub use instances::{prepare_export_meshes, MeshInstance};
 pub use materials::{
-    brands, catalog_json, find_preset, material_catalog, presets_for_brand, MaterialPreset,
+    brands, catalog_json, find_preset, material_catalog, presets_for_brand,
+    resolve_body_appearance, MaterialPreset,
 };
 pub use mesh_weld::{
     boundary_edge_count, invalid_model_edge_count, validate_3mf_model_mesh, weld_triangle_mesh,
