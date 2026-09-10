@@ -1,6 +1,6 @@
 // Functional FDM design candidate; dimensions in millimetres.
 // Native sketches, features and joints only. No imported mesh or captured entity IDs.
-// Authored with crates/recipes/examples/author_vise.rs; replay with cargo xtask run-script --recipe d-screw-vise.
+// Authored with crates/recipes/examples/author_vise.rs; replay with cargo xtask run-script --server PATH_TO_NBCAD_MCP --recipe d-screw-vise.
 {
   "$schema": "./nbcad-script.schema.json",
   "checks": [

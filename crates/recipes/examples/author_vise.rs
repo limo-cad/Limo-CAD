@@ -861,7 +861,7 @@ fn main() {
     }
     exports.insert("design_inputs".into(),json!({"jaw_width_mm":60,"initial_opening_mm":48,"allowed_travel_mm":48,"lead_mm":2.5,"nominal_thread_mm":20,"nut_special_nominal_mm":20.5,"radial_process_relief_mm":0.25,"flat_axis_z_mm":28,"thread_engagement_mm":16,"provisional_material":"Bambu PETG HF","input_torque_Nm":0.25,"assumed_overall_efficiency":0.2,"contact_patch_mm2":600,"physical_load_rating":null}));
     let document = json!({"$schema":"./nbcad-script.schema.json","version":1,"name":"D-shaped printed screw vise","starting_state":"empty","steps":a.steps,"checks":checks,"exports":exports});
-    let text=format!("// Functional FDM design candidate; dimensions in millimetres.\n// Native sketches, features and joints only. No imported mesh or captured entity IDs.\n// Authored with crates/recipes/examples/author_vise.rs; replay with cargo xtask run-script --recipe d-screw-vise.\n{}\n",serde_json::to_string_pretty(&document).unwrap());
+    let text=format!("// Functional FDM design candidate; dimensions in millimetres.\n// Native sketches, features and joints only. No imported mesh or captured entity IDs.\n// Authored with crates/recipes/examples/author_vise.rs; replay with cargo xtask run-script --server PATH_TO_NBCAD_MCP --recipe d-screw-vise.\n{}\n",serde_json::to_string_pretty(&document).unwrap());
     nbcad_script::Script::parse(&text).expect("authored source must pass preflight");
     std::fs::write("examples/scripts/d-screw-vise.nbcad.jsonc", text).unwrap();
     author_fit_coupon();

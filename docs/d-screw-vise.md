@@ -1,7 +1,7 @@
 # D-screw vise manufacturing candidate
 
 The committed source is `examples/scripts/d-screw-vise.nbcad.jsonc`. Run it with
-`cargo xtask run-script --recipe d-screw-vise`, or choose the recipe in Scripts
+`cargo xtask run-script --server PATH_TO_NBCAD_MCP --recipe d-screw-vise`, or choose the recipe in Scripts
 and use **Run in new design**. `d-screw-vise-fit` is the smaller paired thread
 coupon. Both use the ordinary native MCP operations and retain sketches,
 driving dimensions, datum planes, features and assembly joints. The Rust

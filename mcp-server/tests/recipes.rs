@@ -827,6 +827,14 @@ fn d_screw_vise_builds_editable_native_geometry() {
         .2
     };
     assert!(screw_volume(&simplified["scene"]) > screw_volume(&exports["final_scene"]) + 100.);
+    let invalidated = client.rpc("tools/call", json!({"name":"drawing_export","arguments":{"sheet_id":exports["vise_screw_svg"]["sheet_id"],"format":"svg"}}));
+    assert_eq!(
+        invalidated["isError"], true,
+        "a topology-changing thread edit must not silently rebind dimensions"
+    );
+    assert!(invalidated["content"]
+        .to_string()
+        .contains("topology changed"));
     let restored_thread=client.call("solid_edit_external_thread",json!({"feature_id":exports["male_thread_feature_id"],"request":exports["male_thread_request"]}));
     assert!(
         restored_geometry_residual(
@@ -835,6 +843,14 @@ fn d_screw_vise_builds_editable_native_geometry() {
             String::new()
         )
         .0 < 1e-6
+    );
+    assert_same_json(
+        &client.call(
+            "drawing_export",
+            json!({"sheet_id":exports["vise_screw_svg"]["sheet_id"],"format":"svg"}),
+        )["content"],
+        &exports["vise_screw_svg"]["content"],
+        "restored thread restores verified drawing references",
     );
     let mut restored = Client::restore(&exports["final_model"]);
     assert_same_json(
@@ -1024,6 +1040,11 @@ fn assert_equivalent_mesh(actual: &Value, expected: &Value) {
     };
     let (mut actual_triangles, actual_vertices) = triangles(actual);
     let (mut expected_triangles, expected_vertices) = triangles(expected);
+    assert_eq!(
+        actual_triangles.values().sum::<usize>(),
+        expected_triangles.values().sum::<usize>(),
+        "restored triangulation changed triangle count"
+    );
     assert!(
         actual_vertices == expected_vertices,
         "restored vertex positions changed at 1e-6 mm resolution"
