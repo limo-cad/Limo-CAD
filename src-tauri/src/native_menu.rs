@@ -10,14 +10,12 @@
 use std::io;
 use std::sync::Mutex;
 
-#[cfg(target_os = "macos")]
-use tauri::menu::{
-    IsMenuItem, Menu, MenuEvent, MenuItemKind, PredefinedMenuItem, Submenu,
-};
 use tauri::menu::MenuItem;
 #[cfg(target_os = "macos")]
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::menu::{IsMenuItem, Menu, MenuEvent, MenuItemKind, PredefinedMenuItem, Submenu};
 use tauri::Wry;
+#[cfg(target_os = "macos")]
+use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "macos")]
 pub const EDIT_COMMAND_EVENT: &str = "native-edit-command";
@@ -136,8 +134,7 @@ impl NativeFileMenuState {
             return Ok(());
         };
         for item in &items.idle_items {
-            item.set_enabled(!busy)
-                .map_err(|error| error.to_string())?;
+            item.set_enabled(!busy).map_err(|error| error.to_string())?;
         }
         for item in &items.document_items {
             item.set_enabled(!busy && document_open)
@@ -206,9 +203,14 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
         .into_iter()
         .enumerate()
         .find_map(|(index, item)| match item {
-            MenuItemKind::Predefined(item) if item.text().ok().is_some_and(|text| {
-                text.replace('&', "").trim_start().starts_with("Quit")
-            }) => Some(index),
+            MenuItemKind::Predefined(item)
+                if item
+                    .text()
+                    .ok()
+                    .is_some_and(|text| text.replace('&', "").trim_start().starts_with("Quit")) =>
+            {
+                Some(index)
+            }
             _ => None,
         })
         .ok_or_else(|| io::Error::other("default macOS application menu has no Quit item"))?;
@@ -225,15 +227,12 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
     // Mirror the in-app File menu so the macOS menu bar and the window's
     // File dropdown run the same commands. Fall back to creating the submenu
     // if a future Tauri default menu ever drops it; Close Window stays last.
-    let file = match menu
-        .items()?
-        .into_iter()
-        .find_map(|item| match item {
-            MenuItemKind::Submenu(submenu) if submenu.text().ok().as_deref() == Some("File") => {
-                Some(submenu)
-            }
-            _ => None,
-        }) {
+    let file = match menu.items()?.into_iter().find_map(|item| match item {
+        MenuItemKind::Submenu(submenu) if submenu.text().ok().as_deref() == Some("File") => {
+            Some(submenu)
+        }
+        _ => None,
+    }) {
         Some(submenu) => submenu,
         None => {
             let submenu = Submenu::with_id(app, "nbcad-file-menu", "File", true)?;
@@ -243,16 +242,31 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
     };
     let new_project =
         MenuItem::with_id(app, FILE_NEW_ID, "New Project", true, Some("CmdOrCtrl+N"))?;
-    let open =
-        MenuItem::with_id(app, FILE_OPEN_ID, "Open Project…", true, Some("CmdOrCtrl+O"))?;
+    let open = MenuItem::with_id(
+        app,
+        FILE_OPEN_ID,
+        "Open Project…",
+        true,
+        Some("CmdOrCtrl+O"),
+    )?;
     let open_script =
         MenuItem::with_id(app, FILE_OPEN_SCRIPT_ID, "Open Script…", true, None::<&str>)?;
     let save = MenuItem::with_id(app, FILE_SAVE_ID, "Save", false, Some("CmdOrCtrl+S"))?;
-    let save_as =
-        MenuItem::with_id(app, FILE_SAVE_AS_ID, "Save As…", false, Some("CmdOrCtrl+Shift+S"))?;
+    let save_as = MenuItem::with_id(
+        app,
+        FILE_SAVE_AS_ID,
+        "Save As…",
+        false,
+        Some("CmdOrCtrl+Shift+S"),
+    )?;
     let rename = MenuItem::with_id(app, FILE_RENAME_ID, "Rename Project…", false, None::<&str>)?;
-    let import_step =
-        MenuItem::with_id(app, FILE_IMPORT_STEP_ID, "Import STEP/STP…", false, None::<&str>)?;
+    let import_step = MenuItem::with_id(
+        app,
+        FILE_IMPORT_STEP_ID,
+        "Import STEP/STP…",
+        false,
+        None::<&str>,
+    )?;
     let export_step_all = MenuItem::with_id(
         app,
         FILE_EXPORT_STEP_ALL_ID,
@@ -341,7 +355,11 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
         idle_items: vec![new_project, open, open_script],
         document_items: vec![save, save_as, rename, import_step],
         all_body_items: vec![export_step_all, export_3mf_all, export_stl_all],
-        selected_body_items: vec![export_step_selected, export_3mf_selected, export_stl_selected],
+        selected_body_items: vec![
+            export_step_selected,
+            export_3mf_selected,
+            export_stl_selected,
+        ],
         drawing_dxf,
         profile_dxf,
     });
@@ -375,7 +393,11 @@ pub fn handle_event(app: &AppHandle<Wry>, event: MenuEvent) {
         return;
     }
     if event.id() == UNDO_ID || event.id() == REDO_ID {
-        let command = if event.id() == UNDO_ID { "undo" } else { "redo" };
+        let command = if event.id() == UNDO_ID {
+            "undo"
+        } else {
+            "redo"
+        };
         let _ = app.emit(EDIT_COMMAND_EVENT, command);
         return;
     }

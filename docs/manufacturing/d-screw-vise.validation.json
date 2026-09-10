@@ -59,7 +59,7 @@
       "Five closed positive-volume print meshes, separate print poses and XY spacing, approximately 203.6x166x52mm plate; two real paired thread coupons with exact replay/reload."
     ]
   },
-  "live_boundary": "This manifest records the full headless lifecycle baseline. The initial live vise exposed a preset-expansion parity defect and a runner Save-directory ordering defect; separate shared follow-up fixes and live evidence qualify attached presentation. Save As also intentionally changes the document display name.",
+  "live_boundary": "The original headless lifecycle snapshot remains identified above. The attached replay below qualifies the integrated material, output, camera and visibility fixes; later presentation/error-recovery changes have separate focused regressions.",
   "physical_qualification": {
     "status": "not performed",
     "load_rating": null,
@@ -186,5 +186,35 @@
       "bytes": 357032,
       "sha256": "ec1aa283348e638d451795b4200585b908b02d4e8d0e21dbafbe6154a0e6a109"
     }
-  ]
+  ],
+  "live_validation": {
+    "engine_revision": "6f7e5e6bcd0c55257407c753ddc64c9a59e7dcc6",
+    "recipe": "d-screw-vise",
+    "steps_completed": 692,
+    "final_checks_completed": 55,
+    "elapsed_ms": 237208,
+    "exact_comparison": "PASS: native model, scene, sketches and solved assembly matched the independent headless reference before Save As.",
+    "camera_completion": "The final authored isometric request returned after leaving Drawings, mounting the actual viewport and completing its animation.",
+    "save": "The Rust runner prepared output directories, retained the report and model, and saved the editable native project.",
+    "construction_visibility": {
+      "hidden_sketches": 43,
+      "hidden_datums": 24,
+      "verification": "Saved clean copy differs only in reference visibility and the intentional Save As document name; body visibility and every other model field are unchanged."
+    },
+    "artifacts": [
+      {
+        "path": "live-final/vise/run-1.json",
+        "sha256": "2fb640c80786b178fa508fa1980cb219db3324ba74dc7dc6733483763865ecc5"
+      },
+      {
+        "path": "live-final/vise/d-screw-vise-live.nbcad",
+        "sha256": "f712d5f3af6191bc517d7d84d984fbea8375fee8b7144540c7630f4c79f15485"
+      },
+      {
+        "path": "live-final/vise/d-screw-vise-clean.nbcad",
+        "sha256": "13dfe4d599dd0210aa704ee9e739bb865b7e9652d332fbab76b22132b9108c5e"
+      }
+    ],
+    "physical_qualification": "Not performed; manufacturing notes retain print/fit, material-specific load/wear and generator-output requirements."
+  }
 }

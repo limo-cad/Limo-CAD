@@ -27,6 +27,22 @@ a four-second actual isometric capture. Hiding 27 sketches and one datum plane f
 that closing shot changed visibility only. The separate recording window closed
 through MCP, and both original user documents were preserved byte-for-byte.
 
+The two manufacturing candidates also completed full live runs at `6f7e5e6`:
+692 vise steps with 55 final checks in 237 seconds, and 1,622 turbine steps with
+11 final checks in 959 seconds. Both exactly matched the independent headless
+model, scene, sketches and solved assembly. The corresponding headless first
+runs were 70 and 184 seconds. These are measured presentation runs on this
+machine, not a maximum-rate benchmark or a profiler attribution.
+
+PR112 makes material resolution identical through live and headless dispatch,
+retains completed output before Save, and waits for the actual viewport and
+camera after leaving Drawings. PR113 supplies the shared Show refs operation;
+saved clean copies hide all 43/24 vise sketches/datums and 105/105 turbine
+sketches/datums without changing any geometry or body visibility. PR114 corrects
+the stale final step count and prevents a later Save from overwriting the final
+camera feedback. PR115 fixes export recovery after a proven unchanged Open
+rejection, while retaining guards after uncertain native replacement.
+
 ## Before promoting the draft
 
 - **Use the native renderer for feature previews.** The small preview currently
@@ -43,17 +59,19 @@ through MCP, and both original user documents were preserved byte-for-byte.
   closed. Keep keyboard dismissal and inspection available without hover timing
   traps or a popup that obstructs ordinary modeling. Passing control contracts
   alone does not approve this layout.
-- **Make closing-view cleanup a shared operation.** The recording needed one UI
-  visibility toggle per sketch and datum. Add an explicit grouped operation for
-  displaying construction references so the GUI, API and MCP can show or hide a
-  selected set without dozens of control-ID round trips. Preserve geometry and
-  persist only intended visibility changes. Do not silently hide unfinished
-  sketches during construction.
+- **Stage construction for teaching.** The grouped closing-view operation now
+  exists. During long builds, retained sketches/datums and overlapping part
+  definitions can still obscure the current sketch before assembly placement.
+  Review chapter-level visibility and camera framing without discarding the
+  parametric references or silently hiding an unfinished sketch. Keep the final
+  geometry and checks independent of presentation choices.
 - **Consolidate presentation ownership.** Modeling and ordering are Rust;
   presentation timing and camera interpolation currently include frontend code in
   `operationPlayback.ts` and the viewport adapter. Move behavior into Rust/Bevy
   where the native renderer can own it, while keeping one ordered command path
   and equivalent maximum-rate results. Avoid adding parallel animation state.
+  Profile attached maximum-rate and presented runs separately; do not infer that
+  increasing presentation speed removes native publication and viewport work.
 - **Complete the learning and manufacturing scope.** The short fillet lesson is
   not comprehensive feature coverage. Preserve #89's unique analytic/round-trip
   checks: its four small examples now have native JSONC sources and Rust stdio

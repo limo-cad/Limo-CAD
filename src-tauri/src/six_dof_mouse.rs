@@ -346,9 +346,7 @@ mod mac_driver {
         // aborts when it observes a misaligned report. Copy the short record
         // before inspecting it; `read_unaligned` is specifically defined for
         // this FFI case and leaves the rest of the callback on aligned storage.
-        Some(unsafe {
-            std::ptr::read_unaligned(argument.cast::<ConnexionDeviceState>())
-        })
+        Some(unsafe { std::ptr::read_unaligned(argument.cast::<ConnexionDeviceState>()) })
     }
 
     struct CallbackState {

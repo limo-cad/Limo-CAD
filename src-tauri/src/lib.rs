@@ -268,7 +268,10 @@ engine_command!(
     read
 );
 engine_command!(engine_project_set_visibility, "project_set_visibility");
-engine_command!(engine_construction_set_visibility, "construction_set_visibility");
+engine_command!(
+    engine_construction_set_visibility,
+    "construction_set_visibility"
+);
 engine_command!(
     engine_drawing_document,
     "drawing_document",

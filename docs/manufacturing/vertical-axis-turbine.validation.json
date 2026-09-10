@@ -54,7 +54,7 @@
       "Four native fit coupons reuse the shaft clamp, lower bearing seat, complete motor cradle and actual pinion; driving bores 8.3/22.3/32.6/2.2mm, each mesh within 60mm, four drawing pairs, exact repeat and reload."
     ]
   },
-  "live_boundary": "This manifest records the full headless lifecycle baseline. The initial live vise exposed a preset-expansion parity defect and a runner Save-directory ordering defect; separate shared follow-up fixes and live evidence qualify attached presentation. Save As also intentionally changes the document display name.",
+  "live_boundary": "The original headless lifecycle snapshot remains identified above. The attached replay below qualifies the integrated material, output, camera and visibility fixes; later presentation/error-recovery changes have separate focused regressions.",
   "physical_qualification": {
     "status": "not performed",
     "load_rating": null,
@@ -362,5 +362,35 @@
       "bytes": 35148,
       "sha256": "6c42e485e0a0262da1a56dbf2d536f062c2b48a0495b83d79fcf72b9cfcbb961"
     }
-  ]
+  ],
+  "live_validation": {
+    "engine_revision": "6f7e5e6bcd0c55257407c753ddc64c9a59e7dcc6",
+    "recipe": "vertical-axis-turbine",
+    "steps_completed": 1622,
+    "final_checks_completed": 11,
+    "elapsed_ms": 959059,
+    "exact_comparison": "PASS: native model, scene, sketches and solved assembly matched the independent headless reference before Save As.",
+    "camera_completion": "The final authored isometric request returned after leaving Drawings, mounting the actual viewport and completing its animation.",
+    "save": "The Rust runner prepared output directories, retained the report and model, and saved the editable native project.",
+    "construction_visibility": {
+      "hidden_sketches": 105,
+      "hidden_datums": 105,
+      "verification": "Saved clean copy differs only in reference visibility and the intentional Save As document name; body visibility and every other model field are unchanged."
+    },
+    "artifacts": [
+      {
+        "path": "live-final/turbine/run-1.json",
+        "sha256": "0654d347bb4c03759c3d01c94c97bb203551bfd60079157874984d576863d103"
+      },
+      {
+        "path": "live-final/turbine/vertical-axis-turbine-live.nbcad",
+        "sha256": "45d40e4362ced1815da15930b508219b3bd3cc641e18fdd2c9b6a703e1a712f7"
+      },
+      {
+        "path": "live-final/turbine/vertical-axis-turbine-clean.nbcad",
+        "sha256": "8780678bfdb423b52b2fa89f8f5eea550cf14881be4afdca9081426a961f10a1"
+      }
+    ],
+    "physical_qualification": "Not performed; manufacturing notes retain print/fit, material-specific load/wear and generator-output requirements."
+  }
 }

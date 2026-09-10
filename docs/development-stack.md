@@ -7,7 +7,7 @@ Rendering changes the presentation, not the modeling operations or final checks.
 
 ## Review and merge order
 
-The [native GitHub stack shown in PR #111](https://github.com/jackControls/noBS-CAD/pull/111)
+The [native GitHub stack shown in PR #115](https://github.com/jackControls/noBS-CAD/pull/115)
 is the current source of truth for its order, approvals and CI. Its layers are:
 
 1. PR95: associative drawing dimensions.
@@ -27,6 +27,10 @@ is the current source of truth for its order, approvals and CI. Its layers are:
 14. PR109: remove unused component placeholders for consumed construction bodies.
 15. PR110: the D-screw vise, fit coupon, print layout and manufacturing drawings.
 16. PR111: the vertical-axis turbine, four fit coupons and assembly/part drawings.
+17. PR112: shared live material presets, retained replay output and camera completion.
+18. PR113: one grouped control for retained construction-reference visibility.
+19. PR114: truthful final playback counts and stable completed-run feedback.
+20. PR115: export recovery after a project Open is proven to have changed nothing.
 
 Each PR's diff is against the layer below it. GitHub applies main's review rules
 to every layer and can merge a reviewed prefix from the bottom. A draft layer
@@ -38,6 +42,14 @@ merge the approved prefix in order. PR99 remains draft for the interface and
 native-preview decisions documented in `script-interface-review.md`. Its status
 does not erase the independently reviewable geometry and recipe work above it.
 No approvals or repository protection rules are bypassed by using a stack.
+
+On September 10, GitHub rejected the asynchronous PR95–98 prefix merge for a
+qualifying write-access approval even though all four exact-head Jack reviews
+were approved and his admin permission was confirmed. No merge or branch rewrite
+occurred; the precise server-side cause is unconfirmed. The evidence is recorded
+with issue #14. PR108's later rejected-Open finding is addressed by the focused
+PR115 follow-up; its change-request review is retained for re-review. Do not
+silently dismiss it or rewrite already approved descendants to hide that history.
 
 PR88 remains an independent diagnostics change against main. When it lands,
 carry its session-generation logic into the extracted MCP library while updating
@@ -70,6 +82,14 @@ editing checks, editable drawings and teaching notes belong together. See
 work. All three now have runnable native sources. The two new manufacturing
 candidates include editable drawings and fit coupons; physical qualification
 and the bench's full drawing package remain open.
+
+Both new candidates also completed attached, rendered construction in a rebuilt
+desktop at `6f7e5e6`: the vise passed 692 steps and 55 final checks, and the turbine
+passed 1,622 steps and 11 final checks. Each matched its independent native model,
+scene, sketches and solved assembly exactly before Save As. Separate clean-view
+copies changed only retained-reference visibility and the saved document name.
+The validation manifests retain the original full headless baseline and this
+additional live evidence rather than replacing one with the other.
 
 Single-feature lessons use the same versioned JSONC format and catalog. Prefer a
 small, clear part that demonstrates a modeling decision, a meaningful parameter
