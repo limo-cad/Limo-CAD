@@ -180,6 +180,10 @@ wind tunnel; record measurement conditions instead of claiming a power curve.
 
 ## Validation and physical boundary
 
+The [native validation snapshot](manufacturing/vertical-axis-turbine.validation.json)
+records the tested source revision, source hashes, counts and native output hashes.
+It distinguishes the headless lifecycle from live presentation and physical testing.
+
 The Rust MCP acceptance test replays from blank twice, compares complete native
 models/scenes/drawings, checks all sketch constraints and solved placement,
 exports each printable definition as a selected manifold 3MF, edits the stage

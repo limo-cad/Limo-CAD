@@ -173,6 +173,11 @@ output directory before running
 `cargo test --manifest-path mcp-server/Cargo.toml --test recipes d_screw_vise`.
 The harness never deletes that explicitly selected directory.
 
+The committed [native validation snapshot](manufacturing/d-screw-vise.validation.json)
+records the reachable source revision, normalized source hashes and actual
+artifact hashes. Its headless baseline is separate from attached presentation
+qualification and from physical fabrication.
+
 Before promoting this candidate, print the coupon and the complete set, verify
 assembly access and hardware fit, measure play and turning effort, apply a
 controlled light load, then inspect deformation and wear after repeated use

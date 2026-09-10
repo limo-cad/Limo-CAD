@@ -1,0 +1,366 @@
+{
+  "schema_version": 1,
+  "kind": "manufacturing-candidate-validation-snapshot",
+  "date": "2026-09-10",
+  "platform": "Windows x64; native OCCT 7.9.3",
+  "engine_revision": "0cf567c0afcf9b1a00c030035ed90d63ed0e9178",
+  "model_schema": 6,
+  "source_hash_encoding": "UTF-8 with LF line endings",
+  "sources": [
+    {
+      "path": "examples/scripts/vertical-axis-turbine.nbcad.jsonc",
+      "sha256_utf8_lf": "83899609dbf960843c472539c9c360d15e9de4242c27c6e3569e3ea7f5af17fa"
+    },
+    {
+      "path": "examples/scripts/turbine-fit-coupons.nbcad.jsonc",
+      "sha256_utf8_lf": "2a406ef9569aa45ecec9aa0031bfeb4f673c390ae10460c50d6fd2e7d3e9373e"
+    },
+    {
+      "path": "crates/recipes/examples/author_turbine.rs",
+      "sha256_utf8_lf": "42424fe44d282e5231979e07d0bb453fee1e0b37145493c0737c336d6a190852"
+    },
+    {
+      "path": "mcp-server/tests/recipes.rs",
+      "sha256_utf8_lf": "10621969dcddcbc462a94b3776a8859f550b18eb95a556463fe810675bc68ebc"
+    }
+  ],
+  "artifact_directory": "nobs-cad-fixed-demos/flagships-final-2026-09-10/turbine",
+  "validation": {
+    "command": "cargo test --locked --manifest-path mcp-server/Cargo.toml --test recipes turbine -- --nocapture --test-threads=1",
+    "artifact_option": "Set NBCAD_RECIPE_ARTIFACT_DIR to a separate output directory to retain native projects, meshes and drawings.",
+    "tests_passed": 2,
+    "elapsed_seconds": 556.97,
+    "first_replay_elapsed_ms": 184226,
+    "steps_completed": 1622,
+    "final_checks_completed": 11,
+    "native_bodies": 16,
+    "printed_definitions": 9,
+    "component_definitions": 16,
+    "component_occurrences": 19,
+    "solved_occurrences": 19,
+    "fully_constrained_sketches": 105,
+    "datum_planes": 105,
+    "persistent_history_features": 321,
+    "drawing_sheets": 12,
+    "svg_and_dxf_exports": 24,
+    "independent_blank_replay": "Exact native model, scene, sketches, assembly, solved placement and drawing export values on this build.",
+    "native_reload": "Retained native geometry, sketches, assembly, drawings and solved placement verified in a fresh native process.",
+    "checks": [
+      "Each selected printed definition exports once as a native manifold 3MF in its original Z=0 print coordinates, within 200mm per axis; repeated rotor stages remain one reusable definition.",
+      "A stage-plate edit from 3 to 4 mm changes the real volume and both occurrences; edited reload and restored geometry are checked.",
+      "Quarter- and half-tooth-pitch native gear interference samples, 810degree multi-turn drive, reverse relation and home restoration.",
+      "Native continuous witness solids verify the open passage above the short rotor hub; actual guard-head clearance is 3.35mm nominal.",
+      "No component definition references a consumed construction body after final native recompute.",
+      "Four native fit coupons reuse the shaft clamp, lower bearing seat, complete motor cradle and actual pinion; driving bores 8.3/22.3/32.6/2.2mm, each mesh within 60mm, four drawing pairs, exact repeat and reload."
+    ]
+  },
+  "live_boundary": "This manifest records the full headless lifecycle baseline. The initial live vise exposed a preset-expansion parity defect and a runner Save-directory ordering defect; separate shared follow-up fixes and live evidence qualify attached presentation. Save As also intentionally changes the document display name.",
+  "physical_qualification": {
+    "status": "not performed",
+    "load_rating": null,
+    "remaining": [
+      "Measure the actual generator case, terminals and shaft projection.",
+      "Print and measure the four fit coupons with the intended filament/profile.",
+      "Verify purchased fasteners, bearing fit, retention, runout, assembly access and clamp slip.",
+      "Measure startup, speed, voltage/current under known loads, fatigue and wear before claiming performance.",
+      "Outdoor variants additionally require hardware weather resistance, drainage, anchoring and overspeed retention qualification."
+    ]
+  },
+  "artifacts": [
+    {
+      "file": "assembly.dxf",
+      "bytes": 29697,
+      "sha256": "358f98bc19601f7e4a4e761c37649ffaa6b75ef27e0e314eaa81bd517434daf7"
+    },
+    {
+      "file": "assembly.png",
+      "bytes": 347525,
+      "sha256": "0a0e884a930bca4c89e6469e9e595bc88406a1428694b77cd8db34d7d211984e"
+    },
+    {
+      "file": "assembly.svg",
+      "bytes": 16759,
+      "sha256": "55345ab6b58a4fd4ca84a5dcb5313b1eaaae1160d07cc33abedb1c54d2c0eb8c"
+    },
+    {
+      "file": "base.3mf",
+      "bytes": 22526,
+      "sha256": "5cb913e287eeed27b97ab777570f276a5f46ae7e6edc331f67f1c4624f67ca09"
+    },
+    {
+      "file": "base.dxf",
+      "bytes": 53769,
+      "sha256": "54d0a6352b8f1872a7f44614e103ecf626ccadca8edb8d17f927462c3896594c"
+    },
+    {
+      "file": "base.png",
+      "bytes": 370843,
+      "sha256": "331e79b7f0b45b87ae22ec8acdef25fd6a11ee090fe803ea61babbbcad3577b2"
+    },
+    {
+      "file": "base.svg",
+      "bytes": 27354,
+      "sha256": "d127629a64815a6783973857f2e29009b4e108e53e382bcc669fbf273d19b95f"
+    },
+    {
+      "file": "bom.dxf",
+      "bytes": 5740,
+      "sha256": "9dd0afec0d0aa270f712be24c7bb6866d603a0a334894da78b4477649281af2f"
+    },
+    {
+      "file": "bom.png",
+      "bytes": 646689,
+      "sha256": "ad472e28f6047483f0f329abbe1f9a323e20a690dba178f4c062c429c3534344"
+    },
+    {
+      "file": "bom.svg",
+      "bytes": 7817,
+      "sha256": "83d9b185fb3c2856451d4e3b2b9a1626db1a75cba07bd01c6e2f9c4ef6c9fcff"
+    },
+    {
+      "file": "cap.3mf",
+      "bytes": 5244,
+      "sha256": "3d395ca5df6ddc485aa48e367b3424654678f08997de2f28fb62436d335bd417"
+    },
+    {
+      "file": "cap.dxf",
+      "bytes": 15631,
+      "sha256": "4e135b37fc64d9d32056b3c0466f6cb27337e549c6b5e4b97c5fcfcd2bede076"
+    },
+    {
+      "file": "cap.png",
+      "bytes": 316820,
+      "sha256": "e3b06de8d8aa950d67c322e1a86156a9d2acc0aab0d78be329975967e75c5833"
+    },
+    {
+      "file": "cap.svg",
+      "bytes": 8701,
+      "sha256": "cbd68ad1a0f32c6f1084a6672a8de314b41d8c1a7842cfc198aaa7ee47f35822"
+    },
+    {
+      "file": "fit-coupons/bearing_coupon.3mf",
+      "bytes": 13500,
+      "sha256": "e9e379d6e9ca962dc3be38f91cd185acdaa935708913d1b0f61588aced490b87"
+    },
+    {
+      "file": "fit-coupons/bearing_coupon.dxf",
+      "bytes": 86242,
+      "sha256": "b9c405bd784fa165e1b80a1f223b44e682224fa6896048a308876fb432bbf4bc"
+    },
+    {
+      "file": "fit-coupons/bearing_coupon.svg",
+      "bytes": 37083,
+      "sha256": "d2a9a002032cd90a5133163d6c16f54e1e14e2057cb4af17ef0e80dc4a240019"
+    },
+    {
+      "file": "fit-coupons/motor_mount.3mf",
+      "bytes": 11566,
+      "sha256": "354e78b77482727f586cd19cd3540fa75af8e49bae3ccd4700bff0049423f006"
+    },
+    {
+      "file": "fit-coupons/motor_mount.dxf",
+      "bytes": 88508,
+      "sha256": "1c0dc48359d583d4314badb35902ec6902c07161b17c6175ab7a3029a5b63a5f"
+    },
+    {
+      "file": "fit-coupons/motor_mount.svg",
+      "bytes": 37569,
+      "sha256": "68274c653b76c73acfb8b226dc3b900a9a67deeae7c441b184d355ccf866b85d"
+    },
+    {
+      "file": "fit-coupons/pinion.3mf",
+      "bytes": 25943,
+      "sha256": "a7ff259887aea5e6e16e2efd4384277ea8296c1a4dc4ffed2823beeb55d8f273"
+    },
+    {
+      "file": "fit-coupons/pinion.dxf",
+      "bytes": 324164,
+      "sha256": "f8821b34b9ed4a7cc18eea4a2cad53107e0f35a8cb86e0512685be38aa9ab85e"
+    },
+    {
+      "file": "fit-coupons/pinion.svg",
+      "bytes": 231350,
+      "sha256": "c9bf37ad2c0f667d93d64816b2215551ed8bd6acbb7666e251d80f2c98c2a65a"
+    },
+    {
+      "file": "fit-coupons/shaft_coupon.3mf",
+      "bytes": 11200,
+      "sha256": "9414eea00b74bf062c5e8ce0ba708f42ac7abf067a8b7845ccb571834ba2751f"
+    },
+    {
+      "file": "fit-coupons/shaft_coupon.dxf",
+      "bytes": 70527,
+      "sha256": "eac9fac97be0893c78fb0bab2fbf83ae4a64286c5277b6bac9ca2293e91de228"
+    },
+    {
+      "file": "fit-coupons/shaft_coupon.svg",
+      "bytes": 33907,
+      "sha256": "b0806d8a8ccde0e225f2d6ec2250a5734404cca5af901ddd0efc8613d2da0f1a"
+    },
+    {
+      "file": "fit-coupons/turbine-fit-coupons.nbcad",
+      "bytes": 13477,
+      "sha256": "a9159213246c6b1eadcfb9243f73fb1618f433e5451fca5e97c54ce4478fd96a"
+    },
+    {
+      "file": "guard.3mf",
+      "bytes": 15168,
+      "sha256": "4ad67080d7f270b2c1f54a4dfe562718d21c2767a09353f6826e157d5f749422"
+    },
+    {
+      "file": "guard.dxf",
+      "bytes": 56058,
+      "sha256": "c376f48fb1dff6e165144da79e4fa0a11447f196075eb2845f50e119c236b599"
+    },
+    {
+      "file": "guard.png",
+      "bytes": 471887,
+      "sha256": "6325107523dcba2a3e7e3fe87a68c683b42eb70fcc9dccac64cdf423cfa6ecd2"
+    },
+    {
+      "file": "guard.svg",
+      "bytes": 31085,
+      "sha256": "c6c008f38362df9a57222a99023ec5302176e23f671414f2c7fbd972d85c3267"
+    },
+    {
+      "file": "guard_lid.3mf",
+      "bytes": 9476,
+      "sha256": "d86fc9dd3c72b0711940561f6be934849652b8656365ac09d192b7f51e7d5e89"
+    },
+    {
+      "file": "guard_lid.dxf",
+      "bytes": 27830,
+      "sha256": "e24e851fb54863500b172b9cb3ea952d7d0740b5c397d9f75cd0208f1cc3f5dc"
+    },
+    {
+      "file": "guard_lid.png",
+      "bytes": 384265,
+      "sha256": "4cd51af58ab3d460dd547750309c862994aef1b91ee8c970677361bc967251a3"
+    },
+    {
+      "file": "guard_lid.svg",
+      "bytes": 13489,
+      "sha256": "2460a19353c58be8ec2134d013e3b0cb2472fb6236b2c9b358c503eea2840c99"
+    },
+    {
+      "file": "motor_mount.3mf",
+      "bytes": 11565,
+      "sha256": "96d29df983e638c976f2ee62a02c4b4479a47dd5346825e38b8f640f54711ef9"
+    },
+    {
+      "file": "motor_mount.dxf",
+      "bytes": 88527,
+      "sha256": "7197ed2ce8e269b956478387a22244e1d7a242200f0b649a13abf491eb335ad6"
+    },
+    {
+      "file": "motor_mount.png",
+      "bytes": 433560,
+      "sha256": "270d61ccb9bcd699d3cf001a068e7130f84faa50c7c9b2a8052292d0916a45d3"
+    },
+    {
+      "file": "motor_mount.svg",
+      "bytes": 37588,
+      "sha256": "5279f01fa546948fc4ebeb31f28fd1b0982f76dc3be8a20b95904c0d604e24af"
+    },
+    {
+      "file": "pinion.3mf",
+      "bytes": 25943,
+      "sha256": "c059b7938960b109dc6bb8f0590d5776166043ac1aeda372d4e48bbbab7aea3d"
+    },
+    {
+      "file": "pinion.dxf",
+      "bytes": 324060,
+      "sha256": "c16a1d4357ade6afefa3b0331983d6a4b50a4dd930ab14f08dc929516577201e"
+    },
+    {
+      "file": "pinion.png",
+      "bytes": 420126,
+      "sha256": "28a45225c6a4e7e27e2872880be8b75c774b6b95094f83374b08a4d7b3d1faac"
+    },
+    {
+      "file": "pinion.svg",
+      "bytes": 231188,
+      "sha256": "35f13e0fa9c64c071b2c3c200f508a034e59bc7884dfac7c4a444b62c63f091b"
+    },
+    {
+      "file": "rotor_gear.3mf",
+      "bytes": 65337,
+      "sha256": "fe6a65f3ab292ba67aeb83986906a828a09cd861bf4dca75f57d0dc5b2a7d388"
+    },
+    {
+      "file": "rotor_gear.dxf",
+      "bytes": 479766,
+      "sha256": "9c2d2e7e56e8fcfb057f02407392032309eb0d71dc538581927649ef2f2acae7"
+    },
+    {
+      "file": "rotor_gear.png",
+      "bytes": 487068,
+      "sha256": "8f4dd1da5a72e2420a8ec06a08554cb670f51582e000936e8890d6b4296bf39d"
+    },
+    {
+      "file": "rotor_gear.svg",
+      "bytes": 548682,
+      "sha256": "f96589ba5d40df47c90a491062990ae491507c7b4848dd2be2c6d6e757529056"
+    },
+    {
+      "file": "shaft.dxf",
+      "bytes": 7226,
+      "sha256": "10236a23e1194f5424faca0316808399e674fb415c21c93e3535ab0562d0035d"
+    },
+    {
+      "file": "shaft.png",
+      "bytes": 302975,
+      "sha256": "45176871ab3843d56f7c1fa374ce8a457663b4d96dee1a1f0e55d9eda9def8c1"
+    },
+    {
+      "file": "shaft.svg",
+      "bytes": 6058,
+      "sha256": "021dfe1873ac78a79814498f96e5e70aad5984c075014e68b19880faea0cbe85"
+    },
+    {
+      "file": "stage.3mf",
+      "bytes": 19490,
+      "sha256": "d236236f08f0acf8e9a1098a088cce6232cb807e278a7416c13180ece5aa6342"
+    },
+    {
+      "file": "stage.dxf",
+      "bytes": 112399,
+      "sha256": "b3235877695b227a0eb1b85fd86334b309e8e1a203b2fc0dc40372056ec05898"
+    },
+    {
+      "file": "stage.png",
+      "bytes": 440980,
+      "sha256": "40cc62ac8543d0d2ec6ab419559b5fa43bad98f81bb537556554db6ba09ea040"
+    },
+    {
+      "file": "stage.svg",
+      "bytes": 51188,
+      "sha256": "bd308d50c19285f341081981353d39493329a3167b325171a51693804c3ce499"
+    },
+    {
+      "file": "tower.3mf",
+      "bytes": 22786,
+      "sha256": "00fc05c6d4472c2abc7903ede420d0c8a38ba8ed084679099ea5ac5b0be97af3"
+    },
+    {
+      "file": "tower.dxf",
+      "bytes": 134164,
+      "sha256": "06e778c6a1d98cc997d80e96868cc2644fdeb60f5af5392788ca879298bada9e"
+    },
+    {
+      "file": "tower.png",
+      "bytes": 475121,
+      "sha256": "698db7aefab2f1b1d6a7312ecf39853461d47852ab94b12589e8088dd07e7fd5"
+    },
+    {
+      "file": "tower.svg",
+      "bytes": 54550,
+      "sha256": "99d8fbccfc579ca3998227f349866ef1690d0b1ba946df54e2bf80c22b1ff66d"
+    },
+    {
+      "file": "vertical-axis-turbine.nbcad",
+      "bytes": 35148,
+      "sha256": "6c42e485e0a0262da1a56dbf2d536f062c2b48a0495b83d79fcf72b9cfcbb961"
+    }
+  ]
+}

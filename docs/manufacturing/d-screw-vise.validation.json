@@ -3,81 +3,73 @@
   "kind": "manufacturing-candidate-validation-snapshot",
   "date": "2026-09-10",
   "platform": "Windows x64; native OCCT 7.9.3",
-  "engine_revision": "4ee3963c3a92c8500a4d32cd7d78be97cb6dc06a",
+  "engine_revision": "0cf567c0afcf9b1a00c030035ed90d63ed0e9178",
   "model_schema": 6,
+  "source_hash_encoding": "UTF-8 with LF line endings",
   "sources": [
     {
       "path": "examples/scripts/d-screw-vise.nbcad.jsonc",
-      "sha256": "4cff8f1f0e7622a637d92d4b5ba1051478293ea617f3d3ccad5392053a589f65"
+      "sha256_utf8_lf": "fde8514488e0567bc5640f0db88464cc99f248f9c276d323326feb008d34a996"
     },
     {
       "path": "examples/scripts/d-screw-vise-fit.nbcad.jsonc",
-      "sha256": "0bc5385a248b7757581b0676d9ab45266a87da7796b3afc6dafc5039e71ceda1"
+      "sha256_utf8_lf": "0bc5385a248b7757581b0676d9ab45266a87da7796b3afc6dafc5039e71ceda1"
     },
     {
       "path": "crates/recipes/examples/author_vise.rs",
-      "sha256": "5c1a89cd984bcf7225385b3b5b21385b8331fd3183c35c21e8981f0a464a6984"
+      "sha256_utf8_lf": "698d828f2c932a3d4654fcc8505fd41a442d291abd0587296e15f057cb825997"
     },
     {
       "path": "crates/recipes/examples/vise_drawings/mod.rs",
-      "sha256": "e41e3c0fdd80284c255ac8351ac5a88d313facf475d5a91b7aeac80e7585c29b"
+      "sha256_utf8_lf": "083b2bb45a5f40ae88591a87aaa71cde38457ff9488637d9d4833cee8654cdf8"
     },
     {
       "path": "mcp-server/tests/recipes.rs",
-      "sha256": "d90380f8a007ab881a86ba665a909eace221323c0fa14afecedeea395ff8ba19"
+      "sha256_utf8_lf": "10621969dcddcbc462a94b3776a8859f550b18eb95a556463fe810675bc68ebc"
     }
   ],
-  "artifact_directory": "native-target/vise-artifacts",
+  "artifact_directory": "nobs-cad-fixed-demos/flagships-final-2026-09-10/d_screw_vise",
   "validation": {
-    "native_command": "$env:NBCAD_RECIPE_ARTIFACT_DIR=\"<output-directory>\"; cargo test --manifest-path mcp-server/Cargo.toml --target-dir native-target --test recipes d_screw_vise -- --nocapture --test-threads=1",
+    "command": "cargo test --locked --manifest-path mcp-server/Cargo.toml --test recipes d_screw_vise -- --nocapture --test-threads=1",
+    "artifact_option": "Set NBCAD_RECIPE_ARTIFACT_DIR to a separate output directory to retain native projects, meshes and drawings.",
     "tests_passed": 2,
-    "elapsed_seconds": 322.84,
-    "first_replay_elapsed_ms": 73700,
-    "steps_completed": 587,
-    "final_checks_completed": 48,
-    "native_bodies": 7,
-    "printed_bodies": 5,
-    "fully_constrained_sketches": 36,
-    "datum_planes": 20,
-    "persistent_history_features": 94,
+    "elapsed_seconds": 320.23,
+    "first_replay_elapsed_ms": 70242,
+    "steps_completed": 692,
+    "final_checks_completed": 55,
+    "native_bodies": 9,
+    "printed_definitions": 5,
+    "component_definitions": 9,
+    "component_occurrences": 9,
+    "solved_occurrences": 9,
+    "fully_constrained_sketches": 43,
+    "datum_planes": 24,
+    "persistent_history_features": 112,
     "drawing_sheets": 6,
     "svg_and_dxf_exports": 12,
-    "independent_blank_replay": "exact final model, scene, sketches, assembly, poses and SVG/DXF content",
-    "native_reload": "exact geometry, assembly poses and SVG/DXF content",
-    "dimension_edits": "jaw width60→64→60 and guide width4.8→5.2→4.8; actual drawings update and geometry restores",
-    "restoration_geometry": "equal oriented coplanar patches, welded vertex positions within1e-6mm, equal bounds and enclosed volume; native topology IDs and structure preserved",
-    "largest_native_metadata_residual": 3.410605131648481E-13,
-    "restoration_note": "Two tessellation triangles on one cylindrical wall strip flip their shared diagonal; this is not a6.2mm part displacement. Averaged shading normals can change with that diagonal. Independent blank replay remains exact.",
-    "drawing_topology_guard": "modeled→simplified thread allowed; affected drawing export rejects topology change; restoring exact thread restores exact drawing",
-    "assembly_checks": "single driven Screw–Revolute–Slider loop;48mm travel, forward/reverse/multiturn motion, atomic beyond-limit rejection, exact sampled interference, late-travel paddle sweep, keeper and M3 insertion paths",
-    "home_thread_minimum_clearance_mm": 0.13531033091211228,
-    "home_overlapping_pairs": 0,
-    "printed_plate_extent_mm": [
-      203.6,
-      166,
-      52
-    ],
-    "printer_bed_limit_mm": [
-      235.5,
-      256,
-      256
-    ],
-    "mesh_checks": "finite closed positive-volume welded meshes, separate print poses and XY spacing; bed contact within1e-4mm numerical tolerance",
-    "coupon": "two exact native replays, real interrupted helical profile integral, positive closed print meshes and native reload",
-    "temporary_artifact_ownership": "Unique owned temporary directories are removed on drop; explicit NBCAD_RECIPE_ARTIFACT_DIR is retained and never deleted. Ownership cleanup test and native coupon readback/export passed after refactoring.",
-    "source_marker_refresh": "Fresh native load and12SVG/DXF exports through existing Rust xtask/MCP completed13steps in38528ms; A-A/B-B cutting-plane lines and two arrow polygons verified in SVG and source layers in DXF. Geometry was already validated by the full suite."
+    "independent_blank_replay": "Exact native model, scene, sketches, assembly, solved placement and drawing export values on this build.",
+    "native_reload": "Retained native geometry, sketches, assembly, drawings and solved placement verified in a fresh native process.",
+    "checks": [
+      "Actual jaw width 60→64→60 and guide width 4.8→5.2→4.8 edits; geometric volume and drawing changes verified.",
+      "After dimensional restore: equal oriented coplanar surface patches, welded vertex positions within 1e-6mm, equal bounds and volume. A triangulation diagonal can flip without moving the surface. Largest native metadata residual 3.410605131648481e-13.",
+      "Real M20x2.5 external helix, through-axis D flat and custom 20.5x2.5 relieved female thread; topology-changing thread edit rejects affected drawing references and exact restoration recovers exports.",
+      "Single driven Screw–Revolute–Slider loop, 48mm travel, forward/reverse/multiple turns and atomic travel-limit rejection.",
+      "Native sampled interference, late-travel paddle sweep, jaw lower-and-slide installation, intended Z8 support contact, keeper hardware insertion and positive cartridge cross-bolt capture.",
+      "Cartridge free gap at 0.38mm, blocked at 0.42mm, housing contact within ±1degree rocking; these are rigid geometric checks, not fastener or printed-part strength predictions.",
+      "Five closed positive-volume print meshes, separate print poses and XY spacing, approximately 203.6x166x52mm plate; two real paired thread coupons with exact replay/reload."
+    ]
   },
+  "live_boundary": "This manifest records the full headless lifecycle baseline. The initial live vise exposed a preset-expansion parity defect and a runner Save-directory ordering defect; separate shared follow-up fixes and live evidence qualify attached presentation. Save As also intentionally changes the document display name.",
   "physical_qualification": {
     "status": "not performed",
     "load_rating": null,
     "remaining": [
-      "Print paired coupon in intended orientations and material.",
-      "Verify purchased hardware and mounting board dimensions.",
-      "Qualify assembly, fit, backlash, turning effort, wear and sustained-load creep before functional use.",
-      "Requalify PLA/PETG/ASA and manufacturing-process variants separately."
+      "Print the paired coupon in the intended orientation and actual material/profile.",
+      "Verify purchased hardware dimensions and accessible assembly.",
+      "Measure fit, backlash, turning effort, clamp force, sustained-load creep and repeated-use wear.",
+      "Requalify material and manufacturing-process variants separately."
     ]
   },
-  "drawing_snapshot_note": "All six drawing outputs were regenerated after9537017 from the verified schema6 native model. Actual A-A/B-B cuts and full-width parent-view cutting-plane markers are present.",
   "artifacts": [
     {
       "file": "d-screw-vise-fit.3mf",
@@ -91,93 +83,93 @@
     },
     {
       "file": "d-screw-vise-print.3mf",
-      "bytes": 98817,
-      "sha256": "5e68959b80efe6ec634735b389b7e65937b99feb137cc24afdee69d48a23acbb"
+      "bytes": 103960,
+      "sha256": "ba0606d6cebd05a69be1f046ad833d10a32a8ec7186aa4368f2e51556b647bb0"
     },
     {
       "file": "d-screw-vise-print.nbcad",
-      "bytes": 11427,
-      "sha256": "a758f5a9fc30bb2d201a4e72880822072f3f4ae69db83f5b2997f02bb5535cff"
+      "bytes": 13600,
+      "sha256": "d1485c6926939c8df3f7d7413f074d283de6f3072fd80d3228175bca2d60a85b"
     },
     {
       "file": "d-screw-vise.nbcad",
-      "bytes": 17833,
-      "sha256": "8f0dadf0dbe5137c805d3155e24961fc0ccc0f30dac031757e05bf70a53fcf40"
+      "bytes": 20440,
+      "sha256": "a3a63d14a048ba8a96b8317b2bc743888fca58d7b267c1fc07fb4d3c9fb82114"
     },
     {
       "file": "vise_assembly_dxf.dxf",
-      "bytes": 269898,
-      "sha256": "6f00bb40ddcc58b4d8869c70549adfd798cea0720fa30f1299045d2d3744e00e"
+      "bytes": 277931,
+      "sha256": "1b5b75c69a58d963465a4a582f45718f2026568af989b851a86c5e2948fa704c"
     },
     {
       "file": "vise_assembly_svg.png",
-      "bytes": 764359,
-      "sha256": "e0e40b7d0cf27e7a4bf3ca88c672106a1a026ac4436bcf9f1bc22574ecdc1b62"
+      "bytes": 1124867,
+      "sha256": "c7785f913c34de85975cbda2e66e948cff9365bb8ac7ca59d47ff8c54d203b70"
     },
     {
       "file": "vise_assembly_svg.svg",
-      "bytes": 366276,
-      "sha256": "f546a3d61639239348a5076688fe3481307880998d4426e2a959c2fbef27f134"
+      "bytes": 371211,
+      "sha256": "0c9f8eff3b5e4a9f5b206a3a76c2641e92c8f8349b23a8465849ff41e0dccc65"
     },
     {
       "file": "vise_frame_dxf.dxf",
-      "bytes": 39280,
-      "sha256": "4f75126c1cb94c750220a2c9062a279e82f985b943264aa567ccb8ab120050f5"
+      "bytes": 64116,
+      "sha256": "4180c893ba86f72e110e10222ed1262453ed9c8dfaf0a00bdcd06a43a48bf6fe"
     },
     {
       "file": "vise_frame_svg.png",
-      "bytes": 277679,
-      "sha256": "7362f92788bf94e13510bfa7f87873a8eb16c858cb25f58aa32d673349364308"
+      "bytes": 450697,
+      "sha256": "dbe659f5a768379e791c1061ae495167468b376dcafb646ce05d62d853087e25"
     },
     {
       "file": "vise_frame_svg.svg",
-      "bytes": 35091,
-      "sha256": "f304d83d524abc03d54509d4d58fc0fa59432df448e9628335ce16feca17fc5b"
+      "bytes": 48689,
+      "sha256": "93d829ae0f10b2c0fcf7455f73ee0d0cdbf0948e2aff2dcd04d4519b70f304a0"
     },
     {
       "file": "vise_jaw_dxf.dxf",
-      "bytes": 67179,
-      "sha256": "65c88cc5e5a07876f1bed844315c3fa4f4d7c62dadaddbca6dc06146c7e8c562"
+      "bytes": 67193,
+      "sha256": "936f7808f29b16bbbe5bbee0ca995e83a71e09bb746b185ca055866fcb619acf"
     },
     {
       "file": "vise_jaw_svg.png",
-      "bytes": 304274,
-      "sha256": "6a261ac4477b8d9b87df7011efff3a5b09307208bba8e4e4fceec3e04704cc23"
+      "bytes": 433870,
+      "sha256": "e39924267ff3eaf5ec86e99d86c855cf948cd6c8d9d5a81d5b55c110bb0efda7"
     },
     {
       "file": "vise_jaw_svg.svg",
-      "bytes": 40503,
-      "sha256": "a5eacd9ed56be4e3c55e85ff3cf99daecd9151b3ee73fadc3210ceaba2a55b3c"
+      "bytes": 40506,
+      "sha256": "db6c3de68346a3bf86638ae1a9e35d7b3f9b2a64dd0673839785ea551ed45828"
     },
     {
       "file": "vise_keeper_dxf.dxf",
-      "bytes": 35477,
-      "sha256": "2b6f9a458a26d1d5f6b15cebfa9e56a2a45bd003ad3057ea9ccb225d3d41823a"
+      "bytes": 35490,
+      "sha256": "23a0f084d498ce9417ee4acb641826c8e571eef007000991e7866cb17a034649"
     },
     {
       "file": "vise_keeper_svg.png",
-      "bytes": 283093,
-      "sha256": "941ec362e58640e73bfa4f66d37aeaf8a869282b0130b501332bdd6b6c788ac1"
+      "bytes": 398066,
+      "sha256": "ddb091d42945904ed5f09ee758c68e418bec2d310eaae82a25ee5203b754a6d1"
     },
     {
       "file": "vise_keeper_svg.svg",
-      "bytes": 22405,
-      "sha256": "07a1a8bb310aa6d6f58174795079096b301538e6ff8f159ef16412b5eb418643"
+      "bytes": 22381,
+      "sha256": "cbcad014973a7c6470143813b8882211d687529a964b3f9841b3e1daba65b376"
     },
     {
       "file": "vise_nut_dxf.dxf",
-      "bytes": 67157,
-      "sha256": "3c959dc5e796ef01b67dcdcf56d8e7f3d145ec67feb2c7ca53a99315bd5244cb"
+      "bytes": 77826,
+      "sha256": "e7c55f4b4d578e73efb6708210ebefd6e9559c7ba212a557560f4ef9e4fce2d8"
     },
     {
       "file": "vise_nut_svg.png",
-      "bytes": 373687,
-      "sha256": "a8f6a99c4bbaabc37d6f96517a7f9a37b5eaa8e3a16c9e97b1cf66c0cfaf8a7e"
+      "bytes": 559229,
+      "sha256": "0d831b4ccb0ea9bf5ccb732469b1f8568f80d4de6fef360144f71942c388b197"
     },
     {
       "file": "vise_nut_svg.svg",
-      "bytes": 57746,
-      "sha256": "878b65d3c32c4ca7196bdd147b646c12de11c2e9035e2742c72d0224b40ceda7"
+      "bytes": 63177,
+      "sha256": "e654ed8772f99beaf72988dffe87f772934d84f2d852c9d1de11e4e2d5c4f53d"
     },
     {
       "file": "vise_screw_dxf.dxf",
@@ -186,8 +178,8 @@
     },
     {
       "file": "vise_screw_svg.png",
-      "bytes": 443117,
-      "sha256": "ecfe2f9abeeadd4f37850dea9c10b88611f477b9ccc239c4d6e85b06d8a5795a"
+      "bytes": 636065,
+      "sha256": "b90ab3a757d4344e4227f36a2b6f7381e897bcb15b1daaa40939c4e77509a696"
     },
     {
       "file": "vise_screw_svg.svg",
