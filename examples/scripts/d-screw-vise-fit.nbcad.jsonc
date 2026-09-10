@@ -1,0 +1,791 @@
+// Paired physical fit coupon; print the supplied orientations without supports first.
+// It is an experiment, not proof that a chosen printer/profile will achieve the intended clearance.
+{
+  "$schema": "./nbcad-script.schema.json",
+  "checks": [
+    {
+      "call": {
+        "arguments": {},
+        "group": "solid/check",
+        "operation": "solid_scene"
+      },
+      "expect": {
+        "/errors": []
+      },
+      "id": "final_scene"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "document/files",
+        "operation": "cad_project_model"
+      },
+      "id": "final_model"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finished"
+      },
+      "id": "final_sketches"
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 2
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/0/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/1/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/2/dof/value"
+      },
+      "equals": 0
+    }
+  ],
+  "exports": {
+    "coupon_length_mm": 25,
+    "final_model": {
+      "$ref": "final_model",
+      "pointer": ""
+    },
+    "final_scene": {
+      "$ref": "final_scene",
+      "pointer": ""
+    },
+    "final_sketches": {
+      "$ref": "final_sketches",
+      "pointer": ""
+    },
+    "nominal_female_mm": 20.5,
+    "nominal_male_mm": 20,
+    "nut_body_id": {
+      "$ref": "nut_body_id",
+      "pointer": ""
+    },
+    "pitch_mm": 2.5,
+    "screw_body_id": {
+      "$ref": "screw_body_id",
+      "pointer": ""
+    }
+  },
+  "name": "D-screw vise / paired print-fit coupons",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Qualify the actual interrupted thread",
+      "duration_ms": 1800,
+      "note": "Print the male coupon on its D flat and the female coupon with its thread axis vertical. The female is a custom 20.5 × 2.5 ISO-derived profile, not a standard M20 6H fit. Record material, layer height, extrusion width, fit, required turning torque and wear before committing to a full screw."
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "Coupon nut / 36 by 36 by 10",
+          "plane": {
+            "plane": "xy",
+            "type": "origin_plane"
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "Coupon nut / 36 by 36 by 10_begin"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "Coupon nut / 36 by 36 by 10_snap"
+    },
+    {
+      "call": {
+        "arguments": {
+          "anchor": {
+            "x": 45.0,
+            "y": -18.0
+          },
+          "corner_hint": {
+            "x": 81.0,
+            "y": 18.0
+          },
+          "ctrl_held": true,
+          "height_mm": 36.0,
+          "mode": "two_point",
+          "width_mm": 36.0
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked"
+      },
+      "id": "Coupon nut / 36 by 36 by 10_profile"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "Coupon nut / 36 by 36 by 10_profile",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/id",
+              "take": "one",
+              "where": {
+                "/kind": "point",
+                "/position/x": 45.0,
+                "/position/y": -18.0
+              }
+            }
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Coupon nut / 36 by 36 by 10_locate"
+    },
+    {
+      "duration_ms": 180,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "Coupon nut / 36 by 36 by 10_finish"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 10.0,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "new_body",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "Coupon nut / 36 by 36 by 10",
+          "taper_angle_deg": 0,
+          "target_body_ids": []
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "Coupon nut / 36 by 36 by 10_build"
+    },
+    {
+      "let": {
+        "nut_feature": {
+          "$select": {
+            "from": {
+              "$ref": "Coupon nut / 36 by 36 by 10_build",
+              "pointer": ""
+            },
+            "path": "/document/features",
+            "pointer": "/id",
+            "take": "last"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "nut_body_id": {
+          "$select": {
+            "from": {
+              "$ref": "Coupon nut / 36 by 36 by 10_build",
+              "pointer": ""
+            },
+            "path": "/scene/bodies",
+            "pointer": "/id",
+            "take": "one",
+            "where": {
+              "/feature_id": {
+                "$ref": "nut_feature",
+                "pointer": ""
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "coupon_nut_face": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "Coupon nut / 36 by 36 by 10_build",
+                  "pointer": ""
+                },
+                "path": "/scene/bodies",
+                "pointer": "",
+                "take": "one",
+                "where": {
+                  "/id": {
+                    "$ref": "nut_body_id",
+                    "pointer": ""
+                  }
+                }
+              }
+            },
+            "path": "/faces",
+            "pointer": "",
+            "take": "one",
+            "where": {
+              "/plane/normal/2": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "Coupon screw / ten complete turns",
+          "plane": {
+            "plane": "yz",
+            "type": "origin_plane"
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "Coupon screw / ten complete turns_begin"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "Coupon screw / ten complete turns_snap"
+    },
+    {
+      "call": {
+        "arguments": {
+          "ctrl_held": true,
+          "position": {
+            "x": 0.0,
+            "y": 28.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_point"
+      },
+      "id": "Coupon screw / ten complete turns_point"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$ref": "Coupon screw / ten complete turns_point",
+            "pointer": "/entities/0"
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Coupon screw / ten complete turns_point_fix"
+    },
+    {
+      "call": {
+        "arguments": {
+          "anchor": {
+            "x": 0.0,
+            "y": 28.0
+          },
+          "ctrl_held": true,
+          "diameter_mm": 20.0,
+          "edge_hint": {
+            "x": 10.0,
+            "y": 28.0
+          },
+          "mode": "center_diameter"
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked"
+      },
+      "id": "Coupon screw / ten complete turns_profile"
+    },
+    {
+      "call": {
+        "arguments": {
+          "curve": {
+            "$ref": "Coupon screw / ten complete turns_profile",
+            "pointer": "/entities/0"
+          },
+          "point": {
+            "$ref": "Coupon screw / ten complete turns_point",
+            "pointer": "/entities/0"
+          },
+          "type": "center_coincident"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Coupon screw / ten complete turns_locate"
+    },
+    {
+      "duration_ms": 180,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "Coupon screw / ten complete turns_finish"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 25.0,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "new_body",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "Coupon screw / ten complete turns",
+          "taper_angle_deg": 0,
+          "target_body_ids": []
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "Coupon screw / ten complete turns_build"
+    },
+    {
+      "let": {
+        "screw_feature": {
+          "$select": {
+            "from": {
+              "$ref": "Coupon screw / ten complete turns_build",
+              "pointer": ""
+            },
+            "path": "/document/features",
+            "pointer": "/id",
+            "take": "last"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "screw_body_id": {
+          "$select": {
+            "from": {
+              "$ref": "Coupon screw / ten complete turns_build",
+              "pointer": ""
+            },
+            "path": "/scene/bodies",
+            "pointer": "/id",
+            "take": "one",
+            "where": {
+              "/feature_id": {
+                "$ref": "screw_feature",
+                "pointer": ""
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "coupon_screw_face": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "Coupon screw / ten complete turns_build",
+                  "pointer": ""
+                },
+                "path": "/scene/bodies",
+                "pointer": "",
+                "take": "one",
+                "where": {
+                  "/id": {
+                    "$ref": "screw_body_id",
+                    "pointer": ""
+                  }
+                }
+              }
+            },
+            "path": "/faces",
+            "pointer": "",
+            "take": "one",
+            "where": {
+              "/cylinder/radius": 10
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "body_id": {
+            "$ref": "nut_body_id",
+            "pointer": ""
+          },
+          "diameter": 17.5,
+          "extent": {
+            "type": "through_all"
+          },
+          "face_id": {
+            "$ref": "coupon_nut_face",
+            "pointer": "/id"
+          },
+          "flip": false,
+          "position": {
+            "$project": {
+              "basis": {
+                "$ref": "coupon_nut_face",
+                "pointer": "/plane"
+              },
+              "point": [
+                63,
+                0,
+                10
+              ]
+            }
+          },
+          "style": "simple",
+          "thread": {
+            "class": "6H",
+            "depth": null,
+            "designation": "CUSTOM FDM 20.5 x 2.5 / ISO 60-degree form / 6H envelope; not standard M20",
+            "hand": "right",
+            "nominal_diameter": 20.5,
+            "pitch": 2.5,
+            "representation": "modeled",
+            "series": "metric_fine",
+            "standard": "iso_metric",
+            "threads_per_inch": null
+          }
+        },
+        "group": "solid/refine",
+        "operation": "solid_hole"
+      },
+      "id": "coupon_female_thread"
+    },
+    {
+      "call": {
+        "arguments": {
+          "body_id": {
+            "$ref": "screw_body_id",
+            "pointer": ""
+          },
+          "face_id": {
+            "$ref": "coupon_screw_face",
+            "pointer": "/id"
+          },
+          "flip": false,
+          "thread": {
+            "class": "6g",
+            "depth": null,
+            "designation": "M20 x 2.5 - 6g",
+            "hand": "right",
+            "nominal_diameter": 20,
+            "pitch": 2.5,
+            "representation": "modeled",
+            "series": "metric_coarse",
+            "standard": "iso_metric",
+            "threads_per_inch": null
+          }
+        },
+        "group": "solid/refine",
+        "operation": "solid_external_thread"
+      },
+      "id": "coupon_male_thread"
+    },
+    {
+      "call": {
+        "arguments": {
+          "distance": 17.0,
+          "name": "xy datum at 17 mm",
+          "reference": {
+            "plane": "xy",
+            "type": "origin_plane"
+          }
+        },
+        "group": "solid/reference",
+        "operation": "construction_plane_offset"
+      },
+      "id": "datum_0"
+    },
+    {
+      "let": {
+        "datum_0_plane": {
+          "datum_id": {
+            "$select": {
+              "from": {
+                "$ref": "datum_0",
+                "pointer": ""
+              },
+              "path": "/planes",
+              "pointer": "/datum_id",
+              "take": "one",
+              "where": {
+                "/name": "xy datum at 17 mm"
+              }
+            }
+          },
+          "type": "datum_plane"
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "Coupon screw / through-axis D flat",
+          "plane": {
+            "$ref": "datum_0_plane",
+            "pointer": ""
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "Coupon screw / through-axis D flat_begin"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "Coupon screw / through-axis D flat_snap"
+    },
+    {
+      "call": {
+        "arguments": {
+          "anchor": {
+            "x": -1.0,
+            "y": -11.0
+          },
+          "corner_hint": {
+            "x": 26.0,
+            "y": 11.0
+          },
+          "ctrl_held": true,
+          "height_mm": 22.0,
+          "mode": "two_point",
+          "width_mm": 27.0
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked"
+      },
+      "id": "Coupon screw / through-axis D flat_profile"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "Coupon screw / through-axis D flat_profile",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/id",
+              "take": "one",
+              "where": {
+                "/kind": "point",
+                "/position/x": -1.0,
+                "/position/y": -11.0
+              }
+            }
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Coupon screw / through-axis D flat_locate"
+    },
+    {
+      "duration_ms": 180,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "Coupon screw / through-axis D flat_finish"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 11.0,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "cut",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "Coupon screw / through-axis D flat",
+          "taper_angle_deg": 0,
+          "target_body_ids": [
+            {
+              "$ref": "screw_body_id",
+              "pointer": ""
+            }
+          ]
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "Coupon screw / through-axis D flat_build"
+    },
+    {
+      "call": {
+        "arguments": {
+          "body_ids": [
+            {
+              "$ref": "screw_body_id",
+              "pointer": ""
+            }
+          ],
+          "copy": false,
+          "pivot": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "translation": {
+            "x": 0,
+            "y": 0,
+            "z": -28
+          }
+        },
+        "group": "solid/body",
+        "operation": "solid_move_copy"
+      },
+      "id": "coupon_screw_on_bed"
+    },
+    {
+      "call": {
+        "arguments": {
+          "body_ids": [
+            {
+              "$ref": "screw_body_id",
+              "pointer": ""
+            },
+            {
+              "$ref": "nut_body_id",
+              "pointer": ""
+            }
+          ],
+          "copy": false,
+          "pivot": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "translation": {
+            "x": 0,
+            "y": 18,
+            "z": 0
+          }
+        },
+        "group": "solid/body",
+        "operation": "solid_move_copy"
+      },
+      "id": "coupon_positive_bed_coordinates"
+    },
+    {
+      "call": {
+        "arguments": {
+          "body_id": {
+            "$ref": "screw_body_id",
+            "pointer": ""
+          },
+          "preset_id": "bambu.petg.hf.white"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "screw_material"
+    },
+    {
+      "call": {
+        "arguments": {
+          "body_id": {
+            "$ref": "nut_body_id",
+            "pointer": ""
+          },
+          "preset_id": "bambu.petg.hf.white"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "nut_material"
+    },
+    {
+      "duration_ms": 500,
+      "fit": true,
+      "view": "isometric"
+    }
+  ],
+  "version": 1
+}

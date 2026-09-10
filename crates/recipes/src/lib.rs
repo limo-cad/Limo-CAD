@@ -13,6 +13,22 @@ pub struct Recipe {
 
 pub const RECIPES: &[Recipe] = &[
     Recipe {
+        id: "d-screw-vise",
+        source: include_str!("../../../examples/scripts/d-screw-vise.nbcad.jsonc"),
+        summary: "Build a five-part vise with a real interrupted helical screw, circular wear nut and guided retained jaw. Physical print-fit qualification remains required.",
+        kind: "flagship-candidate",
+        focus_operations: &["solid_external_thread", "assembly_create_joint"],
+        preview: false,
+    },
+    Recipe {
+        id: "d-screw-vise-fit",
+        source: include_str!("../../../examples/scripts/d-screw-vise-fit.nbcad.jsonc"),
+        summary: "Print a true half-section M20 screw and explicitly relieved custom female thread in their intended FDM orientations.",
+        kind: "manufacturing-coupon",
+        focus_operations: &["solid_external_thread", "solid_hole"],
+        preview: false,
+    },
+    Recipe {
         id: "fillet-basics",
         source: include_str!("../../../examples/scripts/fillet-basics.nbcad.jsonc"),
         summary: "Locate a dimensioned sketch, extrude stock, then round only its top rim.",
