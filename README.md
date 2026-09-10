@@ -94,11 +94,11 @@ noBS CAD feature history.
 
 ## Local automation (MCP)
 
-The repository includes a stateful, headless
-[MCP server](mcp-server/README.md) for local testing and agent-driven
-modeling over **stdio**. It uses the same Rust planning model and native OCCT
-adapter as the desktop app and registers **105** sketch/solid modeling tools
-(plus control and export helpers).
+The [MCP server](mcp-server/README.md) uses the same grouped product interface,
+Rust planning model and native OCCT adapter as the desktop app. It can own a
+headless document for local testing or attach to an explicitly selected live
+design. Modeling commands reach that document's owner in order; the desktop
+remains the single writer while MCP waits for execution receipts.
 
 Default **dynamic** disclosure advertises a focus-scoped subset (spine + active
 and soft packs with TTL) — guidance for agents, not a hard jail. Out-of-focus
@@ -107,11 +107,38 @@ ignores `notifications/tools/list_changed`.
 
 Export via MCP: **STEP** (CAD interchange), **STL** (geometry-only mesh), and
 **3MF** (preferred for slicers; per-body color/material plus compatible slicer
-Metadata hints — not a full pre-sliced project). Session helpers
-(`cad_list_sessions` / `cad_attach` / `cad_refresh` / `cad_detach`) load
-**read-only** snapshots from `NBCAD_SESSION_DIR`; live UI co-link is not shipped.
+Metadata hints — not a full pre-sliced project). Session helpers discover and
+attach to running windows/documents. Snapshot refresh and explicit submission
+remain diagnostic tools; ordinary attached modeling handles that transport.
 
 Details: [docs/mcp-harness.md](docs/mcp-harness.md).
+
+## Build, learn and demonstrate
+
+An authored `.nbcad.jsonc` recipe is a readable sequence of the same modeling
+operations used interactively. **Build** runs it at maximum rate. **Teach** adds
+chapter notes and stepping through the editable feature history. **Show** renders
+the construction with captions and camera transitions. The source and final
+checks stay the same across these modes.
+
+Open **Scripts** in the app to choose a recipe or load a source file. The
+[recipe library](examples/scripts/README.md) includes the garden bench and short
+sketch, extrusion, hole, revolve, fillet and repeated-part assembly examples.
+The same Rust runner supports independent headless checks:
+
+```sh
+cargo xtask run-script --recipe mounting-plate --server MCP_EXECUTABLE --repeat 2
+```
+
+Use `--session SESSION_ID --new --present --speed 2` with a matching desktop/MCP
+build to watch construction in a new design tab while retaining the current one.
+The generated `.nbcad` remains an editable parametric project.
+
+The bench, printable windmill with optional generator, and small screw vise are
+the [three reference targets](docs/recipe-development.md). The bench is runnable;
+the windmill and vise currently have design briefs. Full flagship drafting and
+the learning interface are still in development. See the
+[native review stack](docs/development-stack.md) for the implementation layers.
 
 ## 3D mouse compatibility
 

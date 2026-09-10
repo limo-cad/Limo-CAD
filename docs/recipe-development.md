@@ -11,8 +11,11 @@ The [recipe library](../examples/scripts/README.md) sits above the replay and
 playback capabilities in the review stack. Sources, semantic checks, expected edit
 behavior and editable drawing additions should be reviewed together. Keep each
 later feature lesson or flagship iteration in a small PR based on that layer's
-current tip, moving the base to main when its parent merges. Shared capability
+current tip, with GitHub updating its stack base as parents merge. Shared capability
 changes belong below recipes that depend on them.
+
+The [development stack](development-stack.md) records the review/merge workflow
+and how to keep working from the current capability tip.
 
 ## Committed targets and current evidence
 

@@ -5,12 +5,12 @@ It covers most sketch and solid-modeling tools with **soft focus-scoped
 disclosure** (`tools.listChanged: true`). Out-of-focus tools stay callable.
 
 > Notes: [docs/mcp-harness.md](../docs/mcp-harness.md).
-> Proposed ideas (in-process co-link, multi-window broker, …):
+> Further architecture options (multi-document broker, …):
 > [docs/proposed-architecture.md](../docs/proposed-architecture.md).
 
 **Spine controls:** `cad_get_focus`, `cad_set_focus`, disclosure mode get/set,
 `cad_list_all_tools`, `cad_cancel_recompute`, `cad_list_sessions`, `cad_attach`,
-`cad_refresh`, `cad_detach` (read-only session snapshots).
+`cad_refresh`, `cad_detach` (explicit document discovery and attachment).
 
 **Print:** prefer `solid_export_3mf` (mm + materials + slicer Metadata). Also
 `solid_export_stl`, `solid_export_step` (CAD), `material_catalog`,
@@ -48,7 +48,9 @@ Manual Cursor / VS Code config (build the release binary first):
 }
 ```
 
-Client installer (`install-mcp`) and UI launch tools are follow-ups.
+Repository client setup uses `cargo xtask install-mcp`. `cad_interface` also
+supports application launch and guarded live-window control; see the harness
+notes for document ownership and version compatibility.
 
 ## Modeling flow
 
@@ -106,13 +108,34 @@ not recovered sketch/extrude history; dump a forward tool sequence with
 
 `cad_project_model` returns the authoritative versioned `model.json`,
 `cad_load_project_model` transactionally restores and recomputes it, and
-`cad_new_project` clears to an empty document. The **snapshot bridge** uses
-`cad_list_sessions` / `cad_attach` / `cad_submit` / `cad_refresh` / `cad_detach`
-under `NBCAD_SESSION_DIR` (UUID v4 session ids; require valid `model.json`).
-While attached, direct mutates return `session_read_only` (use `cad_submit`). `cad_submit` writes `inbox/<seq>.json` for UI-owned apply; MCP does **not**
-write `model.json` (no last-writer-wins). Desktop Tauri applies inbox ops via
-`host::handle` and publishes a new snapshot. Headless goldens (no attach) still
-mutate this process directly. [#11](https://github.com/jackControls/noBS-CAD/issues/11) stays open.
+`cad_new_project` clears a headless document. For live work, discover a window
+with `cad_list_sessions` and bind its intended document with `cad_attach`.
+Ordinary tools and `cad_interface` grouped execution route modeling edits to that
+desktop owner and await its ordered receipts. MCP does not write the live
+`model.json`; the desktop applies operations and publishes completed snapshots
+under `NBCAD_SESSION_DIR`. An unattached MCP process owns its own document.
+
+`cad_submit`, `cad_await_apply` and `cad_refresh` remain lower-level diagnostics,
+not extra calls required after each edit. Old desktops that do not support the
+shared interface reject live writes with a version/ownership error. Live routing
+landed in #91 and closed #11; multi-document brokering remains #12.
+
+## Authored recipes
+
+Use `cad_interface` with `action: "recipes"` to discover the Rust-owned catalog.
+Run a selected source with `{"action":"script","recipe":"mounting-plate"}`;
+an explicit `source` or absolute `.nbcad.jsonc` `path` is also accepted instead
+of a recipe ID. These choices all use one interpreter and the ordinary grouped
+operations. The app and `cargo xtask run-script` consume the same catalog.
+
+Scripts require a blank document, stop at a failing operation and run their final
+checks. Fast mode executes locally without presentation waits; present mode adds
+authored notes and camera transitions in an attached desktop. `cad_script` remains
+the older forward-trace export and is not the authored recipe command.
+
+See [native scripts](../docs/native-scripts.md) for controls and source format,
+and [the recipe library](../examples/scripts/README.md) for runnable examples and
+their geometry/edit/replay evidence.
 
 **Print handoff:** `solid_export_preflight` → `set_body_appearance` (optional) →
 `solid_export_3mf` (preferred for slicers). Use `solid_tessellate` to inspect
