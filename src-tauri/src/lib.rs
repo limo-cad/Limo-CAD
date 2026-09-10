@@ -773,7 +773,7 @@ fn engine_project_load(
     state: tauri::State<'_, AppState>,
     payload: &str,
 ) -> String {
-    bridge.run_ui_mutation(window.label(), || state.project_load(payload))
+    bridge.run_project_replacement(window.label(), &state, || state.project_load(payload))
 }
 
 #[tauri::command]
@@ -782,7 +782,7 @@ fn engine_project_new(
     bridge: tauri::State<'_, session_bridge::SessionBridgeState>,
     state: tauri::State<'_, AppState>,
 ) -> String {
-    bridge.run_ui_mutation(window.label(), || state.project_new())
+    bridge.run_project_replacement(window.label(), &state, || state.project_new())
 }
 
 #[tauri::command]

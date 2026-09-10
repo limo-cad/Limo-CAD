@@ -54,10 +54,12 @@ pub async fn native_script_run(
     source: String,
     mode: String,
     speed: f64,
+    document_id: String,
+    session_id: String,
 ) -> Result<Value, Value> {
     let running = state.acquire()?;
     let session_id = bridge
-        .active_script_session(window.label(), &engine)
+        .active_script_session(window.label(), &engine, &document_id, &session_id)
         .map_err(|error| failure("script_session_unavailable", error))?;
     // The async command returns control to the UI while its blocking Rust
     // interpreter waits for the existing presentation and mutation receipts.
