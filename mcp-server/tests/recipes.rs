@@ -1663,6 +1663,10 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
             serde_json::to_vec_pretty(&report).unwrap(),
         )
         .unwrap();
+        write_native_project(
+            &directory.join("vertical-axis-turbine.nbcad"),
+            &exports["final_model"],
+        );
         std::fs::write(
             directory.join("model.json"),
             serde_json::to_vec_pretty(&exports["final_model"]).unwrap(),
@@ -1863,6 +1867,10 @@ fn turbine_fit_coupons_have_driving_fits_and_replay_as_closed_prints() {
             serde_json::to_vec_pretty(&report).unwrap(),
         )
         .unwrap();
+        write_native_project(
+            &directory.join("turbine-fit-coupons.nbcad"),
+            &exports["final_model"],
+        );
         std::fs::write(
             directory.join("model.json"),
             serde_json::to_vec_pretty(&exports["final_model"]).unwrap(),
