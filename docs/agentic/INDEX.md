@@ -18,5 +18,5 @@ Committed operating docs for humans and coding agents working on noBS CAD.
 |------|------|
 | `mcp-server/src/disclosure.rs` | Focus packs, soft TTL, tags |
 | `mcp-server/src/session.rs` | Headless session dirs, attach |
-| `mcp-server/src/main.rs` | Tool registry, RPC, goldens |
+| `mcp-server/src/lib.rs` | Tool registry, RPC, goldens |
 | `crates/export/` | 3MF/STL writers, material catalog |

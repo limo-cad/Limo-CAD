@@ -12,7 +12,7 @@ export class SerialPlayback {
 }
 
 export interface PresentationRequest {
-  command?: 'configure' | 'note' | 'pause' | 'resume' | 'step' | 'status' | 'finish' | 'stop';
+  command?: 'configure' | 'note' | 'pause' | 'resume' | 'step' | 'status' | 'finish' | 'stop' | 'dismiss' | 'show';
   mode?: 'fast' | 'present';
   speed?: number;
   duration_ms?: number;
@@ -23,6 +23,7 @@ export interface PresentationRequest {
 }
 export interface PresentationSnapshot {
   active: boolean;
+  visible: boolean;
   mode: 'fast' | 'present';
   speed: number;
   paused: boolean;
@@ -39,7 +40,7 @@ export interface PresentationSnapshot {
 
 /** A clock-injected gate makes pause/speed/step behavior independent of timers. */
 export class PresentationController {
-  private state: PresentationSnapshot = { active: false, mode: 'fast', speed: 1,
+  private state: PresentationSnapshot = { active: false, visible: false, mode: 'fast', speed: 1,
     paused: false, stopped: false, finished: false, text: '', chapter: '', operation: '',
     step_index: 0, step_count: 0, highlighted_body_ids: [], highlighted_sketch_entity_ids: [] };
   private remainingMs = 0;
@@ -73,7 +74,7 @@ export class PresentationController {
   }
   control(request: PresentationRequest): ReturnType<PresentationController['status']> {
     const command = request.command ?? 'status';
-    if (!['configure', 'note', 'pause', 'resume', 'step', 'status', 'finish', 'stop'].includes(command)) throw new Error('Unknown presentation command');
+    if (!['configure', 'note', 'pause', 'resume', 'step', 'status', 'finish', 'stop', 'dismiss', 'show'].includes(command)) throw new Error('Unknown presentation command');
     if (request.mode !== undefined && !['fast', 'present'].includes(request.mode)) throw new Error('mode must be fast or present');
     if (request.speed !== undefined && (!Number.isFinite(request.speed) || request.speed < 0.1 || request.speed > 16)) throw new Error('speed must be from 0.1 to 16');
     if (request.duration_ms !== undefined && (!Number.isInteger(request.duration_ms) || request.duration_ms < 0 || request.duration_ms > 10000)) throw new Error('duration_ms must be an integer from 0 to 10000');
@@ -87,10 +88,18 @@ export class PresentationController {
     const count = request.step_count ?? this.state.step_count;
     if (count && index > count) throw new Error('step_index cannot exceed step_count');
     if (command === 'finish' && this.state.stopped) throw new Error('Playback was stopped; it cannot be marked complete');
+    if (command === 'show' && !this.state.active) throw new Error('No playback is available to show');
     this.advance();
     if (command === 'status') return this.status();
+    if (command === 'dismiss' || command === 'show') {
+      // Visibility is independent of execution. In particular, hiding a
+      // paused run neither resumes it nor consumes its single-step permit.
+      this.emit({ visible: command === 'show' });
+      return this.status();
+    }
     if (command === 'configure') this.paceMs = 0;
     const patch: Partial<PresentationSnapshot> = { active: true };
+    if (!this.state.active) patch.visible = true;
     if (request.mode !== undefined) patch.mode = request.mode;
     if (request.speed !== undefined) patch.speed = request.speed;
     if (request.text !== undefined) patch.text = request.text;
@@ -98,7 +107,7 @@ export class PresentationController {
     if (request.step_index !== undefined) patch.step_index = index;
     if (request.step_count !== undefined) patch.step_count = count;
     if (command === 'configure' && (this.state.finished || this.state.stopped)) {
-      Object.assign(patch, { paused: false, finished: false, stopped: false, operation: '',
+      Object.assign(patch, { visible: true, paused: false, finished: false, stopped: false, operation: '',
         highlighted_body_ids: [], highlighted_sketch_entity_ids: [] });
       this.credits = 0; this.remainingMs = 0;
     }

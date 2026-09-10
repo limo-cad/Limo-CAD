@@ -13,6 +13,44 @@ are supported. Comments inside strings are preserved. Version 1 contains data an
 expressions only: no embedded JavaScript, shell commands or general programming
 runtime.
 
+## Open and run scripts in CAD
+
+The **Scripts** button opens the script workspace beside the current design. Each
+bundled example uses the shared command groups behind the ribbon and MCP
+interface. Choose a short capability lesson to learn an operation, or the complete
+bench to follow a larger design. The source remains readable JSONC with its comments,
+chapter notes and commands.
+
+The Source tab supports editing, validation through the Rust parser, and **Save
+script as…**. The file-path disclosure exposes the same loader to the semantic
+MCP controls without having to operate an operating-system file picker.
+
+Use **File → Open Script…** to load a `.nbcad.jsonc` file into that workspace. The
+native macOS File menu routes this through the same action as the in-window File
+menu. Opening a source file does not execute its modeling commands. Close the
+script dock when you want the space back; use **Scripts** to show it again.
+
+**Run in new design** creates a blank design in the existing CAD window and replays
+the selected source there. The existing project remains separate. Presentation
+controls provide Pause, Step, Resume, speed and Maximum rate during the run. Save
+the resulting `.nbcad` project to retain its editable feature history.
+The playback bar docks below the viewport. **Close** hides it without changing
+execution; **Show playback** restores it from the top bar, including after a run
+has completed or stopped.
+
+Short lessons can also provide an isolated miniature preview. The fillet lesson
+exports captioned frames before and after rounding the top rim. Preview execution
+uses a separate headless engine, then displays its returned tessellation in the
+small preview surface; it does not borrow the active document, camera or native
+viewport’s feature-preview channel. Ribbon hover help can show the same lesson
+where an example is associated with that operation. Hovering does not run the
+lesson in the active design.
+
+Preview is intentionally bounded to short source files: at most 80 construction
+steps and checks combined, and 2 MiB of source. Use **Run in new design** for the
+full bench. Both paths execute the same native command interpreter; a preview is
+not a replacement for the editable `.nbcad` project or the final validation gate.
+
 ## One execution path
 
 The Rust `nbcad-script` crate resolves references and sequences the existing grouped
@@ -128,7 +166,7 @@ A view can use `current`, `isometric`, `front`, `back`, `left`, `right`, `top` o
 camera transition. Targets use the same named result expressions as modeling calls.
 
 The shared presentation interface exposes `configure`, `note`, `pause`, `resume`,
-`step`, `status`, `finish` and `stop`. Configuration chooses `mode: "fast"` or
+`step`, `status`, `finish`, `stop`, `dismiss` and `show`. Configuration chooses `mode: "fast"` or
 `"present"` and `speed` from 0.1 to 16. The on-screen controls operate the same state.
 Pause preserves the remaining authored hold. Single step allows one modeling
 mutation. Maximum rate skips presentation delays and camera animation. An authored
@@ -182,3 +220,14 @@ the actual native caption, speed selector, pause, Step, Resume, Stop and Maximum
 controls. It preserves the existing document, runs a small sketch exercise in the
 same window and leaves a blank design for the next example. It never launches
 another desktop window.
+
+`cargo xtask test-mcp scripts-workspace --server MCP --session UUID --out DIRECTORY`
+drives the **Scripts** button, bundled fillet lesson and **Run in new design**
+through fresh semantic UI controls. It plays and fits the isolated preview, checks
+the editable sketch, extrusion and fillet, and confirms the original design
+remains unchanged in its retained tab. Closing and showing the completed playback
+controls and script dock must release and restore their viewport space. Add
+`--script /absolute/path/example.nbcad.jsonc` to exercise the visible file-path
+loader before selecting the bundled lesson. It leaves the finished lesson open
+in the same window and writes its native project and proof report to the output
+directory. Finish any active sketch or feature edit before starting this check.

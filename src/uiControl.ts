@@ -6,16 +6,32 @@ export interface UiControl {
   label: string;
   role: string;
   disabled: boolean;
+  expanded?: boolean;
+  selected?: boolean;
   value?: string | boolean;
   options?: Array<{ value: string; label: string; disabled: boolean }>;
 }
 
-const selector = 'button,input:not([type="hidden"]),select,textarea,a[href],[role="button"],[role="tab"],[role="treeitem"],[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"],[role="checkbox"],[role="radio"],[contenteditable="true"]';
+const selector = 'button,details > summary,input:not([type="hidden"]),select,textarea,a[href],[role="button"],[role="tab"],[role="treeitem"],[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"],[role="checkbox"],[role="radio"],[contenteditable="true"]';
 let snapshot = 0;
 let inspectedContext: unknown;
 let current = new Map<string, { element: HTMLElement; label: string; surface: string }>();
 
+function disclosureDetails(element: HTMLElement): HTMLDetailsElement | null {
+  const parent = element.parentElement;
+  return element.tagName === 'SUMMARY' && parent instanceof HTMLDetailsElement
+    && [...parent.children].find(child => child.tagName === 'SUMMARY') === element ? parent : null;
+}
+
 export function visible(element: HTMLElement): boolean {
+  // A closed disclosure exposes only its first summary, including any controls
+  // inside that summary. CSS boxes alone do not capture this native UI state.
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    if (parent instanceof HTMLDetailsElement && !parent.open) {
+      const summary = [...parent.children].find(child => child.tagName === 'SUMMARY');
+      if (!summary?.contains(element)) return false;
+    }
+  }
   const style = getComputedStyle(element);
   return element.isConnected && !element.closest('[hidden],[inert],[aria-hidden="true"]')
     && style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
@@ -50,11 +66,16 @@ export function inspectUi(context?: unknown) {
   current = new Map();
   for (const element of document.querySelectorAll<HTMLElement>(selector)) {
     if (!visible(element) || element.closest('[data-mcp-presentation]')) continue;
+    const details = disclosureDetails(element);
+    if (element.tagName === 'SUMMARY' && !details) continue;
     const id = `control-${snapshot}-${current.size + 1}`;
     current.set(id, { element, label: label(element), surface: surface(element) });
     const disabled = element.matches(':disabled,[aria-disabled="true"]') || element.closest('[aria-disabled="true"]') !== null;
     const control: UiControl = { id, surface: surface(element), label: label(element),
-      role: element.getAttribute('role') || (element instanceof HTMLInputElement ? element.type : element.tagName.toLowerCase()), disabled };
+      role: element.getAttribute('role') || (details ? 'button' : element instanceof HTMLInputElement ? element.type : element.tagName.toLowerCase()), disabled };
+    if (details) control.expanded = details.open;
+    else if (element.hasAttribute('aria-expanded')) control.expanded = element.getAttribute('aria-expanded') === 'true';
+    if (element.hasAttribute('aria-selected')) control.selected = element.getAttribute('aria-selected') === 'true';
     if (element instanceof HTMLInputElement && element.type !== 'password' && element.type !== 'file') {
       control.value = ['checkbox', 'radio'].includes(element.type) ? element.checked : element.value;
     } else if (element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) control.value = element.value;
@@ -115,6 +136,7 @@ export function operateUi(request: UiAction, context?: unknown): HTMLElement | n
     const accepted = element.dispatchEvent(new KeyboardEvent('keydown', { key: request.key, bubbles: true, cancelable: true }));
     // Synthetic key events do not trigger the browser's native form default.
     if (accepted && request.key === 'Enter' && element instanceof HTMLInputElement) element.form?.requestSubmit();
+    if (accepted && request.key === 'Enter' && disclosureDetails(element)) element.click();
     element.dispatchEvent(new KeyboardEvent('keyup', { key: request.key, bubbles: true }));
   } else throw new Error('Unsupported UI action');
   return element;

@@ -37,7 +37,7 @@ Pinned vcpkg checkout must use `fetch-depth: 0` (versioned port trees fail on sh
 
 ## Adding an MCP tool
 
-1. Register `ToolSpec` in `mcp-server/src/main.rs` `tool_specs()`.
+1. Register `ToolSpec` in `mcp-server/src/lib.rs` `tool_specs()`.
 2. Add pack tags in `disclosure::tags_for_tool` (and `auto_focus_for_tool` if needed).
 3. Update `MODELING_TOOL_COUNT` / pack count assertions if it is a modeling tool.
 4. Add or extend a headless golden under `#[cfg(test)]` in `main.rs`.

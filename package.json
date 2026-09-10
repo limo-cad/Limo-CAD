@@ -27,7 +27,7 @@
     "build:wasm": "wasm-pack build crates/wasm --target web --out-dir ../../src/engine-wasm/pkg --out-name nbcad_wasm",
     "smoke:wasm": "node scripts/smoke-wasm.mjs",
     "test:frontend": "npm run test:constraint-glyphs && npm run test:revolve-axis && npm run test:modeling-picker && npm run test:screen-picker && npm run test:viewport-theme && npm run test:project-archive && npm run test:profile-picker && npm run test:presentation",
-    "test:presentation": "tsx src/operationPlayback.test.ts",
+    "test:presentation": "tsx src/operationPlayback.test.ts && tsx src/scripts/previewGeometry.test.ts",
     "test:constraint-glyphs": "tsx src/sketch/constraintGlyphAnchor.test.ts",
     "test:revolve-axis": "tsx src/lib/revolveAxis.test.ts",
     "test:modeling-picker": "tsx src/modeling/viewportPicker.test.ts",

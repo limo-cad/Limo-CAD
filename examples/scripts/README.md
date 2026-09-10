@@ -1,5 +1,9 @@
 # Native command examples
 
+- [Sketch, extrude, ease the edges](fillet-basics.nbcad.jsonc): a first-part lesson
+  for Solid → Refine → Fillet. Builds a fully located 60 × 30 mm sketch, extrudes
+  12 mm of stock and rounds the four top edges by 2 mm. Exports two captioned
+  scene frames for an isolated preview, plus the editable final model.
 - [Crown garden bench](garden-bench.nbcad.jsonc): a complete timber assembly from
   dimensioned sketches, native features and physical mating references. Includes
   authored captions, camera framing and final manufacturing contracts.

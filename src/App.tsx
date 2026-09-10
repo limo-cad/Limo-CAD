@@ -9,6 +9,7 @@
 import { useEffect, useRef } from 'react';
 import { installOperationFeedback } from './operationPlayback';
 import { PresentationControls } from './components/PresentationControls';
+import { ScriptPanel } from './components/ScriptPanel';
 import { useTranslation } from './i18n';
 import { useAppStore } from './store/appStore';
 import {
@@ -416,9 +417,10 @@ export default function App() {
                 <div className="contents" data-mcp-surface="comments"><CommentsPanel /></div>
               </>
             )}
-            <PresentationControls />
           </main>
+          <PresentationControls />
         </div>
+        <ScriptPanel />
       </div>
       {!drawingWorkspace && <div className="contents" data-mcp-surface="feature-history"><Timeline /></div>}
       <ConstraintDialogHost />

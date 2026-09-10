@@ -11,6 +11,7 @@ import {
 import { createPortal } from 'react-dom';
 import {
   Box,
+  BookOpen,
   ChevronDown,
   FileDown,
   FileText,
@@ -42,6 +43,8 @@ import { switchProjectTab } from '../files/projectTabs';
 import { cx } from '../lib/cx';
 import { exportActiveDrawingDxf } from '../drawing/export';
 import { requestNativeViewportLayout } from './viewport/nativeViewportBridge';
+import { PresentationReopen } from './PresentationControls';
+import { openScriptFile, showScripts, useScriptWorkspace } from '../scripts/workspace';
 
 const FILE_MENU_VIEWPORT_MARGIN = 6;
 const FILE_MENU_FALLBACK_WIDTH = 256;
@@ -246,6 +249,11 @@ export function ProjectMenuControls() {
                 onClick={() => run(openProject)}
               />
               <FileMenuItem
+                icon={<BookOpen size={14} />}
+                label="Open Script…"
+                onClick={() => { setMenuOpen(false); void openScriptFile(); }}
+              />
+              <FileMenuItem
                 icon={<Save size={14} />}
                 label={t('file.save')}
                 shortcut="⌘S"
@@ -387,6 +395,7 @@ export function ProjectTabBar() {
   const projectBusy = useAppStore((s) => s.projectBusy);
   const historyEditing = useAppStore((s) => s.historyEdit !== null);
   const [busy, setBusy] = useState(false);
+  const scriptsOpen = useScriptWorkspace(s => s.open);
   const activeTabRef = useRef<HTMLDivElement>(null);
   const interactionBusy = busy || modelBusy || projectBusy || historyEditing;
 
@@ -508,6 +517,12 @@ export function ProjectTabBar() {
         );
         })}
       </div>
+      <PresentationReopen />
+      <button type="button" aria-label="Scripts" aria-expanded={scriptsOpen}
+        data-interface-group="document/scripts" onClick={showScripts}
+        className="flex shrink-0 items-center gap-1.5 border-l border-edge px-3 text-xs text-mute hover:bg-edge hover:text-ink">
+        <BookOpen size={13} /> Scripts
+      </button>
     </div>
   );
 }

@@ -179,6 +179,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "MCP drawing example failed" }
           cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --repeat 2 --server ./mcp-server/target/debug/nbcad-mcp.exe --out ./target/mcp-workshop/garden-bench
           if ($LASTEXITCODE -ne 0) { throw "Parametric garden bench failed" }
+          cargo xtask run-script examples/scripts/fillet-basics.nbcad.jsonc --repeat 2 --server ./mcp-server/target/debug/nbcad-mcp.exe --out ./target/mcp-workshop/fillet-basics
+          if ($LASTEXITCODE -ne 0) { throw "Parametric fillet lesson failed" }
 
       - name: Upload MCP workshop evidence
         if: always()
@@ -253,6 +255,7 @@ jobs:
           cargo xtask test-mcp bench --server ./mcp-server/target/debug/nbcad-mcp --workshop all --out ./target/mcp-workshop
           cargo xtask test-mcp drawing --server ./mcp-server/target/debug/nbcad-mcp --out ./target/mcp-workshop/drawing-report.json
           cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --repeat 2 --server ./mcp-server/target/debug/nbcad-mcp --out ./target/mcp-workshop/garden-bench
+          cargo xtask run-script examples/scripts/fillet-basics.nbcad.jsonc --repeat 2 --server ./mcp-server/target/debug/nbcad-mcp --out ./target/mcp-workshop/fillet-basics
 
       - name: Upload MCP workshop evidence
         if: always()

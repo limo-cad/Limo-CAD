@@ -30,6 +30,8 @@ enum PresentationCommand {
     Stop,
     Status,
     Finish,
+    Dismiss,
+    Show,
 }
 
 #[derive(serde::Deserialize)]
@@ -1868,6 +1870,8 @@ mod tests {
             "note",
             "pause",
             "resume",
+            "dismiss",
+            "show",
             "step",
             "stop",
             "status",

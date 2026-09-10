@@ -37,6 +37,8 @@ const FILE_NEW_ID: &str = "nbcad-file-new";
 #[cfg(target_os = "macos")]
 const FILE_OPEN_ID: &str = "nbcad-file-open";
 #[cfg(target_os = "macos")]
+const FILE_OPEN_SCRIPT_ID: &str = "nbcad-file-open-script";
+#[cfg(target_os = "macos")]
 const FILE_SAVE_ID: &str = "nbcad-file-save";
 #[cfg(target_os = "macos")]
 const FILE_SAVE_AS_ID: &str = "nbcad-file-save-as";
@@ -66,9 +68,10 @@ const APP_SETTINGS_ID: &str = "nbcad-app-settings";
 /// Native File-menu item id → frontend command payload. Mirrors the in-app
 /// File menu one-to-one so both entry points run the same project actions.
 #[cfg(target_os = "macos")]
-const FILE_COMMANDS: [(&str, &str); 15] = [
+const FILE_COMMANDS: [(&str, &str); 16] = [
     (FILE_NEW_ID, "new"),
     (FILE_OPEN_ID, "open"),
+    (FILE_OPEN_SCRIPT_ID, "open-script"),
     (FILE_SAVE_ID, "save"),
     (FILE_SAVE_AS_ID, "save-as"),
     (FILE_RENAME_ID, "rename"),
@@ -242,6 +245,8 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
         MenuItem::with_id(app, FILE_NEW_ID, "New Project", true, Some("CmdOrCtrl+N"))?;
     let open =
         MenuItem::with_id(app, FILE_OPEN_ID, "Open Project…", true, Some("CmdOrCtrl+O"))?;
+    let open_script =
+        MenuItem::with_id(app, FILE_OPEN_SCRIPT_ID, "Open Script…", true, None::<&str>)?;
     let save = MenuItem::with_id(app, FILE_SAVE_ID, "Save", false, Some("CmdOrCtrl+S"))?;
     let save_as =
         MenuItem::with_id(app, FILE_SAVE_AS_ID, "Save As…", false, Some("CmdOrCtrl+Shift+S"))?;
@@ -311,6 +316,7 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
     let file_items: Vec<&dyn IsMenuItem<Wry>> = vec![
         &new_project,
         &open,
+        &open_script,
         &save,
         &save_as,
         &rename,
@@ -332,7 +338,7 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
     ];
     file.insert_items(&file_items, 0)?;
     app.state::<NativeFileMenuState>().install(NativeFileItems {
-        idle_items: vec![new_project, open],
+        idle_items: vec![new_project, open, open_script],
         document_items: vec![save, save_as, rename, import_step],
         all_body_items: vec![export_step_all, export_3mf_all, export_stl_all],
         selected_body_items: vec![export_step_selected, export_3mf_selected, export_stl_selected],

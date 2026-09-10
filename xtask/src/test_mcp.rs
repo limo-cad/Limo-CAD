@@ -8,6 +8,10 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     if suite == "playback" {
         return crate::playback_test::run(&args.collect::<Vec<_>>()).map_err(anyhow::Error::msg);
     }
+    if suite == "scripts-workspace" {
+        return crate::playback_test::run_workspace(&args.collect::<Vec<_>>())
+            .map_err(anyhow::Error::msg);
+    }
     if suite == "garden-bench" {
         return crate::replay::run(args);
     }
@@ -18,7 +22,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "exit" => "exit.mjs",
         "bench" => "bench.mjs",
         "drawing" => "drawing.mjs",
-        _ => bail!("Unknown MCP suite '{suite}'; use contracts, live, controls, exit, bench, garden-bench, or drawing"),
+        _ => bail!("Unknown MCP suite '{suite}'; use contracts, live, controls, playback, scripts-workspace, exit, bench, garden-bench, or drawing"),
     };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let status = Command::new("node")

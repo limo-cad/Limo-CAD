@@ -22,6 +22,7 @@ import { dispatchRibbonAction } from '../ribbon/dispatch';
 import { useAppStore } from '../store/appStore';
 import { CONSTRAINT_ICON_IDS, ToolIcon } from './icons';
 import { RibbonMenu } from './RibbonMenu';
+import { FeatureScriptPreview } from './FeatureScriptPreview';
 
 export function Ribbon() {
   const { t } = useTranslation();
@@ -270,6 +271,8 @@ function Panel({
 }) {
   const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
+  const workspace = useAppStore((state) => state.mode === 'sketch' ? 'sketch' : state.activeTab);
+  const group = `${workspace}/${panel.id}`;
   const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null);
 
   const toggle = () => {
@@ -287,7 +290,7 @@ function Panel({
   return (
     <div
       ref={panelRef}
-      data-interface-group={`${useAppStore.getState().mode === 'sketch' ? 'sketch' : useAppStore.getState().activeTab}/${panel.id}`}
+      data-interface-group={group}
       className="relative flex shrink-0 flex-col border-r border-edge px-1.5 max-[1400px]:px-0.5"
     >
       <div className={cx(
@@ -298,6 +301,8 @@ function Panel({
           <Button
             key={button.id}
             button={button}
+            group={group}
+            operation={panel.operations.find(operation => operation === `solid_${button.id}`)}
             documentOpen={documentOpen}
             onAction={(action, payload) => {
               // A command can be launched from the always-visible panel while
@@ -345,10 +350,14 @@ function Panel({
 
 function Button({
   button,
+  group,
+  operation,
   documentOpen,
   onAction,
 }: {
   button: RibbonButton;
+  group: string;
+  operation?: string;
   documentOpen: boolean;
   onAction: (action?: RibbonAction, payload?: string) => void;
 }) {
@@ -396,7 +405,7 @@ function Button({
         ? 'w-12 max-[1400px]:w-10'
         : 'w-11 max-[1400px]:w-9';
 
-  return (
+  const control = (
     <button
       type="button"
       data-ribbon-button={button.id}
@@ -428,4 +437,9 @@ function Button({
       </span>
     </button>
   );
+  return operation && (button.action === 'extrude' || button.action === 'solidFillet') ? (
+    <FeatureScriptPreview group={group} operation={operation} label={t(button.labelKey)} disabled={!enabled}>
+      {control}
+    </FeatureScriptPreview>
+  ) : control;
 }

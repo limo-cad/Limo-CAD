@@ -64,7 +64,7 @@ Commands:
                 --session UUID --new --present to replay in an existing window.
                 --repeat 2 verifies independent headless runs are deterministic.
   cad-call      Send one MCP command from Rust (--tool NAME --args JSON).
-  test-mcp      Run contracts (default), live, controls, playback, exit, bench, garden-bench, or drawing. Additional
+  test-mcp      Run contracts (default), live, controls, playback, scripts-workspace, exit, bench, garden-bench, or drawing. Additional
                 arguments pass directly to the selected MCP test/demo driver.
                 Example: cargo xtask test-mcp live --server PATH --desktop PATH
   install-mcp   Detect installed agent clients and upsert the local nbcad-mcp

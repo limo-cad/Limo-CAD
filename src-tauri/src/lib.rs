@@ -8,6 +8,7 @@
 //! All modeling logic lives in the engine crates, never here.
 
 mod native_menu;
+mod scripts;
 pub mod native_viewport;
 mod session_bridge;
 mod six_dof_mouse;
@@ -919,6 +920,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new())
         .manage(NativeQuitState::default())
+        .manage(scripts::NativeScriptState::default())
         .manage(native_menu::NativeEditMenuState::default())
         .manage(native_menu::NativeFileMenuState::default())
         .manage(session_bridge::SessionBridgeState::default())
@@ -970,6 +972,10 @@ pub fn run() {
             system_memory_status,
             native_unsaved_set,
             native_force_quit,
+            scripts::native_script_inspect,
+            scripts::native_script_run,
+            scripts::native_script_preview,
+            scripts::native_script_examples,
             get_document,
             native_viewport_set_layout,
             native_viewport_set_suspended,

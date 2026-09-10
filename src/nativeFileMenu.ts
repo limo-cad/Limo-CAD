@@ -18,11 +18,13 @@ import {
   saveProject,
 } from './files/projectFiles';
 import { exportActiveDrawingDxf } from './drawing/export';
+import { openScriptFile } from './scripts/workspace';
 import { useAppStore } from './store/appStore';
 
 const FILE_COMMANDS = [
   'new',
   'open',
+  'open-script',
   'save',
   'save-as',
   'rename',
@@ -86,6 +88,8 @@ function dispatch(command: NativeFileCommand): void {
       return run(newProject);
     case 'open':
       return run(openProject);
+    case 'open-script':
+      return run(openScriptFile);
     case 'save':
       return run(() => saveProject(false));
     case 'save-as':

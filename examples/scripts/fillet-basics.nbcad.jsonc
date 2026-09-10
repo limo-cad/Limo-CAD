@@ -1,0 +1,141 @@
+// A first native part: dimensioned sketch → stock extrusion → top-edge roundover.
+// The same commands build the editable project, a visible lesson or isolated preview frames.
+// All dimensions are millimetres. Returned references locate geometry without recorded IDs.
+{
+  "$schema": "./nbcad-script.schema.json",
+  "version": 1,
+  "name": "Sketch, extrude, ease the edges",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Locate the stock",
+      "note": "Start from a marked face, edge and end. A 60 × 30 mm rectangle controls the footprint; one fixed corner locates it at the machining origin.",
+      "duration_ms": 1100
+    },
+    {
+      "id": "stock_sketch",
+      "call": {
+        "group": "sketch/draw", "operation": "sketch_begin",
+        "arguments": {"name": "Block / stock from A-B-C", "plane": {"type": "origin_plane", "plane": "xy"}}
+      }
+    },
+    {
+      "id": "stock_profile",
+      "call": {
+        "group": "sketch/draw", "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point", "anchor": {"x": 0, "y": 0}, "corner_hint": {"x": 60, "y": 30},
+          "width_mm": 60, "height_mm": 30, "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "locate_profile",
+      "call": {
+        "group": "sketch/constrain", "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {"$ref": "stock_profile", "pointer": "/sketch"}, "path": "/entities",
+              "where": {"/kind": "point", "/position/x": 0, "/position/y": 0},
+              "take": "one", "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {"view": "current", "fit": true, "target": "active_sketch", "duration_ms": 300},
+    {
+      "chapter": "Give the profile thickness",
+      "note": "Extrude this closed profile by 12 mm. The sketch remains in the history, so width, depth and thickness can be edited independently.",
+      "duration_ms": 1100
+    },
+    {"id": "finish_stock_sketch", "call": {"group": "sketch/draw", "operation": "sketch_finish", "arguments": {}}},
+    {
+      "id": "stock_extrude",
+      "call": {
+        "group": "solid/build", "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "Block / stock from A-B-C", "profile_indices": [0], "operation": "new_body",
+          "extent": {"type": "distance", "distance": 12}, "taper_angle_deg": 0, "flip": false, "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "stock_feature": {
+          "$select": {"from": {"$ref": "stock_extrude"}, "path": "/document/features", "take": "last", "pointer": "/id"}
+        }
+      }
+    },
+    {
+      "let": {
+        "stock_body": {
+          "$select": {
+            "from": {"$ref": "stock_extrude"}, "path": "/scene/bodies",
+            "where": {"/feature_id": {"$ref": "stock_feature"}}, "take": "one"
+          }
+        }
+      }
+    },
+    {"view": "isometric", "fit": true, "body_id": {"$ref": "stock_body", "pointer": "/id"}, "duration_ms": 350},
+    {
+      "chapter": "Round only the top rim",
+      "note": "Select the four edges lying on the 12 mm top face. A 2 mm fillet softens the touched rim while the bottom remains a flat bearing face.",
+      "duration_ms": 1400
+    },
+    // Select by geometric intent: all points on each chosen edge lie at the stock top.
+    // Count the result before applying the feature; unexpected topology stops the lesson.
+    {
+      "let": {
+        "top_edges": {
+          "$select": {
+            "from": {"$ref": "stock_body"}, "path": "/edges",
+            "where": {"/refinable": true, "$every": {"path": "/points", "where": {"/z": 12}}},
+            "take": "all", "pointer": "/id"
+          }
+        }
+      }
+    },
+    {"assert": {"$count": {"$ref": "top_edges"}}, "equals": 4},
+    {
+      "id": "ease_top_edges",
+      "call": {
+        "group": "solid/refine", "operation": "solid_fillet",
+        "arguments": {
+          "body_id": {"$ref": "stock_body", "pointer": "/id"}, "edge_ids": {"$ref": "top_edges"},
+          "radius": 2, "tangent_chain": false
+        }
+      }
+    },
+    {"view": "isometric", "fit": true, "body_id": {"$ref": "stock_body", "pointer": "/id"}, "duration_ms": 350},
+    {
+      "chapter": "Three editable features",
+      "note": "The result retains one fully constrained sketch, one extrusion and one edge fillet. The roundover is a design feature you can change or remove later.",
+      "duration_ms": 1500
+    }
+  ],
+  "checks": [
+    {"id": "final_scene", "call": {"group": "solid/check", "operation": "solid_scene", "arguments": {}}, "expect": {"/errors": []}},
+    {"assert": {"$count": {"$ref": "final_scene", "pointer": "/bodies"}}, "equals": 1},
+    {"id": "final_sketches", "call": {"group": "sketch/draw", "operation": "sketch_finished", "arguments": {}}},
+    {"assert": {"$count": {"$ref": "final_sketches"}}, "equals": 1},
+    {"assert": {"$ref": "final_sketches", "pointer": "/0/dof/value"}, "equals": 0},
+    {"id": "final_solution", "call": {"group": "assembly/joints", "operation": "assembly_solution", "arguments": {}}, "expect": {"/solved": true, "/diagnostics": []}},
+    {"id": "final_model", "call": {"group": "document/files", "operation": "cad_project_model", "arguments": {}}},
+    {"assert": {"$count": {"$ref": "final_model", "pointer": "/document/history/features"}}, "equals": 3},
+    {"assert": {"$ref": "final_model", "pointer": "/extrudes/0/extent/distance"}, "equals": 12},
+    {"assert": {"$ref": "final_model", "pointer": "/fillets/0/radius"}, "equals": 2}
+  ],
+  "exports": {
+    "final_model": {"$ref": "final_model"},
+    "final_scene": {"$ref": "final_scene"},
+    "final_sketches": {"$ref": "final_sketches"},
+    "final_solution": {"$ref": "final_solution"},
+    "preview_frames": [
+      {"caption": "Extrude the dimensioned profile into 12 mm stock.", "scene": {"$ref": "stock_extrude", "pointer": "/scene"}},
+      {"caption": "Round the four top edges by 2 mm; keep the bottom flat.", "scene": {"$ref": "ease_top_edges", "pointer": "/scene"}}
+    ]
+  }
+}

@@ -123,7 +123,7 @@ interface PublishWriteResult {
   engine_revision?: number;
 }
 
-async function publishNow(): Promise<boolean> {
+export async function publishNow(): Promise<boolean> {
   const state = useAppStore.getState();
   if (state.engineKind !== 'tauri') return false;
   const focus = focusFromUi(state.mode, state.activeTool, activeSolidDialog(state));

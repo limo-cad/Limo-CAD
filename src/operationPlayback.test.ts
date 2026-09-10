@@ -1,4 +1,7 @@
-import { PresentationController, SerialPlayback } from './operationPlayback';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { PresentationController, SerialPlayback, presentation } from './operationPlayback';
+import { PresentationControls, PresentationReopen } from './components/PresentationControls';
 
 function check(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
@@ -54,6 +57,55 @@ for (const request of [{ speed: 0 }, { duration_ms: -1 }, { step_index: 5 }, { t
   check(failed && JSON.stringify(player.status()) === before, 'Invalid presentation requests leave playback unchanged');
 }
 
+let visibilityClock = 0;
+const visibility = new PresentationController(() => visibilityClock);
+visibility.control({ command: 'dismiss' });
+check(!visibility.status().active && !visibility.status().visible, 'Dismissing absent playback does not create a run');
+visibility.control({ command: 'configure', mode: 'present' });
+visibility.control({ command: 'note', text: 'An authored hold', duration_ms: 1000 });
+visibility.control({ command: 'dismiss' });
+visibilityClock += 1000;
+check(!visibility.status().visible && visibility.canApply(), 'Closing the bar leaves running playback and its hold advancing');
+visibility.control({ command: 'pause' });
+visibility.control({ command: 'step' });
+visibility.control({ command: 'show' });
+visibility.control({ command: 'dismiss' });
+check(!visibility.status().visible && visibility.status().paused && visibility.status().step_pending,
+  'Dismissing paused playback preserves its pending step instead of silently resuming or canceling it');
+visibility.control({ command: 'note', text: 'The next caption', duration_ms: 500 });
+check(!visibility.status().visible, 'Later captions respect the user’s decision to hide the controls');
+visibility.control({ command: 'show' });
+check(visibility.status().visible && visibility.status().paused && visibility.status().step_pending,
+  'Reopening restores controls without changing the paused execution state');
+visibility.modelApplied();
+visibility.control({ command: 'dismiss' });
+visibility.control({ command: 'finish' });
+check(!visibility.status().visible && visibility.status().finished && visibility.canApply(),
+  'Completion stays dismissed and does not block normal modeling');
+visibility.control({ command: 'show' });
+visibility.control({ command: 'dismiss' });
+check(!visibility.status().visible && visibility.canApply(), 'Completed playback remains closable');
+visibility.control({ command: 'configure', mode: 'present' });
+check(visibility.status().visible && !visibility.status().finished, 'A newly started run reveals its controls again');
+
+const renderControls = () => renderToStaticMarkup(createElement(PresentationControls));
+const renderReopen = () => renderToStaticMarkup(createElement(PresentationReopen));
+check(renderControls() === '' && renderReopen() === '', 'No playback chrome appears before a run exists');
+presentation.control({ command: 'configure', mode: 'present', speed: 0.1 });
+check(renderControls().includes('aria-label="Close playback controls"'), 'The actual playback surface exposes an accessible close control');
+check(renderControls().includes('value="0.1" selected'), 'A configured non-preset speed remains visible in the actual selector');
+presentation.control({ command: 'pause' });
+presentation.control({ command: 'dismiss' });
+check(renderControls() === '' && renderReopen().includes('Show playback controls') && renderReopen().includes('Paused'),
+  'Hidden paused playback leaves a discoverable reopen control with its status');
+presentation.control({ command: 'show' });
+check(renderReopen() === '' && renderControls().includes('Resume'), 'Showing playback restores the real resume control without duplicate surfaces');
+presentation.control({ command: 'finish' });
+const closeControl = renderControls().match(/<button[^>]*aria-label="Close playback controls"[^>]*>/)?.[0];
+check(Boolean(closeControl) && !/\sdisabled(?:\s|=|>)/.test(closeControl!), 'The close control remains enabled after completion');
+presentation.control({ command: 'dismiss' });
+check(renderControls() === '' && renderReopen().includes('Complete'), 'A completed bar can be removed and reopened');
+
 const lane = new SerialPlayback();
 let release!: () => void;
 const barrier = new Promise<void>(resolve => { release = resolve; });
@@ -64,4 +116,4 @@ release();
 await first;
 check(runs === 1, 'The serial lane never repeats or overlaps a completed operation');
 check(await lane.tick(async () => {}), 'The lane accepts subsequent work after completion');
-console.log('Presentation timing, pause, step, stop, maximum rate, and serial ordering passed');
+console.log('Presentation timing, pause, step, stop, maximum rate, dismiss/reopen, rendered controls, and serial ordering passed');

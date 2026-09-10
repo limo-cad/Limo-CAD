@@ -286,6 +286,36 @@ fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
 }
 
 impl SessionBridgeState {
+    /// Capture the current native tab's published session before a background
+    /// script starts. A stale or switched tab cannot silently retarget the run.
+    pub(crate) fn active_script_session(
+        &self,
+        window_label: &str,
+        engine: &AppState,
+    ) -> Result<String, String> {
+        let publishers = self
+            .publishers
+            .lock()
+            .map_err(|_| "session publisher lock poisoned".to_string())?;
+        let document = engine.active_project_session_id();
+        let publisher = publishers
+            .get(window_label)
+            .ok_or("Publish the current design before running its script")?;
+        if publisher.active_project_session_id.as_deref() != Some(&document) {
+            return Err("The active design changed before script playback started".into());
+        }
+        let project = publisher
+            .by_project
+            .get(&document)
+            .ok_or("The current design has no published script session")?;
+        if project.published_generation != project.engine_revision
+            || project.last_model_generation != Some(project.engine_revision)
+        {
+            return Err("Publish the current completed design before running its script".into());
+        }
+        Ok(project.session_id.clone())
+    }
+
     fn reserve_for_window(&self, window_label: &str) -> Result<serde_json::Value, String> {
         self.reserve_for_window_on_project(window_label, None)
     }
@@ -1847,6 +1877,43 @@ mod tests {
         assert!(main_model.contains("\"marker\":\"main\""));
         assert!(second_model.contains("\"marker\":\"secondary\""));
 
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn native_script_session_requires_the_current_published_document() {
+        let _test = TEST_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!("nbcad-script-session-{}", now_ms()));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let state = SessionBridgeState::default();
+        let engine = AppState::new();
+        assert!(state.active_script_session("main", &engine).is_err());
+        envelope_ok(&state.with_project_session_transition("main", &engine, || {
+            engine.bind_project_session("script-tab")
+        }));
+        let (session, export) = reserve(&state, "main");
+        state
+            .write_for_window("main", payload(&session, export, "blank"))
+            .unwrap();
+        assert_eq!(
+            state.active_script_session("main", &engine).unwrap(),
+            session
+        );
+        envelope_ok(&state.run_ui_mutation("main", || {
+            engine.engine_call("document_set_name", r#""Changed""#)
+        }));
+        assert!(state.active_script_session("main", &engine).is_err());
+        let (_, export) = reserve(&state, "main");
+        state
+            .write_for_window("main", payload(&session, export, "changed"))
+            .unwrap();
+        assert_eq!(
+            state.active_script_session("main", &engine).unwrap(),
+            session
+        );
+        envelope_ok(&engine.create_project_session("other-tab"));
+        assert!(state.active_script_session("main", &engine).is_err());
         std::env::remove_var("NBCAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }

@@ -3904,6 +3904,7 @@ dependencies = [
  "hidapi",
  "nbcad-core",
  "nbcad-export",
+ "nbcad-mcp",
  "nbcad-mcp-mutate",
  "nbcad-occt",
  "nbcad-sketch",
@@ -3956,6 +3957,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "nbcad-mcp"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "nbcad-core",
+ "nbcad-export",
+ "nbcad-mcp-mutate",
+ "nbcad-occt",
+ "nbcad-script",
+ "nbcad-sketch",
+ "nbcad-solid",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "nbcad-mcp-mutate"
 version = "0.1.0"
 dependencies = [
@@ -3973,6 +3990,13 @@ dependencies = [
  "nbcad-export",
  "nbcad-solid",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "nbcad-script"
+version = "0.1.0"
+dependencies = [
  "serde_json",
 ]
 

@@ -1976,6 +1976,11 @@
   ],
   "groups": [
     {
+      "id": "document/scripts",
+      "labelKey": "document/scripts",
+      "operations": ["cad_script"]
+    },
+    {
       "id": "document/presentation",
       "labelKey": "document/presentation",
       "operations": []
@@ -1992,8 +1997,7 @@
         "cad_set_document_name",
         "cad_project_model",
         "cad_load_project_model",
-        "cad_new_project",
-        "cad_script"
+        "cad_new_project"
       ]
     },
     {
