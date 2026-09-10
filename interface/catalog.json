@@ -226,7 +226,9 @@
             "solid_chamfer",
             "solid_edit_chamfer",
             "solid_hole",
-            "solid_edit_hole"
+            "solid_edit_hole",
+            "solid_external_thread",
+            "solid_edit_external_thread"
           ]
         },
         {

@@ -491,6 +491,18 @@ pub static MUTATES: &[MutateSpec] = &[
         execution: ExecutionKind::SolidReplay,
     },
     MutateSpec {
+        name: "solid_external_thread",
+        engine_method: "solid_prepare_body_feature",
+        payload: PayloadKind::BodyFeature("external_thread"),
+        execution: ExecutionKind::SolidReplay,
+    },
+    MutateSpec {
+        name: "solid_edit_external_thread",
+        engine_method: "solid_prepare_edit_body_feature",
+        payload: PayloadKind::EditBodyFeature("external_thread"),
+        execution: ExecutionKind::SolidReplay,
+    },
+    MutateSpec {
         name: "solid_hole",
         engine_method: "solid_prepare_hole",
         payload: PayloadKind::Object,

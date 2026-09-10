@@ -582,8 +582,14 @@ pub fn tags_for_tool(name: &str) -> (FocusPack, bool) {
         "solid_extrude" | "solid_edit_extrude" | "solid_revolve" | "solid_edit_revolve"
         | "solid_sweep" | "solid_edit_sweep" | "solid_loft" | "solid_edit_loft" | "solid_rib"
         | "solid_edit_rib" => FocusPack::Solid,
-        "solid_fillet" | "solid_edit_fillet" | "solid_chamfer" | "solid_edit_chamfer"
-        | "solid_hole" | "solid_edit_hole" => FocusPack::Modify,
+        "solid_fillet"
+        | "solid_edit_fillet"
+        | "solid_chamfer"
+        | "solid_edit_chamfer"
+        | "solid_hole"
+        | "solid_edit_hole"
+        | "solid_external_thread"
+        | "solid_edit_external_thread" => FocusPack::Modify,
         "solid_shell"
         | "solid_edit_shell"
         | "solid_mirror"
@@ -664,6 +670,8 @@ pub fn auto_focus_for_tool(name: &str) -> Option<FocusPack> {
             | "solid_edit_chamfer"
             | "solid_hole"
             | "solid_edit_hole"
+            | "solid_external_thread"
+            | "solid_edit_external_thread"
     ) {
         return Some(FocusPack::Modify);
     }

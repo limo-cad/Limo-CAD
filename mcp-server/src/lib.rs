@@ -1681,6 +1681,15 @@ fn tool_specs() -> Vec<ToolSpec> {
             "representation",
         ],
     );
+    let external_thread = object_schema(
+        json!({
+            "body_id": {"type":"integer", "minimum":1},
+            "face_id": {"type":"integer", "minimum":1},
+            "thread": hole_thread.clone(),
+            "flip": {"type":"boolean"}
+        }),
+        &["body_id", "face_id", "thread"],
+    );
     let hole = object_schema(
         json!({
             "body_id": { "type": "integer", "minimum": 1 },
@@ -2963,6 +2972,22 @@ fn tool_specs() -> Vec<ToolSpec> {
                 }),
                 &["feature_id", "hole"],
             ),
+        ),
+        ToolSpec::solid(
+            "solid_external_thread",
+            "Create external thread on a cylindrical face",
+            "Cut a persisted ISO metric or Unified male thread into an exact cylindrical face. The nominal diameter must match the selected cylinder. Modeled representation creates a real helix; a later planar cut can create an interrupted D section.",
+            "solid_prepare_body_feature",
+            Payload::BodyFeature("external_thread"),
+            external_thread.clone(),
+        ),
+        ToolSpec::solid(
+            "solid_edit_external_thread",
+            "Edit external Thread feature",
+            "Edit the persisted external thread and recompute all downstream features using its captured cylindrical reference.",
+            "solid_prepare_edit_body_feature",
+            Payload::EditBodyFeature("external_thread"),
+            object_schema(json!({"feature_id":{"type":"integer","minimum":1},"request":external_thread}), &["feature_id", "request"]),
         ),
         ToolSpec::solid(
             "solid_shell",
