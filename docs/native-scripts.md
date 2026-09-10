@@ -244,5 +244,6 @@ existing window and has no dependency on the bundled example catalog.
 Add `--script /absolute/path/source.nbcad.jsonc` to also check loading another
 source before the built-in fixture; the additional source is never executed.
 
-The recipe-library layer adds real-kernel preview and bundled-lesson acceptance
-scenarios alongside their authored sources, extending these adapter checks.
+The recipe-library layer adds headless recipe and real-kernel preview checks
+alongside their authored sources. These do not replace the live adapter checks
+above or establish that the teaching interface has been validated on a new build.
