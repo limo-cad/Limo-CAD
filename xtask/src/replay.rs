@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     fs,
     io::{BufRead, BufReader, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::mpsc::{self, Receiver},
     time::Duration,
@@ -200,6 +200,179 @@ fn launched_session(launch: &Value) -> Result<String> {
         .ok_or_else(|| anyhow!("Ready CAD launch did not identify a document; no script has run"))
 }
 
+#[derive(Debug)]
+struct ReplayOutputs {
+    directory: Option<PathBuf>,
+    save: Option<PathBuf>,
+}
+impl ReplayOutputs {
+    fn prepare(out: Option<&str>, save: Option<&str>, repeat: usize) -> Result<Self> {
+        let directory = out
+            .map(|path| prepare_directory(Path::new(path), "replay output"))
+            .transpose()?;
+        let save = save
+            .map(|path| -> Result<PathBuf> {
+                let path = Path::new(path);
+                let filename = path.file_name().ok_or_else(|| {
+                    anyhow!("Save destination must name a file: {}", path.display())
+                })?;
+                let parent = path
+                    .parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .unwrap_or(Path::new("."));
+                let path = prepare_directory(parent, "CAD save")?.join(filename);
+                validate_file_destination(&path)?;
+                Ok(path)
+            })
+            .transpose()?;
+        if let Some(out) = &directory {
+            for iteration in 1..=repeat {
+                for name in [
+                    format!("run-{iteration}.json"),
+                    format!("model-{iteration}.json"),
+                ] {
+                    let path = out.join(name);
+                    validate_file_destination(&path)?;
+                    if save
+                        .as_ref()
+                        .is_some_and(|save| same_destination(save, &path))
+                    {
+                        bail!(
+                            "CAD save destination conflicts with replay output: {}",
+                            path.display()
+                        );
+                    }
+                }
+            }
+        }
+        Ok(Self { directory, save })
+    }
+
+    fn complete(
+        &self,
+        iteration: usize,
+        report: &Value,
+        save: impl FnOnce(&Path) -> Result<Value>,
+    ) -> Result<()> {
+        // Retain the completed result before attempting any further operation
+        // on the live document. Save can still fail after a successful preflight.
+        let report_path = if let Some(out) = &self.directory {
+            let path = out.join(format!("run-{iteration}.json"));
+            fs::write(&path, serde_json::to_vec_pretty(report)?)
+                .with_context(|| format!("Write completed replay report {}", path.display()))?;
+            if let Some(model) = report.pointer("/exports/final_model") {
+                let model_path = out.join(format!("model-{iteration}.json"));
+                fs::write(&model_path, serde_json::to_vec_pretty(model)?).with_context(|| {
+                    format!(
+                        "Write model snapshot {}; replay report retained at {}",
+                        model_path.display(),
+                        path.display()
+                    )
+                })?;
+            }
+            Some(path)
+        } else {
+            None
+        };
+        if let Some(path) = &self.save {
+            save(path).with_context(|| {
+                let retained = report_path
+                    .as_ref()
+                    .map(|report| format!("; replay report retained at {}", report.display()))
+                    .unwrap_or_default();
+                format!(
+                    "Replay completed, but saving CAD file {} failed{retained}",
+                    path.display()
+                )
+            })?;
+        }
+        Ok(())
+    }
+}
+
+fn prepare_directory(path: &Path, purpose: &str) -> Result<PathBuf> {
+    if path.as_os_str().is_empty() {
+        bail!("The {purpose} directory must not be empty");
+    }
+    fs::create_dir_all(path)
+        .with_context(|| format!("Prepare {purpose} directory {}", path.display()))?;
+    let path = fs::canonicalize(path)
+        .with_context(|| format!("Resolve {purpose} directory {}", path.display()))?;
+    // Probe the actual directory permissions without touching a user's output
+    // file. A unique create-new file also detects failures beyond a read-only bit.
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    for _ in 0..100 {
+        let probe = path.join(format!(
+            ".nbcad-replay-write-check-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let mut file = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&probe)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!("Verify writable {purpose} directory {}", path.display())
+                })
+            }
+        };
+        let written = file
+            .write_all(b"noBS CAD replay output preflight\n")
+            .and_then(|_| file.sync_all());
+        drop(file);
+        let removed = fs::remove_file(&probe);
+        written
+            .with_context(|| format!("Verify writable {purpose} directory {}", path.display()))?;
+        removed.with_context(|| format!("Remove output preflight file {}", probe.display()))?;
+        return Ok(path);
+    }
+    bail!(
+        "Could not allocate a write check in {purpose} directory {}",
+        path.display()
+    )
+}
+
+fn validate_file_destination(path: &Path) -> Result<()> {
+    match fs::metadata(path) {
+        Ok(metadata) => {
+            if !metadata.is_file() || metadata.permissions().readonly() {
+                bail!(
+                    "Output destination must be a writable regular file: {}",
+                    path.display()
+                );
+            }
+            // Opening without create or truncate preserves all existing bytes.
+            fs::OpenOptions::new()
+                .write(true)
+                .open(path)
+                .with_context(|| format!("Verify writable output file {}", path.display()))?;
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("Inspect output destination {}", path.display()))
+        }
+    }
+    Ok(())
+}
+
+fn same_destination(a: &Path, b: &Path) -> bool {
+    let a = fs::canonicalize(a).unwrap_or_else(|_| a.to_owned());
+    let b = fs::canonicalize(b).unwrap_or_else(|_| b.to_owned());
+    if cfg!(windows) {
+        a.as_os_str()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&b.as_os_str().to_string_lossy())
+    } else {
+        a == b
+    }
+}
+
 pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     let (args, file) = options(args)?;
     known_options(
@@ -265,6 +438,11 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
             semantic_result(&serde_json::from_str(&fs::read_to_string(p)?)?)
         })
         .transpose()?;
+    let outputs = ReplayOutputs::prepare(
+        args.get("--out").map(String::as_str),
+        args.get("--save").map(String::as_str),
+        repeat,
+    )?;
     for iteration in 1..=repeat {
         let mut client = Client::start(server)?;
         // A misspelled recipe must not launch a window or create an empty tab.
@@ -326,26 +504,12 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
         if let Some(session) = session {
             report["session_id"] = json!(session);
         }
-        if let Some(save) = args.get("--save") {
+        outputs.complete(iteration, &report, |save| {
             client.call(
                 "cad_interface",
                 json!({"action":"file","command":"save","path":save}),
-            )?;
-        }
-        if let Some(out) = args.get("--out") {
-            let out = Path::new(out);
-            fs::create_dir_all(out)?;
-            fs::write(
-                out.join(format!("run-{iteration}.json")),
-                serde_json::to_string_pretty(&report)?,
-            )?;
-            if let Some(model) = report.pointer("/exports/final_model") {
-                fs::write(
-                    out.join(format!("model-{iteration}.json")),
-                    serde_json::to_string_pretty(model)?,
-                )?;
-            }
-        }
+            )
+        })?;
         if repeat > 1 || args.contains_key("--compare") {
             let semantic = semantic_result(&report)?;
             if let Some(previous) = &baseline {
@@ -446,6 +610,180 @@ fn first_difference(a: &Value, b: &Value, path: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct TestDirectory(PathBuf);
+    impl TestDirectory {
+        fn new() -> Self {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+            for _ in 0..100 {
+                let path = std::env::temp_dir().join(format!(
+                    "nbcad-replay-test-{}-{}",
+                    std::process::id(),
+                    SEQUENCE.fetch_add(1, Ordering::Relaxed)
+                ));
+                match fs::create_dir(&path) {
+                    Ok(()) => return Self(path),
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                    Err(error) => panic!("Create owned test directory: {error}"),
+                }
+            }
+            panic!("Could not allocate an owned test directory")
+        }
+    }
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            // Only remove the exact directory exclusively created by new().
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn creates_shared_output_and_save_parent_without_creating_the_save_file() {
+        let temp = TestDirectory::new();
+        let out = temp.0.join("new/nested/output");
+        let save = out.join("design.nbcad");
+        let prepared = ReplayOutputs::prepare(out.to_str(), save.to_str(), 2).unwrap();
+        let absolute = fs::canonicalize(&out).unwrap();
+        assert_eq!(prepared.directory, Some(absolute.clone()));
+        assert_eq!(prepared.save, Some(absolute.join("design.nbcad")));
+        assert_eq!(
+            fs::read_dir(&out).unwrap().count(),
+            0,
+            "write probes must be removed and real outputs must not be created early"
+        );
+    }
+
+    #[test]
+    fn output_preflight_runs_before_starting_the_server_or_desktop() {
+        let temp = TestDirectory::new();
+        let out = temp.0.join("reports");
+        let save = temp.0.join("separate/save/design.nbcad");
+        let args = || {
+            vec![
+                "--server".into(),
+                temp.0
+                    .join("missing-mcp-executable")
+                    .to_string_lossy()
+                    .into_owned(),
+                "--desktop".into(),
+                "must-not-launch".into(),
+                "--recipe".into(),
+                "unused".into(),
+                "--out".into(),
+                out.to_string_lossy().into_owned(),
+                "--save".into(),
+                save.to_string_lossy().into_owned(),
+            ]
+        };
+        let error = run(args().into_iter()).unwrap_err();
+        assert!(error.to_string().contains("Start MCP server"), "{error:#}");
+        assert!(out.is_dir());
+        assert!(save.parent().unwrap().is_dir());
+        assert!(!save.exists());
+
+        fs::remove_dir(&out).unwrap();
+        fs::write(&out, b"existing user file").unwrap();
+        let error = run(args().into_iter()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Prepare replay output directory"),
+            "{error:#}"
+        );
+        assert_eq!(fs::read(&out).unwrap(), b"existing user file");
+    }
+
+    #[test]
+    fn preflight_preserves_existing_files_and_rejects_bad_destinations() {
+        let temp = TestDirectory::new();
+        let report = temp.0.join("run-1.json");
+        let save = temp.0.join("design.nbcad");
+        fs::write(&report, b"previous report").unwrap();
+        fs::write(&save, b"existing CAD work").unwrap();
+        ReplayOutputs::prepare(temp.0.to_str(), save.to_str(), 1).unwrap();
+        assert_eq!(fs::read(&report).unwrap(), b"previous report");
+        assert_eq!(fs::read(&save).unwrap(), b"existing CAD work");
+        assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 2);
+        assert!(ReplayOutputs::prepare(temp.0.to_str(), report.to_str(), 1)
+            .unwrap_err()
+            .to_string()
+            .contains("conflicts with replay output"));
+
+        let original = fs::metadata(&save).unwrap().permissions();
+        let mut readonly = original.clone();
+        readonly.set_readonly(true);
+        fs::set_permissions(&save, readonly).unwrap();
+        let result = ReplayOutputs::prepare(None, save.to_str(), 1);
+        fs::set_permissions(&save, original).unwrap();
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("writable regular file"));
+        assert_eq!(fs::read(&save).unwrap(), b"existing CAD work");
+
+        fs::create_dir(temp.0.join("model-1.json")).unwrap();
+        assert!(ReplayOutputs::prepare(temp.0.to_str(), None, 1).is_err());
+    }
+
+    #[test]
+    fn relative_save_filename_is_resolved_for_the_desktop_process() {
+        let temp = TestDirectory::new();
+        let filename = format!("{}.nbcad", temp.0.file_name().unwrap().to_string_lossy());
+        let outputs = ReplayOutputs::prepare(None, Some(&filename), 1).unwrap();
+        assert_eq!(
+            outputs.save,
+            Some(fs::canonicalize(".").unwrap().join(filename))
+        );
+    }
+
+    #[test]
+    fn completed_report_and_model_survive_a_later_save_failure() {
+        let temp = TestDirectory::new();
+        let save = temp.0.join("saved/design.nbcad");
+        let outputs = ReplayOutputs::prepare(temp.0.to_str(), save.to_str(), 1).unwrap();
+        let model = json!({"schema_version":6,"name":"completed work"});
+        let report = json!({"session_id":"live-document","steps_completed":3,"checks_completed":2,"exports":{"final_model":model}});
+        let error = outputs
+            .complete(1, &report, |destination| {
+                assert_eq!(destination, outputs.save.as_ref().unwrap());
+                let retained: Value =
+                    serde_json::from_slice(&fs::read(temp.0.join("run-1.json"))?)?;
+                assert_eq!(retained, report, "report must exist before Save is called");
+                let retained_model: Value =
+                    serde_json::from_slice(&fs::read(temp.0.join("model-1.json"))?)?;
+                assert_eq!(retained_model, model);
+                bail!("simulated late save failure")
+            })
+            .unwrap_err();
+        let message = format!("{error:#}");
+        assert!(message.contains("Replay completed"));
+        assert!(message.contains("replay report retained at"));
+        assert!(message.contains("simulated late save failure"));
+        assert_eq!(
+            serde_json::from_slice::<Value>(&fs::read(temp.0.join("run-1.json")).unwrap()).unwrap(),
+            report
+        );
+    }
+
+    #[test]
+    fn failure_to_retain_the_report_stops_before_save() {
+        let temp = TestDirectory::new();
+        let save = temp.0.join("design.nbcad");
+        let outputs = ReplayOutputs::prepare(temp.0.to_str(), save.to_str(), 1).unwrap();
+        // Simulate a destination changing after preflight but during replay.
+        fs::create_dir(temp.0.join("run-1.json")).unwrap();
+        let called = std::cell::Cell::new(false);
+        let error = outputs
+            .complete(1, &json!({"steps_completed":3}), |_| {
+                called.set(true);
+                Ok(json!({}))
+            })
+            .unwrap_err();
+        assert!(!called.get());
+        assert!(error.to_string().contains("Write completed replay report"));
+    }
+
     #[test]
     fn live_launch_cannot_fall_back_to_headless_replay() {
         assert_eq!(
