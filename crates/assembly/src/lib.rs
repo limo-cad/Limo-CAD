@@ -224,6 +224,90 @@ impl ComponentStructureDto {
 }
 
 impl AssemblyDocumentDto {
+    /// Discard compatibility placeholders for consumed construction bodies.
+    /// Call only after a successful replay at the end of the feature history;
+    /// rollback scenes are incomplete and must retain their saved intent.
+    pub fn remove_consumed_placeholders(
+        &mut self,
+        scene: &SolidSceneDto,
+        referenced_bodies: &HashSet<BodyId>,
+        referenced_occurrences: &HashSet<OccurrenceId>,
+    ) -> Result<(), String> {
+        if !scene.errors.is_empty() {
+            return Ok(());
+        }
+        self.validate()?;
+        let live = scene
+            .bodies
+            .iter()
+            .map(|body| body.id)
+            .collect::<HashSet<_>>();
+        let mut discarded = HashSet::new();
+        for definition in &self.component_structure.definitions {
+            let [body] = definition.body_ids.as_slice() else {
+                continue;
+            };
+            let default_name = format!("Body{}", body.0);
+            if !definition.promoted
+                || live.contains(body)
+                || referenced_bodies.contains(body)
+                || self.grounded_body_id == Some(*body)
+                || definition.name != format!("{default_name} Part")
+                || definition.local_coordinate_system != AssemblyTransformDto::default()
+                || self.joints.iter().any(|joint| {
+                    joint.connector_a.body_id == *body || joint.connector_b.body_id == *body
+                })
+                || self
+                    .contact_sets
+                    .iter()
+                    .any(|contact| contact.body_a == *body || contact.body_b == *body)
+            {
+                continue;
+            }
+            let occurrences = self
+                .component_structure
+                .occurrences
+                .iter()
+                .filter(|occurrence| occurrence.component_id == definition.id)
+                .collect::<Vec<_>>();
+            if occurrences.len() > 1
+                || occurrences.iter().any(|occurrence| {
+                    occurrence.name != default_name
+                        || occurrence.parent_occurrence_id.is_some()
+                        || occurrence.local_pose != AssemblyTransformDto::default()
+                        || !occurrence.visible
+                        || occurrence.grounded
+                        || referenced_occurrences.contains(&occurrence.id)
+                        || self
+                            .component_structure
+                            .occurrences
+                            .iter()
+                            .any(|child| child.parent_occurrence_id == Some(occurrence.id))
+                        || self.joints.iter().any(|joint| {
+                            joint.advanced.connector_a_occurrence_id == Some(occurrence.id)
+                                || joint.advanced.connector_b_occurrence_id == Some(occurrence.id)
+                        })
+                        || self.contact_sets.iter().any(|contact| {
+                            contact.occurrence_a == occurrence.id
+                                || contact.occurrence_b == occurrence.id
+                        })
+                })
+            {
+                continue;
+            }
+            discarded.insert(definition.id);
+        }
+        self.component_structure
+            .occurrences
+            .retain(|occurrence| !discarded.contains(&occurrence.component_id));
+        self.component_structure
+            .definitions
+            .retain(|definition| !discarded.contains(&definition.id));
+        // Keep monotonic allocation counters. A body reintroduced by an edit
+        // receives a fresh default; no referenced identity was discarded.
+        self.validate()
+    }
+
     /// Promote every unorganized live body to a deterministic one-body
     /// component and root occurrence. This is the only legacy migration path;
     /// it never copies feature history or tessellation into assembly intent.
@@ -6938,6 +7022,153 @@ mod tests {
         let migrated = document.clone();
         document.synchronize_components(&scene).unwrap();
         assert_eq!(document, migrated, "migration must be idempotent");
+    }
+
+    #[test]
+    fn consumed_default_components_are_removed_without_reusing_ids() {
+        let scene = scene();
+        let mut current = scene.clone();
+        current.bodies.pop();
+        let mut document = AssemblyDocumentDto::default();
+        document.synchronize_components(&scene).unwrap();
+        let next = document.component_structure.next_component_id;
+        document
+            .remove_consumed_placeholders(&current, &HashSet::new(), &HashSet::new())
+            .unwrap();
+        assert_eq!(document.component_structure.definitions.len(), 1);
+        assert_eq!(document.component_structure.occurrences.len(), 1);
+        assert_eq!(document.component_structure.next_component_id, next);
+        let saved = document.clone();
+        document
+            .remove_consumed_placeholders(&current, &HashSet::new(), &HashSet::new())
+            .unwrap();
+        assert_eq!(document, saved);
+        let mut restored: AssemblyDocumentDto =
+            serde_json::from_str(&serde_json::to_string(&document).unwrap()).unwrap();
+        restored.synchronize_components(&scene).unwrap();
+        assert_eq!(restored.component_structure.definitions.len(), 2);
+        assert!(
+            restored
+                .component_structure
+                .definitions
+                .iter()
+                .find(|definition| definition.body_ids == [BodyId(2)])
+                .unwrap()
+                .id
+                .0
+                >= next
+        );
+        assert_eq!(restored.solve(&scene).instance_body_poses.len(), 2);
+    }
+
+    #[test]
+    fn consumed_component_cleanup_preserves_user_intent_and_references() {
+        let scene = scene();
+        let mut current = scene.clone();
+        current.bodies.pop();
+        for intent in [
+            "explicit",
+            "definition_name",
+            "coordinate_system",
+            "occurrence_name",
+            "moved",
+            "hidden",
+            "grounded",
+            "repeated",
+            "parented",
+            "parent",
+            "joint",
+            "contact",
+            "drawing_body",
+            "drawing_occurrence",
+        ] {
+            let mut document = AssemblyDocumentDto::default();
+            document.synchronize_components(&scene).unwrap();
+            let id = document.component_structure.occurrences[1].id;
+            let mut bodies = HashSet::new();
+            let mut occurrences = HashSet::new();
+            match intent {
+                "explicit" => document.component_structure.definitions[1].promoted = false,
+                "definition_name" => {
+                    document.component_structure.definitions[1].name = "Saved tooling".into()
+                }
+                "coordinate_system" => {
+                    document.component_structure.definitions[1]
+                        .local_coordinate_system
+                        .translation[0] = 5.
+                }
+                "occurrence_name" => {
+                    document.component_structure.occurrences[1].name = "Keep this fixture".into()
+                }
+                "moved" => {
+                    document.component_structure.occurrences[1]
+                        .local_pose
+                        .translation[0] = 5.
+                }
+                "hidden" => document.component_structure.occurrences[1].visible = false,
+                "grounded" => document.component_structure.occurrences[1].grounded = true,
+                "repeated" => {
+                    document
+                        .create_occurrence(CreateOccurrenceRequestDto {
+                            component_id: document.component_structure.definitions[1].id,
+                            name: "Repeated tooling".into(),
+                            parent_occurrence_id: None,
+                            local_pose: AssemblyTransformDto::default(),
+                        })
+                        .unwrap();
+                }
+                "parented" => {
+                    document.component_structure.occurrences[1].parent_occurrence_id =
+                        Some(document.component_structure.occurrences[0].id)
+                }
+                "parent" => {
+                    document.component_structure.occurrences[0].parent_occurrence_id = Some(id)
+                }
+                "joint" => {
+                    document.create(request(&scene), &scene).unwrap();
+                }
+                "contact" => {
+                    document.contact_sets.push(ContactSetDto {
+                        id: ContactSetId(1),
+                        name: "Fixture contact".into(),
+                        occurrence_a: document.component_structure.occurrences[0].id,
+                        body_a: BodyId(1),
+                        occurrence_b: id,
+                        body_b: BodyId(2),
+                        clearance_mm: 0.,
+                        stop_motion: true,
+                        enabled: true,
+                    });
+                    document.next_contact_set_id = 2;
+                }
+                "drawing_body" => {
+                    bodies.insert(BodyId(2));
+                }
+                "drawing_occurrence" => {
+                    occurrences.insert(id);
+                }
+                _ => unreachable!(),
+            }
+            let before = document.clone();
+            document
+                .remove_consumed_placeholders(&current, &bodies, &occurrences)
+                .unwrap();
+            assert_eq!(document, before, "preserve {intent}");
+        }
+        let mut document = AssemblyDocumentDto::default();
+        document.synchronize_components(&scene).unwrap();
+        let before = document.clone();
+        current.errors.push(nbcad_solid::KernelFeatureErrorDto {
+            feature_id: nbcad_core::FeatureId(2),
+            message: "Native recompute failed".into(),
+        });
+        document
+            .remove_consumed_placeholders(&current, &HashSet::new(), &HashSet::new())
+            .unwrap();
+        assert_eq!(
+            document, before,
+            "failed replay is not evidence of consumed geometry"
+        );
     }
 
     #[test]

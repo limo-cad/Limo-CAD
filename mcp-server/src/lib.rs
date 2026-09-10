@@ -7386,6 +7386,209 @@ mod tests {
         assert_eq!(combined["scene"]["bodies"].as_array().unwrap().len(), 1);
     }
 
+    fn mcp_patterned_box() -> (CadServer, Value) {
+        let (mut server, base) = mcp_box();
+        let patterned = server
+            .call_tool(
+                "solid_rectangular_pattern",
+                json!({
+                    "body_ids":[base["scene"]["bodies"][0]["id"]],
+                    "direction":{"x":1.,"y":0.,"z":0.},"spacing":10.,"count":3,
+                    "second_direction":null,"second_spacing":0.,"second_count":1
+                }),
+            )
+            .unwrap();
+        (server, patterned)
+    }
+
+    #[test]
+    fn consumed_pattern_components_clean_up_and_rollback_preserves_intent() {
+        let (mut server, patterned) = mcp_patterned_box();
+        let bodies = patterned["scene"]["bodies"].as_array().unwrap();
+        let pattern_end = patterned["document"]["features"].as_array().unwrap().len();
+        let before = server.call_tool("assembly_document", json!({})).unwrap();
+        let combined = server.call_tool("solid_combine", json!({"target_body_id":bodies[0]["id"],"tool_body_ids":[bodies[1]["id"],bodies[2]["id"]],"operation":"join","keep_tools":false})).unwrap();
+        assert_eq!(combined["scene"]["errors"], json!([]));
+        assert_eq!(combined["scene"]["bodies"].as_array().unwrap().len(), 1);
+        let after = server.call_tool("assembly_document", json!({})).unwrap();
+        assert_eq!(
+            after["component_structure"]["definitions"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            after["component_structure"]["occurrences"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        let saved = server.manager.export_project_model().unwrap();
+        // Old projects already contain these ghosts. A successful native load
+        // must clean them too, without altering the retained solid geometry.
+        let mut legacy: Value = serde_json::from_str(&saved).unwrap();
+        legacy["assembly"]["component_structure"] = before["component_structure"].clone();
+        let mut loaded = CadServer::new().unwrap();
+        loaded
+            .call_tool(
+                "cad_load_project_model",
+                json!({"model_json":legacy.to_string()}),
+            )
+            .unwrap();
+        assert_eq!(
+            loaded.call_tool("assembly_document", json!({})).unwrap(),
+            after
+        );
+        assert_eq!(
+            loaded.call_tool("solid_scene", json!({})).unwrap()["bodies"],
+            combined["scene"]["bodies"]
+        );
+
+        server
+            .call_tool("solid_set_rollback", json!({"rollback_index":pattern_end}))
+            .unwrap();
+        assert_eq!(
+            server.call_tool("solid_scene", json!({})).unwrap()["bodies"],
+            patterned["scene"]["bodies"]
+        );
+        let restored_pattern = server.call_tool("assembly_document", json!({})).unwrap();
+        assert_eq!(
+            restored_pattern["component_structure"]["definitions"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+        server
+            .call_tool(
+                "solid_set_rollback",
+                json!({"rollback_index":pattern_end-1}),
+            )
+            .unwrap();
+        assert_eq!(
+            server.call_tool("solid_scene", json!({})).unwrap()["bodies"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            server.call_tool("assembly_document", json!({})).unwrap(),
+            restored_pattern,
+            "rollback absence must preserve default identities for redo"
+        );
+        let rollback_model = server.manager.export_project_model().unwrap();
+        let mut reopened_rollback = CadServer::new().unwrap();
+        reopened_rollback
+            .call_tool(
+                "cad_load_project_model",
+                json!({"model_json":rollback_model}),
+            )
+            .unwrap();
+        assert_eq!(
+            reopened_rollback
+                .call_tool("assembly_document", json!({}))
+                .unwrap(),
+            restored_pattern,
+            "save/reopen at an earlier marker must retain later component identities"
+        );
+        server
+            .call_tool("solid_set_rollback", json!({"rollback_index":pattern_end}))
+            .unwrap();
+        assert_eq!(
+            server.call_tool("assembly_document", json!({})).unwrap(),
+            restored_pattern
+        );
+        server
+            .call_tool(
+                "solid_set_rollback",
+                json!({"rollback_index":pattern_end+1}),
+            )
+            .unwrap();
+        assert_eq!(
+            server.call_tool("assembly_document", json!({})).unwrap()["component_structure"]
+                ["definitions"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn consumed_components_referenced_by_drawing_selections_and_edges_are_preserved() {
+        for reference_kind in ["body_selection", "occurrence_selection", "annotation"] {
+            let (mut server, patterned) = mcp_patterned_box();
+            let bodies = patterned["scene"]["bodies"].as_array().unwrap();
+            let referenced_body = &bodies[1]["id"];
+            let assembly = server.call_tool("assembly_document", json!({})).unwrap();
+            let definition = assembly["component_structure"]["definitions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|definition| definition["body_ids"] == json!([referenced_body]))
+                .unwrap();
+            let occurrence = assembly["component_structure"]["occurrences"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|occurrence| occurrence["component_id"] == definition["id"])
+                .unwrap();
+            server
+                .call_tool(
+                    "drawing_create_sheet",
+                    json!({"name":"Keep tooling intent","format":"a4","orientation":"landscape"}),
+                )
+                .unwrap();
+            let mut view = json!({"name":"Tooling","kind":"top","scope":"assembly","direction":[0.,0.,1.],"up":[0.,1.,0.],"position":[90.,65.],"scale":1.});
+            if reference_kind == "body_selection" {
+                view["body_ids"] = json!([referenced_body]);
+            }
+            if reference_kind == "occurrence_selection" {
+                view["occurrence_ids"] = json!([occurrence["id"]]);
+            }
+            server
+                .call_tool("drawing_add_view", json!({"sheet_id":1,"view":view}))
+                .unwrap();
+            if reference_kind == "annotation" {
+                let projection = server.call_tool("drawing_projection", json!({"scope":"assembly","body_ids":[referenced_body],"direction":[0.,0.,1.],"up":[0.,1.,0.]})).unwrap();
+                let anchors = projection["anchors"].as_array().unwrap();
+                let first = &anchors[0];
+                let second = anchors
+                    .iter()
+                    .find(|anchor| anchor["point"][0] != first["point"][0])
+                    .unwrap();
+                let reference = |anchor: &Value| json!({"body_id":anchor["body_id"],"occurrence_id":anchor["occurrence_id"],"edge_id":anchor["edge_id"],"edge_key":anchor["edge_key"],"endpoint":anchor["endpoint"],"fallback_point":anchor["model_point"]});
+                server.call_tool("drawing_add_linear_dimension", json!({"sheet_id":1,"view_id":1,"first":reference(first),"second":reference(second),"mode":"horizontal","offset":12.})).unwrap();
+            }
+            server.call_tool("solid_combine", json!({"target_body_id":bodies[0]["id"],"tool_body_ids":[bodies[1]["id"],bodies[2]["id"]],"operation":"join","keep_tools":false})).unwrap();
+            let after = server.call_tool("assembly_document", json!({})).unwrap();
+            assert_eq!(
+                after["component_structure"]["definitions"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                2
+            );
+            assert!(
+                after["component_structure"]["definitions"]
+                    .as_array()
+                    .unwrap()
+                    .contains(definition),
+                "preserve {reference_kind}"
+            );
+            assert!(
+                after["component_structure"]["occurrences"]
+                    .as_array()
+                    .unwrap()
+                    .contains(occurrence),
+                "preserve {reference_kind}"
+            );
+        }
+    }
+
     #[test]
     fn mcp_curved_and_guided_sweeps_run_through_native_occt() {
         let mut server = CadServer::new().unwrap();

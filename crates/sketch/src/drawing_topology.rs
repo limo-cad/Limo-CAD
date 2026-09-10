@@ -7,6 +7,62 @@ use nbcad_solid::{BodyDto, SolidSceneDto};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Explicit drawing selections and annotations are user intent, even while
+/// their body is absent after a history edit. Keep their assembly identities.
+pub(crate) fn drawing_component_references(
+    document: &DrawingDocumentDto,
+) -> Result<
+    (
+        std::collections::HashSet<BodyId>,
+        std::collections::HashSet<nbcad_assembly::OccurrenceId>,
+    ),
+    String,
+> {
+    use nbcad_assembly::OccurrenceId;
+    use std::collections::HashSet;
+    fn collect(
+        value: &Value,
+        bodies: &mut HashSet<BodyId>,
+        occurrences: &mut HashSet<OccurrenceId>,
+    ) {
+        match value {
+            Value::Object(object) => {
+                if let Some(id) = object.get("body_id").and_then(Value::as_u64) {
+                    bodies.insert(BodyId(id));
+                }
+                if let Some(id) = object.get("occurrence_id").and_then(Value::as_u64) {
+                    occurrences.insert(OccurrenceId(id));
+                }
+                if let Some(ids) = object.get("body_ids").and_then(Value::as_array) {
+                    bodies.extend(ids.iter().filter_map(Value::as_u64).map(BodyId));
+                }
+                if let Some(ids) = object.get("occurrence_ids").and_then(Value::as_array) {
+                    occurrences.extend(ids.iter().filter_map(Value::as_u64).map(OccurrenceId));
+                }
+                for value in object.values() {
+                    collect(value, bodies, occurrences);
+                }
+            }
+            Value::Array(values) => {
+                for value in values {
+                    collect(value, bodies, occurrences);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut bodies = HashSet::new();
+    let mut occurrences = HashSet::new();
+    if !document.sheets.is_empty() {
+        collect(
+            &serde_json::to_value(document).map_err(|error| error.to_string())?,
+            &mut bodies,
+            &mut occurrences,
+        );
+    }
+    Ok((bodies, occurrences))
+}
+
 pub fn drawing_body_signature(body: &BodyDto) -> Option<String> {
     (!body.topology_signature.is_empty())
         .then(|| format!("feature:{}:{}", body.feature_id.0, body.topology_signature))

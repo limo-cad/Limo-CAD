@@ -2295,6 +2295,28 @@ impl SketchManager {
                 self.document.add_body_node(body.id.0, &body.name);
             }
         }
+        if scene.errors.is_empty()
+            && self.document.features().rollback_index == self.document.features().features.len()
+            && self
+                .assembly
+                .component_structure
+                .definitions
+                .iter()
+                .any(|definition| {
+                    definition.promoted
+                        && definition
+                            .body_ids
+                            .iter()
+                            .any(|body_id| !body_ids.contains(&body_id.0))
+                })
+        {
+            let (bodies, occurrences) =
+                crate::drawing_topology::drawing_component_references(&self.drawings)
+                    .map_err(SessionError::Solid)?;
+            self.assembly
+                .remove_consumed_placeholders(&scene, &bodies, &occurrences)
+                .map_err(SessionError::Solid)?;
+        }
         self.assembly
             .synchronize_components(&scene)
             .map_err(SessionError::Solid)?;
