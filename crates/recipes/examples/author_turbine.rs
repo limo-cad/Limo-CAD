@@ -188,6 +188,11 @@ impl Author {
         operation: &str,
         target: Option<&str>,
     ) -> String {
+        if operation == "new_body" {
+            self.steps.push(
+                json!({"view":"current","fit":true,"target":"active_sketch","duration_ms":300}),
+            );
+        }
         let finish = self.uid("finish");
         self.call(&finish, "sketch/draw", "sketch_finish", json!({}));
         let id = self.uid("extrude");
@@ -508,6 +513,15 @@ impl Author {
         self.drawings.push(export);
     }
     fn component(&mut self, name: &str, title: &str, printable: bool, pose: [f64; 3]) {
+        let (color, color_name) = match name {
+            "stage" | "cap" => ([220, 142, 50], "Warm orange rotor"),
+            "rotor_gear" | "pinion" => ([232, 195, 94], "Golden drive"),
+            "guard" | "guard_lid" => ([46, 78, 98], "Blue guard"),
+            "motor" => ([112, 126, 139], "Generator case"),
+            _ if printable => ([80, 105, 106], "Teal support"),
+            _ => ([169, 180, 185], "Hardware envelope"),
+        };
+        self.call(&format!("{name}_appearance"),"document/appearance","set_body_appearance",json!({"body_id":body_ref(name),"color":{"r":color[0],"g":color[1],"b":color[2],"a":255},"material_name":if printable{"Generic PETG / qualification pending"}else{"Purchased hardware / representative envelope"},"filament_type":if printable{"PETG"}else{""},"brand":"Generic","color_name":color_name}));
         self.call(
             &format!("{name}_component"),
             "assembly/joints",
@@ -527,6 +541,7 @@ impl Author {
             ),
         );
         self.call(&format!("{name}_placement"),"assembly/joints","assembly_set_occurrence_pose",json!({"occurrence_id":occ_ref(name),"local_pose":{"translation":pose,"rotation":[0,0,0,1]}}));
+        self.steps.push(json!({"view":"isometric","fit":true,"component_id":at(&format!("{name}_component"),"/id"),"duration_ms":450}));
         self.parts.push(json!({"id":name,"name":title,"body_id":body_ref(name),"component_id":at(&format!("{name}_component"),"/id"),"occurrence_id":occ_ref(name),"printable":printable,"material":if printable{"PETG"}else{"purchased — drawing/specimen confirmation required"},"print_pose":{"translation":[0,0,0],"rotation":[0,0,0,1]}}));
     }
     fn face(&mut self, name: &str, z: f64, normal: f64) -> String {

@@ -966,6 +966,12 @@
       "id": "exact_coordinates_8"
     },
     {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
       "call": {
         "arguments": {},
         "group": "sketch/draw",
@@ -1308,6 +1314,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_28"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -2812,6 +2824,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "stage_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 50,
+            "g": 142,
+            "r": 220
+          },
+          "color_name": "Warm orange rotor",
+          "filament_type": "PETG",
+          "material_name": "Generic PETG / qualification pending"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "stage_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -2878,6 +2913,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "stage_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "stage_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -3004,6 +3048,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_119"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -3211,6 +3261,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "cap_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 50,
+            "g": 142,
+            "r": 220
+          },
+          "color_name": "Warm orange rotor",
+          "filament_type": "PETG",
+          "material_name": "Generic PETG / qualification pending"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "cap_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -3277,6 +3350,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "cap_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "cap_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "chapter": "Separate rotor bearings",
@@ -3539,6 +3621,12 @@
         "operation": "sketch_add_constraints"
       },
       "id": "close_profile_144"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -6306,6 +6394,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "base_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 106,
+            "g": 105,
+            "r": 80
+          },
+          "color_name": "Teal support",
+          "filament_type": "PETG",
+          "material_name": "Generic PETG / qualification pending"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "base_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -6372,6 +6483,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "base_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "base_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -6498,6 +6618,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_341"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -8756,6 +8882,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "tower_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 106,
+            "g": 105,
+            "r": 80
+          },
+          "color_name": "Teal support",
+          "filament_type": "PETG",
+          "material_name": "Generic PETG / qualification pending"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "tower_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -8822,6 +8971,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "tower_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "tower_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -8948,6 +9106,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_492"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -9155,6 +9319,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "bearing_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 185,
+            "g": 180,
+            "r": 169
+          },
+          "color_name": "Hardware envelope",
+          "filament_type": "",
+          "material_name": "Purchased hardware / representative envelope"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "bearing_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -9221,6 +9408,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "bearing_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "bearing_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -9349,6 +9545,12 @@
       "id": "exact_coordinates_513"
     },
     {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
       "call": {
         "arguments": {},
         "group": "sketch/draw",
@@ -9390,6 +9592,29 @@
           }
         }
       }
+    },
+    {
+      "call": {
+        "arguments": {
+          "body_id": {
+            "$ref": "shaft_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 185,
+            "g": 180,
+            "r": 169
+          },
+          "color_name": "Hardware envelope",
+          "filament_type": "",
+          "material_name": "Purchased hardware / representative envelope"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "shaft_appearance"
     },
     {
       "call": {
@@ -9460,6 +9685,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "shaft_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "shaft_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -9586,6 +9820,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_524"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -9793,6 +10033,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "spacer_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 185,
+            "g": 180,
+            "r": 169
+          },
+          "color_name": "Hardware envelope",
+          "filament_type": "",
+          "material_name": "Purchased hardware / representative envelope"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "spacer_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -9859,6 +10122,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "spacer_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "spacer_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -9985,6 +10257,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_545"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -10192,6 +10470,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "washer_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 185,
+            "g": 180,
+            "r": 169
+          },
+          "color_name": "Hardware envelope",
+          "filament_type": "",
+          "material_name": "Purchased hardware / representative envelope"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "washer_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -10258,6 +10559,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "washer_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "washer_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -10384,6 +10694,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_566"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -10591,6 +10907,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "collar_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 185,
+            "g": 180,
+            "r": 169
+          },
+          "color_name": "Hardware envelope",
+          "filament_type": "",
+          "material_name": "Purchased hardware / representative envelope"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "collar_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -10657,6 +10996,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "collar_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "collar_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "chapter": "Generator cartridge",
@@ -10788,6 +11136,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_587"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -12668,6 +13022,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "motor_mount_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 106,
+            "g": 105,
+            "r": 80
+          },
+          "color_name": "Teal support",
+          "filament_type": "PETG",
+          "material_name": "Generic PETG / qualification pending"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "motor_mount_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -12734,6 +13111,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "motor_mount_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "motor_mount_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -12862,6 +13248,12 @@
       "id": "exact_coordinates_704"
     },
     {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
       "call": {
         "arguments": {},
         "group": "sketch/draw",
@@ -12903,6 +13295,29 @@
           }
         }
       }
+    },
+    {
+      "call": {
+        "arguments": {
+          "body_id": {
+            "$ref": "motor_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 139,
+            "g": 126,
+            "r": 112
+          },
+          "color_name": "Generator case",
+          "filament_type": "",
+          "material_name": "Purchased hardware / representative envelope"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "motor_appearance"
     },
     {
       "call": {
@@ -12973,6 +13388,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "motor_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "motor_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -13101,6 +13525,12 @@
       "id": "exact_coordinates_715"
     },
     {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
       "call": {
         "arguments": {},
         "group": "sketch/draw",
@@ -13142,6 +13572,29 @@
           }
         }
       }
+    },
+    {
+      "call": {
+        "arguments": {
+          "body_id": {
+            "$ref": "motor_shaft_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 185,
+            "g": 180,
+            "r": 169
+          },
+          "color_name": "Hardware envelope",
+          "filament_type": "",
+          "material_name": "Purchased hardware / representative envelope"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "motor_shaft_appearance"
     },
     {
       "call": {
@@ -13212,6 +13665,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "motor_shaft_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "motor_shaft_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "chapter": "Guard the transmission",
@@ -13343,6 +13805,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_726"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -17926,6 +18394,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "guard_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 98,
+            "g": 78,
+            "r": 46
+          },
+          "color_name": "Blue guard",
+          "filament_type": "PETG",
+          "material_name": "Generic PETG / qualification pending"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "guard_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -17992,6 +18483,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "guard_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "guard_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -18118,6 +18618,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_987"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -18965,6 +19471,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "guard_lid_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 98,
+            "g": 78,
+            "r": 46
+          },
+          "color_name": "Blue guard",
+          "filament_type": "PETG",
+          "material_name": "Generic PETG / qualification pending"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "guard_lid_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -19031,6 +19560,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "guard_lid_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "guard_lid_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "chapter": "A real 4:1 spur pair",
@@ -19162,6 +19700,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_1052"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -20230,6 +20774,12 @@
         "operation": "sketch_add_constraints"
       },
       "id": "close_profile_1098"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -21443,6 +21993,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "rotor_gear_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 94,
+            "g": 195,
+            "r": 232
+          },
+          "color_name": "Golden drive",
+          "filament_type": "PETG",
+          "material_name": "Generic PETG / qualification pending"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "rotor_gear_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -21509,6 +22082,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "rotor_gear_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "rotor_gear_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "call": {
@@ -21635,6 +22217,12 @@
         "operation": "sketch_set_grid_snap"
       },
       "id": "exact_coordinates_1175"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -22703,6 +23291,12 @@
         "operation": "sketch_add_constraints"
       },
       "id": "close_profile_1221"
+    },
+    {
+      "duration_ms": 300,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
     },
     {
       "call": {
@@ -23916,6 +24510,29 @@
     {
       "call": {
         "arguments": {
+          "body_id": {
+            "$ref": "pinion_body",
+            "pointer": "/id"
+          },
+          "brand": "Generic",
+          "color": {
+            "a": 255,
+            "b": 94,
+            "g": 195,
+            "r": 232
+          },
+          "color_name": "Golden drive",
+          "filament_type": "PETG",
+          "material_name": "Generic PETG / qualification pending"
+        },
+        "group": "document/appearance",
+        "operation": "set_body_appearance"
+      },
+      "id": "pinion_appearance"
+    },
+    {
+      "call": {
+        "arguments": {
           "absorb_promoted_bodies": true,
           "body_ids": [
             {
@@ -23982,6 +24599,15 @@
         "operation": "assembly_set_occurrence_pose"
       },
       "id": "pinion_placement"
+    },
+    {
+      "component_id": {
+        "$ref": "pinion_component",
+        "pointer": "/id"
+      },
+      "duration_ms": 450,
+      "fit": true,
+      "view": "isometric"
     },
     {
       "chapter": "Native assembly relationships",

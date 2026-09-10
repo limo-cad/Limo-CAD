@@ -21,6 +21,10 @@ authoring helper. That helper performs geometry calculations and emits ordinary
 MCP commands; the existing native interpreter performs all CAD operations.
 Commit the helper and generated source together. Returned topology references,
 rather than recorded body IDs, drive the construction and drawings.
+Presentation frames each new part profile, then its placed component. Captions,
+300–450 ms camera transitions and part colors explain the same model: orange
+rotor, golden drive, blue guard and teal supports. Fast replay skips presentation
+delays. These colors are visual designations, not vendor-qualified filaments.
 
 ## Design and editing
 
