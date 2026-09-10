@@ -250,7 +250,7 @@ pub(super) fn add(a: &mut Author) -> Vec<String> {
         a,
         &assembly,
         "assembly_iso",
-        "Assembly / seven components",
+        "Assembly / nine components",
         json!([]),
         [1., -1., 1.],
         [0., 0., 1.],
@@ -289,6 +289,8 @@ pub(super) fn add(a: &mut Author) -> Vec<String> {
         ("keeper","Retained U keeper","PETG","Broad end down"),
         ("retainer_screw","M3 x 40 socket screw","Purchased","Verify supplier drawing"),
         ("retainer_nut","M3 hex nut","Purchased","Verify supplier drawing"),
+        ("cartridge_screw","M3 x 25 cartridge screw","Purchased","Verify supplier drawing"),
+        ("cartridge_nut","M3 cartridge hex nut","Purchased","Verify supplier drawing"),
     ].into_iter().enumerate().map(|(i,(part,description,material,finish))| json!({
         "item_number":(i+1).to_string(),"body_id":a.body_id(part),"part_number":format!("VISE-{part}"),
         "description":description,"quantity":1.,"material":material,"finish":finish
@@ -301,11 +303,11 @@ pub(super) fn add(a: &mut Author) -> Vec<String> {
     );
     notes(a,&assembly,"assembly",290.,&[
         "ASSEMBLE 1: Print and test the paired interrupted-thread coupon. Deburr rails, thread starts and the keeper slot.",
-        "2: Insert the M3 nut into the jaw from below. Place the wear nut in its housing; turn in the D screw.",
-        "3: Slide the jaw onto the rails and over the screw head. Lower the keeper over the neck; fit the M3 screw from above.",
-        "4: Check the full travel by hand before loading. Keep hands away from the jaw pinch region; use adult guidance.",
+        "2: Insert the M3 nuts into the jaw and housing pockets. Lower the wear cartridge; fit its M3 x 25 cross-bolt before turning in the D screw.",
+        "3: Slide the jaw onto the rails and over the screw head. Lower the keeper over the neck; fit its M3 x 40 screw from above.",
+        "4: Check both retainers and the full travel by hand before loading. Keep hands away from the jaw pinch region; use adult guidance.",
         "LOAD PATH: Closing thrust passes from screw head into the jaw shoulder, then through the workpiece to the fixed jaw and frame.",
-        "SERVICE: Remove workpiece and unload. Remove the top M3 screw, lift keeper, slide jaw off, then unscrew the drive and lift the wear nut.",
+        "SERVICE: Unload. Remove the top keeper screw, lift keeper, slide jaw off and unscrew the drive. Remove the cartridge cross-bolt before lifting the nut.",
         "The D thread has asymmetric contact. CAD motion and interference checks do not establish creep, wear or a clamping-force rating.",
         "A-A passes through the screw axis. Purchased hardware is shown as clearance envelopes; threads and sockets are not manufactured here.",
     ]);
@@ -456,6 +458,16 @@ pub(super) fn add(a: &mut Author) -> Vec<String> {
                     a,
                     &sheet,
                     &end,
+                    "frame_cartridge_cross_hole",
+                    part,
+                    1.7,
+                    145.,
+                    "diameter",
+                );
+                radial(
+                    a,
+                    &sheet,
+                    &end,
                     "housing_envelope",
                     part,
                     10.6,
@@ -479,6 +491,7 @@ pub(super) fn add(a: &mut Author) -> Vec<String> {
                     "FIT: Cartridge pocket has 0.4 mm nominal clearance per side. Rail clearance is set in the jaw.",
                     "The broad base carries closing load between the nut housing and fixed jaw. Secure it through the slots.",
                     "Section A-A on the assembly sheet shows the screw envelope, cartridge shoulders and axial load path.",
+                    "Cartridge retention: load the M3 hex nut into the rear housing pocket; install the M3 x 25 bolt from the opposite face.",
                 ]);
             }
             "jaw" => {
@@ -524,6 +537,16 @@ pub(super) fn add(a: &mut Author) -> Vec<String> {
                 ]);
             }
             "nut" => {
+                radial(
+                    a,
+                    &sheet,
+                    &end,
+                    "nut_cartridge_cross_hole",
+                    part,
+                    1.7,
+                    35.,
+                    "diameter",
+                );
                 let section = json!({"type":"section","parent_view_id":top.id,
                     "first":axis_anchor(a,part,12.,false),"second":axis_anchor(a,part,28.,false),
                     "label":"B-B","hatch_angle_deg":45.,"hatch_spacing_mm":1.5});
@@ -543,7 +566,7 @@ pub(super) fn add(a: &mut Author) -> Vec<String> {
                 notes(a,&sheet,part,225.,&[
                     "THREAD: Custom nominal 20.5 x 2.5, right hand, ISO 60-degree form; not a standard M20 6H fit.",
                     "0.25 mm nominal radial process relief relative to the M20 screw. Print axis vertical and qualify the coupon.",
-                    "Sixteen millimetres of axial engagement. Housing prevents rotation; replace the cartridge when worn.",
+                    "16 mm engagement. Housing prevents rotation; the M3 cross-bolt prevents lift. Unload and remove the bolt before replacing the nut.",
                 ]);
             }
             "screw" => {

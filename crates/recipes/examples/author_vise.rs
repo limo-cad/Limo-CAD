@@ -191,6 +191,39 @@ impl Author {
         self.circle(id, center, 2. * radius);
         self.extrude(id, end - start, operation, part);
     }
+    fn cartridge_circle(
+        &mut self,
+        id: &str,
+        start: f64,
+        end: f64,
+        radius: f64,
+        operation: &str,
+        part: &str,
+    ) {
+        self.begin(id, "yz", start);
+        self.circle(id, [12., 42.], 2. * radius);
+        self.extrude(id, end - start, operation, part);
+    }
+    fn cartridge_hexagon(
+        &mut self,
+        id: &str,
+        start: f64,
+        end: f64,
+        across_flats: f64,
+        operation: &str,
+        part: &str,
+    ) {
+        self.begin(id, "yz", start);
+        let radius = across_flats / 3_f64.sqrt();
+        let vertices: Vec<_> = (0..6)
+            .map(|i| {
+                let angle = (i as f64 * 60.).to_radians();
+                [12. + radius * angle.cos(), 42. + radius * angle.sin()]
+            })
+            .collect();
+        self.equal_edge_profile(id, &vertices, radius);
+        self.extrude(id, end - start, operation, part);
+    }
     fn hexagon_z(
         &mut self,
         id: &str,
@@ -381,6 +414,22 @@ fn main() {
         10.6,
     );
     a.extrude(roof, 26., "cut", "frame");
+    a.cartridge_circle(
+        "Housing / cartridge cross-bolt clearance",
+        7.,
+        33.,
+        1.7,
+        "cut",
+        "frame",
+    );
+    a.cartridge_hexagon(
+        "Housing / rear-loaded cartridge M3 nut",
+        8.,
+        10.8,
+        5.9,
+        "cut",
+        "frame",
+    );
     // Low rails locate both edges of the moving jaw. They do not intersect mounting slots.
     for (id, y) in [("left", -23.), ("right", 19.)] {
         a.box_shape(
@@ -459,6 +508,14 @@ fn main() {
         [12., -18., 10.],
         [28., 18., 46.],
         "new_body",
+        "nut",
+    );
+    a.cartridge_circle(
+        "Nut cartridge / positive capture cross-hole",
+        11.,
+        29.,
+        1.7,
+        "cut",
         "nut",
     );
     let nut_face = select(
@@ -600,6 +657,39 @@ fn main() {
         "cut",
         "retainer_nut",
     );
+    a.note("Capture the wear nut independently of thread phase", "A purchased M3 x 25 cross-bolt passes through the housing and wear cartridge at Y12/Z42, clear of the drive thread. Its trapped rear M3 nut and accessible front socket head prevent cartridge lift without relying on gravity or the interrupted thread. The two 3.4 mm clearance holes bound unloaded radial float to 0.4 mm; the housing shoulders still carry axial clamping load.");
+    a.cartridge_circle(
+        "Cartridge bolt / purchased M3 x 25 envelope",
+        7.,
+        32.,
+        1.5,
+        "new_body",
+        "cartridge_screw",
+    );
+    a.cartridge_circle(
+        "Cartridge bolt / socket head envelope",
+        32.,
+        35.,
+        2.75,
+        "join",
+        "cartridge_screw",
+    );
+    a.cartridge_hexagon(
+        "Cartridge nut / purchased M3 envelope",
+        8.4,
+        10.8,
+        5.5,
+        "new_body",
+        "cartridge_nut",
+    );
+    a.cartridge_circle(
+        "Cartridge nut / simplified thread envelope",
+        8.3,
+        10.9,
+        1.5,
+        "cut",
+        "cartridge_nut",
+    );
 
     a.note("Real helical engagement and the printable D flat", "Thread the round nut and the finished cylindrical screw blank, then cut the screw flat through its axis. The remaining half thread retains a true 2.5 mm lead. Its rotating envelope is circular; the asymmetric contact needs physical fit and wear qualification.");
     a.steps.push(nut_thread_step);
@@ -650,12 +740,19 @@ fn main() {
         ("keeper", "Removable jaw keeper"),
         ("retainer_screw", "Purchased M3 x 40 socket screw"),
         ("retainer_nut", "Purchased M3 hex nut"),
+        ("cartridge_screw", "Purchased M3 x 25 cartridge bolt"),
+        ("cartridge_nut", "Purchased M3 cartridge nut"),
     ] {
         a.component(part, title);
-        if !part.starts_with("retainer_") {
+        if !part.starts_with("retainer_") && !part.starts_with("cartridge_") {
             a.call(&format!("{part}_material"),"document/appearance","set_body_appearance",json!({"body_id":a.body_id(part),"preset_id":if part=="frame" || part=="jaw" {"bambu.petg.hf.black"} else {"bambu.petg.hf.white"}}));
         }
-        a.bind(&format!("{part}_anchor_face"),json!({"$select":{"from":reference(&format!("{part}_body"),""),"path":"/faces","where":{"/plane/normal/2":1},"take":"first"}}));
+        let plane_axis = if part.starts_with("cartridge_") {
+            "/plane/normal/0"
+        } else {
+            "/plane/normal/2"
+        };
+        a.bind(&format!("{part}_anchor_face"),json!({"$select":{"from":reference(&format!("{part}_body"),""),"path":"/faces","where":{plane_axis:1},"take":"first"}}));
     }
     a.call(
         "ground_frame",
@@ -679,6 +776,16 @@ fn main() {
         [69., 0., 28.],
         Value::Null,
     );
+    for part in ["cartridge_screw", "cartridge_nut"] {
+        a.joint(
+            &format!("{part}_in_housing"),
+            "rigid",
+            "frame",
+            part,
+            [20., 12., 42.],
+            Value::Null,
+        );
+    }
     a.joint(
         "screw_drive",
         "screw",
@@ -723,7 +830,7 @@ fn main() {
     a.steps
         .push(json!({"view":"isometric","fit":true,"duration_ms":650}));
 
-    a.note("Print layout and assembly order", "The screw prints on its through-axis flat. Stand the nut on its end, and put the jaw and keeper on their broad end faces. Five separated parts fit within 204 by 166 mm, including the conservative 235.5 by 256 mm dual-tool bed. Insert the nut, turn in the screw, slide on the jaw and secure the keeper with its M3 hardware. The frame's 45-degree bore roof preserves the circular rotating envelope without a horizontal bridge.");
+    a.note("Print layout and assembly order", "The screw prints on its through-axis flat. Stand the nut on its end, and put the jaw and keeper on their broad end faces. Five separated parts fit within 204 by 166 mm, including the conservative 235.5 by 256 mm dual-tool bed. Insert and cross-bolt the wear nut, turn in the D screw, slide on the jaw and secure the keeper with its M3 hardware. The frame's 45-degree bore roof preserves the circular rotating envelope without a horizontal bridge; the small 3.4 mm cross-hole needs a qualified short bridge.");
     for joint in [
         "nut_in_housing",
         "keeper_in_jaw",
@@ -801,7 +908,9 @@ fn main() {
         checks.push(json!({"id":id,"call":{"group":group,"operation":operation,"arguments":{}}}));
     }
     checks.push(json!({"assert":reference("final_scene","/errors"),"equals":[]}));
-    checks.push(json!({"assert":{"$count":reference("final_scene","/bodies")},"equals":7}));
+    checks.push(
+        json!({"assert":{"$count":reference("final_scene","/bodies")},"equals":a.bodies.len()}),
+    );
     checks.push(json!({"assert":{"$count":reference("final_sketches","")},"equals":a.sketches}));
     for index in 0..a.sketches {
         checks.push(
@@ -830,6 +939,8 @@ fn main() {
         "keeper",
         "retainer_screw",
         "retainer_nut",
+        "cartridge_screw",
+        "cartridge_nut",
     ] {
         exports.insert(format!("{part}_body_id"), a.body_id(part));
         exports.insert(
@@ -859,7 +970,7 @@ fn main() {
     for id in drawing_exports {
         exports.insert(id.clone(), reference(&id, ""));
     }
-    exports.insert("design_inputs".into(),json!({"jaw_width_mm":60,"initial_opening_mm":48,"allowed_travel_mm":48,"lead_mm":2.5,"nominal_thread_mm":20,"nut_special_nominal_mm":20.5,"radial_process_relief_mm":0.25,"flat_axis_z_mm":28,"thread_engagement_mm":16,"provisional_material":"Bambu PETG HF","input_torque_Nm":0.25,"assumed_overall_efficiency":0.2,"contact_patch_mm2":600,"physical_load_rating":null}));
+    exports.insert("design_inputs".into(),json!({"jaw_width_mm":60,"initial_opening_mm":48,"allowed_travel_mm":48,"lead_mm":2.5,"nominal_thread_mm":20,"nut_special_nominal_mm":20.5,"radial_process_relief_mm":0.25,"flat_axis_z_mm":28,"thread_engagement_mm":16,"cartridge_cross_bolt":"M3 x25","cartridge_capture_hole_mm":3.4,"cartridge_capture_axis_yz_mm":[12,42],"cartridge_max_rigid_radial_float_mm":0.4,"provisional_material":"Bambu PETG HF","input_torque_Nm":0.25,"assumed_overall_efficiency":0.2,"contact_patch_mm2":600,"physical_load_rating":null}));
     let document = json!({"$schema":"./nbcad-script.schema.json","version":1,"name":"D-shaped printed screw vise","starting_state":"empty","steps":a.steps,"checks":checks,"exports":exports});
     let text=format!("// Functional FDM design candidate; dimensions in millimetres.\n// Native sketches, features and joints only. No imported mesh or captured entity IDs.\n// Authored with crates/recipes/examples/author_vise.rs; replay with cargo xtask run-script --server PATH_TO_NBCAD_MCP --recipe d-screw-vise.\n{}\n",serde_json::to_string_pretty(&document).unwrap());
     nbcad_script::Script::parse(&text).expect("authored source must pass preflight");

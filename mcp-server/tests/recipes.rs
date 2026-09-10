@@ -594,6 +594,8 @@ fn d_screw_vise_builds_editable_native_geometry() {
                 - 16.8 * 36.8 * 42.4
                 - pi * 10.6_f64.powi(2) * 7.2
                 - 7.2 * 10.6_f64.powi(2) * (1. - pi / 4.)
+                - 2.8 * 3_f64.sqrt() / 2. * 5.9_f64.powi(2)
+                - 4.4 * pi * 1.7_f64.powi(2)
                 + 2. * 96. * 4. * 4.,
             0.0005,
         ),
@@ -667,7 +669,8 @@ fn d_screw_vise_builds_editable_native_geometry() {
         .iter()
         .find(|body| body["id"] == exports["nut_body_id"])
         .unwrap();
-    let nut_analytic = 16. * 36. * 36. - 16. * pi * female_mean_radius_squared;
+    let nut_analytic =
+        16. * 36. * 36. - 16. * pi * female_mean_radius_squared - 16. * pi * 1.7_f64.powi(2);
     assert!(
         (mesh_measurement(nut).2 - nut_analytic).abs() / nut_analytic < 0.01,
         "threaded cartridge follows its60-degree radial profile integral"
@@ -763,6 +766,118 @@ fn d_screw_vise_builds_editable_native_geometry() {
             .unwrap()["id"]
             .clone()
     };
+    // The cartridge has positive capture independent of the rotating D-thread.
+    // Check its assembly sequence before the drive/jaw are installed, then its
+    // free clearance and hard stops using only the actual retaining bodies.
+    for name in [
+        "nut_in_housing",
+        "cartridge_screw_in_housing",
+        "cartridge_nut_in_housing",
+    ] {
+        client.call(
+            "assembly_set_joint_enabled",
+            json!({"joint_id":joint_id(name),"enabled":false}),
+        );
+    }
+    let cartridge_pose = |client: &mut Client, part: &str, translation: Value, rotation: Value| {
+        client.call("assembly_set_occurrence_pose",json!({"occurrence_id":exports[format!("{part}_occurrence_id")],"local_pose":{"translation":translation,"rotation":rotation}}));
+    };
+    cartridge_pose(
+        &mut client,
+        "cartridge_screw",
+        json!([60, 0, 0]),
+        json!([0, 0, 0, 1]),
+    );
+    cartridge_pose(
+        &mut client,
+        "cartridge_nut",
+        json!([-20, 0, 0]),
+        json!([0, 0, 0, 1]),
+    );
+    for lift in [50., 30., 10., 0.] {
+        cartridge_pose(&mut client, "nut", json!([0, 0, lift]), json!([0, 0, 0, 1]));
+        no_overlap(&client.call("assembly_interference_check",json!({"occurrence_ids":[exports["frame_occurrence_id"],exports["nut_occurrence_id"]],"clearance_threshold_mm":0})));
+    }
+    for retreat in [-12., -5., 0.] {
+        cartridge_pose(
+            &mut client,
+            "cartridge_nut",
+            json!([retreat, 0, 0]),
+            json!([0, 0, 0, 1]),
+        );
+        no_overlap(&client.call("assembly_interference_check",json!({"occurrence_ids":[exports["frame_occurrence_id"],exports["nut_occurrence_id"],exports["cartridge_nut_occurrence_id"]],"clearance_threshold_mm":0})));
+    }
+    for approach in [40., 20., 3., 0.] {
+        cartridge_pose(
+            &mut client,
+            "cartridge_screw",
+            json!([approach, 0, 0]),
+            json!([0, 0, 0, 1]),
+        );
+        no_overlap(&client.call("assembly_interference_check",json!({"occurrence_ids":[exports["frame_occurrence_id"],exports["nut_occurrence_id"],exports["cartridge_nut_occurrence_id"],exports["cartridge_screw_occurrence_id"]],"clearance_threshold_mm":0})));
+    }
+    // Two Ø3.4 holes around a Ø3 shaft permit at most0.4mm relative radial
+    // offset in rigid geometry. At0.38mm the bolt can share that offset;
+    // at0.42mm it cannot fit both holes. No friction/gravity assumption enters.
+    cartridge_pose(
+        &mut client,
+        "cartridge_screw",
+        json!([0, 0, 0.19]),
+        json!([0, 0, 0, 1]),
+    );
+    for (lift, blocked) in [(0.38, false), (0.42, true)] {
+        cartridge_pose(&mut client, "nut", json!([0, 0, lift]), json!([0, 0, 0, 1]));
+        let result=client.call("assembly_interference_check",json!({"occurrence_ids":[exports["frame_occurrence_id"],exports["nut_occurrence_id"],exports["cartridge_screw_occurrence_id"]],"clearance_threshold_mm":0}));
+        assert_eq!(
+            result["pairs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|p| p["interfering"] == true),
+            blocked,
+            "cartridge lift{lift}: {result}"
+        );
+    }
+    cartridge_pose(
+        &mut client,
+        "cartridge_screw",
+        json!([0, 0, 0]),
+        json!([0, 0, 0, 1]),
+    );
+    for angle in [-1_f64, 1.] {
+        let radians = angle.to_radians();
+        let (sin, cos) = radians.sin_cos();
+        cartridge_pose(
+            &mut client,
+            "nut",
+            json!([
+                0.,
+                12. - (12. * cos - 42. * sin),
+                42. - (12. * sin + 42. * cos)
+            ]),
+            json!([(radians / 2.).sin(), 0., 0., (radians / 2.).cos()]),
+        );
+        let result=client.call("assembly_interference_check",json!({"occurrence_ids":[exports["frame_occurrence_id"],exports["nut_occurrence_id"]],"clearance_threshold_mm":0}));
+        assert!(
+            result["pairs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|p| p["interfering"] == true),
+            "cartridge rock{angle}degree must meet a housing stop: {result}"
+        );
+    }
+    cartridge_pose(&mut client, "nut", json!([0, 0, 0]), json!([0, 0, 0, 1]));
+    for name in [
+        "nut_in_housing",
+        "cartridge_screw_in_housing",
+        "cartridge_nut_in_housing",
+    ] {
+        client.call(
+            "assembly_set_joint_enabled",
+            json!({"joint_id":joint_id(name),"enabled":true}),
+        );
+    }
     for name in ["keeper_in_jaw", "retainer_screw_in_jaw"] {
         client.call(
             "assembly_set_joint_enabled",

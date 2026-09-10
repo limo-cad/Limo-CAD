@@ -20,13 +20,18 @@ stack of rings, a D-shaped female bore or an imported mesh.
 
 Five parts are printed: the slotted frame, guided jaw, replaceable threaded nut,
 D screw and keeper. A purchased M3 × 40 socket screw and M3 hex nut positively
-retain the keeper. Their native bodies are explicitly simplified clearance
+retain the keeper; an M3 × 25 socket screw and second M3 nut capture the wear
+cartridge. Their native bodies are explicitly simplified clearance
 envelopes; the print plate excludes them. Supplier dimensions must be checked
 before choosing hardware: the modeled head is Ø5.5 × 3 and the nut is 5.5 across
 flats × 2.4 thick, consistent with the [Bossard nut drawing](https://media.distrelec.com/Web/Downloads/_t/ds/1241613_eng_tds.pdf).
 
-1. Seat the large threaded cartridge in the frame. Its rectangular outside
-   prevents rotation and its end shoulders transfer axial force into the frame.
+1. Seat the large threaded cartridge in the frame. Load its M3 nut into the
+   hex pocket from the rear (X8), then insert the M3 × 25 bolt from the front
+   (head seated at X32). Its axis is Y12/Z42, clear of the drive thread. Fit this
+   fastener before the drive and jaw, while both ends are accessible. The
+   cartridge's rectangular outside prevents rotation and its end shoulders
+   transfer axial force into the frame.
 2. Turn the D screw through the circular female thread. The screw's phase is
    registered to the actual native helix, including its cutter start allowance.
 3. Load the small M3 nut from the underside of the jaw, hold it in its hexagonal
@@ -51,11 +56,20 @@ the solver determines jaw travel and retention rotation. The nominal unloaded
 geometry uses 0.4 mm running/axial gaps. Physical backlash and elastic seating
 under load are not simulated by this ideal kinematic joint.
 
+The cartridge cross-bolt positively arrests lifting throughout a complete
+drive turn. Retention does not depend on gravity, friction or the orientation
+of the interrupted D-thread. A Ø3 shaft in the housing and cartridge's Ø3.4
+holes permits at most 0.4 mm relative radial float in rigid geometry. Native
+tests check the free gap at 0.38 mm, collision at 0.42 mm, and housing contact
+before ±1° rocking about the bolt axis. These are geometric limits, not a
+prediction of bolt bending or printed housing deformation under load. Remove
+the jaw and drive before undoing this bolt to replace the wear cartridge.
+
 Mount the frame on a sacrificial board using four M5 through-bolts, washers and
 nuts through the 18 × 6 mm slots; select bolt length for the board thickness.
 The slots are outside the jaw path and remain accessible from above. Snug the
 washers without crushing the printed base. This mounting hardware is installation
-equipment and is not part of the seven modeled component envelopes.
+equipment and is not part of the nine modeled component envelopes.
 
 ## Editing the design
 
@@ -99,8 +113,10 @@ The full five-part plate fits within approximately 204 × 166 × 52 mm, inside
 the conservative 235.5 × 256 × 256 mm target. The D screw rests on its flat;
 the nut's thread axis is vertical; the jaw and keeper rest on their broad end
 faces. The frame has two 45° roof faces above its circular screw envelope,
-replacing the horizontal bore bridge. Its apex is Z42.991, leaving about 9 mm
-of stock below the housing top. Try this layout without supports and inspect it
+replacing the large horizontal bore bridge. Its apex is Z42.991, leaving about 9 mm
+of stock below the housing top. The small cartridge cross-hole and hex pocket
+still need approximately 3.4 mm short bridges qualified with the print profile.
+Try this layout without supports and inspect it
 before applying load; process success still depends on the extrusion profile.
 The standard 3MF retains
 separate manifold bodies and material assignments. It is an export of the

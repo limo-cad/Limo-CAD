@@ -58,7 +58,7 @@
           "pointer": "/bodies"
         }
       },
-      "equals": 7
+      "equals": 9
     },
     {
       "assert": {
@@ -67,7 +67,7 @@
           "pointer": ""
         }
       },
-      "equals": 36
+      "equals": 43
     },
     {
       "assert": {
@@ -323,6 +323,55 @@
     },
     {
       "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/36/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/37/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/38/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/39/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/40/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/41/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/42/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
         "$ref": "final_solution",
         "pointer": "/solved"
       },
@@ -365,9 +414,32 @@
     }
   ],
   "exports": {
+    "cartridge_nut_body_id": {
+      "$ref": "cartridge_nut_body_id",
+      "pointer": ""
+    },
+    "cartridge_nut_occurrence_id": {
+      "$ref": "cartridge_nut_occurrence",
+      "pointer": ""
+    },
+    "cartridge_screw_body_id": {
+      "$ref": "cartridge_screw_body_id",
+      "pointer": ""
+    },
+    "cartridge_screw_occurrence_id": {
+      "$ref": "cartridge_screw_occurrence",
+      "pointer": ""
+    },
     "design_inputs": {
       "allowed_travel_mm": 48,
       "assumed_overall_efficiency": 0.2,
+      "cartridge_capture_axis_yz_mm": [
+        12,
+        42
+      ],
+      "cartridge_capture_hole_mm": 3.4,
+      "cartridge_cross_bolt": "M3 x25",
+      "cartridge_max_rigid_radial_float_mm": 0.4,
       "contact_patch_mm2": 600,
       "flat_axis_z_mm": 28,
       "initial_opening_mm": 48,
@@ -1942,6 +2014,474 @@
     {
       "call": {
         "arguments": {
+          "name": "Housing / cartridge cross-bolt clearance",
+          "plane": {
+            "$ref": "datum_2_plane",
+            "pointer": ""
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "Housing / cartridge cross-bolt clearance_begin"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "Housing / cartridge cross-bolt clearance_snap"
+    },
+    {
+      "call": {
+        "arguments": {
+          "ctrl_held": true,
+          "position": {
+            "x": 12.0,
+            "y": 42.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_point"
+      },
+      "id": "Housing / cartridge cross-bolt clearance_point"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$ref": "Housing / cartridge cross-bolt clearance_point",
+            "pointer": "/entities/0"
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Housing / cartridge cross-bolt clearance_point_fix"
+    },
+    {
+      "call": {
+        "arguments": {
+          "anchor": {
+            "x": 12.0,
+            "y": 42.0
+          },
+          "ctrl_held": true,
+          "diameter_mm": 3.4,
+          "edge_hint": {
+            "x": 13.7,
+            "y": 42.0
+          },
+          "mode": "center_diameter"
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked"
+      },
+      "id": "Housing / cartridge cross-bolt clearance_profile"
+    },
+    {
+      "call": {
+        "arguments": {
+          "curve": {
+            "$ref": "Housing / cartridge cross-bolt clearance_profile",
+            "pointer": "/entities/0"
+          },
+          "point": {
+            "$ref": "Housing / cartridge cross-bolt clearance_point",
+            "pointer": "/entities/0"
+          },
+          "type": "center_coincident"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Housing / cartridge cross-bolt clearance_locate"
+    },
+    {
+      "duration_ms": 180,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "Housing / cartridge cross-bolt clearance_finish"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 26.0,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "cut",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "Housing / cartridge cross-bolt clearance",
+          "taper_angle_deg": 0,
+          "target_body_ids": [
+            {
+              "$ref": "frame_body_id",
+              "pointer": ""
+            }
+          ]
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "Housing / cartridge cross-bolt clearance_build"
+    },
+    {
+      "call": {
+        "arguments": {
+          "distance": 8.0,
+          "name": "yz datum at 8 mm",
+          "reference": {
+            "plane": "yz",
+            "type": "origin_plane"
+          }
+        },
+        "group": "solid/reference",
+        "operation": "construction_plane_offset"
+      },
+      "id": "datum_3"
+    },
+    {
+      "let": {
+        "datum_3_plane": {
+          "datum_id": {
+            "$select": {
+              "from": {
+                "$ref": "datum_3",
+                "pointer": ""
+              },
+              "path": "/planes",
+              "pointer": "/datum_id",
+              "take": "one",
+              "where": {
+                "/name": "yz datum at 8 mm"
+              }
+            }
+          },
+          "type": "datum_plane"
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "Housing / rear-loaded cartridge M3 nut",
+          "plane": {
+            "$ref": "datum_3_plane",
+            "pointer": ""
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_begin"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_snap"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_deg": 119.99999999999997,
+          "ctrl_held": true,
+          "from": {
+            "x": 15.406366588218793,
+            "y": 42.0
+          },
+          "length_mm": 3.4063665882187926,
+          "to_hint": {
+            "x": 13.703183294109397,
+            "y": 44.95
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_edge_0"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_deg": 180.0,
+          "ctrl_held": true,
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "Housing / rear-loaded cartridge M3 nut_edge_0",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "length_text": "d1",
+          "to_hint": {
+            "x": 10.296816705890604,
+            "y": 44.95
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_edge_1"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_deg": -119.99999999999999,
+          "ctrl_held": true,
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "Housing / rear-loaded cartridge M3 nut_edge_1",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "length_text": "d1",
+          "to_hint": {
+            "x": 8.593633411781207,
+            "y": 42.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_edge_2"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_deg": -60.000000000000036,
+          "ctrl_held": true,
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "Housing / rear-loaded cartridge M3 nut_edge_2",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "length_text": "d1",
+          "to_hint": {
+            "x": 10.296816705890603,
+            "y": 39.05
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_edge_3"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_deg": 0.0,
+          "ctrl_held": true,
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "Housing / rear-loaded cartridge M3 nut_edge_3",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "length_text": "d1",
+          "to_hint": {
+            "x": 13.703183294109397,
+            "y": 39.05
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_edge_4"
+    },
+    {
+      "call": {
+        "arguments": {
+          "ctrl_held": true,
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "Housing / rear-loaded cartridge M3 nut_edge_4",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "to_hint": {
+            "x": 15.406366588218793,
+            "y": 42.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_edge_5"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_active"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_snapshot"
+    },
+    {
+      "call": {
+        "arguments": {
+          "a": {
+            "$select": {
+              "from": {
+                "$ref": "Housing / rear-loaded cartridge M3 nut_edge_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end_id",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "b": {
+            "$select": {
+              "from": {
+                "$ref": "Housing / rear-loaded cartridge M3 nut_edge_0",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/start_id",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "type": "coincident"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_close"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "Housing / rear-loaded cartridge M3 nut_snapshot",
+                "pointer": ""
+              },
+              "path": "/entities",
+              "pointer": "/id",
+              "take": "first",
+              "where": {
+                "/kind": "point"
+              }
+            }
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_locate"
+    },
+    {
+      "duration_ms": 180,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_finish"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 2.8000000000000007,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "cut",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "Housing / rear-loaded cartridge M3 nut",
+          "taper_angle_deg": 0,
+          "target_body_ids": [
+            {
+              "$ref": "frame_body_id",
+              "pointer": ""
+            }
+          ]
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "Housing / rear-loaded cartridge M3 nut_build"
+    },
+    {
+      "call": {
+        "arguments": {
           "name": "Guide rail left / 4 high",
           "plane": {
             "$ref": "datum_0_plane",
@@ -2188,15 +2728,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_3"
+      "id": "datum_4"
     },
     {
       "let": {
-        "datum_3_plane": {
+        "datum_4_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_3",
+                "$ref": "datum_4",
                 "pointer": ""
               },
               "path": "/planes",
@@ -2216,7 +2756,7 @@
         "arguments": {
           "name": "Moving jaw / 60 mm gripping face",
           "plane": {
-            "$ref": "datum_3_plane",
+            "$ref": "datum_4_plane",
             "pointer": ""
           }
         },
@@ -2366,15 +2906,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_4"
+      "id": "datum_5"
     },
     {
       "let": {
-        "datum_4_plane": {
+        "datum_5_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_4",
+                "$ref": "datum_5",
                 "pointer": ""
               },
               "path": "/planes",
@@ -2394,7 +2934,7 @@
         "arguments": {
           "name": "Jaw guide left / running clearance",
           "plane": {
-            "$ref": "datum_4_plane",
+            "$ref": "datum_5_plane",
             "pointer": ""
           }
         },
@@ -2505,7 +3045,7 @@
         "arguments": {
           "name": "Jaw guide right / running clearance",
           "plane": {
-            "$ref": "datum_4_plane",
+            "$ref": "datum_5_plane",
             "pointer": ""
           }
         },
@@ -2624,15 +3164,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_5"
+      "id": "datum_6"
     },
     {
       "let": {
-        "datum_5_plane": {
+        "datum_6_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_5",
+                "$ref": "datum_6",
                 "pointer": ""
               },
               "path": "/planes",
@@ -2652,7 +3192,7 @@
         "arguments": {
           "name": "Jaw / circular thrust chamber",
           "plane": {
-            "$ref": "datum_5_plane",
+            "$ref": "datum_6_plane",
             "pointer": ""
           }
         },
@@ -2790,15 +3330,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_6"
+      "id": "datum_7"
     },
     {
       "let": {
-        "datum_6_plane": {
+        "datum_7_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_6",
+                "$ref": "datum_7",
                 "pointer": ""
               },
               "path": "/planes",
@@ -2818,7 +3358,7 @@
         "arguments": {
           "name": "Jaw / transverse keeper slot",
           "plane": {
-            "$ref": "datum_6_plane",
+            "$ref": "datum_7_plane",
             "pointer": ""
           }
         },
@@ -2929,7 +3469,7 @@
         "arguments": {
           "name": "Jaw / bottom-loaded M3 nut pocket",
           "plane": {
-            "$ref": "datum_3_plane",
+            "$ref": "datum_4_plane",
             "pointer": ""
           }
         },
@@ -3239,15 +3779,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_7"
+      "id": "datum_8"
     },
     {
       "let": {
-        "datum_7_plane": {
+        "datum_8_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_7",
+                "$ref": "datum_8",
                 "pointer": ""
               },
               "path": "/planes",
@@ -3267,7 +3807,7 @@
         "arguments": {
           "name": "Jaw / retainer screw clearance",
           "plane": {
-            "$ref": "datum_7_plane",
+            "$ref": "datum_8_plane",
             "pointer": ""
           }
         },
@@ -3405,15 +3945,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_8"
+      "id": "datum_9"
     },
     {
       "let": {
-        "datum_8_plane": {
+        "datum_9_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_8",
+                "$ref": "datum_9",
                 "pointer": ""
               },
               "path": "/planes",
@@ -3433,7 +3973,7 @@
         "arguments": {
           "name": "Jaw / retainer head access",
           "plane": {
-            "$ref": "datum_8_plane",
+            "$ref": "datum_9_plane",
             "pointer": ""
           }
         },
@@ -3585,15 +4125,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_9"
+      "id": "datum_10"
     },
     {
       "let": {
-        "datum_9_plane": {
+        "datum_10_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_9",
+                "$ref": "datum_10",
                 "pointer": ""
               },
               "path": "/planes",
@@ -3613,7 +4153,7 @@
         "arguments": {
           "name": "Nut cartridge / removable wear part",
           "plane": {
-            "$ref": "datum_9_plane",
+            "$ref": "datum_10_plane",
             "pointer": ""
           }
         },
@@ -3751,13 +4291,179 @@
       }
     },
     {
+      "call": {
+        "arguments": {
+          "distance": 11.0,
+          "name": "yz datum at 11 mm",
+          "reference": {
+            "plane": "yz",
+            "type": "origin_plane"
+          }
+        },
+        "group": "solid/reference",
+        "operation": "construction_plane_offset"
+      },
+      "id": "datum_11"
+    },
+    {
+      "let": {
+        "datum_11_plane": {
+          "datum_id": {
+            "$select": {
+              "from": {
+                "$ref": "datum_11",
+                "pointer": ""
+              },
+              "path": "/planes",
+              "pointer": "/datum_id",
+              "take": "one",
+              "where": {
+                "/name": "yz datum at 11 mm"
+              }
+            }
+          },
+          "type": "datum_plane"
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "Nut cartridge / positive capture cross-hole",
+          "plane": {
+            "$ref": "datum_11_plane",
+            "pointer": ""
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "Nut cartridge / positive capture cross-hole_begin"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "Nut cartridge / positive capture cross-hole_snap"
+    },
+    {
+      "call": {
+        "arguments": {
+          "ctrl_held": true,
+          "position": {
+            "x": 12.0,
+            "y": 42.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_point"
+      },
+      "id": "Nut cartridge / positive capture cross-hole_point"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$ref": "Nut cartridge / positive capture cross-hole_point",
+            "pointer": "/entities/0"
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Nut cartridge / positive capture cross-hole_point_fix"
+    },
+    {
+      "call": {
+        "arguments": {
+          "anchor": {
+            "x": 12.0,
+            "y": 42.0
+          },
+          "ctrl_held": true,
+          "diameter_mm": 3.4,
+          "edge_hint": {
+            "x": 13.7,
+            "y": 42.0
+          },
+          "mode": "center_diameter"
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked"
+      },
+      "id": "Nut cartridge / positive capture cross-hole_profile"
+    },
+    {
+      "call": {
+        "arguments": {
+          "curve": {
+            "$ref": "Nut cartridge / positive capture cross-hole_profile",
+            "pointer": "/entities/0"
+          },
+          "point": {
+            "$ref": "Nut cartridge / positive capture cross-hole_point",
+            "pointer": "/entities/0"
+          },
+          "type": "center_coincident"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Nut cartridge / positive capture cross-hole_locate"
+    },
+    {
+      "duration_ms": 180,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "Nut cartridge / positive capture cross-hole_finish"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 18.0,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "cut",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "Nut cartridge / positive capture cross-hole",
+          "taper_angle_deg": 0,
+          "target_body_ids": [
+            {
+              "$ref": "nut_body_id",
+              "pointer": ""
+            }
+          ]
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "Nut cartridge / positive capture cross-hole_build"
+    },
+    {
       "let": {
         "nut_start_face": {
           "$select": {
             "from": {
               "$select": {
                 "from": {
-                  "$ref": "Nut cartridge / removable wear part_build",
+                  "$ref": "Nut cartridge / positive capture cross-hole_build",
                   "pointer": ""
                 },
                 "path": "/scene/bodies",
@@ -3808,15 +4514,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_10"
+      "id": "datum_12"
     },
     {
       "let": {
-        "datum_10_plane": {
+        "datum_12_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_10",
+                "$ref": "datum_12",
                 "pointer": ""
               },
               "path": "/planes",
@@ -3836,7 +4542,7 @@
         "arguments": {
           "name": "Screw / nominal 20 mm cylinder",
           "plane": {
-            "$ref": "datum_10_plane",
+            "$ref": "datum_12_plane",
             "pointer": ""
           }
         },
@@ -4005,15 +4711,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_11"
+      "id": "datum_13"
     },
     {
       "let": {
-        "datum_11_plane": {
+        "datum_13_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_11",
+                "$ref": "datum_13",
                 "pointer": ""
               },
               "path": "/planes",
@@ -4033,7 +4739,7 @@
         "arguments": {
           "name": "Screw handle / integral flat paddle",
           "plane": {
-            "$ref": "datum_11_plane",
+            "$ref": "datum_13_plane",
             "pointer": ""
           }
         },
@@ -4152,15 +4858,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_12"
+      "id": "datum_14"
     },
     {
       "let": {
-        "datum_12_plane": {
+        "datum_14_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_12",
+                "$ref": "datum_14",
                 "pointer": ""
               },
               "path": "/planes",
@@ -4180,7 +4886,7 @@
         "arguments": {
           "name": "Screw / rear thrust collar",
           "plane": {
-            "$ref": "datum_12_plane",
+            "$ref": "datum_14_plane",
             "pointer": ""
           }
         },
@@ -4318,15 +5024,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_13"
+      "id": "datum_15"
     },
     {
       "let": {
-        "datum_13_plane": {
+        "datum_15_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_13",
+                "$ref": "datum_15",
                 "pointer": ""
               },
               "path": "/planes",
@@ -4346,7 +5052,7 @@
         "arguments": {
           "name": "Screw / retention neck",
           "plane": {
-            "$ref": "datum_13_plane",
+            "$ref": "datum_15_plane",
             "pointer": ""
           }
         },
@@ -4484,15 +5190,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_14"
+      "id": "datum_16"
     },
     {
       "let": {
-        "datum_14_plane": {
+        "datum_16_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_14",
+                "$ref": "datum_16",
                 "pointer": ""
               },
               "path": "/planes",
@@ -4512,7 +5218,7 @@
         "arguments": {
           "name": "Screw / captured thrust head",
           "plane": {
-            "$ref": "datum_14_plane",
+            "$ref": "datum_16_plane",
             "pointer": ""
           }
         },
@@ -4656,7 +5362,7 @@
         "arguments": {
           "name": "Keeper / transverse plate",
           "plane": {
-            "$ref": "datum_6_plane",
+            "$ref": "datum_7_plane",
             "pointer": ""
           }
         },
@@ -4806,15 +5512,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_15"
+      "id": "datum_17"
     },
     {
       "let": {
-        "datum_15_plane": {
+        "datum_17_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_15",
+                "$ref": "datum_17",
                 "pointer": ""
               },
               "path": "/planes",
@@ -4834,7 +5540,7 @@
         "arguments": {
           "name": "Keeper / circular neck clearance",
           "plane": {
-            "$ref": "datum_15_plane",
+            "$ref": "datum_17_plane",
             "pointer": ""
           }
         },
@@ -4972,15 +5678,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_16"
+      "id": "datum_18"
     },
     {
       "let": {
-        "datum_16_plane": {
+        "datum_18_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_16",
+                "$ref": "datum_18",
                 "pointer": ""
               },
               "path": "/planes",
@@ -5000,7 +5706,7 @@
         "arguments": {
           "name": "Keeper / downward installation throat",
           "plane": {
-            "$ref": "datum_16_plane",
+            "$ref": "datum_18_plane",
             "pointer": ""
           }
         },
@@ -5111,7 +5817,7 @@
         "arguments": {
           "name": "Keeper / M3 retainer clearance",
           "plane": {
-            "$ref": "datum_16_plane",
+            "$ref": "datum_18_plane",
             "pointer": ""
           }
         },
@@ -5241,7 +5947,7 @@
         "arguments": {
           "name": "Keeper / recessed socket-head seat",
           "plane": {
-            "$ref": "datum_8_plane",
+            "$ref": "datum_9_plane",
             "pointer": ""
           }
         },
@@ -5385,7 +6091,7 @@
         "arguments": {
           "name": "Retainer screw / purchased M3 x 40 envelope",
           "plane": {
-            "$ref": "datum_7_plane",
+            "$ref": "datum_8_plane",
             "pointer": ""
           }
         },
@@ -5546,7 +6252,7 @@
         "arguments": {
           "name": "Retainer screw / socket head envelope",
           "plane": {
-            "$ref": "datum_8_plane",
+            "$ref": "datum_9_plane",
             "pointer": ""
           }
         },
@@ -5684,15 +6390,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_17"
+      "id": "datum_19"
     },
     {
       "let": {
-        "datum_17_plane": {
+        "datum_19_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_17",
+                "$ref": "datum_19",
                 "pointer": ""
               },
               "path": "/planes",
@@ -5712,7 +6418,7 @@
         "arguments": {
           "name": "Retainer nut / purchased M3 envelope",
           "plane": {
-            "$ref": "datum_17_plane",
+            "$ref": "datum_19_plane",
             "pointer": ""
           }
         },
@@ -6053,15 +6759,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_18"
+      "id": "datum_20"
     },
     {
       "let": {
-        "datum_18_plane": {
+        "datum_20_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_18",
+                "$ref": "datum_20",
                 "pointer": ""
               },
               "path": "/planes",
@@ -6081,7 +6787,7 @@
         "arguments": {
           "name": "Retainer nut / simplified thread envelope",
           "plane": {
-            "$ref": "datum_18_plane",
+            "$ref": "datum_20_plane",
             "pointer": ""
           }
         },
@@ -6205,6 +6911,873 @@
         "operation": "solid_extrude"
       },
       "id": "Retainer nut / simplified thread envelope_build"
+    },
+    {
+      "chapter": "Capture the wear nut independently of thread phase",
+      "duration_ms": 1800,
+      "note": "A purchased M3 x 25 cross-bolt passes through the housing and wear cartridge at Y12/Z42, clear of the drive thread. Its trapped rear M3 nut and accessible front socket head prevent cartridge lift without relying on gravity or the interrupted thread. The two 3.4 mm clearance holes bound unloaded radial float to 0.4 mm; the housing shoulders still carry axial clamping load."
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "Cartridge bolt / purchased M3 x 25 envelope",
+          "plane": {
+            "$ref": "datum_2_plane",
+            "pointer": ""
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "Cartridge bolt / purchased M3 x 25 envelope_begin"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "Cartridge bolt / purchased M3 x 25 envelope_snap"
+    },
+    {
+      "call": {
+        "arguments": {
+          "ctrl_held": true,
+          "position": {
+            "x": 12.0,
+            "y": 42.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_point"
+      },
+      "id": "Cartridge bolt / purchased M3 x 25 envelope_point"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$ref": "Cartridge bolt / purchased M3 x 25 envelope_point",
+            "pointer": "/entities/0"
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Cartridge bolt / purchased M3 x 25 envelope_point_fix"
+    },
+    {
+      "call": {
+        "arguments": {
+          "anchor": {
+            "x": 12.0,
+            "y": 42.0
+          },
+          "ctrl_held": true,
+          "diameter_mm": 3.0,
+          "edge_hint": {
+            "x": 13.5,
+            "y": 42.0
+          },
+          "mode": "center_diameter"
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked"
+      },
+      "id": "Cartridge bolt / purchased M3 x 25 envelope_profile"
+    },
+    {
+      "call": {
+        "arguments": {
+          "curve": {
+            "$ref": "Cartridge bolt / purchased M3 x 25 envelope_profile",
+            "pointer": "/entities/0"
+          },
+          "point": {
+            "$ref": "Cartridge bolt / purchased M3 x 25 envelope_point",
+            "pointer": "/entities/0"
+          },
+          "type": "center_coincident"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Cartridge bolt / purchased M3 x 25 envelope_locate"
+    },
+    {
+      "duration_ms": 180,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "Cartridge bolt / purchased M3 x 25 envelope_finish"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 25.0,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "new_body",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "Cartridge bolt / purchased M3 x 25 envelope",
+          "taper_angle_deg": 0,
+          "target_body_ids": []
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "Cartridge bolt / purchased M3 x 25 envelope_build"
+    },
+    {
+      "let": {
+        "cartridge_screw_feature": {
+          "$select": {
+            "from": {
+              "$ref": "Cartridge bolt / purchased M3 x 25 envelope_build",
+              "pointer": ""
+            },
+            "path": "/document/features",
+            "pointer": "/id",
+            "take": "last"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "cartridge_screw_body_id": {
+          "$select": {
+            "from": {
+              "$ref": "Cartridge bolt / purchased M3 x 25 envelope_build",
+              "pointer": ""
+            },
+            "path": "/scene/bodies",
+            "pointer": "/id",
+            "take": "one",
+            "where": {
+              "/feature_id": {
+                "$ref": "cartridge_screw_feature",
+                "pointer": ""
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "distance": 32.0,
+          "name": "yz datum at 32 mm",
+          "reference": {
+            "plane": "yz",
+            "type": "origin_plane"
+          }
+        },
+        "group": "solid/reference",
+        "operation": "construction_plane_offset"
+      },
+      "id": "datum_21"
+    },
+    {
+      "let": {
+        "datum_21_plane": {
+          "datum_id": {
+            "$select": {
+              "from": {
+                "$ref": "datum_21",
+                "pointer": ""
+              },
+              "path": "/planes",
+              "pointer": "/datum_id",
+              "take": "one",
+              "where": {
+                "/name": "yz datum at 32 mm"
+              }
+            }
+          },
+          "type": "datum_plane"
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "Cartridge bolt / socket head envelope",
+          "plane": {
+            "$ref": "datum_21_plane",
+            "pointer": ""
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "Cartridge bolt / socket head envelope_begin"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "Cartridge bolt / socket head envelope_snap"
+    },
+    {
+      "call": {
+        "arguments": {
+          "ctrl_held": true,
+          "position": {
+            "x": 12.0,
+            "y": 42.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_point"
+      },
+      "id": "Cartridge bolt / socket head envelope_point"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$ref": "Cartridge bolt / socket head envelope_point",
+            "pointer": "/entities/0"
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Cartridge bolt / socket head envelope_point_fix"
+    },
+    {
+      "call": {
+        "arguments": {
+          "anchor": {
+            "x": 12.0,
+            "y": 42.0
+          },
+          "ctrl_held": true,
+          "diameter_mm": 5.5,
+          "edge_hint": {
+            "x": 14.75,
+            "y": 42.0
+          },
+          "mode": "center_diameter"
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked"
+      },
+      "id": "Cartridge bolt / socket head envelope_profile"
+    },
+    {
+      "call": {
+        "arguments": {
+          "curve": {
+            "$ref": "Cartridge bolt / socket head envelope_profile",
+            "pointer": "/entities/0"
+          },
+          "point": {
+            "$ref": "Cartridge bolt / socket head envelope_point",
+            "pointer": "/entities/0"
+          },
+          "type": "center_coincident"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Cartridge bolt / socket head envelope_locate"
+    },
+    {
+      "duration_ms": 180,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "Cartridge bolt / socket head envelope_finish"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 3.0,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "join",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "Cartridge bolt / socket head envelope",
+          "taper_angle_deg": 0,
+          "target_body_ids": [
+            {
+              "$ref": "cartridge_screw_body_id",
+              "pointer": ""
+            }
+          ]
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "Cartridge bolt / socket head envelope_build"
+    },
+    {
+      "call": {
+        "arguments": {
+          "distance": 8.4,
+          "name": "yz datum at 8.4 mm",
+          "reference": {
+            "plane": "yz",
+            "type": "origin_plane"
+          }
+        },
+        "group": "solid/reference",
+        "operation": "construction_plane_offset"
+      },
+      "id": "datum_22"
+    },
+    {
+      "let": {
+        "datum_22_plane": {
+          "datum_id": {
+            "$select": {
+              "from": {
+                "$ref": "datum_22",
+                "pointer": ""
+              },
+              "path": "/planes",
+              "pointer": "/datum_id",
+              "take": "one",
+              "where": {
+                "/name": "yz datum at 8.4 mm"
+              }
+            }
+          },
+          "type": "datum_plane"
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "Cartridge nut / purchased M3 envelope",
+          "plane": {
+            "$ref": "datum_22_plane",
+            "pointer": ""
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_begin"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_snap"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_deg": 120.00000000000001,
+          "ctrl_held": true,
+          "from": {
+            "x": 15.175426480542942,
+            "y": 42.0
+          },
+          "length_mm": 3.1754264805429417,
+          "to_hint": {
+            "x": 13.587713240271471,
+            "y": 44.75
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_edge_0"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_deg": 180.0,
+          "ctrl_held": true,
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "Cartridge nut / purchased M3 envelope_edge_0",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "length_text": "d1",
+          "to_hint": {
+            "x": 10.41228675972853,
+            "y": 44.75
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_edge_1"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_deg": -120.00000000000004,
+          "ctrl_held": true,
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "Cartridge nut / purchased M3 envelope_edge_1",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "length_text": "d1",
+          "to_hint": {
+            "x": 8.824573519457058,
+            "y": 42.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_edge_2"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_deg": -60.00000000000002,
+          "ctrl_held": true,
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "Cartridge nut / purchased M3 envelope_edge_2",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "length_text": "d1",
+          "to_hint": {
+            "x": 10.412286759728527,
+            "y": 39.25
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_edge_3"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_deg": 0.0,
+          "ctrl_held": true,
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "Cartridge nut / purchased M3 envelope_edge_3",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "length_text": "d1",
+          "to_hint": {
+            "x": 13.587713240271471,
+            "y": 39.25
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_edge_4"
+    },
+    {
+      "call": {
+        "arguments": {
+          "ctrl_held": true,
+          "from": {
+            "$select": {
+              "from": {
+                "$ref": "Cartridge nut / purchased M3 envelope_edge_4",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "to_hint": {
+            "x": 15.175426480542942,
+            "y": 42.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_edge_5"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_active"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_snapshot"
+    },
+    {
+      "call": {
+        "arguments": {
+          "a": {
+            "$select": {
+              "from": {
+                "$ref": "Cartridge nut / purchased M3 envelope_edge_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/end_id",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "b": {
+            "$select": {
+              "from": {
+                "$ref": "Cartridge nut / purchased M3 envelope_edge_0",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/start_id",
+              "take": "last",
+              "where": {
+                "/kind": "line"
+              }
+            }
+          },
+          "type": "coincident"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_close"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "Cartridge nut / purchased M3 envelope_snapshot",
+                "pointer": ""
+              },
+              "path": "/entities",
+              "pointer": "/id",
+              "take": "first",
+              "where": {
+                "/kind": "point"
+              }
+            }
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_locate"
+    },
+    {
+      "duration_ms": 180,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_finish"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 2.4000000000000004,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "new_body",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "Cartridge nut / purchased M3 envelope",
+          "taper_angle_deg": 0,
+          "target_body_ids": []
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "Cartridge nut / purchased M3 envelope_build"
+    },
+    {
+      "let": {
+        "cartridge_nut_feature": {
+          "$select": {
+            "from": {
+              "$ref": "Cartridge nut / purchased M3 envelope_build",
+              "pointer": ""
+            },
+            "path": "/document/features",
+            "pointer": "/id",
+            "take": "last"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "cartridge_nut_body_id": {
+          "$select": {
+            "from": {
+              "$ref": "Cartridge nut / purchased M3 envelope_build",
+              "pointer": ""
+            },
+            "path": "/scene/bodies",
+            "pointer": "/id",
+            "take": "one",
+            "where": {
+              "/feature_id": {
+                "$ref": "cartridge_nut_feature",
+                "pointer": ""
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "distance": 8.3,
+          "name": "yz datum at 8.3 mm",
+          "reference": {
+            "plane": "yz",
+            "type": "origin_plane"
+          }
+        },
+        "group": "solid/reference",
+        "operation": "construction_plane_offset"
+      },
+      "id": "datum_23"
+    },
+    {
+      "let": {
+        "datum_23_plane": {
+          "datum_id": {
+            "$select": {
+              "from": {
+                "$ref": "datum_23",
+                "pointer": ""
+              },
+              "path": "/planes",
+              "pointer": "/datum_id",
+              "take": "one",
+              "where": {
+                "/name": "yz datum at 8.3 mm"
+              }
+            }
+          },
+          "type": "datum_plane"
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "Cartridge nut / simplified thread envelope",
+          "plane": {
+            "$ref": "datum_23_plane",
+            "pointer": ""
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "Cartridge nut / simplified thread envelope_begin"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "Cartridge nut / simplified thread envelope_snap"
+    },
+    {
+      "call": {
+        "arguments": {
+          "ctrl_held": true,
+          "position": {
+            "x": 12.0,
+            "y": 42.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_point"
+      },
+      "id": "Cartridge nut / simplified thread envelope_point"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$ref": "Cartridge nut / simplified thread envelope_point",
+            "pointer": "/entities/0"
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Cartridge nut / simplified thread envelope_point_fix"
+    },
+    {
+      "call": {
+        "arguments": {
+          "anchor": {
+            "x": 12.0,
+            "y": 42.0
+          },
+          "ctrl_held": true,
+          "diameter_mm": 3.0,
+          "edge_hint": {
+            "x": 13.5,
+            "y": 42.0
+          },
+          "mode": "center_diameter"
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked"
+      },
+      "id": "Cartridge nut / simplified thread envelope_profile"
+    },
+    {
+      "call": {
+        "arguments": {
+          "curve": {
+            "$ref": "Cartridge nut / simplified thread envelope_profile",
+            "pointer": "/entities/0"
+          },
+          "point": {
+            "$ref": "Cartridge nut / simplified thread envelope_point",
+            "pointer": "/entities/0"
+          },
+          "type": "center_coincident"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "Cartridge nut / simplified thread envelope_locate"
+    },
+    {
+      "duration_ms": 180,
+      "fit": true,
+      "target": "active_sketch",
+      "view": "current"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "Cartridge nut / simplified thread envelope_finish"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 2.5999999999999996,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "cut",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "Cartridge nut / simplified thread envelope",
+          "taper_angle_deg": 0,
+          "target_body_ids": [
+            {
+              "$ref": "cartridge_nut_body_id",
+              "pointer": ""
+            }
+          ]
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "Cartridge nut / simplified thread envelope_build"
     },
     {
       "chapter": "Real helical engagement and the printable D flat",
@@ -6356,15 +7929,15 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_19"
+      "id": "datum_24"
     },
     {
       "let": {
-        "datum_19_plane": {
+        "datum_24_plane": {
           "datum_id": {
             "$select": {
               "from": {
-                "$ref": "datum_19",
+                "$ref": "datum_24",
                 "pointer": ""
               },
               "path": "/planes",
@@ -6384,7 +7957,7 @@
         "arguments": {
           "name": "Screw / D flat through axis",
           "plane": {
-            "$ref": "datum_19_plane",
+            "$ref": "datum_24_plane",
             "pointer": ""
           }
         },
@@ -7163,6 +8736,174 @@
       }
     },
     {
+      "let": {
+        "cartridge_screw_body": {
+          "$select": {
+            "from": {
+              "$ref": "Cartridge bolt / socket head envelope_build",
+              "pointer": ""
+            },
+            "path": "/scene/bodies",
+            "pointer": "",
+            "take": "one",
+            "where": {
+              "/id": {
+                "$ref": "cartridge_screw_body_id",
+                "pointer": ""
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "absorb_promoted_bodies": true,
+          "body_ids": [
+            {
+              "$ref": "cartridge_screw_body_id",
+              "pointer": ""
+            }
+          ],
+          "name": "Purchased M3 x 25 cartridge bolt"
+        },
+        "group": "assembly/joints",
+        "operation": "assembly_create_component"
+      },
+      "id": "cartridge_screw_component"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "assembly/joints",
+        "operation": "assembly_document"
+      },
+      "id": "cartridge_screw_assembly"
+    },
+    {
+      "let": {
+        "cartridge_screw_occurrence": {
+          "$select": {
+            "from": {
+              "$ref": "cartridge_screw_assembly",
+              "pointer": ""
+            },
+            "path": "/component_structure/occurrences",
+            "pointer": "/id",
+            "take": "one",
+            "where": {
+              "/component_id": {
+                "$ref": "cartridge_screw_component",
+                "pointer": "/id"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "cartridge_screw_anchor_face": {
+          "$select": {
+            "from": {
+              "$ref": "cartridge_screw_body",
+              "pointer": ""
+            },
+            "path": "/faces",
+            "take": "first",
+            "where": {
+              "/plane/normal/0": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "cartridge_nut_body": {
+          "$select": {
+            "from": {
+              "$ref": "Cartridge nut / simplified thread envelope_build",
+              "pointer": ""
+            },
+            "path": "/scene/bodies",
+            "pointer": "",
+            "take": "one",
+            "where": {
+              "/id": {
+                "$ref": "cartridge_nut_body_id",
+                "pointer": ""
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "absorb_promoted_bodies": true,
+          "body_ids": [
+            {
+              "$ref": "cartridge_nut_body_id",
+              "pointer": ""
+            }
+          ],
+          "name": "Purchased M3 cartridge nut"
+        },
+        "group": "assembly/joints",
+        "operation": "assembly_create_component"
+      },
+      "id": "cartridge_nut_component"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "assembly/joints",
+        "operation": "assembly_document"
+      },
+      "id": "cartridge_nut_assembly"
+    },
+    {
+      "let": {
+        "cartridge_nut_occurrence": {
+          "$select": {
+            "from": {
+              "$ref": "cartridge_nut_assembly",
+              "pointer": ""
+            },
+            "path": "/component_structure/occurrences",
+            "pointer": "/id",
+            "take": "one",
+            "where": {
+              "/component_id": {
+                "$ref": "cartridge_nut_component",
+                "pointer": "/id"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "cartridge_nut_anchor_face": {
+          "$select": {
+            "from": {
+              "$ref": "cartridge_nut_body",
+              "pointer": ""
+            },
+            "path": "/faces",
+            "take": "first",
+            "where": {
+              "/plane/normal/0": 1
+            }
+          }
+        }
+      }
+    },
+    {
       "call": {
         "arguments": {
           "grounded": true,
@@ -7465,6 +9206,296 @@
         "operation": "assembly_create_joint"
       },
       "id": "keeper_in_jaw"
+    },
+    {
+      "call": {
+        "arguments": {
+          "advanced": {
+            "connector_a_occurrence_id": {
+              "$ref": "frame_occurrence",
+              "pointer": ""
+            },
+            "connector_a_twist_deg": 0.0,
+            "connector_b_occurrence_id": {
+              "$ref": "cartridge_screw_occurrence",
+              "pointer": ""
+            },
+            "screw_pitch_mm_per_revolution": 2.5
+          },
+          "angle_offset_deg": 0,
+          "connector_a": {
+            "body_id": {
+              "$ref": "frame_body_id",
+              "pointer": ""
+            },
+            "face_id": {
+              "$select": {
+                "from": {
+                  "$ref": "frame_body",
+                  "pointer": ""
+                },
+                "path": "/faces",
+                "pointer": "/id",
+                "take": "one",
+                "where": {
+                  "/key": {
+                    "$ref": "frame_anchor_face",
+                    "pointer": "/key"
+                  }
+                }
+              }
+            },
+            "face_key": {
+              "$ref": "frame_anchor_face",
+              "pointer": "/key"
+            },
+            "frame": {
+              "origin": [
+                20.0,
+                12.0,
+                42.0
+              ],
+              "primary_axis": [
+                1,
+                0,
+                0
+              ],
+              "secondary_axis": [
+                0,
+                1,
+                0
+              ]
+            },
+            "kind": "planar_face",
+            "source_surface_frame": {
+              "origin": {
+                "$ref": "frame_anchor_face",
+                "pointer": "/plane/origin"
+              },
+              "primary_axis": {
+                "$ref": "frame_anchor_face",
+                "pointer": "/plane/normal"
+              },
+              "secondary_axis": {
+                "$ref": "frame_anchor_face",
+                "pointer": "/plane/u"
+              }
+            }
+          },
+          "connector_b": {
+            "body_id": {
+              "$ref": "cartridge_screw_body_id",
+              "pointer": ""
+            },
+            "face_id": {
+              "$select": {
+                "from": {
+                  "$ref": "cartridge_screw_body",
+                  "pointer": ""
+                },
+                "path": "/faces",
+                "pointer": "/id",
+                "take": "one",
+                "where": {
+                  "/key": {
+                    "$ref": "cartridge_screw_anchor_face",
+                    "pointer": "/key"
+                  }
+                }
+              }
+            },
+            "face_key": {
+              "$ref": "cartridge_screw_anchor_face",
+              "pointer": "/key"
+            },
+            "frame": {
+              "origin": [
+                20.0,
+                12.0,
+                42.0
+              ],
+              "primary_axis": [
+                1,
+                0,
+                0
+              ],
+              "secondary_axis": [
+                0,
+                1,
+                0
+              ]
+            },
+            "kind": "planar_face",
+            "source_surface_frame": {
+              "origin": {
+                "$ref": "cartridge_screw_anchor_face",
+                "pointer": "/plane/origin"
+              },
+              "primary_axis": {
+                "$ref": "cartridge_screw_anchor_face",
+                "pointer": "/plane/normal"
+              },
+              "secondary_axis": {
+                "$ref": "cartridge_screw_anchor_face",
+                "pointer": "/plane/u"
+              }
+            }
+          },
+          "flipped": true,
+          "kind": "rigid",
+          "linear_limits": null,
+          "linear_offset_mm": 0,
+          "name": "cartridge_screw_in_housing"
+        },
+        "group": "assembly/joints",
+        "operation": "assembly_create_joint"
+      },
+      "id": "cartridge_screw_in_housing"
+    },
+    {
+      "call": {
+        "arguments": {
+          "advanced": {
+            "connector_a_occurrence_id": {
+              "$ref": "frame_occurrence",
+              "pointer": ""
+            },
+            "connector_a_twist_deg": 0.0,
+            "connector_b_occurrence_id": {
+              "$ref": "cartridge_nut_occurrence",
+              "pointer": ""
+            },
+            "screw_pitch_mm_per_revolution": 2.5
+          },
+          "angle_offset_deg": 0,
+          "connector_a": {
+            "body_id": {
+              "$ref": "frame_body_id",
+              "pointer": ""
+            },
+            "face_id": {
+              "$select": {
+                "from": {
+                  "$ref": "frame_body",
+                  "pointer": ""
+                },
+                "path": "/faces",
+                "pointer": "/id",
+                "take": "one",
+                "where": {
+                  "/key": {
+                    "$ref": "frame_anchor_face",
+                    "pointer": "/key"
+                  }
+                }
+              }
+            },
+            "face_key": {
+              "$ref": "frame_anchor_face",
+              "pointer": "/key"
+            },
+            "frame": {
+              "origin": [
+                20.0,
+                12.0,
+                42.0
+              ],
+              "primary_axis": [
+                1,
+                0,
+                0
+              ],
+              "secondary_axis": [
+                0,
+                1,
+                0
+              ]
+            },
+            "kind": "planar_face",
+            "source_surface_frame": {
+              "origin": {
+                "$ref": "frame_anchor_face",
+                "pointer": "/plane/origin"
+              },
+              "primary_axis": {
+                "$ref": "frame_anchor_face",
+                "pointer": "/plane/normal"
+              },
+              "secondary_axis": {
+                "$ref": "frame_anchor_face",
+                "pointer": "/plane/u"
+              }
+            }
+          },
+          "connector_b": {
+            "body_id": {
+              "$ref": "cartridge_nut_body_id",
+              "pointer": ""
+            },
+            "face_id": {
+              "$select": {
+                "from": {
+                  "$ref": "cartridge_nut_body",
+                  "pointer": ""
+                },
+                "path": "/faces",
+                "pointer": "/id",
+                "take": "one",
+                "where": {
+                  "/key": {
+                    "$ref": "cartridge_nut_anchor_face",
+                    "pointer": "/key"
+                  }
+                }
+              }
+            },
+            "face_key": {
+              "$ref": "cartridge_nut_anchor_face",
+              "pointer": "/key"
+            },
+            "frame": {
+              "origin": [
+                20.0,
+                12.0,
+                42.0
+              ],
+              "primary_axis": [
+                1,
+                0,
+                0
+              ],
+              "secondary_axis": [
+                0,
+                1,
+                0
+              ]
+            },
+            "kind": "planar_face",
+            "source_surface_frame": {
+              "origin": {
+                "$ref": "cartridge_nut_anchor_face",
+                "pointer": "/plane/origin"
+              },
+              "primary_axis": {
+                "$ref": "cartridge_nut_anchor_face",
+                "pointer": "/plane/normal"
+              },
+              "secondary_axis": {
+                "$ref": "cartridge_nut_anchor_face",
+                "pointer": "/plane/u"
+              }
+            }
+          },
+          "flipped": true,
+          "kind": "rigid",
+          "linear_limits": null,
+          "linear_offset_mm": 0,
+          "name": "cartridge_nut_in_housing"
+        },
+        "group": "assembly/joints",
+        "operation": "assembly_create_joint"
+      },
+      "id": "cartridge_nut_in_housing"
     },
     {
       "call": {
@@ -8220,7 +10251,7 @@
     {
       "chapter": "Print layout and assembly order",
       "duration_ms": 1800,
-      "note": "The screw prints on its through-axis flat. Stand the nut on its end, and put the jaw and keeper on their broad end faces. Five separated parts fit within 204 by 166 mm, including the conservative 235.5 by 256 mm dual-tool bed. Insert the nut, turn in the screw, slide on the jaw and secure the keeper with its M3 hardware. The frame's 45-degree bore roof preserves the circular rotating envelope without a horizontal bridge."
+      "note": "The screw prints on its through-axis flat. Stand the nut on its end, and put the jaw and keeper on their broad end faces. Five separated parts fit within 204 by 166 mm, including the conservative 235.5 by 256 mm dual-tool bed. Insert and cross-bolt the wear nut, turn in the D screw, slide on the jaw and secure the keeper with its M3 hardware. The frame's 45-degree bore roof preserves the circular rotating envelope without a horizontal bridge; the small 3.4 mm cross-hole needs a qualified short bridge."
     },
     {
       "call": {
@@ -9371,7 +11402,7 @@
               1.0
             ],
             "kind": "custom",
-            "name": "Assembly / seven components",
+            "name": "Assembly / nine components",
             "position": [
               455.0,
               95.0
@@ -9417,7 +11448,7 @@
             "pointer": "/id",
             "take": "first",
             "where": {
-              "/name": "Assembly / seven components"
+              "/name": "Assembly / nine components"
             }
           }
         }
@@ -9837,6 +11868,30 @@
               "material": "Purchased",
               "part_number": "VISE-retainer_nut",
               "quantity": 1.0
+            },
+            {
+              "body_id": {
+                "$ref": "cartridge_screw_body_id",
+                "pointer": ""
+              },
+              "description": "M3 x 25 cartridge screw",
+              "finish": "Verify supplier drawing",
+              "item_number": "8",
+              "material": "Purchased",
+              "part_number": "VISE-cartridge_screw",
+              "quantity": 1.0
+            },
+            {
+              "body_id": {
+                "$ref": "cartridge_nut_body_id",
+                "pointer": ""
+              },
+              "description": "M3 cartridge hex nut",
+              "finish": "Verify supplier drawing",
+              "item_number": "9",
+              "material": "Purchased",
+              "part_number": "VISE-cartridge_nut",
+              "quantity": 1.0
             }
           ],
           "position": [
@@ -9882,7 +11937,7 @@
             "$ref": "vise_assembly_sheet_id",
             "pointer": ""
           },
-          "text": "2: Insert the M3 nut into the jaw from below. Place the wear nut in its housing; turn in the D screw."
+          "text": "2: Insert the M3 nuts into the jaw and housing pockets. Lower the wear cartridge; fit its M3 x 25 cross-bolt before turning in the D screw."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -9900,7 +11955,7 @@
             "$ref": "vise_assembly_sheet_id",
             "pointer": ""
           },
-          "text": "3: Slide the jaw onto the rails and over the screw head. Lower the keeper over the neck; fit the M3 screw from above."
+          "text": "3: Slide the jaw onto the rails and over the screw head. Lower the keeper over the neck; fit its M3 x 40 screw from above."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -9918,7 +11973,7 @@
             "$ref": "vise_assembly_sheet_id",
             "pointer": ""
           },
-          "text": "4: Check the full travel by hand before loading. Keep hands away from the jaw pinch region; use adult guidance."
+          "text": "4: Check both retainers and the full travel by hand before loading. Keep hands away from the jaw pinch region; use adult guidance."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -9954,7 +12009,7 @@
             "$ref": "vise_assembly_sheet_id",
             "pointer": ""
           },
-          "text": "SERVICE: Remove workpiece and unload. Remove the top M3 screw, lift keeper, slide jaw off, then unscrew the drive and lift the wear nut."
+          "text": "SERVICE: Unload. Remove the top keeper screw, lift keeper, slide jaw off and unscrew the drive. Remove the cartridge cross-bolt before lifting the nut."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -11157,6 +13212,201 @@
                           "$ref": "frame_body_id",
                           "pointer": ""
                         },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/closed",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_id": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "fallback_center": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/center_model",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "fallback_normal": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/normal_model",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "fallback_radius": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/radius",
+                "take": "first",
+                "where": {}
+              }
+            }
+          },
+          "leader_angle_deg": 145.0,
+          "mode": "diameter",
+          "offset": 14.0,
+          "precision": 2,
+          "sheet_id": {
+            "$ref": "vise_frame_sheet_id",
+            "pointer": ""
+          },
+          "view_id": {
+            "$ref": "vise_frame_end_view_id",
+            "pointer": ""
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_radial_dimension"
+      },
+      "id": "vise_frame_cartridge_cross_hole_dimension"
+    },
+    {
+      "call": {
+        "arguments": {
+          "feature": {
+            "body_id": {
+              "$ref": "frame_body_id",
+              "pointer": ""
+            },
+            "closed": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_frame_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "frame_body_id",
+                          "pointer": ""
+                        },
                         "/radius": 10.6
                       }
                     }
@@ -11654,6 +13904,24 @@
         "operation": "drawing_add_note"
       },
       "id": "vise_frame_note_3"
+    },
+    {
+      "call": {
+        "arguments": {
+          "position": [
+            20.0,
+            239.0
+          ],
+          "sheet_id": {
+            "$ref": "vise_frame_sheet_id",
+            "pointer": ""
+          },
+          "text": "Cartridge retention: load the M3 hex nut into the rear housing pocket; install the M3 x 25 bolt from the opposite face."
+        },
+        "group": "drawing/annotate",
+        "operation": "drawing_add_note"
+      },
+      "id": "vise_frame_note_4"
     },
     {
       "call": {
@@ -14707,6 +16975,201 @@
     {
       "call": {
         "arguments": {
+          "feature": {
+            "body_id": {
+              "$ref": "nut_body_id",
+              "pointer": ""
+            },
+            "closed": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/closed",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_id": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "fallback_center": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/center_model",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "fallback_normal": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/normal_model",
+                "take": "first",
+                "where": {}
+              }
+            },
+            "fallback_radius": {
+              "$select": {
+                "from": [
+                  {
+                    "$select": {
+                      "from": {
+                        "$ref": "vise_nut_end_projection",
+                        "pointer": ""
+                      },
+                      "path": "/circles",
+                      "pointer": "",
+                      "take": "first",
+                      "where": {
+                        "/body_id": {
+                          "$ref": "nut_body_id",
+                          "pointer": ""
+                        },
+                        "/radius": 1.7
+                      }
+                    }
+                  }
+                ],
+                "path": "",
+                "pointer": "/radius",
+                "take": "first",
+                "where": {}
+              }
+            }
+          },
+          "leader_angle_deg": 35.0,
+          "mode": "diameter",
+          "offset": 14.0,
+          "precision": 2,
+          "sheet_id": {
+            "$ref": "vise_nut_sheet_id",
+            "pointer": ""
+          },
+          "view_id": {
+            "$ref": "vise_nut_end_view_id",
+            "pointer": ""
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_radial_dimension"
+      },
+      "id": "vise_nut_cartridge_cross_hole_dimension"
+    },
+    {
+      "call": {
+        "arguments": {
           "sheet_id": {
             "$ref": "vise_nut_sheet_id",
             "pointer": ""
@@ -15270,7 +17733,7 @@
             "$ref": "vise_nut_sheet_id",
             "pointer": ""
           },
-          "text": "Sixteen millimetres of axial engagement. Housing prevents rotation; replace the cartridge when worn."
+          "text": "16 mm engagement. Housing prevents rotation; the M3 cross-bolt prevents lift. Unload and remove the bolt before replacing the nut."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
