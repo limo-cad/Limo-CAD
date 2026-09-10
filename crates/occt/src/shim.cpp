@@ -2660,7 +2660,6 @@ FfiInterferenceResult Kernel::exact_interference(
       rotation_b_x, rotation_b_y, rotation_b_z, rotation_b_w);
 
   BRepExtrema_DistShapeShape distance(a, b);
-  distance.Perform();
   if (!distance.IsDone()) {
     throw std::runtime_error("OCCT could not evaluate exact body clearance");
   }
@@ -2677,8 +2676,13 @@ FfiInterferenceResult Kernel::exact_interference(
     output.closest_point_b_z = point_b.Z();
   }
 
+  // The shape-taking constructors already compute their result. A confirmed
+  // positive separation also proves that a boolean intersection is empty;
+  // containment remains a boolean query even if surface clearance is positive.
+  if (!distance.InnerSolution() && output.minimum_clearance_mm > 1.0e-7) {
+    return output;
+  }
   BRepAlgoAPI_Common common(a, b, Message_ProgressRange());
-  common.Build(Message_ProgressRange());
   if (!common.IsDone()) {
     throw std::runtime_error("OCCT could not evaluate exact body overlap");
   }
