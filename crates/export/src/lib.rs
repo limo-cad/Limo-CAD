@@ -5,6 +5,7 @@
 //! writer ([`ExportFacade`]).
 
 mod facade;
+mod instances;
 mod materials;
 mod mesh_weld;
 mod pip_demo;
@@ -17,6 +18,7 @@ use nbcad_solid::KernelBodyDto;
 use serde::{Deserialize, Serialize};
 
 pub use facade::ExportFacade;
+pub use instances::{place_mesh_instances, MeshInstance};
 pub use materials::{
     brands, catalog_json, find_preset, material_catalog, presets_for_brand, MaterialPreset,
 };

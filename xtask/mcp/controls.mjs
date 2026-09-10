@@ -24,6 +24,12 @@ try {
  if (option('--model')) await mutate('cad_load_project_model',{model_json:await readFile(option('--model'),'utf8')});
  const original=await c.call('cad_project_model');
  const beforeGeneration=await generation();
+ const home=await c.call('cad_interface',{action:'view',view:'isometric',fit:false});
+ const fitted=await c.call('cad_interface',{action:'view',view:'current',fit:true});
+ assert.equal(home.status,'applied');assert.equal(fitted.status,'applied');
+ for(const key of ['position','target']) for(let axis=0;axis<3;axis++)
+  assert(Math.abs(home.camera[key][axis]-fitted.camera[key][axis])<1e-6,'ISO must already frame the visible geometry without a second Fit');
+
  const directions={top:[0,0,1],bottom:[0,0,-1],front:[0,-1,0],back:[0,1,0],left:[-1,0,0],right:[1,0,0]};
  for (const view of ['current',...Object.keys(directions),'isometric']) {
   const result=await c.call('cad_interface',{action:'view',view,fit:view!=='current'});

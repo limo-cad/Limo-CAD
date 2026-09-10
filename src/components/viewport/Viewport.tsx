@@ -11599,7 +11599,7 @@ export function Viewport() {
       camera.lookAt(controls.target);
     };
 
-    const fitVisibleGeometry = () => {
+    const fitVisibleGeometry = (direction?: CAD.Vector3, up?: CAD.Vector3) => {
       const bounds = getVisibleBounds();
       if (bounds.isEmpty()) {
         animateCamera(HOME_POSITION.clone(), HOME_TARGET.clone(), WORLD_UP.clone(), 350);
@@ -11611,12 +11611,12 @@ export function Viewport() {
       const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
       const halfFov = Math.max(CAD.MathUtils.degToRad(5), Math.min(verticalFov, horizontalFov) / 2);
       const distance = Math.min(10000, Math.max(2, (radius / Math.sin(halfFov)) * 1.15));
-      const viewDirection = camera.position.clone().sub(controls.target).normalize();
+      const viewDirection = direction?.clone() ?? camera.position.clone().sub(controls.target).normalize();
       if (viewDirection.lengthSq() < 1e-12) viewDirection.set(1, -1, 1).normalize();
       animateCamera(
         sphere.center.clone().addScaledVector(viewDirection, distance),
         sphere.center,
-        camera.up.clone(),
+        up?.clone() ?? camera.up.clone(),
         300,
       );
     };
@@ -11827,7 +11827,7 @@ export function Viewport() {
         );
       },
       home: () => {
-        animateCamera(HOME_POSITION.clone(), HOME_TARGET.clone(), WORLD_UP.clone(), 350);
+        fitVisibleGeometry(HOME_POSITION.clone().sub(HOME_TARGET).normalize(), WORLD_UP);
       },
       fit: fitVisibleGeometry,
       orbitBy: (dx, dy) => {

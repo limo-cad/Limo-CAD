@@ -764,6 +764,23 @@ impl CadServer {
                 mesh.name = body.name.clone();
             }
         }
+        let solution = self.manager.assembly_solution();
+        if !solution.solved {
+            return Err("Resolve assembly errors before mesh export.".into());
+        }
+        let instances: Vec<_> = solution
+            .instance_body_poses
+            .iter()
+            .map(|p| nbcad_export::MeshInstance {
+                body_id: p.body_id,
+                occurrence_id: p.occurrence_id.0,
+                translation: p.translation,
+                rotation: p.rotation,
+                visible: p.visible,
+            })
+            .collect();
+        let meshes =
+            nbcad_export::place_mesh_instances(&meshes, &instances).map_err(|e| e.to_string())?;
         let bytes = if name == "solid_export_stl" {
             nbcad_export::write_stl(&meshes).map_err(|error| error.to_string())?
         } else {
@@ -5207,6 +5224,49 @@ mod tests {
             positions,
             indices,
         }
+    }
+
+    #[test]
+    fn assembly_mesh_export_retains_repeated_occurrences_and_placement() {
+        let (mut server, _) = mcp_box();
+        let doc = server.call_tool("assembly_document", json!({})).unwrap();
+        let component = doc["component_structure"]["occurrences"][0]["component_id"].clone();
+        let added = server
+            .call_tool(
+                "assembly_create_occurrence",
+                json!({"component_id":component,"name":"Second"}),
+            )
+            .unwrap();
+        server.call_tool("assembly_set_occurrence_pose", json!({"occurrence_id":added["id"],"local_pose":{"translation":[100.,0.,0.],"rotation":[0.,0.,0.,1.]}})).unwrap();
+        let before = server.call_tool("cad_project_model", json!({})).unwrap();
+        let exported = server
+            .call_tool("solid_export_3mf", json!({"slicer_target":"standard"}))
+            .unwrap();
+        let bytes = BASE64
+            .decode(exported["bytes_base64"].as_str().unwrap())
+            .unwrap();
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut xml = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("3D/3dmodel.model").unwrap(), &mut xml)
+            .unwrap();
+        assert_eq!(xml.matches("<mesh>").count(), 2);
+        let meshes: Vec<_> = xml
+            .split("<mesh>")
+            .skip(1)
+            .map(|part| parse_3mf_model_mesh(part.split("</mesh>").next().unwrap()))
+            .collect();
+        for mesh in &meshes {
+            nbcad_export::validate_3mf_model_mesh(mesh).unwrap();
+        }
+        let max_x = meshes
+            .iter()
+            .flat_map(|m| m.positions.chunks_exact(3).map(|p| p[0]))
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert_eq!(max_x, 110.);
+        assert_eq!(
+            server.call_tool("cad_project_model", json!({})).unwrap(),
+            before
+        );
     }
 
     #[test]

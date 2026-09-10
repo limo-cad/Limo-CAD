@@ -87,3 +87,16 @@ existing MCP CI jobs, without a new all-tools coverage gate.
 
 See [design principles](parametric-design-principles.md) for research sources and
 the modeling practices behind these checks.
+
+## Mesh export
+
+Native desktop and MCP 3MF/STL export use visible solved occurrences, so this
+bench exports 36 positioned meshes rather than 19 overlapping part definitions.
+Body selection exports the visible instances of those source bodies. Source
+meshes are welded before placement; manifold validation remains enabled for 3MF.
+Material lookup retains the original body identity. Unsolved assemblies reject
+export instead of silently emitting an incorrect layout.
+
+The bench remains full size in millimetres. Scaling or arranging it for a printer
+is separate from assembly export; no automatic bed scaling is applied. Keep the
+native .nbcad project for editing; 3MF is a secondary manufacturing output.

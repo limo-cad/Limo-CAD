@@ -729,6 +729,23 @@ impl AppState {
                 mesh.name = body.name.clone();
             }
         }
+        let solution = inner.manager.assembly_solution();
+        if !solution.solved {
+            return Err("Resolve assembly errors before mesh export.".into());
+        }
+        let instances: Vec<_> = solution
+            .instance_body_poses
+            .iter()
+            .map(|p| nbcad_export::MeshInstance {
+                body_id: p.body_id,
+                occurrence_id: p.occurrence_id.0,
+                translation: p.translation,
+                rotation: p.rotation,
+                visible: p.visible,
+            })
+            .collect();
+        let meshes =
+            nbcad_export::place_mesh_instances(&meshes, &instances).map_err(|e| e.to_string())?;
         nbcad_export::write_stl(&meshes).map_err(|error| error.to_string())
     }
 
@@ -754,6 +771,23 @@ impl AppState {
                 mesh.name = body.name.clone();
             }
         }
+        let solution = inner.manager.assembly_solution();
+        if !solution.solved {
+            return Err("Resolve assembly errors before mesh export.".into());
+        }
+        let instances: Vec<_> = solution
+            .instance_body_poses
+            .iter()
+            .map(|p| nbcad_export::MeshInstance {
+                body_id: p.body_id,
+                occurrence_id: p.occurrence_id.0,
+                translation: p.translation,
+                rotation: p.rotation,
+                visible: p.visible,
+            })
+            .collect();
+        let meshes =
+            nbcad_export::place_mesh_instances(&meshes, &instances).map_err(|e| e.to_string())?;
         nbcad_export::ExportFacade::export_3mf(&meshes, &appearances, &request)
             .map_err(|error| error.to_string())
     }
