@@ -6,7 +6,7 @@ use std::time::Duration;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use nbcad_core::BodyId;
 use nbcad_export::MeshExportRequest;
-use nbcad_mcp_mutate;
+use nbcad_mcp_mutate::{self, PayloadKind as Payload};
 use nbcad_occt::OcctKernel;
 use nbcad_sketch::{host, SketchManager};
 use nbcad_solid::{CommitKernelRequest, RecomputePlanDto, StepExportRequest};
@@ -24,17 +24,6 @@ use disclosure::{
 };
 
 const LATEST_PROTOCOL: &str = "2025-06-18";
-
-#[derive(Clone, Copy)]
-enum Payload {
-    Empty,
-    Object,
-    Field(&'static str),
-    DatumSource(&'static str),
-    EditDatumSource(&'static str),
-    BodyFeature(&'static str),
-    EditBodyFeature(&'static str),
-}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Execution {
@@ -202,60 +191,7 @@ impl CadServer {
             self.disclosure.re_promote(pack);
         }
 
-        let payload = match payload_kind {
-            Payload::Empty => String::new(),
-            Payload::Object => serde_json::to_string(&arguments)
-                .map_err(|error| format!("could not encode arguments: {error}"))?,
-            Payload::Field(field) => {
-                let value = arguments
-                    .get(field)
-                    .ok_or_else(|| format!("missing required argument '{field}'"))?;
-                serde_json::to_string(value)
-                    .map_err(|error| format!("could not encode '{field}': {error}"))?
-            }
-            Payload::DatumSource(kind) => {
-                let mut source = arguments
-                    .as_object()
-                    .cloned()
-                    .ok_or_else(|| "tool arguments must be an object".to_string())?;
-                source.insert("type".to_string(), Value::String(kind.to_string()));
-                serde_json::to_string(&json!({ "source": source }))
-                    .map_err(|error| format!("could not encode construction plane: {error}"))?
-            }
-            Payload::EditDatumSource(kind) => {
-                let mut fields = arguments
-                    .as_object()
-                    .cloned()
-                    .ok_or_else(|| "tool arguments must be an object".to_string())?;
-                let feature_id = fields
-                    .remove("feature_id")
-                    .ok_or_else(|| "missing required argument 'feature_id'".to_string())?;
-                fields.insert("type".to_string(), Value::String(kind.to_string()));
-                serde_json::to_string(&json!({
-                    "feature_id": feature_id,
-                    "plane": { "source": fields }
-                }))
-                .map_err(|error| format!("could not encode construction plane edit: {error}"))?
-            }
-            Payload::BodyFeature(kind) => serde_json::to_string(&json!({
-                "type": kind,
-                "request": arguments
-            }))
-            .map_err(|error| format!("could not encode body feature: {error}"))?,
-            Payload::EditBodyFeature(kind) => {
-                let feature_id = arguments
-                    .get("feature_id")
-                    .ok_or_else(|| "missing required argument 'feature_id'".to_string())?;
-                let request = arguments
-                    .get("request")
-                    .ok_or_else(|| "missing required argument 'request'".to_string())?;
-                serde_json::to_string(&json!({
-                    "feature_id": feature_id,
-                    "feature": { "type": kind, "request": request }
-                }))
-                .map_err(|error| format!("could not encode body feature edit: {error}"))?
-            }
-        };
+        let payload = nbcad_mcp_mutate::encode_payload(payload_kind, &arguments)?;
 
         let mut value = if let Some(session_id) = self
             .attached_document_id
@@ -300,6 +236,20 @@ impl CadServer {
                 })
             } else if name == "solid_export_stl" || name == "solid_export_3mf" {
                 self.export_mesh(name, arguments)?
+            } else if name == "assembly_interference_check" {
+                let request = serde_json::from_value(arguments)
+                    .map_err(|e| format!("interference request: {e}"))?;
+                let solution = self.manager.assembly_solution();
+                if !solution.solved {
+                    return Err("Cannot inspect interference in an unsolved assembly".into());
+                }
+                serde_json::to_value(nbcad_occt::exact_interference_report(
+                    &self.kernel,
+                    &self.manager.solid_scene(),
+                    &solution.instance_body_poses,
+                    &request,
+                )?)
+                .map_err(|e| e.to_string())?
             } else if name == "solid_tessellate" {
                 self.tessellate_tool(arguments)?
             } else if name == "solid_export_preflight" {
@@ -1097,6 +1047,7 @@ fn is_read_safe_while_attached(name: &str) -> bool {
             | "solid_scene"
             | "assembly_document"
             | "assembly_solution"
+            | "assembly_interference_check"
             | "solid_tessellate"
             | "solid_extrude_definitions"
             | "solid_revolve_definitions"
@@ -1585,6 +1536,7 @@ fn tool_specs() -> Vec<ToolSpec> {
     );
     let offset_plane = object_schema(
         json!({
+            "name": {"type":"string","minLength":1},
             "reference": plane.clone(),
             "distance": { "type": "number" }
         }),
@@ -1592,6 +1544,7 @@ fn tool_specs() -> Vec<ToolSpec> {
     );
     let midplane = object_schema(
         json!({
+            "name": {"type":"string","minLength":1},
             "first": plane.clone(),
             "second": plane.clone()
         }),
@@ -1599,6 +1552,7 @@ fn tool_specs() -> Vec<ToolSpec> {
     );
     let plane_at_angle = object_schema(
         json!({
+            "name": {"type":"string","minLength":1},
             "reference": plane,
             "body_id": { "type": "integer", "minimum": 1 },
             "edge_id": { "type": "integer", "minimum": 1 },
@@ -1771,6 +1725,7 @@ fn tool_specs() -> Vec<ToolSpec> {
             object_schema(
                 json!({
                     "plane": plane,
+                    "name": {"type":"string","minLength":1,"description":"Unique design-intent name, retained in history, sketch references, and native save/reopen."},
                     "face_origin": {
                         "type": "string",
                         "enum": ["face_center", "global_origin_projection"],
@@ -2913,6 +2868,12 @@ fn tool_specs() -> Vec<ToolSpec> {
             "assembly_solution",
             Payload::Empty,
             empty_schema(),
+        ),
+        ToolSpec::direct(
+            "assembly_interference_check", "Inspect exact assembly interference",
+            "Check retained native solids at solved occurrence poses. Reports exact overlap volumes and clearances after broad-phase culling. Empty occurrence_ids checks all visible occurrences; touching faces are not volumetric interference.",
+            "assembly_interference_check", Payload::Object,
+            object_schema(json!({"occurrence_ids":{"type":"array","items":{"type":"integer","minimum":1},"uniqueItems":true},"clearance_threshold_mm":{"type":"number","minimum":0}}), &[]),
         ),
         ToolSpec::direct(
             "assembly_create_component",
@@ -5346,6 +5307,94 @@ mod tests {
             server.call_tool("cad_project_model", json!({})).unwrap(),
             before
         );
+    }
+
+    #[test]
+    fn exact_interference_distinguishes_overlap_touch_and_clearance() {
+        let (mut server, _) = mcp_box();
+        let document = server.call_tool("assembly_document", json!({})).unwrap();
+        let component = document["component_structure"]["occurrences"][0]["component_id"].clone();
+        let added = server
+            .call_tool(
+                "assembly_create_occurrence",
+                json!({"component_id":component,"name":"Inspection fixture"}),
+            )
+            .unwrap();
+        for (x, overlap, clearance) in [(10., 2000., 0.), (20., 0., 0.), (21., 0., 1.)] {
+            server.call_tool("assembly_set_occurrence_pose", json!({"occurrence_id":added["id"],"local_pose":{"translation":[x,0.,0.],"rotation":[0.,0.,0.,1.]}})).unwrap();
+            let before = server.call_tool("cad_project_model", json!({})).unwrap();
+            let report = server
+                .call_tool(
+                    "assembly_interference_check",
+                    json!({"clearance_threshold_mm":2.}),
+                )
+                .unwrap();
+            assert_eq!(report["exact"], true);
+            let pairs = report["pairs"].as_array().unwrap();
+            assert_eq!(pairs.len(), 1);
+            assert!((pairs[0]["overlap_volume_mm3"].as_f64().unwrap() - overlap).abs() < 1e-6);
+            assert!((pairs[0]["minimum_clearance_mm"].as_f64().unwrap() - clearance).abs() < 1e-6);
+            assert_eq!(pairs[0]["interfering"], overlap > 0.);
+            assert_eq!(
+                server.call_tool("cad_project_model", json!({})).unwrap(),
+                before
+            );
+        }
+        assert!(server
+            .call_tool(
+                "assembly_interference_check",
+                json!({"clearance_threshold_mm":-1.})
+            )
+            .is_err());
+        assert!(is_read_safe_while_attached("assembly_interference_check"));
+        assert!(server
+            .call_tool(
+                "assembly_interference_check",
+                json!({"occurrence_ids":[999999]})
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn named_sketches_and_datums_preserve_references_and_reject_duplicates() {
+        let mut server = CadServer::new().unwrap();
+        let plane = server.call_tool("construction_plane_offset",json!({"name":"Stock / A face","reference":{"type":"origin_plane","plane":"xy"},"distance":0.})).unwrap();
+        assert_eq!(plane["planes"][0]["name"], "Stock / A face");
+        let reference = json!({"type":"datum_plane","datum_id":plane["planes"][0]["datum_id"]});
+        let sketch = server
+            .call_tool("sketch_begin", json!({"name":"Sketch2","plane":reference}))
+            .unwrap();
+        assert_eq!(sketch["name"], "Sketch2");
+        server.call_tool("sketch_finish", json!({})).unwrap();
+        let before = server.call_tool("cad_project_model", json!({})).unwrap();
+        for name in ["Sketch2", "  ", "bad\nname"] {
+            assert!(server
+                .call_tool("sketch_begin", json!({"name":name,"plane":reference}))
+                .is_err());
+            assert_eq!(
+                server.call_tool("cad_project_model", json!({})).unwrap(),
+                before
+            );
+        }
+        assert!(server.call_tool("construction_plane_offset",json!({"name":"Stock / A face","reference":{"type":"origin_plane","plane":"xy"},"distance":5.})).is_err());
+        assert_eq!(
+            server.call_tool("cad_project_model", json!({})).unwrap(),
+            before
+        );
+        let automatic = server
+            .call_tool("sketch_begin", json!({"plane":reference}))
+            .unwrap();
+        assert_eq!(automatic["name"], "Sketch3");
+        server.call_tool("sketch_finish", json!({})).unwrap();
+        let model = server.call_tool("cad_project_model", json!({})).unwrap();
+        let mut restored = CadServer::new().unwrap();
+        restored
+            .call_tool("cad_load_project_model", json!({"model_json":model}))
+            .unwrap();
+        let edit = restored
+            .call_tool("sketch_edit", json!({"name":"Sketch2"}))
+            .unwrap();
+        assert_eq!(edit["plane"], reference);
     }
 
     #[test]

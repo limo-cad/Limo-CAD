@@ -206,6 +206,7 @@ fn planar_face_sketch_origin_can_use_face_center_or_global_projection() {
     let centered = manager
         .begin_sketch_with_options(BeginSketchRequest {
             plane: PlaneRef::PlanarFace { face_id },
+            name: None,
             face_origin: FaceSketchOrigin::FaceCenter,
         })
         .unwrap();
@@ -222,6 +223,7 @@ fn planar_face_sketch_origin_can_use_face_center_or_global_projection() {
     let projected = manager
         .begin_sketch_with_options(BeginSketchRequest {
             plane: PlaneRef::PlanarFace { face_id },
+            name: None,
             face_origin: FaceSketchOrigin::GlobalOriginProjection,
         })
         .unwrap();

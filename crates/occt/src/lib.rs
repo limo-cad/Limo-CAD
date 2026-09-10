@@ -4,6 +4,9 @@
 //! shell. Keeping the feature off lets the host-neutral workspace and WASM
 //! target build on machines that do not have the OCCT SDK installed.
 
+mod interference;
+pub use interference::{exact_interference_report, exact_pair_result};
+
 use std::collections::HashSet;
 
 use nbcad_core::{BodyId, EdgeId};

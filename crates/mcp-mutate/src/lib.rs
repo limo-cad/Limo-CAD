@@ -706,7 +706,12 @@ pub fn encode_payload(kind: PayloadKind, arguments: &Value) -> Result<String, St
                 .cloned()
                 .ok_or_else(|| "tool arguments must be an object".to_string())?;
             source.insert("type".to_string(), Value::String(kind.to_string()));
-            serde_json::to_string(&json!({ "source": source }))
+            let name = source.remove("name");
+            let mut payload = json!({ "source": source });
+            if let Some(name) = name {
+                payload["name"] = name;
+            }
+            serde_json::to_string(&payload)
                 .map_err(|error| format!("could not encode construction plane: {error}"))
         }
         PayloadKind::EditDatumSource(kind) => {

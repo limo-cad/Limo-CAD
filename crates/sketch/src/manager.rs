@@ -384,6 +384,7 @@ impl SketchManager {
     /// registers it in the browser tree under Sketches.
     pub fn begin_sketch(&mut self, plane: PlaneRef) -> Result<SketchDto, SessionError> {
         self.begin_sketch_with_options(BeginSketchRequest {
+            name: None,
             plane,
             face_origin: FaceSketchOrigin::SupportOrigin,
         })
@@ -397,6 +398,17 @@ impl SketchManager {
     ) -> Result<SketchDto, SessionError> {
         if self.active.is_some() {
             return Err(SessionError::SketchAlreadyActive);
+        }
+        let requested_name = request.name.as_deref().map(str::trim);
+        if let Some(name) = requested_name {
+            if name.is_empty()
+                || name.chars().any(char::is_control)
+                || self.finished.iter().any(|s| s.session.name() == name)
+            {
+                return Err(SessionError::Solid(
+                    "Sketch name must be non-empty, printable, and unique".into(),
+                ));
+            }
         }
         let plane = request.plane;
         let basis = match plane {
@@ -438,7 +450,18 @@ impl SketchManager {
                 })?,
         };
         self.sketch_count += 1;
-        let name = format!("Sketch{}", self.sketch_count);
+        let name = if let Some(name) = requested_name {
+            name.to_owned()
+        } else {
+            while self
+                .finished
+                .iter()
+                .any(|s| s.session.name() == format!("Sketch{}", self.sketch_count))
+            {
+                self.sketch_count += 1;
+            }
+            format!("Sketch{}", self.sketch_count)
+        };
         self.document.add_browser_child(
             BrowserNodeKind::SketchesFolder,
             BrowserNodeKind::Sketch,
@@ -1434,9 +1457,27 @@ impl SketchManager {
             &active,
             &mut request.source,
         )?;
-        let feature_id = self.document.alloc_feature_id();
         let next_number = max_feature_number(&self.document, "Plane") + 1;
-        let name = format!("Plane{next_number}");
+        let name = request
+            .name
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("Plane{next_number}"));
+        if name.is_empty()
+            || name.chars().any(char::is_control)
+            || self
+                .document
+                .features()
+                .features
+                .iter()
+                .any(|f| f.name == name)
+        {
+            return Err(SessionError::Solid(
+                "Construction plane name must be non-empty, printable, and unique".into(),
+            ));
+        }
+        let feature_id = self.document.alloc_feature_id();
         let datum_id = FaceId(self.next_datum_id);
         self.next_datum_id += 1;
         self.datum_planes.push(DatumPlaneDefinitionDto {
@@ -6122,6 +6163,7 @@ mod project_tests {
         let mut manager = SketchManager::new();
         let offset = manager
             .create_datum_plane(DatumPlaneRequest {
+                name: None,
                 source: DatumPlaneSourceDto::Offset {
                     reference: PlaneRef::OriginPlane {
                         plane: OriginPlane::Xy,
@@ -6135,6 +6177,7 @@ mod project_tests {
 
         let midplane = manager
             .create_datum_plane(DatumPlaneRequest {
+                name: None,
                 source: DatumPlaneSourceDto::Midplane {
                     first: PlaneRef::OriginPlane {
                         plane: OriginPlane::Xy,
@@ -6151,6 +6194,7 @@ mod project_tests {
             .edit_datum_plane(EditDatumPlaneRequest {
                 feature_id: offset_definition.feature_id,
                 plane: DatumPlaneRequest {
+                    name: None,
                     source: DatumPlaneSourceDto::Offset {
                         reference: PlaneRef::OriginPlane {
                             plane: OriginPlane::Xy,
@@ -6166,6 +6210,7 @@ mod project_tests {
         let self_reference = manager.edit_datum_plane(EditDatumPlaneRequest {
             feature_id: offset_definition.feature_id,
             plane: DatumPlaneRequest {
+                name: None,
                 source: DatumPlaneSourceDto::Offset {
                     reference: PlaneRef::DatumPlane {
                         datum_id: offset_definition.datum_id,
@@ -6186,6 +6231,7 @@ mod project_tests {
         let mut manager = SketchManager::new();
         let result = manager
             .create_datum_plane(DatumPlaneRequest {
+                name: None,
                 source: DatumPlaneSourceDto::AtAngle {
                     reference: PlaneRef::OriginPlane {
                         plane: OriginPlane::Xy,

@@ -217,3 +217,22 @@ current topology and tolerance metadata, rejects invalid edits, and restores
 through a fresh process. With --desktop and --save it also checks native file
 save/reopen. This is the linear-dimension slice of #93; specialized annotations,
 complete manufacturing sheets and export operations remain to implement.
+
+## Inspection and reference naming
+
+`assembly_interference_check` belongs to `assembly/inspect`, matching the existing
+Assembly browser’s Inspect panel. It uses the same exact retained-BRep query as the native
+engine, with solved occurrence transforms. An empty occurrence filter checks all
+visible occurrences; a nonempty filter checks pairs within that set. A single
+selected occurrence therefore has no other occurrence to compare. Broad-phase
+culling avoids distant pairs. Touching is distinguished from positive overlap
+volume, and a configurable nonnegative clearance threshold admits nearby pairs.
+Unsolved assemblies, failed geometry, and missing/hidden requested occurrences
+reject instead of returning a misleading clean result. The existing Inspect panel and MCP use one shared native implementation and the
+same product group; the disabled Model-ribbon placeholder is not another API path.
+
+`sketch_begin` and construction-plane creation accept optional meaningful `name`
+values. Names survive native replay, history and references. Empty/control-character
+or duplicate names reject before allocating history IDs. Automatic sketch names
+skip an explicitly named SketchN. Headless and live arguments use the same shared
+encoder, including datum names; there is no second conversion implementation.

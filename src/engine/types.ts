@@ -32,6 +32,7 @@ export type PlaneRef =
 export type FaceSketchOrigin = 'face_center' | 'global_origin_projection';
 
 export interface BeginSketchRequest {
+  name?: string;
   plane: PlaneRef;
   face_origin: FaceSketchOrigin;
 }

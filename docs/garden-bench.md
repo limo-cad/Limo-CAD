@@ -1,102 +1,122 @@
-# Editable crown garden bench
+# Crown garden bench: referenced joinery candidate
 
-This original native design demonstrates editable timber parts and an assembly:
-1200 mm seat width, 450 mm seat height, five seat slats, crowned back pickets and
-supported armrests. It is not an imported FreeCAD model. The smaller `bench` suite
-remains the rectangular-stock regression fixture.
+This original timber design is an editable native example, not a FreeCAD import.
+It is a candidate for the flagship set, not a released or load-rated furniture plan.
+The smaller `bench` suite remains the rectangular-stock regression fixture.
 
 ```sh
 cargo xtask test-mcp garden-bench --server /absolute/path/to/nbcad-mcp --out /absolute/path/to/results
 ```
 
-Build visibly in a new native window and save an editable project:
+To replay visibly and save the native assembly, add `--desktop /path/to/nbcad`
+and `--save /path/to/referenced-garden-bench.nbcad`. Use matching desktop and MCP
+builds: this revision adds named sketches/datums and exact occurrence interference.
+Construction goes through the shared `cad_interface` groups. Existing projects are
+preserved. No imported geometry or model-file patching constructs the example.
 
-```sh
-cargo xtask test-mcp garden-bench --server /absolute/path/to/nbcad-mcp --desktop /absolute/path/to/nbcad --save /absolute/path/to/buildable-garden-bench.nbcad --out /absolute/path/to/results
-```
+## Design and assembly intent
 
-Use matching engine versions with the slot center-constraint and capsule-tangency
-fixes in this PR. This revision changes the recipe, not the desktop binary. It uses
-the shared product groups through `cad_interface`; no UI selectors, model-file
-surgery, STEP or STL are used to construct the model. Existing documents are preserved.
+The seat is 1200 mm wide and 450 mm high. Five slats rest on the side rails and a
+center bearer. Continuous front posts support the arms; rear posts support the back.
+The frame uses square-cut, face-lapped members with outside-accessible fastening.
+The center bearer rests on two small, purposeful support blocks at the aprons.
 
-## Construction intent
+Two continuous arm rails replace the four short arm blocks. They connect the front
+and rear posts, support the arm boards along their length, and repeat the side-frame
+construction. Armrests are mirrored about the seat center, with an 18 mm plan radius
+at their noses and 3 mm eased edges. Their rear ends stop 3 mm before the rear posts.
+Left and right armrests are separate machined definitions because their fixing holes
+are handed; the continuous rails are interchangeable. No duplicate unused hole pattern
+is added just to reuse a component definition.
 
-Front legs continue up to support the arms. Rear legs continue into the back posts.
-Square-ended aprons and side rails overlap post faces and have accessible fastening
-from outside the frame. Upper and lower side rails are different definitions because
-their drilling differs. Left and right posts are separate machined parts.
+Crowned, slotted back pickets sit on the seating side of the back rails. The honey
+colored seat, arms and pickets against the deep green frame retain the garden-bench
+character. Finish colors describe appearance only, not an assigned timber species.
+The straight back and level seat have not been validated with a physical comfort mockup.
 
-The seat bears on both side rails and a center bearer. Support blocks carry that
-bearer at the aprons. Three fixing positions per slat reduce the unsupported span.
-Seat gaps are 5 mm; square post notches provide 1 mm nominal clearance per side.
-The first two slats clear the taller front posts and the last clears the rear posts.
-These clearances assume accurately machined, conditioned stock and must be reviewed
-for the actual timber and exposure.
+Assembly mates follow an actual connected member/fastener graph. Each child is mated
+to a member it touches, using the finished mating faces and the joint's physical
+location. One front leg is grounded. The recipe no longer hangs every member from
+arbitrary offsets on that leg. Rigid mates represent the assembled design, not screw
+flexibility, clamping deformation, or a structural analysis.
 
-Back pickets sit on the seating side of the two back rails, which are fastened to
-the rear faces of the posts. Picket screws enter from behind the rails. Armrests
-bear on the front post tops and four square bearing cleats; they attach from below
-through the cleats into the arm boards. No shaped upright or unsupported arm-end
-butt joint is required.
+## Machining references and editable history
 
-## Machining and assembly order
+Every stock profile is dimensioned and fixed at one locating vertex, leaving its size
+editable. Every notch is similarly located. Zero degrees of freedom is asserted; the
+previous rectangles had two translational degrees of freedom despite having dimensions.
+Sketches are named for their owning part and machining operation.
 
-1. Cut stock to the component envelopes and drill the documented patterns. Machine
-   the square post notches. The back-picket crown and slot are optional decoration
-   for fabrication, but retained here to exercise editable slot/crown features.
-2. Clamp the frame square. Fit the lower side rails and lower stretcher first;
-   upper rails would obstruct driver access. Then fit the lapped aprons, upper
-   side rails, center support blocks and center bearer.
-3. Fit the seat slats with spacers. Seat clearance holes have 10 mm, 90-degree
-   countersinks for flush heads. Install the seat before the armrests.
-4. Fit the back rails to the posts and fasten the pickets from behind.
-5. Fit the arm cleats and secure the arms from underneath. Ease exposed edges,
-   including square notches and posts, without removing joint bearing areas.
+The machining datum convention is A: broad stock face, B: adjacent long-edge face,
+C: square end. These meet at local XYZ zero. `report.json` records the corresponding
+normal axes and grain axis for every part, along with stock sizes, quantities, sketches,
+features and component IDs. The CAD stock-profile plane need not be the primary
+workholding face: a leg can naturally be extruded from its end profile.
 
-`report.json` includes the component/sketch/feature map, quantities, finished
-component envelopes and a fastener schedule with head coordinates, direction,
-length, connected occurrences and installation stage. Native hole features model
-5.5 mm clearance bores and 3.5 mm pilot bores with a 2 mm pilot-depth allowance.
-Nominal screws are 5 mm; lengths vary with joint thickness. The recipe checks
-side-grain entry and retained tip clearance. Fastener solids/threads are not modeled.
-Pilot sizes and head envelopes are example assumptions: select actual exterior
-fasteners and timber, then reconcile the manufacturer's drilling and edge-distance
-requirements. This example has no certified load rating.
+The picket slot is sketched on a named mid-thickness construction plane between its
+broad faces, then cut symmetrically beyond both faces. Its width and length remain
+driving dimensions. Its height is located from the part's bottom datum, so extending
+the crown changes the top margin without moving the decorative field. The stock,
+plane, slot and cut remain native history; the datum is used by the feature rather
+than added as decoration.
 
-## Editable history and evidence
+Part sketches live in component-definition coordinates. Repeated assembly occurrences
+are transforms of those definitions. Sketches appearing back at the origin when edited
+in the assembled view expose the component-context editing gap in issue #94; they do
+not mean that their stock profiles should be scattered into assembly coordinates.
+This candidate must not be presented as a finished in-place editing reference until
+that workflow is resolved. The bench also is not one globally resizable master model:
+recipe dimensions, feature parameters and assembly coordinates have distinct roles.
 
-Each stock part begins with a dimensioned native sketch and extrusion. The picket
-adds crown/edge fillets, a fully constrained slot and a native through cut. Machined
-components are assembled with face-referenced rigid mate frames measured from the
-grounded front leg. These are explicit placement dimensions, not a global bench
-resizing parameter or a simulation of screw-joint flexibility.
+## Fit and fabrication sequence
 
-The recipe checks real material removal for notches, slots and drilling, assembly
-solutions and poses, seat/arm bearing and front-of-rail picket placement from the
-solved mesh envelopes. It rejects crossing screw shafts and checks a conservative
-20 mm square by 120 mm driver envelope at each installation stage. These checks
-are scoped to axis-aligned stock; they are not a general exact interference test.
+Post notches provide 2 mm nominal clearance per side, with square internal corners
+finished by sawing/chiseling or an equivalent process. Under the example's ±0.5 mm
+finished-size and ±0.5 mm relative-location budgets, the lateral notch stack retains
+1 mm minimum clearance. Arm-to-rear-post clearance is 3 mm nominal and 1.5 mm minimum
+under the stated conservative stack. Seat gaps remain 5 mm. These are declared
+machining/assembly assumptions, not a moisture-movement allowance or formal GD&T
+certification. Choose timber, conditioning, finish and exposure before approving them.
 
-It changes slot width 18 to 20 mm and picket height 315 to 340 mm, checks dependent
-features and repeated occurrences, restores history in a fresh MCP process and
-edits the height again. The saved native file is reopened and its slot edited
-20 to 22 to 20 mm. The delivered pickets remain 340 mm tall. Recompute errors,
-no-op cuts and broken relationships fail the run. The same example runs in the
-existing MCP CI jobs, without a new all-tools coverage gate.
+1. Prepare stock from its marked face, edge and end; cut to size and machine notches,
+   crowns, slots and edge radii. Drill clearance holes and countersinks. Keep bearing
+   areas flat. Dry-fit and clamp each connection before transferring pilot centers.
+2. Fit the lower frame and stretcher first, then the aprons, upper side rails, center
+   support blocks and bearer. Check frame squareness before tightening.
+3. Fit seat slats with spacers. Fix along one centerline across each narrow slat so
+   the board can move across its width into the gaps.
+4. Fit the back rails and pickets; the picket fasteners enter from behind the rails.
+5. Fit the continuous arm rails from outside, then the handed arms from above with
+   flush countersunk heads. The screw row lies over each support rail; the arm can
+   expand across its width away from that row. Preserve the rear clearance.
 
-See [design principles](parametric-design-principles.md) for research sources and
-the modeling practices behind these checks.
+The nominal fasteners are 5 mm screws, with 5.5 mm clearance bores and 3.5 mm pilots.
+Seat and arm heads use a 10 mm, 90-degree countersink envelope. Pilot bores are
+transferred from the clamped mating parts, with a depth stop; do not independently
+locate both sides of a screw connection to ±0.5 mm and assume they will align.
+Select actual exterior fasteners and reconcile their head geometry, pilot size,
+engagement and edge-distance requirements with the chosen timber before fabrication.
+The model includes nominal bores, not screw solids or threads.
 
-## Mesh export
+## Evidence and release limits
 
-Native desktop and MCP 3MF/STL export use visible solved occurrences, so this
-bench exports 36 positioned meshes rather than 19 overlapping part definitions.
-Body selection exports the visible instances of those source bodies. Source
-meshes are welded before placement; manifold validation remains enabled for 3MF.
-Material lookup retains the original body identity. Unsolved assemblies reject
-export instead of silently emitting an incorrect layout.
+The replay checks actual material removal, fixed stock/notch/slot profiles, mirrored
+arm geometry, rear clearance, bearing contacts, side-grain screw entry, tip clearance,
+separated screw shafts, and a conservative 20 mm by 120 mm driver-access envelope in
+assembly order. Exact retained OCCT solids at solved occurrence poses must have zero
+volumetric interference. A separate regression distinguishes overlap from touching and
+positive clearance; broad-phase envelopes alone are not used to declare an overlap.
 
-The bench remains full size in millimetres. Scaling or arranging it for a printer
-is separate from assembly export; no automatic bed scaling is applied. Keep the
-native .nbcad project for editing; 3MF is a secondary manufacturing output.
+Slot-width and picket-height edits are recomputed, then repeated after fresh-process
+restore. A live run saves and reopens `.nbcad`, edits the slot again, restores its
+intended width, and saves. The reports preserve the tool-call recipe and verification
+results. These checks establish selected geometric and editing properties; they do not
+certify comfort, loads, timber movement, or every possible parameter change.
+
+Manufacturing release still requires timber/hardware selection, a comfort and assembly
+mockup, the component-context editing workflow, and a comprehensive reviewed drawing
+package. See `parametric-design-principles.md` and `flagship-examples.md`.
+
+Native 3MF/STL export contains the visible solved occurrences at their assembled
+positions, in millimetres. It is a secondary output. Keep `.nbcad` for parameter edits;
+printer scaling and bed arrangement are separate operations.

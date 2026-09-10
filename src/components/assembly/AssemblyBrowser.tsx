@@ -1047,7 +1047,7 @@ function InterferencePanel() {
   };
 
   return (
-    <div data-testid="interference-panel" className="min-h-0 flex-1 overflow-y-auto p-2.5">
+    <div data-testid="interference-panel" data-interface-group="assembly/inspect" className="min-h-0 flex-1 overflow-y-auto p-2.5">
       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-mute"><ShieldAlert size={12} className="text-accent" /> Interference & clearance</div>
       <div className="mt-2 grid grid-cols-2 gap-1.5">
         <label className="block text-[8px] uppercase text-mute">Clearance (mm)<input type="number" min={0} step={0.1} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} className="mt-0.5 h-7 w-full rounded border border-edge bg-header px-2 text-[10px] text-ink" /></label>

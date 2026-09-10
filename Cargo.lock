@@ -310,6 +310,7 @@ version = "0.1.0"
 dependencies = [
  "cxx",
  "cxx-build",
+ "nbcad-assembly",
  "nbcad-core",
  "nbcad-export",
  "nbcad-solid",

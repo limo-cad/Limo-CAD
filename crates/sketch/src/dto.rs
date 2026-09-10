@@ -164,8 +164,10 @@ pub enum FaceSketchOrigin {
 
 /// Extended Create Sketch payload. The host also accepts a bare `PlaneRef`
 /// for backwards compatibility with existing MCP clients.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BeginSketchRequest {
+    #[serde(default)]
+    pub name: Option<String>,
     pub plane: PlaneRef,
     #[serde(default)]
     pub face_origin: FaceSketchOrigin,

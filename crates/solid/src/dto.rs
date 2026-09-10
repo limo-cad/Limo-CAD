@@ -887,6 +887,8 @@ pub enum DatumPlaneSourceDto {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DatumPlaneRequest {
+    #[serde(default)]
+    pub name: Option<String>,
     pub source: DatumPlaneSourceDto,
 }
 

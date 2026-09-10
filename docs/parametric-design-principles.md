@@ -61,3 +61,29 @@ cannot establish native editability, and a successful edit cannot establish usab
 Add a regression when a failure teaches a general lesson. Do not impose a count of
 all tools or snapshots of every UI label. Keep examples executable through the same
 `cad_interface` groups and `cargo xtask test-mcp` used by existing CI.
+
+## Bench audit lessons
+
+A dimensioned rectangle can still translate: assert its degrees of freedom and
+locate one intentional vertex at the part origin. Naming the stock sketch and each
+machining sketch makes the native history understandable without reading the demo
+source. Add a construction plane when a feature actually uses it; the picket's
+mid-thickness plane drives a symmetric slot cut.
+
+Check handed machining before reusing a component. Mirroring an arm's placement does
+not mirror a shared definition's bores. Use separate finished definitions when the
+holes differ. Connect assembly mates at real mating surfaces, and validate symmetry
+from solved geometry rather than assuming that two independently typed coordinates
+are mirrored.
+
+Use explicit clearance stacks and a fabrication process that can achieve alignment.
+For screw joints, independently positioned pilots can exceed clearance even when each
+part meets its drawing tolerance; transfer pilots from the clamped clearance-drilled
+member. Label wood-movement assumptions separately. WOOD's [wood-movement guidance](https://www.woodmagazine.com/woodworking-how-to/wood-preparation/dealing-with-wood-movement)
+discusses allowing movement across grain; the bench's narrow seat and arm boards use
+one fastening row across their width. [Ian Kirby's stock preparation guidance](https://www.finewoodworking.com/1978/12/01/preparation-of-stock)
+explains the reference face/edge convention behind the per-part datum descriptions.
+
+Exact placed-solid interference is now available through MCP and shares the native
+implementation. A zero-overlap result does not establish suitable joints, tolerance
+margin, comfort, strength, or editability. Those require separate, concrete checks.
