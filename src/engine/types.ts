@@ -2304,6 +2304,8 @@ export type MeshExportScope = 'assembly' | 'definition';
 
 /** Mesh export selection. Empty body_ids exports every active body. */
 export interface MeshExportRequest {
+  /** Optional exact project snapshot; native export rejects changes atomically. */
+  expected_model_json?: string;
   body_ids: number[];
   /** Defaults to solved visible occurrences. Definition exports each part once in its own coordinates. */
   scope?: MeshExportScope;

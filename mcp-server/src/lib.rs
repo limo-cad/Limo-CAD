@@ -1015,6 +1015,16 @@ impl CadServer {
             serde_json::from_value(arguments)
                 .map_err(|error| format!("bad mesh export arguments: {error}"))?
         };
+        if request.expected_model_json.is_some() {
+            request
+                .check_model_snapshot(
+                    &self
+                        .manager
+                        .export_project_model()
+                        .map_err(|e| e.to_string())?,
+                )
+                .map_err(|e| e.to_string())?;
+        }
         let scene = self.manager.solid_scene();
         let appearances = self.manager.body_appearances();
         let mut meshes = self
@@ -3458,6 +3468,7 @@ fn tool_specs() -> Vec<ToolSpec> {
                         "description": "Empty exports every active body."
                     },
                     "scope": {"type":"string","enum":["assembly","definition"],"default":"assembly","description":"Assembly exports visible solved occurrences. Definition exports each selected body once in its part coordinates."},
+                    "expected_model_json": {"type":"string","description":"Optional exact cad_project_model string captured before an interactive choice. Export rejects if the current model differs; no geometry is written."},
                     "linear_deflection": {"type": "number", "exclusiveMinimum": 0, "default": 0.15},
                     "angular_deflection": {"type": "number", "exclusiveMinimum": 0, "default": 0.35}
                 }),
@@ -3478,6 +3489,7 @@ fn tool_specs() -> Vec<ToolSpec> {
                         "description": "Empty exports every active body."
                     },
                     "scope": {"type":"string","enum":["assembly","definition"],"default":"assembly","description":"Assembly exports visible solved occurrences. Definition exports each selected body once in its part coordinates."},
+                    "expected_model_json": {"type":"string","description":"Optional exact cad_project_model string captured before an interactive choice. Export rejects if the current model differs; no geometry is written."},
                     "linear_deflection": {"type": "number", "exclusiveMinimum": 0, "default": 0.15},
                     "angular_deflection": {"type": "number", "exclusiveMinimum": 0, "default": 0.35},
                     "include_appearance": {"type": "boolean", "default": true},
@@ -6250,6 +6262,53 @@ mod tests {
             .unwrap();
         assert_eq!(u32::from_le_bytes(bytes[80..84].try_into().unwrap()), 12);
         assert_eq!(server.manager.export_project_model().unwrap(), before);
+    }
+
+    #[test]
+    fn mesh_export_snapshot_rejects_mcp_open_and_assembly_edits() {
+        let (mut server, initial) = mcp_box();
+        let body = initial["scene"]["bodies"][0]["id"].clone();
+        let expected = server.manager.export_project_model().unwrap();
+        let request = json!({"body_ids":[body],"expected_model_json":expected,"scope":"definition","slicer_target":"standard"});
+        let original = server
+            .call_tool("solid_export_3mf", request.clone())
+            .unwrap();
+        let (mut replacement, _) = mcp_box();
+        let document = replacement
+            .call_tool("assembly_document", json!({}))
+            .unwrap();
+        let occurrence = &document["component_structure"]["occurrences"][0]["id"];
+        replacement.call_tool("assembly_set_occurrence_pose", json!({"occurrence_id":occurrence,"local_pose":{"translation":[0.,0.,90.],"rotation":[0.,0.,0.,1.]}})).unwrap();
+        let replacement_model = replacement.manager.export_project_model().unwrap();
+        // Same document body IDs and same geometry; a different placement is
+        // still a different manufacturing request. This is the live Open path.
+        server
+            .call_tool(
+                "cad_load_project_model",
+                json!({"model_json":replacement_model}),
+            )
+            .unwrap();
+        for operation in ["solid_export_stl", "solid_export_3mf"] {
+            assert!(server
+                .call_tool(operation, request.clone())
+                .unwrap_err()
+                .contains("document changed"));
+        }
+        assert_eq!(
+            server.manager.export_project_model().unwrap(),
+            replacement_model
+        );
+        // Legacy requests keep their default behavior, without a snapshot tax.
+        assert!(server
+            .call_tool("solid_export_stl", json!({"body_ids":[body]}))
+            .is_ok());
+        server
+            .call_tool("cad_load_project_model", json!({"model_json":expected}))
+            .unwrap();
+        assert_eq!(
+            server.call_tool("solid_export_3mf", request).unwrap()["bytes_base64"],
+            original["bytes_base64"]
+        );
     }
 
     #[test]

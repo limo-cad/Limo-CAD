@@ -33,6 +33,7 @@ import {
 } from './projectTabs';
 import { requestUnsavedDecision } from './unsavedChanges';
 import { requestMeshExportScope } from '../components/MeshExportDialog';
+import { runMeshExport } from './meshExportFlow';
 
 const PROJECT_TYPE: SaveType = {
   description: 'noBS CAD Project',
@@ -408,50 +409,46 @@ function meshExportBodyIds(selectedOnly: boolean): number[] {
   return bodyIds;
 }
 
-export async function exportStl(selectedOnly: boolean): Promise<boolean> {
-  const state = useAppStore.getState();
-  const bodyIds = meshExportBodyIds(selectedOnly);
-  const scope = await requestMeshExportScope();
-  if (scope === null) return false;
-  if (state.bodyAppearances.some((entry) => bodyIds.includes(entry.body_id))) {
-    window.alert(translate('file.stlDropsAppearance'));
-  }
-  const documentName = withoutExtension(state.document?.name ?? state.projectFileName ?? 'Untitled');
-  const suffix = selectedOnly && state.selectedBody !== null ? `-Body${state.selectedBody}` : '';
-  const target = await chooseSaveTarget(`${documentName}${suffix}.stl`, STL_TYPE);
-  if (!target) return false;
-  const engine = await getEngine();
-  const bytes = await engine.exportStl({
-    body_ids: bodyIds,
-    scope,
-    linear_deflection: 0.15,
-    angular_deflection: 0.35,
-    include_appearance: false,
-  });
-  await writeSaveTarget(target, bytes);
-  return true;
+export function exportStl(selectedOnly: boolean): Promise<boolean> {
+  return exportMesh('stl', selectedOnly);
 }
 
-export async function export3mf(selectedOnly: boolean): Promise<boolean> {
+export function export3mf(selectedOnly: boolean): Promise<boolean> {
+  return exportMesh('3mf', selectedOnly);
+}
+
+async function exportMesh(format: 'stl' | '3mf', selectedOnly: boolean): Promise<boolean> {
   const state = useAppStore.getState();
   const bodyIds = meshExportBodyIds(selectedOnly);
-  const scope = await requestMeshExportScope();
-  if (scope === null) return false;
+  const assertSelectionOwner = () => {
+    const current = useAppStore.getState();
+    if (current.activeProjectTabId !== state.activeProjectTabId || current.document !== state.document
+      || current.solidScene !== state.solidScene || current.assemblyDocument !== state.assemblyDocument
+      || current.bodyAppearances !== state.bodyAppearances) {
+      throw new Error('The document changed while choosing mesh export options. Start the export again.');
+    }
+  };
   const documentName = withoutExtension(state.document?.name ?? state.projectFileName ?? 'Untitled');
   const suffix = selectedOnly && state.selectedBody !== null ? `-Body${state.selectedBody}` : '';
-  const target = await chooseSaveTarget(`${documentName}${suffix}.3mf`, THREEMF_TYPE);
-  if (!target) return false;
   const engine = await getEngine();
-  const bytes = await engine.export3mf({
-    body_ids: bodyIds,
-    scope,
-    linear_deflection: 0.15,
-    angular_deflection: 0.35,
-    include_appearance: true,
-    slicer_target: (await import('../materials')).readSlicerTarget(),
+  return runMeshExport({
+    assertSelectionOwner,
+    captureModel: () => engine.exportProjectModel(),
+    chooseScope: requestMeshExportScope,
+    render: async (scope, expected_model_json) => {
+      const request = {body_ids: bodyIds, scope, expected_model_json,
+        linear_deflection: 0.15, angular_deflection: 0.35, include_appearance: format === '3mf'};
+      if (format === 'stl') return engine.exportStl(request);
+      return engine.export3mf({...request, slicer_target: (await import('../materials')).readSlicerTarget()});
+    },
+    chooseTarget: async () => {
+      if (format === 'stl' && state.bodyAppearances.some((entry) => bodyIds.includes(entry.body_id))) {
+        window.alert(translate('file.stlDropsAppearance'));
+      }
+      return chooseSaveTarget(`${documentName}${suffix}.${format}`, format === 'stl' ? STL_TYPE : THREEMF_TYPE);
+    },
+    write: writeSaveTarget,
   });
-  await writeSaveTarget(target, bytes);
-  return true;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

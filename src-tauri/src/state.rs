@@ -751,6 +751,16 @@ impl AppState {
             .lock()
             .map_err(|_| "engine lock poisoned".to_string())?;
         let inner = workspace.active();
+        if request.expected_model_json.is_some() {
+            request
+                .check_model_snapshot(
+                    &inner
+                        .manager
+                        .export_project_model()
+                        .map_err(|e| e.to_string())?,
+                )
+                .map_err(|e| e.to_string())?;
+        }
         if !inner.manager.solid_scene().errors.is_empty() {
             return Err("Resolve timeline errors before exporting STL.".to_string());
         }
@@ -792,6 +802,16 @@ impl AppState {
             .lock()
             .map_err(|_| "engine lock poisoned".to_string())?;
         let inner = workspace.active();
+        if request.expected_model_json.is_some() {
+            request
+                .check_model_snapshot(
+                    &inner
+                        .manager
+                        .export_project_model()
+                        .map_err(|e| e.to_string())?,
+                )
+                .map_err(|e| e.to_string())?;
+        }
         if !inner.manager.solid_scene().errors.is_empty() {
             return Err("Resolve timeline errors before exporting 3MF.".to_string());
         }
@@ -1015,6 +1035,37 @@ mod tests {
         value(state.activate_project_session("tab-a"));
         value(state.drop_project_session("tab-b"));
         assert_eq!(value(state.activate_project_session("tab-b")), false);
+    }
+
+    #[test]
+    fn mesh_export_precondition_runs_under_the_owning_workspace_lock() {
+        let state = AppState::new();
+        value(state.bind_project_session("same-tab"));
+        let expected = value(state.engine_call("project_export_model", ""));
+        let request = serde_json::json!({"expected_model_json":expected});
+        std::thread::scope(|threads| {
+            let mut workspace = state.inner.lock().unwrap();
+            let exporting = threads.spawn(|| state.export_stl(&request.to_string()));
+            // A queued engine mutation gets the lock before export can start.
+            // A frontend identity check cannot prevent this scheduling order.
+            value(host::handle(
+                &mut workspace.active_mut().manager,
+                "document_set_name",
+                r#""Replaced""#,
+            ));
+            drop(workspace);
+            assert!(exporting
+                .join()
+                .unwrap()
+                .unwrap_err()
+                .contains("document changed"));
+        });
+        assert!(state
+            .export_3mf(&request.to_string())
+            .unwrap_err()
+            .contains("document changed"));
+        assert_eq!(state.document_snapshot().name, "Replaced");
+        assert_eq!(state.active_project_session_id(), "same-tab");
     }
 
     #[test]

@@ -50,6 +50,10 @@ pub enum MeshExportScope {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MeshExportRequest {
+    /// Optional optimistic precondition captured before interactive choices.
+    /// Hosts compare it while holding the same ownership lock as mesh export.
+    #[serde(default)]
+    pub expected_model_json: Option<String>,
     #[serde(default)]
     pub body_ids: Vec<BodyId>,
     #[serde(default)]
@@ -85,6 +89,7 @@ fn default_slicer_target() -> SlicerTarget {
 impl Default for MeshExportRequest {
     fn default() -> Self {
         Self {
+            expected_model_json: None,
             body_ids: Vec::new(),
             scope: MeshExportScope::Assembly,
             linear_deflection: DEFAULT_LINEAR_DEFLECTION,
@@ -92,6 +97,22 @@ impl Default for MeshExportRequest {
             include_appearance: true,
             slicer_target: SlicerTarget::BambuStudio,
         }
+    }
+}
+
+impl MeshExportRequest {
+    pub fn check_model_snapshot(&self, current: &str) -> Result<(), ExportError> {
+        if self
+            .expected_model_json
+            .as_deref()
+            .is_some_and(|expected| expected != current)
+        {
+            return Err(ExportError(
+                "The document changed while choosing mesh export options. Start the export again."
+                    .into(),
+            ));
+        }
+        Ok(())
     }
 }
 
