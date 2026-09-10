@@ -2117,20 +2117,38 @@ void Kernel::apply_job(const FfiJob& job) {
       throw std::runtime_error("Combine target body is missing");
     }
     TopoDS_Shape result = target->second;
+    if (job.operation == 1) {
+      // Fuse all tools in one interference pass. Repeatedly fusing into the
+      // growing result makes ordinary tooth/body patterns needlessly quadratic.
+      TopTools_ListOfShape arguments;
+      arguments.Append(result);
+      TopTools_ListOfShape tools;
+      for (std::size_t index = 1; index < job.target_body_ids.size(); ++index) {
+        const auto tool = impl_->bodies.find(job.target_body_ids[index]);
+        if (tool == impl_->bodies.end()) {
+          throw std::runtime_error("Combine tool body is missing");
+        }
+        tools.Append(tool->second);
+      }
+      BRepAlgoAPI_Fuse operation;
+      operation.SetArguments(arguments);
+      operation.SetTools(tools);
+      operation.Build(Message_ProgressRange());
+      if (!operation.IsDone() || operation.Shape().IsNull()) {
+        throw std::runtime_error("OCCT Combine Join failed");
+      }
+      operation.SimplifyResult(true, true, 1.0e-7);
+      result = operation.Shape();
+    }
     for (std::size_t index = 1; index < job.target_body_ids.size(); ++index) {
+      if (job.operation == 1) {
+        break;
+      }
       const auto tool = impl_->bodies.find(job.target_body_ids[index]);
       if (tool == impl_->bodies.end()) {
         throw std::runtime_error("Combine tool body is missing");
       }
-      if (job.operation == 1) {
-        BRepAlgoAPI_Fuse operation(result, tool->second,
-                                   Message_ProgressRange());
-        if (!operation.IsDone()) {
-          throw std::runtime_error("OCCT Combine Join failed");
-        }
-        operation.SimplifyResult(true, true, 1.0e-7);
-        result = operation.Shape();
-      } else if (job.operation == 2) {
+      if (job.operation == 2) {
         BRepAlgoAPI_Cut operation(result, tool->second,
                                   Message_ProgressRange());
         if (!operation.IsDone()) {
