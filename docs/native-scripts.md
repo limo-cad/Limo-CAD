@@ -1,5 +1,9 @@
 # Native command scripts
 
+The interpreter and examples are validated, while the app/preview integration in
+PR #99 remains draft. See [the interface review](script-interface-review.md) for
+the tested evidence and remaining work before promotion.
+
 A `.nbcad.jsonc` file is the reproducible construction source for a native design.
 A `.nbcad` file is the editable project produced by those commands. Keep both when
 publishing an example: one explains how it was made, the other opens directly for

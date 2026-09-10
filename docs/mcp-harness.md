@@ -1,196 +1,143 @@
-# MCP harness notes
+# Local MCP harness
 
-How agents and tests can drive noBS CAD **locally** through MCP.
-This page separates **what exists today** from **proposed** architecture.
-Proposals: [proposed-architecture.md](proposed-architecture.md).
-Product directions: [goals.md](goals.md).
+The desktop, MCP and API share the product groups in
+[`interface/catalog.json`](../interface/catalog.json). Use the same named
+modeling operations, arguments and returned references in headless and live work.
+The transport handles live submission, revision checks and acknowledgement.
+See [the product interface](interface.md) for the complete contract and
+[native command scripts](native-scripts.md) for reusable construction sequences.
 
-An unattached MCP process owns a headless document. To drive the document in
-an open desktop window, use `cad_list_sessions` and `cad_attach`, or launch
-through `cad_interface`. Attached modeling operations automatically route to
-the desktop engine through the shared interface. The desktop owns live edits
-and publishes completed-model snapshots for MCP inspection and export; MCP
-never writes those `model.json` files back.
+## Choose the document owner
 
-## Why MCP
-MCP gives coding agents a tool API without turning noBS CAD into a cloud
-service. The goal is a **strong local automation** surface for testing and
-agent-driven modeling.
-**Invariant:** no required cloud control plane. Automation stays on the user's
-machine (or CI runner).
+An unattached `nbcad-mcp` process owns an independent headless document. It does
+not modify an open CAD window. This is the supported path for offline examples,
+CI and independent repeatability checks.
 
-## Today (as-built on this branch)
-| Topic | Current state |
-|-------|----------------|
-| Transport | **stdio** JSON-RPC (`nbcad-mcp`) — logs on **stderr** |
-| Tools | Modeling tools + control/export helpers (includes `cad_await_apply`, `cad_session_status`) |
-| Disclosure | Soft focus-scoped; `tools.listChanged: true`; ~300 ms throttle |
-| Notify worker | Stdin reader thread + timed wake — `list_changed` / soft-TTL flush **without** a later client ping |
-| Document | One persistent feature history **per MCP process** |
-| Sessions | Attached modeling operations use the live engine automatically. `cad_session_status` observes the loaded completed-model generation, current publisher generation, heartbeat and inbox receipts. `cad_submit` / `cad_await_apply` expose the same apply protocol for explicit queue control. Active-sketch reads use the live engine; completed-model reads use the last loaded snapshot |
-| Geometry | Same native OCCT replay path as desktop when OCCT is available |
-| Export | STEP + STL + **3MF** (`solid_export_*`, `material_catalog`); 3MF preferred for slicers |
+For a running desktop, call `cad_list_sessions`, select its explicit session or
+window/document identity, and call `cad_attach`. Ordinary modeling tools and
+`cad_interface` execute requests then route mutations to that desktop's engine.
+Callers do not issue a separate submit, wait or refresh after every edit.
+`cad_interface` launch attaches the new desktop; acknowledged document transitions
+update the binding, including replacement of a document within the same session.
 
-### Soft disclosure (not a jail)
-Spine → active pack → soft packs (60 s TTL, LRU 2). Hidden tools stay
-**callable**; results include `_disclosure`. Escape hatch: `full_static` or
-`cad_list_all_tools`. Prefer `dynamic` for main agents.
+The desktop remains the single live writer. Its published model is a read cache,
+not shared memory. MCP never writes the live `model.json` back. Active-sketch
+queries use the live owner so unfinished sketch data is available without
+admitting half-finished history into the persisted project.
 
-### Focus packs
-```text
-document | sketch | solid | modify | body_ops | datums | history | inspect | print
-```
-Tags: `mcp-server/src/disclosure.rs` (`tags_for_tool`).
+This routing and its lifecycle checks landed in
+[#91](https://github.com/jackControls/noBS-CAD/pull/91), completing
+[#11](https://github.com/jackControls/noBS-CAD/issues/11) and
+[#15](https://github.com/jackControls/noBS-CAD/issues/15). An in-process transport
+is an architectural option, not a prerequisite for that shared ownership contract.
 
-### Live operations and completed-model snapshots
-Headless goldens work **without** attach (they still mutate the MCP process directly).
-Desktop UI (Tauri) publishes:
-`<NBCAD_SESSION_DIR>/<uuid>/{model.json,active-sketch.json?,focus.json,heartbeat.json}`
-with **identity-bound** fields `session_id` (UUID), `window_id` (Tauri label),
-and `document_id` / `project_session_id` (native project tab). Publish write
-still requires the reserved identity — a delayed write from tab/window A cannot
-land in B's session.
-MCP `cad_submit` (attached only) writes `inbox/<seq>.json` with
-`{ name, arguments, base_generation }` plus optional identity stamps
-`session_id` / `window_id` / `document_id` taken from the attached published
-session. A stale `base_generation` is `generation_conflict`; a stamped op whose
-`session_id` / `window_id` does not match the destination apply binding is
-`session_identity_mismatch` and is dead-lettered (`writeback: false`,
-`session_mode: ui_owned_apply`) so later seqs stay unwedged. Unstamped ops keep
-compat apply behavior. Attach+submit is isolated per published window/session
-(tested). The desktop polls that inbox, applies via the same `host::handle` / solid-replay path as Tauri
-IPC, then the existing publisher writes a new snapshot. MCP never writes
-`model.json` (Jack removed last-writer-wins; do not bring it back).
+## Identity and the lower-level protocol
 
-While a sketch transaction is active, project export intentionally keeps the
-last completed `model.json`; `active-sketch.json` carries the current
-read-only entity/constraint snapshot so a desktop failure can still be
-inspected without admitting half-finished history into the project format.
-(atomic writes, generation-guarded). Session ids are **UUID v4**, not document names.
-With attach:
+Session data lives under `NBCAD_SESSION_DIR`, or the system temporary directory's
+`nbcad-sessions` folder. Each UUID v4 session publishes `model.json`,
+`active-sketch.json` when applicable, `focus.json`, and `heartbeat.json`.
+Publications carry session/window/document identities and engine/published
+generations. The active sketch and completed model have separate generation
+fences. A heartbeat alone does not prove a new completed model is available.
 
-1. `cad_list_sessions` — UUID dirs only (skips `_*-prefixed` control dirs); includes heartbeat `age_ms` / `stale`, plus `window_id` / `document_id` when published. `windows[]` is **one entry per live process/window pair** with `documents[]` plus an authoritative `active_document_id` recorded by the native tab transition (never inferred from heartbeat order). Desktop processes renew independent leases under `_ui/processes/`; a process/window disappears after the lease expires or is removed at shutdown. Inactive tabs stay listed regardless of their own heartbeat age while their owning process lease is fresh; prior-run and closed tabs do not. Multiple concurrently running desktop processes remain independently visible.
-2. `cad_attach` — target by `session_id` and/or `window_id` and/or `document_id` (UUID `document_id` remains a session alias). All provided selectors are **intersected** before ambiguity is reported. Requires valid `model.json`; loads a **copy** into this MCP process; optional `focus.json`. **Never writes `model.json` back.**
-3. Call a modeling operation directly, or use `cad_interface` with `action: execute` and its catalog group. On a current attached desktop, both routes submit to the live engine, wait for the receipt and publication, and return the engine result. A desktop without interface version 1 is rejected before submission. For explicit queue control, `cad_submit` queues one operation from the shared `nbcad-mcp-mutate` map without changing the MCP read snapshot.
-4. UI/engine applies the inbox op against an **authoritative backend `engine_revision`** (advanced atomically with live apply / UI mutation notes — not heartbeat-debounce alone), then publishes a new snapshot. Failed applies are dead-lettered to `inbox/failed/` so the queue cannot wedge. Successful applies archive to `inbox/applied/<seq>.json`.
-5. `cad_await_apply` — poll until the submit seq has an applied/failed receipt; for applied, also require an explicit `published_generation` equal to the current engine generation. Keepalives preserve that fence and cannot masquerade as a publish. If `model_generation` matches, optional `refresh` (default true) reloads the completed model. While a sketch transaction is active, the publisher advances `active_sketch_generation` but intentionally retains the previous completed `model.json`; await returns `model_published:false`, `active_sketch_published:true`, and `refreshed:false`. `timeout_ms: 0` is a single status probe. This closes the manual `cad_refresh` race for agents; it is still **not** in-process shared memory.
-6. `cad_session_status` - a read-only diagnostic in `document/session`. Compare `attached_generation` (the completed model actually loaded) with live heartbeat `generation`. `stale` is true when they differ or either is unknown. `model_generation`, `published_generation`, and `active_sketch_generation` distinguish completed models from active sketch edits; an explicit null model fence stays unknown. Heartbeat age/staleness, identity, and generation come from one heartbeat snapshot. Pending inbox sequences and the latest applied/failed receipt are separate observations. Headless returns `attached:false` / `code:not_attached`, without an error. The status call does not refresh the model or add replay operations.
-7. `cad_refresh` - explicitly reload the attached completed model. Attach, refresh, successful completed-model await, and acknowledged document transitions all update the loaded fence only after a successful read/load. UI acknowledgements of identical model text update its publication fence without recomputing the geometry. An active-sketch-only publication retains the older completed-model fence.
-8. `cad_detach` - clear the attachment and its generation; the loaded model remains available for headless work.
+`cad_list_sessions` projects one entry per live process/window pair, with retained
+documents and an authoritative active document. Expiring process leases under
+`_ui/processes` keep concurrent desktops independently discoverable. Inactive tabs
+remain listed while their owner is alive. Closed and previous-run tabs do not.
+Selectors passed to `cad_attach` are intersected before ambiguity is reported.
 
-The interface grouping comes from `interface/catalog.json`; the diagnostic uses the same `document/session` group as attach, refresh, and other session controls.
+Diagnostic primitives remain available for transport tests and recovery:
 
-Build and tool flow: [mcp-server/README.md](../mcp-server/README.md).
-Day-to-day playbook: [agent-mcp.md](agent-mcp.md).
+- `cad_submit` queues one mutation with its expected engine generation and bound
+  session/window/document identity. Stale generations and mismatched identities
+  reject instead of overwriting another edit or wedging the next request.
+- `cad_await_apply` waits for the applied/failed receipt and explicit publication
+  fence. It distinguishes a completed model from an active-sketch-only update.
+- `cad_session_status` in `document/session` observes the loaded completed model's
+  `attached_generation` against the live `generation`. Missing or unequal
+  generations are stale. It also reports identity, publication fences, heartbeat
+  age, pending inbox operations and the latest receipt. Headless returns
+  `attached:false` and `code:not_attached`, without an error.
+- `cad_refresh` explicitly rereads the attached snapshot; `cad_detach` returns to
+  headless operation. Neither is an extra step in ordinary attached modeling.
 
-### Targeting windows and documents
+Status does not refresh a model or add replay operations. `stale:true` is expected
+while an active sketch advances the live engine beyond its last completed model.
+Heartbeat age describes publisher liveness separately from model freshness; a
+matching revision can still have `heartbeat_stale:true`. Heartbeat-derived fields
+come from one read, but inbox/receipt observations can change during the probe.
 
-A stdio server operates on one headless document or one attached session at a
-time. `cad_list_sessions` reports live processes, windows and document tabs.
-`cad_attach` intersects the supplied session/window/document selectors, and
-attached operations retain that identity. Acknowledged file and tab actions
-follow the returned active session so subsequent operations target the newly
-active document. Publication and inbox identities prevent an operation for one
-window from landing in another window's document.
+Attach, refresh, completed-model awaits and acknowledged document transitions
+record the loaded publication fence only after a successful read/load. An
+acknowledged identical model can advance its fence without recomputing geometry;
+an active-sketch-only publication retains the earlier completed-model fence. Rust
+script playback defers reconstruction until a snapshot query or completion; status
+keeps reporting the older loaded generation while that cache remains deferred.
 
-### Stdio (current supported path)
-Agents and CI spawn `nbcad-mcp` as an MCP stdio server. One process owns one
-headless document until attached. Prefer `solid_export_3mf` for slicer handoff; STEP for CAD interchange.
+Targeted live windows are supported today. One stdio client still has one active
+binding; concurrent scheduling across several documents remains
+[#12](https://github.com/jackControls/noBS-CAD/issues/12). Do not infer a broker from
+the ability to discover and attach to several windows.
 
-### Disclosure notify behavior
-Focus / mode / soft-TTL changes schedule `notifications/tools/list_changed`.
-The server wakes on that deadline even if the client is idle — it does **not**
-require a later `ping` or tool call to flush the notification.
+## Grouping and disclosure
 
-### STEP import and forward scripts
-`solid_import_step` (and `solid_edit_import_step`) load a licensed STEP/STP
-file as a **reference solid**: the kernel stores the source bytes and
-tessellates a dumb body. Scripts are **recorded forward** via `cad_script`
-(`{ "calls": [ { "name", "arguments" } ] }` of successful mutating
-`tools/call` entries). `cad_script` is **portable modeling ops only**:
-session-control reads (`cad_attach` / `cad_refresh` / `cad_detach`) are not
-recorded. Successful attach/refresh **clear and seed** the forward trace with
-`cad_load_project_model` carrying the loaded `model_json` (refresh replaces
-that baseline the same way), so a dumped script replays on a fresh CadServer
-without ephemeral session UUIDs or external snapshot files. Inspect/export
-helpers and failed calls are also skipped. We do **not** reverse-engineer sketch/extrude feature
-history from STEP B-rep. After modeling (or after importing a reference),
-`cad_compare_solids` summarizes `solid_scene` mesh bbox + vertex/triangle
-counts so a rebuilt history can be checked against the imported solid.
+`cad_interface` catalog returns the shared product groups and operations. The
+former `cad_ui`, `cad_view` and `cad_launch` aliases are retired. Native controls
+can be inspected and operated by fresh opaque IDs. Hidden, disabled, stale and
+modal-blocked controls reject.
 
-## Diagnostic boundaries
+Disclosure remains a discovery aid. Focus packs, soft TTL and LRU limits do not
+prevent calls to undisclosed tools. Results can contain `_disclosure` hints;
+`full_static` and `cad_list_all_tools` remain available. A timed worker sends
+`notifications/tools/list_changed` without requiring a later client ping.
+Logs use stderr so stdout stays valid stdio JSON-RPC.
 
-`cad_session_status` reports completed-model freshness separately from live
-sketch availability. During an active sketch, `stale:true` can be expected:
-the live engine has newer sketch edits while completed `model.json` remains
-unchanged. Use the sketch operations for current sketch state; finishing the
-sketch and awaiting publication makes a new completed model available.
+## Repeatable construction and presentation
 
-Heartbeat age indicates publisher liveness, while `stale` compares model
-revisions. A matching revision does not prove a recently responsive desktop;
-check `heartbeat_stale` too. Pending sequences and receipt files are read after
-the heartbeat and can change during the probe. This is a diagnostic observation,
-not a transaction or a lock on the live document.
+The readable `.nbcad.jsonc` sources under [examples/scripts](../examples/scripts)
+run through one Rust interpreter from MCP, `cargo xtask run-script`, or the native
+Scripts workspace. The same source supports maximum rate and paced presentation,
+caption notes, camera targets and final checks. Stop on a failed operation; place
+comprehensive geometry and assembly checks at the end.
 
-A failed model refresh retains the prior loaded generation. If attach recovered
-a model without a usable heartbeat fence, freshness remains unknown until a
-later successful refresh. Reading a heartbeat after loading geometry must never
-stamp a newer publication onto an older model.
-
-The original session design discussion is in
-[#11](https://github.com/jackControls/noBS-CAD/issues/11), and transport proposals
-are in [proposed-architecture.md](proposed-architecture.md). This diagnostic does
-not claim to complete every item in those broader discussions.
-
-## Tutor quests (CI goldens)
-
-Three headless MCP quests score the first education path from
-[#16](https://github.com/jackControls/noBS-CAD/issues/16).
-They wrap the built-in print-in-place parts (`demo_export_pip_3mf`) —
-the **cam bolt** and **drawer clip** — not a cube. Tests:
-`tutor_quest_pip_*` in `cargo test --manifest-path mcp-server/Cargo.toml`
-(Windows + Ubuntu CI: `mcp-server.yml`). No `cad_attach`. The UI tutor that narrates
-the same steps is still open on that issue.
-
-| Quest | What you do | How CI scores it |
-|-------|-------------|------------------|
-| **Cam bolt** | `demo_export_pip_3mf` with `kind: cam_bolt` | 4 named bodies, 0.4 mm AABB clearance, ZIP/`PK` 3MF |
-| **Drawer clip** | same tool with `kind: clip` | 3 named bodies, 0.4 mm clearance, ZIP/`PK` 3MF |
-| **Slicer variants** | same cam bolt for each `slicer_target` | Bambu / Orca / Prusa / Cura / standard packages carry the right Metadata |
-
-These are regression tests, not badges or streaks. The demo tool does not
-mutate the headless document.
-
-### Desktop camera and joint controls
-
-`cad_interface` with `action: view` targets an explicit `session_id` (or the currently attached session).
-Choose `current`, `isometric`, `top`, `bottom`, `front`, `back`, `left`, or `right`;
-set `fit: true` to frame visible geometry. It returns an acknowledged camera
-pose only after the desktop renderer finishes its animation. It does not modify
-geometry, change the engine generation, or add a modeling script operation.
-A live desktop supporting this tool and an active target tab are required.
-Stale sessions are rejected; missing acknowledgement returns `status: timeout`.
-An applied camera pose verifies navigation state, not pixel-level rendering.
-
-The assembly pack also exposes `assembly_delete_joint`,
-`assembly_set_joint_enabled`, and `assembly_set_joint_motion`. The latter two
-preserve the rest of the joint definition, avoiding replacement of connectors
-or limits merely to suppress a joint or move its primary coordinate. Motion
-uses degrees and millimetres; inspect `assembly_solution` for solver diagnostics.
-Attached clients call these operations through the automatic live route;
-explicit `cad_submit` / `cad_await_apply` remains available. Headless clients
-call the same operations against their local model. The desktop and MCP binary must both include
-the shared mutation mappings for live use.
-
-Run the native control regression against a disposable active assembly document:
+The [bench](garden-bench.md) is built from sketches, features and physical mating
+references. Imported geometry does not substitute for its editable construction
+history. The older `cad_script` operation exports a forward trace of modeling
+mutations and a restored baseline; it does not reconstruct parametric history
+from an imported B-rep. Use authored native scripts for new teaching examples.
 
 ```sh
-cargo xtask test-mcp controls --server /path/to/nbcad-mcp --session UUID --out controls.json
+cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --server MCP --repeat 2 --out proof
+cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --server MCP --session UUID --new --present --speed 2 --compare proof/run-1.json --out live-proof
 ```
 
-The test changes the camera, checks that neither the model nor engine generation
-changes, suppresses a joint, temporarily makes it revolute to exercise motion,
-deletes it, and restores the starting model in a `finally` block. An optional
-`--model model.json` loads a fixture into the target document first. It requires
-a working live snapshot publisher. See [the live UI guide](interface.md)
-for the single UI surface, browser contracts, and executable bench workshop.
+Preserve the user's current document first. `--new` creates a design tab in the
+specified window. Omit it only when that tab is already blank. Use `--desktop`
+only when a separate window is intended. See the
+[script interface review](script-interface-review.md) for the remaining draft
+integration work; passing replay checks does not complete the teaching interface.
+
+## Camera, assembly and exports
+
+`cad_interface` view targets the attached or explicitly named session. It supports
+isometric and orthographic orientations, fit, and timed focus on an active sketch,
+body or component. Acknowledgement reports the completed camera transition; it is
+not evidence that a screen capture contains the native renderer. Review actual
+rendered frames when testing presentations.
+
+Assembly inspection and joint operations use the shared engine path. Suppressing,
+deleting or moving a joint does not require replacing its other fields. Motion
+uses degrees and millimetres; inspect the solved assembly for diagnostics. STEP,
+STL and 3MF are exchange/export products, while `.nbcad` preserves editable history.
+
+`cargo xtask test-mcp controls --server MCP --session UUID --out controls.json`
+exercises camera and joint controls in an explicitly selected disposable document.
+The native live, drawing, playback and Scripts-workspace checks have separate
+scoped drivers described in [interface.md](interface.md) and
+[native-scripts.md](native-scripts.md). Keep tests tied to actual behavior and
+failure recovery; do not add another exhaustive tool-count gate or CI matrix.
+
+Existing `tutor_quest_pip_*` engine tests cover cam-bolt/clip exports and slicer
+metadata without changing the headless document. The broader learning path,
+capability lessons and flagship release evidence remain
+[#16](https://github.com/jackControls/noBS-CAD/issues/16).
