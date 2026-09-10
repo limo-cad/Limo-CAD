@@ -1911,6 +1911,81 @@ mod tests {
     }
 
     #[test]
+    fn export_quality_does_not_change_retained_mesh_or_later_exports() {
+        let point = |x, y| Point3Dto { x, y, z: 0. };
+        let mut cylinder = box_job(1, 1);
+        if let KernelJobDto::Extrude(job) = &mut cylinder {
+            job.profiles = vec![KernelProfileDto {
+                profile_index: 0,
+                points: (0..64)
+                    .map(|i| {
+                        let angle = std::f64::consts::TAU * i as f64 / 64.;
+                        point(10. * angle.cos(), 10. * angle.sin())
+                    })
+                    .collect(),
+                curves: vec![KernelCurveDto::Circle {
+                    entity_id: 1,
+                    center: point(0., 0.),
+                    axis_point: point(10., 0.),
+                    normal: Point3Dto {
+                        x: 0.,
+                        y: 0.,
+                        z: 1.,
+                    },
+                }],
+                holes: vec![],
+            }];
+        }
+        let mut plan = RecomputePlanDto {
+            transaction_id: 1,
+            jobs: vec![cylinder],
+            errors: vec![],
+        };
+        let mut kernel = OcctKernel::new().unwrap();
+        let initial = kernel.recompute(&plan).unwrap();
+        assert!(initial.errors.is_empty());
+        let fine_request = MeshExportRequest {
+            linear_deflection: 0.01,
+            angular_deflection: 0.05,
+            ..Default::default()
+        };
+        let coarse_request = MeshExportRequest {
+            linear_deflection: 0.6,
+            angular_deflection: 0.8,
+            ..Default::default()
+        };
+        let fine = kernel.tessellate_bodies(&fine_request).unwrap();
+        assert!(fine[0].indices.len() > initial.bodies[0].indices.len());
+        let repeated = kernel.recompute(&plan).unwrap();
+        assert_eq!(
+            repeated.bodies[0].indices.len(),
+            initial.bodies[0].indices.len(),
+            "manufacturing export must not replace the retained render triangulation"
+        );
+        assert_eq!(repeated, initial);
+        assert_eq!(
+            kernel.last_applied_jobs, 0,
+            "export must preserve native prefix reuse"
+        );
+        let coarse = kernel.tessellate_bodies(&coarse_request).unwrap();
+        assert!(coarse[0].indices.len() < fine[0].indices.len());
+        let mut cold = OcctKernel::new().unwrap();
+        cold.recompute(&plan).unwrap();
+        assert_eq!(
+            coarse,
+            cold.tessellate_bodies(&coarse_request).unwrap(),
+            "requested export quality cannot depend on earlier exports"
+        );
+        assert_eq!(fine, kernel.tessellate_bodies(&fine_request).unwrap());
+        plan.jobs.push(box_job(2, 2));
+        assert_eq!(
+            kernel.recompute(&plan).unwrap(),
+            OcctKernel::new().unwrap().recompute(&plan).unwrap()
+        );
+        assert_eq!(kernel.last_applied_jobs, 1);
+    }
+
+    #[test]
     fn append_replay_matches_cold_geometry_and_rebuilds_on_edit_rollback_or_failure() {
         let mut kernel = OcctKernel::new().unwrap();
         let mut plan = RecomputePlanDto {

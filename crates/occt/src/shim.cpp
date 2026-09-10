@@ -10,6 +10,7 @@
 #include <BRepAlgoAPI_Splitter.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepClass3d_SolidClassifier.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
@@ -2452,8 +2453,18 @@ rust::Vec<std::uint64_t> Kernel::body_ids() const {
   return result;
 }
 
+static FfiMesh mesh_shape(std::uint64_t body_id,
+                          const TopoDS_Shape& shape,
+                          double linear_deflection,
+                          double angular_deflection);
+
 FfiMesh Kernel::mesh(std::uint64_t body_id) const {
-  return mesh_with_deflection(body_id, 0.15, 0.35);
+  const auto found = impl_->bodies.find(body_id);
+  if (found == impl_->bodies.end()) {
+    throw std::runtime_error("body is missing");
+  }
+  // The live render mesh may reuse its existing fixed-quality triangulation.
+  return mesh_shape(body_id, found->second, 0.15, 0.35);
 }
 
 FfiMesh Kernel::mesh_with_deflection(
@@ -2464,7 +2475,22 @@ FfiMesh Kernel::mesh_with_deflection(
   if (found == impl_->bodies.end()) {
     throw std::runtime_error("body is missing");
   }
-  const TopoDS_Shape& shape = found->second;
+  // OCCT's incremental mesher writes triangulations into the supplied shape,
+  // even through a const handle. Export quality must not mutate retained scene
+  // meshes or depend on an earlier export. Copy geometry without mesh data;
+  // copyGeom=false would still share the original triangulation.
+  BRepBuilderAPI_Copy copy(found->second, true, false);
+  if (!copy.IsDone() || copy.Shape().IsNull()) {
+    throw std::runtime_error("OCCT export shape copy failed");
+  }
+  return mesh_shape(body_id, copy.Shape(), linear_deflection,
+                    angular_deflection);
+}
+
+static FfiMesh mesh_shape(std::uint64_t body_id,
+                          const TopoDS_Shape& shape,
+                          double linear_deflection,
+                          double angular_deflection) {
   const double linear =
       linear_deflection > 0.0 ? linear_deflection : 0.15;
   const double angular =
