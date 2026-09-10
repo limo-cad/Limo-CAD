@@ -8,8 +8,8 @@
 //! All modeling logic lives in the engine crates, never here.
 
 mod native_menu;
-mod scripts;
 pub mod native_viewport;
+mod scripts;
 mod session_bridge;
 mod six_dof_mouse;
 mod state;
@@ -428,6 +428,10 @@ engine_command!(engine_set_body_appearance, "set_body_appearance");
 #[tauri::command]
 fn engine_drawing_projection(state: tauri::State<'_, AppState>, payload: &str) -> String {
     state.drawing_projection(payload)
+}
+#[tauri::command]
+fn engine_drawing_export(state: tauri::State<'_, AppState>, payload: &str) -> String {
+    state.drawing_export(payload)
 }
 engine_command!(
     engine_extrude_definitions,
@@ -1063,6 +1067,7 @@ pub fn run() {
             engine_assembly_evaluate_motion_study,
             engine_assembly_swept_collision_check,
             engine_drawing_projection,
+            engine_drawing_export,
             engine_set_body_appearance,
             engine_extrude_definitions,
             engine_revolve_definitions,

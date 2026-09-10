@@ -60,6 +60,66 @@ fn dimension_precision() -> u8 {
     2
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AddRadialDimension {
+    pub sheet_id: u64,
+    pub view_id: u64,
+    pub feature: DrawingCircularRefDto,
+    pub mode: DrawingRadialDimensionMode,
+    pub leader_angle_deg: f64,
+    pub offset: f64,
+    #[serde(default)]
+    pub prefix: String,
+    #[serde(default)]
+    pub suffix: String,
+    #[serde(default = "dimension_precision")]
+    pub precision: u8,
+    #[serde(default)]
+    pub presentation: DrawingDimensionPresentationDto,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AddAngularDimension {
+    pub sheet_id: u64,
+    pub view_id: u64,
+    pub vertex: DrawingTopologyAnchorRefDto,
+    pub first: DrawingTopologyAnchorRefDto,
+    pub second: DrawingTopologyAnchorRefDto,
+    pub radius: f64,
+    #[serde(default)]
+    pub prefix: String,
+    #[serde(default)]
+    pub suffix: String,
+    #[serde(default = "dimension_precision")]
+    pub precision: u8,
+    #[serde(default)]
+    pub presentation: DrawingDimensionPresentationDto,
+}
+/// IDs are allocated by the document. Replacing a BOM with attached balloons
+/// is rejected rather than silently leaving balloons referring to other parts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SetBom {
+    pub sheet_id: u64,
+    pub items: Vec<BomItem>,
+    #[serde(default)]
+    pub position: Option<[f64; 2]>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BomItem {
+    pub item_number: String,
+    #[serde(default)]
+    pub body_id: Option<nbcad_core::BodyId>,
+    pub part_number: String,
+    pub description: String,
+    pub quantity: f64,
+    #[serde(default)]
+    pub material: String,
+    #[serde(default)]
+    pub finish: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "arguments", rename_all = "snake_case")]
 pub enum DrawingCommand {
     CreateSheet(CreateSheet),
@@ -68,6 +128,9 @@ pub enum DrawingCommand {
     AddView(AddView),
     AddNote(AddNote),
     AddLinearDimension(AddLinearDimension),
+    AddRadialDimension(AddRadialDimension),
+    AddAngularDimension(AddAngularDimension),
+    SetBom(SetBom),
 }
 impl SketchManager {
     pub fn drawing_command(
@@ -127,6 +190,44 @@ impl SketchManager {
                     return Err(SessionError::Solid(
                         "Drawing view references a missing body.".into(),
                     ));
+                }
+                if let Some(derivation) = &r.view.derivation {
+                    match derivation {
+                        DrawingViewDerivationDto::Section { first, second, .. }
+                        | DrawingViewDerivationDto::RemovedSection { first, second, .. } => {
+                            for a in [first, second] {
+                                validate_edge(
+                                    &scene,
+                                    &r.view,
+                                    a.body_id,
+                                    a.edge_id,
+                                    &a.edge_key,
+                                    a.circle_center,
+                                )?;
+                            }
+                        }
+                        DrawingViewDerivationDto::Detail { center, .. } => {
+                            validate_edge(
+                                &scene,
+                                &r.view,
+                                center.body_id,
+                                center.edge_id,
+                                &center.edge_key,
+                                center.circle_center,
+                            )?;
+                        }
+                        DrawingViewDerivationDto::Auxiliary { reference, .. } => {
+                            validate_edge(
+                                &scene,
+                                &r.view,
+                                reference.body_id,
+                                reference.edge_id,
+                                &reference.edge_key,
+                                false,
+                            )?;
+                        }
+                        DrawingViewDerivationDto::Broken { .. } => {}
+                    }
                 }
                 r.view.id = next.next_view_id;
                 next.next_view_id = next
@@ -215,6 +316,106 @@ impl SketchManager {
                     },
                 );
             }
+            DrawingCommand::AddRadialDimension(r) => {
+                let target = sheet(&mut next, r.sheet_id)?;
+                let view = dimension_view(target, r.view_id)?;
+                let scene = self.solid_scene();
+                validate_edge(
+                    &scene,
+                    view,
+                    r.feature.body_id,
+                    r.feature.edge_id,
+                    &r.feature.edge_key,
+                    true,
+                )?;
+                let id = annotation_id(&mut next)?;
+                sheet(&mut next, r.sheet_id)?.annotations.push(
+                    DrawingAnnotationDto::RadialDimension {
+                        id,
+                        view_id: r.view_id,
+                        feature: r.feature,
+                        mode: r.mode,
+                        leader_angle_deg: r.leader_angle_deg,
+                        offset: r.offset,
+                        prefix: r.prefix,
+                        suffix: r.suffix,
+                        precision: r.precision,
+                        presentation: r.presentation,
+                    },
+                );
+            }
+            DrawingCommand::AddAngularDimension(r) => {
+                let view = dimension_view(sheet(&mut next, r.sheet_id)?, r.view_id)?;
+                let scene = self.solid_scene();
+                for a in [&r.vertex, &r.first, &r.second] {
+                    validate_edge(
+                        &scene,
+                        view,
+                        a.body_id,
+                        a.edge_id,
+                        &a.edge_key,
+                        a.circle_center,
+                    )?;
+                }
+                let id = annotation_id(&mut next)?;
+                sheet(&mut next, r.sheet_id)?.annotations.push(
+                    DrawingAnnotationDto::AngularDimension {
+                        id,
+                        view_id: r.view_id,
+                        vertex: r.vertex,
+                        first: r.first,
+                        second: r.second,
+                        radius: r.radius,
+                        prefix: r.prefix,
+                        suffix: r.suffix,
+                        precision: r.precision,
+                        presentation: r.presentation,
+                    },
+                );
+            }
+            DrawingCommand::SetBom(r) => {
+                let target = sheet(&mut next, r.sheet_id)?;
+                if target
+                    .annotations
+                    .iter()
+                    .any(|a| matches!(a, DrawingAnnotationDto::ItemBalloon { .. }))
+                {
+                    return Err(SessionError::Solid(
+                        "Remove attached balloons before replacing the bill of materials.".into(),
+                    ));
+                }
+                let scene = self.solid_scene();
+                let mut items = Vec::with_capacity(r.items.len());
+                for item in r.items {
+                    if item
+                        .body_id
+                        .is_some_and(|id| !scene.bodies.iter().any(|b| b.id == id))
+                    {
+                        return Err(SessionError::Solid(
+                            "BOM item references a missing body.".into(),
+                        ));
+                    }
+                    let id = next.next_bom_item_id;
+                    next.next_bom_item_id = id
+                        .checked_add(1)
+                        .ok_or_else(|| SessionError::Solid("BOM IDs exhausted".into()))?;
+                    items.push(DrawingBomItemDto {
+                        id,
+                        item_number: item.item_number,
+                        body_id: item.body_id,
+                        part_number: item.part_number,
+                        description: item.description,
+                        quantity: item.quantity,
+                        material: item.material,
+                        finish: item.finish,
+                    });
+                }
+                let target = sheet(&mut next, r.sheet_id)?;
+                target.bom = items;
+                if let Some(position) = r.position {
+                    target.bom_table_position = Some(position);
+                }
+            }
             DrawingCommand::AddNote(r) => {
                 let id = next.next_annotation_id;
                 next.next_annotation_id = next
@@ -240,6 +441,47 @@ impl SketchManager {
         }
         self.set_drawing_document(next)
     }
+}
+fn annotation_id(doc: &mut DrawingDocumentDto) -> Result<u64, SessionError> {
+    let id = doc.next_annotation_id;
+    doc.next_annotation_id = id
+        .checked_add(1)
+        .ok_or_else(|| SessionError::Solid("Annotation IDs exhausted".into()))?;
+    Ok(id)
+}
+fn dimension_view(sheet: &DrawingSheetDto, id: u64) -> Result<&DrawingViewDto, SessionError> {
+    sheet
+        .views
+        .iter()
+        .find(|v| v.id == id)
+        .ok_or_else(|| SessionError::Solid("Drawing dimension references a missing view.".into()))
+}
+fn validate_edge(
+    scene: &nbcad_solid::SolidSceneDto,
+    view: &DrawingViewDto,
+    body: nbcad_core::BodyId,
+    edge: nbcad_core::EdgeId,
+    key: &str,
+    circle: bool,
+) -> Result<(), SessionError> {
+    if !scene.errors.is_empty() {
+        return Err(SessionError::Solid(
+            "Resolve timeline errors before dimensioning.".into(),
+        ));
+    }
+    let found = scene
+        .bodies
+        .iter()
+        .find(|b| b.id == body)
+        .and_then(|b| b.edges.iter().find(|e| e.id == edge && e.key == key));
+    if found.is_none_or(|e| circle && e.circle.is_none())
+        || (!view.body_ids.is_empty() && !view.body_ids.contains(&body))
+    {
+        return Err(SessionError::Solid(
+            "Dimension anchor is missing, stale, or excluded from the view.".into(),
+        ));
+    }
+    Ok(())
 }
 fn sheet(d: &mut DrawingDocumentDto, id: u64) -> Result<&mut DrawingSheetDto, SessionError> {
     d.sheets

@@ -11,6 +11,7 @@ default = []
 native-occt = []
 
 [dependencies]
+nbcad-sketch = { path = "../sketch" }
 nbcad-assembly = { path = "../assembly" }
 cxx = "1"
 nbcad-core = { path = "../core" }

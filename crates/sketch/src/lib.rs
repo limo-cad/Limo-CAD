@@ -34,12 +34,13 @@ pub mod host;
 
 pub use constraint::{Constraint, ConstraintId, ConstraintKind};
 pub use drawing::{
-    DrawingAnnotationDto, DrawingCircularRefDto, DrawingDocumentDto, DrawingEdgeEndpoint,
-    DrawingLineRefDto, DrawingLinearDimensionMode, DrawingProjectionMethod,
+    DrawingAnnotationDto, DrawingBreakAxis, DrawingCircularRefDto, DrawingDimensionPresentationDto,
+    DrawingDimensionToleranceMode, DrawingDocumentDto, DrawingEdgeEndpoint, DrawingLineRefDto,
+    DrawingLineStyleDto, DrawingLinearDimensionMode, DrawingProjectionMethod,
     DrawingRadialDimensionMode, DrawingSheetDto, DrawingSheetFormat, DrawingSheetOrientation,
-    DrawingStandard, DrawingTemplateDto, DrawingTitleBlockDto, DrawingToleranceNoteDto,
-    DrawingTolerancePreset, DrawingTopologyAnchorRefDto, DrawingViewAlignment, DrawingViewDto,
-    DrawingViewKind,
+    DrawingSheetStyleDto, DrawingStandard, DrawingTemplateDto, DrawingTitleBlockDto,
+    DrawingToleranceNoteDto, DrawingTolerancePreset, DrawingTopologyAnchorRefDto,
+    DrawingViewAlignment, DrawingViewDerivationDto, DrawingViewDto, DrawingViewKind,
 };
 pub use dto::{
     err_json, ok_json, AddConstraintResult, AddLineResult, Arc3PointRequest, ArcCenterRequest,

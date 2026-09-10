@@ -87,6 +87,17 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
                 r,
             ))
         }),
+        "drawing_add_radial_dimension" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::AddRadialDimension(
+                r,
+            ))
+        }),
+        "drawing_add_angular_dimension" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::AddAngularDimension(r))
+        }),
+        "drawing_set_bom" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::SetBom(r))
+        }),
         "drawing_add_note" => with_payload(payload, |r| {
             manager.drawing_command(crate::drawing_commands::DrawingCommand::AddNote(r))
         }),

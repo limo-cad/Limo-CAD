@@ -225,6 +225,12 @@ impl AppState {
     }
 
     pub fn engine_call(&self, method: &str, payload: &str) -> String {
+        if method == "drawing_export" {
+            return self.drawing_export(payload);
+        }
+        if method == "drawing_projection" {
+            return self.drawing_projection(payload);
+        }
         let mut workspace = self.inner.lock().expect("engine lock poisoned");
         let inner = workspace.active_mut();
         let result = host::handle(&mut inner.manager, method, payload);
@@ -676,6 +682,40 @@ impl AppState {
             .kernel
             .export_step(&request)
             .map_err(|error| error.to_string())
+    }
+
+    pub fn drawing_export(&self, payload: &str) -> String {
+        let request: nbcad_occt::drawing_export::DrawingExportRequest =
+            match serde_json::from_str(payload) {
+                Ok(request) => request,
+                Err(error) => return err_json(format!("bad request payload: {error}")),
+            };
+        let workspace = match self.inner.lock() {
+            Ok(workspace) => workspace,
+            Err(_) => return err_json("engine lock poisoned"),
+        };
+        let inner = workspace.active();
+        let scene = inner.manager.solid_scene();
+        let content = nbcad_occt::drawing_export::export_sheet(
+            &inner.manager.drawing_document(),
+            &scene,
+            &request,
+            |r| {
+                let mut p = inner
+                    .kernel
+                    .drawing_projection(r)
+                    .map_err(|e| e.to_string())?;
+                p.anchors = drawing_projection_anchors(&scene, r, &p).map_err(|e| e.to_string())?;
+                p.circles = drawing_projection_circles(&scene, r, &p).map_err(|e| e.to_string())?;
+                Ok(p)
+            },
+        );
+        match content {
+            Ok(content) => ok_json(
+                serde_json::json!({"format":request.format,"encoding":"utf8","content":content,"sheet_id":request.sheet_id}),
+            ),
+            Err(error) => err_json(error),
+        }
     }
 
     pub fn drawing_projection(&self, payload: &str) -> String {

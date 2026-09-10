@@ -13,6 +13,8 @@ pub fn is_live_engine_query(method: &str) -> bool {
     matches!(
         method,
         "active_sketch"
+            | "drawing_export"
+            | "drawing_projection"
             | "assembly_document"
             | "eval_expression"
             | "preview_segment"
@@ -77,6 +79,24 @@ pub static MUTATES: &[MutateSpec] = &[
     MutateSpec {
         name: "drawing_add_linear_dimension",
         engine_method: "drawing_add_linear_dimension",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_add_radial_dimension",
+        engine_method: "drawing_add_radial_dimension",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_add_angular_dimension",
+        engine_method: "drawing_add_angular_dimension",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_set_bom",
+        engine_method: "drawing_set_bom",
         payload: PayloadKind::Object,
         execution: ExecutionKind::Direct,
     },

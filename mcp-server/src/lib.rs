@@ -301,7 +301,28 @@ impl CadServer {
         {
             session::request_engine_query(session_id, engine_method, &payload)?
         } else if execution == Execution::Direct {
-            if name == "drawing_projection" {
+            if name == "drawing_export" {
+                let request: nbcad_occt::drawing_export::DrawingExportRequest =
+                    serde_json::from_value(arguments).map_err(|e| e.to_string())?;
+                let scene = self.manager.solid_scene();
+                let content = nbcad_occt::drawing_export::export_sheet(
+                    &self.manager.drawing_document(),
+                    &scene,
+                    &request,
+                    |r| {
+                        let mut p = self
+                            .kernel
+                            .drawing_projection(r)
+                            .map_err(|e| e.to_string())?;
+                        p.anchors = nbcad_occt::drawing_projection_anchors(&scene, r, &p)
+                            .map_err(|e| e.to_string())?;
+                        p.circles = nbcad_occt::drawing_projection_circles(&scene, r, &p)
+                            .map_err(|e| e.to_string())?;
+                        Ok(p)
+                    },
+                )?;
+                json!({"format":request.format,"encoding":"utf8","content":content,"sheet_id":request.sheet_id})
+            } else if name == "drawing_projection" {
                 let request: nbcad_occt::DrawingProjectionRequest =
                     serde_json::from_value(arguments).map_err(|e| e.to_string())?;
                 let scene = self.manager.solid_scene();
@@ -1305,7 +1326,10 @@ fn entity_ids_schema() -> Value {
 /// Tools allowed to run in-process while snapshot-attached (#55 list).
 /// `cad_submit` is the mutate path: only tools *not* on this list.
 fn is_read_safe_while_attached(name: &str) -> bool {
-    if matches!(name, "drawing_document" | "drawing_projection") {
+    if matches!(
+        name,
+        "drawing_document" | "drawing_projection" | "drawing_export"
+    ) {
         return true;
     }
     matches!(
@@ -3750,7 +3774,10 @@ fn tool_specs() -> Vec<ToolSpec> {
 }
 
 fn records_in_script(name: &str) -> bool {
-    if matches!(name, "drawing_document" | "drawing_projection") {
+    if matches!(
+        name,
+        "drawing_document" | "drawing_projection" | "drawing_export"
+    ) {
         return false;
     }
     if matches!(
@@ -4064,6 +4091,133 @@ pub fn run_stdio() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn drawing_exports_current_associative_geometry_bom_and_rejects_stale_edits() {
+        let mut server = CadServer::new().unwrap();
+        extrude_offset_box(&mut server, "Sketch1", 10.0, 30.0);
+        server
+            .call_tool(
+                "drawing_create_sheet",
+                json!({"name":"Fixture","format":"a4","orientation":"landscape"}),
+            )
+            .unwrap();
+        server.call_tool("drawing_add_view",json!({"sheet_id":1,"view":{"name":"Top","kind":"top","direction":[0.,0.,1.],"up":[0.,1.,0.],"position":[90.,65.],"scale":2.}})).unwrap();
+        let projection = server
+            .call_tool(
+                "drawing_projection",
+                json!({"direction":[0.,0.,1.],"up":[0.,1.,0.]}),
+            )
+            .unwrap();
+        let anchors = projection["anchors"].as_array().unwrap();
+        let first = &anchors[0];
+        let second = anchors
+            .iter()
+            .find(|a| a["point"][0] != first["point"][0] && a["point"][1] != first["point"][1])
+            .unwrap();
+        let as_ref = |a: &Value| json!({"body_id":a["body_id"],"edge_id":a["edge_id"],"edge_key":a["edge_key"],"endpoint":a["endpoint"],"fallback_point":a["model_point"]});
+        let dim = json!({"sheet_id":1,"view_id":1,"first":as_ref(first),"second":as_ref(second),"mode":"horizontal","offset":15.,"presentation":{"tolerance":{"mode":"symmetric","upper":0.2,"lower":-0.2}}});
+        server
+            .call_tool("drawing_add_linear_dimension", dim.clone())
+            .unwrap();
+        let prior = server.call_tool("drawing_document", json!({})).unwrap();
+        let mut stale = dim;
+        stale["first"]["edge_key"] = json!("removed edge");
+        assert!(server
+            .call_tool("drawing_add_linear_dimension", stale)
+            .is_err());
+        assert_eq!(
+            prior,
+            server.call_tool("drawing_document", json!({})).unwrap()
+        );
+        server.call_tool("drawing_set_bom",json!({"sheet_id":1,"items":[{"item_number":"1","body_id":first["body_id"],"part_number":"RAIL","description":"Printed test rail","quantity":1.,"material":"PETG","finish":"Fit coupon required"}],"position":[15.,120.]})).unwrap();
+        let before_bom = server.call_tool("drawing_document", json!({})).unwrap();
+        assert!(server.call_tool("drawing_set_bom",json!({"sheet_id":1,"items":[{"item_number":"1","part_number":"INVALID","description":"Negative quantity","quantity":-1.}]})).is_err());
+        assert_eq!(
+            before_bom,
+            server.call_tool("drawing_document", json!({})).unwrap()
+        );
+        let svg = server
+            .call_tool("drawing_export", json!({"sheet_id":1,"format":"svg"}))
+            .unwrap();
+        assert!(svg["content"].as_str().unwrap().contains("20.00 ±0.20"));
+        assert!(svg["content"]
+            .as_str()
+            .unwrap()
+            .contains("Printed test rail"));
+        assert_eq!(
+            svg,
+            server
+                .call_tool("drawing_export", json!({"sheet_id":1,"format":"svg"}))
+                .unwrap()
+        );
+        let dxf = server
+            .call_tool("drawing_export", json!({"sheet_id":1,"format":"dxf"}))
+            .unwrap();
+        assert!(dxf["content"]
+            .as_str()
+            .unwrap()
+            .contains("$INSUNITS\n70\n4"));
+        let x_arm = anchors
+            .iter()
+            .find(|a| a["point"][0] != first["point"][0] && a["point"][1] == first["point"][1])
+            .unwrap();
+        let y_arm = anchors
+            .iter()
+            .find(|a| a["point"][0] == first["point"][0] && a["point"][1] != first["point"][1])
+            .unwrap();
+        server.call_tool("drawing_add_angular_dimension",json!({"sheet_id":1,"view_id":1,"vertex":as_ref(first),"first":as_ref(x_arm),"second":as_ref(y_arm),"radius":8.})).unwrap();
+        server
+            .call_tool(
+                "sketch_begin",
+                json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+            )
+            .unwrap();
+        server.call_tool("sketch_add_circle",json!({"mode":"center_diameter","p1":{"x":50.,"y":0.},"p2":{"x":60.,"y":0.},"ctrl_held":true})).unwrap();
+        server.call_tool("sketch_finish", json!({})).unwrap();
+        server.call_tool("solid_extrude",json!({"sketch_name":"Sketch2","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":8.},"taper_angle_deg":0.,"flip":false,"target_body_ids":[]})).unwrap();
+        let projection = server
+            .call_tool(
+                "drawing_projection",
+                json!({"direction":[0.,0.,1.],"up":[0.,1.,0.]}),
+            )
+            .unwrap();
+        let circle = &projection["circles"][0];
+        let radial = json!({"sheet_id":1,"view_id":1,"feature":{"body_id":circle["body_id"],"edge_id":circle["edge_id"],"edge_key":circle["edge_key"],"fallback_center":circle["center_model"],"fallback_normal":circle["normal_model"],"fallback_radius":circle["radius"],"closed":circle["closed"]},"mode":"diameter","leader_angle_deg":45.,"offset":12.});
+        server
+            .call_tool("drawing_add_radial_dimension", radial.clone())
+            .unwrap();
+        let before = server.call_tool("drawing_document", json!({})).unwrap();
+        let mut stale = radial;
+        stale["feature"]["edge_key"] = json!("removed circle");
+        assert!(server
+            .call_tool("drawing_add_radial_dimension", stale)
+            .is_err());
+        assert_eq!(
+            before,
+            server.call_tool("drawing_document", json!({})).unwrap()
+        );
+        let svg = server
+            .call_tool("drawing_export", json!({"sheet_id":1,"format":"svg"}))
+            .unwrap();
+        assert!(svg["content"].as_str().unwrap().contains("90.00°"));
+        let diameter = circle["radius"].as_f64().unwrap() * 2.;
+        assert!(svg["content"]
+            .as_str()
+            .unwrap()
+            .contains(&format!("Ø{diameter:.2}")));
+        let model = server.call_tool("cad_project_model", json!({})).unwrap();
+        let mut restored = CadServer::new().unwrap();
+        restored
+            .call_tool("cad_load_project_model", json!({"model_json":model}))
+            .unwrap();
+        assert_eq!(
+            svg["content"],
+            restored
+                .call_tool("drawing_export", json!({"sheet_id":1,"format":"svg"}))
+                .unwrap()["content"]
+        );
+    }
 
     #[test]
     fn embedded_preview_enforces_small_script_limits() {

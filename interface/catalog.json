@@ -1390,7 +1390,8 @@
             "drawing_document",
             "drawing_create_sheet",
             "drawing_select_sheet",
-            "drawing_delete_sheet"
+            "drawing_delete_sheet",
+            "drawing_set_bom"
           ]
         },
         {
@@ -1661,7 +1662,9 @@
             }
           ],
           "operations": [
-            "drawing_add_linear_dimension"
+            "drawing_add_linear_dimension",
+            "drawing_add_radial_dimension",
+            "drawing_add_angular_dimension"
           ]
         },
         {
@@ -1934,7 +1937,9 @@
               "action": "drawingPrint"
             }
           ],
-          "operations": []
+          "operations": [
+            "drawing_export"
+          ]
         }
       ]
     },
