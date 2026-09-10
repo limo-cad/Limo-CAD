@@ -602,8 +602,10 @@ impl CadServer {
                 .unwrap_or(true),
         };
         script.validate_options(options)?;
+        let step_count = script.metadata()["step_count"].clone();
         if self.attached_document_id.is_some() {
-            let mut configure = json!({"action":"presentation","command":"configure","mode":mode});
+            let mut configure = json!({"action":"presentation","command":"configure","mode":mode,
+                "step_index":0,"step_count":step_count,"chapter":"","text":""});
             if let Some(speed) = arguments.get("speed") {
                 configure["speed"] = speed.clone();
             }
@@ -655,7 +657,11 @@ impl CadServer {
         }
         if self.attached_document_id.is_some() {
             let presentation_result = match &result {
-                Ok(_) => json!({"action":"presentation","command":"finish"}),
+                // Notes are sparse, and fast mode skips them entirely. The
+                // interpreter's completed count is authoritative after all
+                // final checks and the live snapshot refresh have succeeded.
+                Ok(report) => json!({"action":"presentation","command":"finish",
+                    "step_index":report["steps_completed"],"step_count":step_count}),
                 Err(_) => {
                     // Keep transport receipts in the MCP error, rather than
                     // covering the design with raw JSON in the caption card.
@@ -9232,6 +9238,130 @@ mod tests {
         assert_eq!(server.manager.solid_scene().bodies.len(), 1);
         std::env::remove_var("NBCAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn live_script_completion_reports_uncaptained_steps_only_after_checks_pass() {
+        let _guard = session::ENV_LOCK.lock().unwrap();
+        for (mode, checks_pass) in [("present", true), ("fast", true), ("present", false)] {
+            let target = session::test_session_uuid();
+            let dir = std::env::temp_dir().join(format!("nbcad-script-completion-{target}"));
+            std::env::set_var("NBCAD_SESSION_DIR", &dir);
+            let mut server = CadServer::new().unwrap();
+            let blank = server.call_tool("cad_project_model", json!({})).unwrap();
+            session::write_session(&target, "model.json", blank.as_str().unwrap()).unwrap();
+            session::write_session(
+                &target,
+                "heartbeat.json",
+                &json!({
+                    "updated_ms":session::now_ms(),"generation":1,"session_id":target,
+                })
+                .to_string(),
+            )
+            .unwrap();
+            let peer = target.clone();
+            // Exercise the production runner and real control-file transport;
+            // the desktop peer only acknowledges commands and captures them.
+            let host = std::thread::spawn(move || {
+                let deadline = std::time::Instant::now() + Duration::from_secs(10);
+                let mut seen = std::collections::HashSet::new();
+                let mut controls = Vec::new();
+                loop {
+                    if let Ok(entries) =
+                        std::fs::read_dir(session::session_dir().join(&peer).join("controls"))
+                    {
+                        for entry in entries.flatten() {
+                            if !entry
+                                .file_name()
+                                .to_string_lossy()
+                                .ends_with(".request.json")
+                                || !seen.insert(entry.path())
+                            {
+                                continue;
+                            }
+                            let request: Value = serde_json::from_str(
+                                &std::fs::read_to_string(entry.path()).unwrap(),
+                            )
+                            .unwrap();
+                            let done = matches!(
+                                request["ui"]["command"].as_str(),
+                                Some("finish" | "stop")
+                            );
+                            let reply = if !request["sketch_query"].is_null() {
+                                assert_eq!(request["sketch_query"]["method"], "active_sketch");
+                                json!({"status":"applied","value":null})
+                            } else {
+                                controls.push(request.clone());
+                                json!({"status":"applied","presentation":{"wait_ms":0}})
+                            };
+                            session::write_session(
+                                &peer,
+                                &format!(
+                                    "controls/{}.result.json",
+                                    request["id"].as_str().unwrap()
+                                ),
+                                &reply.to_string(),
+                            )
+                            .unwrap();
+                            if done {
+                                return controls;
+                            }
+                        }
+                    }
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "Script completion control did not arrive"
+                    );
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            });
+            let source = json!({"version":1,"name":"Sparse captions","steps":[
+                {"note":"The only caption","chapter":"Beginning"},
+                {"let":{"dimension":12}},
+                {"assert":{"$ref":"dimension"},"equals":12},
+                {"view":"isometric","fit":true}
+            ],"checks":[{"assert":{"$ref":"dimension"},"equals":if checks_pass {12} else {13}}]})
+            .to_string();
+            let result = server.call_tool(
+                "cad_interface",
+                json!({
+                    "action":"script","source":source,"session_id":target,"mode":mode,
+                }),
+            );
+            let controls = host.join().unwrap();
+            assert_eq!(controls[0]["ui"]["command"], "configure");
+            assert_eq!(controls[0]["ui"]["chapter"], "");
+            assert_eq!(controls[0]["ui"]["step_index"], 0);
+            assert_eq!(controls[0]["ui"]["step_count"], 4);
+            let final_ui = &controls.last().unwrap()["ui"];
+            if checks_pass {
+                let report = result.unwrap();
+                assert_eq!(report["steps_completed"], 4);
+                assert_eq!(report["checks_completed"], 1);
+                assert_eq!(final_ui["command"], "finish");
+                assert_eq!(final_ui["step_index"], report["steps_completed"]);
+                assert_eq!(final_ui["step_count"], 4);
+            } else {
+                assert!(result.unwrap_err().contains("Assertion failed"));
+                assert_eq!(final_ui["command"], "stop");
+                assert!(
+                    final_ui["step_index"].is_null(),
+                    "A failed check must not claim completion"
+                );
+            }
+            if mode == "fast" {
+                assert_eq!(
+                    controls.len(),
+                    2,
+                    "Maximum rate needs only configure and completion controls"
+                );
+            } else {
+                assert_eq!(controls[1]["ui"]["step_index"], 1);
+                assert_eq!(controls[controls.len() - 2]["view"], "isometric");
+            }
+            std::env::remove_var("NBCAD_SESSION_DIR");
+            std::fs::remove_dir_all(dir).unwrap();
+        }
     }
 
     #[test]

@@ -173,7 +173,7 @@
       "moveCopy": "Move/Copy",
       "combine": "Combine",
       "splitBody": "Split Body",
-      "constructionVisibility": "Construction",
+      "constructionVisibility": "Show refs",
       "hideConstruction": "Hide retained sketches and datum planes",
       "showConstruction": "Show retained sketches and datum planes",
       "offsetPlane": "Offset Plane",

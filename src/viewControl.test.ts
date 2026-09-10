@@ -1,4 +1,5 @@
 import { applyView, type ViewControl, type ViewRequest, type ViewState } from './viewControl';
+import { presentation } from './operationPlayback';
 import {
   getSessionCamera, notifySessionCameraChanged, registerSessionCamera, subscribeSessionCamera,
   unregisterSessionCamera, type CameraSnapshot, type ViewportCameraApi,
@@ -72,6 +73,8 @@ function fixture() {
 }
 
 async function main() {
+  presentation.control({command: 'configure', mode: 'present'});
+  presentation.applied('drawing_add_view');
   const drawing = fixture();
   const pending = drawing.run();
   same(drawing.calls, ['leave drawing'], 'Drawings must be left before waiting for the real viewport');
@@ -83,8 +86,10 @@ async function main() {
   void pending.then(() => { completed = true; });
   await Promise.resolve();
   same(completed, false, 'Mount alone cannot acknowledge an unfinished animation');
+  same(presentation.snapshot().operation, 'drawing add view', 'An unfinished camera move must not replace completed operation feedback');
   drawing.finish();
   same(await pending, drawing.snapshot, 'Return the actual completed camera pose');
+  same(presentation.snapshot().operation, 'Camera: isometric', 'Successful final camera framing replaces earlier drawing operation feedback');
   drawing.clean();
 
   for (const invalid of [

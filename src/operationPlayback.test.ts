@@ -43,6 +43,28 @@ check(player.canApply() && !player.status().stopped, 'A fresh configuration can 
 player.control({ command: 'note', text: 'Assembly ready', chapter: 'Review', step_index: 4 });
 player.control({ command: 'finish' });
 check(player.status().finished && player.status().text === 'Assembly ready' && player.canApply(), 'Finished caption remains readable and does not block subsequent work');
+const completedRun = new PresentationController(() => now);
+completedRun.control({ command: 'configure', mode: 'present', chapter: 'A fresh walkthrough', step_index: 0, step_count: 7 });
+completedRun.control({ command: 'note', text: 'Before the drawing steps', step_index: 2 });
+completedRun.applied('Camera: isometric');
+// Local expressions, drawing reads and checks need not emit a new caption.
+completedRun.control({ command: 'finish', step_index: 7, step_count: 7 });
+const completedSnapshot = completedRun.snapshot();
+completedRun.applied('File: save');
+completedRun.applied('solid_extrude');
+check(completedRun.snapshot() === completedSnapshot && completedSnapshot.step_index === 7
+  && completedSnapshot.operation === 'Camera: isometric',
+  'Authoritative completion includes uncaptained steps and later file/model work cannot rewrite the finished run');
+completedRun.control({ command: 'configure', mode: 'fast', step_index: 0, step_count: 3, text: '', chapter: 'Next run' });
+completedRun.applied('solid_extrude');
+check(completedRun.snapshot().operation === 'extrude' && completedRun.snapshot().step_index === 0,
+  'A new run accepts operation feedback again and resets its progress');
+completedRun.control({ command: 'note', step_index: 1 });
+completedRun.control({ command: 'stop' });
+const stoppedSnapshot = completedRun.snapshot();
+completedRun.applied('File: save');
+check(completedRun.snapshot() === stoppedSnapshot && stoppedSnapshot.step_index === 1 && !stoppedSnapshot.finished,
+  'A stopped run retains partial progress and its last operation');
 player.configurePace(350);
 player.modelApplied();
 check(!player.canApply(), 'Explicit legacy pace remains supported');
@@ -100,7 +122,9 @@ check(renderControls() === '' && renderReopen().includes('Show playback controls
   'Hidden paused playback leaves a discoverable reopen control with its status');
 presentation.control({ command: 'show' });
 check(renderReopen() === '' && renderControls().includes('Resume'), 'Showing playback restores the real resume control without duplicate surfaces');
-presentation.control({ command: 'finish' });
+presentation.control({ command: 'finish', step_index: 7, step_count: 7 });
+check(renderControls().includes('7 / 7') && renderControls().includes('value="7" max="7"'),
+  'The actual completed surface renders the full interpreter count and a full progress bar');
 const closeControl = renderControls().match(/<button[^>]*aria-label="Close playback controls"[^>]*>/)?.[0];
 check(Boolean(closeControl) && !/\sdisabled(?:\s|=|>)/.test(closeControl!), 'The close control remains enabled after completion');
 presentation.control({ command: 'dismiss' });

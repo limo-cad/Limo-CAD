@@ -148,6 +148,9 @@ export class PresentationController {
     return this.state.mode === 'fast' || this.remainingMs <= 0;
   }
   applied(label: string): void {
+    // The completed/stopped walkthrough remains a record of that run, even
+    // while the user saves the result or resumes ordinary modeling afterward.
+    if (!this.state.active || this.state.finished || this.state.stopped) return;
     this.emit({ operation: label.replace(/^(sketch|solid|assembly)_/, '').replace(/_/g, ' ') });
   }
   modelApplied(): void {

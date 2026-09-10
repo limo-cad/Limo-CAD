@@ -1,4 +1,5 @@
 import type { CameraFocus, CameraSnapshot, ViewportCameraApi } from './components/viewport/cameraApi';
+import { presentation } from './operationPlayback';
 
 export interface ViewRequest extends CameraFocus {
   view: string;
@@ -118,5 +119,6 @@ export async function applyView(
     return api.isAnimating() ? undefined : true;
   });
   assertCamera();
+  presentation.applied(`Camera: ${request.view}`);
   return api.getSnapshot();
 }
