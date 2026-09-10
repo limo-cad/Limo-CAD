@@ -23,6 +23,16 @@ not separate modeling, tutorial and animation scripts.
 - [Crown garden bench](garden-bench.nbcad.jsonc): a complete timber assembly from
   dimensioned sketches, native features and physical mating references. Includes
   authored captions, camera framing and final manufacturing contracts.
+- [Vertical-axis turbine](vertical-axis-turbine.nbcad.jsonc): two reused Savonius
+  stages, constrained 72:18 generator gearing, native part and assembly drawings,
+  printable definition exports and explicit physical qualification inputs.
+- [D-screw vise](d-screw-vise.nbcad.jsonc): five printed parts, retained D-shaped
+  screw, coupled 48 mm jaw travel, six drawing sheets and a separate print layout.
+- [D-screw fit coupon](d-screw-vise-fit.nbcad.jsonc): short paired native threads
+  for qualifying the actual material, printer profile and fit before a full vise.
+- [Turbine fit coupons](turbine-fit-coupons.nbcad.jsonc): four native specimens
+  reuse the shaft clamp, bearing seat, motor cradle and pinion geometry, with
+  driving fit dimensions, print orientations and associative drawings.
 - [Version 1 editor schema](nbcad-script.schema.json): step and expression guidance
   for JSONC-aware editors. The Rust interpreter validates references, and the
   shared interface owns each modeling operation’s argument schema.
@@ -43,13 +53,13 @@ is already blank. The script refuses to construct over an existing model.
 See [the native script format](../../docs/native-scripts.md). Each `.nbcad.jsonc` source
 replays construction; the generated `.nbcad` project retains the editable result.
 
-The three flagship targets are the bench, printable vertical-axis turbine with
-integrated generator and functional FDM-first screw vise. Only the bench currently
-has a complete construction recipe. The
-windmill and vise remain [committed design briefs](../../docs/flagship-examples.md)
-until their real native recipes and checks are implemented. They are deliberately
-absent from the runnable catalog. No flagship yet has a complete approved drawing
-package or physical fabrication qualification.
+The bench, turbine and vise are all runnable manufacturing candidates. The two
+new sources include their editable drawing packages and teaching notes. Their
+native tests check independent replay, model reload, intended dimension edits,
+solved motion, interference and printable mesh integrity. See
+[flagship status](../../docs/flagship-examples.md) and the individual design docs
+for evidence and remaining physical qualification. The bench's full drawing
+package remains open, and no flagship has a physical load or durability rating.
 
 The migrated small fixtures preserve #89's analytic bounds/volume, independent
 replay, fresh-process native restore, STEP round trip and STL/3MF checks in

@@ -13,11 +13,14 @@ implications and calculation assumptions are recorded in
 [the engineering brief](flagship-engineering.md). Keep those decisions with the
 recipes and distinguish them from untested engineering proposals.
 
-The bench construction is executable today. The windmill and vise are committed
-design briefs, with no runnable recipe yet. Their next recipe PRs belong above
-the replay capability and [recipe library](../examples/scripts/README.md), with
-native construction, final checks, explanatory chapters and editable drawings
-reviewed together. Do not add empty scripts or import meshes to imply completion.
+All three now have executable native construction sources in the
+[recipe library](../examples/scripts/README.md). The [turbine](vertical-axis-turbine.md)
+includes the generator drive, reusable rotor stages, assembly and part drawings;
+the [D-screw vise](d-screw-vise.md) includes its retained printed screw, coupled
+jaw travel, six drawing sheets, print layout and paired thread coupon. Their
+recipe layers include Rust authors, JSONC sources and native lifecycle checks.
+They are software-validated manufacturing candidates awaiting physical qualification;
+none is a released or load-rated product.
 
 The product purpose is one source that does the work, teaches the process and
 shows it: fast execution, controlled step-through inspection and paced rendering

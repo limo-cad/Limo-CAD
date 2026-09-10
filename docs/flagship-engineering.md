@@ -1,9 +1,12 @@
 # Turbine and vise: engineering inputs
 
-This records the user's 10 September 2026 direction and the resulting engineering
-proposals. Neither example has a construction recipe yet. The bench remains at
-its accepted development milestone. These are inputs to native, editable models,
-shared Rust/MCP operations, teaching chapters and comprehensive drawing packages.
+This records the user's 10 September 2026 direction and the engineering inputs
+used by the executable [turbine](vertical-axis-turbine.md) and
+[D-screw vise](d-screw-vise.md). Their native models, shared Rust/MCP operations,
+teaching chapters and drawing packages are committed for review. The bench stays
+at its accepted milestone. The teaching target is ages 8–12 with adult guidance;
+age 5 requires closer hands-on help. No physical load or child-safety qualification
+is implied by software validation.
 
 ## Agreed purpose
 
@@ -54,8 +57,8 @@ and [Prusa's fitting/orientation guidance](https://help.prusa3d.com/article/mode
 They are not measurements of our parts.
 
 Provisional material choices are PETG for the first functional indoor structures,
-PLA for dimensional/teaching iterations, and an ASA turbine configuration for
-persistent outdoor exposure. PLA is not universally less stiff than PETG; PETG's
+PLA for dimensional/teaching iterations, and ASA as a candidate for a separately
+qualified outdoor turbine. PLA is not universally less stiff than PETG; PETG's
 toughness does not guarantee a stiffer vise. PETG overhangs and bridging need
 profile-specific verification; ASA requires attention to warping. Use a named
 grade and its own data sheet, then qualify the printed part. See
@@ -63,11 +66,17 @@ grade and its own data sheet, then qualify the printed part. See
 [Prusa PETG](https://help.prusa3d.com/article/petg_2059) and
 [Bambu ASA guidance](https://us.store.bambulab.com/collections/filament-single-discount/products/asa-filament).
 
+The committed recipes currently use PETG presets. PLA and ASA are qualification
+targets, not already tested material variants. Outdoor operation additionally
+requires suitable motor, bearing and fastener weather resistance, drainage,
+anchoring and wind/overspeed retention. Switching polymer does not establish
+those properties for the current supervised near-ground experiment.
+
 Support-free construction and print-in-place construction are different choices.
 Use integrated or captured parts when they improve the product; retain access to
 wear surfaces, generator mounting and fit adjustment. Broad shoulders should
 carry clamp loads; small retention snaps should not accidentally become the main
-load path. The first printable screw remains part of the vise's intended scope.
+load path. The current vise includes a one-piece printed D-shaped screw.
 
 ## Turbine starting architecture
 
@@ -161,10 +170,11 @@ in metres and torque in N·m. Efficiency is a measured/assumed operating input,
 not a universal plastic constant. The model must state whether it includes thrust
 and guide friction. See [Thomson lead/torque guidance](https://www.thomsonlinear.com/en/support/tips/when-considering-lead-screws-what-specifications-are-most-important-to-look-at).
 
-Illustration only: 0.5 N·m, 4 mm lead and assumed overall efficiency 0.25 give
-196 N axial force. Over an actual 600 mm² jaw contact patch, mean pressure is
-0.327 MPa. A 200 mm² patch under the same force sees 0.982 MPa. This is not a
-clamping-force rating, contact-stress solution or durability claim.
+The current vise teaching example uses 0.25 N·m, 2.5 mm lead and assumed overall
+efficiency 0.20: approximately 126 N axial force. Over an assumed 600 mm² jaw
+contact patch, mean pressure is about 0.21 MPa. These are illustrative input
+assumptions, not a measured clamping force, contact-stress solution or durability
+claim. Reducing the actual contact area increases pressure at the same force.
 
 Before rating the design, also check thread bearing/stripping, root torsion,
 frame/jaw bending and deflection, retention and self-locking with measured friction.
@@ -177,24 +187,23 @@ not predict service life.
 
 ## Capability work belongs under the examples
 
-The current source review identifies these shared implementation needs:
+The shared layers now provide driven mechanism coordinates and persistent gear
+relations (#103), native associative drawing commands and placed assembly views
+(#104), replay/Boolean/export performance fixes (#105), exact authoring inputs,
+external-thread commands and script preflight (#106), protected drawing references
+and source indicators (#107), and printable definition export (#108).
 
-- A driven-coordinate mechanism solve for the vise: hold the commanded screw
-  coordinate while solving passive jaw/retention joints. Ordinary joint motion
-  currently assigns one coordinate and may leave a closed loop inconsistent.
-- External-thread operations through MCP, suitable custom printed thread support
-  if selected, and motion-study commands through the same product interface.
-- Gear coupling if the turbine transmission is shown moving: prescribe one
-  driver and derive the other shaft's angle from tooth counts. Independent angle
-  animation is not a mechanically coupled assembly.
-- Named material/process/fit and mathematical relations that survive native edit,
-  recompute, save/reopen and a second edit. Script bindings alone are not editable
-  master parameters; extend the existing Rust expression/parameter path as needed.
-- Print-oriented part selection/layout/envelope checks, plus assembly-aware drawing
-  projections, specialized dimensions, BOM and drawing output. Existing assembly
-  export placement does not establish a printable layout or a complete drawing.
+The vise uses the current ISO external-thread feature and an explicitly labeled
+custom relieved mating nut. It does not disguise an ISO profile as a trapezoidal
+thread. Driving sketch dimensions and native feature parameters remain editable;
+there is still no global cross-sketch master-parameter system. Coordinated design
+changes must update their related inputs deliberately.
 
-Build these in reviewable layers below recipes that need them. The same recipe
+Selected-occurrence editing still needs the workflow decision in #94. Advanced
+annotation parity remains in #93, and the multi-document broker remains in #12.
+These do not turn completed recipe geometry checks into physical qualification.
+
+Keep shared capabilities in reviewable layers below recipes that need them. The same recipe
 must build, teach, show and validate the editable result. Keep physical fit/load
 evidence distinct from deterministic geometry and do not change the accepted
 bench source as part of selecting the two new designs.

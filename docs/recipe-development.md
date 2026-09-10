@@ -24,21 +24,25 @@ and how to keep working from the current capability tip.
   checks. It remains a design candidate; full editable drafting, selected-occurrence
   editing, hardware/material selection and physical fabrication evidence remain.
   Accepted at the current milestone; active example work now moves to the other two.
-- **Printable vertical-axis turbine with integrated generator:** the next manufacturing target.
-  Its [design brief](flagship-examples.md#printable-vertical-axis-turbine) is committed, but a
-  runnable source has not yet been built. The recipe must retain printer-envelope
-  and fit inputs, rotor motion, shaft/bearing retention and an accessible removable
-  motor mount. Physical output and load claims require measured evidence.
-- **Functional screw vise:** the selected third flagship, with a committed brief
-  and no runnable source yet. It should demonstrate guided travel, a retained
-  printable lead screw, replaceable jaws and visible force/pressure calculations.
-  FDM with minimal supports and assembly is primary; CNC/molding are related
-  process variants. See the [engineering inputs](flagship-engineering.md).
+- **Printable vertical-axis turbine with integrated generator:** an executable
+  [Savonius design](vertical-axis-turbine.md) with two reused rotor stages, a native
+  72:18 gear relation, separate bearings, clamped hubs and guarded transmission.
+  Native tests compare blank replays, check selected printable definitions, and
+  exercise edits, reload and motion. Its drawing package includes assembly,
+  critical part dimensions and the hardware BOM. Actual motor fit, startup and
+  loaded output remain physical tests.
+- **Functional screw vise:** an executable [D-screw design](d-screw-vise.md) with
+  five printed parts, purchased keeper retention and a coupled screw/slider loop.
+  It includes six native drawing sheets, a print layout and paired thread coupon.
+  The tests exercise 48 mm travel, insertion paths, dimensional edits and drawing
+  reassociation behavior. Printed fit, force, creep and wear remain unqualified.
 
-The windmill and vise are not placeholder catalog items. Add them when actual
-native sketches, features, joints and checks construct a useful design. Comprehensive
-editable assembly/detail drawings, tolerances, BOM and process/assembly notes are
-part of each flagship's intended recipe work, not a later mesh-only deliverable.
+The two new recipes use constrained sketches, named datums, native features,
+reusable definitions and persistent joints. Materials, fit allowances, assembly
+order and calculations are retained with their sources. Blank replay comparisons
+are exact on the tested build. A dimension edit/restore may retriangulate the
+same surface: the vise test independently checks oriented surface boundaries,
+volume, bounds and topology rather than confusing buffer order with geometry.
 Existing issues #93 and #94 retain the unresolved drawing and occurrence-editing
 decisions; do not copy those issues into a new tracking hierarchy.
 
