@@ -10,7 +10,9 @@ use nbcad_solid::{
     KernelSceneDto, KernelTransformDto, LoftContinuity, Point3Dto, RecomputePlanDto,
     StepExportRequest, SweepOrientation, SweepTransition, ThreadFit,
 };
+use std::collections::VecDeque;
 use std::fmt::Write as _;
+use std::sync::Mutex;
 
 use crate::OcctError;
 use crate::{
@@ -219,8 +221,13 @@ pub struct OcctKernel {
     /// Only a fully successful replay may seed the next append. The jobs
     /// include all resolved geometry inputs, not just feature IDs/revisions.
     successful_jobs: Option<Vec<KernelJobDto>>,
+    /// Exact projection is independent of paper styling and export format.
+    /// Full requests include authoritative occurrence poses and section intent.
+    projection_cache: Mutex<VecDeque<(DrawingProjectionRequest, DrawingProjectionDto)>>,
     #[cfg(test)]
     last_applied_jobs: usize,
+    #[cfg(test)]
+    projection_calculations: std::sync::atomic::AtomicUsize,
 }
 
 impl std::fmt::Debug for OcctKernel {
@@ -238,8 +245,11 @@ impl OcctKernel {
         Ok(Self {
             inner,
             successful_jobs: None,
+            projection_cache: Mutex::new(VecDeque::new()),
             #[cfg(test)]
             last_applied_jobs: 0,
+            #[cfg(test)]
+            projection_calculations: std::sync::atomic::AtomicUsize::new(0),
         })
     }
 
@@ -248,6 +258,9 @@ impl OcctKernel {
         // or tessellation failure can leave a partial native state; the next
         // request must rebuild it even when that request matches an old plan.
         let previous = self.successful_jobs.take();
+        if !plan.errors.is_empty() || previous.as_ref() != Some(&plan.jobs) {
+            self.projection_cache.get_mut().unwrap().clear();
+        }
         let reused = previous
             .as_ref()
             .filter(|jobs| plan.errors.is_empty() && plan.jobs.starts_with(jobs))
@@ -435,6 +448,18 @@ impl OcctKernel {
             })
             .collect::<Vec<_>>();
         let body_ids = request.body_ids.iter().map(|id| id.0).collect::<Vec<_>>();
+        if let Some((_, projection)) = self
+            .projection_cache
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(key, _)| key == request)
+        {
+            return Ok(projection.clone());
+        }
+        #[cfg(test)]
+        self.projection_calculations
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let raw = self
             .inner
             .as_ref()
@@ -489,7 +514,32 @@ impl OcctKernel {
                     .unwrap_or(0.0),
             )
             .map_err(|error| OcctError(error.to_string()))?;
-        projection_from_ffi(raw)
+        let projection = projection_from_ffi(raw)?;
+        // Bound retained work both by view count and actual linework size.
+        let weight = |projection: &DrawingProjectionDto| {
+            projection
+                .visible
+                .iter()
+                .chain(&projection.hidden)
+                .chain(&projection.section)
+                .map(|line| line.points.len())
+                .sum::<usize>()
+        };
+        let points = weight(&projection);
+        const MAX_POINTS: usize = 500_000;
+        if points <= MAX_POINTS {
+            let mut cache = self.projection_cache.lock().unwrap();
+            let mut retained = cache.iter().map(|(_, value)| weight(value)).sum::<usize>();
+            while cache.len() >= 16 || retained + points > MAX_POINTS {
+                if let Some((_, oldest)) = cache.pop_front() {
+                    retained -= weight(&oldest);
+                } else {
+                    break;
+                }
+            }
+            cache.push_back((request.clone(), projection.clone()));
+        }
+        Ok(projection)
     }
 
     pub fn exact_interference(
@@ -2067,6 +2117,103 @@ mod tests {
         plan.errors.clear();
         kernel.recompute(&plan).unwrap();
         assert_eq!(kernel.last_applied_jobs, 1);
+    }
+
+    #[test]
+    fn exact_projection_cache_tracks_geometry_sections_and_solved_placements() {
+        use nbcad_assembly::{ComponentId, InstanceBodyPoseDto, OccurrenceId};
+        use nbcad_sketch::DrawingViewScope;
+        let mut kernel = OcctKernel::new().unwrap();
+        let mut plan = RecomputePlanDto {
+            transaction_id: 1,
+            errors: vec![],
+            jobs: vec![box_job(1, 1)],
+        };
+        kernel.recompute(&plan).unwrap();
+        let mut request = DrawingProjectionRequest {
+            scope: DrawingViewScope::Definition,
+            occurrence_ids: vec![],
+            resolved_occurrences: None,
+            body_ids: vec![BodyId(1)],
+            direction: [0., -1., 0.],
+            up: [0., 0., 1.],
+            include_hidden: false,
+            include_tangent_edges: false,
+            deflection: 0.05,
+            section_plane: None,
+        };
+        let first = kernel.drawing_projection(&request).unwrap();
+        let value = |projection: DrawingProjectionDto| serde_json::to_value(projection).unwrap();
+        assert_eq!(
+            value(first.clone()),
+            value(kernel.drawing_projection(&request).unwrap())
+        );
+        kernel.recompute(&plan).unwrap();
+        assert_eq!(
+            value(first.clone()),
+            value(kernel.drawing_projection(&request).unwrap())
+        );
+        assert_eq!(
+            kernel
+                .projection_calculations
+                .load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
+        request.section_plane = Some(crate::DrawingSectionPlaneDto {
+            point: [0., 0., 0.],
+            normal: [0., -1., 0.],
+            depth: Some(5.),
+        });
+        kernel.drawing_projection(&request).unwrap();
+        assert_eq!(
+            kernel
+                .projection_calculations
+                .load(std::sync::atomic::Ordering::Relaxed),
+            2
+        );
+        request.section_plane = None;
+        request.scope = DrawingViewScope::Assembly;
+        request.resolved_occurrences = Some(vec![InstanceBodyPoseDto {
+            occurrence_id: OccurrenceId(1),
+            component_id: ComponentId(1),
+            body_id: BodyId(1),
+            translation: [0.; 3],
+            rotation: [0., 0., 0., 1.],
+            visible: true,
+        }]);
+        let home = kernel.drawing_projection(&request).unwrap();
+        request.resolved_occurrences.as_mut().unwrap()[0].translation[0] = 40.;
+        let moved = kernel.drawing_projection(&request).unwrap();
+        assert!((moved.bounds[0] - home.bounds[0]).abs() > 39.);
+        assert_eq!(
+            kernel
+                .projection_calculations
+                .load(std::sync::atomic::Ordering::Relaxed),
+            4
+        );
+        if let KernelJobDto::Extrude(job) = &mut plan.jobs[0] {
+            job.end_offset += 7.;
+        }
+        kernel.recompute(&plan).unwrap();
+        assert!(kernel.projection_cache.lock().unwrap().is_empty());
+        let edited = kernel.drawing_projection(&request).unwrap();
+        let mut cold = OcctKernel::new().unwrap();
+        cold.recompute(&plan).unwrap();
+        assert_eq!(
+            value(edited),
+            value(cold.drawing_projection(&request).unwrap())
+        );
+        for index in 0..20 {
+            request.deflection = 0.01 + index as f64 * 0.01;
+            kernel.drawing_projection(&request).unwrap();
+        }
+        assert!(kernel.projection_cache.lock().unwrap().len() <= 16);
+        plan.errors.push(KernelFeatureErrorDto {
+            feature_id: nbcad_core::FeatureId(2),
+            message: "missing sketch".into(),
+        });
+        kernel.recompute(&plan).unwrap();
+        assert!(kernel.projection_cache.lock().unwrap().is_empty());
     }
 
     #[test]

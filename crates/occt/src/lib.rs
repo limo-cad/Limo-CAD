@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 /// Orthographic hidden-line projection request. `direction` points from the
 /// model toward the viewer; `up` is the desired page-up direction.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrawingProjectionRequest {
     #[serde(default)]
     pub scope: nbcad_sketch::DrawingViewScope,
@@ -45,7 +45,7 @@ pub struct DrawingProjectionRequest {
     pub section_plane: Option<DrawingSectionPlaneDto>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrawingSectionPlaneDto {
     pub point: [f64; 3],
     pub normal: [f64; 3],
