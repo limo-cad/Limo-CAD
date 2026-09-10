@@ -5,6 +5,16 @@ const MAX_SCRIPT_BYTES: usize = 16 * 1024 * 1024;
 
 /// Load an authored text script, never executable code or a model snapshot.
 pub fn script_source(arguments: &Value) -> Result<String, String> {
+    if let Some(recipe) = arguments.get("recipe") {
+        if arguments.get("source").is_some() || arguments.get("path").is_some() {
+            return Err("script requires exactly one of recipe, source or path".into());
+        }
+        return Ok(
+            nbcad_recipes::find(recipe.as_str().ok_or("recipe must be an ID string")?)?
+                .source
+                .into(),
+        );
+    }
     let source = arguments.get("source");
     let path = arguments.get("path");
     let source = match (source, path) {
@@ -75,6 +85,10 @@ mod tests {
         for args in [
             json!({}),
             json!({"source":1}),
+            json!({"recipe":1}),
+            json!({"recipe":"not-a-recipe"}),
+            json!({"recipe":"mounting-plate","source":"{}"}),
+            json!({"recipe":"mounting-plate","path":"/part.nbcad.jsonc"}),
             json!({"source":"{}","path":"a.nbcad.jsonc"}),
             json!({"path":"relative.nbcad.jsonc"}),
             json!({"source":"x".repeat(MAX_SCRIPT_BYTES+1)}),

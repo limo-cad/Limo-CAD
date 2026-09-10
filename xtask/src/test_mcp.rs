@@ -12,6 +12,13 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         return crate::playback_test::run_workspace(&args.collect::<Vec<_>>())
             .map_err(anyhow::Error::msg);
     }
+    if suite == "garden-bench" {
+        return crate::replay::run(
+            ["--recipe".to_owned(), "garden-bench".to_owned()]
+                .into_iter()
+                .chain(args),
+        );
+    }
     let script = match suite.as_str() {
         "contracts" => "contracts.mjs",
         "live" => "live.mjs",

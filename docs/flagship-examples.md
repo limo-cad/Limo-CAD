@@ -2,9 +2,20 @@
 
 These are development targets, not released or fabrication-qualified designs.
 The three examples are a printable windmill with an optional motor used as a
- generator, a timber garden bench, and a small screw vise. The vise is the
+generator, a timber garden bench, and a small screw vise. The vise is the
 proposed third example: it adds linear motion, screw/shaft fits and replaceable
 jaws to the rotating windmill and static timber assembly.
+
+The bench construction is executable today. The windmill and vise are committed
+design briefs, with no runnable recipe yet. Their next recipe PRs belong above
+the replay capability and [recipe library](../examples/scripts/README.md), with
+native construction, final checks, explanatory chapters and editable drawings
+reviewed together. Do not add empty scripts or import meshes to imply completion.
+
+The product purpose is one source that does the work, teaches the process and
+shows it: fast execution, controlled step-through inspection and paced rendering
+use the same operation sequence. Feature lessons are part of that capability,
+not sidecar demos maintained in a different language.
 
 ## Order of work
 
@@ -87,11 +98,11 @@ headless comparison and live presentation. The older `cargo xtask test-mcp`
 workshop, drawing, live, controls and contracts drivers remain focused test entry
 points, not a second recommended authoring format.
 
-Draft PR #89 preserves mounting-plate, revolved-spacer and angle-bracket fixtures
-plus analytic and assembly round-trip checks. Its STEP protocol and shared-client
-fixes already landed through #91; the remaining fixtures need integration with the
-native script path before the draft is ready. Keep those useful checks rather than
-introducing another JavaScript modeling runner. Inventory actual capabilities and
+The mounting-plate, revolved-spacer, angle-bracket and repeated-bracket fixtures
+from #89 now use the native JSONC path. Rust MCP stdio tests retain their analytic,
+independent replay, native restore and STEP/STL/3MF checks; the plate, spacer and
+bracket profiles are fully located. The shared catalog exposes only executable
+recipes. Inventory actual capabilities and
 add short replayable demonstrations where missing, including failure recovery and
 parameter editing. There is no arbitrary all-tools percentage gate or duplicate
 CI matrix. See [the script interface review](script-interface-review.md) for the

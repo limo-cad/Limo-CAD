@@ -1,0 +1,10 @@
+[package]
+name = "nbcad-recipes"
+version = "0.1.0"
+edition = "2021"
+license = "LGPL-2.1-or-later"
+description = "Authored native CAD recipes shared by the app, MCP and repository runner"
+
+[dependencies]
+nbcad-script = { path = "../script" }
+serde_json = { version = "1", features = ["float_roundtrip"] }

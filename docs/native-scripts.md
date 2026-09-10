@@ -74,8 +74,16 @@ order, and a rejected operation or a geometry error stops the sequence immediate
 with the failing step identified. An independent agent can use the ordinary live
 presentation controls while the script is running.
 
+For bundled recipes, `{"action":"recipes"}` returns the shared Rust catalog without
+executing a design. Supply `"recipe":"mounting-plate"` instead of `path` or `source`
+to run that committed source. Exactly one source selector is accepted. The app
+uses the same collection; titles, chapters and actual operations are derived from
+the script. A selected recipe is not the legacy `cad_script` trace-export command.
+
 `cargo xtask run-script FILE --server MCP_EXECUTABLE` uses a Rust MCP client to invoke
 the same entry point. With no desktop session it runs headlessly at maximum rate.
+`--recipe ID` selects the shared bundled source instead of a file. A file or ID is
+required; the runner does not silently select an example.
 Add `--session UUID --new --present --speed 2` to create a blank design tab and
 animate it in the existing window. Preserve the current document first. Omit
 `--new` when the named session already contains the intended blank tab. Version 1

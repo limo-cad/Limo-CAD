@@ -60,7 +60,7 @@ Usage:
   cargo run -p xtask -- install-mcp --clients LIST [--no-build] [--binary PATH]
 
 Commands:
-  run-script    Run a .nbcad.jsonc file using the Rust MCP client. Use --server PATH,
+  run-script    Run a .nbcad.jsonc file or --recipe ID using the Rust MCP client. Use --server PATH,
                 --session UUID --new --present to replay in an existing window.
                 --repeat 2 verifies independent headless runs are deterministic.
   cad-call      Send one MCP command from Rust (--tool NAME --args JSON).

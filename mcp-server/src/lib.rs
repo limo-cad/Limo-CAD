@@ -25,6 +25,11 @@ use disclosure::{
 
 const LATEST_PROTOCOL: &str = "2025-06-18";
 
+/// The same recipe catalog powers native discovery and MCP.
+pub fn script_examples() -> Value {
+    nbcad_recipes::catalog(true)
+}
+
 /// Inspect the same validated JSONC source accepted by `cad_interface/script`.
 pub fn inspect_script(arguments: Value) -> Result<Value, String> {
     let source = interface::script_source(&arguments)?;
@@ -443,6 +448,8 @@ impl CadServer {
             "cad_interface" => {
                 if arguments["action"].is_null() || arguments["action"] == "catalog" {
                     json!({"groups":interface::groups(),"operations":full_tool_catalog()})
+                } else if arguments["action"] == "recipes" {
+                    nbcad_recipes::catalog(false)
                 } else if arguments["action"] == "execute" {
                     self.execute_interface(&arguments)?
                 } else if arguments["action"] == "script" {
@@ -3558,7 +3565,8 @@ fn tool_specs() -> Vec<ToolSpec> {
             "Catalog returns shared product groups and typed operations. Execute runs an operation by group and name with identical arguments/results headlessly or live. Script runs one versioned JSONC command file from source or an absolute .nbcad.jsonc path in the current blank document; Rust sequences every operation, stops on failure, and runs final checks by default. Mode fast has no presentation delays; present requires an attached desktop. Presentation provides configure/note/pause/resume/step/stop/status/finish/dismiss/show and speed controls shared with native playback. View supports timed orientation and focus on an active sketch, body, or component. Launch connects a new desktop. Inspect returns rendered controls with fresh opaque target IDs for click/set_value/key. Window close requests guarded application exit; the reply acknowledges the request, not process termination. No selectors or executable script evaluation.",
             object_schema(json!({
                 "session_id":{"type":"string"},
-                "action":{"type":"string","enum":["catalog","execute","script","presentation","launch","view","inspect","click","double_click","context_menu","set_value","key","window","file","viewport"]},
+                "action":{"type":"string","enum":["catalog","recipes","execute","script","presentation","launch","view","inspect","click","double_click","context_menu","set_value","key","window","file","viewport"]},
+                "recipe":{"type":"string","description":"Bundled recipe ID for action script; mutually exclusive with source and path. List IDs with action recipes."},
                 "group":{"type":"string"},"operation":{"type":"string"},"arguments":{"type":"object"},
                 "executable":{"type":"string"},
                 "view":{"type":"string","enum":["current","isometric","top","bottom","front","back","left","right"]},

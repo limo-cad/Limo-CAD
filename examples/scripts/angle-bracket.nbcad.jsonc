@@ -1,0 +1,781 @@
+// Native recipe migrated from the small part-design fixtures. Dimensions are millimetres.
+// No captured entity IDs or model snapshots are used to construct the design.
+{
+  "$schema": "./nbcad-script.schema.json",
+  "version": 1,
+  "name": "Dimensioned angle bracket",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Constrain the section",
+      "note": "Draw one closed six-edge L. Horizontal and vertical relations establish square corners; four driving lengths set a 40 × 30 mm envelope and 5 mm walls.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "bracket_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / dimensioned L section",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 40,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_0": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_0",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 40,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 40,
+            "y": 5
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_1": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_1",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 40,
+            "y": 5
+          },
+          "to_raw": {
+            "x": 5,
+            "y": 5
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_2": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_2",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 5,
+            "y": 5
+          },
+          "to_raw": {
+            "x": 5,
+            "y": 30
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_3": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_3",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 5,
+            "y": 30
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 30
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_4": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_4",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 30
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_5": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_5",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "bracket_line_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/id": {
+                  "$ref": "bracket_edge_0"
+                }
+              },
+              "take": "one",
+              "pointer": "/start_id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_square",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraints",
+        "arguments": {
+          "constraints": [
+            {
+              "type": "horizontal",
+              "entity": {
+                "$ref": "bracket_edge_0"
+              }
+            },
+            {
+              "type": "vertical",
+              "entity": {
+                "$ref": "bracket_edge_1"
+              }
+            },
+            {
+              "type": "horizontal",
+              "entity": {
+                "$ref": "bracket_edge_2"
+              }
+            },
+            {
+              "type": "vertical",
+              "entity": {
+                "$ref": "bracket_edge_3"
+              }
+            },
+            {
+              "type": "horizontal",
+              "entity": {
+                "$ref": "bracket_edge_4"
+              }
+            },
+            {
+              "type": "vertical",
+              "entity": {
+                "$ref": "bracket_edge_5"
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_0"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_1"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_1"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_2"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_2"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_3"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_3"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_4"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_4"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_5"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_5"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_0"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_0",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_0"
+            }
+          ],
+          "text_pos": {
+            "x": 20,
+            "y": -6
+          },
+          "value_text": "40"
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_1",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_1"
+            }
+          ],
+          "text_pos": {
+            "x": 47,
+            "y": 2.5
+          },
+          "value_text": "5"
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_4",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_4"
+            }
+          ],
+          "text_pos": {
+            "x": 2.5,
+            "y": 37
+          },
+          "value_text": "5"
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_5",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_5"
+            }
+          ],
+          "text_pos": {
+            "x": -7,
+            "y": 15
+          },
+          "value_text": "30"
+        }
+      }
+    },
+    {
+      "chapter": "Give the bracket width",
+      "note": "Extrude the fully located section by 20 mm. The section dimensions and extrusion width remain independent editable parameters.",
+      "duration_ms": 1000
+    },
+    {
+      "view": "current",
+      "fit": true,
+      "target": "active_sketch",
+      "duration_ms": 250
+    },
+    {
+      "id": "bracket_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "bracket_build",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "Bracket / dimensioned L section",
+          "profile_indices": [
+            0
+          ],
+          "operation": "new_body",
+          "extent": {
+            "type": "distance",
+            "distance": 20
+          },
+          "taper_angle_deg": 0,
+          "flip": false,
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_feature": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_build"
+            },
+            "path": "/document/features",
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_body": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_build"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/feature_id": {
+                "$ref": "bracket_feature"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "view": "isometric",
+      "fit": true,
+      "body_id": {
+        "$ref": "bracket_body",
+        "pointer": "/id"
+      },
+      "duration_ms": 350
+    },
+    {
+      "let": {
+        "bracket_finished_body": {
+          "$ref": "bracket_body"
+        }
+      }
+    },
+    {
+      "view": "isometric",
+      "fit": true,
+      "duration_ms": 400
+    },
+    {
+      "chapter": "Inspect the editable result",
+      "note": "Review the retained sketch and feature history. Maximum speed, step-through teaching and paced presentation execute this same construction source.",
+      "duration_ms": 1000
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "final_sketches",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finished",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_sketches"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/0/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "id": "final_solution",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_solution",
+        "arguments": {}
+      },
+      "expect": {
+        "/solved": true,
+        "/diagnostics": []
+      }
+    },
+    {
+      "id": "final_model",
+      "call": {
+        "group": "document/files",
+        "operation": "cad_project_model",
+        "arguments": {}
+      }
+    }
+  ],
+  "exports": {
+    "final_model": {
+      "$ref": "final_model"
+    },
+    "final_scene": {
+      "$ref": "final_scene"
+    },
+    "final_sketches": {
+      "$ref": "final_sketches"
+    },
+    "final_solution": {
+      "$ref": "final_solution"
+    }
+  }
+}

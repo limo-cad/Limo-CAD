@@ -1,0 +1,2121 @@
+// Native recipe migrated from the small part-design fixtures. Dimensions are millimetres.
+// No captured entity IDs or model snapshots are used to construct the design.
+// The locked planar coordinates use the analytic centroid of the 40×30×5 L section (area 325 mm²).
+// These are explicit design dimensions; arbitrary section edits require corresponding joint-design edits.
+{
+  "$schema": "./nbcad-script.schema.json",
+  "version": 1,
+  "name": "Repeated bracket assembly and shared edit",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Locate the plate",
+      "note": "Dimension 60 × 40 mm stock and fix one corner at (−30, −20). The origin lies at the plate centre, so the four bores are symmetric.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "plate_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Plate / located 60 by 40 stock",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": -30,
+            "y": -20
+          },
+          "corner_hint": {
+            "x": 30,
+            "y": 20
+          },
+          "width_mm": 60,
+          "height_mm": 40,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "plate_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "plate_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": -30,
+                "/position/y": -20
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "view": "current",
+      "fit": true,
+      "target": "active_sketch",
+      "duration_ms": 250
+    },
+    {
+      "id": "plate_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "plate_build",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "Plate / located 60 by 40 stock",
+          "profile_indices": [
+            0
+          ],
+          "operation": "new_body",
+          "extent": {
+            "type": "distance",
+            "distance": 5
+          },
+          "taper_angle_deg": 0,
+          "flip": false,
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_feature": {
+          "$select": {
+            "from": {
+              "$ref": "plate_build"
+            },
+            "path": "/document/features",
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_body": {
+          "$select": {
+            "from": {
+              "$ref": "plate_build"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/feature_id": {
+                "$ref": "plate_feature"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "view": "isometric",
+      "fit": true,
+      "body_id": {
+        "$ref": "plate_body",
+        "pointer": "/id"
+      },
+      "duration_ms": 350
+    },
+    {
+      "chapter": "Drill from current geometry",
+      "note": "Each 5 mm through hole is located 10 mm from both adjacent edges. Resolve the top face after each cut and project the design coordinates into its returned plane basis.",
+      "duration_ms": 1000
+    },
+    {
+      "let": {
+        "plate_face_0": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "plate_build"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_hole_0",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "plate_face_0",
+            "pointer": "/id"
+          },
+          "position": {
+            "$project": {
+              "point": [
+                -20,
+                -10,
+                5
+              ],
+              "basis": {
+                "$ref": "plate_face_0",
+                "pointer": "/plane"
+              }
+            }
+          },
+          "diameter": 5,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_face_1": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "plate_hole_0"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_hole_1",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "plate_face_1",
+            "pointer": "/id"
+          },
+          "position": {
+            "$project": {
+              "point": [
+                20,
+                -10,
+                5
+              ],
+              "basis": {
+                "$ref": "plate_face_1",
+                "pointer": "/plane"
+              }
+            }
+          },
+          "diameter": 5,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_face_2": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "plate_hole_1"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_hole_2",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "plate_face_2",
+            "pointer": "/id"
+          },
+          "position": {
+            "$project": {
+              "point": [
+                20,
+                10,
+                5
+              ],
+              "basis": {
+                "$ref": "plate_face_2",
+                "pointer": "/plane"
+              }
+            }
+          },
+          "diameter": 5,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_face_3": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "plate_hole_2"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_hole_3",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "plate_face_3",
+            "pointer": "/id"
+          },
+          "position": {
+            "$project": {
+              "point": [
+                -20,
+                10,
+                5
+              ],
+              "basis": {
+                "$ref": "plate_face_3",
+                "pointer": "/plane"
+              }
+            }
+          },
+          "diameter": 5,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_finished_body": {
+          "$select": {
+            "from": {
+              "$ref": "plate_hole_3"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/id": {
+                "$ref": "plate_body",
+                "pointer": "/id"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_component",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_create_component",
+        "arguments": {
+          "name": "plate",
+          "body_ids": [
+            {
+              "$ref": "plate_body",
+              "pointer": "/id"
+            }
+          ],
+          "absorb_promoted_bodies": true
+        }
+      }
+    },
+    {
+      "id": "plate_assembly",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_document",
+        "arguments": {}
+      }
+    },
+    {
+      "let": {
+        "plate_occurrence": {
+          "$select": {
+            "from": {
+              "$ref": "plate_assembly"
+            },
+            "path": "/component_structure/occurrences",
+            "where": {
+              "/component_id": {
+                "$ref": "plate_component",
+                "pointer": "/id"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "chapter": "Locate the radial section",
+      "note": "A 5 mm wide by 12 mm long section begins at radius 5 mm from the Y axis. The two radial positions set a 10 mm bore and 20 mm outside diameter.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "spacer_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Spacer / bore radius and length section",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "id": "spacer_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": 5,
+            "y": 0
+          },
+          "corner_hint": {
+            "x": 10,
+            "y": 12
+          },
+          "width_mm": 5,
+          "height_mm": 12,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "spacer_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "spacer_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": 5,
+                "/position/y": 0
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "chapter": "Revolve the annulus",
+      "note": "Rotate the closed radial section a full turn around the sketch Y axis. This creates one native solid with an open bore, not an imported tube.",
+      "duration_ms": 1000
+    },
+    {
+      "view": "current",
+      "fit": true,
+      "target": "active_sketch",
+      "duration_ms": 250
+    },
+    {
+      "id": "spacer_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "spacer_build",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_revolve",
+        "arguments": {
+          "sketch_name": "Spacer / bore radius and length section",
+          "profile_indices": [
+            0
+          ],
+          "axis_origin": {
+            "x": 0,
+            "y": 0
+          },
+          "axis_direction": {
+            "x": 0,
+            "y": 1
+          },
+          "axis_line_entity_id": null,
+          "angle_deg": 360,
+          "flip": false,
+          "operation": "new_body",
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "spacer_feature": {
+          "$select": {
+            "from": {
+              "$ref": "spacer_build"
+            },
+            "path": "/document/features",
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "spacer_body": {
+          "$select": {
+            "from": {
+              "$ref": "spacer_build"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/feature_id": {
+                "$ref": "spacer_feature"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "view": "isometric",
+      "fit": true,
+      "body_id": {
+        "$ref": "spacer_body",
+        "pointer": "/id"
+      },
+      "duration_ms": 350
+    },
+    {
+      "let": {
+        "spacer_finished_body": {
+          "$ref": "spacer_body"
+        }
+      }
+    },
+    {
+      "id": "spacer_component",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_create_component",
+        "arguments": {
+          "name": "spacer",
+          "body_ids": [
+            {
+              "$ref": "spacer_body",
+              "pointer": "/id"
+            }
+          ],
+          "absorb_promoted_bodies": true
+        }
+      }
+    },
+    {
+      "id": "spacer_assembly",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_document",
+        "arguments": {}
+      }
+    },
+    {
+      "let": {
+        "spacer_occurrence": {
+          "$select": {
+            "from": {
+              "$ref": "spacer_assembly"
+            },
+            "path": "/component_structure/occurrences",
+            "where": {
+              "/component_id": {
+                "$ref": "spacer_component",
+                "pointer": "/id"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "chapter": "Constrain the section",
+      "note": "Draw one closed six-edge L. Horizontal and vertical relations establish square corners; four driving lengths set a 40 × 30 mm envelope and 5 mm walls.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "bracket_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / dimensioned L section",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 40,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_0": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_0",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 40,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 40,
+            "y": 5
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_1": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_1",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 40,
+            "y": 5
+          },
+          "to_raw": {
+            "x": 5,
+            "y": 5
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_2": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_2",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 5,
+            "y": 5
+          },
+          "to_raw": {
+            "x": 5,
+            "y": 30
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_3": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_3",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 5,
+            "y": 30
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 30
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_4": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_4",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 30
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_5": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_5",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "bracket_line_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/id": {
+                  "$ref": "bracket_edge_0"
+                }
+              },
+              "take": "one",
+              "pointer": "/start_id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_square",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraints",
+        "arguments": {
+          "constraints": [
+            {
+              "type": "horizontal",
+              "entity": {
+                "$ref": "bracket_edge_0"
+              }
+            },
+            {
+              "type": "vertical",
+              "entity": {
+                "$ref": "bracket_edge_1"
+              }
+            },
+            {
+              "type": "horizontal",
+              "entity": {
+                "$ref": "bracket_edge_2"
+              }
+            },
+            {
+              "type": "vertical",
+              "entity": {
+                "$ref": "bracket_edge_3"
+              }
+            },
+            {
+              "type": "horizontal",
+              "entity": {
+                "$ref": "bracket_edge_4"
+              }
+            },
+            {
+              "type": "vertical",
+              "entity": {
+                "$ref": "bracket_edge_5"
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_0"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_1"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_1"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_2"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_2"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_3"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_3"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_4"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_4"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_5"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_5"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_0"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_0",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_0"
+            }
+          ],
+          "text_pos": {
+            "x": 20,
+            "y": -6
+          },
+          "value_text": "40"
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_1",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_1"
+            }
+          ],
+          "text_pos": {
+            "x": 47,
+            "y": 2.5
+          },
+          "value_text": "5"
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_4",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_4"
+            }
+          ],
+          "text_pos": {
+            "x": 2.5,
+            "y": 37
+          },
+          "value_text": "5"
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_5",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_5"
+            }
+          ],
+          "text_pos": {
+            "x": -7,
+            "y": 15
+          },
+          "value_text": "30"
+        }
+      }
+    },
+    {
+      "chapter": "Give the bracket width",
+      "note": "Extrude the fully located section by 20 mm. The section dimensions and extrusion width remain independent editable parameters.",
+      "duration_ms": 1000
+    },
+    {
+      "view": "current",
+      "fit": true,
+      "target": "active_sketch",
+      "duration_ms": 250
+    },
+    {
+      "id": "bracket_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "bracket_build",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "Bracket / dimensioned L section",
+          "profile_indices": [
+            0
+          ],
+          "operation": "new_body",
+          "extent": {
+            "type": "distance",
+            "distance": 20
+          },
+          "taper_angle_deg": 0,
+          "flip": false,
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_feature": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_build"
+            },
+            "path": "/document/features",
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_body": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_build"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/feature_id": {
+                "$ref": "bracket_feature"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "view": "isometric",
+      "fit": true,
+      "body_id": {
+        "$ref": "bracket_body",
+        "pointer": "/id"
+      },
+      "duration_ms": 350
+    },
+    {
+      "let": {
+        "bracket_finished_body": {
+          "$ref": "bracket_body"
+        }
+      }
+    },
+    {
+      "id": "bracket_component",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_create_component",
+        "arguments": {
+          "name": "angle-bracket",
+          "body_ids": [
+            {
+              "$ref": "bracket_body",
+              "pointer": "/id"
+            }
+          ],
+          "absorb_promoted_bodies": true
+        }
+      }
+    },
+    {
+      "id": "bracket_assembly",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_document",
+        "arguments": {}
+      }
+    },
+    {
+      "let": {
+        "bracket_occurrence": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_assembly"
+            },
+            "path": "/component_structure/occurrences",
+            "where": {
+              "/component_id": {
+                "$ref": "bracket_component",
+                "pointer": "/id"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "chapter": "Reuse the bracket definition",
+      "note": "Create a second occurrence of the same angle bracket. Ground the plate and attach the three moving occurrences using explicit face reference frames.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "bracket_copy",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_create_occurrence",
+        "arguments": {
+          "component_id": {
+            "$ref": "bracket_component",
+            "pointer": "/id"
+          },
+          "name": "angle-bracket-2"
+        }
+      }
+    },
+    {
+      "id": "ground_plate",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_set_occurrence_grounded",
+        "arguments": {
+          "occurrence_id": {
+            "$ref": "plate_occurrence",
+            "pointer": "/id"
+          },
+          "grounded": true
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_mating_face": {
+          "$select": {
+            "from": {
+              "$ref": "plate_finished_body"
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1
+            },
+            "take": "first"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_mating_face": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_finished_body"
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": -1
+            },
+            "take": "first"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "spacer_mating_face": {
+          "$select": {
+            "from": {
+              "$ref": "spacer_finished_body"
+            },
+            "path": "/faces",
+            "where": {
+              "$and": [
+                {
+                  "/plane/origin/1": 0
+                },
+                {
+                  "$or": [
+                    {
+                      "/plane/normal/1": 1
+                    },
+                    {
+                      "/plane/normal/1": -1
+                    }
+                  ]
+                }
+              ]
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "spacer_joint",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_create_joint",
+        "arguments": {
+          "name": "Spacer to plate",
+          "kind": "rigid",
+          "connector_a": {
+            "body_id": {
+              "$ref": "plate_body",
+              "pointer": "/id"
+            },
+            "face_id": {
+              "$ref": "plate_mating_face",
+              "pointer": "/id"
+            },
+            "face_key": {
+              "$ref": "plate_mating_face",
+              "pointer": "/key"
+            },
+            "kind": "planar_face",
+            "frame": {
+              "origin": [
+                0,
+                0,
+                5
+              ],
+              "primary_axis": [
+                0,
+                0,
+                1
+              ],
+              "secondary_axis": [
+                1,
+                0,
+                0
+              ]
+            },
+            "source_surface_frame": {
+              "origin": {
+                "$ref": "plate_mating_face",
+                "pointer": "/plane/origin"
+              },
+              "primary_axis": {
+                "$ref": "plate_mating_face",
+                "pointer": "/plane/normal"
+              },
+              "secondary_axis": {
+                "$ref": "plate_mating_face",
+                "pointer": "/plane/u"
+              }
+            }
+          },
+          "connector_b": {
+            "body_id": {
+              "$ref": "spacer_body",
+              "pointer": "/id"
+            },
+            "face_id": {
+              "$ref": "spacer_mating_face",
+              "pointer": "/id"
+            },
+            "face_key": {
+              "$ref": "spacer_mating_face",
+              "pointer": "/key"
+            },
+            "kind": "planar_face",
+            "frame": {
+              "origin": [
+                0,
+                0,
+                0
+              ],
+              "primary_axis": [
+                0,
+                -1,
+                0
+              ],
+              "secondary_axis": [
+                1,
+                0,
+                0
+              ]
+            },
+            "source_surface_frame": {
+              "origin": {
+                "$ref": "spacer_mating_face",
+                "pointer": "/plane/origin"
+              },
+              "primary_axis": {
+                "$ref": "spacer_mating_face",
+                "pointer": "/plane/normal"
+              },
+              "secondary_axis": {
+                "$ref": "spacer_mating_face",
+                "pointer": "/plane/u"
+              }
+            }
+          },
+          "flipped": true,
+          "grounded_occurrence_id": {
+            "$ref": "plate_occurrence",
+            "pointer": "/id"
+          },
+          "advanced": {
+            "connector_a_occurrence_id": {
+              "$ref": "plate_occurrence",
+              "pointer": "/id"
+            },
+            "connector_b_occurrence_id": {
+              "$ref": "spacer_occurrence",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_joint_0",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_create_joint",
+        "arguments": {
+          "name": "Bracket 1 to plate",
+          "kind": "planar",
+          "connector_a": {
+            "body_id": {
+              "$ref": "plate_body",
+              "pointer": "/id"
+            },
+            "face_id": {
+              "$ref": "plate_mating_face",
+              "pointer": "/id"
+            },
+            "face_key": {
+              "$ref": "plate_mating_face",
+              "pointer": "/key"
+            },
+            "kind": "planar_face",
+            "frame": {
+              "origin": [
+                0,
+                0,
+                5
+              ],
+              "primary_axis": [
+                0,
+                0,
+                1
+              ],
+              "secondary_axis": [
+                1,
+                0,
+                0
+              ]
+            },
+            "source_surface_frame": {
+              "origin": {
+                "$ref": "plate_mating_face",
+                "pointer": "/plane/origin"
+              },
+              "primary_axis": {
+                "$ref": "plate_mating_face",
+                "pointer": "/plane/normal"
+              },
+              "secondary_axis": {
+                "$ref": "plate_mating_face",
+                "pointer": "/plane/u"
+              }
+            }
+          },
+          "connector_b": {
+            "body_id": {
+              "$ref": "bracket_body",
+              "pointer": "/id"
+            },
+            "face_id": {
+              "$ref": "bracket_mating_face",
+              "pointer": "/id"
+            },
+            "face_key": {
+              "$ref": "bracket_mating_face",
+              "pointer": "/key"
+            },
+            "kind": "planar_face",
+            "frame": {
+              "origin": [
+                {
+                  "$ref": "bracket_mating_face",
+                  "pointer": "/signature/centroid/x"
+                },
+                {
+                  "$ref": "bracket_mating_face",
+                  "pointer": "/signature/centroid/y"
+                },
+                {
+                  "$ref": "bracket_mating_face",
+                  "pointer": "/signature/centroid/z"
+                }
+              ],
+              "primary_axis": [
+                0,
+                0,
+                -1
+              ],
+              "secondary_axis": [
+                1,
+                0,
+                0
+              ]
+            },
+            "source_surface_frame": {
+              "origin": {
+                "$ref": "bracket_mating_face",
+                "pointer": "/plane/origin"
+              },
+              "primary_axis": {
+                "$ref": "bracket_mating_face",
+                "pointer": "/plane/normal"
+              },
+              "secondary_axis": {
+                "$ref": "bracket_mating_face",
+                "pointer": "/plane/u"
+              }
+            }
+          },
+          "flipped": false,
+          "grounded_occurrence_id": {
+            "$ref": "plate_occurrence",
+            "pointer": "/id"
+          },
+          "angle_offset_deg": 0,
+          "angle_limits": {
+            "min": 0,
+            "max": 0
+          },
+          "linear_offset_mm": -11.73076923076923,
+          "linear_limits": {
+            "min": -11.73076923076923,
+            "max": -11.73076923076923
+          },
+          "advanced": {
+            "connector_a_occurrence_id": {
+              "$ref": "plate_occurrence",
+              "pointer": "/id"
+            },
+            "connector_b_occurrence_id": {
+              "$ref": "bracket_occurrence",
+              "pointer": "/id"
+            },
+            "secondary_linear_offset_mm": -6.73076923076923,
+            "secondary_linear_limits": {
+              "min": -6.73076923076923,
+              "max": -6.73076923076923
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_joint_1",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_create_joint",
+        "arguments": {
+          "name": "Bracket 2 to plate",
+          "kind": "planar",
+          "connector_a": {
+            "body_id": {
+              "$ref": "plate_body",
+              "pointer": "/id"
+            },
+            "face_id": {
+              "$ref": "plate_mating_face",
+              "pointer": "/id"
+            },
+            "face_key": {
+              "$ref": "plate_mating_face",
+              "pointer": "/key"
+            },
+            "kind": "planar_face",
+            "frame": {
+              "origin": [
+                0,
+                0,
+                5
+              ],
+              "primary_axis": [
+                0,
+                0,
+                1
+              ],
+              "secondary_axis": [
+                1,
+                0,
+                0
+              ]
+            },
+            "source_surface_frame": {
+              "origin": {
+                "$ref": "plate_mating_face",
+                "pointer": "/plane/origin"
+              },
+              "primary_axis": {
+                "$ref": "plate_mating_face",
+                "pointer": "/plane/normal"
+              },
+              "secondary_axis": {
+                "$ref": "plate_mating_face",
+                "pointer": "/plane/u"
+              }
+            }
+          },
+          "connector_b": {
+            "body_id": {
+              "$ref": "bracket_body",
+              "pointer": "/id"
+            },
+            "face_id": {
+              "$ref": "bracket_mating_face",
+              "pointer": "/id"
+            },
+            "face_key": {
+              "$ref": "bracket_mating_face",
+              "pointer": "/key"
+            },
+            "kind": "planar_face",
+            "frame": {
+              "origin": [
+                {
+                  "$ref": "bracket_mating_face",
+                  "pointer": "/signature/centroid/x"
+                },
+                {
+                  "$ref": "bracket_mating_face",
+                  "pointer": "/signature/centroid/y"
+                },
+                {
+                  "$ref": "bracket_mating_face",
+                  "pointer": "/signature/centroid/z"
+                }
+              ],
+              "primary_axis": [
+                0,
+                0,
+                -1
+              ],
+              "secondary_axis": [
+                1,
+                0,
+                0
+              ]
+            },
+            "source_surface_frame": {
+              "origin": {
+                "$ref": "bracket_mating_face",
+                "pointer": "/plane/origin"
+              },
+              "primary_axis": {
+                "$ref": "bracket_mating_face",
+                "pointer": "/plane/normal"
+              },
+              "secondary_axis": {
+                "$ref": "bracket_mating_face",
+                "pointer": "/plane/u"
+              }
+            }
+          },
+          "flipped": false,
+          "grounded_occurrence_id": {
+            "$ref": "plate_occurrence",
+            "pointer": "/id"
+          },
+          "angle_offset_deg": 180,
+          "angle_limits": {
+            "min": 180,
+            "max": 180
+          },
+          "linear_offset_mm": 11.73076923076923,
+          "linear_limits": {
+            "min": 11.73076923076923,
+            "max": 11.73076923076923
+          },
+          "advanced": {
+            "connector_a_occurrence_id": {
+              "$ref": "plate_occurrence",
+              "pointer": "/id"
+            },
+            "connector_b_occurrence_id": {
+              "$ref": "bracket_copy",
+              "pointer": "/id"
+            },
+            "secondary_linear_offset_mm": 6.73076923076923,
+            "secondary_linear_limits": {
+              "min": 6.73076923076923,
+              "max": 6.73076923076923
+            }
+          }
+        }
+      }
+    },
+    {
+      "chapter": "Edit one definition, update both occurrences",
+      "note": "Change the bracket extrusion from 20 to 25 mm. The two occurrences retain their opposite positions and share the regenerated native body. This is an assembly lesson, not a fastened or manufacturing-qualified product.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "before_edit_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "id": "before_edit_model",
+      "call": {
+        "group": "document/files",
+        "operation": "cad_project_model",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "widen_brackets",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_edit_extrude",
+        "arguments": {
+          "feature_id": {
+            "$ref": "bracket_feature"
+          },
+          "extrude": {
+            "sketch_name": "Bracket / dimensioned L section",
+            "profile_indices": [
+              0
+            ],
+            "operation": "new_body",
+            "extent": {
+              "type": "distance",
+              "distance": 25
+            },
+            "taper_angle_deg": 0,
+            "flip": false,
+            "target_body_ids": []
+          }
+        }
+      }
+    },
+    {
+      "view": "isometric",
+      "fit": true,
+      "duration_ms": 400
+    },
+    {
+      "chapter": "Inspect the editable result",
+      "note": "Review the retained sketch and feature history. Maximum speed, step-through teaching and paced presentation execute this same construction source.",
+      "duration_ms": 1000
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 3
+    },
+    {
+      "id": "final_sketches",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finished",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_sketches"
+        }
+      },
+      "equals": 3
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/0/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/1/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/2/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "id": "final_solution",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_solution",
+        "arguments": {}
+      },
+      "expect": {
+        "/solved": true,
+        "/diagnostics": []
+      }
+    },
+    {
+      "id": "final_model",
+      "call": {
+        "group": "document/files",
+        "operation": "cad_project_model",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "final_assembly",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_document",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_assembly",
+          "pointer": "/component_structure/definitions"
+        }
+      },
+      "equals": 3
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_assembly",
+          "pointer": "/component_structure/occurrences"
+        }
+      },
+      "equals": 4
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_assembly",
+          "pointer": "/joints"
+        }
+      },
+      "equals": 3
+    }
+  ],
+  "exports": {
+    "final_model": {
+      "$ref": "final_model"
+    },
+    "final_scene": {
+      "$ref": "final_scene"
+    },
+    "final_sketches": {
+      "$ref": "final_sketches"
+    },
+    "final_solution": {
+      "$ref": "final_solution"
+    },
+    "before_edit_model": {
+      "$ref": "before_edit_model"
+    },
+    "before_edit_scene": {
+      "$ref": "before_edit_scene"
+    },
+    "final_assembly": {
+      "$ref": "final_assembly"
+    },
+    "bracket_body_id": {
+      "$ref": "bracket_body",
+      "pointer": "/id"
+    }
+  }
+}

@@ -56,7 +56,8 @@ through MCP, and both original user documents were preserved byte-for-byte.
   and equivalent maximum-rate results. Avoid adding parallel animation state.
 - **Complete the learning and manufacturing scope.** The short fillet lesson is
   not comprehensive feature coverage. Preserve #89's unique analytic/round-trip
-  checks when moving its fixtures to native scripts. The bench remains a design
+  checks: its four small examples now have native JSONC sources and Rust stdio
+  validation in the recipe-library layer. The bench remains a design
   candidate; selected-occurrence editing is #94 and complete drafting is #93.
   The printable windmill, bench and screw vise are iteration targets in
   [flagship-examples.md](flagship-examples.md), not released models.

@@ -1,0 +1,538 @@
+// Native recipe migrated from the small part-design fixtures. Dimensions are millimetres.
+// No captured entity IDs or model snapshots are used to construct the design.
+{
+  "$schema": "./nbcad-script.schema.json",
+  "version": 1,
+  "name": "Four-hole mounting plate",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Locate the plate",
+      "note": "Dimension 60 × 40 mm stock and fix one corner at (−30, −20). The origin lies at the plate centre, so the four bores are symmetric.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "plate_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Plate / located 60 by 40 stock",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": -30,
+            "y": -20
+          },
+          "corner_hint": {
+            "x": 30,
+            "y": 20
+          },
+          "width_mm": 60,
+          "height_mm": 40,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "plate_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "plate_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": -30,
+                "/position/y": -20
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "view": "current",
+      "fit": true,
+      "target": "active_sketch",
+      "duration_ms": 250
+    },
+    {
+      "id": "plate_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "plate_build",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "Plate / located 60 by 40 stock",
+          "profile_indices": [
+            0
+          ],
+          "operation": "new_body",
+          "extent": {
+            "type": "distance",
+            "distance": 5
+          },
+          "taper_angle_deg": 0,
+          "flip": false,
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_feature": {
+          "$select": {
+            "from": {
+              "$ref": "plate_build"
+            },
+            "path": "/document/features",
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_body": {
+          "$select": {
+            "from": {
+              "$ref": "plate_build"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/feature_id": {
+                "$ref": "plate_feature"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "view": "isometric",
+      "fit": true,
+      "body_id": {
+        "$ref": "plate_body",
+        "pointer": "/id"
+      },
+      "duration_ms": 350
+    },
+    {
+      "chapter": "Drill from current geometry",
+      "note": "Each 5 mm through hole is located 10 mm from both adjacent edges. Resolve the top face after each cut and project the design coordinates into its returned plane basis.",
+      "duration_ms": 1000
+    },
+    {
+      "let": {
+        "plate_face_0": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "plate_build"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_hole_0",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "plate_face_0",
+            "pointer": "/id"
+          },
+          "position": {
+            "$project": {
+              "point": [
+                -20,
+                -10,
+                5
+              ],
+              "basis": {
+                "$ref": "plate_face_0",
+                "pointer": "/plane"
+              }
+            }
+          },
+          "diameter": 5,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_face_1": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "plate_hole_0"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_hole_1",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "plate_face_1",
+            "pointer": "/id"
+          },
+          "position": {
+            "$project": {
+              "point": [
+                20,
+                -10,
+                5
+              ],
+              "basis": {
+                "$ref": "plate_face_1",
+                "pointer": "/plane"
+              }
+            }
+          },
+          "diameter": 5,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_face_2": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "plate_hole_1"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_hole_2",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "plate_face_2",
+            "pointer": "/id"
+          },
+          "position": {
+            "$project": {
+              "point": [
+                20,
+                10,
+                5
+              ],
+              "basis": {
+                "$ref": "plate_face_2",
+                "pointer": "/plane"
+              }
+            }
+          },
+          "diameter": 5,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_face_3": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "plate_hole_2"
+                },
+                "path": "/scene/bodies",
+                "where": {
+                  "/id": {
+                    "$ref": "plate_body",
+                    "pointer": "/id"
+                  }
+                },
+                "take": "one"
+              }
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "plate_hole_3",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "plate_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "plate_face_3",
+            "pointer": "/id"
+          },
+          "position": {
+            "$project": {
+              "point": [
+                -20,
+                10,
+                5
+              ],
+              "basis": {
+                "$ref": "plate_face_3",
+                "pointer": "/plane"
+              }
+            }
+          },
+          "diameter": 5,
+          "extent": {
+            "type": "through_all"
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "plate_finished_body": {
+          "$select": {
+            "from": {
+              "$ref": "plate_hole_3"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/id": {
+                "$ref": "plate_body",
+                "pointer": "/id"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "view": "isometric",
+      "fit": true,
+      "duration_ms": 400
+    },
+    {
+      "chapter": "Inspect the editable result",
+      "note": "Review the retained sketch and feature history. Maximum speed, step-through teaching and paced presentation execute this same construction source.",
+      "duration_ms": 1000
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "final_sketches",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finished",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_sketches"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/0/dof/value"
+      },
+      "equals": 0
+    },
+    {
+      "id": "final_solution",
+      "call": {
+        "group": "assembly/joints",
+        "operation": "assembly_solution",
+        "arguments": {}
+      },
+      "expect": {
+        "/solved": true,
+        "/diagnostics": []
+      }
+    },
+    {
+      "id": "final_model",
+      "call": {
+        "group": "document/files",
+        "operation": "cad_project_model",
+        "arguments": {}
+      }
+    }
+  ],
+  "exports": {
+    "final_model": {
+      "$ref": "final_model"
+    },
+    "final_scene": {
+      "$ref": "final_scene"
+    },
+    "final_sketches": {
+      "$ref": "final_sketches"
+    },
+    "final_solution": {
+      "$ref": "final_solution"
+    }
+  }
+}
+

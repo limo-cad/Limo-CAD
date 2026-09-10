@@ -13,8 +13,8 @@ export interface ScriptExample {
   id: string;
   name: string;
   summary: string;
-  group: string;
-  operation: string;
+  kind: 'lesson' | 'assembly' | 'flagship-candidate';
+  focus_operations: string[];
   operations: string[];
   preview: boolean;
   source: string;

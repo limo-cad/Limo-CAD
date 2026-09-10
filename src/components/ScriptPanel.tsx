@@ -53,7 +53,7 @@ export function ScriptPanel() {
             disabled={busy} onClick={() => void showScriptExample(example)}>
             <span className="block text-xs font-semibold">{example.name}</span>
             <span className="mt-1 block text-xs leading-relaxed text-mute">{example.summary}</span>
-            <span className="mt-2 block text-[10px] text-mute">{example.preview ? 'Short feature lesson' : 'Complete design walkthrough'}</span>
+            <span className="mt-2 block text-[10px] text-mute">{example.kind === 'lesson' ? 'Feature lesson' : example.kind === 'assembly' ? 'Assembly example' : 'Flagship design candidate'}</span>
           </button>
         ))}</div>
         {state.loading && <p role="status" className="mt-3 text-xs text-mute">Loading script…</p>}
