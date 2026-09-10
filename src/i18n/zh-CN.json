@@ -50,6 +50,7 @@
     "closeDiscardConfirm": "关闭此设计并丢弃其未保存的更改？",
     "quitDiscardConfirm": "退出 noBS CAD 并丢弃所有打开设计中的未保存更改？",
     "closeSaveConfirm": "关闭此设计前是否要保存更改？",
+    "exit": "退出",
     "quitSaveConfirm": "退出 noBS CAD 前是否要保存更改？",
     "replaceSaveConfirm": "在此标签页中打开另一个项目前是否要保存此设计？",
     "finishBeforeStep": "导出 STEP 前请完成当前草图。",

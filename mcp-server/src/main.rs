@@ -3308,7 +3308,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::control(
             "cad_interface", "Explore and drive the product interface",
-            "Catalog returns shared product groups and typed operations. Execute runs an operation by group and name with identical arguments/results headlessly or live; callers do not manage submission. Launch connects the new desktop. Inspect returns rendered controls grouped by product surfaces, with opaque target IDs, labels, disabled states and values. Use those IDs for click/set_value/key; stale, hidden, disabled and modal-blocked controls reject. Window mode is foreground/background/inspect. pace_ms (0-2000) controls visible playback timing; fast mode still acknowledges ordered operations. No selectors or JavaScript evaluation. Inspect again after opening menus or dialogs.",
+            "Catalog returns shared product groups and typed operations. Execute runs an operation by group and name with identical arguments/results headlessly or live; callers do not manage submission. Launch connects the new desktop. Inspect returns rendered controls grouped by product surfaces, with opaque target IDs, labels, disabled states and values. Use those IDs for click/set_value/key; stale, hidden, disabled and modal-blocked controls reject. Window mode is foreground/background/inspect/close. Close requests normal guarded application exit; unsaved work prompts for Save/Discard/Cancel. The reply acknowledges the request, not process termination. pace_ms (0-2000) controls visible playback timing; fast mode still acknowledges ordered operations. No selectors or JavaScript evaluation. Inspect again after opening menus or dialogs.",
             object_schema(json!({
                 "session_id":{"type":"string"},
                 "action":{"type":"string","enum":["catalog","execute","launch","view","inspect","click","double_click","context_menu","set_value","key","window","file","viewport"]},
@@ -3327,7 +3327,7 @@ fn tool_specs() -> Vec<ToolSpec> {
                 "overwrite":{"type":"boolean"},"discard_changes":{"type":"boolean"},
                 "target":{"type":"string"},"value":{"type":"string"},
                 "key":{"type":"string","enum":["Enter","Escape","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Delete","Backspace"]},
-                "mode":{"type":"string","enum":["foreground","background","inspect"]},
+                "mode":{"type":"string","enum":["foreground","background","inspect","close"]},
                 "pace_ms":{"type":"integer","minimum":0,"maximum":2000}
             }), &[]),
         ),

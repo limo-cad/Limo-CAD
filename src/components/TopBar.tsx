@@ -24,6 +24,8 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslation } from '../i18n';
+import { isTauriRuntime } from '../engine';
+import { requestApplicationExit } from '../files/applicationExit';
 import {
   closeProject,
   export3mf,
@@ -331,6 +333,13 @@ export function ProjectMenuControls() {
                 label={t('topbar.settings')}
                 onClick={openSettings}
               />
+              {isTauriRuntime() && (
+                <FileMenuItem
+                  icon={<X size={14} />}
+                  label={t('file.exit')}
+                  onClick={() => { setMenuOpen(false); requestApplicationExit(); }}
+                />
+              )}
               <div className="mt-1 border-t border-edge px-3 pb-1 pt-2 text-[9px] leading-relaxed text-mute">
                 {t('file.zipHint')}
               </div>

@@ -43,11 +43,24 @@ and a `move`, `click`, `double_click`, or atomic `drag` gesture. `point` and dra
 3D viewport also accepts a `world` point. These operations route through the
 same canvas handlers as user input. They do not bypass feature validation.
 
-`action: window` accepts `foreground`, `background`, or `inspect`. Returned
+`action: window` accepts `foreground`, `background`, `inspect`, or `close`. Returned
 window flags describe observed OS state; foreground requests are subject to OS
 focus policy. Native wake events advance camera animation, operation playback,
 and keepalives while browser timers are throttled. Hidden execution reports
 `presented: false`; a successful operation is not proof of rendered pixels.
+
+`close` requests application exit through the same unsaved-work guard as the
+title-bar close button, Alt+F4, File → Exit, and native macOS Quit. Its reply
+acknowledges the request, not process termination. Inspect and use the normal
+Save / Don't Save / Cancel controls if a prompt appears. A save without a known
+path opens the native picker; save to an explicit path first for unattended
+replay. All live control replies, including confirmation clicks, are written
+before shutdown. There is no MCP force-kill or implicit discard mode.
+
+`cargo xtask test-mcp exit --server PATH --desktop PATH [--out REPORT]` launches
+only disposable windows and verifies foreground/background exit, the File menu,
+cancel/discard, save followed by fresh-process reopen, and Windows native close.
+Native macOS menu/shortcut delivery still needs a macOS smoke run.
 
 `action: file` supports absolute `.nbcad` paths for `open` and `save`, and an
 explicit `name` for `rename`, using the normal project pipeline. Replacing an

@@ -56,7 +56,7 @@ Usage:
   cargo run -p xtask -- install-mcp --clients LIST [--no-build] [--binary PATH]
 
 Commands:
-  test-mcp      Run contracts (default), live, controls, bench, garden-bench, or drawing. Additional
+  test-mcp      Run contracts (default), live, controls, exit, bench, garden-bench, or drawing. Additional
                 arguments pass directly to the selected MCP test/demo driver.
                 Example: cargo xtask test-mcp live --server PATH --desktop PATH
   install-mcp   Detect installed agent clients and upsert the local nbcad-mcp

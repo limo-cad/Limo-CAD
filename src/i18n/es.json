@@ -50,6 +50,7 @@
     "closeDiscardConfirm": "¿Cerrar este diseño y descartar sus cambios sin guardar?",
     "quitDiscardConfirm": "¿Salir de noBS CAD y descartar los cambios sin guardar en todos los diseños abiertos?",
     "closeSaveConfirm": "¿Desea guardar los cambios en este diseño antes de cerrarlo?",
+    "exit": "Salir",
     "quitSaveConfirm": "¿Desea guardar los cambios antes de salir de noBS CAD?",
     "replaceSaveConfirm": "¿Desea guardar este diseño antes de abrir otro proyecto en su pestaña?",
     "finishBeforeStep": "Finalice el croquis activo antes de exportar STEP.",

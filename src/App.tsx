@@ -67,6 +67,7 @@ import {
 import { installNativeFileMenu } from './nativeFileMenu';
 import { isTauriRuntime } from './engine';
 import { requestUnsavedDecision } from './files/unsavedChanges';
+import { createExitController } from './files/applicationExit';
 import { UnsavedChangesDialog } from './components/UnsavedChangesDialog';
 
 export default function App() {
@@ -129,7 +130,8 @@ export default function App() {
   useEffect(() => {
     if (!isTauriRuntime()) return;
     let disposed = false;
-    let promptOpen = false;
+    let exitController: ReturnType<typeof createExitController> | null = null;
+    const requestQuit = () => { void exitController?.request(); };
     let unlistenClose: (() => void) | null = null;
     let unlistenQuit: (() => void) | null = null;
     void Promise.all([
@@ -139,29 +141,22 @@ export default function App() {
     ]).then(async ([{ invoke }, { listen }, { getCurrentWindow }]) => {
       if (disposed) return;
       const appWindow = getCurrentWindow();
-      const requestQuit = async () => {
-        if (promptOpen || disposed) return;
-        if (!hasUnsavedProjects()) {
-          await invoke('native_force_quit');
-          return;
-        }
-        promptOpen = true;
-        try {
-          const decision = await requestUnsavedDecision('quit');
-          if (decision === 'cancel' || disposed) return;
-          if (decision === 'save' && !(await saveAllUnsavedProjects())) return;
-          if (!disposed) await invoke('native_force_quit');
-        } catch (error) {
+      exitController = createExitController({
+        dirty: hasUnsavedProjects,
+        decide: () => requestUnsavedDecision('quit'),
+        save: saveAllUnsavedProjects,
+        exit: () => invoke('native_force_quit'),
+        error: (error) => {
           useAppStore.getState().setConstraintDialog({
             titleKey: 'file.errorTitle',
             message: error instanceof Error ? error.message : String(error),
           });
-        } finally {
-          promptOpen = false;
-        }
-      };
+        },
+      });
+      window.addEventListener('nbcad:quit-request', requestQuit);
       unlistenClose = await appWindow.onCloseRequested((event) => {
-        if (!hasUnsavedProjects()) return;
+        // Always own close: Tauri's default JS handler calls window.destroy,
+        // which is not granted by core:default and bypasses our quit route.
         event.preventDefault();
         void requestQuit();
       });
@@ -177,6 +172,8 @@ export default function App() {
     }).catch(() => undefined);
     return () => {
       disposed = true;
+      exitController?.dispose();
+      window.removeEventListener('nbcad:quit-request', requestQuit);
       unlistenClose?.();
       unlistenQuit?.();
     };

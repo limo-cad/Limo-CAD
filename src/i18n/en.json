@@ -50,6 +50,7 @@
     "closeDiscardConfirm": "Close this design and discard its unsaved changes?",
     "quitDiscardConfirm": "Quit noBS CAD and discard unsaved changes in all open designs?",
     "closeSaveConfirm": "Do you want to save the changes to this design before closing it?",
+    "exit": "Exit",
     "quitSaveConfirm": "Do you want to save changes before quitting noBS CAD?",
     "replaceSaveConfirm": "Do you want to save this design before opening another project in its tab?",
     "finishBeforeStep": "Finish the active sketch before exporting STEP.",

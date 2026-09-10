@@ -1339,8 +1339,14 @@ pub fn mcp_window_control(window: tauri::WebviewWindow, mode: String) -> Result<
             window.set_focus().map_err(|e| e.to_string())?;
         }
         "background" => window.minimize().map_err(|e| e.to_string())?,
+        "close" => {
+            // Same CloseRequested event as title-bar X / Alt+F4. The frontend
+            // guard owns confirmation and waits for the MCP reply before exit.
+            window.close().map_err(|e| e.to_string())?;
+            return Ok(json!({"close_requested": true}));
+        }
         "inspect" => (),
-        _ => return Err("mode must be foreground, background, or inspect".into()),
+        _ => return Err("mode must be foreground, background, close, or inspect".into()),
     }
     Ok(
         json!({"visible": window.is_visible().map_err(|e| e.to_string())?,

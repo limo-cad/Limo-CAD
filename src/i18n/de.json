@@ -50,6 +50,7 @@
     "closeDiscardConfirm": "Diese Konstruktion schließen und ihre ungespeicherten Änderungen verwerfen?",
     "quitDiscardConfirm": "noBS CAD beenden und ungespeicherte Änderungen in allen offenen Konstruktionen verwerfen?",
     "closeSaveConfirm": "Möchten Sie die Änderungen an dieser Konstruktion vor dem Schließen speichern?",
+    "exit": "Beenden",
     "quitSaveConfirm": "Möchten Sie Änderungen vor dem Beenden von noBS CAD speichern?",
     "replaceSaveConfirm": "Möchten Sie diese Konstruktion speichern, bevor Sie ein anderes Projekt in ihrem Tab öffnen?",
     "finishBeforeStep": "Beenden Sie die aktive Skizze, bevor Sie STEP exportieren.",

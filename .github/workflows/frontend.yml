@@ -29,6 +29,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Run all frontend regression suites
         run: npm run test:frontend
+      - name: Test guarded application exit and control acknowledgements
+        run: npx tsx scripts/applicationExit.test.ts
       - name: Verify desktop frontend builds without browser WASM
         run: npm run build:desktop
       - name: Test live MCP snapshot revision boundaries

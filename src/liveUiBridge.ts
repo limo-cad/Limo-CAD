@@ -6,6 +6,7 @@ import { presentOperation, setPlaybackPace, waitForPlayback } from './operationP
 import { operateUiFile, type UiFileRequest } from './uiFiles';
 import {drivePointer, type UiGesture} from './uiPointer';
 import {pendingEngineOperations} from './engine/activity';
+import { applicationExitBarrier } from './files/applicationExit';
 
 export const viewDirections: Record<string, [number, number, number]> = {
   front: [0, -1, 0], back: [0, 1, 0], left: [-1, 0, 0], right: [1, 0, 0],
@@ -18,6 +19,7 @@ interface ViewRequest { id: string; session_id: string; view: string; fit: boole
 export async function applyLiveUiControl(publishChangedState: () => Promise<void>): Promise<void> {
   if (applying || useAppStore.getState().engineKind !== 'tauri') return;
   applying = true;
+  const releaseExit = applicationExitBarrier.hold();
   try {
     const before = useAppStore.getState();
     const document = before.document;
@@ -107,5 +109,5 @@ export async function applyLiveUiControl(publishChangedState: () => Promise<void
     await invoke('mcp_session_bridge_control', { response });
   } catch (error) {
     console.debug('[sessionBridge] view request failed', error);
-  } finally { applying = false; }
+  } finally { applying = false; releaseExit(); }
 }
