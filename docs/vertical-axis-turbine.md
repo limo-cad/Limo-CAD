@@ -50,6 +50,14 @@ recess. This is explicit prototype geometry, not a strength rating. The hub
 requires a printed slip/torque coupon and a measured motor before physical
 release; do not enlarge the modeled motor shaft merely to make the hub fit.
 
+The stage and carrier use 6.4 mm counterbores for flat clamp head/nut seats.
+Their remaining clamp grips are 8 mm and 10 mm respectively. The rotor gear
+uses a 24 mm hub with a 9.6 mm grip; the pinion uses a 12 mm hub, 4.8 mm seat
+diameter and 4 mm grip. The generator cradle uses flat integral ears with a
+16 mm grip. These are modeled seating surfaces, not fasteners resting on a
+curved wall. Confirm washer/head/nut dimensions and usable engagement against
+the procurement drawing before printing.
+
 ## Print and assemble
 
 PETG is the baseline. Start with a 0.4 mm nozzle and 0.2 mm layers only as a

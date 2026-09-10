@@ -19295,16 +19295,16 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "12.110365194966903",
+          "angle_text": "12.74853115766883",
           "ctrl_held": true,
           "from": {
             "x": 34.73314488728579,
             "y": -1.0821951020094638
           },
-          "length_text": "0.19312039736547754",
+          "length_text": "0.38725676222590544",
           "to_hint": {
-            "x": 34.92196744801647,
-            "y": -1.0416793219020861
+            "x": 35.11085498729632,
+            "y": -0.9967382108904587
           }
         },
         "group": "sketch/draw",
@@ -19332,16 +19332,16 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "13.38327916467539",
+          "angle_text": "15.120279820470861",
           "ctrl_held": true,
           "from": {
-            "x": 34.92196744801647,
-            "y": -1.0416793219020861
-          },
-          "length_text": "0.1941602584314251",
-          "to_hint": {
             "x": 35.11085498729632,
             "y": -0.9967382108904587
+          },
+          "length_text": "0.391421176155441",
+          "to_hint": {
+            "x": 35.48872530517342,
+            "y": -0.8946374762683681
           }
         },
         "group": "sketch/draw",
@@ -19369,16 +19369,16 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "14.564672631605845",
+          "angle_text": "17.221226476466345",
           "ctrl_held": true,
           "from": {
-            "x": 35.11085498729632,
-            "y": -0.9967382108904587
+            "x": 35.48872530517342,
+            "y": -0.8946374762683681
           },
-          "length_text": "0.19519995009883329",
+          "length_text": "0.3955825478037377",
           "to_hint": {
-            "x": 35.299782071278656,
-            "y": -0.9476507638543925
+            "x": 35.86657339092087,
+            "y": -0.7775205422926077
           }
         },
         "group": "sketch/draw",
@@ -19406,16 +19406,16 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "15.67294357758784",
+          "angle_text": "19.132839216868312",
           "ctrl_held": true,
           "from": {
-            "x": 35.299782071278656,
-            "y": -0.9476507638543925
+            "x": 35.86657339092087,
+            "y": -0.7775205422926077
           },
-          "length_text": "0.19623953295727406",
+          "length_text": "0.39974241994030113",
           "to_hint": {
-            "x": 35.48872530517342,
-            "y": -0.8946374762683681
+            "x": 36.2442345237577,
+            "y": -0.6465011885919726
           }
         },
         "group": "sketch/draw",
@@ -19443,16 +19443,16 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "16.721098433543116",
+          "angle_text": "20.902774188679192",
           "ctrl_held": true,
           "from": {
-            "x": 35.48872530517342,
-            "y": -0.8946374762683681
+            "x": 36.2442345237577,
+            "y": -0.6465011885919726
           },
-          "length_text": "0.19727904176694347",
+          "length_text": "0.4039014422538703",
           "to_hint": {
-            "x": 35.67766272088893,
-            "y": -0.8378776906519103
+            "x": 36.621554081345,
+            "y": -0.5023959266586339
           }
         },
         "group": "sketch/draw",
@@ -19480,16 +19480,16 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "17.718733108537986",
+          "angle_text": "22.561762809655185",
           "ctrl_held": true,
           "from": {
-            "x": 35.67766272088893,
-            "y": -0.8378776906519103
+            "x": 36.621554081345,
+            "y": -0.5023959266586339
           },
-          "length_text": "0.19831849790168946",
+          "length_text": "0.4080599362580342",
           "to_hint": {
-            "x": 35.86657339092087,
-            "y": -0.7775205422926077
+            "x": 36.99838375296508,
+            "y": -0.34583184979036224
           }
         },
         "group": "sketch/draw",
@@ -19503,228 +19503,6 @@
           "$select": {
             "from": {
               "$ref": "edge_1070",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "18.67316593838707",
-          "ctrl_held": true,
-          "from": {
-            "x": 35.86657339092087,
-            "y": -0.7775205422926077
-          },
-          "length_text": "0.19935791522892576",
-          "to_hint": {
-            "x": 36.055437171403845,
-            "y": -0.7136922508686477
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1072"
-    },
-    {
-      "let": {
-        "edge_ref_1073": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1072",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "19.59012828651751",
-          "ctrl_held": true,
-          "from": {
-            "x": 36.055437171403845,
-            "y": -0.7136922508686477
-          },
-          "length_text": "0.20039730313976925",
-          "to_hint": {
-            "x": 36.2442345237577,
-            "y": -0.6465011885919726
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1074"
-    },
-    {
-      "let": {
-        "edge_ref_1075": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1074",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "20.47420723589539",
-          "ctrl_held": true,
-          "from": {
-            "x": 36.2442345237577,
-            "y": -0.6465011885919726
-          },
-          "length_text": "0.20143666822070216",
-          "to_hint": {
-            "x": 36.43294638662709,
-            "y": -0.5760415255483428
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1076"
-    },
-    {
-      "let": {
-        "edge_ref_1077": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1076",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "21.32914118695103",
-          "ctrl_held": true,
-          "from": {
-            "x": 36.43294638662709,
-            "y": -0.5760415255483428
-          },
-          "length_text": "0.2024760152280526",
-          "to_hint": {
-            "x": 36.621554081345,
-            "y": -0.5023959266586339
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1078"
-    },
-    {
-      "let": {
-        "edge_ref_1079": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1078",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "22.158024024152077",
-          "ctrl_held": true,
-          "from": {
-            "x": 36.621554081345,
-            "y": -0.5023959266586339
-          },
-          "length_text": "0.20351534768242474",
-          "to_hint": {
-            "x": 36.81003924051061,
-            "y": -0.42563759475509794
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1080"
-    },
-    {
-      "let": {
-        "edge_ref_1081": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1080",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "22.96345020753643",
-          "ctrl_held": true,
-          "from": {
-            "x": 36.81003924051061,
-            "y": -0.42563759475509794
-          },
-          "length_text": "0.2045546682456519",
-          "to_hint": {
-            "x": 36.99838375296508,
-            "y": -0.34583184979036224
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1082"
-    },
-    {
-      "let": {
-        "edge_ref_1083": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1082",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -19754,14 +19532,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1084"
+      "id": "edge_1072"
     },
     {
       "let": {
-        "edge_ref_1085": {
+        "edge_ref_1073": {
           "$select": {
             "from": {
-              "$ref": "edge_1084",
+              "$ref": "edge_1072",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -19791,14 +19569,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1086"
+      "id": "edge_1074"
     },
     {
       "let": {
-        "edge_ref_1087": {
+        "edge_ref_1075": {
           "$select": {
             "from": {
-              "$ref": "edge_1086",
+              "$ref": "edge_1074",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -19828,14 +19606,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1088"
+      "id": "edge_1076"
     },
     {
       "let": {
-        "edge_ref_1089": {
+        "edge_ref_1077": {
           "$select": {
             "from": {
-              "$ref": "edge_1088",
+              "$ref": "edge_1076",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -19865,14 +19643,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1090"
+      "id": "edge_1078"
     },
     {
       "let": {
-        "edge_ref_1091": {
+        "edge_ref_1079": {
           "$select": {
             "from": {
-              "$ref": "edge_1090",
+              "$ref": "edge_1078",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -19902,14 +19680,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1092"
+      "id": "edge_1080"
     },
     {
       "let": {
-        "edge_ref_1093": {
+        "edge_ref_1081": {
           "$select": {
             "from": {
-              "$ref": "edge_1092",
+              "$ref": "edge_1080",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -19924,50 +19702,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "157.03654979246357",
+          "angle_text": "157.43823719034484",
           "ctrl_held": true,
           "from": {
             "x": 36.99838375296508,
             "y": 0.34583184979036224
           },
-          "length_text": "0.2045546682456519",
-          "to_hint": {
-            "x": 36.81003924051061,
-            "y": 0.42563759475509794
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1094"
-    },
-    {
-      "let": {
-        "edge_ref_1095": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1094",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "157.84197597584796",
-          "ctrl_held": true,
-          "from": {
-            "x": 36.81003924051061,
-            "y": 0.42563759475509794
-          },
-          "length_text": "0.20351534768242474",
+          "length_text": "0.4080599362580342",
           "to_hint": {
             "x": 36.621554081345,
             "y": 0.5023959266586339
@@ -19976,14 +19717,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1096"
+      "id": "edge_1082"
     },
     {
       "let": {
-        "edge_ref_1097": {
+        "edge_ref_1083": {
           "$select": {
             "from": {
-              "$ref": "edge_1096",
+              "$ref": "edge_1082",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -19998,50 +19739,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "158.67085881304897",
+          "angle_text": "159.09722581132084",
           "ctrl_held": true,
           "from": {
             "x": 36.621554081345,
             "y": 0.5023959266586339
           },
-          "length_text": "0.2024760152280526",
-          "to_hint": {
-            "x": 36.43294638662709,
-            "y": 0.5760415255483428
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1098"
-    },
-    {
-      "let": {
-        "edge_ref_1099": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1098",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "159.5257927641046",
-          "ctrl_held": true,
-          "from": {
-            "x": 36.43294638662709,
-            "y": 0.5760415255483428
-          },
-          "length_text": "0.20143666822070216",
+          "length_text": "0.4039014422538703",
           "to_hint": {
             "x": 36.2442345237577,
             "y": 0.6465011885919726
@@ -20050,14 +19754,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1100"
+      "id": "edge_1084"
     },
     {
       "let": {
-        "edge_ref_1101": {
+        "edge_ref_1085": {
           "$select": {
             "from": {
-              "$ref": "edge_1100",
+              "$ref": "edge_1084",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -20072,50 +19776,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "160.4098717134825",
+          "angle_text": "160.8671607831317",
           "ctrl_held": true,
           "from": {
             "x": 36.2442345237577,
             "y": 0.6465011885919726
           },
-          "length_text": "0.20039730313976925",
-          "to_hint": {
-            "x": 36.055437171403845,
-            "y": 0.7136922508686477
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1102"
-    },
-    {
-      "let": {
-        "edge_ref_1103": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1102",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "161.3268340616129",
-          "ctrl_held": true,
-          "from": {
-            "x": 36.055437171403845,
-            "y": 0.7136922508686477
-          },
-          "length_text": "0.19935791522892576",
+          "length_text": "0.39974241994030113",
           "to_hint": {
             "x": 35.86657339092087,
             "y": 0.7775205422926077
@@ -20124,14 +19791,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1104"
+      "id": "edge_1086"
     },
     {
       "let": {
-        "edge_ref_1105": {
+        "edge_ref_1087": {
           "$select": {
             "from": {
-              "$ref": "edge_1104",
+              "$ref": "edge_1086",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -20146,50 +19813,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "162.28126689146202",
+          "angle_text": "162.77877352353366",
           "ctrl_held": true,
           "from": {
             "x": 35.86657339092087,
             "y": 0.7775205422926077
           },
-          "length_text": "0.19831849790168946",
-          "to_hint": {
-            "x": 35.67766272088893,
-            "y": 0.8378776906519103
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1106"
-    },
-    {
-      "let": {
-        "edge_ref_1107": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1106",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "163.27890156645688",
-          "ctrl_held": true,
-          "from": {
-            "x": 35.67766272088893,
-            "y": 0.8378776906519103
-          },
-          "length_text": "0.19727904176694347",
+          "length_text": "0.3955825478037377",
           "to_hint": {
             "x": 35.48872530517342,
             "y": 0.8946374762683681
@@ -20198,14 +19828,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1108"
+      "id": "edge_1088"
     },
     {
       "let": {
-        "edge_ref_1109": {
+        "edge_ref_1089": {
           "$select": {
             "from": {
-              "$ref": "edge_1108",
+              "$ref": "edge_1088",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -20220,50 +19850,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "164.32705642241217",
+          "angle_text": "164.87972017952916",
           "ctrl_held": true,
           "from": {
             "x": 35.48872530517342,
             "y": 0.8946374762683681
           },
-          "length_text": "0.19623953295727406",
-          "to_hint": {
-            "x": 35.299782071278656,
-            "y": 0.9476507638543925
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1110"
-    },
-    {
-      "let": {
-        "edge_ref_1111": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1110",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "165.43532736839418",
-          "ctrl_held": true,
-          "from": {
-            "x": 35.299782071278656,
-            "y": 0.9476507638543925
-          },
-          "length_text": "0.19519995009883329",
+          "length_text": "0.391421176155441",
           "to_hint": {
             "x": 35.11085498729632,
             "y": 0.9967382108904587
@@ -20272,14 +19865,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1112"
+      "id": "edge_1090"
     },
     {
       "let": {
-        "edge_ref_1113": {
+        "edge_ref_1091": {
           "$select": {
             "from": {
-              "$ref": "edge_1112",
+              "$ref": "edge_1090",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -20294,50 +19887,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "166.61672083532463",
+          "angle_text": "167.25146884233118",
           "ctrl_held": true,
           "from": {
             "x": 35.11085498729632,
             "y": 0.9967382108904587
           },
-          "length_text": "0.1941602584314251",
-          "to_hint": {
-            "x": 34.92196744801647,
-            "y": 1.0416793219020861
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1114"
-    },
-    {
-      "let": {
-        "edge_ref_1115": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1114",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "167.88963480503313",
-          "ctrl_held": true,
-          "from": {
-            "x": 34.92196744801647,
-            "y": 1.0416793219020861
-          },
-          "length_text": "0.19312039736547754",
+          "length_text": "0.38725676222590544",
           "to_hint": {
             "x": 34.73314488728579,
             "y": 1.0821951020094638
@@ -20346,14 +19902,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1116"
+      "id": "edge_1092"
     },
     {
       "let": {
-        "edge_ref_1117": {
+        "edge_ref_1093": {
           "$select": {
             "from": {
-              "$ref": "edge_1116",
+              "$ref": "edge_1092",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -20383,14 +19939,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1118"
+      "id": "edge_1094"
     },
     {
       "let": {
-        "edge_ref_1119": {
+        "edge_ref_1095": {
           "$select": {
             "from": {
-              "$ref": "edge_1118",
+              "$ref": "edge_1094",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -20418,14 +19974,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line"
       },
-      "id": "edge_1120"
+      "id": "edge_1096"
     },
     {
       "let": {
-        "edge_ref_1121": {
+        "edge_ref_1097": {
           "$select": {
             "from": {
-              "$ref": "edge_1120",
+              "$ref": "edge_1096",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -20663,138 +20219,6 @@
                 "pointer": "/end_id"
               },
               "b": {
-                "$ref": "edge_ref_1099",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1099",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1101",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1101",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1103",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1103",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1105",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1105",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1107",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1107",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1109",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1109",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1111",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1111",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1113",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1113",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1115",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1115",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1117",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1117",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1119",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1119",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1121",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1121",
-                "pointer": "/end_id"
-              },
-              "b": {
                 "$ref": "edge_ref_1059",
                 "pointer": "/start_id"
               },
@@ -20805,7 +20229,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraints"
       },
-      "id": "close_profile_1122"
+      "id": "close_profile_1098"
     },
     {
       "call": {
@@ -20813,7 +20237,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1123"
+      "id": "finish_1099"
     },
     {
       "call": {
@@ -20834,14 +20258,14 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1124"
+      "id": "extrude_1100"
     },
     {
       "let": {
         "rotor_gear_tooth_body": {
           "$select": {
             "from": {
-              "$ref": "extrude_1124"
+              "$ref": "extrude_1100"
             },
             "path": "/scene/bodies",
             "take": "last",
@@ -20938,7 +20362,7 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1125"
+      "id": "datum_1101"
     },
     {
       "call": {
@@ -20948,7 +20372,7 @@
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1125"
+                  "$ref": "datum_1101"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -20962,7 +20386,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1126"
+      "id": "begin_1102"
     },
     {
       "call": {
@@ -20972,7 +20396,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1127"
+      "id": "grid_1103"
     },
     {
       "call": {
@@ -20985,7 +20409,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_point"
       },
-      "id": "centre_point_1128"
+      "id": "centre_point_1104"
     },
     {
       "call": {
@@ -20993,7 +20417,7 @@
           "entity": {
             "$select": {
               "from": {
-                "$ref": "centre_point_1128",
+                "$ref": "centre_point_1104",
                 "pointer": "/sketch"
               },
               "path": "/entities",
@@ -21009,7 +20433,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraint"
       },
-      "id": "locate_circle_1129"
+      "id": "locate_circle_1105"
     },
     {
       "call": {
@@ -21019,7 +20443,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "acquire_center_1131"
+      "id": "acquire_center_1107"
     },
     {
       "call": {
@@ -21039,7 +20463,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_circle_locked"
       },
-      "id": "circle_1130"
+      "id": "circle_1106"
     },
     {
       "call": {
@@ -21049,7 +20473,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "exact_coordinates_1132"
+      "id": "exact_coordinates_1108"
     },
     {
       "call": {
@@ -21057,7 +20481,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1133"
+      "id": "finish_1109"
     },
     {
       "call": {
@@ -21083,7 +20507,7 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1134"
+      "id": "extrude_1110"
     },
     {
       "call": {
@@ -21098,12 +20522,463 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1135"
+      "id": "datum_1111"
     },
     {
       "call": {
         "arguments": {
           "name": "rotor_gear_bore",
+          "plane": {
+            "datum_id": {
+              "$select": {
+                "from": {
+                  "$ref": "datum_1111"
+                },
+                "path": "/planes",
+                "pointer": "/datum_id",
+                "take": "last",
+                "where": {}
+              }
+            },
+            "type": "datum_plane"
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "begin_1112"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "grid_1113"
+    },
+    {
+      "call": {
+        "arguments": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_point"
+      },
+      "id": "centre_point_1114"
+    },
+    {
+      "call": {
+        "arguments": {
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "centre_point_1114",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "pointer": "/id",
+              "take": "last",
+              "where": {
+                "/kind": "point"
+              }
+            }
+          },
+          "type": "fix"
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint"
+      },
+      "id": "locate_circle_1115"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": true
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "acquire_center_1117"
+    },
+    {
+      "call": {
+        "arguments": {
+          "anchor": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "ctrl_held": false,
+          "diameter_text": "8.3",
+          "edge_hint": {
+            "x": 4.15,
+            "y": 0.0
+          },
+          "mode": "center_diameter"
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked"
+      },
+      "id": "circle_1116"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "exact_coordinates_1118"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "finish_1119"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 15.0,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "cut",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "rotor_gear_bore",
+          "taper_angle_deg": 0,
+          "target_body_ids": [
+            {
+              "$ref": "rotor_gear_body",
+              "pointer": "/id"
+            }
+          ]
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "extrude_1120"
+    },
+    {
+      "call": {
+        "arguments": {
+          "distance": 3.0,
+          "name": "rotor_gear_clamp_split / datum",
+          "reference": {
+            "plane": "xy",
+            "type": "origin_plane"
+          }
+        },
+        "group": "solid/reference",
+        "operation": "construction_plane_offset"
+      },
+      "id": "datum_1121"
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "rotor_gear_clamp_split",
+          "plane": {
+            "datum_id": {
+              "$select": {
+                "from": {
+                  "$ref": "datum_1121"
+                },
+                "path": "/planes",
+                "pointer": "/datum_id",
+                "take": "last",
+                "where": {}
+              }
+            },
+            "type": "datum_plane"
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_begin"
+      },
+      "id": "begin_1122"
+    },
+    {
+      "call": {
+        "arguments": {
+          "enabled": false
+        },
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap"
+      },
+      "id": "grid_1123"
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_text": "0",
+          "ctrl_held": true,
+          "from": {
+            "x": -0.6,
+            "y": -24.0
+          },
+          "length_text": "1.2",
+          "to_hint": {
+            "x": 0.6,
+            "y": -24.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "edge_1124"
+    },
+    {
+      "let": {
+        "edge_ref_1125": {
+          "$select": {
+            "from": {
+              "$ref": "edge_1124",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "take": "last",
+            "where": {
+              "/kind": "line"
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_text": "90",
+          "ctrl_held": true,
+          "from": {
+            "x": 0.6,
+            "y": -24.0
+          },
+          "length_text": "24",
+          "to_hint": {
+            "x": 0.6,
+            "y": 0.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "edge_1126"
+    },
+    {
+      "let": {
+        "edge_ref_1127": {
+          "$select": {
+            "from": {
+              "$ref": "edge_1126",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "take": "last",
+            "where": {
+              "/kind": "line"
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "angle_text": "180",
+          "ctrl_held": true,
+          "from": {
+            "x": 0.6,
+            "y": 0.0
+          },
+          "length_text": "1.2",
+          "to_hint": {
+            "x": -0.6,
+            "y": 0.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line_locked"
+      },
+      "id": "edge_1128"
+    },
+    {
+      "let": {
+        "edge_ref_1129": {
+          "$select": {
+            "from": {
+              "$ref": "edge_1128",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "take": "last",
+            "where": {
+              "/kind": "line"
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "ctrl_held": true,
+          "from": {
+            "x": -0.6,
+            "y": 0.0
+          },
+          "to_raw": {
+            "x": -0.6,
+            "y": -24.0
+          }
+        },
+        "group": "sketch/draw",
+        "operation": "sketch_add_line"
+      },
+      "id": "edge_1130"
+    },
+    {
+      "let": {
+        "edge_ref_1131": {
+          "$select": {
+            "from": {
+              "$ref": "edge_1130",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "take": "last",
+            "where": {
+              "/kind": "line"
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "constraints": [
+            {
+              "entity": {
+                "$ref": "edge_ref_1125",
+                "pointer": "/start_id"
+              },
+              "type": "fix"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1125",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1127",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1127",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1129",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1129",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1131",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1131",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1125",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            }
+          ]
+        },
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraints"
+      },
+      "id": "close_profile_1132"
+    },
+    {
+      "call": {
+        "arguments": {},
+        "group": "sketch/draw",
+        "operation": "sketch_finish"
+      },
+      "id": "finish_1133"
+    },
+    {
+      "call": {
+        "arguments": {
+          "extent": {
+            "distance": 12.0,
+            "type": "distance"
+          },
+          "flip": false,
+          "operation": "cut",
+          "profile_indices": [
+            0
+          ],
+          "sketch_name": "rotor_gear_clamp_split",
+          "taper_angle_deg": 0,
+          "target_body_ids": [
+            {
+              "$ref": "rotor_gear_body",
+              "pointer": "/id"
+            }
+          ]
+        },
+        "group": "solid/build",
+        "operation": "solid_extrude"
+      },
+      "id": "extrude_1134"
+    },
+    {
+      "call": {
+        "arguments": {
+          "distance": -35.0,
+          "name": "rotor_gear_clamp_bolt / datum",
+          "reference": {
+            "plane": "yz",
+            "type": "origin_plane"
+          }
+        },
+        "group": "solid/reference",
+        "operation": "construction_plane_offset"
+      },
+      "id": "datum_1135"
+    },
+    {
+      "call": {
+        "arguments": {
+          "name": "rotor_gear_clamp_bolt",
           "plane": {
             "datum_id": {
               "$select": {
@@ -21138,8 +21013,8 @@
       "call": {
         "arguments": {
           "position": {
-            "x": 0.0,
-            "y": 0.0
+            "x": -7.68,
+            "y": 8.0
           }
         },
         "group": "sketch/draw",
@@ -21185,14 +21060,14 @@
       "call": {
         "arguments": {
           "anchor": {
-            "x": 0.0,
-            "y": 0.0
+            "x": -7.68,
+            "y": 8.0
           },
           "ctrl_held": false,
-          "diameter_text": "8.3",
+          "diameter_text": "3.2",
           "edge_hint": {
-            "x": 4.15,
-            "y": 0.0
+            "x": -6.08,
+            "y": 8.0
           },
           "mode": "center_diameter"
         },
@@ -21223,457 +21098,6 @@
       "call": {
         "arguments": {
           "extent": {
-            "distance": 15.0,
-            "type": "distance"
-          },
-          "flip": false,
-          "operation": "cut",
-          "profile_indices": [
-            0
-          ],
-          "sketch_name": "rotor_gear_bore",
-          "taper_angle_deg": 0,
-          "target_body_ids": [
-            {
-              "$ref": "rotor_gear_body",
-              "pointer": "/id"
-            }
-          ]
-        },
-        "group": "solid/build",
-        "operation": "solid_extrude"
-      },
-      "id": "extrude_1144"
-    },
-    {
-      "call": {
-        "arguments": {
-          "distance": 3.0,
-          "name": "rotor_gear_clamp_split / datum",
-          "reference": {
-            "plane": "xy",
-            "type": "origin_plane"
-          }
-        },
-        "group": "solid/reference",
-        "operation": "construction_plane_offset"
-      },
-      "id": "datum_1145"
-    },
-    {
-      "call": {
-        "arguments": {
-          "name": "rotor_gear_clamp_split",
-          "plane": {
-            "datum_id": {
-              "$select": {
-                "from": {
-                  "$ref": "datum_1145"
-                },
-                "path": "/planes",
-                "pointer": "/datum_id",
-                "take": "last",
-                "where": {}
-              }
-            },
-            "type": "datum_plane"
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_begin"
-      },
-      "id": "begin_1146"
-    },
-    {
-      "call": {
-        "arguments": {
-          "enabled": false
-        },
-        "group": "sketch/selection",
-        "operation": "sketch_set_grid_snap"
-      },
-      "id": "grid_1147"
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "0",
-          "ctrl_held": true,
-          "from": {
-            "x": -0.6,
-            "y": -24.0
-          },
-          "length_text": "1.2",
-          "to_hint": {
-            "x": 0.6,
-            "y": -24.0
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1148"
-    },
-    {
-      "let": {
-        "edge_ref_1149": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1148",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "90",
-          "ctrl_held": true,
-          "from": {
-            "x": 0.6,
-            "y": -24.0
-          },
-          "length_text": "24",
-          "to_hint": {
-            "x": 0.6,
-            "y": 0.0
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1150"
-    },
-    {
-      "let": {
-        "edge_ref_1151": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1150",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "180",
-          "ctrl_held": true,
-          "from": {
-            "x": 0.6,
-            "y": 0.0
-          },
-          "length_text": "1.2",
-          "to_hint": {
-            "x": -0.6,
-            "y": 0.0
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1152"
-    },
-    {
-      "let": {
-        "edge_ref_1153": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1152",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "ctrl_held": true,
-          "from": {
-            "x": -0.6,
-            "y": 0.0
-          },
-          "to_raw": {
-            "x": -0.6,
-            "y": -24.0
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line"
-      },
-      "id": "edge_1154"
-    },
-    {
-      "let": {
-        "edge_ref_1155": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1154",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "constraints": [
-            {
-              "entity": {
-                "$ref": "edge_ref_1149",
-                "pointer": "/start_id"
-              },
-              "type": "fix"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1149",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1151",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1151",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1153",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1153",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1155",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1155",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1149",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            }
-          ]
-        },
-        "group": "sketch/constrain",
-        "operation": "sketch_add_constraints"
-      },
-      "id": "close_profile_1156"
-    },
-    {
-      "call": {
-        "arguments": {},
-        "group": "sketch/draw",
-        "operation": "sketch_finish"
-      },
-      "id": "finish_1157"
-    },
-    {
-      "call": {
-        "arguments": {
-          "extent": {
-            "distance": 12.0,
-            "type": "distance"
-          },
-          "flip": false,
-          "operation": "cut",
-          "profile_indices": [
-            0
-          ],
-          "sketch_name": "rotor_gear_clamp_split",
-          "taper_angle_deg": 0,
-          "target_body_ids": [
-            {
-              "$ref": "rotor_gear_body",
-              "pointer": "/id"
-            }
-          ]
-        },
-        "group": "solid/build",
-        "operation": "solid_extrude"
-      },
-      "id": "extrude_1158"
-    },
-    {
-      "call": {
-        "arguments": {
-          "distance": -35.0,
-          "name": "rotor_gear_clamp_bolt / datum",
-          "reference": {
-            "plane": "yz",
-            "type": "origin_plane"
-          }
-        },
-        "group": "solid/reference",
-        "operation": "construction_plane_offset"
-      },
-      "id": "datum_1159"
-    },
-    {
-      "call": {
-        "arguments": {
-          "name": "rotor_gear_clamp_bolt",
-          "plane": {
-            "datum_id": {
-              "$select": {
-                "from": {
-                  "$ref": "datum_1159"
-                },
-                "path": "/planes",
-                "pointer": "/datum_id",
-                "take": "last",
-                "where": {}
-              }
-            },
-            "type": "datum_plane"
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_begin"
-      },
-      "id": "begin_1160"
-    },
-    {
-      "call": {
-        "arguments": {
-          "enabled": false
-        },
-        "group": "sketch/selection",
-        "operation": "sketch_set_grid_snap"
-      },
-      "id": "grid_1161"
-    },
-    {
-      "call": {
-        "arguments": {
-          "position": {
-            "x": -7.68,
-            "y": 8.0
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_point"
-      },
-      "id": "centre_point_1162"
-    },
-    {
-      "call": {
-        "arguments": {
-          "entity": {
-            "$select": {
-              "from": {
-                "$ref": "centre_point_1162",
-                "pointer": "/sketch"
-              },
-              "path": "/entities",
-              "pointer": "/id",
-              "take": "last",
-              "where": {
-                "/kind": "point"
-              }
-            }
-          },
-          "type": "fix"
-        },
-        "group": "sketch/constrain",
-        "operation": "sketch_add_constraint"
-      },
-      "id": "locate_circle_1163"
-    },
-    {
-      "call": {
-        "arguments": {
-          "enabled": true
-        },
-        "group": "sketch/selection",
-        "operation": "sketch_set_grid_snap"
-      },
-      "id": "acquire_center_1165"
-    },
-    {
-      "call": {
-        "arguments": {
-          "anchor": {
-            "x": -7.68,
-            "y": 8.0
-          },
-          "ctrl_held": false,
-          "diameter_text": "3.2",
-          "edge_hint": {
-            "x": -6.08,
-            "y": 8.0
-          },
-          "mode": "center_diameter"
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_circle_locked"
-      },
-      "id": "circle_1164"
-    },
-    {
-      "call": {
-        "arguments": {
-          "enabled": false
-        },
-        "group": "sketch/selection",
-        "operation": "sketch_set_grid_snap"
-      },
-      "id": "exact_coordinates_1166"
-    },
-    {
-      "call": {
-        "arguments": {},
-        "group": "sketch/draw",
-        "operation": "sketch_finish"
-      },
-      "id": "finish_1167"
-    },
-    {
-      "call": {
-        "arguments": {
-          "extent": {
             "distance": 70.0,
             "type": "distance"
           },
@@ -21694,13 +21118,13 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1168"
+      "id": "extrude_1144"
     },
     {
       "call": {
         "arguments": {
           "distance": -35.0,
-          "name": "clamp_spotface_1169 / datum",
+          "name": "clamp_spotface_1145 / datum",
           "reference": {
             "plane": "yz",
             "type": "origin_plane"
@@ -21709,17 +21133,17 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1170"
+      "id": "datum_1146"
     },
     {
       "call": {
         "arguments": {
-          "name": "clamp_spotface_1169",
+          "name": "clamp_spotface_1145",
           "plane": {
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1170"
+                  "$ref": "datum_1146"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -21733,7 +21157,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1171"
+      "id": "begin_1147"
     },
     {
       "call": {
@@ -21743,7 +21167,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1172"
+      "id": "grid_1148"
     },
     {
       "call": {
@@ -21756,7 +21180,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_point"
       },
-      "id": "centre_point_1173"
+      "id": "centre_point_1149"
     },
     {
       "call": {
@@ -21764,7 +21188,7 @@
           "entity": {
             "$select": {
               "from": {
-                "$ref": "centre_point_1173",
+                "$ref": "centre_point_1149",
                 "pointer": "/sketch"
               },
               "path": "/entities",
@@ -21780,7 +21204,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraint"
       },
-      "id": "locate_circle_1174"
+      "id": "locate_circle_1150"
     },
     {
       "call": {
@@ -21790,7 +21214,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "acquire_center_1176"
+      "id": "acquire_center_1152"
     },
     {
       "call": {
@@ -21810,7 +21234,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_circle_locked"
       },
-      "id": "circle_1175"
+      "id": "circle_1151"
     },
     {
       "call": {
@@ -21820,7 +21244,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "exact_coordinates_1177"
+      "id": "exact_coordinates_1153"
     },
     {
       "call": {
@@ -21828,7 +21252,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1178"
+      "id": "finish_1154"
     },
     {
       "call": {
@@ -21842,7 +21266,7 @@
           "profile_indices": [
             0
           ],
-          "sketch_name": "clamp_spotface_1169",
+          "sketch_name": "clamp_spotface_1145",
           "taper_angle_deg": 0,
           "target_body_ids": [
             {
@@ -21854,13 +21278,13 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1179"
+      "id": "extrude_1155"
     },
     {
       "call": {
         "arguments": {
           "distance": 4.8,
-          "name": "clamp_spotface_1180 / datum",
+          "name": "clamp_spotface_1156 / datum",
           "reference": {
             "plane": "yz",
             "type": "origin_plane"
@@ -21869,17 +21293,17 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1181"
+      "id": "datum_1157"
     },
     {
       "call": {
         "arguments": {
-          "name": "clamp_spotface_1180",
+          "name": "clamp_spotface_1156",
           "plane": {
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1181"
+                  "$ref": "datum_1157"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -21893,7 +21317,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1182"
+      "id": "begin_1158"
     },
     {
       "call": {
@@ -21903,7 +21327,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1183"
+      "id": "grid_1159"
     },
     {
       "call": {
@@ -21916,7 +21340,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_point"
       },
-      "id": "centre_point_1184"
+      "id": "centre_point_1160"
     },
     {
       "call": {
@@ -21924,7 +21348,7 @@
           "entity": {
             "$select": {
               "from": {
-                "$ref": "centre_point_1184",
+                "$ref": "centre_point_1160",
                 "pointer": "/sketch"
               },
               "path": "/entities",
@@ -21940,7 +21364,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraint"
       },
-      "id": "locate_circle_1185"
+      "id": "locate_circle_1161"
     },
     {
       "call": {
@@ -21950,7 +21374,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "acquire_center_1187"
+      "id": "acquire_center_1163"
     },
     {
       "call": {
@@ -21970,7 +21394,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_circle_locked"
       },
-      "id": "circle_1186"
+      "id": "circle_1162"
     },
     {
       "call": {
@@ -21980,7 +21404,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "exact_coordinates_1188"
+      "id": "exact_coordinates_1164"
     },
     {
       "call": {
@@ -21988,7 +21412,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1189"
+      "id": "finish_1165"
     },
     {
       "call": {
@@ -22002,7 +21426,7 @@
           "profile_indices": [
             0
           ],
-          "sketch_name": "clamp_spotface_1180",
+          "sketch_name": "clamp_spotface_1156",
           "taper_angle_deg": 0,
           "target_body_ids": [
             {
@@ -22014,7 +21438,7 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1190"
+      "id": "extrude_1166"
     },
     {
       "call": {
@@ -22039,14 +21463,14 @@
         "group": "assembly/joints",
         "operation": "assembly_document"
       },
-      "id": "assembly_1191"
+      "id": "assembly_1167"
     },
     {
       "let": {
         "rotor_gear_occurrence": {
           "$select": {
             "from": {
-              "$ref": "assembly_1191"
+              "$ref": "assembly_1167"
             },
             "path": "/component_structure/occurrences",
             "take": "one",
@@ -22099,7 +21523,7 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1192"
+      "id": "datum_1168"
     },
     {
       "call": {
@@ -22109,7 +21533,7 @@
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1192"
+                  "$ref": "datum_1168"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -22123,7 +21547,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1193"
+      "id": "begin_1169"
     },
     {
       "call": {
@@ -22133,7 +21557,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1194"
+      "id": "grid_1170"
     },
     {
       "call": {
@@ -22146,7 +21570,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_point"
       },
-      "id": "centre_point_1195"
+      "id": "centre_point_1171"
     },
     {
       "call": {
@@ -22154,7 +21578,7 @@
           "entity": {
             "$select": {
               "from": {
-                "$ref": "centre_point_1195",
+                "$ref": "centre_point_1171",
                 "pointer": "/sketch"
               },
               "path": "/entities",
@@ -22170,7 +21594,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraint"
       },
-      "id": "locate_circle_1196"
+      "id": "locate_circle_1172"
     },
     {
       "call": {
@@ -22180,7 +21604,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "acquire_center_1198"
+      "id": "acquire_center_1174"
     },
     {
       "call": {
@@ -22200,7 +21624,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_circle_locked"
       },
-      "id": "circle_1197"
+      "id": "circle_1173"
     },
     {
       "call": {
@@ -22210,7 +21634,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "exact_coordinates_1199"
+      "id": "exact_coordinates_1175"
     },
     {
       "call": {
@@ -22218,7 +21642,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1200"
+      "id": "finish_1176"
     },
     {
       "call": {
@@ -22239,14 +21663,14 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1201"
+      "id": "extrude_1177"
     },
     {
       "let": {
         "pinion_body": {
           "$select": {
             "from": {
-              "$ref": "extrude_1201"
+              "$ref": "extrude_1177"
             },
             "path": "/scene/bodies",
             "take": "last",
@@ -22268,7 +21692,7 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1202"
+      "id": "datum_1178"
     },
     {
       "call": {
@@ -22278,7 +21702,7 @@
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1202"
+                  "$ref": "datum_1178"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -22292,7 +21716,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1203"
+      "id": "begin_1179"
     },
     {
       "call": {
@@ -22302,7 +21726,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1204"
+      "id": "grid_1180"
     },
     {
       "call": {
@@ -22322,14 +21746,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1205"
+      "id": "edge_1181"
     },
     {
       "let": {
-        "edge_ref_1206": {
+        "edge_ref_1182": {
           "$select": {
             "from": {
-              "$ref": "edge_1205",
+              "$ref": "edge_1181",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22344,50 +21768,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "1.1502623552427234",
+          "angle_text": "3.9558003649589932",
           "ctrl_held": true,
           "from": {
             "x": 8.417792197404642,
             "y": -0.8158274741832057
           },
-          "length_text": "0.12943086282139016",
-          "to_hint": {
-            "x": 8.547196978170641,
-            "y": -0.8132292121499693
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1207"
-    },
-    {
-      "let": {
-        "edge_ref_1208": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1207",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "6.717869643648151",
-          "ctrl_held": true,
-          "from": {
-            "x": 8.547196978170641,
-            "y": -0.8132292121499693
-          },
-          "length_text": "0.13146619662111922",
+          "length_text": "0.2605891952086691",
           "to_hint": {
             "x": 8.677760555951881,
             "y": -0.7978502326329524
@@ -22396,14 +21783,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1209"
+      "id": "edge_1183"
     },
     {
       "let": {
-        "edge_ref_1210": {
+        "edge_ref_1184": {
           "$select": {
             "from": {
-              "$ref": "edge_1209",
+              "$ref": "edge_1183",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22418,50 +21805,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "10.388122827051337",
+          "angle_text": "11.899831914827661",
           "ctrl_held": true,
           "from": {
             "x": 8.677760555951881,
             "y": -0.7978502326329524
           },
-          "length_text": "0.13343183716712345",
-          "to_hint": {
-            "x": 8.809005294601409,
-            "y": -0.7737904374008466
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1211"
-    },
-    {
-      "let": {
-        "edge_ref_1212": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1211",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "13.389661790778554",
-          "ctrl_held": true,
-          "from": {
-            "x": 8.809005294601409,
-            "y": -0.7737904374008466
-          },
-          "length_text": "0.13539092721128607",
+          "length_text": "0.26873055589880634",
           "to_hint": {
             "x": 8.940715982031975,
             "y": -0.7424376386788895
@@ -22470,14 +21820,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1213"
+      "id": "edge_1185"
     },
     {
       "let": {
-        "edge_ref_1214": {
+        "edge_ref_1186": {
           "$select": {
             "from": {
-              "$ref": "edge_1213",
+              "$ref": "edge_1185",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22492,50 +21842,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "16.009128712944467",
+          "angle_text": "17.19976572692926",
           "ctrl_held": true,
           "from": {
             "x": 8.940715982031975,
             "y": -0.7424376386788895
           },
-          "length_text": "0.1373478995245384",
-          "to_hint": {
-            "x": 9.072737223385634,
-            "y": -0.7045583919170849
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1215"
-    },
-    {
-      "let": {
-        "edge_ref_1216": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1215",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "18.37368219650934",
-          "ctrl_held": true,
-          "from": {
-            "x": 9.072737223385634,
-            "y": -0.7045583919170849
-          },
-          "length_text": "0.13930391892934924",
+          "length_text": "0.27659292602882757",
           "to_hint": {
             "x": 9.20493955381023,
             "y": -0.6606479642332107
@@ -22544,14 +21857,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1217"
+      "id": "edge_1187"
     },
     {
       "let": {
-        "edge_ref_1218": {
+        "edge_ref_1188": {
           "$select": {
             "from": {
-              "$ref": "edge_1217",
+              "$ref": "edge_1187",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22566,50 +21879,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "20.553160303421592",
+          "angle_text": "21.578986308247583",
           "ctrl_held": true,
           "from": {
             "x": 9.20493955381023,
             "y": -0.6606479642332107
           },
-          "length_text": "0.14125942762839466",
-          "to_hint": {
-            "x": 9.337207374736145,
-            "y": -0.6110551276394907
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1219"
-    },
-    {
-      "let": {
-        "edge_ref_1220": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1219",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "22.590806005884012",
-          "ctrl_held": true,
-          "from": {
-            "x": 9.337207374736145,
-            "y": -0.6110551276394907
-          },
-          "length_text": "0.14321463068691423",
+          "length_text": "0.28442908728875266",
           "to_hint": {
             "x": 9.46943341481599,
             "y": -0.5560396319351658
@@ -22618,14 +21894,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1221"
+      "id": "edge_1189"
     },
     {
       "let": {
-        "edge_ref_1222": {
+        "edge_ref_1190": {
           "$select": {
             "from": {
-              "$ref": "edge_1221",
+              "$ref": "edge_1189",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22640,50 +21916,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "24.515576284918776",
+          "angle_text": "25.437901291756592",
           "ctrl_held": true,
           "from": {
             "x": 9.46943341481599,
             "y": -0.5560396319351658
           },
-          "length_text": "0.1451696362820427",
-          "to_hint": {
-            "x": 9.601515790603937,
-            "y": -0.4958028549258327
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1223"
-    },
-    {
-      "let": {
-        "edge_ref_1224": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1223",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "26.347970157431153",
-          "ctrl_held": true,
-          "from": {
-            "x": 9.601515790603937,
-            "y": -0.4958028549258327
-          },
-          "length_text": "0.14712450690311102",
+          "length_text": "0.2922567757025083",
           "to_hint": {
             "x": 9.733356291727489,
             "y": -0.4305058198095714
@@ -22692,14 +21931,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1225"
+      "id": "edge_1191"
     },
     {
       "let": {
-        "edge_ref_1226": {
+        "edge_ref_1192": {
           "$select": {
             "from": {
-              "$ref": "edge_1225",
+              "$ref": "edge_1191",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22714,50 +21953,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "28.1031163072577",
+          "angle_text": "28.953334406150955",
           "ctrl_held": true,
           "from": {
             "x": 9.733356291727489,
             "y": -0.4305058198095714
           },
-          "length_text": "0.14907928117636143",
-          "to_hint": {
-            "x": 9.864859311474586,
-            "y": -0.3602805546021312
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1227"
-    },
-    {
-      "let": {
-        "edge_ref_1228": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1227",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "29.79254807057689",
-          "ctrl_held": true,
-          "from": {
-            "x": 9.864859311474586,
-            "y": -0.3602805546021312
-          },
-          "length_text": "0.15103398426647738",
+          "length_text": "0.3000806513758178",
           "to_hint": {
             "x": 9.995931146548072,
             "y": -0.2852376438518455
@@ -22766,14 +21968,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1229"
+      "id": "edge_1193"
     },
     {
       "let": {
-        "edge_ref_1230": {
+        "edge_ref_1194": {
           "$select": {
             "from": {
-              "$ref": "edge_1229",
+              "$ref": "edge_1193",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22803,14 +22005,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1231"
+      "id": "edge_1195"
     },
     {
       "let": {
-        "edge_ref_1232": {
+        "edge_ref_1196": {
           "$select": {
             "from": {
-              "$ref": "edge_1231",
+              "$ref": "edge_1195",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22840,14 +22042,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1233"
+      "id": "edge_1197"
     },
     {
       "let": {
-        "edge_ref_1234": {
+        "edge_ref_1198": {
           "$select": {
             "from": {
-              "$ref": "edge_1233",
+              "$ref": "edge_1197",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22877,14 +22079,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1235"
+      "id": "edge_1199"
     },
     {
       "let": {
-        "edge_ref_1236": {
+        "edge_ref_1200": {
           "$select": {
             "from": {
-              "$ref": "edge_1235",
+              "$ref": "edge_1199",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22914,14 +22116,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1237"
+      "id": "edge_1201"
     },
     {
       "let": {
-        "edge_ref_1238": {
+        "edge_ref_1202": {
           "$select": {
             "from": {
-              "$ref": "edge_1237",
+              "$ref": "edge_1201",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22951,14 +22153,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1239"
+      "id": "edge_1203"
     },
     {
       "let": {
-        "edge_ref_1240": {
+        "edge_ref_1204": {
           "$select": {
             "from": {
-              "$ref": "edge_1239",
+              "$ref": "edge_1203",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -22973,50 +22175,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "150.20745192942314",
+          "angle_text": "151.04666559384904",
           "ctrl_held": true,
           "from": {
             "x": 9.995931146548072,
             "y": 0.2852376438518455
           },
-          "length_text": "0.15103398426647738",
-          "to_hint": {
-            "x": 9.864859311474586,
-            "y": 0.3602805546021312
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1241"
-    },
-    {
-      "let": {
-        "edge_ref_1242": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1241",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "151.8968836927423",
-          "ctrl_held": true,
-          "from": {
-            "x": 9.864859311474586,
-            "y": 0.3602805546021312
-          },
-          "length_text": "0.14907928117636143",
+          "length_text": "0.3000806513758178",
           "to_hint": {
             "x": 9.733356291727489,
             "y": 0.4305058198095714
@@ -23025,14 +22190,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1243"
+      "id": "edge_1205"
     },
     {
       "let": {
-        "edge_ref_1244": {
+        "edge_ref_1206": {
           "$select": {
             "from": {
-              "$ref": "edge_1243",
+              "$ref": "edge_1205",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -23047,50 +22212,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "153.65202984256885",
+          "angle_text": "154.56209870824338",
           "ctrl_held": true,
           "from": {
             "x": 9.733356291727489,
             "y": 0.4305058198095714
           },
-          "length_text": "0.14712450690311102",
-          "to_hint": {
-            "x": 9.601515790603937,
-            "y": 0.4958028549258327
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1245"
-    },
-    {
-      "let": {
-        "edge_ref_1246": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1245",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "155.48442371508125",
-          "ctrl_held": true,
-          "from": {
-            "x": 9.601515790603937,
-            "y": 0.4958028549258327
-          },
-          "length_text": "0.1451696362820427",
+          "length_text": "0.2922567757025083",
           "to_hint": {
             "x": 9.46943341481599,
             "y": 0.5560396319351658
@@ -23099,14 +22227,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1247"
+      "id": "edge_1207"
     },
     {
       "let": {
-        "edge_ref_1248": {
+        "edge_ref_1208": {
           "$select": {
             "from": {
-              "$ref": "edge_1247",
+              "$ref": "edge_1207",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -23121,50 +22249,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "157.409193994116",
+          "angle_text": "158.42101369175245",
           "ctrl_held": true,
           "from": {
             "x": 9.46943341481599,
             "y": 0.5560396319351658
           },
-          "length_text": "0.14321463068691423",
-          "to_hint": {
-            "x": 9.337207374736145,
-            "y": 0.6110551276394907
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1249"
-    },
-    {
-      "let": {
-        "edge_ref_1250": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1249",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "159.44683969657842",
-          "ctrl_held": true,
-          "from": {
-            "x": 9.337207374736145,
-            "y": 0.6110551276394907
-          },
-          "length_text": "0.14125942762839466",
+          "length_text": "0.28442908728875266",
           "to_hint": {
             "x": 9.20493955381023,
             "y": 0.6606479642332107
@@ -23173,14 +22264,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1251"
+      "id": "edge_1209"
     },
     {
       "let": {
-        "edge_ref_1252": {
+        "edge_ref_1210": {
           "$select": {
             "from": {
-              "$ref": "edge_1251",
+              "$ref": "edge_1209",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -23195,50 +22286,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "161.62631780349065",
+          "angle_text": "162.80023427307077",
           "ctrl_held": true,
           "from": {
             "x": 9.20493955381023,
             "y": 0.6606479642332107
           },
-          "length_text": "0.13930391892934924",
-          "to_hint": {
-            "x": 9.072737223385634,
-            "y": 0.7045583919170849
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1253"
-    },
-    {
-      "let": {
-        "edge_ref_1254": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1253",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "163.99087128705554",
-          "ctrl_held": true,
-          "from": {
-            "x": 9.072737223385634,
-            "y": 0.7045583919170849
-          },
-          "length_text": "0.1373478995245384",
+          "length_text": "0.27659292602882757",
           "to_hint": {
             "x": 8.940715982031975,
             "y": 0.7424376386788895
@@ -23247,14 +22301,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1255"
+      "id": "edge_1211"
     },
     {
       "let": {
-        "edge_ref_1256": {
+        "edge_ref_1212": {
           "$select": {
             "from": {
-              "$ref": "edge_1255",
+              "$ref": "edge_1211",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -23269,50 +22323,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "166.61033820922145",
+          "angle_text": "168.10016808517233",
           "ctrl_held": true,
           "from": {
             "x": 8.940715982031975,
             "y": 0.7424376386788895
           },
-          "length_text": "0.13539092721128607",
-          "to_hint": {
-            "x": 8.809005294601409,
-            "y": 0.7737904374008466
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1257"
-    },
-    {
-      "let": {
-        "edge_ref_1258": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1257",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "169.61187717294868",
-          "ctrl_held": true,
-          "from": {
-            "x": 8.809005294601409,
-            "y": 0.7737904374008466
-          },
-          "length_text": "0.13343183716712345",
+          "length_text": "0.26873055589880634",
           "to_hint": {
             "x": 8.677760555951881,
             "y": 0.7978502326329524
@@ -23321,14 +22338,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1259"
+      "id": "edge_1213"
     },
     {
       "let": {
-        "edge_ref_1260": {
+        "edge_ref_1214": {
           "$select": {
             "from": {
-              "$ref": "edge_1259",
+              "$ref": "edge_1213",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -23343,50 +22360,13 @@
     {
       "call": {
         "arguments": {
-          "angle_text": "173.28213035635184",
+          "angle_text": "176.04419963504102",
           "ctrl_held": true,
           "from": {
             "x": 8.677760555951881,
             "y": 0.7978502326329524
           },
-          "length_text": "0.13146619662111922",
-          "to_hint": {
-            "x": 8.547196978170641,
-            "y": 0.8132292121499693
-          }
-        },
-        "group": "sketch/draw",
-        "operation": "sketch_add_line_locked"
-      },
-      "id": "edge_1261"
-    },
-    {
-      "let": {
-        "edge_ref_1262": {
-          "$select": {
-            "from": {
-              "$ref": "edge_1261",
-              "pointer": "/sketch"
-            },
-            "path": "/entities",
-            "take": "last",
-            "where": {
-              "/kind": "line"
-            }
-          }
-        }
-      }
-    },
-    {
-      "call": {
-        "arguments": {
-          "angle_text": "178.84973764475728",
-          "ctrl_held": true,
-          "from": {
-            "x": 8.547196978170641,
-            "y": 0.8132292121499693
-          },
-          "length_text": "0.12943086282139016",
+          "length_text": "0.2605891952086691",
           "to_hint": {
             "x": 8.417792197404642,
             "y": 0.8158274741832057
@@ -23395,14 +22375,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1263"
+      "id": "edge_1215"
     },
     {
       "let": {
-        "edge_ref_1264": {
+        "edge_ref_1216": {
           "$select": {
             "from": {
-              "$ref": "edge_1263",
+              "$ref": "edge_1215",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -23432,14 +22412,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1265"
+      "id": "edge_1217"
     },
     {
       "let": {
-        "edge_ref_1266": {
+        "edge_ref_1218": {
           "$select": {
             "from": {
-              "$ref": "edge_1265",
+              "$ref": "edge_1217",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -23467,14 +22447,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line"
       },
-      "id": "edge_1267"
+      "id": "edge_1219"
     },
     {
       "let": {
-        "edge_ref_1268": {
+        "edge_ref_1220": {
           "$select": {
             "from": {
-              "$ref": "edge_1267",
+              "$ref": "edge_1219",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -23492,13 +22472,145 @@
           "constraints": [
             {
               "entity": {
-                "$ref": "edge_ref_1206",
+                "$ref": "edge_ref_1182",
                 "pointer": "/start_id"
               },
               "type": "fix"
             },
             {
               "a": {
+                "$ref": "edge_ref_1182",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1184",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1184",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1186",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1186",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1188",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1188",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1190",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1190",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1192",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1192",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1194",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1194",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1196",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1196",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1198",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1198",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1200",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1200",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1202",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1202",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1204",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
+                "$ref": "edge_ref_1204",
+                "pointer": "/end_id"
+              },
+              "b": {
+                "$ref": "edge_ref_1206",
+                "pointer": "/start_id"
+              },
+              "type": "coincident"
+            },
+            {
+              "a": {
                 "$ref": "edge_ref_1206",
                 "pointer": "/end_id"
               },
@@ -23580,271 +22692,7 @@
                 "pointer": "/end_id"
               },
               "b": {
-                "$ref": "edge_ref_1222",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1222",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1224",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1224",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1226",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1226",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1228",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1228",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1230",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1230",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1232",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1232",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1234",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1234",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1236",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1236",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1238",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1238",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1240",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1240",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1242",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1242",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1244",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1244",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1246",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1246",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1248",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1248",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1250",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1250",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1252",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1252",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1254",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1254",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1256",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1256",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1258",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1258",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1260",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1260",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1262",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1262",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1264",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1264",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1266",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1266",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1268",
-                "pointer": "/start_id"
-              },
-              "type": "coincident"
-            },
-            {
-              "a": {
-                "$ref": "edge_ref_1268",
-                "pointer": "/end_id"
-              },
-              "b": {
-                "$ref": "edge_ref_1206",
+                "$ref": "edge_ref_1182",
                 "pointer": "/start_id"
               },
               "type": "coincident"
@@ -23854,7 +22702,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraints"
       },
-      "id": "close_profile_1269"
+      "id": "close_profile_1221"
     },
     {
       "call": {
@@ -23862,7 +22710,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1270"
+      "id": "finish_1222"
     },
     {
       "call": {
@@ -23883,14 +22731,14 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1271"
+      "id": "extrude_1223"
     },
     {
       "let": {
         "pinion_tooth_body": {
           "$select": {
             "from": {
-              "$ref": "extrude_1271"
+              "$ref": "extrude_1223"
             },
             "path": "/scene/bodies",
             "take": "last",
@@ -23987,7 +22835,7 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1272"
+      "id": "datum_1224"
     },
     {
       "call": {
@@ -23997,7 +22845,7 @@
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1272"
+                  "$ref": "datum_1224"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -24011,7 +22859,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1273"
+      "id": "begin_1225"
     },
     {
       "call": {
@@ -24021,7 +22869,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1274"
+      "id": "grid_1226"
     },
     {
       "call": {
@@ -24034,7 +22882,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_point"
       },
-      "id": "centre_point_1275"
+      "id": "centre_point_1227"
     },
     {
       "call": {
@@ -24042,7 +22890,7 @@
           "entity": {
             "$select": {
               "from": {
-                "$ref": "centre_point_1275",
+                "$ref": "centre_point_1227",
                 "pointer": "/sketch"
               },
               "path": "/entities",
@@ -24058,7 +22906,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraint"
       },
-      "id": "locate_circle_1276"
+      "id": "locate_circle_1228"
     },
     {
       "call": {
@@ -24068,7 +22916,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "acquire_center_1278"
+      "id": "acquire_center_1230"
     },
     {
       "call": {
@@ -24088,7 +22936,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_circle_locked"
       },
-      "id": "circle_1277"
+      "id": "circle_1229"
     },
     {
       "call": {
@@ -24098,7 +22946,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "exact_coordinates_1279"
+      "id": "exact_coordinates_1231"
     },
     {
       "call": {
@@ -24106,7 +22954,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1280"
+      "id": "finish_1232"
     },
     {
       "call": {
@@ -24132,7 +22980,7 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1281"
+      "id": "extrude_1233"
     },
     {
       "call": {
@@ -24147,7 +22995,7 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1282"
+      "id": "datum_1234"
     },
     {
       "call": {
@@ -24157,7 +23005,7 @@
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1282"
+                  "$ref": "datum_1234"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -24171,7 +23019,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1283"
+      "id": "begin_1235"
     },
     {
       "call": {
@@ -24181,7 +23029,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1284"
+      "id": "grid_1236"
     },
     {
       "call": {
@@ -24194,7 +23042,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_point"
       },
-      "id": "centre_point_1285"
+      "id": "centre_point_1237"
     },
     {
       "call": {
@@ -24202,7 +23050,7 @@
           "entity": {
             "$select": {
               "from": {
-                "$ref": "centre_point_1285",
+                "$ref": "centre_point_1237",
                 "pointer": "/sketch"
               },
               "path": "/entities",
@@ -24218,7 +23066,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraint"
       },
-      "id": "locate_circle_1286"
+      "id": "locate_circle_1238"
     },
     {
       "call": {
@@ -24228,7 +23076,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "acquire_center_1288"
+      "id": "acquire_center_1240"
     },
     {
       "call": {
@@ -24248,7 +23096,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_circle_locked"
       },
-      "id": "circle_1287"
+      "id": "circle_1239"
     },
     {
       "call": {
@@ -24258,7 +23106,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "exact_coordinates_1289"
+      "id": "exact_coordinates_1241"
     },
     {
       "call": {
@@ -24266,7 +23114,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1290"
+      "id": "finish_1242"
     },
     {
       "call": {
@@ -24292,7 +23140,7 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1291"
+      "id": "extrude_1243"
     },
     {
       "call": {
@@ -24307,7 +23155,7 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1292"
+      "id": "datum_1244"
     },
     {
       "call": {
@@ -24317,7 +23165,7 @@
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1292"
+                  "$ref": "datum_1244"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -24331,7 +23179,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1293"
+      "id": "begin_1245"
     },
     {
       "call": {
@@ -24341,7 +23189,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1294"
+      "id": "grid_1246"
     },
     {
       "call": {
@@ -24361,14 +23209,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1295"
+      "id": "edge_1247"
     },
     {
       "let": {
-        "edge_ref_1296": {
+        "edge_ref_1248": {
           "$select": {
             "from": {
-              "$ref": "edge_1295",
+              "$ref": "edge_1247",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -24398,14 +23246,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1297"
+      "id": "edge_1249"
     },
     {
       "let": {
-        "edge_ref_1298": {
+        "edge_ref_1250": {
           "$select": {
             "from": {
-              "$ref": "edge_1297",
+              "$ref": "edge_1249",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -24435,14 +23283,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line_locked"
       },
-      "id": "edge_1299"
+      "id": "edge_1251"
     },
     {
       "let": {
-        "edge_ref_1300": {
+        "edge_ref_1252": {
           "$select": {
             "from": {
-              "$ref": "edge_1299",
+              "$ref": "edge_1251",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -24470,14 +23318,14 @@
         "group": "sketch/draw",
         "operation": "sketch_add_line"
       },
-      "id": "edge_1301"
+      "id": "edge_1253"
     },
     {
       "let": {
-        "edge_ref_1302": {
+        "edge_ref_1254": {
           "$select": {
             "from": {
-              "$ref": "edge_1301",
+              "$ref": "edge_1253",
               "pointer": "/sketch"
             },
             "path": "/entities",
@@ -24495,51 +23343,51 @@
           "constraints": [
             {
               "entity": {
-                "$ref": "edge_ref_1296",
+                "$ref": "edge_ref_1248",
                 "pointer": "/start_id"
               },
               "type": "fix"
             },
             {
               "a": {
-                "$ref": "edge_ref_1296",
+                "$ref": "edge_ref_1248",
                 "pointer": "/end_id"
               },
               "b": {
-                "$ref": "edge_ref_1298",
+                "$ref": "edge_ref_1250",
                 "pointer": "/start_id"
               },
               "type": "coincident"
             },
             {
               "a": {
-                "$ref": "edge_ref_1298",
+                "$ref": "edge_ref_1250",
                 "pointer": "/end_id"
               },
               "b": {
-                "$ref": "edge_ref_1300",
+                "$ref": "edge_ref_1252",
                 "pointer": "/start_id"
               },
               "type": "coincident"
             },
             {
               "a": {
-                "$ref": "edge_ref_1300",
+                "$ref": "edge_ref_1252",
                 "pointer": "/end_id"
               },
               "b": {
-                "$ref": "edge_ref_1302",
+                "$ref": "edge_ref_1254",
                 "pointer": "/start_id"
               },
               "type": "coincident"
             },
             {
               "a": {
-                "$ref": "edge_ref_1302",
+                "$ref": "edge_ref_1254",
                 "pointer": "/end_id"
               },
               "b": {
-                "$ref": "edge_ref_1296",
+                "$ref": "edge_ref_1248",
                 "pointer": "/start_id"
               },
               "type": "coincident"
@@ -24549,7 +23397,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraints"
       },
-      "id": "close_profile_1303"
+      "id": "close_profile_1255"
     },
     {
       "call": {
@@ -24557,7 +23405,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1304"
+      "id": "finish_1256"
     },
     {
       "call": {
@@ -24583,7 +23431,7 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1305"
+      "id": "extrude_1257"
     },
     {
       "call": {
@@ -24598,7 +23446,7 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1306"
+      "id": "datum_1258"
     },
     {
       "call": {
@@ -24608,7 +23456,7 @@
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1306"
+                  "$ref": "datum_1258"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -24622,7 +23470,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1307"
+      "id": "begin_1259"
     },
     {
       "call": {
@@ -24632,7 +23480,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1308"
+      "id": "grid_1260"
     },
     {
       "call": {
@@ -24645,7 +23493,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_point"
       },
-      "id": "centre_point_1309"
+      "id": "centre_point_1261"
     },
     {
       "call": {
@@ -24653,7 +23501,7 @@
           "entity": {
             "$select": {
               "from": {
-                "$ref": "centre_point_1309",
+                "$ref": "centre_point_1261",
                 "pointer": "/sketch"
               },
               "path": "/entities",
@@ -24669,7 +23517,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraint"
       },
-      "id": "locate_circle_1310"
+      "id": "locate_circle_1262"
     },
     {
       "call": {
@@ -24679,7 +23527,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "acquire_center_1312"
+      "id": "acquire_center_1264"
     },
     {
       "call": {
@@ -24699,7 +23547,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_circle_locked"
       },
-      "id": "circle_1311"
+      "id": "circle_1263"
     },
     {
       "call": {
@@ -24709,7 +23557,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "exact_coordinates_1313"
+      "id": "exact_coordinates_1265"
     },
     {
       "call": {
@@ -24717,7 +23565,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1314"
+      "id": "finish_1266"
     },
     {
       "call": {
@@ -24743,13 +23591,13 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1315"
+      "id": "extrude_1267"
     },
     {
       "call": {
         "arguments": {
           "distance": -35.0,
-          "name": "clamp_spotface_1316 / datum",
+          "name": "clamp_spotface_1268 / datum",
           "reference": {
             "plane": "yz",
             "type": "origin_plane"
@@ -24758,17 +23606,17 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1317"
+      "id": "datum_1269"
     },
     {
       "call": {
         "arguments": {
-          "name": "clamp_spotface_1316",
+          "name": "clamp_spotface_1268",
           "plane": {
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1317"
+                  "$ref": "datum_1269"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -24782,7 +23630,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1318"
+      "id": "begin_1270"
     },
     {
       "call": {
@@ -24792,7 +23640,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1319"
+      "id": "grid_1271"
     },
     {
       "call": {
@@ -24805,7 +23653,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_point"
       },
-      "id": "centre_point_1320"
+      "id": "centre_point_1272"
     },
     {
       "call": {
@@ -24813,7 +23661,7 @@
           "entity": {
             "$select": {
               "from": {
-                "$ref": "centre_point_1320",
+                "$ref": "centre_point_1272",
                 "pointer": "/sketch"
               },
               "path": "/entities",
@@ -24829,7 +23677,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraint"
       },
-      "id": "locate_circle_1321"
+      "id": "locate_circle_1273"
     },
     {
       "call": {
@@ -24839,7 +23687,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "acquire_center_1323"
+      "id": "acquire_center_1275"
     },
     {
       "call": {
@@ -24859,7 +23707,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_circle_locked"
       },
-      "id": "circle_1322"
+      "id": "circle_1274"
     },
     {
       "call": {
@@ -24869,7 +23717,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "exact_coordinates_1324"
+      "id": "exact_coordinates_1276"
     },
     {
       "call": {
@@ -24877,7 +23725,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1325"
+      "id": "finish_1277"
     },
     {
       "call": {
@@ -24891,7 +23739,7 @@
           "profile_indices": [
             0
           ],
-          "sketch_name": "clamp_spotface_1316",
+          "sketch_name": "clamp_spotface_1268",
           "taper_angle_deg": 0,
           "target_body_ids": [
             {
@@ -24903,13 +23751,13 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1326"
+      "id": "extrude_1278"
     },
     {
       "call": {
         "arguments": {
           "distance": 2.0,
-          "name": "clamp_spotface_1327 / datum",
+          "name": "clamp_spotface_1279 / datum",
           "reference": {
             "plane": "yz",
             "type": "origin_plane"
@@ -24918,17 +23766,17 @@
         "group": "solid/reference",
         "operation": "construction_plane_offset"
       },
-      "id": "datum_1328"
+      "id": "datum_1280"
     },
     {
       "call": {
         "arguments": {
-          "name": "clamp_spotface_1327",
+          "name": "clamp_spotface_1279",
           "plane": {
             "datum_id": {
               "$select": {
                 "from": {
-                  "$ref": "datum_1328"
+                  "$ref": "datum_1280"
                 },
                 "path": "/planes",
                 "pointer": "/datum_id",
@@ -24942,7 +23790,7 @@
         "group": "sketch/draw",
         "operation": "sketch_begin"
       },
-      "id": "begin_1329"
+      "id": "begin_1281"
     },
     {
       "call": {
@@ -24952,7 +23800,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "grid_1330"
+      "id": "grid_1282"
     },
     {
       "call": {
@@ -24965,7 +23813,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_point"
       },
-      "id": "centre_point_1331"
+      "id": "centre_point_1283"
     },
     {
       "call": {
@@ -24973,7 +23821,7 @@
           "entity": {
             "$select": {
               "from": {
-                "$ref": "centre_point_1331",
+                "$ref": "centre_point_1283",
                 "pointer": "/sketch"
               },
               "path": "/entities",
@@ -24989,7 +23837,7 @@
         "group": "sketch/constrain",
         "operation": "sketch_add_constraint"
       },
-      "id": "locate_circle_1332"
+      "id": "locate_circle_1284"
     },
     {
       "call": {
@@ -24999,7 +23847,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "acquire_center_1334"
+      "id": "acquire_center_1286"
     },
     {
       "call": {
@@ -25019,7 +23867,7 @@
         "group": "sketch/draw",
         "operation": "sketch_add_circle_locked"
       },
-      "id": "circle_1333"
+      "id": "circle_1285"
     },
     {
       "call": {
@@ -25029,7 +23877,7 @@
         "group": "sketch/selection",
         "operation": "sketch_set_grid_snap"
       },
-      "id": "exact_coordinates_1335"
+      "id": "exact_coordinates_1287"
     },
     {
       "call": {
@@ -25037,7 +23885,7 @@
         "group": "sketch/draw",
         "operation": "sketch_finish"
       },
-      "id": "finish_1336"
+      "id": "finish_1288"
     },
     {
       "call": {
@@ -25051,7 +23899,7 @@
           "profile_indices": [
             0
           ],
-          "sketch_name": "clamp_spotface_1327",
+          "sketch_name": "clamp_spotface_1279",
           "taper_angle_deg": 0,
           "target_body_ids": [
             {
@@ -25063,7 +23911,7 @@
         "group": "solid/build",
         "operation": "solid_extrude"
       },
-      "id": "extrude_1337"
+      "id": "extrude_1289"
     },
     {
       "call": {
@@ -25088,14 +23936,14 @@
         "group": "assembly/joints",
         "operation": "assembly_document"
       },
-      "id": "assembly_1338"
+      "id": "assembly_1290"
     },
     {
       "let": {
         "pinion_occurrence": {
           "$select": {
             "from": {
-              "$ref": "assembly_1338"
+              "$ref": "assembly_1290"
             },
             "path": "/component_structure/occurrences",
             "take": "one",
@@ -25164,7 +24012,7 @@
     },
     {
       "let": {
-        "face_1339": {
+        "face_1291": {
           "$select": {
             "from": {
               "$select": {
@@ -25193,7 +24041,7 @@
     },
     {
       "let": {
-        "face_1340": {
+        "face_1292": {
           "$select": {
             "from": {
               "$select": {
@@ -25241,11 +24089,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1339",
+              "$ref": "face_1291",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1339",
+              "$ref": "face_1291",
               "pointer": "/key"
             },
             "frame": {
@@ -25268,15 +24116,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1339",
+                "$ref": "face_1291",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1339",
+                "$ref": "face_1291",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1339",
+                "$ref": "face_1291",
                 "pointer": "/plane/u"
               }
             }
@@ -25287,11 +24135,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1340",
+              "$ref": "face_1292",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1340",
+              "$ref": "face_1292",
               "pointer": "/key"
             },
             "frame": {
@@ -25314,15 +24162,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1340",
+                "$ref": "face_1292",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1340",
+                "$ref": "face_1292",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1340",
+                "$ref": "face_1292",
                 "pointer": "/plane/u"
               }
             }
@@ -25339,7 +24187,7 @@
     },
     {
       "let": {
-        "face_1341": {
+        "face_1293": {
           "$select": {
             "from": {
               "$select": {
@@ -25368,7 +24216,7 @@
     },
     {
       "let": {
-        "face_1342": {
+        "face_1294": {
           "$select": {
             "from": {
               "$select": {
@@ -25416,11 +24264,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1341",
+              "$ref": "face_1293",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1341",
+              "$ref": "face_1293",
               "pointer": "/key"
             },
             "frame": {
@@ -25443,15 +24291,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1341",
+                "$ref": "face_1293",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1341",
+                "$ref": "face_1293",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1341",
+                "$ref": "face_1293",
                 "pointer": "/plane/u"
               }
             }
@@ -25462,11 +24310,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1342",
+              "$ref": "face_1294",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1342",
+              "$ref": "face_1294",
               "pointer": "/key"
             },
             "frame": {
@@ -25489,15 +24337,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1342",
+                "$ref": "face_1294",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1342",
+                "$ref": "face_1294",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1342",
+                "$ref": "face_1294",
                 "pointer": "/plane/u"
               }
             }
@@ -25514,7 +24362,7 @@
     },
     {
       "let": {
-        "face_1343": {
+        "face_1295": {
           "$select": {
             "from": {
               "$select": {
@@ -25543,7 +24391,7 @@
     },
     {
       "let": {
-        "face_1344": {
+        "face_1296": {
           "$select": {
             "from": {
               "$select": {
@@ -25591,11 +24439,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1343",
+              "$ref": "face_1295",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1343",
+              "$ref": "face_1295",
               "pointer": "/key"
             },
             "frame": {
@@ -25618,15 +24466,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1343",
+                "$ref": "face_1295",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1343",
+                "$ref": "face_1295",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1343",
+                "$ref": "face_1295",
                 "pointer": "/plane/u"
               }
             }
@@ -25637,11 +24485,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1344",
+              "$ref": "face_1296",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1344",
+              "$ref": "face_1296",
               "pointer": "/key"
             },
             "frame": {
@@ -25664,15 +24512,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1344",
+                "$ref": "face_1296",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1344",
+                "$ref": "face_1296",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1344",
+                "$ref": "face_1296",
                 "pointer": "/plane/u"
               }
             }
@@ -25689,7 +24537,7 @@
     },
     {
       "let": {
-        "face_1345": {
+        "face_1297": {
           "$select": {
             "from": {
               "$select": {
@@ -25718,7 +24566,7 @@
     },
     {
       "let": {
-        "face_1346": {
+        "face_1298": {
           "$select": {
             "from": {
               "$select": {
@@ -25766,11 +24614,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1345",
+              "$ref": "face_1297",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1345",
+              "$ref": "face_1297",
               "pointer": "/key"
             },
             "frame": {
@@ -25793,15 +24641,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1345",
+                "$ref": "face_1297",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1345",
+                "$ref": "face_1297",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1345",
+                "$ref": "face_1297",
                 "pointer": "/plane/u"
               }
             }
@@ -25812,11 +24660,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1346",
+              "$ref": "face_1298",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1346",
+              "$ref": "face_1298",
               "pointer": "/key"
             },
             "frame": {
@@ -25839,15 +24687,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1346",
+                "$ref": "face_1298",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1346",
+                "$ref": "face_1298",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1346",
+                "$ref": "face_1298",
                 "pointer": "/plane/u"
               }
             }
@@ -25864,7 +24712,7 @@
     },
     {
       "let": {
-        "face_1347": {
+        "face_1299": {
           "$select": {
             "from": {
               "$select": {
@@ -25893,7 +24741,7 @@
     },
     {
       "let": {
-        "face_1348": {
+        "face_1300": {
           "$select": {
             "from": {
               "$select": {
@@ -25941,11 +24789,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1347",
+              "$ref": "face_1299",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1347",
+              "$ref": "face_1299",
               "pointer": "/key"
             },
             "frame": {
@@ -25968,15 +24816,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1347",
+                "$ref": "face_1299",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1347",
+                "$ref": "face_1299",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1347",
+                "$ref": "face_1299",
                 "pointer": "/plane/u"
               }
             }
@@ -25987,11 +24835,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1348",
+              "$ref": "face_1300",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1348",
+              "$ref": "face_1300",
               "pointer": "/key"
             },
             "frame": {
@@ -26014,15 +24862,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1348",
+                "$ref": "face_1300",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1348",
+                "$ref": "face_1300",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1348",
+                "$ref": "face_1300",
                 "pointer": "/plane/u"
               }
             }
@@ -26039,7 +24887,7 @@
     },
     {
       "let": {
-        "face_1349": {
+        "face_1301": {
           "$select": {
             "from": {
               "$select": {
@@ -26068,7 +24916,7 @@
     },
     {
       "let": {
-        "face_1350": {
+        "face_1302": {
           "$select": {
             "from": {
               "$select": {
@@ -26116,11 +24964,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1349",
+              "$ref": "face_1301",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1349",
+              "$ref": "face_1301",
               "pointer": "/key"
             },
             "frame": {
@@ -26143,15 +24991,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1349",
+                "$ref": "face_1301",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1349",
+                "$ref": "face_1301",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1349",
+                "$ref": "face_1301",
                 "pointer": "/plane/u"
               }
             }
@@ -26162,11 +25010,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1350",
+              "$ref": "face_1302",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1350",
+              "$ref": "face_1302",
               "pointer": "/key"
             },
             "frame": {
@@ -26189,15 +25037,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1350",
+                "$ref": "face_1302",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1350",
+                "$ref": "face_1302",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1350",
+                "$ref": "face_1302",
                 "pointer": "/plane/u"
               }
             }
@@ -26214,7 +25062,7 @@
     },
     {
       "let": {
-        "face_1351": {
+        "face_1303": {
           "$select": {
             "from": {
               "$select": {
@@ -26243,7 +25091,7 @@
     },
     {
       "let": {
-        "face_1352": {
+        "face_1304": {
           "$select": {
             "from": {
               "$select": {
@@ -26291,11 +25139,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1351",
+              "$ref": "face_1303",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1351",
+              "$ref": "face_1303",
               "pointer": "/key"
             },
             "frame": {
@@ -26318,15 +25166,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1351",
+                "$ref": "face_1303",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1351",
+                "$ref": "face_1303",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1351",
+                "$ref": "face_1303",
                 "pointer": "/plane/u"
               }
             }
@@ -26337,11 +25185,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1352",
+              "$ref": "face_1304",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1352",
+              "$ref": "face_1304",
               "pointer": "/key"
             },
             "frame": {
@@ -26364,15 +25212,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1352",
+                "$ref": "face_1304",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1352",
+                "$ref": "face_1304",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1352",
+                "$ref": "face_1304",
                 "pointer": "/plane/u"
               }
             }
@@ -26389,7 +25237,7 @@
     },
     {
       "let": {
-        "face_1353": {
+        "face_1305": {
           "$select": {
             "from": {
               "$select": {
@@ -26418,7 +25266,7 @@
     },
     {
       "let": {
-        "face_1354": {
+        "face_1306": {
           "$select": {
             "from": {
               "$select": {
@@ -26466,11 +25314,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1353",
+              "$ref": "face_1305",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1353",
+              "$ref": "face_1305",
               "pointer": "/key"
             },
             "frame": {
@@ -26493,15 +25341,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1353",
+                "$ref": "face_1305",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1353",
+                "$ref": "face_1305",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1353",
+                "$ref": "face_1305",
                 "pointer": "/plane/u"
               }
             }
@@ -26512,11 +25360,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1354",
+              "$ref": "face_1306",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1354",
+              "$ref": "face_1306",
               "pointer": "/key"
             },
             "frame": {
@@ -26539,15 +25387,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1354",
+                "$ref": "face_1306",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1354",
+                "$ref": "face_1306",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1354",
+                "$ref": "face_1306",
                 "pointer": "/plane/u"
               }
             }
@@ -26564,7 +25412,7 @@
     },
     {
       "let": {
-        "face_1355": {
+        "face_1307": {
           "$select": {
             "from": {
               "$select": {
@@ -26593,7 +25441,7 @@
     },
     {
       "let": {
-        "face_1356": {
+        "face_1308": {
           "$select": {
             "from": {
               "$select": {
@@ -26641,11 +25489,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1355",
+              "$ref": "face_1307",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1355",
+              "$ref": "face_1307",
               "pointer": "/key"
             },
             "frame": {
@@ -26668,15 +25516,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1355",
+                "$ref": "face_1307",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1355",
+                "$ref": "face_1307",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1355",
+                "$ref": "face_1307",
                 "pointer": "/plane/u"
               }
             }
@@ -26687,11 +25535,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1356",
+              "$ref": "face_1308",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1356",
+              "$ref": "face_1308",
               "pointer": "/key"
             },
             "frame": {
@@ -26714,15 +25562,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1356",
+                "$ref": "face_1308",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1356",
+                "$ref": "face_1308",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1356",
+                "$ref": "face_1308",
                 "pointer": "/plane/u"
               }
             }
@@ -26739,7 +25587,7 @@
     },
     {
       "let": {
-        "face_1357": {
+        "face_1309": {
           "$select": {
             "from": {
               "$select": {
@@ -26768,7 +25616,7 @@
     },
     {
       "let": {
-        "face_1358": {
+        "face_1310": {
           "$select": {
             "from": {
               "$select": {
@@ -26816,11 +25664,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1357",
+              "$ref": "face_1309",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1357",
+              "$ref": "face_1309",
               "pointer": "/key"
             },
             "frame": {
@@ -26843,15 +25691,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1357",
+                "$ref": "face_1309",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1357",
+                "$ref": "face_1309",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1357",
+                "$ref": "face_1309",
                 "pointer": "/plane/u"
               }
             }
@@ -26862,11 +25710,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1358",
+              "$ref": "face_1310",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1358",
+              "$ref": "face_1310",
               "pointer": "/key"
             },
             "frame": {
@@ -26889,15 +25737,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1358",
+                "$ref": "face_1310",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1358",
+                "$ref": "face_1310",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1358",
+                "$ref": "face_1310",
                 "pointer": "/plane/u"
               }
             }
@@ -26948,7 +25796,7 @@
     },
     {
       "let": {
-        "face_1359": {
+        "face_1311": {
           "$select": {
             "from": {
               "$select": {
@@ -26977,7 +25825,7 @@
     },
     {
       "let": {
-        "face_1360": {
+        "face_1312": {
           "$select": {
             "from": {
               "$select": {
@@ -27025,11 +25873,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1359",
+              "$ref": "face_1311",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1359",
+              "$ref": "face_1311",
               "pointer": "/key"
             },
             "frame": {
@@ -27052,15 +25900,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1359",
+                "$ref": "face_1311",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1359",
+                "$ref": "face_1311",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1359",
+                "$ref": "face_1311",
                 "pointer": "/plane/u"
               }
             }
@@ -27071,11 +25919,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1360",
+              "$ref": "face_1312",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1360",
+              "$ref": "face_1312",
               "pointer": "/key"
             },
             "frame": {
@@ -27098,15 +25946,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1360",
+                "$ref": "face_1312",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1360",
+                "$ref": "face_1312",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1360",
+                "$ref": "face_1312",
                 "pointer": "/plane/u"
               }
             }
@@ -27123,7 +25971,7 @@
     },
     {
       "let": {
-        "face_1361": {
+        "face_1313": {
           "$select": {
             "from": {
               "$select": {
@@ -27152,7 +26000,7 @@
     },
     {
       "let": {
-        "face_1362": {
+        "face_1314": {
           "$select": {
             "from": {
               "$select": {
@@ -27200,11 +26048,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1361",
+              "$ref": "face_1313",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1361",
+              "$ref": "face_1313",
               "pointer": "/key"
             },
             "frame": {
@@ -27227,15 +26075,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1361",
+                "$ref": "face_1313",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1361",
+                "$ref": "face_1313",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1361",
+                "$ref": "face_1313",
                 "pointer": "/plane/u"
               }
             }
@@ -27246,11 +26094,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1362",
+              "$ref": "face_1314",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1362",
+              "$ref": "face_1314",
               "pointer": "/key"
             },
             "frame": {
@@ -27273,15 +26121,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1362",
+                "$ref": "face_1314",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1362",
+                "$ref": "face_1314",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1362",
+                "$ref": "face_1314",
                 "pointer": "/plane/u"
               }
             }
@@ -27298,7 +26146,7 @@
     },
     {
       "let": {
-        "face_1363": {
+        "face_1315": {
           "$select": {
             "from": {
               "$select": {
@@ -27327,7 +26175,7 @@
     },
     {
       "let": {
-        "face_1364": {
+        "face_1316": {
           "$select": {
             "from": {
               "$select": {
@@ -27375,11 +26223,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1363",
+              "$ref": "face_1315",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1363",
+              "$ref": "face_1315",
               "pointer": "/key"
             },
             "frame": {
@@ -27402,15 +26250,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1363",
+                "$ref": "face_1315",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1363",
+                "$ref": "face_1315",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1363",
+                "$ref": "face_1315",
                 "pointer": "/plane/u"
               }
             }
@@ -27421,11 +26269,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1364",
+              "$ref": "face_1316",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1364",
+              "$ref": "face_1316",
               "pointer": "/key"
             },
             "frame": {
@@ -27448,15 +26296,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1364",
+                "$ref": "face_1316",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1364",
+                "$ref": "face_1316",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1364",
+                "$ref": "face_1316",
                 "pointer": "/plane/u"
               }
             }
@@ -27507,7 +26355,7 @@
     },
     {
       "let": {
-        "face_1365": {
+        "face_1317": {
           "$select": {
             "from": {
               "$select": {
@@ -27536,7 +26384,7 @@
     },
     {
       "let": {
-        "face_1366": {
+        "face_1318": {
           "$select": {
             "from": {
               "$select": {
@@ -27584,11 +26432,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1365",
+              "$ref": "face_1317",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1365",
+              "$ref": "face_1317",
               "pointer": "/key"
             },
             "frame": {
@@ -27611,15 +26459,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1365",
+                "$ref": "face_1317",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1365",
+                "$ref": "face_1317",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1365",
+                "$ref": "face_1317",
                 "pointer": "/plane/u"
               }
             }
@@ -27630,11 +26478,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1366",
+              "$ref": "face_1318",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1366",
+              "$ref": "face_1318",
               "pointer": "/key"
             },
             "frame": {
@@ -27657,15 +26505,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1366",
+                "$ref": "face_1318",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1366",
+                "$ref": "face_1318",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1366",
+                "$ref": "face_1318",
                 "pointer": "/plane/u"
               }
             }
@@ -27682,7 +26530,7 @@
     },
     {
       "let": {
-        "face_1367": {
+        "face_1319": {
           "$select": {
             "from": {
               "$select": {
@@ -27711,7 +26559,7 @@
     },
     {
       "let": {
-        "face_1368": {
+        "face_1320": {
           "$select": {
             "from": {
               "$select": {
@@ -27759,11 +26607,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1367",
+              "$ref": "face_1319",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1367",
+              "$ref": "face_1319",
               "pointer": "/key"
             },
             "frame": {
@@ -27786,15 +26634,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1367",
+                "$ref": "face_1319",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1367",
+                "$ref": "face_1319",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1367",
+                "$ref": "face_1319",
                 "pointer": "/plane/u"
               }
             }
@@ -27805,11 +26653,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1368",
+              "$ref": "face_1320",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1368",
+              "$ref": "face_1320",
               "pointer": "/key"
             },
             "frame": {
@@ -27832,15 +26680,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1368",
+                "$ref": "face_1320",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1368",
+                "$ref": "face_1320",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1368",
+                "$ref": "face_1320",
                 "pointer": "/plane/u"
               }
             }
@@ -27857,7 +26705,7 @@
     },
     {
       "let": {
-        "face_1369": {
+        "face_1321": {
           "$select": {
             "from": {
               "$select": {
@@ -27886,7 +26734,7 @@
     },
     {
       "let": {
-        "face_1370": {
+        "face_1322": {
           "$select": {
             "from": {
               "$select": {
@@ -27934,11 +26782,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1369",
+              "$ref": "face_1321",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1369",
+              "$ref": "face_1321",
               "pointer": "/key"
             },
             "frame": {
@@ -27961,15 +26809,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1369",
+                "$ref": "face_1321",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1369",
+                "$ref": "face_1321",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1369",
+                "$ref": "face_1321",
                 "pointer": "/plane/u"
               }
             }
@@ -27980,11 +26828,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1370",
+              "$ref": "face_1322",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1370",
+              "$ref": "face_1322",
               "pointer": "/key"
             },
             "frame": {
@@ -28007,15 +26855,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1370",
+                "$ref": "face_1322",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1370",
+                "$ref": "face_1322",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1370",
+                "$ref": "face_1322",
                 "pointer": "/plane/u"
               }
             }
@@ -28032,7 +26880,7 @@
     },
     {
       "let": {
-        "face_1371": {
+        "face_1323": {
           "$select": {
             "from": {
               "$select": {
@@ -28061,7 +26909,7 @@
     },
     {
       "let": {
-        "face_1372": {
+        "face_1324": {
           "$select": {
             "from": {
               "$select": {
@@ -28109,11 +26957,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1371",
+              "$ref": "face_1323",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1371",
+              "$ref": "face_1323",
               "pointer": "/key"
             },
             "frame": {
@@ -28136,15 +26984,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1371",
+                "$ref": "face_1323",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1371",
+                "$ref": "face_1323",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1371",
+                "$ref": "face_1323",
                 "pointer": "/plane/u"
               }
             }
@@ -28155,11 +27003,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1372",
+              "$ref": "face_1324",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1372",
+              "$ref": "face_1324",
               "pointer": "/key"
             },
             "frame": {
@@ -28182,15 +27030,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1372",
+                "$ref": "face_1324",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1372",
+                "$ref": "face_1324",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1372",
+                "$ref": "face_1324",
                 "pointer": "/plane/u"
               }
             }
@@ -28241,7 +27089,7 @@
     },
     {
       "let": {
-        "face_1373": {
+        "face_1325": {
           "$select": {
             "from": {
               "$select": {
@@ -28270,7 +27118,7 @@
     },
     {
       "let": {
-        "face_1374": {
+        "face_1326": {
           "$select": {
             "from": {
               "$select": {
@@ -28318,11 +27166,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1373",
+              "$ref": "face_1325",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1373",
+              "$ref": "face_1325",
               "pointer": "/key"
             },
             "frame": {
@@ -28345,15 +27193,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1373",
+                "$ref": "face_1325",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1373",
+                "$ref": "face_1325",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1373",
+                "$ref": "face_1325",
                 "pointer": "/plane/u"
               }
             }
@@ -28364,11 +27212,11 @@
               "pointer": "/id"
             },
             "face_id": {
-              "$ref": "face_1374",
+              "$ref": "face_1326",
               "pointer": "/id"
             },
             "face_key": {
-              "$ref": "face_1374",
+              "$ref": "face_1326",
               "pointer": "/key"
             },
             "frame": {
@@ -28391,15 +27239,15 @@
             "kind": "planar_face",
             "source_surface_frame": {
               "origin": {
-                "$ref": "face_1374",
+                "$ref": "face_1326",
                 "pointer": "/plane/origin"
               },
               "primary_axis": {
-                "$ref": "face_1374",
+                "$ref": "face_1326",
                 "pointer": "/plane/normal"
               },
               "secondary_axis": {
-                "$ref": "face_1374",
+                "$ref": "face_1326",
                 "pointer": "/plane/u"
               }
             }
@@ -28722,7 +27570,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1375"
+      "id": "diameter_1327"
     },
     {
       "let": {
@@ -28787,7 +27635,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1376"
+      "id": "diameter_1328"
     },
     {
       "call": {
@@ -28921,7 +27769,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_linear_dimension"
       },
-      "id": "height_1377"
+      "id": "height_1329"
     },
     {
       "call": {
@@ -28938,7 +27786,7 @@
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
       },
-      "id": "drawing_note_1378"
+      "id": "drawing_note_1330"
     },
     {
       "call": {
@@ -29247,7 +28095,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1379"
+      "id": "diameter_1331"
     },
     {
       "let": {
@@ -29312,7 +28160,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1380"
+      "id": "diameter_1332"
     },
     {
       "call": {
@@ -29446,7 +28294,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_linear_dimension"
       },
-      "id": "height_1381"
+      "id": "height_1333"
     },
     {
       "call": {
@@ -29463,7 +28311,7 @@
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
       },
-      "id": "drawing_note_1382"
+      "id": "drawing_note_1334"
     },
     {
       "call": {
@@ -29772,7 +28620,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1383"
+      "id": "diameter_1335"
     },
     {
       "let": {
@@ -29837,7 +28685,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1384"
+      "id": "diameter_1336"
     },
     {
       "call": {
@@ -29971,7 +28819,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_linear_dimension"
       },
-      "id": "height_1385"
+      "id": "height_1337"
     },
     {
       "call": {
@@ -29988,7 +28836,7 @@
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
       },
-      "id": "drawing_note_1386"
+      "id": "drawing_note_1338"
     },
     {
       "call": {
@@ -30297,7 +29145,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1387"
+      "id": "diameter_1339"
     },
     {
       "let": {
@@ -30362,7 +29210,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1388"
+      "id": "diameter_1340"
     },
     {
       "let": {
@@ -30427,7 +29275,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1389"
+      "id": "diameter_1341"
     },
     {
       "call": {
@@ -30561,7 +29409,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_linear_dimension"
       },
-      "id": "height_1390"
+      "id": "height_1342"
     },
     {
       "call": {
@@ -30578,7 +29426,7 @@
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
       },
-      "id": "drawing_note_1391"
+      "id": "drawing_note_1343"
     },
     {
       "call": {
@@ -30887,7 +29735,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1392"
+      "id": "diameter_1344"
     },
     {
       "let": {
@@ -30952,7 +29800,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1393"
+      "id": "diameter_1345"
     },
     {
       "call": {
@@ -31086,7 +29934,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_linear_dimension"
       },
-      "id": "height_1394"
+      "id": "height_1346"
     },
     {
       "call": {
@@ -31103,7 +29951,7 @@
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
       },
-      "id": "drawing_note_1395"
+      "id": "drawing_note_1347"
     },
     {
       "call": {
@@ -31412,7 +30260,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1396"
+      "id": "diameter_1348"
     },
     {
       "let": {
@@ -31477,7 +30325,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1397"
+      "id": "diameter_1349"
     },
     {
       "let": {
@@ -31542,7 +30390,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1398"
+      "id": "diameter_1350"
     },
     {
       "call": {
@@ -31676,7 +30524,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_linear_dimension"
       },
-      "id": "height_1399"
+      "id": "height_1351"
     },
     {
       "call": {
@@ -31693,7 +30541,7 @@
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
       },
-      "id": "drawing_note_1400"
+      "id": "drawing_note_1352"
     },
     {
       "call": {
@@ -32002,7 +30850,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1401"
+      "id": "diameter_1353"
     },
     {
       "let": {
@@ -32067,7 +30915,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1402"
+      "id": "diameter_1354"
     },
     {
       "let": {
@@ -32132,7 +30980,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1403"
+      "id": "diameter_1355"
     },
     {
       "call": {
@@ -32266,7 +31114,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_linear_dimension"
       },
-      "id": "height_1404"
+      "id": "height_1356"
     },
     {
       "call": {
@@ -32283,7 +31131,7 @@
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
       },
-      "id": "drawing_note_1405"
+      "id": "drawing_note_1357"
     },
     {
       "call": {
@@ -32592,7 +31440,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1406"
+      "id": "diameter_1358"
     },
     {
       "let": {
@@ -32657,7 +31505,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1407"
+      "id": "diameter_1359"
     },
     {
       "call": {
@@ -32791,7 +31639,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_linear_dimension"
       },
-      "id": "height_1408"
+      "id": "height_1360"
     },
     {
       "call": {
@@ -32808,7 +31656,7 @@
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
       },
-      "id": "drawing_note_1409"
+      "id": "drawing_note_1361"
     },
     {
       "call": {
@@ -33117,7 +31965,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1410"
+      "id": "diameter_1362"
     },
     {
       "let": {
@@ -33182,7 +32030,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1411"
+      "id": "diameter_1363"
     },
     {
       "call": {
@@ -33316,7 +32164,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_linear_dimension"
       },
-      "id": "height_1412"
+      "id": "height_1364"
     },
     {
       "call": {
@@ -33333,7 +32181,7 @@
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
       },
-      "id": "drawing_note_1413"
+      "id": "drawing_note_1365"
     },
     {
       "call": {
@@ -33642,7 +32490,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_radial_dimension"
       },
-      "id": "diameter_1414"
+      "id": "diameter_1366"
     },
     {
       "call": {
@@ -33776,7 +32624,7 @@
         "group": "drawing/dimensions",
         "operation": "drawing_add_linear_dimension"
       },
-      "id": "height_1415"
+      "id": "height_1367"
     },
     {
       "call": {
@@ -33793,7 +32641,7 @@
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
       },
-      "id": "drawing_note_1416"
+      "id": "drawing_note_1368"
     },
     {
       "call": {
@@ -33884,7 +32732,7 @@
         "group": "drawing/views",
         "operation": "drawing_add_view"
       },
-      "id": "assembly_view_1417"
+      "id": "assembly_view_1369"
     },
     {
       "call": {
@@ -33917,7 +32765,7 @@
         "group": "drawing/views",
         "operation": "drawing_add_view"
       },
-      "id": "assembly_view_1418"
+      "id": "assembly_view_1370"
     },
     {
       "call": {

@@ -547,18 +547,48 @@ impl Author {
         let polar = |rad: f64, ang: f64| [rad * ang.cos(), rad * ang.sin()];
         let mut points = vec![polar(root - 0.15, -angle(root))];
         let start = root.max(base);
-        for i in 0..=12 {
-            let rad = start + (tip - start) * i as f64 / 12.;
+        let subdivisions = 6;
+        for i in 0..=subdivisions {
+            let rad = start + (tip - start) * i as f64 / subdivisions as f64;
             points.push(polar(rad, -angle(rad)));
         }
         for i in 1..=5 {
             points.push(polar(tip, -angle(tip) + 2. * angle(tip) * i as f64 / 5.));
         }
-        for i in (0..12).rev() {
-            let rad = start + (tip - start) * i as f64 / 12.;
+        for i in (0..subdivisions).rev() {
+            let rad = start + (tip - start) * i as f64 / subdivisions as f64;
             points.push(polar(rad, angle(rad)));
         }
         points.push(polar(root - 0.15, angle(root)));
+        // Check the written polyline against the continuous involute, not just
+        // its sampled vertices. Distance to a set is 1-Lipschitz; half the
+        // largest intervening arc length bounds what lies between test points.
+        let distance = |point: [f64; 2], a: [f64; 2], b: [f64; 2]| {
+            let d = [b[0] - a[0], b[1] - a[1]];
+            let t = (((point[0] - a[0]) * d[0] + (point[1] - a[1]) * d[1])
+                / (d[0] * d[0] + d[1] * d[1]))
+                .clamp(0., 1.);
+            (point[0] - a[0] - t * d[0]).hypot(point[1] - a[1] - t * d[1])
+        };
+        let count = 2000;
+        let mut max_error: f64 = 0.;
+        for i in 0..=count {
+            let radius = start + (tip - start) * i as f64 / count as f64;
+            let exact = polar(radius, -angle(radius));
+            max_error = max_error.max(
+                points
+                    .windows(2)
+                    .map(|edge| distance(exact, edge[0], edge[1]))
+                    .fold(f64::INFINITY, f64::min),
+            );
+        }
+        let last = tip - (tip - start) / count as f64;
+        let continuous_bound = max_error + (tip * tip - last * last) / (4. * base);
+        assert!(
+            continuous_bound < 0.01,
+            "{teeth}-tooth involute exceeds0.01 mm chord budget: {continuous_bound}"
+        );
+        eprintln!("{teeth}-tooth continuous involute chord bound: {continuous_bound:.6} mm");
         let tooth = format!("{name}_tooth");
         self.begin(&tooth, "xy", 0.);
         self.polygon(&points);

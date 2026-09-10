@@ -80,6 +80,7 @@ struct Client {
     input: ChildStdin,
     replies: Receiver<Result<Value, String>>,
     id: u64,
+    timeout: Duration,
 }
 impl Client {
     fn start() -> Self {
@@ -112,6 +113,7 @@ impl Client {
             input,
             replies,
             id: 0,
+            timeout: Duration::from_secs(60),
         };
         client.rpc("initialize", json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"recipe-regression","version":"1"}}));
         writeln!(
@@ -134,7 +136,7 @@ impl Client {
         loop {
             let reply = self
                 .replies
-                .recv_timeout(Duration::from_secs(600))
+                .recv_timeout(self.timeout)
                 .unwrap_or_else(|error| panic!("MCP did not finish {method}: {error}"))
                 .unwrap_or_else(|error| panic!("Invalid MCP response for {method}: {error}"));
             if reply["id"] != self.id {
@@ -1543,5 +1545,169 @@ fn d_screw_vise_coupon_replays_real_threads_and_exports_printable_meshes() {
     assert_eq!(
         Client::restore(&exports["final_model"]).call("solid_scene", json!({}))["bodies"],
         exports["final_scene"]["bodies"]
+    );
+}
+
+#[test]
+fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
+    let mut client = Client::start();
+    // This is a full construction/drafting acceptance run, not a single-call
+    // unit test. The deadline remains bounded and failures still stop at once.
+    client.timeout = Duration::from_secs(240);
+    let report = client.recipe("vertical-axis-turbine");
+    let exports = &report["exports"];
+    assert_eq!(exports["final_solution"]["solved"], true);
+    assert_eq!(exports["final_solution"]["diagnostics"], json!([]));
+    assert!(exports["final_sketches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|s| s["dof"]["value"] == 0));
+    let parts = exports["parts"].as_array().unwrap();
+    let scene = &exports["final_scene"];
+    assert_eq!(scene["errors"], json!([]));
+    let body = |id: &Value| {
+        scene["bodies"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["id"] == *id)
+            .unwrap()
+    };
+    let stage = parts.iter().find(|p| p["id"] == "stage").unwrap();
+    assert_eq!(stage["quantity"], 2);
+    let stage_instances = exports["final_solution"]["instance_body_poses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["body_id"] == stage["body_id"])
+        .collect::<Vec<_>>();
+    assert_eq!(stage_instances.len(), 2);
+    assert_eq!(stage_instances[0]["translation"], json!([0., 0., 70.]));
+    assert_eq!(stage_instances[1]["translation"], json!([0., 0., 170.]));
+    assert!(
+        (stage_instances[1]["rotation"][2].as_f64().unwrap() - std::f64::consts::FRAC_1_SQRT_2)
+            .abs()
+            < 1e-10
+    );
+    for part in parts {
+        let (min, max, volume) = mesh_measurement(body(&part["body_id"]));
+        assert!(volume.is_finite() && volume > 0., "{}", part["id"]);
+        if part["printable"] != true {
+            continue;
+        }
+        assert!(
+            min[2].abs() < 1e-5,
+            "{} print pose is not on the bed",
+            part["id"]
+        );
+        assert!(
+            (0..3).all(|i| max[i] - min[i] <= 200.001),
+            "{} exceeds 200 mm print envelope",
+            part["id"]
+        );
+        let print = client.call(
+            "solid_export_3mf",
+            json!({"body_ids":[part["body_id"]],"slicer_target":"standard"}),
+        );
+        let bytes = BASE64
+            .decode(print["bytes_base64"].as_str().unwrap())
+            .unwrap();
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
+        let mut model = String::new();
+        archive
+            .by_name("3D/3dmodel.model")
+            .unwrap()
+            .read_to_string(&mut model)
+            .unwrap();
+        assert_eq!(
+            model.matches("<object ").count(),
+            1,
+            "one selected printable definition per file"
+        );
+        assert!(model.contains("unit=\"millimeter\"") && model.contains("<triangle "));
+        if let Some(directory) = std::env::var_os("NBCAD_RECIPE_ARTIFACT_DIR") {
+            let directory = std::path::PathBuf::from(directory);
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(
+                directory.join(format!("{}.3mf", part["id"].as_str().unwrap())),
+                bytes,
+            )
+            .unwrap();
+        }
+    }
+    let interference = client.call("assembly_interference_check", json!({}));
+    if let Some(directory) = std::env::var_os("NBCAD_RECIPE_ARTIFACT_DIR") {
+        let directory = std::path::PathBuf::from(directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("turbine-run-1.json"),
+            serde_json::to_vec_pretty(&report).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            directory.join("interference.json"),
+            serde_json::to_vec_pretty(&interference).unwrap(),
+        )
+        .unwrap();
+        for drawing in exports["drawings"].as_array().unwrap() {
+            for format in ["svg", "dxf"] {
+                std::fs::write(
+                    directory.join(format!("{}.{}", drawing["part"].as_str().unwrap(), format)),
+                    drawing[format].as_str().unwrap(),
+                )
+                .unwrap();
+            }
+        }
+    }
+    let mut repeat = Client::start();
+    repeat.timeout = client.timeout;
+    let repeated = repeat.recipe("vertical-axis-turbine");
+    assert_eq!(
+        exports, &repeated["exports"],
+        "two independent native construction and drawing replays"
+    );
+    let mut restored = Client::restore(&exports["final_model"]);
+    let restored_scene = restored.call("solid_scene", json!({}));
+    assert_eq!(
+        restored_scene["bodies"], scene["bodies"],
+        "cold save/load preserves exact topology and mesh"
+    );
+    let old_volume = mesh_measurement(body(&stage["body_id"])).2;
+    let changed=restored.call("solid_edit_extrude",json!({"feature_id":exports["stage_plate_feature"],"extent":{"type":"distance","distance":4.}}));
+    assert_eq!(changed["scene"]["errors"], json!([]));
+    let changed_body = changed["scene"]["bodies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["id"] == stage["body_id"])
+        .unwrap();
+    let difference = mesh_measurement(changed_body).2 - old_volume;
+    assert!((29_000.0..31_000.0).contains(&difference),"one mm of disc material must fill the free area around the hub and bucket walls: {difference}");
+    let edited_model = restored.call("cad_project_model", json!({}));
+    let mut edited = Client::restore(&edited_model);
+    let edited_scene = edited.call("solid_scene", json!({}));
+    assert_eq!(edited_scene["bodies"], changed["scene"]["bodies"]);
+    let moved = client.call(
+        "assembly_set_joint_motion",
+        json!({"joint_id":exports["rotor_joint_id"],"angle_offset_deg":810.,"linear_offset_mm":0.}),
+    );
+    assert!(!moved.is_null());
+    let assembly = client.call("assembly_document", json!({}));
+    let driven = assembly["joints"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|j| j["id"] == exports["generator_joint_id"])
+        .unwrap();
+    assert_eq!(driven["angle_offset_deg"], -3230.);
+    assert_eq!(client.call("assembly_solution", json!({}))["solved"], true);
+    client.call(
+        "assembly_set_joint_motion",
+        json!({"joint_id":exports["rotor_joint_id"],"angle_offset_deg":0.,"linear_offset_mm":0.}),
+    );
+    assert_eq!(
+        client.call("assembly_document", json!({}))["joints"],
+        exports["final_assembly"]["joints"]
     );
 }
