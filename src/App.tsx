@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { installOperationFeedback } from './operationPlayback';
+import { PresentationControls } from './components/PresentationControls';
 import { useTranslation } from './i18n';
 import { useAppStore } from './store/appStore';
 import {
@@ -415,6 +416,7 @@ export default function App() {
                 <div className="contents" data-mcp-surface="comments"><CommentsPanel /></div>
               </>
             )}
+            <PresentationControls />
           </main>
         </div>
       </div>

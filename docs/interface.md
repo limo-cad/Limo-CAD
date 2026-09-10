@@ -116,6 +116,12 @@ snapshots; identical snapshots avoid geometry replay. Delivered native control
 requests retain their originating window/session ownership until reply or expiry,
 independently of whether the source tab remains resident.
 
+Snapshot export tickets are separate from the engine's edit revision. Repeated
+publication and adaptive grid changes during camera movement do not create model
+edits. A real model mutation still advances the revision and rejects stale queued
+commands. `assembly_document` reads the live engine through the existing query
+channel, avoiding a geometry rebuild just to retrieve component occurrences.
+
 This complements the native part/assembly model goldens and camera/joint
 controls test. Those tests validate geometry and persistence; the live UI
 golden validates the connection between engine state and interactive UI. A
@@ -153,7 +159,11 @@ motion coordinates instead of silently ignoring them. Reports include call argum
 and a model checkpoint. Workshop resets are explicit and require an empty
 document at the start. Do not run it over user work.
 
-For a richer editable design, run `cargo xtask test-mcp garden-bench`.
+For a richer editable design, run `cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --server <nbcad-mcp>`.
+This Rust runner interprets the commented command file through the shared interface.
+Add `--repeat 2` for independent headless determinism checks, or use
+`--session <UUID> --present` to narrate and frame the construction in an existing window.
+See `native-scripts.md` for the format and playback controls.
 The [crown garden bench](garden-bench.md) adds crowned/slotted pickets,
 rounded armrests, rear-post clearance pockets, reusable components and
 driving-dimension edits with native history restore checks. The simple `bench`

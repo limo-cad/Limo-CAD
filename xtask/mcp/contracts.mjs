@@ -26,7 +26,7 @@ try {
  await page.goto(server.resolvedUrls.local[0]+'mcp-contract');
  const result=await page.evaluate(async()=>{
   const {inspectUi,operateUi}=await import('/src/uiControl.ts');
-  const {SerialPlayback,presentOperation,setPlaybackPace}=await import('/src/operationPlayback.ts');
+  const {SerialPlayback,presentOperation,setPlaybackPace,presentation}=await import('/src/operationPlayback.ts');
   const {interfaceGroups,operationGroup}=await import('/src/interface.ts');
   const {drivePointer}=await import('/src/uiPointer.ts');
   const {trackEngineOperation,pendingEngineOperations}=await import('/src/engine/activity.ts');
@@ -106,8 +106,8 @@ try {
   feedback.innerHTML='<button>Line</button>';document.body.append(feedback);
   check(inspectUi(context).surfaces.some(s=>s.name==='sketch/draw'),'Controls must use the product group');
   setPlaybackPace(0);await presentOperation('sketch_add_line');
-  check(document.querySelector('[data-mcp-presentation]'),'Fast execution removed feedback before it could render');
-  check(feedback.getAnimations().length>0,'The actual command group must animate without blocking execution');
+  check(presentation.snapshot().operation==='add line','Operation feedback must remain readable until the next operation');
+  check(!document.querySelector('[data-mcp-presentation]')&&feedback.getAnimations().length===0,'Feedback must not create flashing overlays or per-operation animations');
   feedback.remove();
   for(const tab of [config.SOLID_TAB,config.SKETCH_TAB,config.DRAWING_TAB,config.ASSEMBLY_TAB]){
    const walk=(entries)=>{for(const entry of entries){if(entry.type==='separator')continue;

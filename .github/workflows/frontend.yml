@@ -3,8 +3,10 @@ name: Frontend
 on:
   push:
     branches: [main]
-  # Desktop packages calls this for PRs, release tags, and manual builds.
-  # Keeping PR execution there avoids duplicate frontend runs.
+  # Desktop packages calls this for main-target PRs, tags, and manual builds.
+  # Stacked PRs still need the frontend gate without duplicate main-target runs.
+  pull_request:
+    branches-ignore: [main]
   workflow_call:
 
 permissions:

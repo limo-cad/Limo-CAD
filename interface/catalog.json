@@ -1976,6 +1976,11 @@
   ],
   "groups": [
     {
+      "id": "document/presentation",
+      "labelKey": "document/presentation",
+      "operations": []
+    },
+    {
       "id": "assembly/inspect",
       "labelKey": "ribbon.solid.interference",
       "operations": ["assembly_interference_check"]

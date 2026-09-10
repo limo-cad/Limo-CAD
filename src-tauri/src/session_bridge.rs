@@ -23,9 +23,9 @@
 //!   heartbeat.json. Two same-base ops therefore cannot both apply.
 //! - Conflicting or malformed head inbox entries are dead-lettered to
 //!   `inbox/failed/` so the queue cannot wedge forever.
-//! - Debounced snapshot publish may only raise `engine_revision` to the
-//!   published generation (never regress it). Heartbeat-only refreshes do
-//!   not bump the counter.
+//! - Snapshot publication and heartbeat refresh never advance the engine
+//!   revision. Export reservations have a separate sequence for rejecting
+//!   older writes; published generations identify the captured engine state.
 //! - Every heartbeat carries the last fully written `published_generation`
 //!   plus the latest `model_generation` / `active_sketch_generation`.
 //!   Keepalives preserve those fences, so MCP never mistakes liveness for a
@@ -71,10 +71,13 @@ const UNBOUND_PROJECT: &str = "__unbound__";
 #[derive(Debug)]
 struct ProjectPublisher {
     session_id: String,
-    next_generation: u64,
+    /// Monotonic export ticket; independent of model mutations.
+    next_export_sequence: u64,
+    /// Latest export ticket written, including repeated exports of one revision.
+    last_export_sequence: u64,
     /// Latest generation whose snapshot files were fully written. This stays
     /// behind `engine_revision` while a post-mutation export is pending.
-    last_applied_generation: u64,
+    published_generation: u64,
     /// Latest published generation that replaced `model.json`. Active-sketch
     /// snapshots deliberately retain the previous completed model.
     last_model_generation: Option<u64>,
@@ -82,7 +85,7 @@ struct ProjectPublisher {
     active_sketch_generation: Option<u64>,
     /// Authoritative live-engine revision for inbox OCC (see module docs).
     engine_revision: u64,
-    /// generation → `engine_revision` captured at reserve. Write rejects if
+    /// Export ticket → `engine_revision` captured at reserve. Write rejects if
     /// the live revision moved during export.
     pending_exports: HashMap<u64, u64>,
 }
@@ -91,11 +94,13 @@ impl ProjectPublisher {
     fn new() -> Self {
         Self {
             session_id: Uuid::new_v4().to_string(),
-            next_generation: 0,
-            last_applied_generation: 0,
+            next_export_sequence: 0,
+            last_export_sequence: 0,
+            published_generation: 0,
             last_model_generation: None,
             active_sketch_generation: None,
-            engine_revision: 0,
+            // Revision zero is the unpublished fence; a new document starts at one.
+            engine_revision: 1,
             pending_exports: HashMap::new(),
         }
     }
@@ -301,17 +306,17 @@ impl SessionBridgeState {
             publisher.rebind_to(project_session_id);
         }
         let project = publisher.active_mut();
-        project.next_generation = project
-            .next_generation
+        project.next_export_sequence = project
+            .next_export_sequence
             .checked_add(1)
             .ok_or_else(|| "session generation exhausted".to_string())?;
         project
             .pending_exports
-            .insert(project.next_generation, project.engine_revision);
+            .insert(project.next_export_sequence, project.engine_revision);
         let result = json!({
             "session_id": project.session_id,
             "window_id": window_label,
-            "generation": project.next_generation,
+            "generation": project.next_export_sequence,
             "engine_revision": project.engine_revision,
             "project_session_id": publisher.active_project_session_id,
             "document_id": publisher.active_project_session_id,
@@ -401,7 +406,7 @@ impl SessionBridgeState {
             .by_project
             .get_mut(&target_key)
             .ok_or_else(|| format!("session write project '{target_key}' was not reserved"))?;
-        if parsed.generation == 0 || parsed.generation > project.next_generation {
+        if parsed.generation == 0 || parsed.generation > project.next_export_sequence {
             return Err(format!(
                 "session generation {} was not reserved",
                 parsed.generation
@@ -413,13 +418,13 @@ impl SessionBridgeState {
                 parsed.generation
             ));
         };
-        if parsed.generation <= project.last_applied_generation {
+        if parsed.generation <= project.last_export_sequence {
             return Ok(json!({
                 "skipped": true,
                 "reason": "stale_generation",
                 "session_id": project.session_id,
                 "generation": parsed.generation,
-                "last_applied_generation": project.last_applied_generation,
+                "last_export_sequence": project.last_export_sequence,
                 "project_session_id": project_session_id,
                 "session_mode": "read_only_snapshot",
             }));
@@ -441,7 +446,7 @@ impl SessionBridgeState {
         fs::create_dir_all(&dir).map_err(|error| format!("create session dir: {error}"))?;
         let _ = clear_closed_tombstone(&project.session_id);
 
-        let published_generation = parsed.generation;
+        let published_generation = captured_revision;
         let model_generation = if parsed.model_json.is_some() {
             Some(published_generation)
         } else {
@@ -457,7 +462,7 @@ impl SessionBridgeState {
             "session_id": project.session_id,
             "window_id": window_label,
             "updated_ms": now_ms(),
-            "generation": parsed.generation,
+            "generation": published_generation,
             "project_session_id": project_session_id,
             "document_id": project_session_id,
             "process_instance_id": process_instance_id,
@@ -495,12 +500,10 @@ impl SessionBridgeState {
         atomic_write(&dir.join("focus.json"), &focus_body)?;
         atomic_write(&dir.join("heartbeat.json"), &heartbeat_body)?;
 
-        project.last_applied_generation = published_generation;
+        project.last_export_sequence = parsed.generation;
+        project.published_generation = published_generation;
         project.last_model_generation = model_generation;
         project.active_sketch_generation = active_sketch_generation;
-        if published_generation > project.engine_revision {
-            project.engine_revision = published_generation;
-        }
 
         Ok(json!({
             "skipped": false,
@@ -552,7 +555,7 @@ impl SessionBridgeState {
             "interface_version": 1,
             "updated_ms": now_ms(),
             "generation": project.engine_revision,
-            "published_generation": project.last_applied_generation,
+            "published_generation": project.published_generation,
             "model_generation": project.last_model_generation,
             "active_sketch_generation": project.active_sketch_generation,
             "session_id": project.session_id,
@@ -571,7 +574,7 @@ impl SessionBridgeState {
             "session_id": project.session_id,
             "window_id": window_label,
             "generation": project.engine_revision,
-            "published_generation": project.last_applied_generation,
+            "published_generation": project.published_generation,
             "model_generation": project.last_model_generation,
             "active_sketch_generation": project.active_sketch_generation,
             "engine_revision": project.engine_revision,
@@ -658,7 +661,7 @@ fn write_engine_revision_heartbeat(
         "interface_version": 1,
         "updated_ms": now_ms(),
         "generation": project.engine_revision,
-        "published_generation": project.last_applied_generation,
+        "published_generation": project.published_generation,
         "model_generation": project.last_model_generation,
         "active_sketch_generation": project.active_sketch_generation,
         "session_id": project.session_id,
@@ -746,9 +749,6 @@ fn bump_engine_revision(
         .engine_revision
         .checked_add(1)
         .ok_or_else(|| "session engine revision exhausted".to_string())?;
-    if project.engine_revision > project.next_generation {
-        project.next_generation = project.engine_revision;
-    }
     write_engine_revision_heartbeat(project, window_id, project_session_id, process_instance_id)
 }
 
@@ -982,6 +982,15 @@ fn apply_one_inbox_op(
     window_label: &str,
     engine: &AppState,
 ) -> Result<Value, String> {
+    apply_or_reject_one_inbox_op(state, window_label, engine, None)
+}
+
+fn apply_or_reject_one_inbox_op(
+    state: &SessionBridgeState,
+    window_label: &str,
+    engine: &AppState,
+    reject_reason: Option<&str>,
+) -> Result<Value, String> {
     let process_instance_id = state.process_instance_id.clone();
     let _ = state.write_process_instance_file();
     let mut publishers = state
@@ -1026,6 +1035,16 @@ fn apply_one_inbox_op(
             "engine_revision": project.engine_revision,
         }));
     };
+    if let Some(reason) = reject_reason {
+        dead_letter_inbox_op(&session_id, seq, reason)?;
+        return Ok(json!({
+            "applied": false, "dead_lettered": true, "reason": "playback_stopped",
+            "seq": seq, "error": reason, "session_id": session_id,
+            "session_mode": "ui_owned_apply", "writeback": false,
+            "pending": pending_inbox_seqs(&session_id).len(),
+            "engine_revision": project.engine_revision,
+        }));
+    }
     let path = inbox_dir(&session_id).join(format!("{seq}.json"));
     let body = match fs::read_to_string(&path) {
         Ok(body) => body,
@@ -1479,10 +1498,10 @@ fn control_for_window(
         if let Some(query) = request.get("sketch_query") {
             let method = query.get("method").and_then(Value::as_str).unwrap_or("");
             let payload = query.get("payload").and_then(Value::as_str).unwrap_or("");
-            let result = if nbcad_mcp_mutate::is_live_sketch_query(method) {
+            let result = if nbcad_mcp_mutate::is_live_engine_query(method) {
                 parse_engine_envelope(engine.engine_call(method, payload))
             } else {
-                Err("unsupported live sketch query".into())
+                Err("unsupported live engine query".into())
             };
             let response = match result {
                 Ok(value) => json!({"status":"applied","value":value}),
@@ -1536,8 +1555,16 @@ pub fn mcp_session_bridge_apply_inbox(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, SessionBridgeState>,
     engine: tauri::State<'_, AppState>,
+    reject_reason: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    apply_one_inbox_op(&state, window.label(), &engine)
+    if let Some(reason) = reject_reason {
+        if reason.trim().is_empty() || reason.len() > 1000 {
+            return Err("playback rejection needs a nonempty reason of at most 1000 bytes".into());
+        }
+        apply_or_reject_one_inbox_op(&state, window.label(), &engine, Some(&reason))
+    } else {
+        apply_one_inbox_op(&state, window.label(), &engine)
+    }
 }
 
 #[cfg(test)]
@@ -1882,6 +1909,8 @@ mod tests {
         assert_eq!(editing_beat["model_generation"], Value::Null);
         assert_eq!(editing_beat["active_sketch_generation"], first);
 
+        // Finishing a sketch is an engine mutation; publishing its snapshot is not.
+        state.note_mutation_for_window("main").unwrap();
         let (_, second) = reserve(&state, "main");
         state
             .write_for_window("main", payload(&session_id, second, "finished"))
@@ -1936,6 +1965,45 @@ mod tests {
     }
 
     #[test]
+    fn stopped_playback_rejects_queued_operation_without_changing_revision() {
+        let _test = TEST_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!("nbcad-bridge-stop-{}", now_ms()));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let state = SessionBridgeState::default();
+        let (session_id, generation) = reserve(&state, "main");
+        state
+            .write_for_window("main", payload(&session_id, generation, "base"))
+            .unwrap();
+        write_inbox(
+            &session_id,
+            1,
+            "cad_set_document_name",
+            generation,
+            json!({"name":"Must not apply"}),
+        );
+        let engine = AppState::new();
+        let stopped =
+            apply_or_reject_one_inbox_op(&state, "main", &engine, Some("Playback stopped"))
+                .unwrap();
+        assert_eq!(stopped["reason"], "playback_stopped");
+        assert_eq!(stopped["engine_revision"], generation);
+        assert_eq!(stopped["applied"], false);
+        assert!(pending_inbox_seqs(&session_id).is_empty());
+        let receipt: Value = serde_json::from_str(
+            &fs::read_to_string(session_root().join(&session_id).join("inbox/failed/1.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(receipt["error"], "Playback stopped");
+        assert_eq!(
+            apply_one_inbox_op(&state, "main", &engine).unwrap()["reason"],
+            "empty"
+        );
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn inbox_generation_mismatch_is_dead_lettered_and_unblocks_queue() {
         // Production: a conflicting head must not remain pending forever.
         let _test = TEST_LOCK.lock().unwrap();
@@ -1975,6 +2043,87 @@ mod tests {
         let next = apply_one_inbox_op(&state, "main", &engine).unwrap();
         assert_eq!(next["applied"], true);
         assert_eq!(next["seq"], 2);
+
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn display_publications_do_not_invalidate_queued_model_operations() {
+        let _test = TEST_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!("nbcad-bridge-display-race-{}", now_ms()));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let state = SessionBridgeState::default();
+        let engine = AppState::new();
+        let original_model = engine.engine_call("project_export_model", "");
+        envelope_ok(&original_model);
+        envelope_ok(&engine.engine_call("set_grid_step", r#"{"step_mm":5.0}"#));
+        assert_eq!(
+            engine.engine_call("project_export_model", ""),
+            original_model
+        );
+        let (session_id, first_export) = reserve(&state, "main");
+        state
+            .write_for_window("main", payload(&session_id, first_export, "base"))
+            .unwrap();
+        envelope_ok(&state.run_ui_mutation("main", || {
+            engine.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#)
+        }));
+        let original_sketch = engine.engine_call("active_sketch", "");
+        envelope_ok(&original_sketch);
+        let base = state.engine_revision_for_window("main").unwrap().unwrap();
+        for seq in [1, 2] {
+            write_inbox(
+                &session_id,
+                seq,
+                "cad_set_document_name",
+                base,
+                json!({"name": "Applied once"}),
+            );
+        }
+
+        // The store can publish tool/focus changes after submission but before
+        // inbox dispatch. These exports must not pretend the engine was edited.
+        for step in [0.1, 1.0, 10.0, 100.0] {
+            // The viewport sends the read-path grid command as the camera moves.
+            // It changes snap candidates for future input, not existing geometry.
+            envelope_ok(
+                &engine.engine_call("set_grid_step", &json!({"step_mm": step}).to_string()),
+            );
+            assert_eq!(engine.engine_call("active_sketch", ""), original_sketch);
+            let (_, export) = reserve(&state, "main");
+            let published = state
+                .write_for_window("main", payload(&session_id, export, "base"))
+                .unwrap();
+            assert_eq!(published["skipped"], false);
+            assert_eq!(published["generation"], base);
+            assert_eq!(published["model_generation"], base);
+            assert_eq!(published["engine_revision"], base);
+        }
+        assert_eq!(read_session_generation(&session_id), Some(base));
+        let applied = apply_one_inbox_op(&state, "main", &engine).unwrap();
+        assert_eq!(applied["applied"], true, "{applied}");
+        assert_eq!(applied["engine_revision"], base + 1);
+        assert_eq!(engine.document_snapshot().name, "Applied once");
+
+        // A real mutation still invalidates every other operation at that base.
+        let stale = apply_one_inbox_op(&state, "main", &engine).unwrap();
+        assert_eq!(stale["reason"], "generation_conflict");
+        assert_eq!(stale["applied"], false);
+        let (_, next_export) = reserve(&state, "main");
+        assert!(
+            next_export > base + 1,
+            "export sequence must be independent"
+        );
+        let published = state
+            .write_for_window("main", payload(&session_id, next_export, "applied"))
+            .unwrap();
+        assert_eq!(published["published_generation"], base + 1);
+        assert_eq!(published["model_generation"], base + 1);
+        assert_eq!(published["engine_revision"], base + 1);
+        let heartbeat = state.heartbeat_for_window("main").unwrap();
+        assert_eq!(heartbeat["generation"], base + 1);
+        assert_eq!(heartbeat["published_generation"], base + 1);
 
         std::env::remove_var("NBCAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
@@ -2842,14 +2991,14 @@ mod tests {
         // Matching stamp on the correct publisher still applies.
         let (session_c, gen_c) = reserve(&state, "main");
         // re-bind main may create new session after previous publishes — use fresh reserve
-        state
+        let published = state
             .write_for_window("main", payload(&session_c, gen_c, "fresh-a"))
             .unwrap();
         write_inbox_with_identity(
             &session_c,
             1,
             "cad_set_document_name",
-            gen_c,
+            published["engine_revision"].as_u64().unwrap(),
             json!({"name": "MatchA"}),
             Some(&session_c),
             Some("main"),

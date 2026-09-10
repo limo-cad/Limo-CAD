@@ -13,6 +13,8 @@ on:
       - 'crates/export/**'
       - 'crates/assembly/**'
       - 'crates/mcp-mutate/**'
+      - 'crates/script/**'
+      - 'examples/scripts/**'
       - '.cargo/config.toml'
       - 'Cargo.toml'
       - 'Cargo.lock'
@@ -30,6 +32,8 @@ on:
       - 'crates/export/**'
       - 'crates/assembly/**'
       - 'crates/mcp-mutate/**'
+      - 'crates/script/**'
+      - 'examples/scripts/**'
       - '.cargo/config.toml'
       - 'Cargo.toml'
       - 'Cargo.lock'
@@ -173,7 +177,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "MCP workshop failed" }
           cargo xtask test-mcp drawing --server ./mcp-server/target/debug/nbcad-mcp.exe --out ./target/mcp-workshop/drawing-report.json
           if ($LASTEXITCODE -ne 0) { throw "MCP drawing example failed" }
-          cargo xtask test-mcp garden-bench --server ./mcp-server/target/debug/nbcad-mcp.exe --out ./target/mcp-workshop/garden-bench
+          cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --repeat 2 --server ./mcp-server/target/debug/nbcad-mcp.exe --out ./target/mcp-workshop/garden-bench
           if ($LASTEXITCODE -ne 0) { throw "Parametric garden bench failed" }
 
       - name: Upload MCP workshop evidence
@@ -248,7 +252,7 @@ jobs:
           cargo build --locked --manifest-path mcp-server/Cargo.toml
           cargo xtask test-mcp bench --server ./mcp-server/target/debug/nbcad-mcp --workshop all --out ./target/mcp-workshop
           cargo xtask test-mcp drawing --server ./mcp-server/target/debug/nbcad-mcp --out ./target/mcp-workshop/drawing-report.json
-          cargo xtask test-mcp garden-bench --server ./mcp-server/target/debug/nbcad-mcp --out ./target/mcp-workshop/garden-bench
+          cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --repeat 2 --server ./mcp-server/target/debug/nbcad-mcp --out ./target/mcp-workshop/garden-bench
 
       - name: Upload MCP workshop evidence
         if: always()

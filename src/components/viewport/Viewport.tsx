@@ -1,5 +1,6 @@
 import { drivePointer } from '../../uiPointer';
 import { registerSessionCamera, unregisterSessionCamera } from './cameraApi';
+import { presentation } from '../../operationPlayback';
 /**
  * Native Bevy viewport interaction layer with noBS CAD navigation and the
  * sketch environment.
@@ -835,6 +836,17 @@ export function Viewport() {
       toUp: CAD.Vector3,
       dur = 300,
     ) {
+      dur = presentation.motionDuration(dur);
+      if (dur <= 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        cancelCameraAnimation();
+        camera.position.copy(toPos);
+        controls.target.copy(toTarget);
+        camera.up.copy(toUp).normalize();
+        camera.lookAt(controls.target);
+        syncNativeViewportCamera(camera, controls.target);
+        wakeControllerFrame();
+        return;
+      }
       camAnim = {
         t0: performance.now(),
         dur,
@@ -11599,10 +11611,9 @@ export function Viewport() {
       camera.lookAt(controls.target);
     };
 
-    const fitVisibleGeometry = (direction?: CAD.Vector3, up?: CAD.Vector3) => {
-      const bounds = getVisibleBounds();
+    const fitGeometryBounds = (bounds: CAD.Box3, direction?: CAD.Vector3, up?: CAD.Vector3, duration = 300) => {
       if (bounds.isEmpty()) {
-        animateCamera(HOME_POSITION.clone(), HOME_TARGET.clone(), WORLD_UP.clone(), 350);
+        animateCamera(HOME_POSITION.clone(), HOME_TARGET.clone(), WORLD_UP.clone(), duration);
         return;
       }
       const sphere = bounds.getBoundingSphere(new CAD.Sphere());
@@ -11617,8 +11628,11 @@ export function Viewport() {
         sphere.center.clone().addScaledVector(viewDirection, distance),
         sphere.center,
         up?.clone() ?? camera.up.clone(),
-        300,
+        duration,
       );
+    };
+    const fitVisibleGeometry = (direction?: CAD.Vector3, up?: CAD.Vector3, duration = 300) => {
+      fitGeometryBounds(getVisibleBounds(), direction, up, duration);
     };
 
     let sixDofDriverMotion = false;
@@ -11814,7 +11828,7 @@ export function Viewport() {
         target: controls.target.toArray() as [number, number, number],
         up: camera.up.toArray() as [number, number, number],
       }),
-      snapToDirection: (direction) => {
+      snapToDirection: (direction, durationMs = 250) => {
         const n = new CAD.Vector3(...direction).normalize();
         const distance = camera.position.distanceTo(controls.target);
         const up =
@@ -11823,13 +11837,43 @@ export function Viewport() {
           controls.target.clone().addScaledVector(n, distance),
           controls.target.clone(),
           up,
-          250,
+          durationMs,
         );
       },
-      home: () => {
-        fitVisibleGeometry(HOME_POSITION.clone().sub(HOME_TARGET).normalize(), WORLD_UP);
+      home: (durationMs = 300) => {
+        fitVisibleGeometry(HOME_POSITION.clone().sub(HOME_TARGET).normalize(), WORLD_UP, durationMs);
       },
-      fit: fitVisibleGeometry,
+      fit: (durationMs = 300) => fitVisibleGeometry(undefined, undefined, durationMs),
+      focus: (target, durationMs = 300, direction) => {
+        scene.updateMatrixWorld(true);
+        const bounds = new CAD.Box3();
+        const highlightedBodies: number[] = [];
+        if (target.target === 'active_sketch') {
+          if (!store.getState().activeSketch || !sketchGroup.visible) throw new Error('No active sketch to frame');
+          bounds.setFromObject(entityGroup, true);
+        } else if (target.body_id !== undefined || target.component_id !== undefined) {
+          for (const object of solidGroup.children) {
+            if (!object.visible) continue;
+            if (target.body_id !== undefined && object.userData.bodyId !== target.body_id) continue;
+            if (target.component_id !== undefined && object.userData.componentId !== target.component_id) continue;
+            bounds.union(new CAD.Box3().setFromObject(object, true));
+            highlightedBodies.push(object.userData.bodyId as number);
+          }
+        } else {
+          bounds.union(getVisibleBounds());
+        }
+        if (bounds.isEmpty() && (target.target || target.body_id !== undefined || target.component_id !== undefined)) {
+          throw new Error('Requested geometry is not currently visible');
+        }
+        presentation.emphasize([...new Set(highlightedBodies)], target.target === 'active_sketch'
+          ? store.getState().activeSketch!.entities.map(entity => entity.id) : []);
+        const viewDirection = direction === 'isometric'
+          ? HOME_POSITION.clone().sub(HOME_TARGET).normalize()
+          : direction ? new CAD.Vector3(...direction).normalize() : undefined;
+        const up = viewDirection ? (Math.abs(viewDirection.z) > 0.99
+          ? new CAD.Vector3(0, viewDirection.z > 0 ? 1 : -1, 0) : WORLD_UP) : undefined;
+        fitGeometryBounds(bounds, viewDirection, up, durationMs);
+      },
       orbitBy: (dx, dy) => {
         const bounded = CAD.boundedPointerDelta(
           dx,

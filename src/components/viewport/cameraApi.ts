@@ -24,6 +24,12 @@ export interface SixDofMotion {
   deltaSeconds: number;
 }
 
+export interface CameraFocus {
+  target?: 'active_sketch';
+  body_id?: number;
+  component_id?: number;
+}
+
 export interface ViewportCameraApi {
   pointer(action: import('../../uiPointer').UiGesture, point: [number, number], shift?: boolean, to?: [number, number]): Promise<void>;
   bounds(): { x: number; y: number; width: number; height: number };
@@ -34,11 +40,13 @@ export interface ViewportCameraApi {
   /** Native wake events advance navigation even while WebView RAF is suspended. */
   advanceAnimation(): void;
   /** Animated snap to look at the target from a world direction. */
-  snapToDirection(direction: [number, number, number]): void;
+  snapToDirection(direction: [number, number, number], durationMs?: number): void;
   /** Animated return to the default axonometric home view. */
-  home(): void;
+  home(durationMs?: number): void;
   /** Animated frame of the currently visible model/sketch geometry. */
-  fit(): void;
+  fit(durationMs?: number): void;
+  /** Frame actual visible geometry for a scripted explanation, without editing it. */
+  focus(target: CameraFocus, durationMs?: number, direction?: [number, number, number] | 'isometric'): void;
   /** Immediate free-orbit delta from navigation input, in pixels. */
   orbitBy(dxPx: number, dyPx: number): void;
   /** Immediate six-degree-of-freedom navigation from a 3D mouse. */

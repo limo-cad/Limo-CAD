@@ -6,6 +6,8 @@
 //! ```
 
 mod install_mcp;
+mod playback_test;
+mod replay;
 mod test_mcp;
 
 use anyhow::{bail, Result};
@@ -30,6 +32,8 @@ fn run() -> Result<()> {
     };
 
     match command.as_str() {
+        "run-script" => replay::run(args),
+        "cad-call" => replay::call(args),
         "test-mcp" => test_mcp::run(args),
         "install-mcp" => {
             let options = install_mcp::Options::parse(args)?;
@@ -56,7 +60,11 @@ Usage:
   cargo run -p xtask -- install-mcp --clients LIST [--no-build] [--binary PATH]
 
 Commands:
-  test-mcp      Run contracts (default), live, controls, exit, bench, garden-bench, or drawing. Additional
+  run-script    Run a .nbcad.jsonc file using the Rust MCP client. Use --server PATH,
+                --session UUID --new --present to replay in an existing window.
+                --repeat 2 verifies independent headless runs are deterministic.
+  cad-call      Send one MCP command from Rust (--tool NAME --args JSON).
+  test-mcp      Run contracts (default), live, controls, playback, exit, bench, garden-bench, or drawing. Additional
                 arguments pass directly to the selected MCP test/demo driver.
                 Example: cargo xtask test-mcp live --server PATH --desktop PATH
   install-mcp   Detect installed agent clients and upsert the local nbcad-mcp

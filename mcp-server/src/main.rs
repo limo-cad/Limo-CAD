@@ -25,6 +25,37 @@ use disclosure::{
 
 const LATEST_PROTOCOL: &str = "2025-06-18";
 
+/// A pause may begin and end between receipt observations. Give resumed
+/// execution a fresh bounded wait, always against the original submission.
+fn await_playback_receipt(
+    mut wait: impl FnMut() -> Result<Value, String>,
+    mut presentation_status: impl FnMut() -> Result<Value, String>,
+) -> Result<Value, String> {
+    let mut active_retry_available = true;
+    loop {
+        let receipt = wait()?;
+        if receipt["status"] != "timeout" {
+            return Ok(receipt);
+        }
+        let state = presentation_status()?;
+        if state["status"] != "applied" {
+            return Ok(receipt);
+        }
+        if state["presentation"]["stopped"] == true {
+            return Err(json!({"code":"playback_stopped","receipt":receipt}).to_string());
+        }
+        if state["presentation"]["paused"] == true {
+            active_retry_available = true;
+            continue;
+        }
+        if active_retry_available {
+            active_retry_available = false;
+            continue;
+        }
+        return Ok(receipt);
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Execution {
     Direct,
@@ -127,6 +158,10 @@ struct CadServer {
     pending_recompute_transaction: Option<u64>,
     /// Forward record of successful mutating `tools/call` entries for `cad_script`.
     tool_trace: Vec<Value>,
+    /// Scripts use authoritative live results without rebuilding a second
+    /// OCCT model after each mutation. Snapshot reads still refresh on demand.
+    script_running: bool,
+    live_snapshot_dirty: bool,
 }
 
 impl CadServer {
@@ -140,6 +175,8 @@ impl CadServer {
             loaded_snapshot_json: None,
             pending_recompute_transaction: None,
             tool_trace: Vec::new(),
+            script_running: false,
+            live_snapshot_dirty: false,
         })
     }
 
@@ -167,6 +204,22 @@ impl CadServer {
         let payload_kind = spec.payload;
         let pack = spec.pack;
         let spine = spec.spine;
+        let live_query = self
+            .attached_document_id
+            .as_deref()
+            .is_some_and(|session_id| {
+                nbcad_mcp_mutate::is_live_engine_query(engine_method)
+                    && (engine_method != "assembly_document"
+                        || session::heartbeat_meta(session_id)["interface_version"] == 1)
+            });
+
+        if self.live_snapshot_dirty
+            && execution != Execution::Control
+            && !is_modeling_mutate(name)
+            && !live_query
+        {
+            self.refresh_read_only_snapshot()?;
+        }
 
         // The operation is identical with or without a renderer. A live
         // document still owns its engine: hide its inbox protocol from callers.
@@ -193,12 +246,10 @@ impl CadServer {
 
         let payload = nbcad_mcp_mutate::encode_payload(payload_kind, &arguments)?;
 
-        let mut value = if let Some(session_id) = self
-            .attached_document_id
-            .as_deref()
-            .filter(|_| nbcad_mcp_mutate::is_live_sketch_query(engine_method))
+        let mut value = if let Some(session_id) =
+            self.attached_document_id.as_deref().filter(|_| live_query)
         {
-            session::request_sketch_query(session_id, engine_method, &payload)?
+            session::request_engine_query(session_id, engine_method, &payload)?
         } else if execution == Execution::Direct {
             if name == "drawing_projection" {
                 let request: nbcad_occt::DrawingProjectionRequest =
@@ -349,6 +400,8 @@ impl CadServer {
                     json!({"groups":interface::groups(),"operations":full_tool_catalog()})
                 } else if arguments["action"] == "execute" {
                     self.execute_interface(&arguments)?
+                } else if arguments["action"] == "script" {
+                    self.execute_script(&arguments)?
                 } else if arguments["action"] == "launch" {
                     let mut launched = desktop::launch(&arguments)?;
                     if launched["status"] == "ready" {
@@ -366,7 +419,14 @@ impl CadServer {
                             result["active_session_id"].as_str().map(str::to_owned)
                         {
                             if self.attached_document_id.as_deref() != Some(active.as_str()) {
+                                if self.script_running {
+                                    return Err("Active document changed during script playback; no later commands were submitted".into());
+                                }
                                 self.attach_read_only_snapshot(&json!({"session_id":active}))?;
+                            } else if self.script_running {
+                                // Captions, controls and camera acknowledgements
+                                // do not require a second OCCT reconstruction.
+                                self.live_snapshot_dirty = true;
                             } else if self.load_snapshot_model(&active, true)? {
                                 self.apply_snapshot_focus(&active);
                             }
@@ -387,7 +447,12 @@ impl CadServer {
                     "session_mode": "read_only_snapshot",
                 })
             }
-            "cad_script" => json!({ "calls": self.tool_trace.clone() }),
+            "cad_script" => {
+                if self.live_snapshot_dirty {
+                    self.refresh_read_only_snapshot()?;
+                }
+                json!({ "calls": self.tool_trace.clone() })
+            }
             "cad_compare_solids" => compare_solids_summary(&self.manager.solid_scene()),
             "cad_submit" => self.submit_inbox_op(&arguments)?,
             "cad_await_apply" => self.await_inbox_apply(&arguments)?,
@@ -395,6 +460,157 @@ impl CadServer {
             other => return Err(format!("unknown control tool: {other}")),
         };
         Ok(value)
+    }
+
+    fn execute_script(&mut self, arguments: &Value) -> Result<Value, String> {
+        if self.script_running {
+            return Err("Scripts cannot recursively run another script".into());
+        }
+        let source = interface::script_source(arguments)?;
+        let script = nbcad_script::Script::parse(&source)?;
+        if let Some(session_id) = arguments.get("session_id") {
+            let session_id = session_id
+                .as_str()
+                .ok_or("script session_id must be a string")?;
+            self.attach_read_only_snapshot(&json!({"session_id":session_id}))?;
+        }
+        if arguments.get("mode").is_some_and(|mode| !mode.is_string()) {
+            return Err("script mode must be fast or present".into());
+        }
+        let mode = arguments
+            .get("mode")
+            .and_then(Value::as_str)
+            .unwrap_or("fast");
+        if !matches!(mode, "fast" | "present") {
+            return Err("script mode must be fast or present".into());
+        }
+        if arguments
+            .get("validate")
+            .is_some_and(|value| !value.is_boolean())
+        {
+            return Err("script validate must be a boolean".into());
+        }
+        let presentation = mode == "present";
+        if presentation && self.attached_document_id.is_none() {
+            return Err(
+                "Presentation requires an attached desktop; use fast mode headlessly".into(),
+            );
+        }
+        if self.attached_document_id.is_some() {
+            self.refresh_read_only_snapshot()?;
+        }
+        let active_sketch = self.call_tool("sketch_active", json!({}))?;
+        if !active_sketch.is_null()
+            || !self.manager.document_dto().features.is_empty()
+            || !self.manager.solid_scene().bodies.is_empty()
+            || !self.manager.drawing_document().sheets.is_empty()
+            || self.manager.assembly_document() != nbcad_sketch::AssemblyDocumentDto::default()
+        {
+            return Err(
+                "Script requires a blank document; create a new file before running it".into(),
+            );
+        }
+        let options = nbcad_script::RunOptions {
+            presentation,
+            validate: arguments
+                .get("validate")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+        };
+        script.validate_options(options)?;
+        if self.attached_document_id.is_some() {
+            let mut configure = json!({"action":"presentation","command":"configure","mode":mode});
+            if let Some(speed) = arguments.get("speed") {
+                configure["speed"] = speed.clone();
+            }
+            let result = self.call_tool("cad_interface", configure)?;
+            if result["status"] != "applied" {
+                return Err(format!("Playback configuration failed: {result}"));
+            }
+        }
+        self.script_running = true;
+        let mut result = nbcad_script::run(
+            &script,
+            |name, arguments| {
+                let is_note =
+                    arguments["action"] == "presentation" && arguments["command"] == "note";
+                let result = self.call_tool(name, arguments)?;
+                if name == "cad_interface"
+                    && result
+                        .get("status")
+                        .is_some_and(|status| status != "applied")
+                {
+                    return Err(format!("Interface operation failed: {result}"));
+                }
+                if is_note {
+                    self.wait_for_script_presentation(&result)?;
+                }
+                Ok(result)
+            },
+            options,
+        );
+        self.script_running = false;
+        if self.live_snapshot_dirty {
+            // Preserve the original step failure if rebuilding the read cache
+            // also fails. The live document remains the authoritative result.
+            if let Err(error) = self.refresh_read_only_snapshot() {
+                if result.is_ok() {
+                    result = Err(error);
+                }
+            }
+        }
+        if self.attached_document_id.is_some() {
+            let presentation_result = match &result {
+                Ok(_) => json!({"action":"presentation","command":"finish"}),
+                Err(_) => {
+                    // Keep transport receipts in the MCP error, rather than
+                    // covering the design with raw JSON in the caption card.
+                    json!({"action":"presentation","command":"stop","text":"Playback stopped. The partial design is preserved; see the script error for details."})
+                }
+            };
+            let acknowledged = self.call_tool("cad_interface", presentation_result);
+            if result.is_ok() {
+                match acknowledged {
+                    Ok(value) if value["status"] == "applied" => {}
+                    Ok(value) => {
+                        result = Err(format!("Playback completion was not acknowledged: {value}"))
+                    }
+                    Err(error) => result = Err(format!("Playback completion failed: {error}")),
+                }
+            }
+        }
+        result
+    }
+
+    fn wait_for_script_presentation(&mut self, initial: &Value) -> Result<(), String> {
+        let mut result = initial.clone();
+        loop {
+            let state = &result["presentation"];
+            if state["stopped"] == true {
+                return Err("Playback stopped".into());
+            }
+            if state["step_pending"] == true {
+                // Let the runner reach the next modeling operation; the
+                // native inbox consumes the permit after that operation.
+                return Ok(());
+            }
+            let wait_ms = state["wait_ms"].as_u64().unwrap_or(0);
+            if state["paused"] != true && wait_ms == 0 {
+                return Ok(());
+            }
+            std::thread::sleep(Duration::from_millis(if state["paused"] == true {
+                250
+            } else {
+                wait_ms.min(250).max(1)
+            }));
+            result = self.call_tool(
+                "cad_interface",
+                json!({"action":"presentation","command":"status"}),
+            )?;
+            if result["status"] != "applied" {
+                return Err(format!("Playback status failed: {result}"));
+            }
+        }
     }
 
     fn execute_interface(&mut self, arguments: &Value) -> Result<Value, String> {
@@ -422,11 +638,24 @@ impl CadServer {
         let seq = submitted["seq"]
             .as_u64()
             .ok_or("submission omitted sequence")?;
-        let applied = self.await_inbox_apply(&json!({"seq":seq,"timeout_ms":30000}))?;
+        let applied = await_playback_receipt(
+            || {
+                self.await_inbox_apply(&json!({"seq":seq,"timeout_ms":30000,"refresh":!self.script_running,"poll_ms":10}))
+            },
+            || {
+                session::request_ui(
+                    &json!({"action":"presentation","command":"status"}),
+                    Some(&session_id),
+                )
+            },
+        )?;
         if applied["status"] != "applied" {
             // Preserve the receipt and sequence: an uncertain operation must
             // never be silently retried by the interface.
             return Err(applied.to_string());
+        }
+        if self.script_running && applied["model_published"] == true {
+            self.live_snapshot_dirty = true;
         }
         // A completed-model refresh already seeded a replay baseline containing
         // this edit. Only active-sketch edits still need an individual entry.
@@ -666,6 +895,7 @@ impl CadServer {
         self.seed_script_baseline_from_model(&model_json);
         self.loaded_snapshot_json = Some(model_json);
         self.attached_generation = publication_generation;
+        self.live_snapshot_dirty = false;
         Ok(true)
     }
 
@@ -3269,26 +3499,33 @@ fn tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::control(
             "cad_interface", "Explore and drive the product interface",
-            "Catalog returns shared product groups and typed operations. Execute runs an operation by group and name with identical arguments/results headlessly or live; callers do not manage submission. Launch connects the new desktop. Inspect returns rendered controls grouped by product surfaces, with opaque target IDs, labels, disabled states and values. Use those IDs for click/set_value/key; stale, hidden, disabled and modal-blocked controls reject. Window mode is foreground/background/inspect/close. Close requests normal guarded application exit; unsaved work prompts for Save/Discard/Cancel. The reply acknowledges the request, not process termination. pace_ms (0-2000) controls visible playback timing; fast mode still acknowledges ordered operations. No selectors or JavaScript evaluation. Inspect again after opening menus or dialogs.",
+            "Catalog returns shared product groups and typed operations. Execute runs an operation by group and name with identical arguments/results headlessly or live. Script runs one versioned JSONC command file from source or an absolute .nbcad.jsonc path in the current blank document; Rust sequences every operation, stops on failure, and runs final checks by default. Mode fast has no presentation delays; present requires an attached desktop. Presentation provides configure/note/pause/resume/step/stop/status/finish and speed controls shared with native playback. View supports timed orientation and focus on an active sketch, body, or component. Launch connects a new desktop. Inspect returns rendered controls with fresh opaque target IDs for click/set_value/key. Window close requests guarded application exit; the reply acknowledges the request, not process termination. No selectors or executable script evaluation.",
             object_schema(json!({
                 "session_id":{"type":"string"},
-                "action":{"type":"string","enum":["catalog","execute","launch","view","inspect","click","double_click","context_menu","set_value","key","window","file","viewport"]},
+                "action":{"type":"string","enum":["catalog","execute","script","presentation","launch","view","inspect","click","double_click","context_menu","set_value","key","window","file","viewport"]},
                 "group":{"type":"string"},"operation":{"type":"string"},"arguments":{"type":"object"},
                 "executable":{"type":"string"},
                 "view":{"type":"string","enum":["current","isometric","top","bottom","front","back","left","right"]},
                 "fit":{"type":"boolean"},
+                "body_id":{"type":"integer","minimum":0},"component_id":{"type":"integer","minimum":0},
+                "duration_ms":{"type":"integer","minimum":0,"maximum":10000},
+                "source":{"type":"string","description":"Version 1 JSONC command script; mutually exclusive with path"},
+                "validate":{"type":"boolean","default":true},
+                "speed":{"type":"number","minimum":0.1,"maximum":16},
+                "text":{"type":"string","maxLength":4000},"chapter":{"type":"string","maxLength":200},
+                "step_index":{"type":"integer","minimum":0},"step_count":{"type":"integer","minimum":0},
                 "gesture":{"type":"string","enum":["move","click","double_click","drag"]},
                 "canvas":{"type":"string","enum":["viewport","drawing"]},
                 "to":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},
                 "point":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},
                 "world":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},
                 "shift":{"type":"boolean"},
-                "command":{"type":"string","enum":["open","save","rename"]},
+                "command":{"type":"string","enum":["open","save","rename","configure","note","pause","resume","step","stop","status","finish"]},
                 "path":{"type":"string"},"name":{"type":"string"},
                 "overwrite":{"type":"boolean"},"discard_changes":{"type":"boolean"},
-                "target":{"type":"string"},"value":{"type":"string"},
+                "target":{"type":"string","description":"Fresh inspect control ID, or active_sketch for view"},"value":{"type":"string"},
                 "key":{"type":"string","enum":["Enter","Escape","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Delete","Backspace"]},
-                "mode":{"type":"string","enum":["foreground","background","inspect","close"]},
+                "mode":{"type":"string","enum":["foreground","background","inspect","close","fast","present"]},
                 "pace_ms":{"type":"integer","minimum":0,"maximum":2000}
             }), &[]),
         ),
@@ -3729,6 +3966,258 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resumed_playback_gets_a_fresh_bounded_receipt_wait() {
+        for (pauses, complete_after) in [(vec![true, false], 3), (vec![false], 2)] {
+            let mut waits = 0;
+            let mut states = pauses.into_iter();
+            let result = await_playback_receipt(
+                || {
+                    waits += 1;
+                    Ok(json!({"status":if waits == complete_after {"applied"} else {"timeout"}, "seq":17}))
+                },
+                || Ok(json!({"status":"applied","presentation":{"paused":states.next().unwrap_or(false)}})),
+            ).unwrap();
+            // A pause which resumes just before a deadline still gets another
+            // complete wait on seq17 rather than a failing zero-time probe.
+            assert_eq!(waits, complete_after);
+            assert_eq!(result["status"], "applied");
+            assert_eq!(result["seq"], 17);
+        }
+        let mut waits = 0;
+        let result = await_playback_receipt(
+            || {
+                waits += 1;
+                Ok(json!({"status":"timeout","seq":18}))
+            },
+            || Ok(json!({"status":"applied","presentation":{"paused":false}})),
+        )
+        .unwrap();
+        assert_eq!(waits, 2);
+        assert_eq!(result["status"], "timeout");
+    }
+
+    #[test]
+    fn attached_assembly_reads_are_fresh_without_reconstructing_cached_geometry() {
+        let _guard = session::ENV_LOCK.lock().unwrap();
+        let id = session::test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("nbcad-live-assembly-query-{id}"));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        write_box_session(&id);
+        let mut server = CadServer::new().unwrap();
+        server
+            .call_tool("cad_attach", json!({"session_id":id}))
+            .unwrap();
+        let cached = server.manager.assembly_document();
+        let cached_model = server.loaded_snapshot_json.clone();
+        server.live_snapshot_dirty = true;
+        // Querying the live document must not touch the stale reconstruction
+        // cache: a full reload would fail against this deliberately bad file.
+        session::write_session(&id, "model.json", "not a model snapshot").unwrap();
+        session::write_session(
+            &id,
+            "heartbeat.json",
+            &json!({"updated_ms":session::now_ms(),"generation":2,"interface_version":1})
+                .to_string(),
+        )
+        .unwrap();
+        let peer = id.clone();
+        let worker = std::thread::spawn(move || {
+            let mut manager = SketchManager::new();
+            for index in 1..=2 {
+                parse_engine_envelope(host::handle(
+                    &mut manager,
+                    "assembly_create_component",
+                    &json!({"name":format!("Live component {index}")}).to_string(),
+                ))
+                .unwrap();
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                loop {
+                    let entries =
+                        std::fs::read_dir(session::session_dir().join(&peer).join("controls"));
+                    let request = entries
+                        .ok()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(Result::ok)
+                        .find(|entry| {
+                            entry
+                                .file_name()
+                                .to_string_lossy()
+                                .ends_with(".request.json")
+                        });
+                    if let Some(entry) = request {
+                        let request: Value =
+                            serde_json::from_str(&std::fs::read_to_string(entry.path()).unwrap())
+                                .unwrap();
+                        let query = &request["sketch_query"];
+                        assert_eq!(query["method"], "assembly_document");
+                        let value = parse_engine_envelope(host::handle(
+                            &mut manager,
+                            "assembly_document",
+                            "",
+                        ))
+                        .unwrap();
+                        std::fs::remove_file(entry.path()).unwrap();
+                        session::write_session(
+                            &peer,
+                            &format!("controls/{}.result.json", request["id"].as_str().unwrap()),
+                            &json!({"status":"applied","value":value}).to_string(),
+                        )
+                        .unwrap();
+                        break;
+                    }
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "No live assembly query received"
+                    );
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        });
+        for count in 1..=2 {
+            let result = server.call_tool("cad_interface",json!({"action":"execute","group":"assembly/joints","operation":"assembly_document","arguments":{}})).unwrap();
+            assert_eq!(
+                result["component_structure"]["definitions"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                count
+            );
+            assert_eq!(server.manager.assembly_document(), cached);
+            assert_eq!(server.loaded_snapshot_json, cached_model);
+            assert!(server.live_snapshot_dirty);
+        }
+        worker.join().unwrap();
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn parametric_reload_and_wire_results_preserve_floating_point_geometry() {
+        let mut original = CadServer::new().unwrap();
+        original
+            .call_tool(
+                "sketch_begin",
+                json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+            )
+            .unwrap();
+        original.call_tool("sketch_add_circle", json!({"mode":"center_diameter","p1":{"x":0.,"y":0.},"p2":{"x":23.75,"y":0.},"ctrl_held":true})).unwrap();
+        original.call_tool("sketch_finish", json!({})).unwrap();
+        original.call_tool("solid_extrude",json!({"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":38.7},"taper_angle_deg":0.,"flip":false,"target_body_ids":[]})).unwrap();
+        let assembly = original.call_tool("assembly_document", json!({})).unwrap();
+        let occurrence = assembly["component_structure"]["occurrences"][0]["id"].clone();
+        // These valid small coordinates drift by one ULP in serde_json's
+        // default fast float parser. The API and cached reload must keep bits.
+        let translation = [-1.1728120758078999e-17_f64, 5.684341886080804e-14, 0.2];
+        original.call_tool("assembly_set_occurrence_pose",json!({"occurrence_id":occurrence,"local_pose":{"translation":translation,"rotation":[0.,0.,0.,1.]}})).unwrap();
+        let mut before_solution = original.call_tool("assembly_solution", json!({})).unwrap();
+        for (axis, expected) in translation.iter().enumerate() {
+            let actual = before_solution["instance_body_poses"][0]["translation"][axis]
+                .as_f64()
+                .unwrap();
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+        let mut before_scene = original.call_tool("solid_scene", json!({})).unwrap();
+        let model = original.call_tool("cad_project_model", json!({})).unwrap();
+        let mut reopened = CadServer::new().unwrap();
+        reopened
+            .call_tool("cad_load_project_model", json!({"model_json":model}))
+            .unwrap();
+        let mut after_scene = reopened.call_tool("solid_scene", json!({})).unwrap();
+        let mut after_solution = reopened.call_tool("assembly_solution", json!({})).unwrap();
+        for value in [
+            &mut before_scene,
+            &mut after_scene,
+            &mut before_solution,
+            &mut after_solution,
+        ] {
+            value.as_object_mut().unwrap().remove("_disclosure");
+        }
+        assert_eq!(before_scene, after_scene);
+        assert_eq!(before_solution, after_solution);
+        assert_eq!(
+            original.manager.export_project_model().unwrap(),
+            reopened.manager.export_project_model().unwrap()
+        );
+    }
+
+    #[test]
+    fn command_script_replays_parametric_model_and_refuses_existing_work() {
+        let (original, _) = mcp_box();
+        let steps: Vec<Value> = original
+            .tool_trace
+            .iter()
+            .map(|call| {
+                json!({"call":{
+                    "group":interface::group_for(call["name"].as_str().unwrap()),
+                    "operation":call["name"],"arguments":call["arguments"]
+                }})
+            })
+            .collect();
+        let source = json!({"version":1,"name":"Parametric block","steps":steps}).to_string();
+        let mut first = CadServer::new().unwrap();
+        let mut second = CadServer::new().unwrap();
+        for server in [&mut first, &mut second] {
+            let result = server
+                .call_tool("cad_interface", json!({"action":"script","source":source}))
+                .unwrap();
+            assert_eq!(result["steps_completed"], steps.len());
+            assert_eq!(server.manager.solid_scene().bodies.len(), 1);
+            assert!(server.manager.solid_scene().errors.is_empty());
+        }
+        let before = first.manager.export_project_model().unwrap();
+        assert_eq!(before, second.manager.export_project_model().unwrap());
+        let error = first
+            .call_tool("cad_interface", json!({"action":"script","source":source}))
+            .unwrap_err();
+        assert!(error.contains("blank"));
+        assert_eq!(before, first.manager.export_project_model().unwrap());
+    }
+
+    #[test]
+    fn command_script_stops_before_later_commands_after_operation_error() {
+        let mut server = CadServer::new().unwrap();
+        let source = json!({"version":1,"name":"Stop on error","steps":[
+            {"id":"first","call":{"group":"document/files","operation":"cad_set_document_name","arguments":{"name":"Before failure"}}},
+            {"id":"bad","call":{"group":"document/files","operation":"cad_set_document_name","arguments":{"name":""}}},
+            {"id":"never","call":{"group":"document/files","operation":"cad_set_document_name","arguments":{"name":"Must not run"}}}
+        ]}).to_string();
+        let error = server
+            .call_tool("cad_interface", json!({"action":"script","source":source}))
+            .unwrap_err();
+        assert!(error.contains("bad"));
+        assert_eq!(server.manager.document_dto().name, "Before failure");
+        assert!(!server.script_running);
+    }
+
+    #[test]
+    fn deferred_live_snapshot_is_refreshed_before_a_query() {
+        let _guard = session::ENV_LOCK.lock().unwrap();
+        let id = session::test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("nbcad-deferred-script-{id}"));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        write_box_session(&id);
+        let mut server = CadServer::new().unwrap();
+        server
+            .call_tool("cad_attach", json!({"session_id":id}))
+            .unwrap();
+        let mut updated =
+            serde_json::from_str::<Value>(&session::require_model_json(&id).unwrap()).unwrap();
+        updated["document"]["name"] = json!("New authoritative document");
+        session::write_session(&id, "model.json", &updated.to_string()).unwrap();
+        server.live_snapshot_dirty = true;
+        assert_ne!(
+            server.manager.document_dto().name,
+            "New authoritative document"
+        );
+        let result = server.call_tool("cad_document", json!({})).unwrap();
+        assert_eq!(result["name"], "New authoritative document");
+        assert!(!server.live_snapshot_dirty);
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     fn mcp_box() -> (CadServer, Value) {
         let mut server = CadServer::new().unwrap();
@@ -7121,7 +7610,7 @@ mod tests {
                                 .unwrap();
                         let query = &request["sketch_query"];
                         let method = query["method"].as_str().unwrap();
-                        assert!(nbcad_mcp_mutate::is_live_sketch_query(method));
+                        assert!(nbcad_mcp_mutate::is_live_engine_query(method));
                         let value = parse_engine_envelope(host::handle(
                             &mut manager,
                             method,
@@ -7148,7 +7637,7 @@ mod tests {
         assert_eq!(result["value"], 240.0);
         assert!(server.manager.active_snapshot().is_none());
         for mutate in nbcad_mcp_mutate::mutate_specs() {
-            assert!(!nbcad_mcp_mutate::is_live_sketch_query(
+            assert!(!nbcad_mcp_mutate::is_live_engine_query(
                 mutate.engine_method
             ));
         }

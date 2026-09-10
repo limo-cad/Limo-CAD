@@ -18,6 +18,7 @@ import {
   type FinishedSketchEntityPickRef,
 } from '../../modeling/viewportPickFeedback';
 import { revolveProfileAcceptsAxis } from '../../lib/revolveAxis';
+import { presentation as playbackPresentation } from '../../operationPlayback';
 
 export interface NativeCameraState {
   position: [number, number, number];
@@ -791,8 +792,11 @@ function moveCopyPresentationPoses(
 export function collectNativeViewportPresentation(): NativePresentation {
   const state = useAppStore.getState();
   const pickerFeedback = collectAppViewportPickFeedback(state);
+  const playback = playbackPresentation.snapshot();
+  const emphasize = playback.active && playback.mode === 'present' && !playback.finished && !playback.stopped;
   const edgePickMode = activeEdgePickMode(pickerFeedback.activePick);
-  const selectedSketchEntityIds = [...new Set(state.selectedEntities)];
+  const selectedSketchEntityIds = [...new Set([...state.selectedEntities,
+    ...(emphasize ? playback.highlighted_sketch_entity_ids : [])])];
   if (
     state.selectedEntity !== null &&
     !selectedSketchEntityIds.includes(state.selectedEntity)
@@ -842,7 +846,10 @@ export function collectNativeViewportPresentation(): NativePresentation {
       pickerFeedback.selectedReferencePlane?.type === 'datum_plane'
         ? pickerFeedback.selectedReferencePlane.datum_id
         : null,
-    selectedBodyIds: pickerFeedback.selectedBodyIds,
+    // This is a render-only emphasis layer. It never changes application
+    // selection, picking state, operation targets, or the saved model.
+    selectedBodyIds: [...new Set([...pickerFeedback.selectedBodyIds,
+      ...(emphasize ? playback.highlighted_body_ids : [])])],
     selectedOccurrenceId: state.selectedOccurrenceId,
     hoveredOccurrenceId: state.hoveredOccurrenceId,
     hoveredBodyId: pickerFeedback.hoveredBodyId,
@@ -1531,6 +1538,7 @@ export function attachNativeViewport(container: HTMLElement): () => void {
   }
 
   let previous = useAppStore.getState();
+  const unsubscribePlayback = playbackPresentation.subscribe(syncPresentation);
   const unsubscribe = useAppStore.subscribe((next) => {
     if (
       next.activeSketch !== previous.activeSketch ||
@@ -1645,6 +1653,7 @@ export function attachNativeViewport(container: HTMLElement): () => void {
     for (const unlisten of nativeWindowUnlisteners) unlisten();
     nativeWindowUnlisteners = [];
     unsubscribe();
+    unsubscribePlayback();
     hoveredHudControl = '';
     pressedHudControl = '';
     delete document.documentElement.dataset.nativeViewport;

@@ -304,8 +304,10 @@ dependencies = [
  "nbcad-export",
  "nbcad-mcp-mutate",
  "nbcad-occt",
+ "nbcad-script",
  "nbcad-sketch",
  "nbcad-solid",
+ "serde",
  "serde_json",
  "zip",
 ]
@@ -328,6 +330,13 @@ dependencies = [
  "nbcad-export",
  "nbcad-solid",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "nbcad-script"
+version = "0.1.0"
+dependencies = [
  "serde_json",
 ]
 

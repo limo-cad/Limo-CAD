@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from './store/appStore';
 import { getSessionCamera } from './components/viewport/cameraApi';
 import { inspectUi, operateUi, visible, type UiAction } from './uiControl';
-import { presentOperation, setPlaybackPace, waitForPlayback } from './operationPlayback';
+import { presentOperation, presentation, setPlaybackPace, waitForPlayback, type PresentationRequest } from './operationPlayback';
 import { operateUiFile, type UiFileRequest } from './uiFiles';
 import {drivePointer, type UiGesture} from './uiPointer';
 import {pendingEngineOperations} from './engine/activity';
@@ -13,7 +13,14 @@ export const viewDirections: Record<string, [number, number, number]> = {
   top: [0, 0, 1], bottom: [0, 0, -1],
 };
 let applying = false;
-interface ViewRequest { id: string; session_id: string; view: string; fit: boolean; expires_ms: number; ui?: Omit<UiAction, 'action'> & UiFileRequest & { action: UiAction['action'] | 'window' | 'file' | 'viewport'; pace_ms?: number; mode?: string; canvas?: 'viewport' | 'drawing'; gesture?: UiGesture; point?: [number, number]; to?: [number, number]; world?: [number, number, number]; shift?: boolean } }
+interface ViewRequest { id: string; session_id: string; view: string; fit: boolean; expires_ms: number;
+  target?: 'active_sketch'; body_id?: number; component_id?: number; duration_ms?: number;
+  ui?: Omit<UiAction, 'action'> & Omit<UiFileRequest, 'command'> & Omit<PresentationRequest, 'mode' | 'command'> & {
+    action: UiAction['action'] | 'window' | 'file' | 'viewport' | 'presentation'; command?: string;
+    pace_ms?: number; mode?: string; canvas?: 'viewport' | 'drawing'; gesture?: UiGesture;
+    point?: [number, number]; to?: [number, number]; world?: [number, number, number]; shift?: boolean;
+  }
+}
 
 /** Called by the existing UI heartbeat loop; never changes the model revision. */
 export async function applyLiveUiControl(publishChangedState: () => Promise<void>): Promise<void> {
@@ -30,11 +37,13 @@ export async function applyLiveUiControl(publishChangedState: () => Promise<void
       if (request.ui) {
         if (request.expires_ms < Date.now()) throw new Error('UI request expired');
         if (request.ui.pace_ms !== undefined) setPlaybackPace(request.ui.pace_ms);
-        if (request.ui.action === 'window') {
+        if (request.ui.action === 'presentation') {
+          response.presentation = presentation.control(request.ui as PresentationRequest);
+        } else if (request.ui.action === 'window') {
           response.window = await invoke('mcp_window_control', { mode: request.ui.mode ?? 'inspect' });
         } else if (request.ui.action === 'file') {
           useAppStore.getState().setProjectBusy(true);
-          try { response.completed = await operateUiFile(request.ui); }
+          try { response.completed = await operateUiFile(request.ui as UiFileRequest); }
           finally { useAppStore.getState().setProjectBusy(false); }
           if (!response.completed) throw new Error('File operation did not complete; inspect the UI for details');
           await presentOperation(`File: ${request.ui.command}`);
@@ -89,15 +98,16 @@ export async function applyLiveUiControl(publishChangedState: () => Promise<void
           await waitForPlayback(25);
         }
       };
-      if (request.view === 'isometric') api.home();
-      else if (viewDirections[request.view]) api.snapToDirection(viewDirections[request.view]);
-      else if (request.view !== 'current') throw new Error('Unknown view');
+      const duration = request.duration_ms ?? 300;
+      const focused = request.target !== undefined || request.body_id !== undefined || request.component_id !== undefined;
+      const direction = request.view === 'isometric' ? 'isometric' : viewDirections[request.view];
+      if (request.view !== 'current' && !direction) throw new Error('Unknown view');
+      // A framed orientation is one deliberate camera move, not a zoom out
+      // to the entire assembly followed immediately by a zoom into its part.
+      if (focused || request.fit) api.focus(request, duration, direction);
+      else if (request.view === 'isometric') api.home(duration);
+      else if (direction && direction !== 'isometric') api.snapToDirection(direction, duration);
       await waitForCamera();
-      if (document !== useAppStore.getState().document) throw new Error('Document changed');
-      if (request.fit) {
-        api.fit();
-        await waitForCamera();
-      }
       if (document !== useAppStore.getState().document) throw new Error('Document changed');
       response.status = 'applied';
       response.camera = api.getSnapshot();
