@@ -1,4 +1,4 @@
-import { getEngine } from '../engine';
+import { getEngine, ProjectLoadError } from '../engine';
 import type { BodyAppearance } from '../engine/types';
 import { translate } from '../i18n';
 import {
@@ -258,10 +258,18 @@ export async function openProject(options?: { filePath: string; discardChanges?:
   // Native replacement precedes the store update below. Keep ownership held
   // throughout both so another export cannot capture B with A's UI selection.
   const releaseTransition = projectTransitions.begin();
+  let changed = false;
   let published = false;
   try {
     const engine = await getEngine();
-    const update = await engine.loadProjectModel(modelJson);
+    changed = true;
+    const update = await engine.loadProjectModel(modelJson).catch((error: unknown) => {
+      // Only an explicit pre-mutation rejection proves the prior native model
+      // and geometry are intact. IPC, recompute and post-load repair failures
+      // remain unverified, even when the frontend still shows the old document.
+      changed = !(error instanceof ProjectLoadError && error.engineState === 'unchanged');
+      throw error;
+    });
     const [finishedSketches, datumPlanes, bodyAppearances, drawingDocument, assemblyDocument, assemblySolution, projectVisibility] = await Promise.all([
       engine.finishedSketches(),
       engine.datumPlaneDefinitions(),
@@ -294,7 +302,7 @@ export async function openProject(options?: { filePath: string; discardChanges?:
     if (!hasUnsavedProjects()) clearProjectRecovery();
     return true;
   } finally {
-    releaseTransition(true, published);
+    releaseTransition(changed, published);
   }
 }
 

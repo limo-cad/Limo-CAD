@@ -167,6 +167,17 @@ try {
  });
  console.log('PASS production script source lifecycle: '+JSON.stringify(scripts));
  await scriptPage.close();
+ const recoveryPage=await browser.newPage();
+ await recoveryPage.goto(server.resolvedUrls.local[0]+'mcp-contract');
+ const recovery=await recoveryPage.evaluate(async()=>{
+  const {checkProjectLoadRecovery}=await import('/src/files/projectFiles.browser.test.ts');
+  let timer;
+  try{return await Promise.race([checkProjectLoadRecovery(),new Promise((_,reject)=>{
+   timer=setTimeout(()=>reject(new Error('Project recovery timed out: '+document.body.innerHTML)),15000);
+  })]);}finally{clearTimeout(timer);}
+ });
+ console.log('PASS production project-open/export recovery: '+JSON.stringify(recovery));
+ await recoveryPage.close();
 } finally {await browser?.close();await server.close();}
 
 
