@@ -364,15 +364,17 @@ async function withProjectTransition(
   const state = useAppStore.getState();
   if (state.solidBusy || state.historyEdit) return false;
   const releaseTransition = projectTransitions.begin();
+  let changed = true;
   let published = false;
   state.setSolidBusy(true);
   try {
     const result = await operation();
-    published = true;
+    changed = result;
+    published = result;
     return result;
   } finally {
     useAppStore.getState().setSolidBusy(false);
-    releaseTransition(true, published);
+    releaseTransition(changed, published);
   }
 }
 

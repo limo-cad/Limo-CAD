@@ -108,6 +108,8 @@ async function main() {
   const failedPublication = new ProjectTransitions();
   failedPublication.begin()(true, false);
   await rejects(failedPublication.assertCurrent(failedPublication.capture()), /document changed/);
+  failedPublication.begin()(false, true);
+  await rejects(failedPublication.assertCurrent(failedPublication.capture()), /document changed/);
   failedPublication.begin()(true, true);
   await failedPublication.assertCurrent(failedPublication.capture());
 
