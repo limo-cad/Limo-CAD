@@ -359,18 +359,20 @@ async function hydrateProjectTab(tabId: string): Promise<void> {
 }
 
 async function withProjectTransition(
-  operation: () => Promise<boolean>,
+  operation: (replacingActiveModel: () => void) => Promise<boolean>,
 ): Promise<boolean> {
   const state = useAppStore.getState();
   if (state.solidBusy || state.historyEdit) return false;
   const releaseTransition = projectTransitions.begin();
-  let changed = true;
+  let changed = false;
   let published = false;
   state.setSolidBusy(true);
   try {
-    const result = await operation();
-    changed = result;
-    published = result;
+    const result = await operation(() => { changed = true; });
+    // Closing an inactive tab or selecting the active tab can succeed without
+    // publishing the active native model. Those operations must not clear an
+    // earlier unverified load, nor invalidate an otherwise valid export.
+    published = changed && result;
     return result;
   } finally {
     useAppStore.getState().setSolidBusy(false);
@@ -390,10 +392,11 @@ export async function initializeProjectTabs(): Promise<void> {
 
 /** Add a fresh document while preserving the current one as an inactive tab. */
 export function createProjectTab(): Promise<boolean> {
-  return withProjectTransition(async () => {
+  return withProjectTransition(async (replacingActiveModel) => {
     await snapshotActiveProjectTab();
     const engine = await getEngine();
     const id = createTabId();
+    replacingActiveModel();
     const update = await engine.createProjectSession(id);
     const modelJson = await engine.exportProjectModel();
     currentProjectTarget = null;
@@ -427,11 +430,12 @@ export function createProjectTab(): Promise<boolean> {
 
 /** Hydrate an existing tab into the one native modeling/rendering engine. */
 export function switchProjectTab(tabId: string): Promise<boolean> {
-  return withProjectTransition(async () => {
+  return withProjectTransition(async (replacingActiveModel) => {
     const state = useAppStore.getState();
     if (tabId === state.activeProjectTabId) return true;
     if (!state.projectTabs.some((tab) => tab.id === tabId)) return false;
     await snapshotActiveProjectTab();
+    replacingActiveModel();
     await hydrateProjectTab(tabId);
     return true;
   });
@@ -443,7 +447,7 @@ export function closeProjectTab(
   tabId?: string,
   discardUnsaved = false,
 ): Promise<boolean> {
-  return withProjectTransition(async () => {
+  return withProjectTransition(async (replacingActiveModel) => {
     const state = useAppStore.getState();
     const id = tabId ?? state.activeProjectTabId;
     if (!id) return false;
@@ -469,6 +473,7 @@ export function closeProjectTab(
     if (state.projectTabs.length > 1) {
       const adjacent =
         state.projectTabs[index + 1] ?? state.projectTabs[index - 1];
+      replacingActiveModel();
       await hydrateProjectTab(adjacent.id);
       const runtime = runtimes.get(id);
       if (runtime?.resident) {
@@ -485,6 +490,7 @@ export function closeProjectTab(
     }
 
     const engine = await getEngine();
+    replacingActiveModel();
     const update = await engine.newProject();
     const modelJson = await engine.exportProjectModel();
     dropApplicationHistory(id);

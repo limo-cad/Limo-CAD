@@ -5,9 +5,10 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MeshExportDialog } from '../components/MeshExportDialog';
 import { useAppStore } from '../store/appStore';
-import { openProject, export3mf, exportStl } from './projectFiles';
+import { openProject, closeProject, export3mf, exportStl } from './projectFiles';
 import { createNbcadArchive } from './nbcad';
 import { I18nProvider } from '../i18n';
+import { switchProjectTab } from './projectTabs';
 import type { DocumentDto, SolidSceneDto } from '../engine/types';
 
 type Failure = 'unchanged' | 'repair' | 'publication' | 'transport' | 'success';
@@ -126,6 +127,15 @@ export async function checkProjectLoadRecovery() {
       await rejectOpen(/restoration failed|hydration read failed|reply was lost/);
       check(useAppStore.getState().document === priorDocument, 'Failed publication keeps the old frontend owner');
       await assertBlocked();
+      const activeId = useAppStore.getState().activeProjectTabId!;
+      useAppStore.setState({projectTabs: [
+        {id: activeId, name: priorDocument!.name, fileName: null, dirty: false, workspaceTab: 'solid'},
+        {id: 'unrelated-inactive', name: 'Other part', fileName: null, dirty: false, workspaceTab: 'solid'},
+      ]});
+      check(await closeProject('unrelated-inactive'), 'Closing an unrelated inactive tab must succeed');
+      await assertBlocked();
+      check(await switchProjectTab(activeId), 'Selecting the already-active tab must remain a successful no-op');
+      await assertBlocked();
       // A later unchanged rejection cannot bless an already unverified native
       // replacement. Only a successful native load + UI publication recovers it.
       behavior = 'unchanged';
@@ -136,7 +146,8 @@ export async function checkProjectLoadRecovery() {
       check(await exportMesh('3mf') === null, 'Successful native load and frontend publication must recover export');
     }
     return {atomicRejectedOpen: true, repeated3mf: true, stl: true,
-      repairFailureGuard: true, publicationFailureGuard: true, unknownTransportGuard: true, successfulReloadRecovery: true};
+      repairFailureGuard: true, publicationFailureGuard: true, unknownTransportGuard: true,
+      inactiveTabClosePreservesGuard: true, activeTabNoopPreservesGuard: true, successfulReloadRecovery: true};
   } finally {
     root.unmount();
     rootElement.remove();
