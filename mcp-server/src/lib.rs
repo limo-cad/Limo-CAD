@@ -915,6 +915,7 @@ impl CadServer {
         let model_json = session::require_model_json(session_id)?;
         if skip_unchanged && self.loaded_snapshot_json.as_deref() == Some(model_json.as_str()) {
             self.attached_generation = publication_generation;
+            self.live_snapshot_dirty = false;
             return Ok(false);
         }
         let plan_value = parse_engine_envelope(host::handle(
