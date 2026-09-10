@@ -46,7 +46,7 @@
     {
       "call": {
         "arguments": {},
-        "group": "assembly/joints",
+        "group": "assembly/inspect",
         "operation": "assembly_interference_check"
       },
       "id": "final_interference"

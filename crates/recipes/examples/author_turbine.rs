@@ -1161,7 +1161,7 @@ fn main() {
         ("final_assembly", "assembly/joints", "assembly_document"),
         (
             "final_interference",
-            "assembly/joints",
+            "assembly/inspect",
             "assembly_interference_check",
         ),
     ] {
