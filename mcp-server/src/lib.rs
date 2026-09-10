@@ -4288,6 +4288,171 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    #[test]
+    fn session_status_observes_deferred_script_edits_without_advancing_loaded_fence() {
+        let _guard = session::ENV_LOCK.lock().unwrap();
+        let id = session::test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("nbcad-script-status-{id}"));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let (_, original_model) = write_box_session(&id);
+        session::write_session(
+            &id,
+            "heartbeat.json",
+            &json!({"updated_ms":session::now_ms(),"generation":1,
+                "published_generation":1,"model_generation":1,"interface_version":1})
+            .to_string(),
+        )
+        .unwrap();
+        let mut server = CadServer::new().unwrap();
+        server
+            .call_tool("cad_attach", json!({"session_id":id}))
+            .unwrap();
+        server.script_running = true;
+
+        // Use the real live mutation receipt and snapshot publisher, followed
+        // by an ordinary caption acknowledgement while reconstruction is deferred.
+        let peer = id.clone();
+        let worker = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while session::pending_inbox_seqs(&peer).unwrap().is_empty() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "No live script edit arrived"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            let seq = session::pending_inbox_seqs(&peer).unwrap()[0];
+            let applied = session::apply_inbox_op(&peer, |name, arguments| {
+                let mut owner = CadServer::new()?;
+                owner.call_tool(
+                    "cad_load_project_model",
+                    json!({
+                        "model_json":session::require_model_json(&peer)?,
+                    }),
+                )?;
+                let value = owner.call_tool(name, arguments)?;
+                // The real desktop publishes the result before the applied
+                // receipt lets a waiting caller consume it.
+                session::write_session(
+                    &peer,
+                    &format!("inbox/results/{seq}.json"),
+                    &value.to_string(),
+                )?;
+                let model = owner
+                    .manager
+                    .export_project_model()
+                    .map_err(|e| e.to_string())?;
+                session::publish_applied_snapshot(&peer, &model)?;
+                Ok(value)
+            })
+            .unwrap();
+            assert_eq!(applied.op.name, "cad_set_document_name");
+            let controls = session::session_dir().join(&peer).join("controls");
+            loop {
+                if let Ok(entries) = std::fs::read_dir(&controls) {
+                    for entry in entries.flatten() {
+                        if !entry
+                            .file_name()
+                            .to_string_lossy()
+                            .ends_with(".request.json")
+                        {
+                            continue;
+                        }
+                        let request: Value =
+                            serde_json::from_str(&std::fs::read_to_string(entry.path()).unwrap())
+                                .unwrap();
+                        assert_eq!(request["ui"]["command"], "note");
+                        session::write_session(
+                            &peer,
+                            &format!("controls/{}.result.json", request["id"].as_str().unwrap()),
+                            &json!({"status":"applied","active_session_id":peer}).to_string(),
+                        )
+                        .unwrap();
+                        std::fs::remove_file(entry.path()).unwrap();
+                        return;
+                    }
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "No script caption arrived"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        });
+        let changed = server
+            .call_tool("cad_set_document_name", json!({"name":"Live script edit"}))
+            .unwrap();
+        assert_eq!(changed["name"], "Live script edit");
+        let trace_after_edit = server.tool_trace.clone();
+        assert_eq!(
+            trace_after_edit.last().unwrap()["name"],
+            "cad_set_document_name"
+        );
+        server
+            .call_tool(
+                "cad_interface",
+                json!({"action":"presentation","command":"note","text":"An edit was applied"}),
+            )
+            .unwrap();
+        worker.join().unwrap();
+        let updated_model = session::require_model_json(&id).unwrap();
+        assert_ne!(updated_model, original_model);
+
+        // A bad cache file makes any accidental refresh observable. Status must
+        // retain both the previously loaded generation and the pending trace.
+        session::write_session(&id, "model.json", "invalid deferred snapshot").unwrap();
+        let status = server
+            .call_tool(
+                "cad_interface",
+                json!({
+                    "action":"execute","group":"document/session",
+                    "operation":"cad_session_status","arguments":{},
+                }),
+            )
+            .unwrap();
+        assert_eq!(status["attached_generation"], 1);
+        assert_eq!(status["generation"], 2);
+        assert_eq!(status["model_generation"], 2);
+        assert_eq!(status["stale"], true);
+        assert_eq!(
+            server.loaded_snapshot_json.as_deref(),
+            Some(original_model.as_str())
+        );
+        assert_ne!(server.manager.document_dto().name, "Live script edit");
+        assert_eq!(server.tool_trace, trace_after_edit);
+        assert!(server.live_snapshot_dirty);
+        assert!(server.call_tool("cad_document", json!({})).is_err());
+        assert_eq!(server.attached_generation, Some(1));
+        assert_eq!(server.tool_trace, trace_after_edit);
+        assert!(server.live_snapshot_dirty);
+
+        // The first successful completed-model read owns the new fence and
+        // replaces the pending operation trace with its portable model baseline.
+        session::write_session(&id, "model.json", &updated_model).unwrap();
+        assert_eq!(
+            server.call_tool("cad_document", json!({})).unwrap()["name"],
+            "Live script edit"
+        );
+        assert_eq!(server.attached_generation, Some(2));
+        assert!(!server.live_snapshot_dirty);
+        assert_eq!(
+            server.tool_trace,
+            vec![json!({"name":"cad_load_project_model",
+            "arguments":{"model_json":updated_model}})]
+        );
+        assert_eq!(
+            server.call_tool("cad_session_status", json!({})).unwrap()["stale"],
+            false
+        );
+        assert!(
+            server.script_running,
+            "Reads do not release the active script guard"
+        );
+        server.script_running = false;
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     fn mcp_box() -> (CadServer, Value) {
         let mut server = CadServer::new().unwrap();
         server
