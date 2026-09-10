@@ -86,10 +86,14 @@ coordinates** in the app's mesh-export options, or pass `scope: "definition"`
 with its `body_ids` through MCP. Assembled placement is the default and includes
 all visible repeated occurrences. The stage, cap,
 base, carrier, cradle, guard, lid and gears have no broad unsupported ceilings.
-Horizontal holes and nut pockets still require slicer review and bridge coupons.
-The library does not yet include separate fit or bridge coupon files; those
-qualification specimens must be authored for the measured hardware and printer
-before this candidate is released for manufacturing.
+Horizontal holes and nut pockets still require slicer review. Start with the
+bundled `turbine-fit-coupons` recipe: four editable specimens cover the stage
+shaft, lower bearing seat, complete small motor cradle and actual pinion. Each
+has an associative drawing with its bore, nominal hardware size, allowance and
+print orientation. The same Rust author emits both sources and reuses the
+cradle, clamp and pinion construction. Export each coupon in part coordinates.
+The shortened shaft/bearing specimens reproduce the local fit and clamp seats;
+they do not establish full-rotor stiffness, fatigue life or load capacity.
 The 198 mm plates leave ample room on the stated X2D bed, but their 200 mm
 geometry envelope does not itself reserve a brim on a smaller printer.
 

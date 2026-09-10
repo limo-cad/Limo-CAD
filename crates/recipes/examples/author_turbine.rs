@@ -514,6 +514,52 @@ impl Author {
         }
         self.drawings.push(export);
     }
+    fn motor_cradle(&mut self) {
+        self.cylinder("motor_mount", [0., 0.], 37., 0., 32., "new_body", None);
+        self.cylinder(
+            "motor_mount_cavity",
+            [0., 0.],
+            32.6,
+            14.,
+            18.,
+            "cut",
+            Some("motor_mount"),
+        );
+        self.block(
+            "motor_wire_slot",
+            [-0.6, -20.],
+            [0.6, -13.],
+            14.,
+            18.,
+            "cut",
+            Some("motor_mount"),
+        );
+        self.block(
+            "motor_clamp_left",
+            [-8., -23.],
+            [-0.6, -16.5],
+            23.,
+            8.,
+            "join",
+            Some("motor_mount"),
+        );
+        self.block(
+            "motor_clamp_right",
+            [0.6, -23.],
+            [8., -16.5],
+            23.,
+            8.,
+            "join",
+            Some("motor_mount"),
+        );
+        self.cross_bore("motor_cradle_clamp", "motor_mount", -19.75, 27., 3.2);
+        for y in [-23., 23.] {
+            let n = self.uid("cradle_ear");
+            self.cylinder(&n, [0., y], 13., 0., 4., "join", Some("motor_mount"));
+            let n = self.uid("cradle_mount");
+            self.cylinder(&n, [0., y], 3.4, 0., 4., "cut", Some("motor_mount"));
+        }
+    }
     fn component(&mut self, name: &str, title: &str, printable: bool, pose: [f64; 3]) {
         let (color, color_name) = match name {
             "stage" | "cap" => ([220, 142, 50], "Warm orange rotor"),
@@ -911,50 +957,7 @@ fn main() {
         [0., 0., 3.],
     );
     a.note("Generator cartridge","The KW-GEN3 case is nominally 32 mm diameter. Its 28 mm case and 6 mm projecting round shaft are provisional, derived from the approximately 34 mm total envelope; measure the specimen before printing the cartridge and pinion.");
-    a.cylinder("motor_mount", [0., 0.], 37., 0., 32., "new_body", None);
-    a.cylinder(
-        "motor_mount_cavity",
-        [0., 0.],
-        32.6,
-        14.,
-        18.,
-        "cut",
-        Some("motor_mount"),
-    );
-    a.block(
-        "motor_wire_slot",
-        [-0.6, -20.],
-        [0.6, -13.],
-        14.,
-        18.,
-        "cut",
-        Some("motor_mount"),
-    );
-    a.block(
-        "motor_clamp_left",
-        [-8., -23.],
-        [-0.6, -16.5],
-        23.,
-        8.,
-        "join",
-        Some("motor_mount"),
-    );
-    a.block(
-        "motor_clamp_right",
-        [0.6, -23.],
-        [8., -16.5],
-        23.,
-        8.,
-        "join",
-        Some("motor_mount"),
-    );
-    a.cross_bore("motor_cradle_clamp", "motor_mount", -19.75, 27., 3.2);
-    for y in [-23., 23.] {
-        let n = a.uid("cradle_ear");
-        a.cylinder(&n, [0., y], 13., 0., 4., "join", Some("motor_mount"));
-        let n = a.uid("cradle_mount");
-        a.cylinder(&n, [0., y], 3.4, 0., 4., "cut", Some("motor_mount"));
-    }
+    a.motor_cradle();
     a.component(
         "motor_mount",
         "Removable KW-GEN3 cradle / specimen fit pending",
@@ -1239,16 +1242,16 @@ fn main() {
     a.call("gear_coupling","assembly/joints","assembly_create_gear_relation",json!({"name":"Printed 72:18 spur pair","joint_a":at("rotor_rotation","/id"),"joint_b":at("generator_rotation","/id"),"teeth_a":72,"teeth_b":18,"reverse":true,"phase_deg":10}));
     a.note("Read the manufacturing intent","Each native part carries its own editable drawing with actual projected edges, diameter and height dimensions. Fits are provisional. Ages 8–12 with adult guidance; age 5 requires closer hands-on adult guidance. Keep fingers away from the rotor and use only supervised low-energy airflow.");
     for (name,height,diameters,note) in [
-        ("stage",100.,vec![198.,8.3],"PRINT2 / PETG / flat disc on bed. 180 bucket sweep; 2 mm walls; 18 mm bucket overlap; hub height18 leaves flow space around the8 mm shaft above. M3 clamp at height10; hub and walls join the3 mm disc. Print fit coupon before committing both stages. Second occurrence stagger90 degrees."),
-        ("cap",3.,vec![198.,8.4],"PRINT1 / flat on bed. Retain between upper stage and purchased upper8 mm shaft collar; no adhesive."),
-        ("base",8.,vec![18.,3.4],"PRINT1 / bottom on bed.160 x130. M3 clearance3.4; underside6.4 x3.2 head recesses. Carrier centers+/-22; cradle(45.25,+/-23); guard109 bolt circle centered(10,0), holes staggered45 degrees. Deburr recesses and keep heads below base."),
-        ("tower",42.,vec![52.,22.3,17.8],"PRINT1 / flange down. Two608 seats22.3 x7 at heights0 and35; insert lower bearing from below before fastening the base; relief17.8 between. Two M3 transverse split clamps. Clamp lightly; verify bearing rotation after fastening."),
-        ("motor_mount",32.,vec![37.,32.6],"PRINT1 / flange down. Cavity starts14 above base. Nominal32 mm motor; measure specimen including shaft projection before print. Two M3 flange bolts and one transverse clamp; route wires through split before closing guard."),
-        ("guard",57.,vec![120.,114.,3.4],"PRINT1 / upright. Four M3 clear bores,8 hex nut traps:5.8 across flats x3 deep open at bottom/top. Capture nuts before mounting. Bottom M3x12 socket screws; lid M3x8 low-profile heads no higher than1.65 above lid."),
-        ("guard_lid",3.,vec![120.,30.,3.4],"PRINT1 / flat. Axis opening offset(-10,0). Four M3x8 low-profile screws; Rotor disc is5 mm above lid, leaving3.35 mm above heads no higher than1.65. Check rotor clears every screw before motion."),
-        ("rotor_gear",12.,vec![8.3,24.],"PRINT1 / teeth flat. Module1;72 teeth;20 degree pressure angle; pitch72;3 mm face.0.10 mm tooth thinning. Split hub M3 screw/nut; center distance45.25. Do not glue to shaft."),
-        ("pinion",6.,vec![2.2,12.],"PRINT1 / teeth flat. Module1;18 teeth;20 degree pressure angle; pitch18;3 mm face.0.10 mm tooth thinning. M2 split clamp at4.5 high. Round2 mm motor shaft; verify specimen projection and fit before printing."),
-        ("shaft",278.,vec![8.],"PURCHASE /8 mm straight steel shaft cut278 long, ends deburred. Separate608 bearings carry rotor loads. This is a representative purchased envelope; straightness and surface finish must suit the actual bearings."),
+        ("stage",100.,vec![198.,8.3],"PRINT 2 / PETG / flat disc on bed. Bucket sweep 180 mm; walls 2 mm; overlap 18 mm. The 18 mm hub leaves airflow around the 8 mm shaft above. M3 clamp center at 10 mm; hub and walls join the 3 mm disc. Print the fit coupon first. Stagger the second stage 90 degrees."),
+        ("cap",3.,vec![198.,8.4],"PRINT 1 / flat on bed. Retain between the upper stage and purchased upper 8 mm shaft collar; no adhesive."),
+        ("base",8.,vec![18.,3.4],"PRINT 1 / bottom on bed. 160 x 130 mm. M3 clearance 3.4 mm; underside head recesses 6.4 x 3.2 mm. Carrier centers +/-22; cradle (45.25, +/-23); guard bolt circle 109, center (10,0), holes staggered 45 degrees. Deburr recesses; keep heads below the base."),
+        ("tower",42.,vec![52.,22.3,17.8],"PRINT 1 / flange down. Two 608 seats, 22.3 x 7 mm, at heights 0 and 35 mm; relief 17.8 mm between. Insert the lower bearing from below before fastening the base. Two M3 transverse split clamps. Clamp lightly; verify bearing rotation after fastening."),
+        ("motor_mount",32.,vec![37.,32.6],"PRINT 1 / flange down. Cavity begins 14 mm above the base. Nominal 32 mm motor: measure the specimen, including shaft projection, before printing. Two M3 flange bolts and one transverse clamp. Route wires through the split before closing the guard."),
+        ("guard",57.,vec![120.,114.,3.4],"PRINT 1 / upright. Four M3 clearance bores and eight hex nut traps: 5.8 mm across flats, 3 mm deep, open at bottom/top. Capture nuts before mounting. Bottom M3 x 12 socket screws; lid M3 x 8 low-profile heads no higher than 1.65 mm above the lid."),
+        ("guard_lid",3.,vec![120.,30.,3.4],"PRINT 1 / flat. Axis opening offset (-10,0). Four M3 x 8 low-profile screws. Rotor disc is 5 mm above the lid, leaving 3.35 mm above heads no higher than 1.65 mm. Check that the rotor clears every screw before motion."),
+        ("rotor_gear",12.,vec![8.3,24.],"PRINT 1 / teeth flat. Module 1; 72 teeth; 20 degree pressure angle; pitch diameter 72 mm; face 3 mm. Tooth thinning 0.10 mm. Split hub with M3 screw/nut; center distance 45.25 mm. Do not glue to the shaft."),
+        ("pinion",6.,vec![2.2,12.],"PRINT 1 / teeth flat. Module 1; 18 teeth; 20 degree pressure angle; pitch diameter 18 mm; nominal face 3 mm. Tooth thinning 0.10 mm. M2 split clamp at 4.5 mm. Round 2 mm motor shaft: verify specimen projection and fit before printing."),
+        ("shaft",278.,vec![8.],"PURCHASE / 8 mm straight steel shaft cut 278 mm long; deburr both ends. Separate 608 bearings carry rotor loads. This is a representative purchased envelope; straightness and surface finish must suit the actual bearings."),
     ] { a.part_drawing(name,height,&diameters,note); }
     a.assembly_drawing();
     a.steps
@@ -1284,4 +1287,139 @@ fn main() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../examples/scripts/vertical-axis-turbine.nbcad.jsonc");
     std::fs::write(path,format!("// Generated by the Rust author_turbine example; replay uses the one native interpreter.\n// Millimetres/degrees. Native editable construction; physical qualification remains pending.\n{}\n",serde_json::to_string_pretty(&source).unwrap())).unwrap();
+    author_fit_coupons();
+}
+
+fn author_fit_coupons() {
+    let mut a = Author::new();
+    a.note("Qualify the fits first", "Print these four separate PETG specimens in their native Z-up orientation. Use the actual measured shaft, bearing and generator. Record filament, printer profile, measured bore and clamp slip before building both rotor stages. These are fit specimens, not strength or safety certification.");
+    a.cylinder("shaft_coupon", [0., 0.], 36., 0., 3., "new_body", None);
+    a.cylinder(
+        "shaft_coupon_hub",
+        [0., 0.],
+        24.,
+        0.,
+        18.,
+        "join",
+        Some("shaft_coupon"),
+    );
+    a.cylinder(
+        "shaft_coupon_fit",
+        [0., 0.],
+        8.3,
+        0.,
+        18.,
+        "cut",
+        Some("shaft_coupon"),
+    );
+    a.block(
+        "shaft_coupon_split",
+        [-0.6, -14.],
+        [0.6, 0.],
+        0.,
+        18.,
+        "cut",
+        Some("shaft_coupon"),
+    );
+    a.clamp("shaft_coupon_clamp", "shaft_coupon", -8., 10., 3.2, 4., 6.4);
+    a.component(
+        "shaft_coupon",
+        "8 mm shaft / 8.3 bore / +0.3 diametral",
+        true,
+        [0., 0., 0.],
+    );
+    a.note("Bearing insertion and clamping", "The lower 608 seat opens at the bed side. Remove first-layer flare before measurement. Insert the bearing from below, then tighten the transverse M3 clamp lightly and check that the bearing still rotates freely.");
+    a.cylinder("bearing_coupon", [0., 0.], 52., 0., 6., "new_body", None);
+    a.cylinder(
+        "bearing_coupon_column",
+        [0., 0.],
+        36.,
+        0.,
+        18.,
+        "join",
+        Some("bearing_coupon"),
+    );
+    a.cylinder(
+        "bearing_coupon_relief",
+        [0., 0.],
+        17.8,
+        0.,
+        18.,
+        "cut",
+        Some("bearing_coupon"),
+    );
+    a.cylinder(
+        "bearing_coupon_fit",
+        [0., 0.],
+        22.3,
+        0.,
+        7.,
+        "cut",
+        Some("bearing_coupon"),
+    );
+    a.block(
+        "bearing_coupon_split",
+        [-0.6, -27.],
+        [0.6, 0.],
+        0.,
+        18.,
+        "cut",
+        Some("bearing_coupon"),
+    );
+    a.clamp(
+        "bearing_coupon_clamp",
+        "bearing_coupon",
+        -14.,
+        12.,
+        3.2,
+        5.,
+        6.4,
+    );
+    a.component(
+        "bearing_coupon",
+        "608 bearing / 22.3 seat / +0.3 diametral",
+        true,
+        [60., 0., 0.],
+    );
+    a.note("Measure the generator specimen", "The case and projecting shaft need separate checks. The complete small cradle reuses the exact turbine construction, including its 32.6 mm cavity, flat M3 clamp ears and wire slot. Nominal case 32 mm and shaft 2 mm must be checked against the delivered motor.");
+    a.motor_cradle();
+    a.component(
+        "motor_mount",
+        "32 mm motor case / 32.6 cavity / +0.6 diametral",
+        true,
+        [0., 70., 0.],
+    );
+    // The actual small pinion is the coupon: its short shaft engagement and
+    // reduced tooth face under the M2 seats must not be disguised by a tall ring.
+    a.gear("pinion", 18, 2.2, 12.);
+    a.component(
+        "pinion",
+        "2 mm motor shaft / 2.2 bore / +0.2 diametral",
+        true,
+        [55., 70., 0.],
+    );
+    for (name,height,diameters,note) in [
+        ("shaft_coupon",18.,vec![8.3,24.],"FIT S / 8 mm shaft; bore 8.3 mm gives 0.3 mm diametral allowance. Actual 18 mm stage hub, M3 clamp at 10 mm, 8 mm grip and 6.4 mm flat seats. Reduced 36 mm disc saves filament; it does not reproduce full rotor stiffness. Print disc down."),
+        ("bearing_coupon",18.,vec![22.3,17.8],"FIT B / 22 mm 608 bearing; seat 22.3 x 7 mm gives 0.3 mm diametral allowance. Actual lower carrier section, M3 clamp at 12 mm and 10 mm grip. Print flange down. Insert from underside; remove first-layer flare and check rotation after light clamping."),
+        ("motor_mount",32.,vec![32.6,37.],"FIT M / nominal 32 mm KW-GEN3 case; cavity 32.6 mm gives 0.6 mm diametral allowance. Exact complete small cradle. Print flange down. Measure the actual case, terminal locations and shaft projection before tightening the M3 clamp."),
+        ("pinion",6.,vec![2.2,12.],"FIT P / nominal 2 mm motor shaft; bore 2.2 mm gives 0.2 mm diametral allowance. Exact 18T pinion and M2 clamp, 4 mm grip. Print teeth down. Provisional 6 mm projection; seats leave 2.1 mm minimum tooth face locally. Check engagement, free rotation and slip under measured load."),
+    ] { a.part_drawing(name,height,&diameters,note); }
+    a.steps
+        .push(json!({"view":"isometric","fit":true,"duration_ms":600}));
+    let mut checks = vec![];
+    for (id, group, operation) in [
+        ("final_scene", "solid/check", "solid_scene"),
+        ("final_sketches", "sketch/draw", "sketch_finished"),
+        ("final_model", "document/files", "cad_project_model"),
+        ("final_solution", "assembly/joints", "assembly_solution"),
+    ] {
+        checks.push(json!({"id":id,"call":{"group":group,"operation":operation,"arguments":{}}}));
+    }
+    checks.push(json!({"assert":at("final_scene","/errors"),"equals":[]}));
+    checks.push(json!({"assert":at("final_solution","/solved"),"equals":true}));
+    checks.push(json!({"assert":{"$count":select(r("final_sketches"),"",json!({"/dof/value":0}),"all","")},"equals":{"$count":r("final_sketches")}}));
+    let source = json!({"$schema":"./nbcad-script.schema.json","version":1,"name":"Turbine fit coupons / measure before printing the rotor","starting_state":"empty","steps":a.steps,"checks":checks,"exports":{"parts":a.parts,"drawings":a.drawings,"final_scene":r("final_scene"),"final_sketches":r("final_sketches"),"final_model":r("final_model"),"final_solution":r("final_solution")}});
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/scripts/turbine-fit-coupons.nbcad.jsonc");
+    std::fs::write(path,format!("// Generated by the same Rust author_turbine example; one native replay interpreter.\n// Actual fit specimens in their intended print orientations. All sizes are millimetres.\n{}\n",serde_json::to_string_pretty(&source).unwrap())).unwrap();
 }

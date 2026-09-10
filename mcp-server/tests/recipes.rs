@@ -1755,6 +1755,119 @@ fn validate_turbine_open_overlap(exports: &Value) {
     }
 }
 
+#[test]
+fn turbine_fit_coupons_have_driving_fits_and_replay_as_closed_prints() {
+    let mut client = Client::start();
+    let report = client.recipe("turbine-fit-coupons");
+    let exports = &report["exports"];
+    assert_eq!(exports["final_scene"]["errors"], json!([]));
+    let parts = exports["parts"].as_array().unwrap();
+    assert_eq!(parts.len(), 4);
+    let sketches = exports["final_sketches"].as_array().unwrap();
+    assert!(sketches.iter().all(|sketch| sketch["dof"]["value"] == 0));
+    let artifact_directory = std::env::var_os("NBCAD_RECIPE_ARTIFACT_DIR")
+        .map(|path| std::path::PathBuf::from(path).join("fit-coupons"));
+    if let Some(directory) = &artifact_directory {
+        std::fs::create_dir_all(directory).unwrap();
+    }
+    for (id, sketch_name, nominal, allowance) in [
+        ("shaft_coupon", "shaft_coupon_fit", 8., 0.3),
+        ("bearing_coupon", "bearing_coupon_fit", 22., 0.3),
+        ("motor_mount", "motor_mount_cavity", 32., 0.6),
+        ("pinion", "pinion_bore", 2., 0.2),
+    ] {
+        let diameter = nominal + allowance;
+        let part = parts.iter().find(|part| part["id"] == id).unwrap();
+        let body = exports["final_scene"]["bodies"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|body| body["id"] == part["body_id"])
+            .unwrap();
+        let (min, max, volume) = mesh_measurement(body);
+        assert!(volume > 0. && min[2].abs() < 1e-5);
+        assert!(
+            (0..3).all(|axis| max[axis] - min[axis] <= 60.),
+            "small printable coupon: {id}"
+        );
+        let sketch = sketches
+            .iter()
+            .find(|sketch| sketch["name"] == sketch_name)
+            .unwrap();
+        assert!(
+            sketch["dimensions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|dimension| dimension["kind"] == "diameter"
+                    && dimension["mode"] == "driving"
+                    && (dimension["value"].as_f64().unwrap() - diameter).abs() < 1e-10),
+            "editable fit diameter: {id}"
+        );
+        assert!(
+            body["faces"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|face| face["cylinder"]["radius"]
+                    .as_f64()
+                    .is_some_and(|radius| (radius * 2. - diameter).abs() < 1e-8)),
+            "actual retained native bore diameter: {id}"
+        );
+        let print = client.call(
+            "solid_export_3mf",
+            json!({"body_ids":[part["body_id"]],"scope":"definition","slicer_target":"standard"}),
+        );
+        let bytes = BASE64
+            .decode(print["bytes_base64"].as_str().unwrap())
+            .unwrap();
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
+        let mut model = String::new();
+        archive
+            .by_name("3D/3dmodel.model")
+            .unwrap()
+            .read_to_string(&mut model)
+            .unwrap();
+        assert_eq!(model.matches("<object ").count(), 1);
+        assert!(model.contains("unit=\"millimeter\"") && model.contains("<triangle "));
+        if let Some(directory) = &artifact_directory {
+            std::fs::write(directory.join(format!("{id}.3mf")), &bytes).unwrap();
+        }
+    }
+    if let Some(directory) = &artifact_directory {
+        std::fs::write(
+            directory.join("run-1.json"),
+            serde_json::to_vec_pretty(&report).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            directory.join("model.json"),
+            serde_json::to_vec_pretty(&exports["final_model"]).unwrap(),
+        )
+        .unwrap();
+        for drawing in exports["drawings"].as_array().unwrap() {
+            for format in ["svg", "dxf"] {
+                std::fs::write(
+                    directory.join(format!("{}.{}", drawing["part"].as_str().unwrap(), format)),
+                    drawing[format].as_str().unwrap(),
+                )
+                .unwrap();
+            }
+        }
+    }
+    let mut repeat = Client::start();
+    assert_eq!(
+        exports,
+        &repeat.recipe("turbine-fit-coupons")["exports"],
+        "exact independent native coupon replay"
+    );
+    let mut restored = Client::restore(&exports["final_model"]);
+    assert_eq!(
+        restored.call("solid_scene", json!({}))["bodies"],
+        exports["final_scene"]["bodies"]
+    );
+}
+
 fn validate_turbine_edit_and_motion(client: &mut Client, exports: &Value) {
     let parts = exports["parts"].as_array().unwrap();
     let stage = parts.iter().find(|part| part["id"] == "stage").unwrap();

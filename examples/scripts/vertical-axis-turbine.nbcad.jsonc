@@ -28425,7 +28425,7 @@
           "sheet_id": {
             "$ref": "stage_sheet_id"
           },
-          "text": "PRINT2 / PETG / flat disc on bed. 180 bucket sweep; 2 mm walls; 18 mm bucket overlap; hub\nheight18 leaves flow space around the8 mm shaft above. M3 clamp at height10; hub and walls\njoin the3 mm disc. Print fit coupon before committing both stages. Second occurrence\nstagger90 degrees."
+          "text": "PRINT 2 / PETG / flat disc on bed. Bucket sweep 180 mm; walls 2 mm; overlap 18 mm. The 18 mm\nhub leaves airflow around the 8 mm shaft above. M3 clamp center at 10 mm; hub and walls join\nthe 3 mm disc. Print the fit coupon first. Stagger the second stage 90 degrees."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -28968,7 +28968,7 @@
           "sheet_id": {
             "$ref": "cap_sheet_id"
           },
-          "text": "PRINT1 / flat on bed. Retain between upper stage and purchased upper8 mm shaft collar; no\nadhesive."
+          "text": "PRINT 1 / flat on bed. Retain between the upper stage and purchased upper 8 mm shaft collar;\nno adhesive."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -29936,7 +29936,7 @@
           "sheet_id": {
             "$ref": "base_sheet_id"
           },
-          "text": "PRINT1 / bottom on bed.160 x130. M3 clearance3.4; underside6.4 x3.2 head recesses. Carrier\ncenters+/-22; cradle(45.25,+/-23); guard109 bolt circle centered(10,0), holes staggered45\ndegrees. Deburr recesses and keep heads below base."
+          "text": "PRINT 1 / bottom on bed. 160 x 130 mm. M3 clearance 3.4 mm; underside head recesses 6.4 x\n3.2 mm. Carrier centers +/-22; cradle (45.25, +/-23); guard bolt circle 109, center (10,0),\nholes staggered 45 degrees. Deburr recesses; keep heads below the base."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -30544,7 +30544,7 @@
           "sheet_id": {
             "$ref": "tower_sheet_id"
           },
-          "text": "PRINT1 / flange down. Two608 seats22.3 x7 at heights0 and35; insert lower bearing from below\nbefore fastening the base; relief17.8 between. Two M3 transverse split clamps. Clamp\nlightly; verify bearing rotation after fastening."
+          "text": "PRINT 1 / flange down. Two 608 seats, 22.3 x 7 mm, at heights 0 and 35 mm; relief 17.8 mm\nbetween. Insert the lower bearing from below before fastening the base. Two M3 transverse\nsplit clamps. Clamp lightly; verify bearing rotation after fastening."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -31087,7 +31087,7 @@
           "sheet_id": {
             "$ref": "motor_mount_sheet_id"
           },
-          "text": "PRINT1 / flange down. Cavity starts14 above base. Nominal32 mm motor; measure specimen\nincluding shaft projection before print. Two M3 flange bolts and one transverse clamp; route\nwires through split before closing guard."
+          "text": "PRINT 1 / flange down. Cavity begins 14 mm above the base. Nominal 32 mm motor: measure the\nspecimen, including shaft projection, before printing. Two M3 flange bolts and one\ntransverse clamp. Route wires through the split before closing the guard."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -31695,7 +31695,7 @@
           "sheet_id": {
             "$ref": "guard_sheet_id"
           },
-          "text": "PRINT1 / upright. Four M3 clear bores,8 hex nut traps:5.8 across flats x3 deep open at\nbottom/top. Capture nuts before mounting. Bottom M3x12 socket screws; lid M3x8 low-profile\nheads no higher than1.65 above lid."
+          "text": "PRINT 1 / upright. Four M3 clearance bores and eight hex nut traps: 5.8 mm across flats, 3\nmm deep, open at bottom/top. Capture nuts before mounting. Bottom M3 x 12 socket screws; lid\nM3 x 8 low-profile heads no higher than 1.65 mm above the lid."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -32303,7 +32303,7 @@
           "sheet_id": {
             "$ref": "guard_lid_sheet_id"
           },
-          "text": "PRINT1 / flat. Axis opening offset(-10,0). Four M3x8 low-profile screws; Rotor disc is5 mm\nabove lid, leaving3.35 mm above heads no higher than1.65. Check rotor clears every screw\nbefore motion."
+          "text": "PRINT 1 / flat. Axis opening offset (-10,0). Four M3 x 8 low-profile screws. Rotor disc is 5\nmm above the lid, leaving 3.35 mm above heads no higher than 1.65 mm. Check that the rotor\nclears every screw before motion."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -32846,7 +32846,7 @@
           "sheet_id": {
             "$ref": "rotor_gear_sheet_id"
           },
-          "text": "PRINT1 / teeth flat. Module1;72 teeth;20 degree pressure angle; pitch72;3 mm face.0.10 mm\ntooth thinning. Split hub M3 screw/nut; center distance45.25. Do not glue to shaft."
+          "text": "PRINT 1 / teeth flat. Module 1; 72 teeth; 20 degree pressure angle; pitch diameter 72 mm;\nface 3 mm. Tooth thinning 0.10 mm. Split hub with M3 screw/nut; center distance 45.25 mm. Do\nnot glue to the shaft."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -33389,7 +33389,7 @@
           "sheet_id": {
             "$ref": "pinion_sheet_id"
           },
-          "text": "PRINT1 / teeth flat. Module1;18 teeth;20 degree pressure angle; pitch18;3 mm face.0.10 mm\ntooth thinning. M2 split clamp at4.5 high. Round2 mm motor shaft; verify specimen projection\nand fit before printing."
+          "text": "PRINT 1 / teeth flat. Module 1; 18 teeth; 20 degree pressure angle; pitch diameter 18 mm;\nnominal face 3 mm. Tooth thinning 0.10 mm. M2 split clamp at 4.5 mm. Round 2 mm motor shaft:\nverify specimen projection and fit before printing."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -33867,7 +33867,7 @@
           "sheet_id": {
             "$ref": "shaft_sheet_id"
           },
-          "text": "PURCHASE /8 mm straight steel shaft cut278 long, ends deburred. Separate608 bearings carry\nrotor loads. This is a representative purchased envelope; straightness and surface finish\nmust suit the actual bearings."
+          "text": "PURCHASE / 8 mm straight steel shaft cut 278 mm long; deburr both ends. Separate 608\nbearings carry rotor loads. This is a representative purchased envelope; straightness and\nsurface finish must suit the actual bearings."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"

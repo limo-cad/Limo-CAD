@@ -77,6 +77,14 @@ pub const RECIPES: &[Recipe] = &[
         preview: false,
     },
     Recipe {
+        id: "turbine-fit-coupons",
+        source: include_str!("../../../examples/scripts/turbine-fit-coupons.nbcad.jsonc"),
+        summary: "Print dimensioned shaft, bearing, motor-case and motor-shaft fit specimens with the actual turbine clamp geometry before committing the full rotor.",
+        kind: "calibration",
+        focus_operations: &["sketch_add_circle_locked", "solid_extrude", "drawing_add_radial_dimension"],
+        preview: false,
+    },
+    Recipe {
         id: "vertical-axis-turbine",
         source: include_str!("../../../examples/scripts/vertical-axis-turbine.nbcad.jsonc"),
         summary: "Build a two-stage printable Savonius turbine, constrained 4:1 spur drive and associative manufacturing drawings. Physical print and generator fit qualification pending.",
