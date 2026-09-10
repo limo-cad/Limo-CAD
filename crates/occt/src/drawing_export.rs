@@ -58,6 +58,17 @@ impl Paper {
             });
         }
     }
+    fn fitted_text(&mut self, point: P, value: impl Into<String>, height: f64, width: f64) {
+        let value = value.into();
+        let count = value
+            .lines()
+            .map(|line| line.chars().count())
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        // Conservative font advance avoids adjacent title fields running together.
+        self.text(point, value, height.min(width / (count as f64 * 0.65)));
+    }
 }
 
 /// The caller owns the kernel/session. Supplying its projection closure avoids
@@ -94,39 +105,7 @@ pub fn export_sheet(
         "BORDER",
         &sheet.style.visible,
     );
-    let title = &sheet.title_block;
-    paper.line(
-        vec![[10., h - 30.], [w - 10., h - 30.]],
-        "BORDER",
-        &sheet.style.visible,
-    );
-    paper.text(
-        [14., h - 24.],
-        format!(
-            "{}   {}   Rev {}",
-            if title.title.is_empty() {
-                &sheet.name
-            } else {
-                &title.title
-            },
-            title.drawing_number,
-            title.revision
-        ),
-        sheet.style.text_height_mm,
-    );
-    paper.text(
-        [14., h - 18.],
-        format!(
-            "Dimensions: mm   {:?} / {:?}   Material: {}   Finish: {}",
-            sheet.standard, sheet.projection_method, title.material, title.finish
-        ),
-        sheet.style.small_text_height_mm,
-    );
-    paper.text(
-        [14., h - 12.],
-        tolerance_note(&sheet.tolerance_note),
-        sheet.style.small_text_height_mm,
-    );
+    draw_title_and_revisions(&mut paper, sheet)?;
     let mut projections = BTreeMap::new();
     for view in &sheet.views {
         let req = projection_request(view, &sheet.views, scene, assembly)?;
@@ -264,6 +243,144 @@ pub fn export_sheet(
         DrawingExportFormat::Svg => Ok(svg(&paper, &sheet.style.font_family)),
         DrawingExportFormat::Dxf => Ok(dxf(&paper)),
     }
+}
+
+fn draw_title_and_revisions(paper: &mut Paper, sheet: &DrawingSheetDto) -> Result<(), String> {
+    let [w, h] = paper.size;
+    let width = 180_f64.min(w - 20.);
+    let x = w - 10. - width;
+    let y = h - 54.;
+    let title = &sheet.title_block;
+    let small = sheet.style.small_text_height_mm;
+    paper.line(vec![[x, y], [w - 10., y]], "BORDER", &sheet.style.dimension);
+    paper.line(vec![[x, y], [x, h - 10.]], "BORDER", &sheet.style.dimension);
+    for offset in [16., 24., 32.] {
+        paper.line(
+            vec![[x, y + offset], [w - 10., y + offset]],
+            "BORDER",
+            &sheet.style.dimension,
+        );
+    }
+    paper.fitted_text(
+        [x + 3., y + 5.5],
+        if title.title.is_empty() {
+            &sheet.name
+        } else {
+            &title.title
+        },
+        sheet.style.text_height_mm,
+        width - 6.,
+    );
+    paper.fitted_text(
+        [x + 3., y + 10.],
+        format!(
+            "DRAWING: {}   REV: {}   SHEET: {}",
+            title.drawing_number, title.revision, sheet.name
+        ),
+        small,
+        width - 6.,
+    );
+    let method = match sheet.projection_method {
+        DrawingProjectionMethod::FirstAngle => "FIRST ANGLE",
+        DrawingProjectionMethod::ThirdAngle => "THIRD ANGLE",
+    };
+    paper.fitted_text(
+        [x + 3., y + 14.],
+        format!(
+            "DIMENSIONS: mm   {:?}   {method}   RELEASE: {:?}",
+            sheet.standard, sheet.release.status
+        ),
+        small,
+        width - 6.,
+    );
+    paper.fitted_text(
+        [x + 3., y + 19.5],
+        format!("MATERIAL: {}   FINISH: {}", title.material, title.finish),
+        small,
+        width - 6.,
+    );
+    let tolerance = tolerance_note(&sheet.tolerance_note);
+    paper.fitted_text(
+        [x + 3., y + 23.],
+        if tolerance.is_empty() {
+            "TOLERANCES: AS SPECIFIED".into()
+        } else {
+            tolerance
+        },
+        small,
+        width - 6.,
+    );
+    paper.fitted_text(
+        [x + 3., y + 28.],
+        format!("COMPANY: {}", title.company),
+        small,
+        width - 6.,
+    );
+    paper.fitted_text(
+        [x + 3., y + 36.],
+        format!(
+            "DRAWN: {}   CHECKED: {}   APPROVED: {}",
+            title.author, title.checked_by, title.approved_by
+        ),
+        small,
+        width - 6.,
+    );
+    paper.fitted_text(
+        [x + 3., y + 41.],
+        format!(
+            "RELEASED REVISION: {}   DATE: {}",
+            sheet.release.released_revision, sheet.release.released_at
+        ),
+        small,
+        width - 6.,
+    );
+
+    if let Some([rx, ry]) = sheet.revision_table_position {
+        let rw = 220_f64.min(w - 10. - rx);
+        let bottom = ry + 6. + sheet.revisions.len() as f64 * 15.;
+        if rw < 40. || rx < 10. || ry < 10. || bottom > h - 10. {
+            return Err("Revision table does not fit within the sheet border".into());
+        }
+        paper.fitted_text(
+            [rx + 2., ry + 4.],
+            "REVISION HISTORY — description, responsibility and release",
+            small,
+            rw - 4.,
+        );
+        for (i, revision) in sheet.revisions.iter().enumerate() {
+            let top = ry + 6. + i as f64 * 15.;
+            paper.line(
+                vec![[rx, top], [rx + rw, top]],
+                "REVISION",
+                &sheet.style.dimension,
+            );
+            paper.fitted_text(
+                [rx + 2., top + 4.],
+                format!(
+                    "{}   {}   {}   CHANGE ORDER: {}",
+                    revision.revision, revision.date, revision.description, revision.change_order
+                ),
+                small,
+                rw - 4.,
+            );
+            paper.fitted_text(
+                [rx + 2., top + 8.5],
+                format!(
+                    "DRAWN: {}   CHECKED: {}   APPROVED: {}",
+                    revision.author, revision.checked_by, revision.approved_by
+                ),
+                small,
+                rw - 4.,
+            );
+            paper.fitted_text(
+                [rx + 2., top + 13.],
+                format!("STATUS: {:?}", revision.status),
+                small,
+                rw - 4.,
+            );
+        }
+    }
+    Ok(())
 }
 
 fn sheet_size(s: &DrawingSheetDto) -> P {
@@ -697,93 +814,170 @@ fn dimension_text(
     if p.reference {
         text = format!("({text})");
     }
-    if p.basic {
-        text = format!("[{text}]");
-    }
     Ok(text)
 }
-fn arrows(p: &mut Paper, a: P, b: P, style: &DrawingSheetStyleDto) {
-    let l = (b[0] - a[0]).hypot(b[1] - a[1]);
-    if l < 1e-9 {
-        return;
-    }
-    let u = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
-    let size = style.arrow_size_mm.min(l / 3.);
-    for (tip, sign) in [(a, 1.), (b, -1.)] {
-        let base = [tip[0] + sign * u[0] * size, tip[1] + sign * u[1] * size];
+fn dimension_label(
+    p: &mut Paper,
+    point: P,
+    value: String,
+    presentation: &DrawingDimensionPresentationDto,
+    style: &DrawingSheetStyleDto,
+) {
+    let height = style.text_height_mm;
+    if presentation.basic {
+        let width = value.chars().count() as f64 * height * 0.65;
+        let [x, y] = point;
         p.line(
             vec![
-                [base[0] - u[1] * size * 0.3, base[1] + u[0] * size * 0.3],
-                tip,
-                [base[0] + u[1] * size * 0.3, base[1] - u[0] * size * 0.3],
+                [x - 1., y - height - 1.],
+                [x + width + 1., y - height - 1.],
+                [x + width + 1., y + 1.],
+                [x - 1., y + 1.],
+                [x - 1., y - height - 1.],
             ],
             "DIMENSION",
             &style.dimension,
         );
     }
+    p.text(point, value, height);
+}
+fn arrow(p: &mut Paper, tip: P, toward: P, style: &DrawingSheetStyleDto) {
+    let length = (toward[0] - tip[0]).hypot(toward[1] - tip[1]);
+    if length < 1e-9 {
+        return;
+    }
+    let u = [(toward[0] - tip[0]) / length, (toward[1] - tip[1]) / length];
+    let size = style.arrow_size_mm.min(length / 3.);
+    let base = [tip[0] + u[0] * size, tip[1] + u[1] * size];
+    p.line(
+        vec![
+            [base[0] - u[1] * size * 0.3, base[1] + u[0] * size * 0.3],
+            tip,
+            [base[0] + u[1] * size * 0.3, base[1] - u[0] * size * 0.3],
+        ],
+        "DIMENSION",
+        &style.dimension,
+    );
+}
+fn arrows(p: &mut Paper, a: P, b: P, style: &DrawingSheetStyleDto) {
+    arrow(p, a, b, style);
+    arrow(p, b, a, style);
 }
 fn draw_annotation(
-    p: &mut Paper,
-    s: &DrawingSheetDto,
+    paper: &mut Paper,
+    sheet: &DrawingSheetDto,
     projections: &BTreeMap<u64, DrawingProjectionDto>,
-    a: &DrawingAnnotationDto,
+    annotation: &DrawingAnnotationDto,
 ) -> Result<(), String> {
-    match a {
-        DrawingAnnotationDto::Note{text,position,..}=>p.text(*position,text,s.style.text_height_mm),
-        DrawingAnnotationDto::LinearDimension{view_id,first,second,mode,offset,prefix,suffix,precision,presentation,..}=> {
-
-            let (v,pr)=view_projection(*view_id,s,projections)?;
-let a=anchor_point(first,pr)?;
-let b=anchor_point(second,pr)?;
-            let value=match mode{DrawingLinearDimensionMode::Horizontal=>(b[0]-a[0]).abs(),DrawingLinearDimensionMode::Vertical=>(b[1]-a[1]).abs(),DrawingLinearDimensionMode::Aligned=>(b[0]-a[0]).hypot(b[1]-a[1])};
-            if value<1e-9{return Err("Dimension has zero projected length".into());}
-            let a=paper_point(v,a,pr);
-let b=paper_point(v,b,pr);
-let (c,d)=match mode{
-                DrawingLinearDimensionMode::Horizontal=>([a[0],a[1]+offset],[b[0],a[1]+offset]),DrawingLinearDimensionMode::Vertical=>([a[0]+offset,a[1]],[a[0]+offset,b[1]]),DrawingLinearDimensionMode::Aligned=> {
-let l=(b[0]-a[0]).hypot(b[1]-a[1]);
-let n=[-(b[1]-a[1])/l,(b[0]-a[0])/l];([a[0]+n[0]*offset,a[1]+n[1]*offset],[b[0]+n[0]*offset,b[1]+n[1]*offset])}};
-            p.line(vec![a,c],"EXTENSION",&s.style.extension);
-p.line(vec![b,d],"EXTENSION",&s.style.extension);
-p.line(vec![c,d],"DIMENSION",&s.style.dimension);arrows(p,c,d,&s.style);
-            p.text([(c[0]+d[0])*0.5+1.,(c[1]+d[1])*0.5-1.5],dimension_text(value,*precision,prefix,suffix,presentation)?,s.style.text_height_mm);
+    let style = &sheet.style;
+    match annotation {
+        DrawingAnnotationDto::Note { text, position, .. } => {
+            paper.text(*position, text, style.text_height_mm);
         }
-        DrawingAnnotationDto::RadialDimension{view_id,feature,mode,leader_angle_deg,offset,prefix,suffix,precision,presentation,..}=> {
-
-            let (v,pr)=view_projection(*view_id,s,projections)?;
-let c=pr.circles.iter().find(|c|c.occurrence_id==feature.occurrence_id&&c.body_id==feature.body_id&&c.edge_id==feature.edge_id&&c.edge_key==feature.edge_key).ok_or("Radial dimension reference is stale or not circular in this view")?;
-            let center=paper_point(v,c.center,pr);
-let r=c.radius*v.scale;
-let a=leader_angle_deg.to_radians();
-let u=[a.cos(),-a.sin()];
-let edge=[center[0]+r*u[0],center[1]+r*u[1]];
-let label=[center[0]+(r+offset)*u[0],center[1]+(r+offset)*u[1]];
-            p.line(vec![center,edge,label],"DIMENSION",&s.style.dimension);arrows(p,edge,label,&s.style);
-            let (value,symbol)=match mode{DrawingRadialDimensionMode::Radius=>(c.radius,"R"),DrawingRadialDimensionMode::Diameter=>(c.radius*2.,"Ø")};
-p.text([label[0]+1.,label[1]-1.],dimension_text(value,*precision,&format!("{prefix}{symbol}"),suffix,presentation)?,s.style.text_height_mm);
+        DrawingAnnotationDto::LinearDimension {
+            view_id, first, second, mode, offset, prefix, suffix, precision, presentation, ..
+        } => {
+            let (view, projection) = view_projection(*view_id, sheet, projections)?;
+            let first = anchor_point(first, projection)?;
+            let second = anchor_point(second, projection)?;
+            let value = match mode {
+                DrawingLinearDimensionMode::Horizontal => (second[0] - first[0]).abs(),
+                DrawingLinearDimensionMode::Vertical => (second[1] - first[1]).abs(),
+                DrawingLinearDimensionMode::Aligned => (second[0] - first[0]).hypot(second[1] - first[1]),
+            };
+            if value < 1e-9 {
+                return Err("Dimension has zero projected length".into());
+            }
+            let a = paper_point(view, first, projection);
+            let b = paper_point(view, second, projection);
+            let (c, d) = match mode {
+                DrawingLinearDimensionMode::Horizontal => ([a[0], a[1] + offset], [b[0], a[1] + offset]),
+                DrawingLinearDimensionMode::Vertical => ([a[0] + offset, a[1]], [a[0] + offset, b[1]]),
+                DrawingLinearDimensionMode::Aligned => {
+                    let length = (b[0] - a[0]).hypot(b[1] - a[1]);
+                    let normal = [-(b[1] - a[1]) / length, (b[0] - a[0]) / length];
+                    ([a[0] + normal[0] * offset, a[1] + normal[1] * offset],
+                     [b[0] + normal[0] * offset, b[1] + normal[1] * offset])
+                }
+            };
+            paper.line(vec![a, c], "EXTENSION", &style.extension);
+            paper.line(vec![b, d], "EXTENSION", &style.extension);
+            paper.line(vec![c, d], "DIMENSION", &style.dimension);
+            arrows(paper, c, d, style);
+            dimension_label(
+                paper, [(c[0] + d[0]) * 0.5 + 1., (c[1] + d[1]) * 0.5 - 1.5],
+                dimension_text(value, *precision, prefix, suffix, presentation)?, presentation, style,
+            );
         }
-        DrawingAnnotationDto::AngularDimension{view_id,vertex,first,second,radius,prefix,suffix,precision,presentation,..}=> {
-
-            let(v,pr)=view_projection(*view_id,s,projections)?;
-let o=paper_point(v,anchor_point(vertex,pr)?,pr);
-let a=paper_point(v,anchor_point(first,pr)?,pr);
-let b=paper_point(v,anchor_point(second,pr)?,pr);
-if (a[0]-o[0]).hypot(a[1]-o[1])<1e-9||(b[0]-o[0]).hypot(b[1]-o[1])<1e-9{return Err("Angular dimension has a collapsed arm".into());}
-            let start=(a[1]-o[1]).atan2(a[0]-o[0]);
-let end=(b[1]-o[1]).atan2(b[0]-o[0]);
-let mut sweep=(end-start).rem_euclid(std::f64::consts::TAU);
-if sweep>std::f64::consts::PI{sweep-=std::f64::consts::TAU;}
-            let points=(0..=48).map(|i|{let t=start+sweep*i as f64/48.;[o[0]+radius*t.cos(),o[1]+radius*t.sin()]}).collect::<Vec<_>>();
-p.line(vec![o,points[0]],"EXTENSION",&s.style.extension);
-p.line(vec![o,points[48]],"EXTENSION",&s.style.extension);
-let m=points[24];
-p.line(points,"DIMENSION",&s.style.dimension);
-p.text([m[0]+1.,m[1]-1.],dimension_text(sweep.abs().to_degrees(),*precision,prefix,&format!("°{suffix}"),presentation)?,s.style.text_height_mm);
+        DrawingAnnotationDto::RadialDimension {
+            view_id, feature, mode, leader_angle_deg, offset, prefix, suffix, precision, presentation, ..
+        } => {
+            let (view, projection) = view_projection(*view_id, sheet, projections)?;
+            let circle = projection.circles.iter().find(|circle| {
+                circle.occurrence_id == feature.occurrence_id
+                    && circle.body_id == feature.body_id
+                    && circle.edge_id == feature.edge_id
+                    && circle.edge_key == feature.edge_key
+            }).ok_or("Radial dimension reference is stale or not circular in this view")?;
+            let center = paper_point(view, circle.center, projection);
+            let radius = circle.radius * view.scale;
+            let angle = leader_angle_deg.to_radians();
+            let direction = [angle.cos(), -angle.sin()];
+            let edge = [center[0] + radius * direction[0], center[1] + radius * direction[1]];
+            let label = [center[0] + (radius + offset) * direction[0], center[1] + (radius + offset) * direction[1]];
+            paper.line(vec![edge, label], "DIMENSION", &style.dimension);
+            arrow(paper, edge, label, style);
+            let (value, symbol) = match mode {
+                DrawingRadialDimensionMode::Radius => (circle.radius, "R"),
+                DrawingRadialDimensionMode::Diameter => (circle.radius * 2., "Ø"),
+            };
+            dimension_label(
+                paper, [label[0] + 1., label[1] - 1.],
+                dimension_text(value, *precision, &format!("{prefix}{symbol}"), suffix, presentation)?,
+                presentation, style,
+            );
         }
-        _=>return Err(format!("Native sheet export does not yet support annotation {}; use the interactive drawing export for this sheet",a.id())),
+        DrawingAnnotationDto::AngularDimension {
+            view_id, vertex, first, second, radius, prefix, suffix, precision, presentation, ..
+        } => {
+            let (view, projection) = view_projection(*view_id, sheet, projections)?;
+            let origin = paper_point(view, anchor_point(vertex, projection)?, projection);
+            let first = paper_point(view, anchor_point(first, projection)?, projection);
+            let second = paper_point(view, anchor_point(second, projection)?, projection);
+            if (first[0] - origin[0]).hypot(first[1] - origin[1]) < 1e-9
+                || (second[0] - origin[0]).hypot(second[1] - origin[1]) < 1e-9 {
+                return Err("Angular dimension has a collapsed arm".into());
+            }
+            let start = (first[1] - origin[1]).atan2(first[0] - origin[0]);
+            let end = (second[1] - origin[1]).atan2(second[0] - origin[0]);
+            let mut sweep = (end - start).rem_euclid(std::f64::consts::TAU);
+            if sweep > std::f64::consts::PI {
+                sweep -= std::f64::consts::TAU;
+            }
+            let points = (0..=48).map(|index| {
+                let angle = start + sweep * index as f64 / 48.;
+                [origin[0] + radius * angle.cos(), origin[1] + radius * angle.sin()]
+            }).collect::<Vec<_>>();
+            paper.line(vec![origin, points[0]], "EXTENSION", &style.extension);
+            paper.line(vec![origin, points[48]], "EXTENSION", &style.extension);
+            let middle = points[24];
+            arrow(paper, points[0], points[8], style);
+            arrow(paper, points[48], points[40], style);
+            paper.line(points, "DIMENSION", &style.dimension);
+            dimension_label(
+                paper, [middle[0] + 1., middle[1] - 1.],
+                dimension_text(sweep.abs().to_degrees(), *precision, prefix, &format!("°{suffix}"), presentation)?,
+                presentation, style,
+            );
+        }
+        _ => return Err(format!(
+            "Native sheet export does not yet support annotation {}; use the interactive drawing export for this sheet",
+            annotation.id(),
+        )),
     }
     Ok(())
 }
+
 fn xml(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -976,6 +1170,86 @@ mod tests {
         assert!(dxf.contains("$INSUNITS\n70\n4"));
         assert!(dxf.contains("\\U+00D8"));
         assert!(dxf.ends_with("0\nEOF\n"));
+    }
+    #[test]
+    fn export_preserves_drawing_responsibility_and_frames_basic_dimensions() {
+        let (mut document, scene, projection) = fixture(20.);
+        let sheet = &mut document.sheets[0];
+        sheet.title_block = DrawingTitleBlockDto {
+            author: "Designer".into(),
+            checked_by: "Checker".into(),
+            approved_by: "Approver".into(),
+            company: "Workshop & school".into(),
+            ..Default::default()
+        };
+        sheet.revision_table_position = Some([15., 95.]);
+        sheet.revisions.push(serde_json::from_value(json!({
+            "id":1,"revision":"A","description":"Increase bearing clearance","date":"2026-09-10",
+            "author":"Revision author","checked_by":"Revision checker","approved_by":"Revision approver",
+            "change_order":"CO-7","status":"draft"
+        })).unwrap());
+        document.next_revision_id = 2;
+        if let DrawingAnnotationDto::LinearDimension { presentation, .. } =
+            &mut sheet.annotations[0]
+        {
+            presentation.basic = true;
+        }
+        let content = export_sheet(
+            &document,
+            &scene,
+            &AssemblyDocumentDto::default(),
+            &DrawingExportRequest {
+                sheet_id: 1,
+                format: DrawingExportFormat::Svg,
+            },
+            |_| Ok(projection.clone()),
+        )
+        .unwrap();
+        for text in [
+            "Designer",
+            "Checker",
+            "Approver",
+            "Workshop &amp; school",
+            "Increase bearing clearance",
+            "Revision author",
+            "Revision checker",
+            "Revision approver",
+            "CO-7",
+        ] {
+            assert!(content.contains(text), "Missing drawing field: {text}");
+        }
+        assert!(content.contains(">20.00</text>"));
+        assert!(!content.contains("[20.00]"));
+        let mut paper = Paper {
+            size: [297., 210.],
+            items: Vec::new(),
+        };
+        dimension_label(
+            &mut paper,
+            [100., 70.],
+            "20.00".into(),
+            &DrawingDimensionPresentationDto {
+                basic: true,
+                ..Default::default()
+            },
+            &document.sheets[0].style,
+        );
+        assert!(
+            matches!(&paper.items[0], Primitive::Line { points, .. } if points.len() == 5 && points.first() == points.last())
+        );
+        document.sheets[0].revision_table_position = Some([15., 205.]);
+        assert!(export_sheet(
+            &document,
+            &scene,
+            &AssemblyDocumentDto::default(),
+            &DrawingExportRequest {
+                sheet_id: 1,
+                format: DrawingExportFormat::Svg
+            },
+            |_| Ok(projection.clone())
+        )
+        .unwrap_err()
+        .contains("does not fit"));
     }
     #[test]
     fn stale_dimensions_fail_instead_of_exporting_fallback_values() {

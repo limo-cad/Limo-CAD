@@ -492,7 +492,8 @@ fn validate_view_selection(
         }
         return Ok(());
     }
-    if !assembly.solve(scene).solved {
+    let solution = assembly.solve(scene);
+    if !solution.solved {
         return Err(SessionError::Solid(
             "Resolve assembly diagnostics before adding an assembly drawing.".into(),
         ));
@@ -506,6 +507,22 @@ fn validate_view_selection(
     }) {
         return Err(SessionError::Solid(
             "Drawing view selects a missing occurrence.".into(),
+        ));
+    }
+    if !solution.instance_body_poses.iter().any(|pose| {
+        pose.visible
+            && (view.body_ids.is_empty() || view.body_ids.contains(&pose.body_id))
+            && validate_instance(
+                assembly,
+                scene,
+                view,
+                Some(pose.occurrence_id),
+                pose.body_id,
+            )
+            .is_ok()
+    }) {
+        return Err(SessionError::Solid(
+            "Assembly drawing view must select at least one visible body occurrence.".into(),
         ));
     }
     Ok(())
