@@ -1,20 +1,17 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from './store/appStore';
-import { getSessionCamera } from './components/viewport/cameraApi';
+import { getSessionCamera, subscribeSessionCamera } from './components/viewport/cameraApi';
 import { inspectUi, operateUi, visible, type UiAction } from './uiControl';
 import { presentOperation, presentation, setPlaybackPace, waitForPlayback, type PresentationRequest } from './operationPlayback';
 import { operateUiFile, type UiFileRequest } from './uiFiles';
 import {drivePointer, type UiGesture} from './uiPointer';
 import {pendingEngineOperations} from './engine/activity';
 import { applicationExitBarrier } from './files/applicationExit';
+import { leaveDrawingWorkspace } from './drawing/document';
+import { applyView, type ViewRequest as CameraViewRequest } from './viewControl';
 
-export const viewDirections: Record<string, [number, number, number]> = {
-  front: [0, -1, 0], back: [0, 1, 0], left: [-1, 0, 0], right: [1, 0, 0],
-  top: [0, 0, 1], bottom: [0, 0, -1],
-};
 let applying = false;
-interface ViewRequest { id: string; session_id: string; view: string; fit: boolean; expires_ms: number;
-  target?: 'active_sketch'; body_id?: number; component_id?: number; duration_ms?: number;
+interface ViewRequest extends CameraViewRequest { id: string; session_id: string;
   ui?: Omit<UiAction, 'action'> & Omit<UiFileRequest, 'command'> & Omit<PresentationRequest, 'mode' | 'command'> & {
     action: UiAction['action'] | 'window' | 'file' | 'viewport' | 'presentation'; command?: string;
     pace_ms?: number; mode?: string; canvas?: 'viewport' | 'drawing'; gesture?: UiGesture;
@@ -86,31 +83,17 @@ export async function applyLiveUiControl(publishChangedState: () => Promise<void
         await invoke('mcp_session_bridge_control', { response });
         return;
       }
-      if (document !== useAppStore.getState().document || request.expires_ms < Date.now()) {
-        throw new Error('Document changed or view request expired');
-      }
-      const api = getSessionCamera();
-      if (!api) throw new Error('Viewport camera is not ready');
-      const waitForCamera = async () => {
-        while (api.isAnimating()) {
-          if (Date.now() >= request.expires_ms) throw new Error('Camera animation did not complete before the request expired');
-          if (document !== useAppStore.getState().document || getSessionCamera() !== api) throw new Error('Document or viewport changed');
-          await waitForPlayback(25);
-        }
-      };
-      const duration = request.duration_ms ?? 300;
-      const focused = request.target !== undefined || request.body_id !== undefined || request.component_id !== undefined;
-      const direction = request.view === 'isometric' ? 'isometric' : viewDirections[request.view];
-      if (request.view !== 'current' && !direction) throw new Error('Unknown view');
-      // A framed orientation is one deliberate camera move, not a zoom out
-      // to the entire assembly followed immediately by a zoom into its part.
-      if (focused || request.fit) api.focus(request, duration, direction);
-      else if (request.view === 'isometric') api.home(duration);
-      else if (direction && direction !== 'isometric') api.snapToDirection(direction, duration);
-      await waitForCamera();
-      if (document !== useAppStore.getState().document) throw new Error('Document changed');
+      response.camera = await applyView(request, before, {
+        state: useAppStore.getState,
+        camera: getSessionCamera,
+        leaveDrawingWorkspace,
+        subscribe(changed) {
+          const unsubscribeState = useAppStore.subscribe(changed);
+          const unsubscribeCamera = subscribeSessionCamera(changed);
+          return () => { unsubscribeState(); unsubscribeCamera(); };
+        },
+      });
       response.status = 'applied';
-      response.camera = api.getSnapshot();
     } catch (error) {
       response.status = 'failed';
       response.error = String(error);

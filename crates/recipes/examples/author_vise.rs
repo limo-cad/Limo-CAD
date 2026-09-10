@@ -893,9 +893,9 @@ fn main() {
         );
     }
     a.call("restore_home_drive","assembly/joints","assembly_set_joint_motion",json!({"joint_id":reference("screw_drive","/id"),"angle_offset_deg":0,"linear_offset_mm":0}));
+    let drawing_exports = vise_drawings::add(&mut a);
     a.steps
         .push(json!({"view":"isometric","fit":true,"duration_ms":650}));
-    let drawing_exports = vise_drawings::add(&mut a);
 
     let mut checks = Vec::new();
     for (id, group, operation) in [

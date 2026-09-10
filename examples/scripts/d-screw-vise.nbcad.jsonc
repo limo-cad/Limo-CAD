@@ -10686,11 +10686,6 @@
       "id": "restore_home_drive"
     },
     {
-      "duration_ms": 650,
-      "fit": true,
-      "view": "isometric"
-    },
-    {
       "chapter": "Drawings: fits, load path and assembly",
       "duration_ms": 1800,
       "note": "Create persistent assembly and part sheets from native topology. Dimensions stay associated with the model; sections reveal the nut, rotating thrust chamber and keeper. Export both SVG and DXF for review."
@@ -21666,6 +21661,11 @@
         "operation": "drawing_export"
       },
       "id": "vise_keeper_dxf"
+    },
+    {
+      "duration_ms": 650,
+      "fit": true,
+      "view": "isometric"
     }
   ],
   "version": 1

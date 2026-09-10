@@ -64,9 +64,24 @@ export interface ViewportCameraApi {
 }
 
 let sessionCamera: ViewportCameraApi | null = null;
-export function registerSessionCamera(api: ViewportCameraApi): void { sessionCamera = api; }
+const sessionCameraListeners = new Set<() => void>();
+/** Notify mount, unmount and actual animation completion; no polling delay. */
+export function notifySessionCameraChanged(): void {
+  for (const changed of [...sessionCameraListeners]) changed();
+}
+export function subscribeSessionCamera(changed: () => void): () => void {
+  sessionCameraListeners.add(changed);
+  return () => { sessionCameraListeners.delete(changed); };
+}
+export function registerSessionCamera(api: ViewportCameraApi): void {
+  sessionCamera = api;
+  notifySessionCameraChanged();
+}
 export function unregisterSessionCamera(api: ViewportCameraApi): void {
-  if (sessionCamera === api) sessionCamera = null;
+  if (sessionCamera === api) {
+    sessionCamera = null;
+    notifySessionCameraChanged();
+  }
 }
 export function getSessionCamera(): ViewportCameraApi | null { return sessionCamera; }
 

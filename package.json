@@ -29,7 +29,7 @@
     "test:frontend": "npm run test:constraint-glyphs && npm run test:revolve-axis && npm run test:modeling-picker && npm run test:screen-picker && npm run test:viewport-theme && npm run test:project-archive && npm run test:profile-picker && npm run test:presentation && npm run test:drawing-instances && npm run test:export-flow",
     "test:drawing-instances": "tsx src/drawing/instances.test.ts",
     "test:export-flow": "tsx src/files/exportFlow.test.ts && tsx src/engine/projectLoad.test.ts",
-    "test:presentation": "tsx src/operationPlayback.test.ts && tsx src/scripts/previewGeometry.test.ts",
+    "test:presentation": "tsx src/operationPlayback.test.ts && tsx src/scripts/previewGeometry.test.ts && tsx src/viewControl.test.ts",
     "test:constraint-glyphs": "tsx src/sketch/constraintGlyphAnchor.test.ts",
     "test:revolve-axis": "tsx src/lib/revolveAxis.test.ts",
     "test:modeling-picker": "tsx src/modeling/viewportPicker.test.ts",
