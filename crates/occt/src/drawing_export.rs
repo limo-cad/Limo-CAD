@@ -34,6 +34,11 @@ enum Primitive {
         point: P,
         value: String,
         height: f64,
+        centered: bool,
+    },
+    Triangle {
+        points: [P; 3],
+        layer: &'static str,
     },
 }
 struct Paper {
@@ -55,8 +60,17 @@ impl Paper {
                 point: [point[0], point[1] + i as f64 * height * 1.4],
                 value: line.into(),
                 height,
+                centered: false,
             });
         }
+    }
+    fn source_label(&mut self, point: P, value: &str, height: f64) {
+        self.items.push(Primitive::Text {
+            point,
+            value: value.into(),
+            height,
+            centered: true,
+        });
     }
     fn fitted_text(&mut self, point: P, value: impl Into<String>, height: f64, width: f64) {
         let value = value.into();
@@ -214,6 +228,7 @@ pub fn export_sheet(
         );
         projections.insert(view.id, projection);
     }
+    draw_derived_sources(&mut paper, sheet, &projections, scene, assembly)?;
     for annotation in &sheet.annotations {
         draw_annotation(&mut paper, sheet, &projections, annotation)?;
     }
@@ -243,6 +258,236 @@ pub fn export_sheet(
     match request.format {
         DrawingExportFormat::Svg => Ok(svg(&paper, &sheet.style.font_family)),
         DrawingExportFormat::Dxf => Ok(dxf(&paper)),
+    }
+}
+
+/// Parent markers share the editor's paper geometry. Resolve model topology
+/// first: an edge-on circle still has an exact center even when it cannot be
+/// represented as a circular curve in the parent projection.
+fn draw_derived_sources(
+    paper: &mut Paper,
+    sheet: &DrawingSheetDto,
+    projections: &BTreeMap<u64, DrawingProjectionDto>,
+    scene: &SolidSceneDto,
+    assembly: &AssemblyDocumentDto,
+) -> Result<(), String> {
+    for child in &sheet.views {
+        let Some(derivation) = &child.derivation else {
+            continue;
+        };
+        let parent_id = match derivation {
+            DrawingViewDerivationDto::Section { parent_view_id, .. }
+            | DrawingViewDerivationDto::RemovedSection { parent_view_id, .. }
+            | DrawingViewDerivationDto::Detail { parent_view_id, .. }
+            | DrawingViewDerivationDto::Auxiliary { parent_view_id, .. }
+            | DrawingViewDerivationDto::Broken { parent_view_id, .. } => *parent_view_id,
+        };
+        let (parent, projection) = view_projection(parent_id, sheet, projections)?;
+        let request = projection_request(parent, &sheet.views, scene, assembly)?;
+        let direction = norm(request.direction)?;
+        let right = norm(cross(request.up, direction))?;
+        let up = norm(cross(direction, right))?;
+        let source = |reference: &DrawingTopologyAnchorRefDto| -> Result<P, String> {
+            if !projection.anchors.iter().any(|anchor| {
+                anchor.occurrence_id == reference.occurrence_id
+                    && anchor.body_id == reference.body_id
+                    && anchor.edge_id == reference.edge_id
+                    && anchor.edge_key == reference.edge_key
+            }) {
+                return Err(
+                    "Derived source reference is missing from its parent projection".into(),
+                );
+            }
+            let point = model_anchor(reference, scene, assembly)?;
+            Ok(paper_point(
+                parent,
+                [dot(point, right), dot(point, up)],
+                projection,
+            ))
+        };
+        match derivation {
+            DrawingViewDerivationDto::Section {
+                first,
+                second,
+                label,
+                ..
+            }
+            | DrawingViewDerivationDto::RemovedSection {
+                first,
+                second,
+                label,
+                ..
+            } => {
+                let [a, b] =
+                    section_source_extent(source(first)?, source(second)?, parent, projection)?;
+                let u = source_direction(a, b)?;
+                let normal = [-u[1], u[0]];
+                paper.line(vec![a, b], "CUTTING_PLANE", &sheet.style.cutting_plane);
+                for point in [a, b] {
+                    source_arrow(
+                        paper,
+                        point,
+                        [point[0] + normal[0] * 5., point[1] + normal[1] * 5.],
+                        2.4,
+                        "CUTTING_PLANE",
+                    );
+                }
+                let short_label = label.split_whitespace().last().unwrap_or(label);
+                for (point, sign) in [(a, -1.), (b, 1.)] {
+                    paper.source_label(
+                        [point[0] + u[0] * sign * 4., point[1] + u[1] * sign * 4.],
+                        short_label,
+                        sheet.style.text_height_mm,
+                    );
+                }
+            }
+            DrawingViewDerivationDto::Detail {
+                center,
+                radius,
+                label,
+                ..
+            } => {
+                let center = source(center)?;
+                let radius = radius * parent.scale;
+                paper.line(
+                    circle_polyline(center, radius),
+                    "PHANTOM",
+                    &sheet.style.phantom,
+                );
+                paper.text(
+                    [center[0] + radius + 3., center[1] - radius - 1.],
+                    label,
+                    sheet.style.text_height_mm,
+                );
+            }
+            DrawingViewDerivationDto::Auxiliary {
+                reference,
+                flipped,
+                label,
+                ..
+            } => {
+                let anchor = |endpoint| DrawingTopologyAnchorRefDto {
+                    topology_signature: reference.topology_signature.clone(),
+                    occurrence_id: reference.occurrence_id,
+                    body_id: reference.body_id,
+                    edge_id: reference.edge_id,
+                    edge_key: reference.edge_key.clone(),
+                    endpoint,
+                    fallback_point: [0.; 3],
+                    circle_center: false,
+                };
+                let a = source(&anchor(DrawingEdgeEndpoint::Start))?;
+                let b = source(&anchor(DrawingEdgeEndpoint::End))?;
+                let u = source_direction(a, b)?;
+                let normal = [-u[1], u[0]];
+                let center = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+                let sign = if *flipped { -1. } else { 1. };
+                let tip = [
+                    center[0] + normal[0] * sign * 8.,
+                    center[1] + normal[1] * sign * 8.,
+                ];
+                paper.line(vec![a, b], "PHANTOM", &sheet.style.phantom);
+                paper.line(
+                    vec![center, tip],
+                    "AUXILIARY",
+                    &DrawingLineStyleDto {
+                        width_mm: 0.48,
+                        dash_mm: vec![],
+                    },
+                );
+                source_arrow(paper, tip, center, 2.2, "AUXILIARY");
+                paper.source_label(
+                    [tip[0] + normal[0] * 3., tip[1] + normal[1] * 3.],
+                    label,
+                    sheet.style.text_height_mm,
+                );
+            }
+            DrawingViewDerivationDto::Broken { axis, .. } => {
+                let k = if *axis == DrawingBreakAxis::Horizontal {
+                    0
+                } else {
+                    1
+                };
+                let extent =
+                    (projection.bounds[3 - k] - projection.bounds[1 - k]) * parent.scale * 0.5;
+                let along = parent.position[k];
+                let across = parent.position[1 - k];
+                let points = vec![
+                    [along, across - extent],
+                    [along, across - 4.],
+                    [along - 2., across - 2.],
+                    [along + 2., across],
+                    [along - 2., across + 2.],
+                    [along, across + 4.],
+                    [along, across + extent],
+                ];
+                paper.line(
+                    points
+                        .into_iter()
+                        .map(|p| if k == 0 { p } else { [p[1], p[0]] })
+                        .collect(),
+                    "BREAK",
+                    &sheet.style.break_line,
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn source_direction(a: P, b: P) -> Result<P, String> {
+    let length = (b[0] - a[0]).hypot(b[1] - a[1]);
+    if length < 1e-7 {
+        return Err("Derived source direction is degenerate in its parent view".into());
+    }
+    Ok([(b[0] - a[0]) / length, (b[1] - a[1]) / length])
+}
+
+// The reference pair defines the plane, not the paper line's length. Carry the
+// indicator across the entire parent view, with arrows outside its silhouette.
+fn section_source_extent(
+    a: P,
+    b: P,
+    view: &DrawingViewDto,
+    projection: &DrawingProjectionDto,
+) -> Result<[P; 2], String> {
+    let u = source_direction(a, b)?;
+    let mut low = f64::NEG_INFINITY;
+    let mut high = f64::INFINITY;
+    for axis in 0..2 {
+        let extent =
+            (projection.bounds[axis + 2] - projection.bounds[axis]) * view.scale * 0.5 + 4.;
+        let min = view.position[axis] - extent;
+        let max = view.position[axis] + extent;
+        if u[axis].abs() < 1e-10 {
+            if a[axis] < min || a[axis] > max {
+                return Err("Section cutting plane misses its parent view".into());
+            }
+        } else {
+            let first = (min - a[axis]) / u[axis];
+            let second = (max - a[axis]) / u[axis];
+            low = low.max(first.min(second));
+            high = high.min(first.max(second));
+        }
+    }
+    if low >= high {
+        return Err("Section cutting plane misses its parent view".into());
+    }
+    Ok([low, high].map(|t| [a[0] + u[0] * t, a[1] + u[1] * t]))
+}
+
+fn source_arrow(paper: &mut Paper, tip: P, toward: P, size: f64, layer: &'static str) {
+    if let Ok(u) = source_direction(tip, toward) {
+        let base = [tip[0] + u[0] * size, tip[1] + u[1] * size];
+        let width = size * 0.38;
+        paper.items.push(Primitive::Triangle {
+            points: [
+                tip,
+                [base[0] - u[1] * width, base[1] + u[0] * width],
+                [base[0] + u[1] * width, base[1] - u[0] * width],
+            ],
+            layer,
+        });
     }
 }
 
@@ -1014,8 +1259,26 @@ fn svg(p: &Paper, font: &str) -> String {
                 point,
                 value,
                 height,
+                centered,
             } => {
-                writeln!(s,"<text x=\"{:.5}\" y=\"{:.5}\" font-family=\"{}\" font-size=\"{height}\" fill=\"#111\">{}</text>",point[0],point[1],xml(font),xml(value)).unwrap();
+                let anchor = if *centered {
+                    " text-anchor=\"middle\""
+                } else {
+                    ""
+                };
+                writeln!(s,"<text x=\"{:.5}\" y=\"{:.5}\" font-family=\"{}\" font-size=\"{height}\" fill=\"#111\"{anchor}>{}</text>",point[0],point[1],xml(font),xml(value)).unwrap();
+            }
+            Primitive::Triangle { points, layer } => {
+                let points = points
+                    .iter()
+                    .map(|p| format!("{:.5},{:.5}", p[0], p[1]))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                writeln!(
+                    s,
+                    "<polygon data-layer=\"{layer}\" points=\"{points}\" fill=\"#111\"/>"
+                )
+                .unwrap();
             }
         }
     }
@@ -1079,6 +1342,7 @@ fn dxf(p: &Paper) -> String {
                 point,
                 value,
                 height,
+                centered,
             } => {
                 writeln!(
                     s,
@@ -1088,6 +1352,32 @@ fn dxf(p: &Paper) -> String {
                     dxf_text(value)
                 )
                 .unwrap();
+                if *centered {
+                    writeln!(
+                        s,
+                        "72\n1\n11\n{:.5}\n21\n{:.5}",
+                        point[0],
+                        p.size[1] - point[1]
+                    )
+                    .unwrap();
+                }
+            }
+            Primitive::Triangle { points, layer } => {
+                writeln!(s, "0\nSOLID\n8\n{layer}").unwrap();
+                for (index, point) in [points[0], points[1], points[2], points[2]]
+                    .iter()
+                    .enumerate()
+                {
+                    writeln!(
+                        s,
+                        "{}\n{:.5}\n{}\n{:.5}",
+                        10 + index,
+                        point[0],
+                        20 + index,
+                        p.size[1] - point[1]
+                    )
+                    .unwrap();
+                }
             }
         }
     }
@@ -1314,6 +1604,108 @@ mod tests {
             0.,
             1.,
             &doc.sheets[0].style.hatch
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn derived_source_markers_follow_parent_topology_in_svg_and_dxf() {
+        let (mut doc, scene, projection) = fixture(20.);
+        let anchor = |endpoint| json!({"body_id":1,"edge_id":1,"edge_key":"bottom","endpoint":endpoint,"fallback_point":[999.,999.,999.]});
+        let child: DrawingViewDto = serde_json::from_value(json!({
+            "id":2,"name":"Section cut","kind":"section","direction":[0.,-1.,0.],"up":[0.,0.,1.],
+            "position":[200.,140.],"scale":0.5,
+            "derivation":{"type":"section","parent_view_id":1,"first":anchor("start"),"second":anchor("end"),"label":"Section A-A","hatch_angle_deg":45.,"hatch_spacing_mm":2.}
+        })).unwrap();
+        // Drawing storage order must not alter source lookup or use child scale.
+        doc.sheets[0].views.insert(0, child);
+        doc.next_view_id = 3;
+        let export = |format, document: &DrawingDocumentDto, projected: &DrawingProjectionDto| {
+            export_sheet(
+                document,
+                &scene,
+                &AssemblyDocumentDto::default(),
+                &DrawingExportRequest {
+                    sheet_id: 1,
+                    format,
+                },
+                |_| Ok(projected.clone()),
+            )
+        };
+        let svg = export(DrawingExportFormat::Svg, &doc, &projection).unwrap();
+        assert!(svg.contains(
+            "data-layer=\"CUTTING_PLANE\" points=\"76.00000,70.00000 124.00000,70.00000\""
+        ));
+        assert!(svg.contains("<polygon data-layer=\"CUTTING_PLANE\" points=\"76.00000,70.00000 75.08800,72.40000 76.91200,72.40000\""));
+        assert_eq!(svg.matches("text-anchor=\"middle\">A-A</text>").count(), 2);
+        assert!(!svg.contains("999.00000"));
+        let dxf = export(DrawingExportFormat::Dxf, &doc, &projection).unwrap();
+        assert_eq!(dxf.matches("0\nSOLID\n8\nCUTTING_PLANE\n").count(), 2);
+        assert!(dxf.contains(
+            "10\n76.00000\n20\n140.00000\n11\n75.08800\n21\n137.60000\n12\n76.91200\n22\n137.60000"
+        ));
+        assert_eq!(dxf.matches("1\nA-A\n72\n1").count(), 2);
+        doc.sheets[0].views[1].position = [110., 90.];
+        doc.sheets[0].views[1].scale = 3.;
+        let moved = export(DrawingExportFormat::Svg, &doc, &projection).unwrap();
+        assert!(moved.contains(
+            "data-layer=\"CUTTING_PLANE\" points=\"76.00000,90.00000 144.00000,90.00000\""
+        ));
+        let mut excluded = projection.clone();
+        excluded.anchors.clear();
+        assert!(export(DrawingExportFormat::Svg, &doc, &excluded)
+            .unwrap_err()
+            .contains("parent projection"));
+    }
+
+    #[test]
+    fn detail_auxiliary_and_broken_sources_use_the_parent_view() {
+        let (mut doc, scene, projection) = fixture(20.);
+        let anchor = json!({"body_id":1,"edge_id":1,"edge_key":"bottom","endpoint":"start","fallback_point":[999.,999.,999.]});
+        let definitions = [
+            json!({"type":"detail","parent_view_id":1,"center":anchor,"radius":3.,"label":"D & fit"}),
+            json!({"type":"auxiliary","parent_view_id":1,"reference":{"body_id":1,"edge_id":1,"edge_key":"bottom","fallback_start":[999.,999.,999.],"fallback_end":[999.,999.,999.]},"flipped":true,"label":"AUX"}),
+            json!({"type":"broken","parent_view_id":1,"axis":"horizontal","first":0.25,"second":0.75,"gap_mm":5.}),
+        ];
+        for (i, definition) in definitions.into_iter().enumerate() {
+            let mut child = doc.sheets[0].views[0].clone();
+            child.id = i as u64 + 2;
+            child.position = [210., 160.];
+            child.scale = 0.5;
+            child.derivation = Some(serde_json::from_value(definition).unwrap());
+            doc.sheets[0].views.push(child);
+        }
+        let mut paper = Paper {
+            size: [297., 210.],
+            items: vec![],
+        };
+        draw_derived_sources(
+            &mut paper,
+            &doc.sheets[0],
+            &BTreeMap::from([(1, projection.clone())]),
+            &scene,
+            &AssemblyDocumentDto::default(),
+        )
+        .unwrap();
+        let svg = svg(&paper, "Arial");
+        assert!(svg.contains("points=\"86.00000,70.00000")); // radius uses parent's 2:1 scale.
+        assert!(svg.contains("D &amp; fit"));
+        assert!(svg
+            .contains("data-layer=\"AUXILIARY\" points=\"100.00000,70.00000 100.00000,62.00000\""));
+        assert!(svg.contains("data-layer=\"BREAK\" points=\"100.00000,70.00000"));
+        let ends = section_source_extent(
+            [100., 70.],
+            [110., 80.],
+            &doc.sheets[0].views[0],
+            &projection,
+        )
+        .unwrap();
+        assert_eq!(ends, [[96., 66.], [104., 74.]]); // oblique line clips to both axes.
+        assert!(section_source_extent(
+            [100., 90.],
+            [110., 90.],
+            &doc.sheets[0].views[0],
+            &projection
         )
         .is_err());
     }

@@ -122,7 +122,7 @@ import {
   type DrawingChamferCandidate,
 } from '../../drawing/chamfer';
 import { exportManufacturingProfileDxf, printActiveDrawing } from '../../drawing/export';
-import { drawingProjectionRequestForView } from '../../drawing/projection';
+import { drawingProjectionRequestForView, drawingSourceAnchorPoint, drawingSectionSourceExtent } from '../../drawing/projection';
 import {
   defaultDrawingFormat,
   defaultDrawingSheetStyle,
@@ -1870,16 +1870,25 @@ function DerivedViewSourceGraphic({ child, parentView, projection }: {
   parentView: DrawingViewDto;
   projection: DrawingProjectionDto;
 }) {
+  const scene = useAppStore((state) => state.solidScene);
+  const solution = useAppStore((state) => state.assemblySolution);
+  const drawings = useAppStore((state) => state.drawingDocument);
   const cuttingLine = useDrawingLine('cutting_plane');
   const phantomLine = useDrawingLine('phantom');
   const breakLine = useDrawingLine('break_line');
   const derivation = child.derivation;
   if (!derivation) return null;
   const color = '#5d50c8';
+  const views = drawings.sheets.flatMap((sheet) => sheet.views);
+  const source = (reference: DrawingTopologyAnchorRefDto) => drawingSourceAnchorPoint(reference, parentView, views, scene, projection, solution);
   if (derivation.type === 'section' || derivation.type === 'removed_section') {
-    const first = resolveDrawingAnchor(derivation.first, parentView, projection);
-    const second = resolveDrawingAnchor(derivation.second, parentView, projection);
-    if (!first || !second) return null;
+    const firstPoint = source(derivation.first);
+    const secondPoint = source(derivation.second);
+    if (!firstPoint || !secondPoint) return null;
+    const ends = drawingSectionSourceExtent(firstPoint, secondPoint, parentView, projection);
+    if (!ends) return null;
+    const first = { paper: ends[0] };
+    const second = { paper: ends[1] };
     const direction = normalize2([second.paper[0] - first.paper[0], second.paper[1] - first.paper[1]]);
     const normal: [number, number] = [-direction[1], direction[0]];
     const arrowEnd: [number, number] = [first.paper[0] + normal[0] * 5, first.paper[1] + normal[1] * 5];
@@ -1893,7 +1902,7 @@ function DerivedViewSourceGraphic({ child, parentView, projection }: {
     </g>;
   }
   if (derivation.type === 'detail') {
-    const center = resolveDrawingAnchor(derivation.center, parentView, projection)?.paper;
+    const center = source(derivation.center);
     if (!center) return null;
     const radius = derivation.radius * parentView.scale;
     return <g data-testid="drawing-detail-boundary" className="pointer-events-none" fill="none" stroke={color}>

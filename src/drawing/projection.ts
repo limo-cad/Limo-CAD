@@ -16,6 +16,54 @@ import type {
 
 type DrawingInstanceBody = BodyDto & { drawingOccurrenceId?: number };
 
+/** Exact source datum in parent paper space, including edge-on arc centers. */
+export function drawingSourceAnchorPoint(
+  reference: DrawingTopologyAnchorRefDto,
+  parent: DrawingViewDto,
+  views: DrawingViewDto[],
+  scene: SolidSceneDto,
+  projection: DrawingProjectionDto,
+  solution?: AssemblySolutionDto,
+): [number, number] | null {
+  if (!projection.anchors.some((anchor) => (anchor.occurrence_id ?? null) === (reference.occurrence_id ?? null)
+    && anchor.body_id === reference.body_id && anchor.edge_id === reference.edge_id && anchor.edge_key === reference.edge_key)) return null;
+  if (parent.scope === 'assembly' && solution?.solved) scene = drawingInstanceScene(scene, solution, undefined, [], false);
+  try {
+    const basis = currentDrawingViewBasis(parent, views, scene, new Set());
+    const point = resolveModelAnchorPoint(reference, scene);
+    if (!point) return null;
+    const direction = normalizeOrNull(basis.direction);
+    const right = direction && normalizeOrNull(cross(basis.up, direction));
+    const up = direction && right && normalizeOrNull(cross(direction, right));
+    if (!right || !up) return null;
+    return [parent.position[0] + (dot(point, right) - (projection.bounds[0] + projection.bounds[2]) * 0.5) * parent.scale,
+      parent.position[1] - (dot(point, up) - (projection.bounds[1] + projection.bounds[3]) * 0.5) * parent.scale];
+  } catch { return null; }
+}
+
+/** Extend a cutting plane across the parent silhouette, matching native export. */
+export function drawingSectionSourceExtent(a: [number, number], b: [number, number], view: DrawingViewDto, projection: DrawingProjectionDto): [[number, number], [number, number]] | null {
+  const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (length < 1e-7) return null;
+  const u = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
+  let low = -Infinity;
+  let high = Infinity;
+  for (let axis = 0; axis < 2; axis++) {
+    const extent = (projection.bounds[axis + 2] - projection.bounds[axis]) * view.scale * 0.5 + 4;
+    const min = view.position[axis] - extent;
+    const max = view.position[axis] + extent;
+    if (Math.abs(u[axis]) < 1e-10) {
+      if (a[axis] < min || a[axis] > max) return null;
+    } else {
+      const first = (min - a[axis]) / u[axis];
+      const second = (max - a[axis]) / u[axis];
+      low = Math.max(low, Math.min(first, second));
+      high = Math.min(high, Math.max(first, second));
+    }
+  }
+  return low < high ? [[a[0] + u[0] * low, a[1] + u[1] * low], [a[0] + u[0] * high, a[1] + u[1] * high]] : null;
+}
+
 /** Presentation-only transform of Rust-solved poses. Retained scene data is unchanged. */
 export function drawingInstanceScene(
   scene: SolidSceneDto,
@@ -52,7 +100,15 @@ export function drawingInstanceScene(
       const p = point({x:body.mesh.positions[i],y:body.mesh.positions[i+1],z:body.mesh.positions[i+2]});
       positions.push(p.x,p.y,p.z);
     }
-    return { ...body, drawingOccurrenceId:pose.occurrence_id, mesh:{...body.mesh,positions}, edges:body.edges.map((edge) => ({...edge,points:edge.points.map(point)})) };
+    const vector = (p: Point3Dto) => {
+      const v = new Vector3(p.x,p.y,p.z).applyQuaternion(q);
+      return {x:v.x,y:v.y,z:v.z};
+    };
+    return { ...body, drawingOccurrenceId:pose.occurrence_id, mesh:{...body.mesh,positions}, edges:body.edges.map((edge) => ({
+      ...edge,points:edge.points.map(point),circle:edge.circle ? {
+        ...edge.circle,center:point(edge.circle.center),normal:vector(edge.circle.normal),reference:vector(edge.circle.reference),
+      } : edge.circle,
+    })) };
   });
   return {...scene,bodies};
 }

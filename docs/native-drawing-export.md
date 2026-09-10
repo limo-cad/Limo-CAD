@@ -19,6 +19,14 @@ the Rust sheet exporter, current exact hidden-line projection and persistent
 drawing document. Exported SVG/DXF are review artifacts; the editable `.nbcad`
 project and Rust replay recipe remain the design sources.
 
+Derived views include their source markers on the parent view. Section and
+removed-section cutting lines extend across the parent bounds with arrowheads
+and labels; detail boundaries, auxiliary arrows and break indicators use the
+same paper conventions as the editor. Short source datum pairs define a plane,
+not the length of its cutting line. Exact arc centers remain usable when viewed
+edge-on and after assembly placement. Both SVG and DXF include these markers;
+missing source topology rejects export instead of substituting fallback points.
+
 View positions specify the center of the projected bounds in paper millimetres,
 matching the interactive editor. Scale converts model millimetres to paper
 millimetres. Dimensions resolve current edge IDs and stable keys. Diagnostic
