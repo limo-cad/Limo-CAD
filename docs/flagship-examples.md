@@ -105,10 +105,10 @@ moving jaw, retained printed lead screw/handle and replaceable wear surfaces for
 the starting architecture; a purchased metal screw is not silently substituted
 for the requested printable screw.
 
-The user suggested a semicircular shaft to print flat. Clarify whether this means
-one half-round rotating screw or two lengthwise halves joined into a round screw.
-These have different thread engagement, stiffness and joint requirements. A flat
-underside alone does not establish that the complete thread prints unsupported.
+The default is the user's selected single-piece D-shaped screw, printed on its
+flat side. Keep its remaining section and thread engagement explicit in the
+calculations, and provide a circular rotating envelope through the nut and guides.
+A flat underside alone does not establish that the complete thread prints unsupported.
 Validate a short thread and guide-fit coupon before a full-length screw/frame.
 
 CNC and molded versions should preserve functional dimensions and interfaces,

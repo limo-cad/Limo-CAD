@@ -14,7 +14,8 @@ shared Rust/MCP operations, teaching chapters and comprehensive drawing packages
   manufacturing. Include low-energy demonstration use and physical guarding of
   the transmission in the design; child-safety qualification is not established.
 - Build a functional vise primarily for FDM. Minimize parts, assembly effort and
-  generated supports. Investigate the user's flat-printing semicircular screw.
+  generated supports. Use the user's selected single-piece D-shaped screw,
+  printed on its flat side, as the default.
   Show force, contact pressure, stiffness and measured durability. Retain related
   CNC and molded configurations with common functional interfaces.
 - Use the three flagships for complementary workflows and small native recipes
@@ -116,18 +117,14 @@ print orientation, alternate fits and replacement after wear. Keep the load path
 short and thrust retention accessible. Choose broad locating and load-bearing
 faces before adding decorative contours.
 
-The semicircular screw interpretation is still awaiting the user's clarification:
+The user selected a single-piece D-shaped screw as the default. Print on the flat
+side and keep the flat depth as an explicit dimension; the initial semicircular
+section places the flat through the screw axis. This rotating screw has interrupted
+engagement and asymmetric stiffness/reaction forces. Provide a circular rotating
+envelope through its nut and supports. It can remain engaged through a turn, but
+ordinary full-screw section/contact-area assumptions no longer apply.
 
-- Two halves printed flat and joined retain full circumferential engagement but
-  need positive registration and a seam that transfers torque and axial force.
-  Split one authored helix into its complementary halves. Mirroring one half
-  changes helix handedness and does not produce the missing half.
-- A single half-round rotating screw has interrupted engagement and asymmetric
-  stiffness/reaction forces. It needs a circular rotating envelope, not a matching
-  D-shaped nut bore. It can remain engaged through a turn, but ordinary full-screw
-  contact-area assumptions no longer apply.
-
-Both require short thread/guide coupons in the intended print orientation. A flat
+Validate short thread/guide coupons in the intended print orientation. A flat
 shaft base alone does not prove that its thread flanks or mating nut need no support.
 Consider a coarse, rounded-root profile with adequate engagement. Custom rounded
 or trapezoidal profiles need native support; the current ISO/Unified feature must
