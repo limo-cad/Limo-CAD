@@ -5227,6 +5227,85 @@ mod tests {
     }
 
     #[test]
+    fn assembly_mesh_export_omits_unused_definitions_after_model_reload() {
+        let (mut server, initial) = mcp_box();
+        let placed_body = initial["scene"]["bodies"][0]["id"].clone();
+        let updated = extrude_offset_box(&mut server, "Sketch2", 30., 40.);
+        let unused_body = updated["scene"]["bodies"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|body| body["id"] != placed_body)
+            .unwrap()["id"]
+            .clone();
+        let component = server.call_tool("assembly_create_component", json!({
+            "name":"Reusable but unplaced", "body_ids":[unused_body], "absorb_promoted_bodies":true
+        })).unwrap();
+        let mut model: Value =
+            serde_json::from_str(&server.manager.export_project_model().unwrap()).unwrap();
+        model["assembly"]["component_structure"]["occurrences"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|occurrence| occurrence["component_id"] != component["id"]);
+        server
+            .call_tool(
+                "cad_load_project_model",
+                json!({"model_json":model.to_string()}),
+            )
+            .unwrap();
+        let solution = server.call_tool("assembly_solution", json!({})).unwrap();
+        assert_eq!(solution["solved"], true);
+        assert_eq!(solution["instance_body_poses"].as_array().unwrap().len(), 1);
+        assert_eq!(server.manager.solid_scene().bodies.len(), 2);
+        let before = server.manager.export_project_model().unwrap();
+        let exported = server
+            .call_tool("solid_export_3mf", json!({"slicer_target":"standard"}))
+            .unwrap();
+        let bytes = BASE64
+            .decode(exported["bytes_base64"].as_str().unwrap())
+            .unwrap();
+        let xml = pip_model_xml(&bytes);
+        assert_eq!(xml.matches("<mesh>").count(), 1);
+        let mesh = parse_3mf_model_mesh(&xml);
+        nbcad_export::validate_3mf_model_mesh(&mesh).unwrap();
+        assert!(mesh.positions.chunks_exact(3).all(|point| point[0] <= 10.));
+        let exported = server.call_tool("solid_export_stl", json!({})).unwrap();
+        let bytes = BASE64
+            .decode(exported["bytes_base64"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(u32::from_le_bytes(bytes[80..84].try_into().unwrap()), 12);
+        assert_eq!(server.manager.export_project_model().unwrap(), before);
+
+        // An assembly containing only unused definitions is empty; it must
+        // not suddenly fall back to exporting all source geometry.
+        model["assembly"]["component_structure"]["occurrences"] = json!([]);
+        for definition in model["assembly"]["component_structure"]["definitions"]
+            .as_array_mut()
+            .unwrap()
+        {
+            definition["promoted"] = json!(false);
+        }
+        server
+            .call_tool(
+                "cad_load_project_model",
+                json!({"model_json":model.to_string()}),
+            )
+            .unwrap();
+        assert!(server
+            .manager
+            .assembly_solution()
+            .instance_body_poses
+            .is_empty());
+        assert!(server
+            .call_tool("solid_export_stl", json!({}))
+            .unwrap_err()
+            .contains("no active bodies"));
+        assert!(server
+            .call_tool("solid_export_3mf", json!({"slicer_target":"standard"}))
+            .is_err());
+    }
+
+    #[test]
     fn assembly_mesh_export_retains_repeated_occurrences_and_placement() {
         let (mut server, _) = mcp_box();
         let doc = server.call_tool("assembly_document", json!({})).unwrap();

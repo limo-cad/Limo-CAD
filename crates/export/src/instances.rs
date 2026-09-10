@@ -18,9 +18,10 @@ pub fn place_mesh_instances(
     meshes: &[TriangleMesh],
     instances: &[MeshInstance],
 ) -> Result<Vec<TriangleMesh>, ExportError> {
-    if instances.is_empty() {
-        return Ok(meshes.to_vec());
-    }
+    // The solved occurrence list is authoritative, including an empty list.
+    // Legacy body-only projects are promoted to root occurrences by the
+    // assembly solver before reaching export. A missing placement here means
+    // an unused definition, not a standalone part at its authoring origin.
     let mut output = Vec::new();
     for source in meshes {
         let placements: Vec<_> = instances
@@ -28,7 +29,6 @@ pub fn place_mesh_instances(
             .filter(|p| p.body_id == source.body_id)
             .collect();
         if placements.is_empty() {
-            output.push(source.clone());
             continue;
         }
         // Weld in part coordinates before f32 assembly placement can amplify seam rounding.
@@ -117,9 +117,19 @@ mod tests {
         let mut invalid = instance(1);
         invalid.rotation = [0.; 4];
         assert!(place_mesh_instances(&[tetra()], &[invalid]).is_err());
-        assert_eq!(
-            place_mesh_instances(&[tetra()], &[]).unwrap(),
-            vec![tetra()]
-        );
+        assert!(place_mesh_instances(&[tetra()], &[]).unwrap().is_empty());
+    }
+    #[test]
+    fn unused_definitions_are_not_exported_beside_visible_instances() {
+        let placed = tetra();
+        let mut unused = tetra();
+        unused.body_id = BodyId(2);
+        unused.name = "Reusable definition without an occurrence".into();
+        let mut pose = instance(1);
+        pose.translation = [50., 0., 0.];
+        let output = place_mesh_instances(&[placed, unused], &[pose]).unwrap();
+        assert_eq!(output.len(), 1);
+        assert_eq!(output[0].body_id, BodyId(1));
+        assert_eq!(&output[0].positions[0..3], &[50., 0., 0.]);
     }
 }
