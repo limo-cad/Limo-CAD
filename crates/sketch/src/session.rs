@@ -1273,6 +1273,17 @@ impl SketchSession {
         exact: Vec2,
         mut inferences: Vec<Inference>,
     ) -> PreviewDto {
+        // A typed length/angle is still subject to the Sketch Palette Snap
+        // setting. Otherwise a narrow slot near the origin can silently move
+        // its endpoint and attach an origin relation despite Snap being off.
+        if !self.point_snap {
+            return PreviewDto {
+                snapped_to: exact,
+                snap: SnapTarget::None,
+                inferences,
+                tracking: None,
+            };
+        }
         if let Some((id, _)) = self
             .sketch
             .entities()
