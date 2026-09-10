@@ -232,9 +232,9 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     let path = if args.contains_key("--recipe") {
         None
     } else {
-        Some(fs::canonicalize(PathBuf::from(file.ok_or_else(|| {
+        Some(fs::canonicalize(file.ok_or_else(|| {
             anyhow!("Supply a script path or --recipe ID")
-        })?))?)
+        })?)?)
     };
     let server = required(&args, "--server")?;
     let repeat = args

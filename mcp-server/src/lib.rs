@@ -4045,6 +4045,26 @@ mod tests {
     }
 
     #[test]
+    fn fillet_recipe_preview_retains_distinct_real_kernel_stages() {
+        let source = nbcad_recipes::find("fillet-basics").unwrap().source;
+        let result = preview_script(source).unwrap();
+        let frames = result["exports"]["preview_frames"].as_array().unwrap();
+        assert_eq!(
+            frames.len(),
+            2,
+            "The lesson shows stock and finished roundover"
+        );
+        assert!(frames
+            .iter()
+            .all(|frame| frame["scene"]["bodies"].as_array().unwrap().len() == 1));
+        assert_ne!(frames[0]["scene"], frames[1]["scene"]);
+        assert_eq!(
+            result["exports"]["final_model"]["fillets"][0]["radius"].as_f64(),
+            Some(2.0)
+        );
+    }
+
+    #[test]
     fn resumed_playback_gets_a_fresh_bounded_receipt_wait() {
         for (pauses, complete_after) in [(vec![true, false], 3), (vec![false], 2)] {
             let mut waits = 0;

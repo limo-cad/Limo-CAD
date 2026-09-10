@@ -25,7 +25,6 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "controls" => "controls.mjs",
         "exit" => "exit.mjs",
         "bench" => "bench.mjs",
-        "garden-bench" => "garden-bench.mjs",
         "drawing" => "drawing.mjs",
         _ => bail!("Unknown MCP suite '{suite}'; use contracts, live, controls, playback, scripts-workspace, exit, bench, garden-bench, or drawing"),
     };

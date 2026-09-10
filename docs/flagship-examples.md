@@ -90,9 +90,9 @@ without physical validation.
 
 ## Smaller capability demonstrations
 
-The [native script format](../examples/scripts/README.md) is the authored
-construction format. The recipe-library layer above playback carries the short
-fillet lesson and complete bench sources, plus future small feature lessons. Run a source with
+The [native recipe library](../examples/scripts/README.md) carries the short
+fillet lesson, plate, spacer, bracket, repeated assembly and complete bench sources.
+Future feature lessons extend that same collection. Run a source with
 `cargo xtask run-script FILE --server MCP`; the same Rust interpreter supports
 headless comparison and live presentation. The older `cargo xtask test-mcp`
 workshop, drawing, live, controls and contracts drivers remain focused test entry
