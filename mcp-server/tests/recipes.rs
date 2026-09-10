@@ -3,12 +3,14 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::mpsc::{self, Receiver};
+use std::time::Duration;
 
 struct Client {
     child: Child,
     input: ChildStdin,
-    output: BufReader<ChildStdout>,
+    replies: Receiver<Result<Value, String>>,
     id: u64,
 }
 impl Client {
@@ -26,10 +28,21 @@ impl Client {
         let mut child = command.spawn().unwrap();
         let input = child.stdin.take().unwrap();
         let output = BufReader::new(child.stdout.take().unwrap());
+        let (sender, replies) = mpsc::channel();
+        std::thread::spawn(move || {
+            for line in output.lines() {
+                let reply = line.map_err(|error| error.to_string()).and_then(|line| {
+                    serde_json::from_str(&line).map_err(|error| error.to_string())
+                });
+                if sender.send(reply).is_err() {
+                    break;
+                }
+            }
+        });
         let mut client = Self {
             child,
             input,
-            output,
+            replies,
             id: 0,
         };
         client.rpc("initialize", json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"recipe-regression","version":"1"}}));
@@ -51,12 +64,11 @@ impl Client {
         .unwrap();
         self.input.flush().unwrap();
         loop {
-            let mut line = String::new();
-            assert!(
-                self.output.read_line(&mut line).unwrap() > 0,
-                "MCP exited while waiting for {method}"
-            );
-            let reply: Value = serde_json::from_str(&line).unwrap();
+            let reply = self
+                .replies
+                .recv_timeout(Duration::from_secs(60))
+                .unwrap_or_else(|error| panic!("MCP did not finish {method}: {error}"))
+                .unwrap_or_else(|error| panic!("Invalid MCP response for {method}: {error}"));
             if reply["id"] != self.id {
                 continue;
             }
