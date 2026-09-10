@@ -189,6 +189,17 @@ pub fn call(args: impl Iterator<Item = String>) -> Result<()> {
     }
     Ok(())
 }
+fn launched_session(launch: &Value) -> Result<String> {
+    if launch["status"] != "ready" {
+        bail!("CAD launch is not ready: {launch}. Inspect that process before retrying; no script has run and no duplicate window was launched.");
+    }
+    launch["session_id"]
+        .as_str()
+        .filter(|id| !id.trim().is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow!("Ready CAD launch did not identify a document; no script has run"))
+}
+
 pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     let (args, file) = options(args)?;
     known_options(
@@ -278,7 +289,7 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
                 "cad_interface",
                 json!({"action":"launch","executable":desktop}),
             )?;
-            session = launch["session_id"].as_str().map(str::to_owned);
+            session = Some(launched_session(&launch)?);
         }
         if let Some(id) = &session {
             client.call("cad_attach", json!({"session_id":id}))?;
@@ -435,6 +446,23 @@ fn first_difference(a: &Value, b: &Value, path: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn live_launch_cannot_fall_back_to_headless_replay() {
+        assert_eq!(
+            launched_session(&json!({"status":"ready","session_id":"document"})).unwrap(),
+            "document"
+        );
+        for reply in [
+            json!({"status":"starting","pid":123}),
+            json!({"status":"starting","session_id":"document"}),
+            json!({"status":"failed","session_id":"document"}),
+            json!({"status":"ready"}),
+            json!({"status":"ready","session_id":" "}),
+        ] {
+            assert!(launched_session(&reply).is_err(), "{reply}");
+        }
+    }
+
     #[test]
     fn reports_model_difference_without_dropping_geometry() {
         let a =
