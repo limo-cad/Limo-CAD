@@ -1,4 +1,13 @@
 {
+  "meshExport": {
+    "title": "Exportar malla",
+    "close": "Cerrar exportación de malla",
+    "assembly": "Posición de ensamblaje",
+    "assemblyHelp": "Exportar las instancias visibles en sus posiciones resueltas, incluidas las piezas repetidas.",
+    "definition": "Coordenadas de la pieza",
+    "definitionHelp": "Exportar cada cuerpo seleccionado una vez en sus coordenadas originales. Seleccionar un cuerpo para imprimir una pieza reutilizable por separado.",
+    "continue": "Continuar"
+  },
   "app": {
     "name": "noBS CAD",
     "untitledDocument": "Sin título"

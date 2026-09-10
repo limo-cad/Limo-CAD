@@ -1,7 +1,7 @@
-//! Place retained body meshes in the solved assembly without retessellating them.
+//! Select part coordinates or solved assembly placement without retessellating.
 use crate::{
-    mesh_weld::validate_mesh_buffers, weld_triangle_mesh, ExportError, TriangleMesh,
-    DEFAULT_WELD_EPSILON,
+    mesh_weld::validate_mesh_buffers, weld_triangle_mesh, ExportError, MeshExportScope,
+    TriangleMesh, DEFAULT_WELD_EPSILON,
 };
 use nbcad_core::BodyId;
 
@@ -14,10 +14,17 @@ pub struct MeshInstance {
     pub visible: bool,
 }
 
-pub fn place_mesh_instances(
+pub fn prepare_export_meshes(
     meshes: &[TriangleMesh],
     instances: &[MeshInstance],
+    scope: MeshExportScope,
 ) -> Result<Vec<TriangleMesh>, ExportError> {
+    if scope == MeshExportScope::Definition {
+        return meshes
+            .iter()
+            .map(|mesh| weld_triangle_mesh(mesh, DEFAULT_WELD_EPSILON))
+            .collect();
+    }
     // The solved occurrence list is authoritative, including an empty list.
     // Legacy body-only projects are promoted to root occurrences by the
     // assembly solver before reaching export. A missing placement here means
@@ -95,8 +102,12 @@ mod tests {
         second.translation = [10., 20., 30.];
         let half = std::f64::consts::FRAC_1_SQRT_2;
         second.rotation = [0., 0., half, half];
-        let out =
-            place_mesh_instances(std::slice::from_ref(&source), &[instance(1), second]).unwrap();
+        let out = prepare_export_meshes(
+            std::slice::from_ref(&source),
+            &[instance(1), second],
+            MeshExportScope::Assembly,
+        )
+        .unwrap();
         assert_eq!(out.len(), 2);
         assert_eq!(out[0].positions, source.positions);
         assert_eq!(&out[1].positions[3..6], &[10., 21., 30.]);
@@ -111,14 +122,40 @@ mod tests {
     fn hidden_instances_do_not_leak_and_invalid_poses_fail() {
         let mut hidden = instance(1);
         hidden.visible = false;
-        assert!(place_mesh_instances(&[tetra()], &[hidden])
-            .unwrap()
-            .is_empty());
+        assert!(
+            prepare_export_meshes(&[tetra()], &[hidden], MeshExportScope::Assembly)
+                .unwrap()
+                .is_empty()
+        );
         let mut invalid = instance(1);
         invalid.rotation = [0.; 4];
-        assert!(place_mesh_instances(&[tetra()], &[invalid]).is_err());
-        assert!(place_mesh_instances(&[tetra()], &[]).unwrap().is_empty());
+        assert!(prepare_export_meshes(&[tetra()], &[invalid], MeshExportScope::Assembly).is_err());
+        assert!(
+            prepare_export_meshes(&[tetra()], &[], MeshExportScope::Assembly)
+                .unwrap()
+                .is_empty()
+        );
     }
+    #[test]
+    fn definition_scope_ignores_placement_visibility_and_occurrence_count() {
+        let source = tetra();
+        let mut hidden = instance(1);
+        hidden.visible = false;
+        let mut moved = instance(2);
+        moved.translation = [100., 200., 300.];
+        let mut unused = source.clone();
+        unused.body_id = BodyId(2);
+        let meshes = vec![source, unused];
+        assert_eq!(
+            prepare_export_meshes(&meshes, &[hidden, moved], MeshExportScope::Definition).unwrap(),
+            meshes
+        );
+        assert_eq!(
+            prepare_export_meshes(&meshes, &[], MeshExportScope::Definition).unwrap(),
+            meshes
+        );
+    }
+
     #[test]
     fn unused_definitions_are_not_exported_beside_visible_instances() {
         let placed = tetra();
@@ -127,7 +164,8 @@ mod tests {
         unused.name = "Reusable definition without an occurrence".into();
         let mut pose = instance(1);
         pose.translation = [50., 0., 0.];
-        let output = place_mesh_instances(&[placed, unused], &[pose]).unwrap();
+        let output =
+            prepare_export_meshes(&[placed, unused], &[pose], MeshExportScope::Assembly).unwrap();
         assert_eq!(output.len(), 1);
         assert_eq!(output[0].body_id, BodyId(1));
         assert_eq!(&output[0].positions[0..3], &[50., 0., 0.]);

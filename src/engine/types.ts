@@ -2300,9 +2300,13 @@ export interface ProjectVisibilityDto {
   hidden_sketch_names: string[];
 }
 
+export type MeshExportScope = 'assembly' | 'definition';
+
 /** Mesh export selection. Empty body_ids exports every active body. */
 export interface MeshExportRequest {
   body_ids: number[];
+  /** Defaults to solved visible occurrences. Definition exports each part once in its own coordinates. */
+  scope?: MeshExportScope;
   linear_deflection: number;
   angular_deflection: number;
   include_appearance: boolean;

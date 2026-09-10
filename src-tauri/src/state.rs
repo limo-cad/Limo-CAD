@@ -701,7 +701,13 @@ impl AppState {
             &inner.manager.assembly_document(),
             &request,
             |r| {
-                        nbcad_occt::project_drawing(&inner.kernel, &scene, &inner.manager.assembly_document(), r).map_err(|e|e.to_string())
+                nbcad_occt::project_drawing(
+                    &inner.kernel,
+                    &scene,
+                    &inner.manager.assembly_document(),
+                    r,
+                )
+                .map_err(|e| e.to_string())
             },
         );
         match content {
@@ -759,7 +765,7 @@ impl AppState {
             }
         }
         let solution = inner.manager.assembly_solution();
-        if !solution.solved {
+        if request.scope == nbcad_export::MeshExportScope::Assembly && !solution.solved {
             return Err("Resolve assembly errors before mesh export.".into());
         }
         let instances: Vec<_> = solution
@@ -773,8 +779,8 @@ impl AppState {
                 visible: p.visible,
             })
             .collect();
-        let meshes =
-            nbcad_export::place_mesh_instances(&meshes, &instances).map_err(|e| e.to_string())?;
+        let meshes = nbcad_export::prepare_export_meshes(&meshes, &instances, request.scope)
+            .map_err(|e| e.to_string())?;
         nbcad_export::write_stl(&meshes).map_err(|error| error.to_string())
     }
 
@@ -801,7 +807,7 @@ impl AppState {
             }
         }
         let solution = inner.manager.assembly_solution();
-        if !solution.solved {
+        if request.scope == nbcad_export::MeshExportScope::Assembly && !solution.solved {
             return Err("Resolve assembly errors before mesh export.".into());
         }
         let instances: Vec<_> = solution
@@ -815,8 +821,8 @@ impl AppState {
                 visible: p.visible,
             })
             .collect();
-        let meshes =
-            nbcad_export::place_mesh_instances(&meshes, &instances).map_err(|e| e.to_string())?;
+        let meshes = nbcad_export::prepare_export_meshes(&meshes, &instances, request.scope)
+            .map_err(|e| e.to_string())?;
         nbcad_export::ExportFacade::export_3mf(&meshes, &appearances, &request)
             .map_err(|error| error.to_string())
     }

@@ -1027,7 +1027,7 @@ impl CadServer {
             }
         }
         let solution = self.manager.assembly_solution();
-        if !solution.solved {
+        if request.scope == nbcad_export::MeshExportScope::Assembly && !solution.solved {
             return Err("Resolve assembly errors before mesh export.".into());
         }
         let instances: Vec<_> = solution
@@ -1041,8 +1041,8 @@ impl CadServer {
                 visible: p.visible,
             })
             .collect();
-        let meshes =
-            nbcad_export::place_mesh_instances(&meshes, &instances).map_err(|e| e.to_string())?;
+        let meshes = nbcad_export::prepare_export_meshes(&meshes, &instances, request.scope)
+            .map_err(|e| e.to_string())?;
         let bytes = if name == "solid_export_stl" {
             nbcad_export::write_stl(&meshes).map_err(|error| error.to_string())?
         } else {
@@ -3457,6 +3457,7 @@ fn tool_specs() -> Vec<ToolSpec> {
                         "items": {"type": "integer", "minimum": 1},
                         "description": "Empty exports every active body."
                     },
+                    "scope": {"type":"string","enum":["assembly","definition"],"default":"assembly","description":"Assembly exports visible solved occurrences. Definition exports each selected body once in its part coordinates."},
                     "linear_deflection": {"type": "number", "exclusiveMinimum": 0, "default": 0.15},
                     "angular_deflection": {"type": "number", "exclusiveMinimum": 0, "default": 0.35}
                 }),
@@ -3476,6 +3477,7 @@ fn tool_specs() -> Vec<ToolSpec> {
                         "items": {"type": "integer", "minimum": 1},
                         "description": "Empty exports every active body."
                     },
+                    "scope": {"type":"string","enum":["assembly","definition"],"default":"assembly","description":"Assembly exports visible solved occurrences. Definition exports each selected body once in its part coordinates."},
                     "linear_deflection": {"type": "number", "exclusiveMinimum": 0, "default": 0.15},
                     "angular_deflection": {"type": "number", "exclusiveMinimum": 0, "default": 0.35},
                     "include_appearance": {"type": "boolean", "default": true},
@@ -6196,6 +6198,58 @@ mod tests {
             positions,
             indices,
         }
+    }
+
+    #[test]
+    fn definition_mesh_export_selects_one_unplaced_native_part() {
+        let (mut server, initial) = mcp_box();
+        let body = initial["scene"]["bodies"][0]["id"].clone();
+        let document = server.call_tool("assembly_document", json!({})).unwrap();
+        let occurrence = document["component_structure"]["occurrences"][0].clone();
+        server.call_tool("assembly_set_occurrence_pose", json!({"occurrence_id":occurrence["id"],"local_pose":{"translation":[0.,0.,70.],"rotation":[0.,0.,0.,1.]}})).unwrap();
+        server.call_tool("assembly_create_occurrence", json!({"component_id":occurrence["component_id"],"name":"Repeated print","local_pose":{"translation":[0.,0.,170.],"rotation":[0.,0.,0.,1.]}})).unwrap();
+        let before = server.manager.export_project_model().unwrap();
+        let assemble = server
+            .call_tool(
+                "solid_export_3mf",
+                json!({"body_ids":[body],"slicer_target":"standard"}),
+            )
+            .unwrap();
+        let xml = pip_model_xml(
+            &BASE64
+                .decode(assemble["bytes_base64"].as_str().unwrap())
+                .unwrap(),
+        );
+        assert_eq!(xml.matches("<mesh>").count(), 2);
+        let definition = server
+            .call_tool(
+                "solid_export_3mf",
+                json!({"body_ids":[body],"scope":"definition","slicer_target":"standard"}),
+            )
+            .unwrap();
+        let xml = pip_model_xml(
+            &BASE64
+                .decode(definition["bytes_base64"].as_str().unwrap())
+                .unwrap(),
+        );
+        assert_eq!(xml.matches("<mesh>").count(), 1);
+        let mesh = parse_3mf_model_mesh(&xml);
+        nbcad_export::validate_3mf_model_mesh(&mesh).unwrap();
+        assert!(mesh
+            .positions
+            .chunks_exact(3)
+            .all(|point| (0.0..=10.0).contains(&point[2])));
+        let stl = server
+            .call_tool(
+                "solid_export_stl",
+                json!({"body_ids":[body],"scope":"definition"}),
+            )
+            .unwrap();
+        let bytes = BASE64
+            .decode(stl["bytes_base64"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(u32::from_le_bytes(bytes[80..84].try_into().unwrap()), 12);
+        assert_eq!(server.manager.export_project_model().unwrap(), before);
     }
 
     #[test]

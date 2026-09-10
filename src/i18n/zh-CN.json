@@ -1,4 +1,13 @@
 {
+  "meshExport": {
+    "title": "导出网格",
+    "close": "关闭网格导出",
+    "assembly": "装配位置",
+    "assemblyHelp": "按求解后的位置导出可见实例，包括重复零件。",
+    "definition": "零件坐标",
+    "definitionHelp": "在原始坐标中将每个选定实体导出一次。选择一个实体即可单独打印可重复使用的零件。",
+    "continue": "继续"
+  },
   "app": {
     "name": "noBS CAD",
     "untitledDocument": "未命名"

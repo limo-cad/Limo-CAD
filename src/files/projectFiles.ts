@@ -32,6 +32,7 @@ import {
   type RecoverableProjectTab,
 } from './projectTabs';
 import { requestUnsavedDecision } from './unsavedChanges';
+import { requestMeshExportScope } from '../components/MeshExportDialog';
 
 const PROJECT_TYPE: SaveType = {
   description: 'noBS CAD Project',
@@ -410,6 +411,8 @@ function meshExportBodyIds(selectedOnly: boolean): number[] {
 export async function exportStl(selectedOnly: boolean): Promise<boolean> {
   const state = useAppStore.getState();
   const bodyIds = meshExportBodyIds(selectedOnly);
+  const scope = await requestMeshExportScope();
+  if (scope === null) return false;
   if (state.bodyAppearances.some((entry) => bodyIds.includes(entry.body_id))) {
     window.alert(translate('file.stlDropsAppearance'));
   }
@@ -420,6 +423,7 @@ export async function exportStl(selectedOnly: boolean): Promise<boolean> {
   const engine = await getEngine();
   const bytes = await engine.exportStl({
     body_ids: bodyIds,
+    scope,
     linear_deflection: 0.15,
     angular_deflection: 0.35,
     include_appearance: false,
@@ -431,6 +435,8 @@ export async function exportStl(selectedOnly: boolean): Promise<boolean> {
 export async function export3mf(selectedOnly: boolean): Promise<boolean> {
   const state = useAppStore.getState();
   const bodyIds = meshExportBodyIds(selectedOnly);
+  const scope = await requestMeshExportScope();
+  if (scope === null) return false;
   const documentName = withoutExtension(state.document?.name ?? state.projectFileName ?? 'Untitled');
   const suffix = selectedOnly && state.selectedBody !== null ? `-Body${state.selectedBody}` : '';
   const target = await chooseSaveTarget(`${documentName}${suffix}.3mf`, THREEMF_TYPE);
@@ -438,6 +444,7 @@ export async function export3mf(selectedOnly: boolean): Promise<boolean> {
   const engine = await getEngine();
   const bytes = await engine.export3mf({
     body_ids: bodyIds,
+    scope,
     linear_deflection: 0.15,
     angular_deflection: 0.35,
     include_appearance: true,

@@ -1,4 +1,13 @@
 {
+  "meshExport": {
+    "title": "Netzexport",
+    "close": "Netzexport schließen",
+    "assembly": "Einbaulage",
+    "assemblyHelp": "Sichtbare Instanzen in ihren berechneten Positionen exportieren, einschließlich wiederholter Bauteile.",
+    "definition": "Bauteilkoordinaten",
+    "definitionHelp": "Jeden ausgewählten Körper einmal in seinen ursprünglichen Koordinaten exportieren. Einen Körper auswählen, um ein wiederverwendbares Bauteil einzeln zu drucken.",
+    "continue": "Weiter"
+  },
   "app": {
     "name": "noBS CAD",
     "untitledDocument": "Ohne Titel"

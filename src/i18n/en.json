@@ -1,4 +1,13 @@
 {
+  "meshExport": {
+    "title": "Mesh export",
+    "close": "Close mesh export",
+    "assembly": "Assembled placement",
+    "assemblyHelp": "Export visible occurrences in their solved positions, including repeated parts.",
+    "definition": "Part coordinates",
+    "definitionHelp": "Export each selected body once in its original coordinates. Select one body to print a reusable part separately.",
+    "continue": "Continue"
+  },
   "app": {
     "name": "noBS CAD",
     "untitledDocument": "Untitled"
