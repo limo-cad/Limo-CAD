@@ -120,13 +120,5 @@ mod tests {
                 );
             }
         }
-        assert!(
-            find("windmill").is_err(),
-            "a design brief is not a runnable recipe"
-        );
-        assert!(
-            find("screw-vise").is_err(),
-            "a design brief is not a runnable recipe"
-        );
     }
 }

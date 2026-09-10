@@ -256,6 +256,19 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
         .transpose()?;
     for iteration in 1..=repeat {
         let mut client = Client::start(server)?;
+        // A misspelled recipe must not launch a window or create an empty tab.
+        // Ask the selected binary's catalog, not a second list in this client.
+        if let Some(recipe) = args.get("--recipe") {
+            let catalog = client.call("cad_interface", json!({"action":"recipes"}))?;
+            if !catalog
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|entry| entry["id"] == *recipe)
+            {
+                bail!("Unknown recipe '{recipe}'; inspect the server's recipe catalog");
+            }
+        }
         let mut session = args.get("--session").cloned();
         if let Some(desktop) = args.get("--desktop") {
             if session.is_some() {
