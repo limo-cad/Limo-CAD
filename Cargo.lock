@@ -319,6 +319,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "nbcad-script"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "nbcad-sketch"
 version = "0.1.0"
 dependencies = [

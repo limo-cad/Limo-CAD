@@ -1,0 +1,9 @@
+[package]
+name = "nbcad-script"
+version = "0.1.0"
+edition = "2021"
+license = "LGPL-2.1-or-later"
+description = "Declarative CAD command replay shared by MCP and repository examples"
+
+[dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }

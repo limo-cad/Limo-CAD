@@ -13,6 +13,7 @@ members = [
     "crates/occt",
     "crates/export",
     "crates/mcp-mutate",
+    "crates/script",
     "crates/wasm",
     "xtask",
 ]

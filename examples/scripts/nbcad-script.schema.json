@@ -1,0 +1,451 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "noBS CAD native command script version 1",
+  "description": "Readable shared-interface commands interpreted by Rust. Modeling arguments use the existing operation schemas; result references are resolved at runtime.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "name",
+    "steps"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "starting_state": {
+      "const": "empty"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verification": {
+      "enum": [
+        "garden-bench"
+      ],
+      "description": "Optional native end gate for the reference model."
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/step"
+      },
+      "description": "Evaluated after construction; operation errors still stop at their point of occurrence."
+    },
+    "exports": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/value"
+      }
+    }
+  },
+  "$defs": {
+    "value": {
+      "description": "Literal JSON data or a runtime result expression. The Rust interpreter validates nested expressions and their result types.",
+      "anyOf": [
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "array",
+          "items": {}
+        },
+        {
+          "type": "object",
+          "additionalProperties": {},
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "$ref"
+                ]
+              },
+              {
+                "required": [
+                  "$select"
+                ]
+              },
+              {
+                "required": [
+                  "$count"
+                ]
+              },
+              {
+                "required": [
+                  "$project"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "$ref"
+          ],
+          "properties": {
+            "$ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pointer": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "$count"
+          ],
+          "properties": {
+            "$count": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "$select"
+          ],
+          "properties": {
+            "$select": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "from"
+              ],
+              "properties": {
+                "from": {},
+                "path": {
+                  "type": "string"
+                },
+                "where": {
+                  "$ref": "#/$defs/predicate"
+                },
+                "take": {
+                  "enum": [
+                    "one",
+                    "first",
+                    "last",
+                    "all"
+                  ]
+                },
+                "pointer": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "$project"
+          ],
+          "properties": {
+            "$project": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "point",
+                "basis"
+              ],
+              "properties": {
+                "point": {},
+                "basis": {}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "predicate": {
+      "type": "object",
+      "description": "JSON-pointer field predicates, $and/$or arrays, or $every over an array path.",
+      "additionalProperties": {},
+      "properties": {
+        "$and": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "$or": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "$every": {
+          "type": "object",
+          "required": [
+            "path",
+            "where"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "where": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "call": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "group",
+            "operation",
+            "arguments"
+          ],
+          "properties": {
+            "group": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "minLength": 1
+            },
+            "arguments": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          }
+        },
+        "bind": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Name a JSON-pointer projection of the same call result."
+        },
+        "expect": {
+          "$ref": "#/$defs/predicate"
+        },
+        "let": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        "assert": {
+          "$ref": "#/$defs/value"
+        },
+        "equals": {
+          "$ref": "#/$defs/value"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "chapter": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "view": {
+          "enum": [
+            "current",
+            "isometric",
+            "front",
+            "back",
+            "left",
+            "right",
+            "top",
+            "bottom"
+          ]
+        },
+        "fit": {
+          "type": "boolean"
+        },
+        "body_id": {
+          "$ref": "#/$defs/focal_id"
+        },
+        "component_id": {
+          "$ref": "#/$defs/focal_id"
+        },
+        "target": {
+          "const": "active_sketch"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "call"
+          ]
+        },
+        {
+          "required": [
+            "let"
+          ]
+        },
+        {
+          "required": [
+            "assert"
+          ]
+        },
+        {
+          "required": [
+            "note"
+          ]
+        },
+        {
+          "required": [
+            "view"
+          ]
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "assert"
+            ]
+          },
+          "then": {
+            "required": [
+              "equals"
+            ]
+          }
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "body_id",
+                  "component_id"
+                ]
+              },
+              {
+                "required": [
+                  "body_id",
+                  "target"
+                ]
+              },
+              {
+                "required": [
+                  "component_id",
+                  "target"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "note"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "note",
+                "chapter",
+                "duration_ms"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "view"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "view",
+                "fit",
+                "target",
+                "body_id",
+                "component_id",
+                "duration_ms"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "focal_id": {
+      "description": "A nonnegative body/component ID or an expression resolving to one.",
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/value"
+            },
+            {
+              "type": "object",
+              "anyOf": [
+                {
+                  "required": [
+                    "$ref"
+                  ]
+                },
+                {
+                  "required": [
+                    "$select"
+                  ]
+                },
+                {
+                  "required": [
+                    "$count"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
