@@ -7,6 +7,74 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
+/// Retain artifacts only when explicitly requested. Otherwise own a uniquely
+/// created temporary directory, including cleanup during a failing assertion.
+struct RecipeArtifacts {
+    path: std::path::PathBuf,
+    temporary: bool,
+}
+impl RecipeArtifacts {
+    fn new() -> Self {
+        if let Some(path) = std::env::var_os("NBCAD_RECIPE_ARTIFACT_DIR").filter(|v| !v.is_empty())
+        {
+            let path = std::path::PathBuf::from(path);
+            std::fs::create_dir_all(&path).unwrap();
+            return Self {
+                path,
+                temporary: false,
+            };
+        }
+        Self::temporary()
+    }
+    fn temporary() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+        let epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        for _ in 0..100 {
+            let path = std::env::temp_dir().join(format!(
+                "nbcad-recipe-{}-{epoch}-{}",
+                std::process::id(),
+                SEQUENCE.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::create_dir(&path) {
+                Ok(()) => {
+                    return Self {
+                        path,
+                        temporary: true,
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("Cannot create recipe test temporary directory: {error}"),
+            }
+        }
+        panic!("Cannot allocate a unique recipe test directory")
+    }
+}
+impl Drop for RecipeArtifacts {
+    fn drop(&mut self) {
+        if self.temporary {
+            // This exact directory was exclusively created by temporary().
+            // Never remove the environment-provided destination or its parent.
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+}
+
+#[test]
+fn temporary_artifacts_remove_only_the_directory_they_own() {
+    let first = RecipeArtifacts::temporary();
+    let second = RecipeArtifacts::temporary();
+    let owned = first.path.clone();
+    std::fs::write(owned.join("checked-artifact"), b"fixture").unwrap();
+    std::fs::write(second.path.join("separate-artifact"), b"keep").unwrap();
+    drop(first);
+    assert!(!owned.exists());
+    assert!(second.path.join("separate-artifact").exists());
+}
+
 struct Client {
     child: Child,
     input: ChildStdin,
@@ -83,9 +151,8 @@ impl Client {
         );
         if reply["isError"] == true && operation == "cad_interface" {
             eprintln!("Recipe failed: {}", reply["content"]);
-            let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../native-target/vise-artifacts");
-            std::fs::create_dir_all(&directory).unwrap();
+            let artifacts = RecipeArtifacts::new();
+            let directory = &artifacts.path;
             let active = self.call("sketch_active", json!({}));
             std::fs::write(
                 directory.join("failed-active-sketch.json"),
@@ -107,7 +174,14 @@ impl Client {
                 )
                 .unwrap();
             }
-            eprintln!("Failed recipe diagnostics saved in {}", directory.display());
+            if !artifacts.temporary {
+                eprintln!(
+                    "Failed recipe diagnostics retained in {}",
+                    directory.display()
+                );
+            } else {
+                eprintln!("Set NBCAD_RECIPE_ARTIFACT_DIR to retain recipe diagnostics.");
+            }
         }
         assert_ne!(reply["isError"], true, "{operation}: {}", reply["content"]);
         let text = reply["content"]
@@ -438,9 +512,8 @@ fn d_screw_vise_builds_editable_native_geometry() {
     let mut client = Client::start();
     let report = client.recipe("d-screw-vise");
     let exports = &report["exports"];
-    let artifact_directory =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../native-target/vise-artifacts");
-    std::fs::create_dir_all(&artifact_directory).unwrap();
+    let artifacts = RecipeArtifacts::new();
+    let artifact_directory = &artifacts.path;
     std::fs::write(
         artifact_directory.join("replay-report.json"),
         serde_json::to_vec_pretty(&report).unwrap(),
@@ -1288,9 +1361,8 @@ fn d_screw_vise_coupon_replays_real_threads_and_exports_printable_meshes() {
         (volume - analytic_volume).abs() / analytic_volume < 0.01,
         "coupon measured {volume}, axial-profile integral {analytic_volume}"
     );
-    let directory =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../native-target/vise-artifacts");
-    std::fs::create_dir_all(&directory).unwrap();
+    let artifacts = RecipeArtifacts::new();
+    let directory = &artifacts.path;
     let exported = client.call("solid_export_3mf", json!({"slicer_target":"standard"}));
     validate_print_3mf(
         &exported,

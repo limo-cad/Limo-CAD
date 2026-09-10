@@ -3,7 +3,7 @@
   "kind": "manufacturing-candidate-validation-snapshot",
   "date": "2026-09-10",
   "platform": "Windows x64; native OCCT 7.9.3",
-  "engine_revision": "f185c1eceea77bf6de1238f7af395f82ce137175",
+  "engine_revision": "4ee3963c3a92c8500a4d32cd7d78be97cb6dc06a",
   "model_schema": 6,
   "sources": [
     {
@@ -24,12 +24,12 @@
     },
     {
       "path": "mcp-server/tests/recipes.rs",
-      "sha256": "be7a90559f3c1fd4c947265c9b1a70f3587bd555d3226ee8b5b975b4e3ec49b1"
+      "sha256": "d90380f8a007ab881a86ba665a909eace221323c0fa14afecedeea395ff8ba19"
     }
   ],
   "artifact_directory": "native-target/vise-artifacts",
   "validation": {
-    "native_command": "cargo test --manifest-path mcp-server/Cargo.toml --target-dir native-target --test recipes d_screw_vise -- --nocapture --test-threads=1",
+    "native_command": "$env:NBCAD_RECIPE_ARTIFACT_DIR=\"<output-directory>\"; cargo test --manifest-path mcp-server/Cargo.toml --target-dir native-target --test recipes d_screw_vise -- --nocapture --test-threads=1",
     "tests_passed": 2,
     "elapsed_seconds": 322.84,
     "first_replay_elapsed_ms": 73700,
@@ -63,7 +63,9 @@
       256
     ],
     "mesh_checks": "finite closed positive-volume welded meshes, separate print poses and XY spacing; bed contact within1e-4mm numerical tolerance",
-    "coupon": "two exact native replays, real interrupted helical profile integral, positive closed print meshes and native reload"
+    "coupon": "two exact native replays, real interrupted helical profile integral, positive closed print meshes and native reload",
+    "temporary_artifact_ownership": "Unique owned temporary directories are removed on drop; explicit NBCAD_RECIPE_ARTIFACT_DIR is retained and never deleted. Ownership cleanup test and native coupon readback/export passed after refactoring.",
+    "source_marker_refresh": "Fresh native load and12SVG/DXF exports through existing Rust xtask/MCP completed13steps in38528ms; A-A/B-B cutting-plane lines and two arrow polygons verified in SVG and source layers in DXF. Geometry was already validated by the full suite."
   },
   "physical_qualification": {
     "status": "not performed",
@@ -75,7 +77,7 @@
       "Requalify PLA/PETG/ASA and manufacturing-process variants separately."
     ]
   },
-  "drawing_snapshot_note": "Native A-A and B-B cuts, captions and dimensions are included. Source-view cutting-plane indicator graphics are a separate shared exporter follow-up; regenerate drawing artifacts after that lands.",
+  "drawing_snapshot_note": "All six drawing outputs were regenerated after9537017 from the verified schema6 native model. Actual A-A/B-B cuts and full-width parent-view cutting-plane markers are present.",
   "artifacts": [
     {
       "file": "d-screw-vise-fit.3mf",
@@ -104,18 +106,18 @@
     },
     {
       "file": "vise_assembly_dxf.dxf",
-      "bytes": 269258,
-      "sha256": "9b0afbad5dd06597fdcfdc116dbd22dddc548f92b8ebfbe478108e53e2e43d9d"
+      "bytes": 269898,
+      "sha256": "6f00bb40ddcc58b4d8869c70549adfd798cea0720fa30f1299045d2d3744e00e"
     },
     {
       "file": "vise_assembly_svg.png",
-      "bytes": 759276,
-      "sha256": "d1bf8ad0df1560259e57896a5f08f2679124873f998614677c27f99fa47576d3"
+      "bytes": 764359,
+      "sha256": "e0e40b7d0cf27e7a4bf3ca88c672106a1a026ac4436bcf9f1bc22574ecdc1b62"
     },
     {
       "file": "vise_assembly_svg.svg",
-      "bytes": 365618,
-      "sha256": "22c0cef50f6b9755d907b7209f31edbbd223f6747505a85a452dfb2be76addea"
+      "bytes": 366276,
+      "sha256": "f546a3d61639239348a5076688fe3481307880998d4426e2a959c2fbef27f134"
     },
     {
       "file": "vise_frame_dxf.dxf",
@@ -164,18 +166,18 @@
     },
     {
       "file": "vise_nut_dxf.dxf",
-      "bytes": 66513,
-      "sha256": "7c3c28774449e7bff7666de4b54c766ec5a78fa0ed58a92f7f6b6a0d2ff221e4"
+      "bytes": 67157,
+      "sha256": "3c959dc5e796ef01b67dcdcf56d8e7f3d145ec67feb2c7ca53a99315bd5244cb"
     },
     {
       "file": "vise_nut_svg.png",
-      "bytes": 371378,
-      "sha256": "884bd8d2a62e13a779fb5499cc357cf7854c1ef316f441256219f55a6ac42b53"
+      "bytes": 373687,
+      "sha256": "a8f6a99c4bbaabc37d6f96517a7f9a37b5eaa8e3a16c9e97b1cf66c0cfaf8a7e"
     },
     {
       "file": "vise_nut_svg.svg",
-      "bytes": 57085,
-      "sha256": "bbdb0b8306d19302387c24710b5cff7e7324e03894ff1c1227597a042d50d092"
+      "bytes": 57746,
+      "sha256": "878b65d3c32c4ca7196bdd147b646c12de11c2e9035e2742c72d0224b40ceda7"
     },
     {
       "file": "vise_screw_dxf.dxf",

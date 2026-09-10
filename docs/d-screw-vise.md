@@ -145,6 +145,12 @@ meshes, print-bed bounds and part separation, analytic stock/coupon volumes,
 joint travel and atomic rejection beyond travel, and exact interference at
 sampled driven positions. These checks run against actual OCCT geometry.
 
+Ordinary tests create and remove their own temporary files. To retain CAD,
+3MF, drawings and failure diagnostics, set `NBCAD_RECIPE_ARTIFACT_DIR` to an
+output directory before running
+`cargo test --manifest-path mcp-server/Cargo.toml --test recipes d_screw_vise`.
+The harness never deletes that explicitly selected directory.
+
 Before promoting this candidate, print the coupon and the complete set, verify
 assembly access and hardware fit, measure play and turning effort, apply a
 controlled light load, then inspect deformation and wear after repeated use
