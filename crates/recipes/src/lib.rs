@@ -15,7 +15,7 @@ pub const RECIPES: &[Recipe] = &[
     Recipe {
         id: "d-screw-vise",
         source: include_str!("../../../examples/scripts/d-screw-vise.nbcad.jsonc"),
-        summary: "Build a five-part vise with a real interrupted helical screw, circular wear nut and guided retained jaw. Physical print-fit qualification remains required.",
+        summary: "Build five printed vise parts with a real interrupted helical screw, circular wear nut, guided jaw and purchased M3 keeper retention. Includes assembly and part drawings; physical qualification remains required.",
         kind: "flagship-candidate",
         focus_operations: &["solid_external_thread", "assembly_create_joint"],
         preview: false,
