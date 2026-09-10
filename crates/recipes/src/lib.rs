@@ -76,6 +76,14 @@ pub const RECIPES: &[Recipe] = &[
         focus_operations: &["assembly_create_joint", "construction_plane_midplane"],
         preview: false,
     },
+    Recipe {
+        id: "vertical-axis-turbine",
+        source: include_str!("../../../examples/scripts/vertical-axis-turbine.nbcad.jsonc"),
+        summary: "Build a two-stage printable Savonius turbine, constrained 4:1 spur drive and associative manufacturing drawings. Physical print and generator fit qualification pending.",
+        kind: "flagship-candidate",
+        focus_operations: &["solid_circular_pattern", "assembly_create_gear_relation", "drawing_add_radial_dimension"],
+        preview: false,
+    },
 ];
 
 pub fn find(id: &str) -> Result<&'static Recipe, String> {
