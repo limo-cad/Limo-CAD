@@ -25,6 +25,23 @@ fn body_ref(name: &str) -> Value {
 fn occ_ref(name: &str) -> Value {
     at(&format!("{name}_occurrence"), "/id")
 }
+fn wrapped(text: &str) -> String {
+    let mut out = String::new();
+    let mut column = 0;
+    for word in text.split_whitespace() {
+        if column + word.len() + 1 > 92 {
+            out.push('\n');
+            column = 0;
+        }
+        if column > 0 {
+            out.push(' ');
+            column += 1;
+        }
+        out.push_str(word);
+        column += word.len();
+    }
+    out
+}
 struct Author {
     steps: Vec<Value>,
     parts: Vec<Value>,
@@ -73,7 +90,7 @@ impl Author {
     }
     fn note(&mut self, chapter: &str, note: &str) {
         self.steps
-            .push(json!({"chapter":chapter,"note":note,"duration_ms":900}));
+            .push(json!({"chapter":chapter,"note":note,"duration_ms":3000}));
     }
     fn uid(&mut self, base: &str) -> String {
         self.serial += 1;
@@ -229,6 +246,25 @@ impl Author {
         self.circle([y, z], diameter);
         self.extrude(name, 70., "cut", Some(target));
     }
+    fn clamp(
+        &mut self,
+        name: &str,
+        target: &str,
+        y: f64,
+        z: f64,
+        diameter: f64,
+        half_grip: f64,
+        seat_diameter: f64,
+    ) {
+        self.cross_bore(name, target, y, z, diameter);
+        // Counterbores provide real, flat head/nut seats on the round hub.
+        for x in [-35., half_grip] {
+            let n = self.uid("clamp_spotface");
+            self.begin(&n, "yz", x);
+            self.circle([y, z], seat_diameter);
+            self.extrude(&n, 35. - half_grip, "cut", Some(target));
+        }
+    }
     fn nut_pocket(&mut self, name: &str, target: &str, center: [f64; 2], z: f64) {
         let radius = 5.8 / (2. * (PI / 6.).cos());
         let points = (0..6)
@@ -312,7 +348,7 @@ impl Author {
             &id,
             "drawing/annotate",
             "drawing_add_note",
-            json!({"sheet_id":r(&sheet_id),"text":note,"position":[22.,228.]}),
+            json!({"sheet_id":r(&sheet_id),"text":wrapped(note),"position":[22.,228.]}),
         );
         let mut export = json!({"part":name,"sheet_id":r(&sheet_id)});
         for format in ["svg", "dxf"] {
@@ -322,6 +358,89 @@ impl Author {
                 "drawing/output",
                 "drawing_export",
                 json!({"sheet_id":r(&sheet_id),"format":format}),
+            );
+            export[format] = at(&id, "/content");
+        }
+        self.drawings.push(export);
+    }
+    fn assembly_drawing(&mut self) {
+        self.call("assembly_sheet","drawing/sheet","drawing_create_sheet",json!({"name":"Turbine assembly","format":"a3","orientation":"landscape","title_block":{"title":"Savonius experiment / assembly","drawing_number":"TUR-000","revision":"A-candidate"}}));
+        self.bind(
+            "assembly_sheet_id",
+            select(r("assembly_sheet"), "/sheets", json!({}), "last", "/id"),
+        );
+        for (kind, direction, up, position, scale) in [
+            ("front", [0., -1., 0.], [0., 0., 1.], [105., 132.], 0.75),
+            ("top", [0., 0., 1.], [0., 1., 0.], [300., 108.], 0.65),
+        ] {
+            let id = self.uid("assembly_view");
+            self.call(&id,"drawing/views","drawing_add_view",json!({"sheet_id":r("assembly_sheet_id"),"view":{"name":format!("Assembly {kind}"),"kind":kind,"scope":"assembly","direction":direction,"up":up,"position":position,"scale":scale,"show_hidden_lines":false}}));
+        }
+        self.call("assembly_note","drawing/annotate","drawing_add_note",json!({"sheet_id":r("assembly_sheet_id"),"position":[20.,254.],"text":"Two identical stages staggered 90 degrees.\nRotor and generator shafts use separate supports.\nSee TUR-BOM and individual part sheets for assembly and fits."}));
+        let mut export = json!({"part":"assembly","sheet_id":r("assembly_sheet_id")});
+        for format in ["svg", "dxf"] {
+            let id = format!("assembly_{format}");
+            self.call(
+                &id,
+                "drawing/output",
+                "drawing_export",
+                json!({"sheet_id":r("assembly_sheet_id"),"format":format}),
+            );
+            export[format] = at(&id, "/content");
+        }
+        self.drawings.push(export);
+        self.call("bom_sheet","drawing/sheet","drawing_create_sheet",json!({"name":"Turbine procurement and assembly","format":"a3","orientation":"landscape","title_block":{"title":"Turbine parts and hardware","drawing_number":"TUR-BOM","revision":"A-candidate"}}));
+        self.bind(
+            "bom_sheet_id",
+            select(r("bom_sheet"), "/sheets", json!({}), "last", "/id"),
+        );
+        let mut items=self.parts.iter().enumerate().map(|(i,p)|json!({"item_number":(i+1).to_string(),"body_id":p["body_id"],"part_number":format!("TUR-{}",p["id"].as_str().unwrap()),"description":p["name"],"quantity":p.get("quantity").cloned().unwrap_or(json!(1)),"material":p["material"]})).collect::<Vec<_>>();
+        for (number, description, quantity) in [
+            (
+                "M3-12",
+                "M3 x12 socket screw /2stage,2cradle base,4guard base",
+                8,
+            ),
+            (
+                "M3-16",
+                "M3 x16 socket screw /2carrier base,2carrier clamp,1rotor hub",
+                5,
+            ),
+            ("M3-20", "M3 x20 socket screw /generator cradle clamp", 1),
+            (
+                "M3-8-low",
+                "M3 x8 low profile screw /head height <=1.65 /guard lid",
+                4,
+            ),
+            (
+                "M3-nut",
+                "M3 hex nut /5.5 AF x2.4 nominal; confirm purchased fastener",
+                18,
+            ),
+            ("M2-8", "M2 x8 socket screw /pinion clamp", 1),
+            (
+                "M2-nut",
+                "M2 hex nut /4 AF x1.6 nominal; confirm purchased fastener",
+                1,
+            ),
+        ] {
+            items.push(json!({"item_number":(items.len()+1).to_string(),"part_number":number,"description":description,"quantity":quantity,"material":"purchased steel"}));
+        }
+        self.call(
+            "turbine_bom",
+            "drawing/sheet",
+            "drawing_set_bom",
+            json!({"sheet_id":r("bom_sheet_id"),"position":[16.,22.],"items":items}),
+        );
+        self.call("procurement_note","drawing/annotate","drawing_add_note",json!({"sheet_id":r("bom_sheet_id"),"position":[22.,207.],"text":wrapped("Hardware is a procurement list, not hidden printable geometry. Verify actual head, nut and shaft dimensions before purchase/printing. PETG baseline. Fits, motor projection, hub slip, rotor startup, bearing clamp load and guard access require physical qualification. Ages8-12 with adult guidance; age5 only with closer hands-on adult guidance.")}));
+        let mut export = json!({"part":"bom","sheet_id":r("bom_sheet_id")});
+        for format in ["svg", "dxf"] {
+            let id = format!("bom_{format}");
+            self.call(
+                &id,
+                "drawing/output",
+                "drawing_export",
+                json!({"sheet_id":r("bom_sheet_id"),"format":format}),
             );
             export[format] = at(&id, "/content");
         }
@@ -486,18 +605,21 @@ impl Author {
             "cut",
             Some(name),
         );
-        self.cross_bore(
+        self.clamp(
             &format!("{name}_clamp_bolt"),
             name,
-            -hub * 0.32,
+            if teeth > 30 { -7.68 } else { -3.2 },
             if teeth > 30 { 8. } else { 4.5 },
             if teeth > 30 { 3.2 } else { 2.2 },
+            if teeth > 30 { 4.8 } else { 2. },
+            if teeth > 30 { 6.4 } else { 4.8 },
         );
     }
 }
 
 fn main() {
     let mut a = Author::new();
+    let g = 54.5 * std::f64::consts::FRAC_1_SQRT_2;
     a.note("The experiment","Build a two-stage vertical-axis Savonius turbine. PETG baseline; 180 mm bucket diameter and 200 mm combined bucket height. Generator and hardware are native representative parts pending specimen fit and physical testing.");
     a.note("Repeated rotor stage","Concentric driving diameters define a bottom disc, shaft hub and two semicircular bucket walls. One stage definition appears twice, staggered by 90 degrees. Print each stage upright and the final cap separately.");
     let stage_plate = a.cylinder("stage", [0., 0.], 198., 0., 3., "new_body", None);
@@ -551,7 +673,7 @@ fn main() {
         "cut",
         Some("stage"),
     );
-    a.cross_bore("stage_clamp_bolt", "stage", -8., 10., 3.2);
+    a.clamp("stage_clamp_bolt", "stage", -8., 10., 3.2, 4., 6.4);
     a.component("stage", "Savonius stage / print twice", true, [0., 0., 70.]);
     a.cylinder("cap", [0., 0.], 198., 0., 3., "new_body", None);
     a.cylinder("cap_bore", [0., 0.], 8.4, 0., 3., "cut", Some("cap"));
@@ -572,10 +694,10 @@ fn main() {
         (22., 0.),
         (45.25, -23.),
         (45.25, 23.),
-        (64.5, 0.),
-        (-44.5, 0.),
-        (10., 54.5),
-        (10., -54.5),
+        (10. + g, g),
+        (10. - g, g),
+        (10. + g, -g),
+        (10. - g, -g),
     ] {
         let n = a.uid("base_fastener");
         a.cylinder(&n, [x, y], 3.4, 0., 8., "cut", Some("base"));
@@ -611,7 +733,7 @@ fn main() {
         "tower_lower_seat",
         [0., 0.],
         22.3,
-        1.,
+        0.,
         7.,
         "cut",
         Some("tower"),
@@ -634,8 +756,8 @@ fn main() {
         "cut",
         Some("tower"),
     );
-    a.cross_bore("tower_clamp_lower", "tower", -14., 12., 3.2);
-    a.cross_bore("tower_clamp_upper", "tower", -14., 32., 3.2);
+    a.clamp("tower_clamp_lower", "tower", -14., 12., 3.2, 5., 6.4);
+    a.clamp("tower_clamp_upper", "tower", -14., 32., 3.2, 5., 6.4);
     for x in [-22., 22.] {
         let n = a.uid("tower_mount");
         a.cylinder(&n, [x, 0.], 3.4, 0., 6., "cut", Some("tower"));
@@ -652,18 +774,18 @@ fn main() {
         "bearing",
         "608 bearing / purchased envelope",
         false,
-        [0., 0., 9.],
+        [0., 0., 8.],
     );
-    a.cylinder("shaft", [0., 0.], 8., 0., 273., "new_body", None);
+    a.cylinder("shaft", [0., 0.], 8., 0., 275., "new_body", None);
     a.component(
         "shaft",
         "8 mm steel shaft / cut to length",
         false,
-        [0., 0., 5.],
+        [0., 0., 3.],
     );
-    a.cylinder("spacer", [0., 0.], 13., 0., 27., "new_body", None);
-    a.cylinder("spacer_bore", [0., 0.], 8.2, 0., 27., "cut", Some("spacer"));
-    a.component("spacer", "Inner race spacer", false, [0., 0., 16.]);
+    a.cylinder("spacer", [0., 0.], 13., 0., 28., "new_body", None);
+    a.cylinder("spacer_bore", [0., 0.], 8.2, 0., 28., "cut", Some("spacer"));
+    a.component("spacer", "Inner race spacer", false, [0., 0., 15.]);
     a.cylinder("washer", [0., 0.], 13., 0., 0.6, "new_body", None);
     a.cylinder("washer_bore", [0., 0.], 8.2, 0., 0.6, "cut", Some("washer"));
     a.component(
@@ -678,7 +800,7 @@ fn main() {
         "collar",
         "Lower shaft collar / purchased",
         false,
-        [0., 0., 4.],
+        [0., 0., 3.],
     );
     a.note("Generator cartridge","The KW-GEN3 case is nominally 32 mm diameter. Its 28 mm case and 6 mm projecting round shaft are provisional, derived from the approximately 34 mm total envelope; measure the specimen before printing the cartridge and pinion.");
     a.cylinder("motor_mount", [0., 0.], 37., 0., 32., "new_body", None);
@@ -700,7 +822,25 @@ fn main() {
         "cut",
         Some("motor_mount"),
     );
-    a.cross_bore("motor_cradle_clamp", "motor_mount", -17., 27., 3.2);
+    a.block(
+        "motor_clamp_left",
+        [-8., -23.],
+        [-0.6, -16.5],
+        23.,
+        8.,
+        "join",
+        Some("motor_mount"),
+    );
+    a.block(
+        "motor_clamp_right",
+        [0.6, -23.],
+        [8., -16.5],
+        23.,
+        8.,
+        "join",
+        Some("motor_mount"),
+    );
+    a.cross_bore("motor_cradle_clamp", "motor_mount", -19.75, 27., 3.2);
     for y in [-23., 23.] {
         let n = a.uid("cradle_ear");
         a.cylinder(&n, [0., y], 13., 0., 4., "join", Some("motor_mount"));
@@ -738,7 +878,7 @@ fn main() {
         "cut",
         Some("guard"),
     );
-    for (x, y) in [(54.5, 0.), (-54.5, 0.), (0., 54.5), (0., -54.5)] {
+    for (x, y) in [(g, g), (-g, g), (g, -g), (-g, -g)] {
         let n = a.uid("guard_boss");
         a.cylinder(&n, [x, y], 8., 0., 57., "join", Some("guard"));
         let n = a.uid("guard_hole");
@@ -764,7 +904,7 @@ fn main() {
         "cut",
         Some("guard_lid"),
     );
-    for (x, y) in [(54.5, 0.), (-54.5, 0.), (0., 54.5), (0., -54.5)] {
+    for (x, y) in [(g, g), (-g, g), (g, -g), (-g, -g)] {
         let n = a.uid("lid_hole");
         a.cylinder(&n, [x, y], 3.4, 0., 3., "cut", Some("guard_lid"));
     }
@@ -775,14 +915,14 @@ fn main() {
         [10., 0., 65.],
     );
     a.note("A real 4:1 spur pair","The tooth flanks sample the involute of the 20-degree base circle with bounded chord error. A native circular pattern repeats one driving tooth and fuses it to the root disc. Module 1, 72/18 teeth, 0.10 mm tooth thinning each and 45.25 mm centre distance are explicit design inputs.");
-    a.gear("rotor_gear", 72, 8.3, 18.);
+    a.gear("rotor_gear", 72, 8.3, 24.);
     a.component(
         "rotor_gear",
         "72 tooth rotor gear / M3 split hub",
         true,
         [0., 0., 50.6],
     );
-    a.gear("pinion", 18, 2.2, 10.);
+    a.gear("pinion", 18, 2.2, 12.);
     a.component(
         "pinion",
         "18 tooth generator pinion / M2 split hub",
@@ -888,14 +1028,14 @@ fn main() {
         0.,
         0.,
         "rigid",
-        -57.6,
+        -59.6,
     );
     a.joint_offset(
         "lower_stage_to_shaft",
         "shaft",
         "stage",
-        [0., 0., 273.],
-        273.,
+        [0., 0., 275.],
+        275.,
         0.,
         0.,
         "rigid",
@@ -924,10 +1064,10 @@ fn main() {
     );
     a.joint(
         "lower_bearing_seat",
-        "tower",
+        "base",
         "bearing",
-        [0., 0., 1.],
-        1.,
+        [0., 0., 8.],
+        8.,
         0.,
         0.,
         "rigid",
@@ -947,19 +1087,19 @@ fn main() {
         "inner_race_spacer",
         "shaft",
         "spacer",
-        [0., 0., 273.],
-        273.,
+        [0., 0., 275.],
+        275.,
         0.,
         0.,
         "rigid",
-        -262.,
+        -263.,
     );
     a.joint_offset(
         "thrust_washer",
         "shaft",
         "washer",
-        [0., 0., 273.],
-        273.,
+        [0., 0., 275.],
+        275.,
         0.,
         0.,
         "rigid",
@@ -969,20 +1109,20 @@ fn main() {
         "shaft_retention",
         "shaft",
         "collar",
-        [0., 0., 273.],
-        273.,
+        [0., 0., 275.],
+        275.,
         0.,
         0.,
         "rigid",
-        -274.,
+        -275.,
     );
     a.repeat("collar_upper", "collar", [0., 0., 273.]);
     a.joint_offset(
         "top_cap_retention",
         "shaft",
         "collar_upper",
-        [0., 0., 273.],
-        273.,
+        [0., 0., 275.],
+        275.,
         0.,
         0.,
         "rigid",
@@ -993,15 +1133,18 @@ fn main() {
     for (name,height,diameters,note) in [
         ("stage",100.,vec![198.,8.3],"PRINT2 / PETG / flat disc on bed. 180 bucket sweep; 2 mm walls; 18 mm bucket overlap. M3 clamp at height10. Print fit coupon before committing both stages. Second occurrence stagger90 degrees."),
         ("cap",3.,vec![198.,8.4],"PRINT1 / flat on bed. Retain between upper stage and purchased upper8 mm shaft collar; no adhesive."),
-        ("base",8.,vec![18.,3.4],"PRINT1 / bottom on bed.160 x130. M3 clearance3.4; underside6.4 x3.2 head recesses. Carrier centers+/-22; cradle(45.25,+/-23); guard(64.5,0),(-44.5,0),(10,+/-54.5). Deburr recesses and keep heads below base."),
-        ("tower",42.,vec![52.,22.3,17.8],"PRINT1 / flange down. Two608 seats22.3 x7 at heights1 and35; relief17.8 between. Two M3 transverse split clamps. Clamp lightly; verify bearing rotation after fastening."),
+        ("base",8.,vec![18.,3.4],"PRINT1 / bottom on bed.160 x130. M3 clearance3.4; underside6.4 x3.2 head recesses. Carrier centers+/-22; cradle(45.25,+/-23); guard109 bolt circle centered(10,0), holes staggered45 degrees. Deburr recesses and keep heads below base."),
+        ("tower",42.,vec![52.,22.3,17.8],"PRINT1 / flange down. Two608 seats22.3 x7 at heights0 and35; insert lower bearing from below before fastening the base; relief17.8 between. Two M3 transverse split clamps. Clamp lightly; verify bearing rotation after fastening."),
         ("motor_mount",32.,vec![37.,32.6],"PRINT1 / flange down. Cavity starts14 above base. Nominal32 mm motor; measure specimen including shaft projection before print. Two M3 flange bolts and one transverse clamp; route wires through split before closing guard."),
         ("guard",57.,vec![120.,114.,3.4],"PRINT1 / upright. Four M3 clear bores,8 hex nut traps:5.8 across flats x3 deep open at bottom/top. Capture nuts before mounting. Bottom M3x12 socket screws; lid M3x8 low-profile heads no higher than1.65 above lid."),
         ("guard_lid",3.,vec![120.,30.,3.4],"PRINT1 / flat. Axis opening offset(-10,0). Four M3x8 low-profile screws; head height<=1.65 keeps clearance below rotor disc. Check rotor clears every screw before motion."),
-        ("rotor_gear",12.,vec![8.3,18.],"PRINT1 / teeth flat. Module1;72 teeth;20 degree pressure angle; pitch72;3 mm face.0.10 mm tooth thinning. Split hub M3 screw/nut; center distance45.25. Do not glue to shaft."),
-        ("pinion",6.,vec![2.2,10.],"PRINT1 / teeth flat. Module1;18 teeth;20 degree pressure angle; pitch18;3 mm face.0.10 mm tooth thinning. M2 split clamp at4.5 high. Round2 mm motor shaft; verify specimen projection and fit before printing."),
-        ("shaft",273.,vec![8.],"PURCHASE /8 mm straight steel shaft cut273 long, ends deburred. Separate608 bearings carry rotor loads. This is a representative purchased envelope; straightness and surface finish must suit the actual bearings."),
+        ("rotor_gear",12.,vec![8.3,24.],"PRINT1 / teeth flat. Module1;72 teeth;20 degree pressure angle; pitch72;3 mm face.0.10 mm tooth thinning. Split hub M3 screw/nut; center distance45.25. Do not glue to shaft."),
+        ("pinion",6.,vec![2.2,12.],"PRINT1 / teeth flat. Module1;18 teeth;20 degree pressure angle; pitch18;3 mm face.0.10 mm tooth thinning. M2 split clamp at4.5 high. Round2 mm motor shaft; verify specimen projection and fit before printing."),
+        ("shaft",275.,vec![8.],"PURCHASE /8 mm straight steel shaft cut275 long, ends deburred. Separate608 bearings carry rotor loads. This is a representative purchased envelope; straightness and surface finish must suit the actual bearings."),
     ] { a.part_drawing(name,height,&diameters,note); }
+    a.assembly_drawing();
+    a.steps
+        .push(json!({"view":"isometric","fit":true,"duration_ms":600}));
     // Final assembly offsets and exact native connectors are validated by the MCP regression.
     a.call(
         "assembly_final",
@@ -1016,10 +1159,19 @@ fn main() {
         ("final_model", "document/files", "cad_project_model"),
         ("final_solution", "assembly/joints", "assembly_solution"),
         ("final_assembly", "assembly/joints", "assembly_document"),
+        (
+            "final_interference",
+            "assembly/joints",
+            "assembly_interference_check",
+        ),
     ] {
         checks.push(json!({"id":id,"call":{"group":group,"operation":operation,"arguments":{}}}));
     }
     checks.push(json!({"assert":at("final_scene","/errors"),"equals":[]}));
+    checks.push(json!({"assert":at("final_solution","/solved"),"equals":true}));
+    checks.push(json!({"assert":at("final_solution","/diagnostics"),"equals":[]}));
+    checks.push(json!({"assert":{"$count":select(r("final_sketches"),"",json!({"/dof/value":0}),"all","")},"equals":{"$count":r("final_sketches")}}));
+    checks.push(json!({"assert":select(r("final_interference"),"/pairs",json!({"/interfering":true}),"all",""),"equals":[]}));
     let source = json!({"$schema":"./nbcad-script.schema.json","version":1,"name":"Vertical-axis turbine / two-stage Savonius","starting_state":"empty","steps":a.steps,"checks":checks,"exports":{"final_scene":r("final_scene"),"final_sketches":r("final_sketches"),"final_model":r("final_model"),"final_solution":r("final_solution"),"final_assembly":r("final_assembly"),"parts":a.parts,"drawings":a.drawings,"stage_plate_feature":r("stage_plate_feature"),"rotor_joint_id":at("rotor_rotation","/id"),"generator_joint_id":at("generator_rotation","/id"),"design":{"diameter_mm":180,"bucket_height_mm":200,"stage_height_mm":100,"stage_angle_deg":90,"gear_module_mm":1,"rotor_teeth":72,"pinion_teeth":18,"pressure_angle_deg":20,"centre_distance_mm":45.25,"material":"PETG","individual_print_envelope_mm":[200,200,200],"motor_specimen_pending":true}}});
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../examples/scripts/vertical-axis-turbine.nbcad.jsonc");
