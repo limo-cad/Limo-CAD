@@ -72,9 +72,31 @@ pub fn group_for(operation: &str) -> Option<&'static str> {
         .and_then(|g| g["id"].as_str())
 }
 
+pub fn validate_script(script: &nbcad_script::Script) -> Result<(), String> {
+    script.validate_calls(|group, operation| match group_for(operation) {
+        Some(expected) if group == expected => Ok(()),
+        Some(expected) => Err(format!("{operation} belongs to {expected}, not {group}")),
+        None => Err(format!("Unknown interface operation {operation}")),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bundled_recipe_calls_preflight_against_the_product_catalog() {
+        for recipe in nbcad_recipes::RECIPES {
+            let script = nbcad_script::Script::parse(recipe.source).unwrap();
+            validate_script(&script).unwrap_or_else(|error| panic!("{}: {error}", recipe.id));
+        }
+        let script = nbcad_script::Script::parse(r#"{"version":1,"name":"wrong late group","steps":[{"note":"No geometry should run"}],"checks":[{"id":"late_inspection","call":{"group":"solid/inspect","operation":"solid_scene","arguments":{}}}]}"#).unwrap();
+        let error = validate_script(&script).unwrap_err();
+        assert!(
+            error.contains("late_inspection") && error.contains("solid/check"),
+            "{error}"
+        );
+    }
 
     #[test]
     fn script_source_requires_one_explicit_text_source() {

@@ -158,6 +158,33 @@ impl Script {
         })
     }
 
+    /// Check every declared operation before any calls run. The host supplies
+    /// its existing interface catalog; the interpreter keeps no second registry.
+    pub fn validate_calls(
+        &self,
+        mut validate: impl FnMut(&str, &str) -> Result<(), String>,
+    ) -> Result<(), String> {
+        for (checking, section) in [(false, "steps"), (true, "checks")] {
+            for (index, step) in self.document[section]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .enumerate()
+            {
+                if let Some(call) = step.get("call") {
+                    validate(
+                        call["group"].as_str().unwrap(),
+                        call["operation"].as_str().unwrap(),
+                    )
+                    .map_err(|error| {
+                        format!("Step {}: {error}", step_id(step, checking, index).unwrap())
+                    })?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Metadata for script browsers, using the validated source's own structure.
     pub fn metadata(&self) -> Value {
         let operations: BTreeSet<&str> = ["steps", "checks"]

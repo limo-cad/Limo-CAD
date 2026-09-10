@@ -34,6 +34,7 @@ pub fn script_examples() -> Value {
 pub fn inspect_script(arguments: Value) -> Result<Value, String> {
     let source = interface::script_source(&arguments)?;
     let script = nbcad_script::Script::parse(&source)?;
+    interface::validate_script(&script)?;
     let mut result = script.metadata();
     result["source"] = Value::String(source);
     if let Some(path) = arguments.get("path") {
@@ -537,6 +538,7 @@ impl CadServer {
         }
         let source = interface::script_source(arguments)?;
         let script = nbcad_script::Script::parse(&source)?;
+        interface::validate_script(&script)?;
         if let Some(session_id) = arguments.get("session_id") {
             let session_id = session_id
                 .as_str()
