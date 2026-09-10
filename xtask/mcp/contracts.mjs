@@ -156,6 +156,17 @@ try {
  assert(result.commands>0);
  for(const action of result.actions) assert(dispatched.has(action), `Enabled ribbon action has no dispatcher case: ${action}`);
  console.log('PASS MCP UI contracts: '+JSON.stringify(result));
+ const scriptPage=await browser.newPage();
+ await scriptPage.goto(server.resolvedUrls.local[0]+'mcp-contract');
+ const scripts=await scriptPage.evaluate(async()=>{
+  const {checkScriptSourceOwnership}=await import('/src/scripts/workspace.browser.test.ts');
+  let timer;
+  try{return await Promise.race([checkScriptSourceOwnership(),new Promise((_,reject)=>{
+   timer=setTimeout(()=>reject(new Error('Script workspace contract timed out')),15000);
+  })]);}finally{clearTimeout(timer);}
+ });
+ console.log('PASS production script source lifecycle: '+JSON.stringify(scripts));
+ await scriptPage.close();
 } finally {await browser?.close();await server.close();}
 
 

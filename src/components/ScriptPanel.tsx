@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BookOpen, FileCode2, FolderOpen, Play, X } from 'lucide-react';
 import {
-  closeScripts, errorMessage, loadScriptPath, openScriptFile, previewExample, runLoadedScript, saveScriptSource,
+  closeScripts, editScriptSource, errorMessage, loadScriptPath, openScriptFile, previewExample, runLoadedScript, saveScriptSource,
   showScriptExample, stopScript, useScriptWorkspace, validateScriptSource,
   type ScriptPreviewFrame,
 } from '../scripts/workspace';
@@ -67,8 +67,8 @@ export function ScriptPanel() {
               onClick={() => useScriptWorkspace.setState({ tab: 'source' })}><FileCode2 size={12} /> Source</button>
           </div>
           {state.tab === 'source' ? <>
-            <textarea aria-label="Script source" spellCheck={false} value={state.source} readOnly={state.running}
-              onChange={event => useScriptWorkspace.setState({ source: event.target.value, completed: false, selectedExample: null })}
+            <textarea aria-label="Script source" spellCheck={false} value={state.source} readOnly={busy}
+              onChange={event => editScriptSource(event.target.value)}
               className="h-80 w-full resize-y rounded border border-edge bg-header p-2 font-mono text-[11px] leading-relaxed" />
             <button className={`${button} mt-2`} disabled={busy} onClick={() => void validateScriptSource()}>Validate changes</button>
             <button className={`${button} ml-2 mt-2`} disabled={busy} onClick={() => void saveScriptSource()}>Save script as…</button>

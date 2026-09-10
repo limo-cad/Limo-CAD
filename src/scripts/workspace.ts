@@ -71,6 +71,11 @@ export function showScripts(): void {
   void ensureScriptExamples().catch(error => useScriptWorkspace.setState({ error: errorMessage(error) }));
 }
 export function closeScripts(): void { useScriptWorkspace.setState({ open: false }); }
+export function editScriptSource(source: string): void {
+  const state = useScriptWorkspace.getState();
+  if (state.loading || state.running) return;
+  useScriptWorkspace.setState({ source, completed: false, selectedExample: null });
+}
 
 function requireDesktop(): void {
   if (!isTauriRuntime()) throw new Error('Open scripts in the desktop application to run the native CAD engine.');
@@ -81,7 +86,8 @@ async function inspect(source: string): Promise<ScriptInfo> {
 }
 function acceptScript(info: ScriptInfo, example: ScriptExample | null = null, path = ''): void {
   useScriptWorkspace.setState({ info, source: info.source, selectedExample: example,
-    path: info.path ?? path, error: null, completed: false, open: true, tab: 'overview' });
+    // Loading opened the panel already. A later Close must survive this reply.
+    path: info.path ?? path, error: null, completed: false, tab: 'overview' });
 }
 async function load(action: () => Promise<void>): Promise<void> {
   showScripts();
