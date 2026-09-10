@@ -1566,6 +1566,7 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
     let parts = exports["parts"].as_array().unwrap();
     let scene = &exports["final_scene"];
     assert_eq!(scene["errors"], json!([]));
+    assert_retained_component_bodies(scene, &exports["final_assembly"]);
     let body = |id: &Value| {
         scene["bodies"]
             .as_array()
@@ -1755,12 +1756,34 @@ fn validate_turbine_open_overlap(exports: &Value) {
     }
 }
 
+fn assert_retained_component_bodies(scene: &Value, assembly: &Value) {
+    let retained = scene["bodies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|body| &body["id"])
+        .collect::<Vec<_>>();
+    for definition in assembly["component_structure"]["definitions"]
+        .as_array()
+        .unwrap()
+    {
+        for body_id in definition["body_ids"].as_array().unwrap() {
+            assert!(retained.contains(&body_id),
+                "consumed construction tools must not remain as phantom assembly parts: {definition}");
+        }
+    }
+}
+
 #[test]
 fn turbine_fit_coupons_have_driving_fits_and_replay_as_closed_prints() {
     let mut client = Client::start();
     let report = client.recipe("turbine-fit-coupons");
     let exports = &report["exports"];
     assert_eq!(exports["final_scene"]["errors"], json!([]));
+    assert_retained_component_bodies(
+        &exports["final_scene"],
+        &client.call("assembly_document", json!({})),
+    );
     let parts = exports["parts"].as_array().unwrap();
     assert_eq!(parts.len(), 4);
     let sketches = exports["final_sketches"].as_array().unwrap();
