@@ -21,6 +21,7 @@ type WasmEngineMethods = WasmEngineInner & {
   set_body_appearance(payload: string): string;
   project_visibility(): string;
   project_set_visibility(payload: string): string;
+  construction_set_visibility(payload: string): string;
   drawing_document(): string;
   drawing_apply(payload: string): string;
   drawing_set_document(payload: string): string;
@@ -253,6 +254,12 @@ export class WasmEngine implements Engine {
   async setProjectVisibility(visibility: ProjectVisibilityDto): Promise<ProjectVisibilityDto> {
     return unwrapEnvelope(
       (this.inner as WasmEngineMethods).project_set_visibility(JSON.stringify(visibility)),
+    );
+  }
+
+  async setConstructionVisibility(request: import('./types').ConstructionVisibilityRequest): Promise<ProjectVisibilityDto> {
+    return unwrapEnvelope(
+      (this.inner as WasmEngineMethods).construction_set_visibility(JSON.stringify(request)),
     );
   }
 

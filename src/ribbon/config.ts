@@ -13,6 +13,7 @@ export type RibbonAction =
   | 'solidChamfer'
   | 'hole'
   | 'constructionPlane'
+  | 'constructionVisibility'
   | 'bodyFeature'
   | 'sketchPattern'
   | 'selectTool'

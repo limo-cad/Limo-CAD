@@ -27,6 +27,17 @@ pub struct ProjectVisibilityDto {
     pub hidden_sketch_names: Vec<String>,
 }
 
+/// Show/hide retained construction references using existing saved visibility.
+/// With no selectors, affect all retained references. If either selector is
+/// supplied, affect only the explicitly selected sets (an empty set is a no-op).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConstructionVisibilityRequest {
+    pub visible: bool,
+    pub sketch_names: Option<Vec<String>>,
+    pub datum_plane_ids: Option<Vec<u64>>,
+}
+
 /// One entity in a sketch snapshot. Lines carry both their endpoint point
 /// ids (structural coincident) and the resolved endpoint coordinates so the
 /// frontend can render without resolving references itself.

@@ -2302,6 +2302,13 @@ export interface ProjectVisibilityDto {
   hidden_sketch_names: string[];
 }
 
+/** No selectors means all retained sketches/datums; explicit sets are selective. */
+export interface ConstructionVisibilityRequest {
+  visible: boolean;
+  sketch_names?: string[];
+  datum_plane_ids?: number[];
+}
+
 export type MeshExportScope = 'assembly' | 'definition';
 
 /** Mesh export selection. Empty body_ids exports every active body. */

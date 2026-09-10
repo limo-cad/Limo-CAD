@@ -54,6 +54,12 @@ pub struct MutateSpec {
 /// Every modeling mutate that `cad_submit` may enqueue and the UI inbox may apply.
 pub static MUTATES: &[MutateSpec] = &[
     MutateSpec {
+        name: "construction_set_visibility",
+        engine_method: "construction_set_visibility",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
         name: "drawing_create_sheet",
         engine_method: "drawing_create_sheet",
         payload: PayloadKind::Object,

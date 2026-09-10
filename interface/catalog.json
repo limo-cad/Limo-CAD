@@ -443,6 +443,13 @@
           ],
           "buttons": [
             {
+              "id": "constructionVisibility",
+              "labelKey": "ribbon.solid.constructionVisibility",
+              "icon": "plane",
+              "enabled": true,
+              "action": "constructionVisibility"
+            },
+            {
               "id": "offsetPlane",
               "labelKey": "ribbon.solid.offsetPlane",
               "icon": "plane",
@@ -460,6 +467,7 @@
             }
           ],
           "operations": [
+            "construction_set_visibility",
             "construction_plane_definitions",
             "construction_plane_offset",
             "construction_plane_edit_offset",

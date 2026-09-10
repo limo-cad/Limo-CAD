@@ -20,6 +20,21 @@ runtime.
 
 ## Open and run scripts in CAD
 
+The **Reference → Construction** button shows or hides retained sketches and datum
+planes together. It uses the same `solid/reference` operation as a script:
+
+```json
+{"call":{"group":"solid/reference","operation":"construction_set_visibility","arguments":{"visible":false}}}
+```
+
+Omit both selectors to affect all current references. To select particular sets,
+provide `sketch_names` and/or `datum_plane_ids`; an omitted category stays unchanged,
+and an explicit empty array is a no-op. Unknown references reject the whole call.
+Visibility is saved in the project and leaves body visibility and parametric
+geometry unchanged. The active unfinished sketch stays visible, and references
+created later start visible. Construction entities inside a sketch are a separate
+sketch-editing setting.
+
 The **Scripts** button opens the script workspace beside the current design.
 Load a commented source file to inspect its chapter notes and grouped commands.
 The recipe-library layer adds the bundled collection using this same adapter.

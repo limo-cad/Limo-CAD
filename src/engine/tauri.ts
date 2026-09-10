@@ -186,6 +186,10 @@ export class TauriEngine implements Engine {
     return this.call('engine_project_set_visibility', visibility);
   }
 
+  async setConstructionVisibility(request: import('./types').ConstructionVisibilityRequest): Promise<ProjectVisibilityDto> {
+    return this.call('engine_construction_set_visibility', request);
+  }
+
   async drawingDocument(): Promise<DrawingDocumentDto> {
     return this.call('engine_drawing_document');
   }

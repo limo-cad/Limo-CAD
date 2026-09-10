@@ -131,6 +131,9 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         "project_set_visibility" => with_payload(payload, |visibility| {
             manager.set_project_visibility(visibility)
         }),
+        "construction_set_visibility" => with_payload(payload, |request| {
+            manager.set_construction_visibility(request)
+        }),
         "drawing_apply" => with_payload(payload, |command| manager.drawing_command(command)),
         "drawing_create_sheet" => with_payload(payload, |r| {
             manager.drawing_command(crate::drawing_commands::DrawingCommand::CreateSheet(r))

@@ -17,6 +17,7 @@ import {
   openHole,
   openBodyFeature,
   openConstructionPlane,
+  toggleConstructionReferences,
   startPlanePick,
 } from '../engine/controller';
 import { applyConstraintById } from '../sketch/applyConstraint';
@@ -81,6 +82,9 @@ export function dispatchRibbonAction(action?: RibbonAction, payload?: string): v
       break;
     case 'constructionPlane':
       openConstructionPlane(payload as ConstructionPlaneKind);
+      break;
+    case 'constructionVisibility':
+      runDrawingAction(toggleConstructionReferences);
       break;
     case 'bodyFeature':
       openBodyFeature(payload as BodyFeatureKind);

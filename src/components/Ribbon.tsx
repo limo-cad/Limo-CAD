@@ -19,7 +19,7 @@ import { useTranslation } from '../i18n';
 import { cx } from '../lib/cx';
 import { ribbonTabById, type RibbonAction, type RibbonButton, type RibbonPanel } from '../ribbon/config';
 import { dispatchRibbonAction } from '../ribbon/dispatch';
-import { useAppStore } from '../store/appStore';
+import { constructionReferencesVisible, useAppStore } from '../store/appStore';
 import { CONSTRAINT_ICON_IDS, ToolIcon } from './icons';
 import { RibbonMenu } from './RibbonMenu';
 import { FeatureScriptPreview } from './FeatureScriptPreview';
@@ -372,13 +372,17 @@ function Button({
     || button.action === 'drawingTool'
     || button.action === 'drawingExportDxf'
     || button.action === 'drawingPrint';
+  const constructionReady = useAppStore((s) => !s.solidBusy && !s.projectBusy
+    && (s.finishedSketches.length > 0 || s.datumPlanes.length > 0));
   const enabled = documentOpen
     && (button.enabled ?? false)
+    && (button.action !== 'constructionVisibility' || constructionReady)
     && (!requiresDrawingSheet || drawingSheetReady);
   // Drawing-tool buttons show the active-tool state.
   const toolActive = useAppStore(
     (s) =>
       (button.action === 'sketchTool' && s.activeTool === button.payload)
+      || (button.action === 'constructionVisibility' && constructionReferencesVisible(s))
       || (
         button.action === 'applyConstraint'
         && s.pendingConstraintTool === button.payload
@@ -410,7 +414,9 @@ function Button({
       type="button"
       data-ribbon-button={button.id}
       aria-pressed={toolActive}
-      title={t(button.labelKey)}
+      title={button.action === 'constructionVisibility'
+        ? t(toolActive ? 'ribbon.solid.hideConstruction' : 'ribbon.solid.showConstruction')
+        : t(button.labelKey)}
       disabled={!enabled}
       onClick={enabled ? () => onAction(button.action, button.payload) : undefined}
       className={cx(

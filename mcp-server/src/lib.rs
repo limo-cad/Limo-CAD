@@ -2646,6 +2646,18 @@ fn tool_specs() -> Vec<ToolSpec> {
             empty_schema(),
         ),
         ToolSpec::direct(
+            "construction_set_visibility",
+            "Show or hide retained sketches and datums",
+            "Change saved construction-reference visibility without changing geometry or body visibility. Omit both selectors to affect all retained sketches and datum planes; provide either selector to affect only the explicit sets. Unknown references reject atomically. The active unfinished sketch stays visible; newly created references remain visible.",
+            "construction_set_visibility",
+            Payload::Object,
+            object_schema(json!({
+                "visible":{"type":"boolean"},
+                "sketch_names":{"type":"array","items":{"type":"string","minLength":1}},
+                "datum_plane_ids":{"type":"array","items":{"type":"integer","minimum":1}}
+            }), &["visible"]),
+        ),
+        ToolSpec::direct(
             "construction_plane_offset",
             "Create offset construction plane",
             "Create a construction plane at a signed distance from an origin plane, planar face, or existing datum plane.",
@@ -6665,6 +6677,160 @@ mod tests {
                 json!({"occurrence_ids":[999999]})
             )
             .is_err());
+    }
+
+    #[test]
+    fn construction_visibility_matches_host_and_preserves_native_model() {
+        fn visibility(value: Value) -> Value {
+            serde_json::to_value(
+                serde_json::from_value::<nbcad_sketch::ProjectVisibilityDto>(value).unwrap(),
+            )
+            .unwrap()
+        }
+        let (mut server, update) = mcp_box();
+        let body_id = update["scene"]["bodies"][0]["id"].as_u64().unwrap();
+        let planes = server
+            .call_tool(
+                "construction_plane_offset",
+                json!({
+                    "name":"Stock reference", "reference":{"type":"origin_plane","plane":"xy"},
+                    "distance":5.
+                }),
+            )
+            .unwrap();
+        let datum_id = planes["planes"][0]["datum_id"].as_u64().unwrap();
+        server
+            .call_tool(
+                "sketch_begin",
+                json!({"name":"Layout", "plane":{
+                    "type":"datum_plane", "datum_id":datum_id
+                }}),
+            )
+            .unwrap();
+        server.call_tool("sketch_finish", json!({})).unwrap();
+        let initial = nbcad_sketch::ProjectVisibilityDto {
+            hidden_body_ids: vec![body_id],
+            ..Default::default()
+        };
+        server
+            .manager
+            .set_project_visibility(initial.clone())
+            .unwrap();
+        let before = server.call_tool("cad_project_model", json!({})).unwrap();
+        let mut before: Value = serde_json::from_str(before.as_str().unwrap()).unwrap();
+        let scene = server.call_tool("solid_scene", json!({})).unwrap();
+        // Desktop and WASM adapters invoke this exact host command. The MCP
+        // entry point must produce the same saved visibility, not a UI overlay.
+        let host_result = parse_engine_envelope(host::handle(
+            &mut server.manager,
+            "construction_set_visibility",
+            r#"{"visible":false}"#,
+        ))
+        .unwrap();
+        server.manager.set_project_visibility(initial).unwrap();
+        assert_eq!(
+            interface::group_for("construction_set_visibility"),
+            Some("solid/reference")
+        );
+        let grouped = |visible: bool| {
+            json!({"action":"execute", "group":"solid/reference",
+            "operation":"construction_set_visibility", "arguments":{"visible":visible}})
+        };
+        let hidden = visibility(server.call_tool("cad_interface", grouped(false)).unwrap());
+        assert_eq!(hidden, host_result);
+        assert_eq!(hidden["hidden_body_ids"], json!([body_id]));
+        assert_eq!(hidden["hidden_sketch_names"], json!(["Layout", "Sketch1"]));
+        assert_eq!(hidden["hidden_datum_plane_ids"], json!([datum_id]));
+        let after = server.call_tool("cad_project_model", json!({})).unwrap();
+        let mut after: Value = serde_json::from_str(after.as_str().unwrap()).unwrap();
+        before.as_object_mut().unwrap().remove("visibility");
+        after.as_object_mut().unwrap().remove("visibility");
+        assert_eq!(
+            after, before,
+            "visibility must not edit parametric intent or IDs"
+        );
+        assert_eq!(server.call_tool("solid_scene", json!({})).unwrap(), scene);
+
+        let selected = visibility(
+            server
+                .call_tool(
+                    "construction_set_visibility",
+                    json!({
+                        "visible":true, "sketch_names":["Sketch1", "Sketch1"]
+                    }),
+                )
+                .unwrap(),
+        );
+        assert_eq!(selected["hidden_sketch_names"], json!(["Layout"]));
+        assert_eq!(selected["hidden_datum_plane_ids"], json!([datum_id]));
+        assert_eq!(
+            visibility(
+                server
+                    .call_tool(
+                        "construction_set_visibility",
+                        json!({
+                        "visible":true, "sketch_names":[]
+                                })
+                    )
+                    .unwrap()
+            ),
+            selected,
+            "an explicit empty selection is a no-op"
+        );
+        for arguments in [
+            json!({"visible":true, "sketch_names":["Layout", "Missing"]}),
+            json!({"visible":true, "sketch_names":["Layout"], "datum_plane_ids":[999999]}),
+        ] {
+            assert!(server
+                .call_tool("construction_set_visibility", arguments)
+                .is_err());
+            assert_eq!(
+                serde_json::to_value(server.manager.project_visibility()).unwrap(),
+                selected
+            );
+        }
+        let model = server.call_tool("cad_project_model", json!({})).unwrap();
+        let mut restored = CadServer::new().unwrap();
+        restored
+            .call_tool("cad_load_project_model", json!({"model_json":model}))
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(restored.manager.project_visibility()).unwrap(),
+            selected
+        );
+        assert_eq!(restored.call_tool("solid_scene", json!({})).unwrap(), scene);
+
+        restored
+            .call_tool(
+                "sketch_begin",
+                json!({"name":"In progress", "plane":{
+                    "type":"origin_plane", "plane":"xz"
+                }}),
+            )
+            .unwrap();
+        let active = serde_json::to_value(restored.manager.active_snapshot()).unwrap();
+        let hidden = restored.call_tool("cad_interface", grouped(false)).unwrap();
+        assert_eq!(
+            serde_json::to_value(restored.manager.active_snapshot()).unwrap(),
+            active
+        );
+        assert!(!hidden["hidden_sketch_names"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("In progress")));
+        restored.call_tool("sketch_finish", json!({})).unwrap();
+        assert!(
+            !restored
+                .manager
+                .project_visibility()
+                .hidden_sketch_names
+                .contains(&"In progress".into()),
+            "new references start visible even after an earlier hide-all"
+        );
+        let shown = restored.call_tool("cad_interface", grouped(true)).unwrap();
+        assert_eq!(shown["hidden_body_ids"], json!([body_id]));
+        assert_eq!(shown["hidden_sketch_names"], json!([]));
+        assert_eq!(shown["hidden_datum_plane_ids"], json!([]));
     }
 
     #[test]

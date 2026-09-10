@@ -95,6 +95,10 @@ impl WasmEngine {
         host::handle(&mut self.manager, "project_set_visibility", payload)
     }
 
+    pub fn construction_set_visibility(&mut self, payload: &str) -> String {
+        host::handle(&mut self.manager, "construction_set_visibility", payload)
+    }
+
     pub fn drawing_document(&mut self) -> String {
         host::handle(&mut self.manager, "drawing_document", "")
     }

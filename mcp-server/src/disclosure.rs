@@ -606,7 +606,8 @@ pub fn tags_for_tool(name: &str) -> (FocusPack, bool) {
         | "solid_edit_split_body"
         | "solid_import_step"
         | "solid_edit_import_step" => FocusPack::BodyOps,
-        "construction_plane_definitions"
+        "construction_set_visibility"
+        | "construction_plane_definitions"
         | "construction_plane_offset"
         | "construction_plane_edit_offset"
         | "construction_plane_midplane"

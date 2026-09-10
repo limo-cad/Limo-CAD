@@ -87,6 +87,15 @@ function emptyProjectVisibility(): ProjectVisibilityDto {
   };
 }
 
+export function constructionReferencesVisible(
+  state: Pick<AppState, 'projectVisibility' | 'finishedSketches' | 'datumPlanes'>,
+): boolean {
+  const hiddenSketches = new Set(state.projectVisibility.hidden_sketch_names);
+  const hiddenDatums = new Set(state.projectVisibility.hidden_datum_plane_ids);
+  return state.finishedSketches.some(sketch => !hiddenSketches.has(sketch.name))
+    || state.datumPlanes.some(plane => !hiddenDatums.has(plane.datum_id));
+}
+
 function persistedVisibilityFromHidden(
   document: DocumentDto | null,
   hidden: Record<NodeId, boolean>,

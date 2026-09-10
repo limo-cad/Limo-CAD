@@ -1272,6 +1272,72 @@ impl SketchManager {
         Ok(self.project_visibility.clone())
     }
 
+    pub fn set_construction_visibility(
+        &mut self,
+        request: crate::ConstructionVisibilityRequest,
+    ) -> Result<ProjectVisibilityDto, SessionError> {
+        let retained_sketches = self
+            .finished
+            .iter()
+            .map(|sketch| sketch.session.name().to_string())
+            .collect::<BTreeSet<_>>();
+        let retained_datums = self
+            .datum_planes
+            .iter()
+            .map(|plane| plane.datum_id.0)
+            .collect::<BTreeSet<_>>();
+        let all = request.sketch_names.is_none() && request.datum_plane_ids.is_none();
+        let sketches = if all {
+            retained_sketches.clone()
+        } else {
+            request
+                .sketch_names
+                .unwrap_or_default()
+                .into_iter()
+                .collect()
+        };
+        let datums = if all {
+            retained_datums.clone()
+        } else {
+            request
+                .datum_plane_ids
+                .unwrap_or_default()
+                .into_iter()
+                .collect()
+        };
+        // Validate the complete selection before changing either set. The
+        // active sketch is not a retained reference and remains visible.
+        if let Some(name) = sketches.difference(&retained_sketches).next() {
+            return Err(SessionError::Solid(format!(
+                "Retained sketch '{name}' was not found"
+            )));
+        }
+        if let Some(id) = datums.difference(&retained_datums).next() {
+            return Err(SessionError::Solid(format!(
+                "Datum plane {id} was not found"
+            )));
+        }
+        let mut visibility = self.project_visibility();
+        let mut hidden_sketches = visibility
+            .hidden_sketch_names
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        let mut hidden_datums = visibility
+            .hidden_datum_plane_ids
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        if request.visible {
+            hidden_sketches.retain(|name| !sketches.contains(name));
+            hidden_datums.retain(|id| !datums.contains(id));
+        } else {
+            hidden_sketches.extend(sketches);
+            hidden_datums.extend(datums);
+        }
+        visibility.hidden_sketch_names = hidden_sketches.into_iter().collect();
+        visibility.hidden_datum_plane_ids = hidden_datums.into_iter().collect();
+        self.set_project_visibility(visibility)
+    }
+
     pub fn set_drawing_document(
         &mut self,
         drawing: DrawingDocumentDto,

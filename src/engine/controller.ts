@@ -8,6 +8,7 @@
 import { getEngine, type Engine } from './index';
 import { projectTransitions } from '../files/projectTransitions';
 import { presentation } from '../operationPlayback';
+import { synchronizeSnapshotVisibility } from '../sessionSnapshot';
 import type {
   BodyFeatureRequestDto,
   DatumPlaneRequest,
@@ -27,11 +28,13 @@ import type {
 } from './types';
 import {
   exportProjectModelWithVisibility,
+  constructionReferencesVisible,
   useAppStore,
   type BodyFeatureKind,
   type ConstructionPlaneKind,
   type HistoryEditCheckpoint,
 } from '../store/appStore';
+
 import {
   authorizeNextSolidRedo,
   beginHistoryMutation,
@@ -53,6 +56,29 @@ import {
   redoDrawingDocument,
   undoDrawingDocument,
 } from '../drawing/document';
+
+/** Apply the same retained-reference operation exposed by the grouped MCP. */
+export async function toggleConstructionReferences(): Promise<void> {
+  const state = useAppStore.getState();
+  if (!state.document || state.solidBusy || state.projectBusy) return;
+  const visible = !constructionReferencesVisible(state);
+  state.setSolidBusy(true);
+  try {
+    const engine = await getEngine();
+    // Per-row Browser eye changes may not yet have reached the publisher.
+    await synchronizeSnapshotVisibility(
+      state.projectVisibility,
+      () => engine.projectVisibility(),
+      value => engine.setProjectVisibility(value),
+    );
+    const visibility = await engine.setConstructionVisibility({ visible });
+    if (useAppStore.getState().document === state.document) {
+      useAppStore.getState().applyProjectVisibility(visibility);
+    }
+  } finally {
+    useAppStore.getState().setSolidBusy(false);
+  }
+}
 
 export function canUndoApplicationHistory(): boolean {
   const state = useAppStore.getState();
