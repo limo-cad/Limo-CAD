@@ -10,6 +10,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use nbcad_core::{BodyId, EdgeId, FaceId};
 use nbcad_solid::{EdgeDto, FaceDto, SolidSceneDto};
 use serde::{Deserialize, Serialize};
+mod relations;
+pub use relations::{CreateGearRelationRequestDto, GearRelationDto};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -388,6 +390,10 @@ impl AssemblyDocumentDto {
             .iter()
             .map(|joint| joint.id)
             .collect::<HashSet<_>>();
+        self.gear_relations.retain(|relation| {
+            active_joint_ids.contains(&relation.joint_a)
+                && active_joint_ids.contains(&relation.joint_b)
+        });
         for position in &mut self.positions {
             position
                 .motions
@@ -880,6 +886,7 @@ impl AssemblyDocumentDto {
         }
         let source_ids = mapping.keys().copied().collect::<HashSet<_>>();
         let mut cloned_joints = Vec::new();
+        let mut joint_mapping = HashMap::new();
         for joint in &self.joints {
             let Some(a) = joint.advanced.connector_a_occurrence_id else {
                 continue;
@@ -900,8 +907,39 @@ impl AssemblyDocumentDto {
             clone.name = unique_joint_name(&self.joints, &cloned_joints, &joint.name);
             clone.advanced.connector_a_occurrence_id = mapping.get(&a).copied();
             clone.advanced.connector_b_occurrence_id = mapping.get(&b).copied();
+            joint_mapping.insert(joint.id, clone.id);
             cloned_joints.push(clone);
         }
+        // Relations belong to the same occurrence subtree as their joints.
+        // Repeated subassemblies retain independent coordinate coupling.
+        let mut cloned_relations = Vec::new();
+        for relation in &self.gear_relations {
+            let (Some(a), Some(b)) = (
+                joint_mapping.get(&relation.joint_a),
+                joint_mapping.get(&relation.joint_b),
+            ) else {
+                continue;
+            };
+            let mut clone = relation.clone();
+            clone.id = self.next_gear_relation_id;
+            self.next_gear_relation_id = clone
+                .id
+                .checked_add(1)
+                .ok_or("Gear relation IDs exhausted")?;
+            clone.specification.joint_a = *a;
+            clone.specification.joint_b = *b;
+            clone.specification.name = format!("{}:{}", relation.name, clone.id);
+            while self
+                .gear_relations
+                .iter()
+                .chain(cloned_relations.iter())
+                .any(|existing: &GearRelationDto| existing.name == clone.name)
+            {
+                clone.specification.name.push(':');
+            }
+            cloned_relations.push(clone);
+        }
+        self.gear_relations.extend(cloned_relations);
         let root = clones[0].clone();
         self.component_structure.occurrences.extend(clones);
         self.joints.extend(cloned_joints);
@@ -1441,6 +1479,11 @@ pub struct CreateContactSetRequestDto {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AssemblyDocumentDto {
+    /// Persisted, unwrapped angular relationships between revolute joints.
+    #[serde(default)]
+    pub gear_relations: Vec<GearRelationDto>,
+    #[serde(default = "default_next_joint_id")]
+    pub next_gear_relation_id: u64,
     #[serde(default)]
     pub joints: Vec<JointDefinitionDto>,
     #[serde(default = "default_next_joint_id")]
@@ -1472,6 +1515,8 @@ pub struct AssemblyDocumentDto {
 impl Default for AssemblyDocumentDto {
     fn default() -> Self {
         Self {
+            gear_relations: Vec::new(),
+            next_gear_relation_id: 1,
             joints: Vec::new(),
             next_joint_id: default_next_joint_id(),
             grounded_body_id: None,
@@ -1489,6 +1534,7 @@ impl Default for AssemblyDocumentDto {
 impl AssemblyDocumentDto {
     pub fn validate(&self) -> Result<(), String> {
         self.component_structure.validate()?;
+        self.validate_gear_relations()?;
         let mut ids = HashSet::new();
         let mut names = HashSet::new();
         let mut max_id = 0;
@@ -1674,6 +1720,8 @@ impl AssemblyDocumentDto {
         if self.joints.len() == original_len {
             return Err(format!("joint {} does not exist", id.0));
         }
+        self.gear_relations
+            .retain(|relation| relation.joint_a != id && relation.joint_b != id);
         for position in &mut self.positions {
             position.motions.retain(|motion| motion.joint_id != id);
         }
@@ -1716,6 +1764,18 @@ impl AssemblyDocumentDto {
     /// topology-backed connector. Editing can therefore repair a broken joint,
     /// but it can never silently retarget a stale face or edge ordinal.
     pub fn update(
+        &mut self,
+        request: UpdateJointRequestDto,
+        scene: &SolidSceneDto,
+    ) -> Result<JointDefinitionDto, String> {
+        let mut candidate = self.clone();
+        let updated = candidate.update_joint_in_place(request, scene)?;
+        candidate.validate_gear_relations()?;
+        *self = candidate;
+        Ok(updated)
+    }
+
+    fn update_joint_in_place(
         &mut self,
         request: UpdateJointRequestDto,
         scene: &SolidSceneDto,
@@ -2182,6 +2242,13 @@ impl AssemblyDocumentDto {
             );
             set_coordinate_value(joint, coordinate, value);
             samples.push(MotionDriverSampleDto { value, ..sample });
+        }
+        let held: Vec<_> = samples
+            .iter()
+            .map(|sample| (sample.joint_id, sample.coordinate.to_internal()))
+            .collect();
+        if !held.is_empty() {
+            candidate.solve_driven_coordinates(&held, scene)?;
         }
         Ok(MotionStudySampleDto {
             study_id: study.id,
@@ -3480,6 +3547,22 @@ fn solve_assembly(document: &AssemblyDocumentDto, scene: &SolidSceneDto) -> Asse
         });
     }
     let edges = solve_edges(&document, scene, &mut diagnostics);
+    for relation in &document.gear_relations {
+        if relation
+            .error_deg(&document)
+            .is_some_and(|error| error.abs() > 1e-5)
+        {
+            diagnostics.push(AssemblyDiagnosticDto {
+                kind: AssemblyDiagnosticKindDto::CycleConflict,
+                message: format!(
+                    "Gear relation '{}' has inconsistent unwrapped angles",
+                    relation.name
+                ),
+                joint_id: Some(relation.joint_a),
+                body_id: None,
+            });
+        }
+    }
     let mut occurrence_poses = HashMap::<OccurrenceId, RigidPose>::new();
     let mut occurrence_visibility = HashMap::<OccurrenceId, bool>::new();
     let mut conflict_joints = HashSet::new();
@@ -3733,6 +3816,16 @@ fn solve_mechanism_drag(
     request: MechanismDragRequestDto,
     scene: &SolidSceneDto,
 ) -> Result<MechanismPreviewDto, String> {
+    solve_mechanism_coordinates(document, request, scene, &[], false)
+}
+
+fn solve_mechanism_coordinates(
+    document: &AssemblyDocumentDto,
+    request: MechanismDragRequestDto,
+    scene: &SolidSceneDto,
+    held: &[(JointId, JointCoordinate)],
+    closure_only: bool,
+) -> Result<MechanismPreviewDto, String> {
     if !scene.bodies.iter().any(|body| body.id == request.body_id) {
         return Err(format!("body {} does not exist", request.body_id.0));
     }
@@ -3799,7 +3892,7 @@ fn solve_mechanism_drag(
         .or_else(|| siblings.first())
         .map(|occurrence| occurrence.id)
         .ok_or_else(|| "mechanism has no occurrence in the dragged subassembly".to_string())?;
-    if target_occurrence == ground {
+    if target_occurrence == ground && !closure_only {
         return Err("the grounded component cannot be dragged".to_string());
     }
     joint_path(&candidate, ground, target_occurrence).ok_or_else(|| {
@@ -3820,7 +3913,8 @@ fn solve_mechanism_drag(
             active_coordinates(joint.kind)
                 .iter()
                 .copied()
-                .map(|coordinate| (joint.id, coordinate)),
+                .map(|coordinate| (joint.id, coordinate))
+                .filter(|coordinate| !held.contains(coordinate)),
         );
     }
 
@@ -3845,6 +3939,7 @@ fn solve_mechanism_drag(
                 target,
                 point_target,
                 &mechanism_ids,
+                closure_only,
             )?;
             let residual = residual_state.values;
             position_error_mm = residual_state.position_error_mm;
@@ -3853,6 +3948,7 @@ fn solve_mechanism_drag(
                 && (!request.solve_orientation || orientation_error_deg <= 0.15)
                 && residual_state.maximum_loop_position_error_mm <= 1.0e-5
                 && residual_state.maximum_loop_orientation_error_deg <= 0.01
+                && residual_state.maximum_gear_error_deg <= 1.0e-5
             {
                 converged = true;
                 break;
@@ -3878,7 +3974,10 @@ fn solve_mechanism_drag(
                     .iter_mut()
                     .find(|joint| joint.id == joint_id)
                     .expect("candidate joint exists");
-                let next_value = clamp_coordinate(joint, coordinate, base_value + epsilon);
+                let mut next_value = clamp_coordinate(joint, coordinate, base_value + epsilon);
+                if (next_value - base_value).abs() <= 1.0e-12 {
+                    next_value = clamp_coordinate(joint, coordinate, base_value - epsilon);
+                }
                 let actual_step = next_value - base_value;
                 if actual_step.abs() <= 1.0e-12 {
                     continue;
@@ -3891,6 +3990,7 @@ fn solve_mechanism_drag(
                     target,
                     point_target,
                     &mechanism_ids,
+                    closure_only,
                 )?
                 .values;
                 for row in 0..residual.len() {
@@ -3958,6 +4058,7 @@ fn solve_mechanism_drag(
                         target,
                         point_target,
                         &mechanism_ids,
+                        closure_only,
                     )?;
                     let trial_objective = weighted_mechanism_residual(
                         &trial_residual.values,
@@ -4010,6 +4111,7 @@ fn solve_mechanism_drag(
                         target,
                         point_target,
                         &mechanism_ids,
+                        closure_only,
                     )?;
                     let trial_objective = weighted_mechanism_residual(
                         &trial_residual.values,
@@ -4079,6 +4181,7 @@ fn solve_mechanism_drag(
                         target,
                         point_target,
                         &mechanism_ids,
+                        closure_only,
                     )?;
                     let trial_objective = weighted_mechanism_residual(
                         &trial_residual.values,
@@ -4108,13 +4211,15 @@ fn solve_mechanism_drag(
         target,
         point_target,
         &mechanism_ids,
+        closure_only,
     ) {
         position_error_mm = residual.position_error_mm;
         orientation_error_deg = residual.orientation_error_deg;
         converged = position_error_mm <= 0.05
             && (!request.solve_orientation || orientation_error_deg <= 0.35)
             && residual.maximum_loop_position_error_mm <= 1.0e-5
-            && residual.maximum_loop_orientation_error_deg <= 0.01;
+            && residual.maximum_loop_orientation_error_deg <= 0.01
+            && residual.maximum_gear_error_deg <= 1.0e-5;
     }
     if !converged {
         solution.diagnostics.push(AssemblyDiagnosticDto {
@@ -4220,6 +4325,7 @@ struct MechanismResidual {
     orientation_error_deg: f64,
     maximum_loop_position_error_mm: f64,
     maximum_loop_orientation_error_deg: f64,
+    maximum_gear_error_deg: f64,
 }
 
 fn mechanism_residual(
@@ -4229,6 +4335,7 @@ fn mechanism_residual(
     target: RigidPose,
     point_target: Option<([f64; 3], [f64; 3])>,
     mechanism_joint_ids: &HashSet<JointId>,
+    closure_only: bool,
 ) -> Result<MechanismResidual, String> {
     let solution = document.solve(scene);
     let current = solution_occurrence_pose(&solution, target_occurrence)
@@ -4241,6 +4348,9 @@ fn mechanism_residual(
         );
         let point_residual = sub(current_grab_point, target_point_world);
         target_residual[..3].copy_from_slice(&point_residual);
+    }
+    if closure_only {
+        target_residual = [0.0; 6];
     }
     let position_error_mm = length([target_residual[0], target_residual[1], target_residual[2]]);
     let orientation_error_deg =
@@ -4266,12 +4376,24 @@ fn mechanism_residual(
             .max(length([closure[3], closure[4], closure[5]]).to_degrees());
         values.extend_from_slice(&closure);
     }
+    let mut maximum_gear_error_deg: f64 = 0.0;
+    for relation in &document.gear_relations {
+        if mechanism_joint_ids.contains(&relation.joint_a)
+            && mechanism_joint_ids.contains(&relation.joint_b)
+        {
+            if let Some(error) = relation.error_deg(document) {
+                maximum_gear_error_deg = maximum_gear_error_deg.max(error.abs());
+                values.extend_from_slice(&[0.0, 0.0, 0.0, error.to_radians(), 0.0, 0.0]);
+            }
+        }
+    }
     Ok(MechanismResidual {
         values,
         position_error_mm,
         orientation_error_deg,
         maximum_loop_position_error_mm,
         maximum_loop_orientation_error_deg,
+        maximum_gear_error_deg,
     })
 }
 
@@ -5943,6 +6065,313 @@ mod tests {
             diagnostic.kind == AssemblyDiagnosticKindDto::CycleConflict
                 && diagnostic.joint_id == Some(JointId(2))
         }));
+    }
+
+    fn driven_fixture(kinds: &[JointKindDto]) -> (AssemblyDocumentDto, SolidSceneDto) {
+        let mut scene = scene();
+        let mut third = scene.bodies[1].clone();
+        third.id = BodyId(3);
+        third.name = "Body3".into();
+        third.feature_id = FeatureId(3);
+        third.faces[0].id = FaceId(30);
+        third.faces[0].key = "face-3".into();
+        scene.bodies.push(third);
+        let mut document = AssemblyDocumentDto::default();
+        for (index, kind) in kinds.iter().enumerate() {
+            let (a, b) = match index {
+                0 => (0, 1),
+                1 if kinds.len() > 2 => (1, 2),
+                _ => (0, 2),
+            };
+            document
+                .create(
+                    CreateJointRequestDto {
+                        name: format!("Joint{index}"),
+                        kind: *kind,
+                        connector_a: connector_from_planar_face(
+                            scene.bodies[a].id,
+                            &scene.bodies[a].faces[0],
+                        )
+                        .unwrap(),
+                        connector_b: connector_from_planar_face(
+                            scene.bodies[b].id,
+                            &scene.bodies[b].faces[0],
+                        )
+                        .unwrap(),
+                        flipped: true,
+                        angle_offset_deg: 0.0,
+                        linear_offset_mm: 0.0,
+                        limits: None,
+                        angle_limits: None,
+                        linear_limits: if *kind == JointKindDto::Slider {
+                            Some(JointLimitsDto {
+                                min: 0.0,
+                                max: 20.0,
+                            })
+                        } else {
+                            None
+                        },
+                        advanced: JointAdvancedDto {
+                            screw_pitch_mm_per_revolution: 5.0,
+                            ..Default::default()
+                        },
+                        grounded_body_id: None,
+                        grounded_occurrence_id: None,
+                    },
+                    &scene,
+                )
+                .unwrap();
+        }
+        (document, scene)
+    }
+
+    #[test]
+    fn driven_vise_holds_screw_and_solves_passive_jaw_with_atomic_limits_and_restore() {
+        let (mut document, scene) = driven_fixture(&[
+            JointKindDto::Screw,
+            JointKindDto::Revolute,
+            JointKindDto::Slider,
+        ]);
+        for angle in [90.0, 180.0, 450.0, 1080.0, 1440.0, 90.0] {
+            document
+                .drive_joint_motion(
+                    SetJointMotionRequestDto {
+                        joint_id: JointId(1),
+                        angle_offset_deg: angle,
+                        linear_offset_mm: 0.0,
+                    },
+                    &scene,
+                )
+                .unwrap();
+            assert_eq!(document.joints[0].angle_offset_deg, angle);
+            assert!((document.joints[2].linear_offset_mm - angle / 360.0 * 5.0).abs() < 1e-5);
+            let solution = document.solve(&scene);
+            assert!(solution.solved, "{:?}", solution.diagnostics);
+            let jaw = solved_pose(&solution, 3);
+            assert_vec3(rotate(jaw.rotation, [1.0, 0.0, 0.0]), [1.0, 0.0, 0.0]);
+            assert!((jaw.translation[2] - angle / 360.0 * 5.0).abs() < 1e-5);
+            let restored: AssemblyDocumentDto =
+                serde_json::from_str(&serde_json::to_string(&document).unwrap()).unwrap();
+            restored.validate().unwrap();
+            assert_eq!(restored, document);
+        }
+        let before = document.clone();
+        assert!(document
+            .drive_joint_motion(
+                SetJointMotionRequestDto {
+                    joint_id: JointId(1),
+                    angle_offset_deg: 1500.0,
+                    linear_offset_mm: 0.0
+                },
+                &scene
+            )
+            .is_err());
+        assert_eq!(document, before);
+    }
+
+    #[test]
+    fn a_single_motion_study_motor_drives_passive_vise_coordinates() {
+        let (mut document, scene) = driven_fixture(&[
+            JointKindDto::Screw,
+            JointKindDto::Revolute,
+            JointKindDto::Slider,
+        ]);
+        let mut study = document
+            .create_motion_study(CreateMotionStudyRequestDto {
+                name: "Screw advance".into(),
+                duration_seconds: 8.0,
+            })
+            .unwrap();
+        study.drivers.push(MotionDriverDto {
+            id: MotionDriverId(1),
+            name: "Handle".into(),
+            joint_id: JointId(1),
+            coordinate: MotionCoordinateDto::PrimaryAngle,
+            law: MotionDriverLawDto::Motor {
+                initial_value: 0.0,
+                velocity_per_second: 180.0,
+                acceleration_per_second2: 0.0,
+            },
+            enabled: true,
+        });
+        study.next_driver_id = 2;
+        document.update_motion_study(study.clone()).unwrap();
+        let before = document.clone();
+        for time_seconds in [0.0, 0.5, 2.5, 6.0, 8.0] {
+            let request = SampleMotionStudyRequestDto {
+                study_id: study.id,
+                time_seconds,
+            };
+            let sample = document.sample_motion_study(request, &scene).unwrap();
+            assert!(sample.solution.solved, "{:?}", sample.solution.diagnostics);
+            assert_eq!(
+                sample.joint_motions[0].angle_offset_deg,
+                time_seconds * 180.0
+            );
+            assert!((sample.joint_motions[2].linear_offset_mm - time_seconds * 2.5).abs() < 1.0e-5);
+            assert_eq!(
+                sample,
+                document.sample_motion_study(request, &scene).unwrap()
+            );
+        }
+        assert_eq!(document, before);
+    }
+
+    #[test]
+    fn repeated_subassemblies_clone_independent_gear_relations() {
+        let (mut document, scene) =
+            driven_fixture(&[JointKindDto::Revolute, JointKindDto::Revolute]);
+        let component = document
+            .create_component(
+                CreateComponentRequestDto {
+                    name: "Gearbox".into(),
+                    body_ids: vec![],
+                    local_coordinate_system: AssemblyTransformDto::default(),
+                    absorb_promoted_bodies: false,
+                },
+                &scene,
+            )
+            .unwrap();
+        let root = document
+            .component_structure
+            .occurrences
+            .iter()
+            .find(|occurrence| occurrence.component_id == component.id)
+            .unwrap()
+            .id;
+        for occurrence in &mut document.component_structure.occurrences {
+            if occurrence.id != root {
+                occurrence.parent_occurrence_id = Some(root);
+            }
+        }
+        document
+            .create_gear_relation(
+                CreateGearRelationRequestDto {
+                    name: "Pair".into(),
+                    joint_a: JointId(1),
+                    joint_b: JointId(2),
+                    teeth_a: 80,
+                    teeth_b: 20,
+                    reverse: true,
+                    phase_deg: 0.0,
+                },
+                &scene,
+            )
+            .unwrap();
+        document
+            .duplicate_occurrence_subtree(DuplicateOccurrenceRequestDto {
+                occurrence_id: root,
+                parent_occurrence_id: None,
+                local_pose: None,
+            })
+            .unwrap();
+        document.validate().unwrap();
+        assert_eq!(document.gear_relations.len(), 2);
+        let copied = document.gear_relations[1].clone();
+        document
+            .drive_joint_motion(
+                SetJointMotionRequestDto {
+                    joint_id: copied.joint_a,
+                    angle_offset_deg: 90.0,
+                    linear_offset_mm: 0.0,
+                },
+                &scene,
+            )
+            .unwrap();
+        assert_eq!(
+            document
+                .joints
+                .iter()
+                .find(|joint| joint.id == copied.joint_b)
+                .unwrap()
+                .angle_offset_deg,
+            -360.0
+        );
+        assert_eq!(document.joints[0].angle_offset_deg, 0.0);
+        assert_eq!(document.joints[1].angle_offset_deg, 0.0);
+        assert!(document.solve(&scene).solved);
+    }
+
+    #[test]
+    fn gear_relation_drives_both_directions_with_unwrapped_phase_and_atomic_limits() {
+        let (mut document, scene) =
+            driven_fixture(&[JointKindDto::Revolute, JointKindDto::Revolute]);
+        let relation = document
+            .create_gear_relation(
+                CreateGearRelationRequestDto {
+                    name: "80 to 20".into(),
+                    joint_a: JointId(1),
+                    joint_b: JointId(2),
+                    teeth_a: 80,
+                    teeth_b: 20,
+                    reverse: true,
+                    phase_deg: 15.0,
+                },
+                &scene,
+            )
+            .unwrap();
+        assert_eq!(document.joints[1].angle_offset_deg, 15.0);
+        let before = document.clone();
+        let mut invalid = document.joints[1].clone();
+        invalid.kind = JointKindDto::Slider;
+        invalid.angle_offset_deg = 0.0;
+        assert!(document
+            .update(
+                UpdateJointRequestDto {
+                    joint: invalid,
+                    grounded_body_id: None,
+                    grounded_occurrence_id: None
+                },
+                &scene
+            )
+            .is_err());
+        assert_eq!(document, before);
+        document
+            .drive_joint_motion(
+                SetJointMotionRequestDto {
+                    joint_id: JointId(1),
+                    angle_offset_deg: 810.0,
+                    linear_offset_mm: 0.0,
+                },
+                &scene,
+            )
+            .unwrap();
+        assert_eq!(document.joints[1].angle_offset_deg, -3225.0);
+        assert!(document.solve(&scene).solved);
+        document
+            .drive_joint_motion(
+                SetJointMotionRequestDto {
+                    joint_id: JointId(2),
+                    angle_offset_deg: 375.0,
+                    linear_offset_mm: 0.0,
+                },
+                &scene,
+            )
+            .unwrap();
+        assert_eq!(document.joints[0].angle_offset_deg, -90.0);
+        let mut restored: AssemblyDocumentDto =
+            serde_json::from_str(&serde_json::to_string(&document).unwrap()).unwrap();
+        restored.validate().unwrap();
+        restored.joints[1].angle_limits = Some(JointLimitsDto {
+            min: -400.0,
+            max: 400.0,
+        });
+        let before = restored.clone();
+        assert!(restored
+            .drive_joint_motion(
+                SetJointMotionRequestDto {
+                    joint_id: JointId(1),
+                    angle_offset_deg: 200.0,
+                    linear_offset_mm: 0.0
+                },
+                &scene
+            )
+            .is_err());
+        assert_eq!(restored, before);
+        restored.delete(JointId(2)).unwrap();
+        assert!(restored.gear_relations.is_empty());
+        document.delete_gear_relation(relation.id).unwrap();
+        assert!(document.gear_relations.is_empty());
     }
 
     #[test]

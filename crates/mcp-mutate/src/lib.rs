@@ -669,6 +669,24 @@ pub static MUTATES: &[MutateSpec] = &[
         execution: ExecutionKind::Direct,
     },
     MutateSpec {
+        name: "assembly_create_gear_relation",
+        engine_method: "assembly_create_gear_relation",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_update_gear_relation",
+        engine_method: "assembly_update_gear_relation",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_delete_gear_relation",
+        engine_method: "assembly_delete_gear_relation",
+        payload: PayloadKind::Field("relation_id"),
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
         name: "set_body_appearance",
         engine_method: "set_body_appearance",
         payload: PayloadKind::Object,

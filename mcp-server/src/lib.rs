@@ -1388,6 +1388,24 @@ fn session_lock_error(code: &str, session_id: Option<&str>) -> String {
     })
 }
 
+fn gear_relation_schema(update: bool) -> Value {
+    let mut properties = json!({
+        "name": { "type": "string", "minLength": 1 },
+        "joint_a": { "type": "integer", "minimum": 1 },
+        "joint_b": { "type": "integer", "minimum": 1 },
+        "teeth_a": { "type": "integer", "minimum": 1, "maximum": 4294967295_u64 },
+        "teeth_b": { "type": "integer", "minimum": 1, "maximum": 4294967295_u64 },
+        "reverse": { "type": "boolean", "default": true, "description": "True for an external pair turning in opposite directions." },
+        "phase_deg": { "type": "number", "default": 0.0, "description": "Unwrapped relation: angle_b = phase_deg + (reverse ? -1 : 1) * teeth_a / teeth_b * angle_a. Connector frames define angular zero." }
+    });
+    let mut required = vec!["name", "joint_a", "joint_b", "teeth_a", "teeth_b"];
+    if update {
+        properties["id"] = json!({ "type": "integer", "minimum": 1 });
+        required.push("id");
+    }
+    object_schema(properties, &required)
+}
+
 fn tool_specs() -> Vec<ToolSpec> {
     let point = point_schema();
     let entity_ids = entity_ids_schema();
@@ -3339,9 +3357,24 @@ fn tool_specs() -> Vec<ToolSpec> {
         ),
         ToolSpec::direct(
             "assembly_set_joint_motion", "Set joint primary motion",
-            "Set the primary angle (degrees) and linear coordinate (millimetres) without replacing the joint definition. Query assembly_solution for limits and diagnostics.",
+            "Drive the selected primary coordinates while solving passive joints and persisted gear relations. Limits or unreachable closure reject atomically. Angles are unwrapped degrees; travel is millimetres. Query assembly_document for solved coordinates and assembly_solution for poses.",
             "assembly_set_joint_motion", Payload::Object,
             object_schema(json!({"joint_id":{"type":"integer","minimum":1},"angle_offset_deg":{"type":"number"},"linear_offset_mm":{"type":"number"}}), &["joint_id","angle_offset_deg","linear_offset_mm"]),
+        ),
+        ToolSpec::direct(
+            "assembly_create_gear_relation", "Create geared rotation relation",
+            "Persist a relation between two revolute joints: angle_b = phase_deg + sign * teeth_a/teeth_b * angle_a. reverse=true gives opposite rotation. Driving either joint solves the other; this is an ideal kinematic relation, not a contact or strength analysis.",
+            "assembly_create_gear_relation",Payload::Object,gear_relation_schema(false),
+        ),
+        ToolSpec::direct(
+            "assembly_update_gear_relation", "Update geared rotation relation",
+            "Replace a saved gear relation, retaining its ID. Recompute from joint_a and reject invalid limits or closure without changing the document.",
+            "assembly_update_gear_relation",Payload::Object,gear_relation_schema(true),
+        ),
+        ToolSpec::direct(
+            "assembly_delete_gear_relation", "Delete geared rotation relation",
+            "Delete only the named relation; preserve both joints and their current angles.",
+            "assembly_delete_gear_relation",Payload::Field("relation_id"),object_schema(json!({"relation_id":{"type":"integer","minimum":1}}), &["relation_id"]),
         ),
         ToolSpec::direct(
             "solid_export_step",
@@ -8625,6 +8658,73 @@ mod tests {
                 }),
             )
             .unwrap()
+    }
+
+    #[test]
+    fn gear_relation_tools_drive_persist_restore_and_delete_native_coordinates() {
+        let mut server = CadServer::new().unwrap();
+        extrude_offset_box(&mut server, "Sketch1", -24.0, -14.0);
+        extrude_offset_box(&mut server, "Sketch2", -5.0, 5.0);
+        let third = extrude_offset_box(&mut server, "Sketch3", 14.0, 24.0);
+        let bodies = third["scene"]["bodies"].as_array().unwrap();
+        let mut ids = Vec::new();
+        for index in 1..=2 {
+            let joint = server.call_tool("assembly_create_joint", json!({
+                "name": format!("Shaft {index}"), "kind":"revolute", "grounded_body_id":bodies[0]["id"],
+                "connector_a":planar_connector_from_body(&bodies[0]),
+                "connector_b":planar_connector_from_body(&bodies[index]), "flipped":true
+            })).unwrap();
+            ids.push(joint["id"].clone());
+        }
+        let mut relation = server.call_tool("assembly_create_gear_relation", json!({
+            "name":"Turbine pair", "joint_a":ids[0], "joint_b":ids[1], "teeth_a":80, "teeth_b":20, "phase_deg":12.0
+        })).unwrap();
+        relation.as_object_mut().unwrap().remove("_disclosure");
+        server
+            .call_tool(
+                "assembly_set_joint_motion",
+                json!({"joint_id":ids[0],"angle_offset_deg":810.0,"linear_offset_mm":0.0}),
+            )
+            .unwrap();
+        let document = server.call_tool("assembly_document", json!({})).unwrap();
+        assert_eq!(document["joints"][1]["angle_offset_deg"], -3228.0);
+        assert_eq!(document["gear_relations"][0], relation);
+        assert_eq!(
+            server.call_tool("assembly_solution", json!({})).unwrap()["solved"],
+            true
+        );
+        let model = server.call_tool("cad_project_model", json!({})).unwrap();
+        let mut restored = CadServer::new().unwrap();
+        restored
+            .call_tool(
+                "cad_load_project_model",
+                json!({"model_json":model.as_str().unwrap()}),
+            )
+            .unwrap();
+        assert_eq!(
+            restored.call_tool("assembly_document", json!({})).unwrap(),
+            document
+        );
+        let mut changed = relation.clone();
+        changed["phase_deg"] = json!(0.0);
+        restored
+            .call_tool("assembly_update_gear_relation", changed)
+            .unwrap();
+        assert_eq!(
+            restored.call_tool("assembly_document", json!({})).unwrap()["joints"][1]
+                ["angle_offset_deg"],
+            -3240.0
+        );
+        restored
+            .call_tool(
+                "assembly_delete_gear_relation",
+                json!({"relation_id":relation["id"]}),
+            )
+            .unwrap();
+        assert_eq!(
+            restored.call_tool("assembly_document", json!({})).unwrap()["gear_relations"],
+            json!([])
+        );
     }
 
     #[test]

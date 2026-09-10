@@ -120,6 +120,39 @@ retargeted topology. Saved projects structurally validate joint ids, counters,
 frames, offsets, and limits. An older project without an `assembly` member opens
 with an empty assembly document because the field is additive to schema v2.
 
+## Driving a mechanism and geared rotation
+
+`assembly_set_joint_motion` prescribes the selected joint's primary coordinates
+and solves its passive coordinates with the same damped least-squares closure
+solver used by component dragging. A frame/screw/retained-jaw/slider loop can
+therefore be driven by its screw alone. The screw field
+`advanced.screw_pitch_mm_per_revolution` is axial travel per full revolution
+(the lead). Failed closure or a dependent coordinate outside its limits rejects
+the whole edit; previews and motion-study samples remain transient. Inactive
+history intent is retained for redo.
+
+`assembly_create_gear_relation`, `assembly_update_gear_relation`, and
+`assembly_delete_gear_relation` share the Assembly / Joints interface group.
+A relation links two revolute coordinates in one assembly level:
+
+```text
+angle_b = phase_deg + (reverse ? -1 : 1) * teeth_a / teeth_b * angle_a
+```
+
+Angles stay unwrapped through multiple turns. `reverse: true` describes an
+external pair; `false` describes equal-direction coupling. For an 80-tooth
+wheel driving a 20-tooth pinion, a +90 degree input gives a -360 degree output
+when phase is zero. Drive either endpoint and the other follows. Connector
+frames establish angular zero, so the model's tooth placement determines the
+required phase. The relation records kinematics; it does not generate teeth,
+prove meshing or contact clearance, or calculate torque and load capacity.
+
+Relations persist in `assembly.gear_relations`. Deleting a joint deletes its
+relations; duplicating a mechanism subtree clones its internal relations with
+independent ids. Editing a related joint to a non-revolute kind is rejected.
+Project schema 4 prevents older readers from silently dropping this coupling;
+older projects migrate with an empty relation list.
+
 ## Solved behavior
 
 1. one solved pose per occurrence, recursively composed through its parent

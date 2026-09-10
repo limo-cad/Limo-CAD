@@ -1402,7 +1402,21 @@ export interface CreateContactSetRequestDto {
   stop_motion: boolean;
 }
 
+/** Persistent unwrapped revolute coordinate relation; geometry remains parametric parts. */
+export interface GearRelationDto {
+  id: number;
+  name: string;
+  joint_a: number;
+  joint_b: number;
+  teeth_a: number;
+  teeth_b: number;
+  reverse: boolean;
+  phase_deg: number;
+}
+
 export interface AssemblyDocumentDto {
+  gear_relations?: GearRelationDto[];
+  next_gear_relation_id?: number;
   joints: JointDefinitionDto[];
   next_joint_id: number;
   grounded_body_id: number | null;

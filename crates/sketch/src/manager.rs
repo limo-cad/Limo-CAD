@@ -11,11 +11,12 @@ use nbcad_assembly::{
     ApplyJointMotionsRequestDto, AssemblyDocumentDto, AssemblyPositionDto, AssemblyPositionId,
     AssemblySolutionDto, ComponentDefinitionDto, ComponentOccurrenceDto, ContactSetDto,
     ContactSetId, CreateAssemblyPositionRequestDto, CreateComponentRequestDto,
-    CreateContactSetRequestDto, CreateJointRequestDto, CreateMotionStudyRequestDto,
-    CreateOccurrenceRequestDto, DuplicateOccurrenceRequestDto, EvaluateMotionStudyRequestDto,
-    InterferenceCheckRequestDto, InterferenceReportDto, JointDefinitionDto, JointId,
-    MechanismDragRequestDto, MechanismPreviewDto, MotionPathRequestDto, MotionStudyDto,
-    MotionStudyEvaluationDto, MotionStudyId, MotionStudySampleDto, SampleMotionStudyRequestDto,
+    CreateContactSetRequestDto, CreateGearRelationRequestDto, CreateJointRequestDto,
+    CreateMotionStudyRequestDto, CreateOccurrenceRequestDto, DuplicateOccurrenceRequestDto,
+    EvaluateMotionStudyRequestDto, GearRelationDto, InterferenceCheckRequestDto,
+    InterferenceReportDto, JointDefinitionDto, JointId, MechanismDragRequestDto,
+    MechanismPreviewDto, MotionPathRequestDto, MotionStudyDto, MotionStudyEvaluationDto,
+    MotionStudyId, MotionStudySampleDto, SampleMotionStudyRequestDto,
     SetJointCoordinatesRequestDto, SetJointEnabledRequestDto, SetJointMotionRequestDto,
     SetOccurrenceGroundedRequestDto, SetOccurrencePoseRequestDto, SweptCollisionEventDto,
     SweptCollisionReportDto, SweptCollisionRequestDto, UpdateComponentRequestDto,
@@ -58,7 +59,7 @@ use crate::dto::{
 };
 use crate::entity::EntityId;
 use crate::project::{
-    decode_project, ProjectCountersV2, ProjectDocumentV2, ProjectModelV3, ProjectPreferencesV2,
+    decode_project, ProjectCountersV2, ProjectDocumentV2, ProjectModelV4, ProjectPreferencesV2,
     PROJECT_FORMAT, PROJECT_SCHEMA_VERSION,
 };
 use crate::session::{
@@ -185,7 +186,7 @@ impl SketchManager {
                 "finish the active sketch before saving the project".to_string(),
             ));
         }
-        let model = ProjectModelV3 {
+        let model = ProjectModelV4 {
             format: PROJECT_FORMAT.to_string(),
             schema_version: PROJECT_SCHEMA_VERSION,
             document: ProjectDocumentV2 {
@@ -772,11 +773,7 @@ impl SketchManager {
         request: SetJointMotionRequestDto,
     ) -> Result<AssemblyDocumentDto, SessionError> {
         self.assembly
-            .set_joint_motion(
-                request.joint_id,
-                request.angle_offset_deg,
-                request.linear_offset_mm,
-            )
+            .drive_joint_motion(request, self.solids.scene())
             .map_err(SessionError::Solid)?;
         self.invalidate_assembly_solution();
         Ok(self.assembly.clone())
@@ -791,11 +788,7 @@ impl SketchManager {
     ) -> Result<AssemblySolutionDto, SessionError> {
         let mut preview = self.assembly.clone();
         preview
-            .set_joint_motion(
-                request.joint_id,
-                request.angle_offset_deg,
-                request.linear_offset_mm,
-            )
+            .drive_joint_motion(request, self.solids.scene())
             .map_err(SessionError::Solid)?;
         Ok(preview.solve(self.solids.scene()))
     }
@@ -805,7 +798,7 @@ impl SketchManager {
         request: SetJointCoordinatesRequestDto,
     ) -> Result<AssemblyDocumentDto, SessionError> {
         self.assembly
-            .set_joint_coordinates(request.motion.joint_id, request.motion)
+            .drive_joint_coordinates(request.motion, self.solids.scene())
             .map_err(SessionError::Solid)?;
         self.invalidate_assembly_solution();
         Ok(self.assembly.clone())
@@ -819,9 +812,41 @@ impl SketchManager {
     ) -> Result<AssemblySolutionDto, SessionError> {
         let mut preview = self.assembly.clone();
         preview
-            .set_joint_coordinates(request.motion.joint_id, request.motion)
+            .drive_joint_coordinates(request.motion, self.solids.scene())
             .map_err(SessionError::Solid)?;
         Ok(preview.solve(self.solids.scene()))
+    }
+
+    pub fn create_gear_relation(
+        &mut self,
+        request: CreateGearRelationRequestDto,
+    ) -> Result<GearRelationDto, SessionError> {
+        let relation = self
+            .assembly
+            .create_gear_relation(request, self.solids.scene())
+            .map_err(SessionError::Solid)?;
+        self.invalidate_assembly_solution();
+        Ok(relation)
+    }
+
+    pub fn update_gear_relation(
+        &mut self,
+        relation: GearRelationDto,
+    ) -> Result<GearRelationDto, SessionError> {
+        let relation = self
+            .assembly
+            .update_gear_relation(relation, self.solids.scene())
+            .map_err(SessionError::Solid)?;
+        self.invalidate_assembly_solution();
+        Ok(relation)
+    }
+
+    pub fn delete_gear_relation(&mut self, id: u64) -> Result<AssemblyDocumentDto, SessionError> {
+        self.assembly
+            .delete_gear_relation(id)
+            .map_err(SessionError::Solid)?;
+        self.invalidate_assembly_solution();
+        Ok(self.assembly.clone())
     }
 
     pub fn preview_mechanism_drag(

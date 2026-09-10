@@ -525,6 +525,9 @@ pub fn tags_for_tool(name: &str) -> (FocusPack, bool) {
         | "assembly_delete_joint"
         | "assembly_set_joint_enabled"
         | "assembly_set_joint_motion"
+        | "assembly_create_gear_relation"
+        | "assembly_update_gear_relation"
+        | "assembly_delete_gear_relation"
         | "assembly_update_joint" => FocusPack::Assembly,
         "sketch_begin"
         | "sketch_finish"

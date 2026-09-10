@@ -1968,7 +1968,10 @@
             "assembly_update_joint",
             "assembly_delete_joint",
             "assembly_set_joint_enabled",
-            "assembly_set_joint_motion"
+            "assembly_set_joint_motion",
+            "assembly_create_gear_relation",
+            "assembly_update_gear_relation",
+            "assembly_delete_gear_relation"
           ]
         }
       ]

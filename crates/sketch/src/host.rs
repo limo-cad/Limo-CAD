@@ -135,6 +135,15 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
                 manager.set_joint_motion(request)
             })
         }
+        "assembly_create_gear_relation" => {
+            with_payload(payload, |request| manager.create_gear_relation(request))
+        }
+        "assembly_update_gear_relation" => {
+            with_payload(payload, |request| manager.update_gear_relation(request))
+        }
+        "assembly_delete_gear_relation" => {
+            with_payload(payload, |id| manager.delete_gear_relation(id))
+        }
         "assembly_preview_joint_motion" => {
             with_payload(payload, |request: SetJointMotionRequestDto| {
                 manager.preview_joint_motion(request)
