@@ -16,12 +16,12 @@ is the current source of truth for its order, approvals and CI. Its layers are:
 4. PR98: bench joinery, persistent references and interference inspection.
 5. PR100: the shared Rust command-script interpreter and editor schema.
 6. PR99: MCP/native adapters, source loading and live presentation.
-7. The recipe collection: authored parts and assemblies, shared catalog,
+7. PR102: authored parts and assemblies, shared catalog,
    teaching notes, camera directions and independent validation.
 
 Each PR's diff is against the layer below it. GitHub applies main's review rules
-to every layer and can merge a reviewed prefix from the bottom. A draft at the
-top does not prevent a ready lower prefix from landing. Use the native stack
+to every layer and can merge a reviewed prefix from the bottom. A draft layer
+does not prevent a ready prefix below it from landing. Use the native stack
 merge control; an ordinary feature-branch merge is not the release workflow.
 
 PR88 remains an independent diagnostics change against main. When it lands,
