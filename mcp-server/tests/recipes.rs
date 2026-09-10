@@ -206,7 +206,7 @@ impl Client {
         let mut client = Self::start();
         client.call(
             "cad_load_project_model",
-            json!({"model_json":serde_json::to_string(model).unwrap()}),
+            json!({"model_json":model.as_str().map(str::to_owned).unwrap_or_else(||serde_json::to_string(model).unwrap())}),
         );
         client
     }
@@ -1646,6 +1646,11 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
         )
         .unwrap();
         std::fs::write(
+            directory.join("model.json"),
+            serde_json::to_vec_pretty(&exports["final_model"]).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
             directory.join("interference.json"),
             serde_json::to_vec_pretty(&interference).unwrap(),
         )
@@ -1667,6 +1672,21 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
         exports, &repeated["exports"],
         "two independent native construction and drawing replays"
     );
+    validate_turbine_edit_and_motion(&mut client, exports);
+}
+
+fn validate_turbine_edit_and_motion(client: &mut Client, exports: &Value) {
+    let parts = exports["parts"].as_array().unwrap();
+    let stage = parts.iter().find(|part| part["id"] == "stage").unwrap();
+    let scene = &exports["final_scene"];
+    let body = |id: &Value| {
+        scene["bodies"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|body| body["id"] == *id)
+            .unwrap()
+    };
     let mut restored = Client::restore(&exports["final_model"]);
     let restored_scene = restored.call("solid_scene", json!({}));
     assert_eq!(
