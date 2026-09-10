@@ -402,9 +402,16 @@ impl AppState {
     }
 
     pub fn project_load(&self, payload: &str) -> String {
-        self.with_request(payload, |manager, model_json: String| {
-            manager.prepare_load_project(model_json)
-        })
+        let model_json: String = match serde_json::from_str(payload) {
+            Ok(model) => model,
+            Err(error) => {
+                return unchanged_project_load_error(format!("bad request payload: {error}"))
+            }
+        };
+        self.execute_with_prepare_error(
+            |manager| manager.prepare_load_project(model_json),
+            unchanged_project_load_error,
+        )
     }
 
     pub fn project_new(&self) -> String {
@@ -866,11 +873,19 @@ impl AppState {
         &self,
         prepare: impl FnOnce(&mut SketchManager) -> Result<RecomputePlanDto, nbcad_sketch::SessionError>,
     ) -> String {
+        self.execute_with_prepare_error(prepare, err_json)
+    }
+
+    fn execute_with_prepare_error(
+        &self,
+        prepare: impl FnOnce(&mut SketchManager) -> Result<RecomputePlanDto, nbcad_sketch::SessionError>,
+        reject_prepare: impl FnOnce(String) -> String,
+    ) -> String {
         let mut workspace = self.inner.lock().expect("engine lock poisoned");
         let inner = workspace.active_mut();
         let plan = match prepare(&mut inner.manager) {
             Ok(plan) => plan,
-            Err(error) => return err_json(error.to_string()),
+            Err(error) => return reject_prepare(error.to_string()),
         };
         let transaction_id = plan.transaction_id;
         let kernel_scene = match inner.kernel.recompute(&plan) {
@@ -893,6 +908,17 @@ impl AppState {
             Err(error) => err_json(error.to_string()),
         }
     }
+}
+
+/// Only parsing/prepare can prove that neither model nor kernel was replaced.
+/// Recompute may mutate kernel bodies before failing; its errors stay unverified.
+fn unchanged_project_load_error(message: String) -> String {
+    serde_json::json!({
+        "ok": false,
+        "error": message,
+        "data": {"project_load_state": "unchanged"}
+    })
+    .to_string()
 }
 
 fn gated_exact_contact_violation(
@@ -1016,6 +1042,51 @@ mod tests {
         let envelope: serde_json::Value = serde_json::from_str(&json).expect("valid envelope");
         assert_eq!(envelope["ok"], true, "engine error: {envelope}");
         envelope["value"].clone()
+    }
+
+    #[test]
+    fn rejected_project_prepare_marks_unchanged_and_preserves_native_export() {
+        let state = AppState::new();
+        value(state.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#));
+        value(state.engine_call(
+            "add_rectangle",
+            r#"{
+            "mode":"two_point","p1":{"x":-10.0,"y":-10.0},
+            "p2":{"x":10.0,"y":10.0},"ctrl_held":false
+        }"#,
+        ));
+        value(state.engine_call("end_sketch", ""));
+        value(state.solid_extrude(
+            r#"{
+            "sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body",
+            "extent":{"type":"distance","distance":10.0},"taper_angle_deg":0.0,
+            "flip":false,"target_body_ids":[]
+        }"#,
+        ));
+        let model = value(state.engine_call("project_export_model", ""));
+        let request = serde_json::json!({"expected_model_json":model}).to_string();
+        let mesh = state.export_stl(&request).unwrap();
+        assert!(!mesh.is_empty());
+        let mut invalid: serde_json::Value = serde_json::from_str(model.as_str().unwrap()).unwrap();
+        invalid["schema_version"] = serde_json::json!(999);
+        for payload in [
+            "{}".to_string(),
+            serde_json::to_string(&invalid.to_string()).unwrap(),
+        ] {
+            let error: serde_json::Value =
+                serde_json::from_str(&state.project_load(&payload)).unwrap();
+            assert_eq!(error["ok"], false);
+            assert_eq!(error["data"]["project_load_state"], "unchanged");
+            assert!(error["error"]
+                .as_str()
+                .is_some_and(|message| !message.is_empty()));
+            assert_eq!(value(state.engine_call("project_export_model", "")), model);
+            assert_eq!(state.export_stl(&request).unwrap(), mesh);
+        }
+        // The marker is specific to Open's pre-kernel rejection; other errors
+        // must not gain an unrelated promise about the model's load outcome.
+        let ordinary: serde_json::Value = serde_json::from_str(&state.solid_extrude("{}")).unwrap();
+        assert!(ordinary.get("data").is_none());
     }
 
     #[test]

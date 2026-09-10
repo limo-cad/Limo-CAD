@@ -292,6 +292,19 @@ export class EngineError extends Error {
   }
 }
 
+/** A rejected Open is harmless only when the engine proves rejection happened
+ * before replacing either the document or its native geometry. */
+export class ProjectLoadError extends EngineError {
+  constructor(
+    readonly engineState: 'unchanged' | 'unverified',
+    readonly cause: unknown,
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause),
+      cause instanceof EngineError ? cause.data : undefined);
+    this.name = 'ProjectLoadError';
+  }
+}
+
 /** Parse a host envelope string, throwing `EngineError` on failure. */
 export function unwrapEnvelope<T>(json: string): T {
   const env = JSON.parse(json) as { ok: boolean; value?: T; error?: string; data?: unknown };
