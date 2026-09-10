@@ -325,7 +325,9 @@ impl Author {
                 ),
             );
             let projection = format!("{name}_{kind}_projection");
-            self.call(&projection,"drawing/views","drawing_projection",json!({"body_ids":[body_ref(name)],"direction":direction,"up":up,"include_hidden":true}));
+            // Match the native sheet export's paper-space curve tolerance so
+            // the exact projection serves both association picks and output.
+            self.call(&projection,"drawing/views","drawing_projection",json!({"body_ids":[body_ref(name)],"direction":direction,"up":up,"include_hidden":true,"deflection":(0.08_f64/scale).max(0.01)}));
             views.push((view_id, projection));
         }
         for (i, diameter) in diameters.iter().enumerate() {
@@ -425,7 +427,7 @@ impl Author {
                 &projection,
                 "drawing/views",
                 "drawing_projection",
-                json!({"scope":"assembly","direction":direction,"up":up,"include_hidden":false}),
+                json!({"scope":"assembly","direction":direction,"up":up,"include_hidden":false,"deflection":(0.08_f64/scale).max(0.01)}),
             );
             if kind == "front" {
                 let anchor = |part: &str, point: Value| {

@@ -28026,6 +28026,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.12307692307692307,
           "direction": [
             0.0,
             0.0,
@@ -28116,6 +28117,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.12307692307692307,
           "direction": [
             0.0,
             -1.0,
@@ -28567,6 +28569,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.12307692307692307,
           "direction": [
             0.0,
             0.0,
@@ -28657,6 +28660,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.12307692307692307,
           "direction": [
             0.0,
             -1.0,
@@ -29108,6 +29112,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.09999999999999999,
           "direction": [
             0.0,
             0.0,
@@ -29198,6 +29203,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.09999999999999999,
           "direction": [
             0.0,
             -1.0,
@@ -30074,6 +30080,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.04,
           "direction": [
             0.0,
             0.0,
@@ -30164,6 +30171,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.04,
           "direction": [
             0.0,
             -1.0,
@@ -30680,6 +30688,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.03333333333333333,
           "direction": [
             0.0,
             0.0,
@@ -30770,6 +30779,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.03333333333333333,
           "direction": [
             0.0,
             -1.0,
@@ -31221,6 +31231,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.06666666666666667,
           "direction": [
             0.0,
             0.0,
@@ -31311,6 +31322,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.06666666666666667,
           "direction": [
             0.0,
             -1.0,
@@ -31827,6 +31839,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.06666666666666667,
           "direction": [
             0.0,
             0.0,
@@ -31917,6 +31930,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.06666666666666667,
           "direction": [
             0.0,
             -1.0,
@@ -32433,6 +32447,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.044444444444444446,
           "direction": [
             0.0,
             0.0,
@@ -32523,6 +32538,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.044444444444444446,
           "direction": [
             0.0,
             -1.0,
@@ -32974,6 +32990,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.02,
           "direction": [
             0.0,
             0.0,
@@ -33064,6 +33081,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.02,
           "direction": [
             0.0,
             -1.0,
@@ -33515,6 +33533,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.12307692307692307,
           "direction": [
             0.0,
             0.0,
@@ -33605,6 +33624,7 @@
               "pointer": "/id"
             }
           ],
+          "deflection": 0.12307692307692307,
           "direction": [
             0.0,
             -1.0,
@@ -33974,6 +33994,7 @@
     {
       "call": {
         "arguments": {
+          "deflection": 0.10666666666666667,
           "direction": [
             0.0,
             -1.0,
@@ -34264,6 +34285,7 @@
     {
       "call": {
         "arguments": {
+          "deflection": 0.12307692307692307,
           "direction": [
             0.0,
             0.0,

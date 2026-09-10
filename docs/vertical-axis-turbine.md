@@ -143,6 +143,10 @@ For a 0.180 m x0.200 m swept area and illustrative air density 1.225 kg/m³,
 fraction can become shaft power, and another fraction becomes electrical power.
 The 4:1 speed increase also increases the torque demanded from the rotor.
 Do not present either airflow power or open-circuit voltage as usable output.
+At 5 m/s the same assumptions give dynamic pressure `q = 0.5 * density * v² =
+15.3 Pa`, and `q * area = 0.551 N` is a force scale. Actual rotor force also
+depends on its drag coefficient, orientation and unsteady flow; this does not
+establish the bearing or guard design load.
 
 At an illustrative rotor torque of 0.020 N·m, the 36 mm rotor-gear pitch radius
 gives `F_t = T / r = 0.556 N` tangential tooth force. With a 20-degree pressure
