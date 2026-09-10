@@ -292,12 +292,14 @@ impl Author {
             &sheet_id,
             select(r(&sheet), "/sheets", json!({}), "last", "/id"),
         );
-        let scale = if name == "stage" || name == "cap" {
-            0.65
-        } else if name == "shaft" {
-            0.65
-        } else {
-            1.2
+        let scale = match name {
+            "stage" | "cap" | "shaft" => 0.65,
+            "base" => 0.8,
+            "pinion" => 4.,
+            "rotor_gear" => 1.8,
+            "motor_mount" => 2.4,
+            "tower" => 2.,
+            _ => 1.2,
         };
         let mut views = vec![];
         for (kind, direction, up, position) in [
@@ -338,11 +340,32 @@ impl Author {
         }
         let make_anchor = |z: f64| {
             let source = r(&views[1].1);
-            let pred = json!({"/model_point/2":z});
+            let pred = if z == 0. {
+                json!({"/model_point/2":z,"/point/0":at(&views[1].1,"/bounds/2")})
+            } else {
+                json!({"/model_point/2":z})
+            };
             json!({"body_id":body_ref(name),"edge_id":select(source.clone(),"/anchors",pred.clone(),"first","/edge_id"),"edge_key":select(source.clone(),"/anchors",pred.clone(),"first","/edge_key"),"endpoint":select(source.clone(),"/anchors",pred.clone(),"first","/endpoint"),"fallback_point":select(source,"/anchors",pred,"first","/model_point")})
         };
         let id = self.uid("height");
         self.call(&id,"drawing/dimensions","drawing_add_linear_dimension",json!({"sheet_id":r(&sheet_id),"view_id":r(&views[1].0),"first":make_anchor(0.),"second":make_anchor(height),"mode":"vertical","offset":14.,"precision":2}));
+        if name == "base" {
+            let corner = |x: f64, y: f64| {
+                let pred = json!({"/model_point/0":x,"/model_point/1":y,"/model_point/2":0.});
+                json!({"body_id":body_ref(name),"edge_id":select(r(&views[0].1),"/anchors",pred.clone(),"first","/edge_id"),"edge_key":select(r(&views[0].1),"/anchors",pred.clone(),"first","/edge_key"),"endpoint":select(r(&views[0].1),"/anchors",pred.clone(),"first","/endpoint"),"fallback_point":select(r(&views[0].1),"/anchors",pred,"first","/model_point")})
+            };
+            for (label, first, second, mode) in [
+                ("width", corner(-70., -65.), corner(90., -65.), "horizontal"),
+                ("depth", corner(90., -65.), corner(90., 65.), "vertical"),
+            ] {
+                self.call(&format!("base_{label}_dimension"),"drawing/dimensions","drawing_add_linear_dimension",json!({"sheet_id":r(&sheet_id),"view_id":r(&views[0].0),"first":first,"second":second,"mode":mode,"offset":14.,"precision":2}));
+            }
+            let centre = |x: f64, y: f64, radius: f64| {
+                let pred = json!({"/center_model/0":x,"/center_model/1":y,"/radius":radius});
+                json!({"body_id":body_ref(name),"edge_id":select(r(&views[0].1),"/circles",pred.clone(),"first","/edge_id"),"edge_key":select(r(&views[0].1),"/circles",pred.clone(),"first","/edge_key"),"endpoint":"start","circle_center":true,"fallback_point":select(r(&views[0].1),"/circles",pred,"first","/center_model")})
+            };
+            self.call("base_shaft_spacing","drawing/dimensions","drawing_add_linear_dimension",json!({"sheet_id":r(&sheet_id),"view_id":r(&views[0].0),"first":centre(0.,0.,9.),"second":centre(45.25,23.,1.7),"mode":"horizontal","offset":35.,"precision":2,"suffix":" shaft spacing"}));
+        }
         let id = self.uid("drawing_note");
         self.call(
             &id,
@@ -375,6 +398,44 @@ impl Author {
         ] {
             let id = self.uid("assembly_view");
             self.call(&id,"drawing/views","drawing_add_view",json!({"sheet_id":r("assembly_sheet_id"),"view":{"name":format!("Assembly {kind}"),"kind":kind,"scope":"assembly","direction":direction,"up":up,"position":position,"scale":scale,"show_hidden_lines":false}}));
+            let view_id = format!("assembly_{kind}_view_id");
+            self.bind(
+                &view_id,
+                select(
+                    select(
+                        r(&id),
+                        "/sheets",
+                        json!({"/id":r("assembly_sheet_id")}),
+                        "one",
+                        "",
+                    ),
+                    "/views",
+                    json!({}),
+                    "last",
+                    "/id",
+                ),
+            );
+            let projection = format!("assembly_{kind}_projection");
+            self.call(
+                &projection,
+                "drawing/views",
+                "drawing_projection",
+                json!({"scope":"assembly","direction":direction,"up":up,"include_hidden":false}),
+            );
+            if kind == "front" {
+                let anchor = |part: &str, point: Value| {
+                    let mut pred = point;
+                    pred["/body_id"] = body_ref(part);
+                    pred["/occurrence_id"] = occ_ref(part);
+                    json!({"body_id":body_ref(part),"occurrence_id":occ_ref(part),"edge_id":select(r(&projection),"/anchors",pred.clone(),"first","/edge_id"),"edge_key":select(r(&projection),"/anchors",pred.clone(),"first","/edge_key"),"endpoint":select(r(&projection),"/anchors",pred.clone(),"first","/endpoint"),"fallback_point":select(r(&projection),"/anchors",pred,"first","/model_point")})
+                };
+                self.call("assembly_height","drawing/dimensions","drawing_add_linear_dimension",json!({"sheet_id":r("assembly_sheet_id"),"view_id":r(&view_id),"first":anchor("base",json!({"/model_point/0":90.,"/model_point/2":0.})),"second":anchor("shaft",json!({"/model_point/2":278.})),"mode":"vertical","offset":14.,"precision":2}));
+            } else {
+                let pred = json!({"/body_id":body_ref("cap"),"/occurrence_id":occ_ref("cap"),"/radius":99.});
+                let field =
+                    |path: &str| select(r(&projection), "/circles", pred.clone(), "first", path);
+                self.call("assembly_diameter","drawing/dimensions","drawing_add_radial_dimension",json!({"sheet_id":r("assembly_sheet_id"),"view_id":r(&view_id),"feature":{"body_id":body_ref("cap"),"occurrence_id":occ_ref("cap"),"edge_id":field("/edge_id"),"edge_key":field("/edge_key"),"fallback_center":field("/center_model"),"fallback_normal":field("/normal_model"),"fallback_radius":field("/radius"),"closed":field("/closed")},"mode":"diameter","leader_angle_deg":35.,"offset":12.,"precision":2}));
+            }
         }
         self.call("assembly_note","drawing/annotate","drawing_add_note",json!({"sheet_id":r("assembly_sheet_id"),"position":[20.,254.],"text":"Two identical stages staggered 90 degrees.\nRotor and generator shafts use separate supports.\nSee TUR-BOM and individual part sheets for assembly and fits."}));
         let mut export = json!({"part":"assembly","sheet_id":r("assembly_sheet_id")});

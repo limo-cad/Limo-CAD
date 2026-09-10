@@ -27654,7 +27654,11 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "stage_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -27667,7 +27671,11 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "stage_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -27680,7 +27688,11 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "stage_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -27693,7 +27705,11 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "stage_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             }
@@ -28179,7 +28195,11 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "cap_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -28192,7 +28212,11 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "cap_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -28205,7 +28229,11 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "cap_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -28218,7 +28246,11 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "cap_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             }
@@ -28401,7 +28433,7 @@
               110.0,
               90.0
             ],
-            "scale": 1.2,
+            "scale": 0.8,
             "show_hidden_lines": true,
             "up": [
               0.0,
@@ -28491,7 +28523,7 @@
               290.0,
               105.0
             ],
-            "scale": 1.2,
+            "scale": 0.8,
             "show_hidden_lines": true,
             "up": [
               0.0,
@@ -28704,7 +28736,11 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "base_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -28717,7 +28753,11 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "base_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -28730,7 +28770,11 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "base_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -28743,7 +28787,11 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "base_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             }
@@ -28820,6 +28868,431 @@
         "operation": "drawing_add_linear_dimension"
       },
       "id": "height_1337"
+    },
+    {
+      "call": {
+        "arguments": {
+          "first": {
+            "body_id": {
+              "$ref": "base_body",
+              "pointer": "/id"
+            },
+            "edge_id": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {
+                  "/model_point/0": -70.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {
+                  "/model_point/0": -70.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "endpoint": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/endpoint",
+                "take": "first",
+                "where": {
+                  "/model_point/0": -70.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "fallback_point": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/model_point",
+                "take": "first",
+                "where": {
+                  "/model_point/0": -70.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            }
+          },
+          "mode": "horizontal",
+          "offset": 14.0,
+          "precision": 2,
+          "second": {
+            "body_id": {
+              "$ref": "base_body",
+              "pointer": "/id"
+            },
+            "edge_id": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "endpoint": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/endpoint",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "fallback_point": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/model_point",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            }
+          },
+          "sheet_id": {
+            "$ref": "base_sheet_id"
+          },
+          "view_id": {
+            "$ref": "base_top_view_id"
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_linear_dimension"
+      },
+      "id": "base_width_dimension"
+    },
+    {
+      "call": {
+        "arguments": {
+          "first": {
+            "body_id": {
+              "$ref": "base_body",
+              "pointer": "/id"
+            },
+            "edge_id": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "endpoint": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/endpoint",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "fallback_point": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/model_point",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": -65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            }
+          },
+          "mode": "vertical",
+          "offset": 14.0,
+          "precision": 2,
+          "second": {
+            "body_id": {
+              "$ref": "base_body",
+              "pointer": "/id"
+            },
+            "edge_id": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": 65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": 65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "endpoint": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/endpoint",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": 65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            },
+            "fallback_point": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/model_point",
+                "take": "first",
+                "where": {
+                  "/model_point/0": 90.0,
+                  "/model_point/1": 65.0,
+                  "/model_point/2": 0.0
+                }
+              }
+            }
+          },
+          "sheet_id": {
+            "$ref": "base_sheet_id"
+          },
+          "view_id": {
+            "$ref": "base_top_view_id"
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_linear_dimension"
+      },
+      "id": "base_depth_dimension"
+    },
+    {
+      "call": {
+        "arguments": {
+          "first": {
+            "body_id": {
+              "$ref": "base_body",
+              "pointer": "/id"
+            },
+            "circle_center": true,
+            "edge_id": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {
+                  "/center_model/0": 0.0,
+                  "/center_model/1": 0.0,
+                  "/radius": 9.0
+                }
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {
+                  "/center_model/0": 0.0,
+                  "/center_model/1": 0.0,
+                  "/radius": 9.0
+                }
+              }
+            },
+            "endpoint": "start",
+            "fallback_point": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/center_model",
+                "take": "first",
+                "where": {
+                  "/center_model/0": 0.0,
+                  "/center_model/1": 0.0,
+                  "/radius": 9.0
+                }
+              }
+            }
+          },
+          "mode": "horizontal",
+          "offset": 35.0,
+          "precision": 2,
+          "second": {
+            "body_id": {
+              "$ref": "base_body",
+              "pointer": "/id"
+            },
+            "circle_center": true,
+            "edge_id": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {
+                  "/center_model/0": 45.25,
+                  "/center_model/1": 23.0,
+                  "/radius": 1.7
+                }
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {
+                  "/center_model/0": 45.25,
+                  "/center_model/1": 23.0,
+                  "/radius": 1.7
+                }
+              }
+            },
+            "endpoint": "start",
+            "fallback_point": {
+              "$select": {
+                "from": {
+                  "$ref": "base_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/center_model",
+                "take": "first",
+                "where": {
+                  "/center_model/0": 45.25,
+                  "/center_model/1": 23.0,
+                  "/radius": 1.7
+                }
+              }
+            }
+          },
+          "sheet_id": {
+            "$ref": "base_sheet_id"
+          },
+          "suffix": " shaft spacing",
+          "view_id": {
+            "$ref": "base_top_view_id"
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_linear_dimension"
+      },
+      "id": "base_shaft_spacing"
     },
     {
       "call": {
@@ -28926,7 +29399,7 @@
               110.0,
               90.0
             ],
-            "scale": 1.2,
+            "scale": 2.0,
             "show_hidden_lines": true,
             "up": [
               0.0,
@@ -29016,7 +29489,7 @@
               290.0,
               105.0
             ],
-            "scale": 1.2,
+            "scale": 2.0,
             "show_hidden_lines": true,
             "up": [
               0.0,
@@ -29294,7 +29767,11 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "tower_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -29307,7 +29784,11 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "tower_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -29320,7 +29801,11 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "tower_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -29333,7 +29818,11 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "tower_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             }
@@ -29516,7 +30005,7 @@
               110.0,
               90.0
             ],
-            "scale": 1.2,
+            "scale": 2.4,
             "show_hidden_lines": true,
             "up": [
               0.0,
@@ -29606,7 +30095,7 @@
               290.0,
               105.0
             ],
-            "scale": 1.2,
+            "scale": 2.4,
             "show_hidden_lines": true,
             "up": [
               0.0,
@@ -29819,7 +30308,11 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "motor_mount_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -29832,7 +30325,11 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "motor_mount_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -29845,7 +30342,11 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "motor_mount_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -29858,7 +30359,11 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "motor_mount_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             }
@@ -30409,7 +30914,11 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "guard_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -30422,7 +30931,11 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "guard_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -30435,7 +30948,11 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "guard_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -30448,7 +30965,11 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "guard_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             }
@@ -30999,7 +31520,11 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "guard_lid_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -31012,7 +31537,11 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "guard_lid_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -31025,7 +31554,11 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "guard_lid_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -31038,7 +31571,11 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "guard_lid_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             }
@@ -31221,7 +31758,7 @@
               110.0,
               90.0
             ],
-            "scale": 1.2,
+            "scale": 1.8,
             "show_hidden_lines": true,
             "up": [
               0.0,
@@ -31311,7 +31848,7 @@
               290.0,
               105.0
             ],
-            "scale": 1.2,
+            "scale": 1.8,
             "show_hidden_lines": true,
             "up": [
               0.0,
@@ -31524,7 +32061,11 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "rotor_gear_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -31537,7 +32078,11 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "rotor_gear_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -31550,7 +32095,11 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "rotor_gear_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -31563,7 +32112,11 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "rotor_gear_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             }
@@ -31746,7 +32299,7 @@
               110.0,
               90.0
             ],
-            "scale": 1.2,
+            "scale": 4.0,
             "show_hidden_lines": true,
             "up": [
               0.0,
@@ -31836,7 +32389,7 @@
               290.0,
               105.0
             ],
-            "scale": 1.2,
+            "scale": 4.0,
             "show_hidden_lines": true,
             "up": [
               0.0,
@@ -32049,7 +32602,11 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "pinion_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -32062,7 +32619,11 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "pinion_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -32075,7 +32636,11 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "pinion_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -32088,7 +32653,11 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "pinion_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             }
@@ -32509,7 +33078,11 @@
                 "pointer": "/edge_id",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "shaft_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -32522,7 +33095,11 @@
                 "pointer": "/edge_key",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "shaft_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -32535,7 +33112,11 @@
                 "pointer": "/endpoint",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "shaft_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             },
@@ -32548,7 +33129,11 @@
                 "pointer": "/model_point",
                 "take": "first",
                 "where": {
-                  "/model_point/2": 0.0
+                  "/model_point/2": 0.0,
+                  "/point/0": {
+                    "$ref": "shaft_front_projection",
+                    "pointer": "/bounds/2"
+                  }
                 }
               }
             }
@@ -32735,6 +33320,263 @@
       "id": "assembly_view_1369"
     },
     {
+      "let": {
+        "assembly_front_view_id": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_view_1369"
+                },
+                "path": "/sheets",
+                "take": "one",
+                "where": {
+                  "/id": {
+                    "$ref": "assembly_sheet_id"
+                  }
+                }
+              }
+            },
+            "path": "/views",
+            "pointer": "/id",
+            "take": "last",
+            "where": {}
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "direction": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "include_hidden": false,
+          "scope": "assembly",
+          "up": [
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "group": "drawing/views",
+        "operation": "drawing_projection"
+      },
+      "id": "assembly_front_projection"
+    },
+    {
+      "call": {
+        "arguments": {
+          "first": {
+            "body_id": {
+              "$ref": "base_body",
+              "pointer": "/id"
+            },
+            "edge_id": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_front_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "base_body",
+                    "pointer": "/id"
+                  },
+                  "/model_point/0": 90.0,
+                  "/model_point/2": 0.0,
+                  "/occurrence_id": {
+                    "$ref": "base_occurrence",
+                    "pointer": "/id"
+                  }
+                }
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_front_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "base_body",
+                    "pointer": "/id"
+                  },
+                  "/model_point/0": 90.0,
+                  "/model_point/2": 0.0,
+                  "/occurrence_id": {
+                    "$ref": "base_occurrence",
+                    "pointer": "/id"
+                  }
+                }
+              }
+            },
+            "endpoint": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_front_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/endpoint",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "base_body",
+                    "pointer": "/id"
+                  },
+                  "/model_point/0": 90.0,
+                  "/model_point/2": 0.0,
+                  "/occurrence_id": {
+                    "$ref": "base_occurrence",
+                    "pointer": "/id"
+                  }
+                }
+              }
+            },
+            "fallback_point": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_front_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/model_point",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "base_body",
+                    "pointer": "/id"
+                  },
+                  "/model_point/0": 90.0,
+                  "/model_point/2": 0.0,
+                  "/occurrence_id": {
+                    "$ref": "base_occurrence",
+                    "pointer": "/id"
+                  }
+                }
+              }
+            },
+            "occurrence_id": {
+              "$ref": "base_occurrence",
+              "pointer": "/id"
+            }
+          },
+          "mode": "vertical",
+          "offset": 14.0,
+          "precision": 2,
+          "second": {
+            "body_id": {
+              "$ref": "shaft_body",
+              "pointer": "/id"
+            },
+            "edge_id": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_front_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "shaft_body",
+                    "pointer": "/id"
+                  },
+                  "/model_point/2": 278.0,
+                  "/occurrence_id": {
+                    "$ref": "shaft_occurrence",
+                    "pointer": "/id"
+                  }
+                }
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_front_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "shaft_body",
+                    "pointer": "/id"
+                  },
+                  "/model_point/2": 278.0,
+                  "/occurrence_id": {
+                    "$ref": "shaft_occurrence",
+                    "pointer": "/id"
+                  }
+                }
+              }
+            },
+            "endpoint": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_front_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/endpoint",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "shaft_body",
+                    "pointer": "/id"
+                  },
+                  "/model_point/2": 278.0,
+                  "/occurrence_id": {
+                    "$ref": "shaft_occurrence",
+                    "pointer": "/id"
+                  }
+                }
+              }
+            },
+            "fallback_point": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_front_projection"
+                },
+                "path": "/anchors",
+                "pointer": "/model_point",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "shaft_body",
+                    "pointer": "/id"
+                  },
+                  "/model_point/2": 278.0,
+                  "/occurrence_id": {
+                    "$ref": "shaft_occurrence",
+                    "pointer": "/id"
+                  }
+                }
+              }
+            },
+            "occurrence_id": {
+              "$ref": "shaft_occurrence",
+              "pointer": "/id"
+            }
+          },
+          "sheet_id": {
+            "$ref": "assembly_sheet_id"
+          },
+          "view_id": {
+            "$ref": "assembly_front_view_id"
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_linear_dimension"
+      },
+      "id": "assembly_height"
+    },
+    {
       "call": {
         "arguments": {
           "sheet_id": {
@@ -32766,6 +33608,208 @@
         "operation": "drawing_add_view"
       },
       "id": "assembly_view_1370"
+    },
+    {
+      "let": {
+        "assembly_top_view_id": {
+          "$select": {
+            "from": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_view_1370"
+                },
+                "path": "/sheets",
+                "take": "one",
+                "where": {
+                  "/id": {
+                    "$ref": "assembly_sheet_id"
+                  }
+                }
+              }
+            },
+            "path": "/views",
+            "pointer": "/id",
+            "take": "last",
+            "where": {}
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "arguments": {
+          "direction": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "include_hidden": false,
+          "scope": "assembly",
+          "up": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "group": "drawing/views",
+        "operation": "drawing_projection"
+      },
+      "id": "assembly_top_projection"
+    },
+    {
+      "call": {
+        "arguments": {
+          "feature": {
+            "body_id": {
+              "$ref": "cap_body",
+              "pointer": "/id"
+            },
+            "closed": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/closed",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "cap_body",
+                    "pointer": "/id"
+                  },
+                  "/occurrence_id": {
+                    "$ref": "cap_occurrence",
+                    "pointer": "/id"
+                  },
+                  "/radius": 99.0
+                }
+              }
+            },
+            "edge_id": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/edge_id",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "cap_body",
+                    "pointer": "/id"
+                  },
+                  "/occurrence_id": {
+                    "$ref": "cap_occurrence",
+                    "pointer": "/id"
+                  },
+                  "/radius": 99.0
+                }
+              }
+            },
+            "edge_key": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/edge_key",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "cap_body",
+                    "pointer": "/id"
+                  },
+                  "/occurrence_id": {
+                    "$ref": "cap_occurrence",
+                    "pointer": "/id"
+                  },
+                  "/radius": 99.0
+                }
+              }
+            },
+            "fallback_center": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/center_model",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "cap_body",
+                    "pointer": "/id"
+                  },
+                  "/occurrence_id": {
+                    "$ref": "cap_occurrence",
+                    "pointer": "/id"
+                  },
+                  "/radius": 99.0
+                }
+              }
+            },
+            "fallback_normal": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/normal_model",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "cap_body",
+                    "pointer": "/id"
+                  },
+                  "/occurrence_id": {
+                    "$ref": "cap_occurrence",
+                    "pointer": "/id"
+                  },
+                  "/radius": 99.0
+                }
+              }
+            },
+            "fallback_radius": {
+              "$select": {
+                "from": {
+                  "$ref": "assembly_top_projection"
+                },
+                "path": "/circles",
+                "pointer": "/radius",
+                "take": "first",
+                "where": {
+                  "/body_id": {
+                    "$ref": "cap_body",
+                    "pointer": "/id"
+                  },
+                  "/occurrence_id": {
+                    "$ref": "cap_occurrence",
+                    "pointer": "/id"
+                  },
+                  "/radius": 99.0
+                }
+              }
+            },
+            "occurrence_id": {
+              "$ref": "cap_occurrence",
+              "pointer": "/id"
+            }
+          },
+          "leader_angle_deg": 35.0,
+          "mode": "diameter",
+          "offset": 12.0,
+          "precision": 2,
+          "sheet_id": {
+            "$ref": "assembly_sheet_id"
+          },
+          "view_id": {
+            "$ref": "assembly_top_view_id"
+          }
+        },
+        "group": "drawing/dimensions",
+        "operation": "drawing_add_radial_dimension"
+      },
+      "id": "assembly_diameter"
     },
     {
       "call": {

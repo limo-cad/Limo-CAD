@@ -3,13 +3,16 @@
 The `vertical-axis-turbine` recipe builds the actual editable model, places its
 components with native joints, adds the 72:18 gear relationship, and creates its
 drawing package. The same source builds the model in fast mode or teaches the
-construction in paced/step mode. There is no second animation model or imported
+construction in presentation mode, with pause, step and speed controls. There is no second animation model or imported
 STL/STEP geometry.
 
-Run `cargo xtask run-script --recipe vertical-axis-turbine --repeat 2 --out <directory>`.
+Run `cargo xtask run-script --server <rebuilt-MCP-binary> --recipe vertical-axis-turbine --repeat 2 --out <directory>`.
 The app's Scripts catalog exposes the same source. Through MCP, use
 `cad_interface` with `action: "script"`, `recipe: "vertical-axis-turbine"`,
-`mode: "fast"` (or `paced`/`step`), and `validate: true` on a blank document.
+`mode: "fast"`, and `validate: true` on a blank document. For an attached desktop,
+use `mode: "present"`; pause, step and playback speed are presentation controls,
+not separate execution modes. The equivalent command uses `--session <id>` and
+`--present --speed 1`; independent `--repeat` checks run headlessly.
 Do not replay into an unrelated working document.
 
 The reviewed JSONC lives in `examples/scripts/vertical-axis-turbine.nbcad.jsonc`.
@@ -44,6 +47,14 @@ coordinate as `10 - 4 * rotor_angle` degrees, including multiple full turns and
 reverse driving. The 10-degree phase places the pinion gap opposite the first
 rotor-gear tooth at the home position.
 
+The current source uses six intervals per involute flank. The Rust author
+bounds the continuous profile deviation from the exact involute below 0.01 mm:
+0.002766 mm for the 72-tooth gear and 0.006855 mm for the 18-tooth pinion.
+It adds the maximum intervening involute arc length to a sampled point-to-edge
+distance bound, so checking only matching vertices cannot hide chord error.
+This refinement changes the geometry reference from earlier development runs;
+the final acceptance compares two runs of this committed source.
+
 The pinion's M2 clamp accommodates a provisional 6 mm projecting shaft. Its
 head/nut recess locally leaves a minimum 2.1 mm tooth-face thickness below the
 recess. This is explicit prototype geometry, not a strength rating. The hub
@@ -62,7 +73,10 @@ the procurement drawing before printing.
 
 PETG is the baseline. Start with a 0.4 mm nozzle and 0.2 mm layers only as a
 provisional process; qualify the actual filament and profile. Print each source
-body in its supplied local orientation with Z=0 on the bed. The stage, cap,
+body in its supplied local orientation with Z=0 on the bed. Choose **Part
+coordinates** in the app's mesh-export options, or pass `scope: "definition"`
+with its `body_ids` through MCP. Assembled placement is the default and includes
+all visible repeated occurrences. The stage, cap,
 base, carrier, cradle, guard, lid and gears have no broad unsupported ceilings.
 Horizontal holes and nut pockets still require slicer review and bridge coupons.
 The 198 mm plates leave ample room on the stated X2D bed, but their 200 mm
@@ -76,7 +90,9 @@ geometry envelope does not itself reserve a brim on a smaller printer.
    from above. The lower seat opens directly to the underside; attaching the
    base retains it. The relief between seats cannot pass a 22 mm bearing.
    Place the 28 mm inner-race spacer between the bearings. The upper washer,
-   rotor gear and lower shaft collar provide the axial stack. Tighten carrier
+   rotor gear and lower shaft collar provide the axial stack. Tighten the lower
+   collar before sliding the base over its 16 mm envelope: the installed base's
+   18 mm opening does not provide radial access to its set screw. Tighten carrier
    clamps only enough to retain the outer races, then check free rotation.
 3. Fasten the carrier and generator cradle to the base. The motor cradle has
    separate flat clamp ears; a screw is not expected to bear on a thin round
@@ -124,6 +140,15 @@ fraction can become shaft power, and another fraction becomes electrical power.
 The 4:1 speed increase also increases the torque demanded from the rotor.
 Do not present either airflow power or open-circuit voltage as usable output.
 
+At an illustrative rotor torque of 0.020 N·m, the 36 mm rotor-gear pitch radius
+gives `F_t = T / r = 0.556 N` tangential tooth force. With a 20-degree pressure
+angle the separating force is `F_r = F_t * tan(20°) = 0.202 N`. The 9 mm pinion
+pitch radius gives an ideal generator torque of 0.005 N·m at four times the
+speed; friction reduces the available torque. This example is a chosen teaching
+load, not a measured rotor torque, tooth-strength rating or bearing selection
+limit. Printed tooth thickness, root geometry, layer direction, clamp slip and
+cyclic load require physical tests; a dimensional clearance is not a load rating.
+
 Record startup angle, wind speed, rotor/generator RPM, known load resistance,
 terminal voltage/current, bearing temperature, hub slip and any contact. Compare
 no-load and loaded startup at multiple rotor angles. A fan is not a calibrated
@@ -135,11 +160,15 @@ The Rust MCP acceptance test replays from blank twice, compares complete native
 models/scenes/drawings, checks all sketch constraints and solved placement,
 exports each printable definition as a selected manifold 3MF, edits the stage
 plate and verifies save/reload, and drives the native gear relationship over
-multiple turns. Final source checks stop on geometry errors, unsolved joints,
+multiple turns. Exact quarter- and half-tooth-pitch interference samples test
+the rotating spur pair between home positions. These are discrete checks, not
+a proof of continuous contact or physical durability. Final source checks stop on geometry errors, unsolved joints,
 remaining sketch freedom or volumetric assembly interference.
 
 The drawings contain associative projected geometry, critical part dimensions,
-an assembly view and a hardware BOM. They are editable manufacturing references,
+base size and shaft spacing, overall assembly dimensions and a hardware BOM.
+Small gears and bearing/motor supports use enlarged views for legibility.
+They are editable manufacturing references,
 not a claim that a printer achieves a GD&T class. Physical fit, startup, output,
 clamp strength, fatigue, bearing loads, guard access and durability remain to be
 qualified. Use as a supervised near-ground science experiment for ages 8–12;

@@ -1553,7 +1553,7 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
     let mut client = Client::start();
     // This is a full construction/drafting acceptance run, not a single-call
     // unit test. The deadline remains bounded and failures still stop at once.
-    client.timeout = Duration::from_secs(240);
+    client.timeout = Duration::from_secs(600);
     let report = client.recipe("vertical-axis-turbine");
     let exports = &report["exports"];
     assert_eq!(exports["final_solution"]["solved"], true);
@@ -1608,7 +1608,7 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
         );
         let print = client.call(
             "solid_export_3mf",
-            json!({"body_ids":[part["body_id"]],"slicer_target":"standard"}),
+            json!({"body_ids":[part["body_id"]],"scope":"definition","slicer_target":"standard"}),
         );
         let bytes = BASE64
             .decode(print["bytes_base64"].as_str().unwrap())
@@ -1674,7 +1674,13 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
         "cold save/load preserves exact topology and mesh"
     );
     let old_volume = mesh_measurement(body(&stage["body_id"])).2;
-    let changed=restored.call("solid_edit_extrude",json!({"feature_id":exports["stage_plate_feature"],"extent":{"type":"distance","distance":4.}}));
+    let definition = exports["final_model"]["extrudes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|feature| feature["feature_id"] == exports["stage_plate_feature"])
+        .unwrap();
+    let changed=restored.call("solid_edit_extrude",json!({"feature_id":exports["stage_plate_feature"],"extrude":{"sketch_name":definition["sketch_name"],"profile_indices":definition["profile_indices"],"operation":definition["operation"],"extent":{"type":"distance","distance":4.},"taper_angle_deg":definition["taper_angle_deg"],"flip":definition["flip"],"target_body_ids":definition["target_body_ids"]}}));
     assert_eq!(changed["scene"]["errors"], json!([]));
     let changed_body = changed["scene"]["bodies"]
         .as_array()
@@ -1688,6 +1694,30 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
     let mut edited = Client::restore(&edited_model);
     let edited_scene = edited.call("solid_scene", json!({}));
     assert_eq!(edited_scene["bodies"], changed["scene"]["bodies"]);
+    let gear_occurrences = parts
+        .iter()
+        .filter(|part| part["id"] == "rotor_gear" || part["id"] == "pinion")
+        .map(|part| part["occurrence_id"].clone())
+        .collect::<Vec<_>>();
+    // Quarter- and half-pitch samples exercise contact between the vertex/home
+    // positions. These exact samples supplement, not replace, a physical sweep.
+    for angle in [1.25, 2.5] {
+        client.call("assembly_set_joint_motion", json!({"joint_id":exports["rotor_joint_id"],"angle_offset_deg":angle,"linear_offset_mm":0.}));
+        let sample = client.call(
+            "assembly_interference_check",
+            json!({"occurrence_ids":gear_occurrences}),
+        );
+        assert_eq!(sample["exact"], true);
+        assert_eq!(sample["pairs"].as_array().unwrap().len(), 1);
+        assert!(
+            sample["pairs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|pair| pair["interfering"] == false),
+            "gear contact at rotor angle{angle}: {sample}"
+        );
+    }
     let moved = client.call(
         "assembly_set_joint_motion",
         json!({"joint_id":exports["rotor_joint_id"],"angle_offset_deg":810.,"linear_offset_mm":0.}),
