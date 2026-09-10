@@ -157,6 +157,8 @@ export function normalizeDrawingDocument(drawing: DrawingDocumentDto): DrawingDo
       title_block: normalizedTitleBlock(sheet.title_block),
       views: (sheet.views ?? []).map((view) => ({
         ...view,
+        scope: view.scope ?? 'definition',
+        occurrence_ids: view.occurrence_ids ?? [],
         body_ids: view.body_ids ?? [],
         show_hidden_lines: view.show_hidden_lines ?? false,
         show_tangent_edges: view.show_tangent_edges ?? true,

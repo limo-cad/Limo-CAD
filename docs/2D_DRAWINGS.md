@@ -314,3 +314,29 @@ Future annotation types must follow the same invariant: persist semantic
 topology references and measurements, not sampled screen coordinates. React
 may edit and render those annotations, Rust validates them, and OCCT remains
 the authority for exact geometry.
+
+
+## Part definitions and placed assemblies
+
+Every drawing view persists a `scope`: `definition` (the legacy default) or
+`assembly`. Definition views use retained part coordinates. Assembly views
+project the current solved visible occurrences together, including repeated
+parts and nested placements. This lets one exact B-rep hide another in OCCT's
+hidden-line pass. `body_ids` filters source parts; `occurrence_ids` filters
+instances, and selecting a subassembly includes its descendants. Empty filters
+select everything in the chosen scope. An empty visible assembly selection is
+an error and never falls back to definition geometry.
+
+The Drawing inspector exposes the same scope and occurrence selection used by
+MCP `drawing_projection` and stored views. Scope belongs to the view, so a sheet
+can contain an assembly overview beside definition views for manufacturing.
+No placement is baked into the retained part geometry or feature history.
+
+Projected endpoints and circles include `occurrence_id`. Associative point,
+line, and circular references preserve this id, preventing a dimension from
+attaching to a different copy of the same part. Older definition references
+remain definition references. A scope change can require reassociating them.
+Derived assembly cutting planes and auxiliary directions resolve the placed
+source topology. Native desktop and MCP use `nbcad_occt::project_drawing`;
+the development browser's tessellated fallback consumes the same Rust-solved
+instance poses. Exact hidden-line generation remains in the native OCCT bridge.

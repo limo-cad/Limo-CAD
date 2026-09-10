@@ -1146,6 +1146,8 @@ export function drawingViewPlacementDraft(
     relationship.alignment,
   );
   if (root) {
+    view.scope = root.scope ?? 'definition';
+    view.occurrence_ids = [...(root.occurrence_ids ?? [])];
     view.body_ids = [...root.body_ids];
     view.show_hidden_lines = root.show_hidden_lines;
     view.show_tangent_edges = root.show_tangent_edges;

@@ -8,7 +8,7 @@ fn choice(values: &[&str]) -> Value {
 pub fn specs() -> Vec<ToolSpec> {
     let id = json!({"type":"integer","minimum":1});
     let anchor = object_schema(
-        json!({"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"endpoint":choice(&["start","end"]),"fallback_point":vector(3),"circle_center":{"type":"boolean"}}),
+        json!({"occurrence_id":{"oneOf":[id,{"type":"null"}]},"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"endpoint":choice(&["start","end"]),"fallback_point":vector(3),"circle_center":{"type":"boolean"}}),
         &[
             "body_id",
             "edge_id",
@@ -19,7 +19,7 @@ pub fn specs() -> Vec<ToolSpec> {
     );
     let sheet = object_schema(json!({"sheet_id":id}), &["sheet_id"]);
     let circular = object_schema(
-        json!({"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"fallback_center":vector(3),"fallback_normal":vector(3),"fallback_radius":{"type":"number","exclusiveMinimum":0},"closed":{"type":"boolean"}}),
+        json!({"occurrence_id":{"oneOf":[id,{"type":"null"}]},"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"fallback_center":vector(3),"fallback_normal":vector(3),"fallback_radius":{"type":"number","exclusiveMinimum":0},"closed":{"type":"boolean"}}),
         &[
             "body_id",
             "edge_id",
@@ -31,7 +31,7 @@ pub fn specs() -> Vec<ToolSpec> {
         ],
     );
     let line = object_schema(
-        json!({"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"fallback_start":vector(3),"fallback_end":vector(3)}),
+        json!({"occurrence_id":{"oneOf":[id,{"type":"null"}]},"body_id":id,"edge_id":id,"edge_key":{"type":"string","minLength":1},"fallback_start":vector(3),"fallback_end":vector(3)}),
         &[
             "body_id",
             "edge_id",
@@ -55,7 +55,7 @@ pub fn specs() -> Vec<ToolSpec> {
         json!({
             "name":{"type":"string"},"kind":choice(&["front","rear","left","right","top","bottom","isometric","custom","section","detail","auxiliary","broken","removed_section"]),"derivation":derivation,
             "direction":vector(3),"up":vector(3),"position":vector(2),"scale":{"type":"number","exclusiveMinimum":0},
-            "parent_view_id":id,"alignment":choice(&["free","horizontal","vertical"]),"body_ids":{"type":"array","items":id},"show_hidden_lines":{"type":"boolean"},"show_tangent_edges":{"type":"boolean"}
+            "scope":choice(&["definition","assembly"]),"occurrence_ids":{"type":"array","items":id},"parent_view_id":id,"alignment":choice(&["free","horizontal","vertical"]),"body_ids":{"type":"array","items":id},"show_hidden_lines":{"type":"boolean"},"show_tangent_edges":{"type":"boolean"}
         }),
         &["name", "kind", "direction", "up", "position", "scale"],
     );
@@ -72,6 +72,6 @@ pub fn specs() -> Vec<ToolSpec> {
         ToolSpec::direct("drawing_set_bom","Set drawing bill of materials","Replace the sheet BOM with explicit quantities and manufacturing notes. IDs are allocated by the document. Existing balloons must be removed first. Body references are optional for purchased hardware.","drawing_set_bom",Payload::Object,object_schema(json!({"sheet_id":id,"position":vector(2),"items":{"type":"array","maxItems":4096,"items":object_schema(json!({"item_number":{"type":"string"},"body_id":id,"part_number":{"type":"string"},"description":{"type":"string"},"quantity":{"type":"number","exclusiveMinimum":0},"material":{"type":"string"},"finish":{"type":"string"}}),&["item_number","part_number","description","quantity"])}}),&["sheet_id","items"])),
         ToolSpec::direct("drawing_add_note","Add drawing note","Add a free-standing note in paper millimetres. Returns the updated drawing document.","drawing_add_note",Payload::Object,object_schema(json!({"sheet_id":id,"text":{"type":"string","maxLength":4096},"position":vector(2)}),&["sheet_id","text","position"])),
         ToolSpec::direct("drawing_export","Export drawing sheet","Render a persistent drawing sheet to SVG or DXF using the current exact model, associative dimensions, title and BOM. Returns UTF-8 content without writing a file. Rejects stale references and unsupported presentation instead of dropping content.","drawing_export",Payload::Object,object_schema(json!({"sheet_id":id,"format":choice(&["svg","dxf"])}),&["sheet_id","format"])),
-        ToolSpec::direct("drawing_projection","Generate exact drawing projection","Generate OCCT visible/hidden linework, bounds, topology anchors and circular references from the current completed solid model. Supports exact section planes. No GUI is required.","drawing_projection",Payload::Object,object_schema(json!({"body_ids":{"type":"array","items":id},"direction":vector(3),"up":vector(3),"include_hidden":{"type":"boolean"},"include_tangent_edges":{"type":"boolean"},"deflection":{"type":"number","exclusiveMinimum":0},"section_plane":object_schema(json!({"point":vector(3),"normal":vector(3),"depth":{"type":"number","exclusiveMinimum":0}}),&["point","normal"])}),&["direction","up"]))
+        ToolSpec::direct("drawing_projection","Generate exact drawing projection","Generate OCCT visible/hidden linework, bounds, topology anchors and circular references from the current completed solid model. Supports exact section planes. No GUI is required.","drawing_projection",Payload::Object,object_schema(json!({"scope":choice(&["definition","assembly"]),"occurrence_ids":{"type":"array","items":id},"body_ids":{"type":"array","items":id},"direction":vector(3),"up":vector(3),"include_hidden":{"type":"boolean"},"include_tangent_edges":{"type":"boolean"},"deflection":{"type":"number","exclusiveMinimum":0},"section_plane":object_schema(json!({"point":vector(3),"normal":vector(3),"depth":{"type":"number","exclusiveMinimum":0}}),&["point","normal"])}),&["direction","up"]))
     ]
 }

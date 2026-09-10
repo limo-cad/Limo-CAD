@@ -308,17 +308,16 @@ impl CadServer {
                 let content = nbcad_occt::drawing_export::export_sheet(
                     &self.manager.drawing_document(),
                     &scene,
+                    &self.manager.assembly_document(),
                     &request,
                     |r| {
-                        let mut p = self
-                            .kernel
-                            .drawing_projection(r)
-                            .map_err(|e| e.to_string())?;
-                        p.anchors = nbcad_occt::drawing_projection_anchors(&scene, r, &p)
-                            .map_err(|e| e.to_string())?;
-                        p.circles = nbcad_occt::drawing_projection_circles(&scene, r, &p)
-                            .map_err(|e| e.to_string())?;
-                        Ok(p)
+                        nbcad_occt::project_drawing(
+                            &self.kernel,
+                            &scene,
+                            &self.manager.assembly_document(),
+                            r,
+                        )
+                        .map_err(|e| e.to_string())
                     },
                 )?;
                 json!({"format":request.format,"encoding":"utf8","content":content,"sheet_id":request.sheet_id})
@@ -329,16 +328,13 @@ impl CadServer {
                 if !scene.errors.is_empty() {
                     return Err("Resolve timeline errors before generating a drawing view.".into());
                 }
-                let mut projection = self
-                    .kernel
-                    .drawing_projection(&request)
-                    .map_err(|e| e.to_string())?;
-                projection.anchors =
-                    nbcad_occt::drawing_projection_anchors(&scene, &request, &projection)
-                        .map_err(|e| e.to_string())?;
-                projection.circles =
-                    nbcad_occt::drawing_projection_circles(&scene, &request, &projection)
-                        .map_err(|e| e.to_string())?;
+                let projection = nbcad_occt::project_drawing(
+                    &self.kernel,
+                    &scene,
+                    &self.manager.assembly_document(),
+                    &request,
+                )
+                .map_err(|e| e.to_string())?;
                 serde_json::to_value(projection).map_err(|e| e.to_string())?
             } else if name == "solid_export_step" {
                 let request: StepExportRequest = if arguments.is_null() {
@@ -6202,6 +6198,164 @@ mod tests {
         assert!(server
             .call_tool("solid_export_3mf", json!({"slicer_target":"standard"}))
             .is_err());
+    }
+
+    #[test]
+    fn assembly_drawing_projects_rotated_instances_and_shared_hidden_line_occlusion() {
+        let (mut server, _) = mcp_box();
+        let document = server.call_tool("assembly_document", json!({})).unwrap();
+        let original = document["component_structure"]["occurrences"][0]["id"].clone();
+        let component = document["component_structure"]["occurrences"][0]["component_id"].clone();
+        let added = server
+            .call_tool(
+                "assembly_create_occurrence",
+                json!({"component_id":component,"name":"Rotated copy"}),
+            )
+            .unwrap();
+        let angle = std::f64::consts::FRAC_PI_8;
+        server.call_tool("assembly_set_occurrence_pose",json!({"occurrence_id":added["id"],"local_pose":{"translation":[100.,0.,0.],"rotation":[0.,0.,angle.sin(),angle.cos()]}})).unwrap();
+        let request = json!({"scope":"assembly","direction":[0.,0.,1.],"up":[0.,1.,0.],"include_hidden":true});
+        let before = server.call_tool("cad_project_model", json!({})).unwrap();
+        let projection = server
+            .call_tool("drawing_projection", request.clone())
+            .unwrap();
+        assert!((projection["bounds"][0].as_f64().unwrap() + 10.).abs() < 1e-6);
+        assert!(
+            (projection["bounds"][2].as_f64().unwrap() - (100. + 10. * 2_f64.sqrt())).abs() < 1e-6
+        );
+        let anchors = projection["anchors"].as_array().unwrap();
+        assert!(anchors.iter().any(|a| a["occurrence_id"] == original));
+        let placed = anchors
+            .iter()
+            .find(|a| a["occurrence_id"] == added["id"])
+            .unwrap();
+        let reference:nbcad_sketch::DrawingTopologyAnchorRefDto=serde_json::from_value(json!({"occurrence_id":placed["occurrence_id"],"body_id":placed["body_id"],"edge_id":placed["edge_id"],"edge_key":placed["edge_key"],"endpoint":placed["endpoint"],"fallback_point":[999.,999.,999.]})).unwrap();
+        let resolved = nbcad_occt::resolve_drawing_anchor(
+            &server.manager.solid_scene(),
+            &server.manager.assembly_document(),
+            &reference,
+        )
+        .unwrap();
+        let expected: [f64; 3] = serde_json::from_value(placed["model_point"].clone()).unwrap();
+        for (actual, expected) in resolved.iter().zip(expected) {
+            assert!((actual - expected).abs() < 1e-8);
+        }
+        assert_eq!(
+            server.call_tool("cad_project_model", json!({})).unwrap(),
+            before
+        );
+        let mut definition = request.clone();
+        definition["scope"] = json!("definition");
+        let definition = server.call_tool("drawing_projection", definition).unwrap();
+        assert!((definition["bounds"][2].as_f64().unwrap() - 10.).abs() < 1e-6);
+        assert!(definition["anchors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|a| a["occurrence_id"].is_null()));
+        let mut selected = request.clone();
+        selected["occurrence_ids"] = json!([added["id"]]);
+        let selected = server.call_tool("drawing_projection", selected).unwrap();
+        assert!(selected["anchors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|a| a["occurrence_id"] == added["id"]));
+        assert!(server.call_tool("drawing_projection",json!({"scope":"assembly","occurrence_ids":[9999],"direction":[0.,0.,1.],"up":[0.,1.,0.]})).is_err());
+        // Place a front box over the right half of the rear box. The rear
+        // right-hand vertical edge must be hidden by the other occurrence.
+        server.call_tool("assembly_set_occurrence_pose",json!({"occurrence_id":added["id"],"local_pose":{"translation":[5.,0.,30.],"rotation":[0.,0.,0.,1.]}})).unwrap();
+        let occluded = server.call_tool("drawing_projection", request).unwrap();
+        let has_mid_edge = |lines: &Value| {
+            lines.as_array().unwrap().iter().any(|line| {
+                line["points"].as_array().unwrap().windows(2).any(|pair| {
+                    let x0 = pair[0][0].as_f64().unwrap();
+                    let x1 = pair[1][0].as_f64().unwrap();
+                    let y0 = pair[0][1].as_f64().unwrap();
+                    let y1 = pair[1][1].as_f64().unwrap();
+                    (x0 - 10.).abs() < 1e-6
+                        && (x1 - 10.).abs() < 1e-6
+                        && y0.min(y1) < -1.
+                        && y0.max(y1) > 1.
+                })
+            })
+        };
+        assert!(!has_mid_edge(&occluded["visible"]));
+        assert!(has_mid_edge(&occluded["hidden"]));
+        // Identical source endpoints on distinct occurrences are distinct
+        // associative anchors. Measure their placed separation, not zero.
+        let anchors = occluded["anchors"].as_array().unwrap();
+        let first = anchors
+            .iter()
+            .find(|a| a["occurrence_id"] == original)
+            .unwrap();
+        let second = anchors
+            .iter()
+            .find(|a| {
+                a["occurrence_id"] == added["id"]
+                    && a["edge_id"] == first["edge_id"]
+                    && a["endpoint"] == first["endpoint"]
+            })
+            .unwrap();
+        let reference = |a: &Value| json!({"occurrence_id":a["occurrence_id"],"body_id":a["body_id"],"edge_id":a["edge_id"],"edge_key":a["edge_key"],"endpoint":a["endpoint"],"fallback_point":a["model_point"]});
+        server
+            .call_tool(
+                "drawing_create_sheet",
+                json!({"name":"Occurrence dimensions","format":"a4","orientation":"landscape"}),
+            )
+            .unwrap();
+        let view = json!({"name":"Assembly top","kind":"top","scope":"assembly","direction":[0.,0.,1.],"up":[0.,1.,0.],"position":[90.,65.],"scale":2.});
+        server
+            .call_tool("drawing_add_view", json!({"sheet_id":1,"view":view}))
+            .unwrap();
+        let dimension = json!({"sheet_id":1,"view_id":1,"first":reference(first),"second":reference(second),"mode":"horizontal","offset":12.});
+        server
+            .call_tool("drawing_add_linear_dimension", dimension.clone())
+            .unwrap();
+        let exported = server
+            .call_tool("drawing_export", json!({"sheet_id":1,"format":"svg"}))
+            .unwrap();
+        assert!(exported["content"]
+            .as_str()
+            .unwrap()
+            .contains(">5.00</text>"));
+        let mut selected_view = view;
+        selected_view["occurrence_ids"] = json!([original]);
+        server
+            .call_tool(
+                "drawing_add_view",
+                json!({"sheet_id":1,"view":selected_view}),
+            )
+            .unwrap();
+        let saved = server.call_tool("drawing_document", json!({})).unwrap();
+        let mut excluded = dimension.clone();
+        excluded["view_id"] = json!(2);
+        assert!(server
+            .call_tool("drawing_add_linear_dimension", excluded)
+            .is_err());
+        let mut no_instance = dimension;
+        no_instance["first"]["occurrence_id"] = Value::Null;
+        assert!(server
+            .call_tool("drawing_add_linear_dimension", no_instance)
+            .is_err());
+        assert_eq!(
+            saved,
+            server.call_tool("drawing_document", json!({})).unwrap()
+        );
+        let model = server.call_tool("cad_project_model", json!({})).unwrap();
+        let before = server
+            .call_tool("drawing_export", json!({"sheet_id":1,"format":"svg"}))
+            .unwrap();
+        let mut restored = CadServer::new().unwrap();
+        restored
+            .call_tool("cad_load_project_model", json!({"model_json":model}))
+            .unwrap();
+        assert_eq!(
+            before["content"],
+            restored
+                .call_tool("drawing_export", json!({"sheet_id":1,"format":"svg"}))
+                .unwrap()["content"]
+        );
     }
 
     #[test]

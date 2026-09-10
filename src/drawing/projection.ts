@@ -1,5 +1,8 @@
+import { Quaternion, Vector3 } from '../components/viewport/cadInteraction';
 import type {
   BodyDto,
+  AssemblyDocumentDto,
+  AssemblySolutionDto,
   DrawingPolylineDto,
   DrawingProjectionAnchorDto,
   DrawingProjectionDto,
@@ -10,6 +13,49 @@ import type {
   Point3Dto,
   SolidSceneDto,
 } from '../engine/types';
+
+type DrawingInstanceBody = BodyDto & { drawingOccurrenceId?: number };
+
+/** Presentation-only transform of Rust-solved poses. Retained scene data is unchanged. */
+export function drawingInstanceScene(
+  scene: SolidSceneDto,
+  solution: AssemblySolutionDto,
+  assembly?: AssemblyDocumentDto,
+  occurrenceIds: number[] = [],
+  includeMesh = true,
+): SolidSceneDto {
+  if (!solution.solved) throw new Error('Resolve assembly diagnostics before projecting its occurrences.');
+  const selected = new Set(occurrenceIds);
+  if (assembly) {
+    for (const id of occurrenceIds) {
+      if (!assembly.component_structure.occurrences.some((node) => node.id === id)) throw new Error('Drawing occurrence is missing.');
+    }
+    let before: number;
+    do {
+      before = selected.size;
+      for (const node of assembly.component_structure.occurrences) {
+        if (node.parent_occurrence_id != null && selected.has(node.parent_occurrence_id)) selected.add(node.id);
+      }
+    } while (selected.size !== before);
+  }
+  const bodies = solution.instance_body_poses.filter((pose) => pose.visible && (selected.size === 0 || selected.has(pose.occurrence_id))).map((pose): DrawingInstanceBody => {
+    const body = scene.bodies.find((value) => value.id === pose.body_id);
+    if (!body) throw new Error('Drawing occurrence source body is missing.');
+    const q = new Quaternion(...pose.rotation).normalize();
+    const t = new Vector3(...pose.translation);
+    const point = (p: Point3Dto): Point3Dto => {
+      const value = new Vector3(p.x, p.y, p.z).applyQuaternion(q).add(t);
+      return { x:value.x, y:value.y, z:value.z };
+    };
+    const positions: number[] = includeMesh ? [] : body.mesh.positions;
+    for (let i=0; includeMesh && i<body.mesh.positions.length; i+=3) {
+      const p = point({x:body.mesh.positions[i],y:body.mesh.positions[i+1],z:body.mesh.positions[i+2]});
+      positions.push(p.x,p.y,p.z);
+    }
+    return { ...body, drawingOccurrenceId:pose.occurrence_id, mesh:{...body.mesh,positions}, edges:body.edges.map((edge) => ({...edge,points:edge.points.map(point)})) };
+  });
+  return {...scene,bodies};
+}
 
 type Vec3 = [number, number, number];
 type ProjectedPoint = [number, number, number];
@@ -45,7 +91,11 @@ export function drawingProjectionRequestForView(
   view: DrawingViewDto,
   views: DrawingViewDto[],
   scene: SolidSceneDto,
+  solution?: AssemblySolutionDto,
 ): DrawingProjectionRequest {
+  if (view.scope === 'assembly' && view.derivation && solution?.solved) {
+    scene = drawingInstanceScene(scene, solution, undefined, [], false);
+  }
   const basis = currentDrawingViewBasis(view, views, scene, new Set());
   const derivation = view.derivation;
   const sectionPlane = derivation?.type === 'section' || derivation?.type === 'removed_section'
@@ -56,6 +106,8 @@ export function drawingProjectionRequestForView(
     }
     : null;
   return {
+    scope: view.scope ?? 'definition',
+    occurrence_ids: view.occurrence_ids ?? [],
     body_ids: view.body_ids,
     direction: basis.direction,
     up: basis.up,
@@ -87,6 +139,7 @@ function currentDrawingViewBasis(
       derivation.reference.edge_id,
       derivation.reference.edge_key,
       scene,
+      derivation.reference.occurrence_id,
     ) ?? [derivation.reference.fallback_start, derivation.reference.fallback_end]
     : [
       resolveModelAnchorPoint(derivation.first, scene) ?? derivation.first.fallback_point,
@@ -114,12 +167,12 @@ function resolveModelAnchorPoint(
   reference: DrawingTopologyAnchorRefDto,
   scene: SolidSceneDto,
 ): Vec3 | null {
-  const line = resolveModelLine(reference.body_id, reference.edge_id, reference.edge_key, scene);
+  const line = resolveModelLine(reference.body_id, reference.edge_id, reference.edge_key, scene, reference.occurrence_id);
   if (!line) return null;
   if (!reference.circle_center) {
     return reference.endpoint === 'start' ? line[0] : line[1];
   }
-  const body = scene.bodies.find((candidate) => candidate.id === reference.body_id);
+  const body = scene.bodies.find((candidate) => candidate.id === reference.body_id && ((candidate as DrawingInstanceBody).drawingOccurrenceId ?? null) === (reference.occurrence_id ?? null));
   const edge = body?.edges.find((candidate) => candidate.id === reference.edge_id)
     ?? body?.edges.find((candidate) => candidate.key === reference.edge_key);
   return edge ? fitCircleCenter(edge.points.map(pointTuple)) : null;
@@ -130,8 +183,9 @@ function resolveModelLine(
   edgeId: number,
   edgeKey: string,
   scene: SolidSceneDto,
+  occurrenceId?: number | null,
 ): [Vec3, Vec3] | null {
-  const body = scene.bodies.find((candidate) => candidate.id === bodyId);
+  const body = scene.bodies.find((candidate) => candidate.id === bodyId && ((candidate as DrawingInstanceBody).drawingOccurrenceId ?? null) === (occurrenceId ?? null));
   const edge = body?.edges.find((candidate) => candidate.id === edgeId)
     ?? body?.edges.find((candidate) => candidate.key === edgeKey);
   const first = edge?.points[0];
@@ -397,6 +451,7 @@ function projectedCircles(
       candidates.push({
         depth: projectedCenter[2],
         circle: {
+        occurrence_id: (body as DrawingInstanceBody).drawingOccurrenceId,
         body_id: body.id,
         edge_id: edge.id,
         edge_key: edge.key,
@@ -511,7 +566,8 @@ function projectedAnchors(
         const projected = projectPoint(model, basis);
         const point: [number, number] = [projected[0], projected[1]];
         anchors.push({
-          body_id: body.id,
+          occurrence_id: (body as DrawingInstanceBody).drawingOccurrenceId,
+        body_id: body.id,
           edge_id: edge.id,
           edge_key: edge.key,
           endpoint,

@@ -47,8 +47,11 @@ export function drawingCenterlineEdgeCandidates(
     for (const edge of body.edges) {
       const points = edge.points.map((point) => [point.x, point.y, point.z] as Vec3);
       if (!isLinear(points)) continue;
-      const start = points[0];
-      const end = points[points.length - 1];
+      for (const startAnchor of projection.anchors.filter((anchor) => anchor.body_id === body.id && anchor.edge_id === edge.id && anchor.edge_key === edge.key && anchor.endpoint === 'start')) {
+      const endAnchor = projection.anchors.find((anchor) => anchor.body_id === body.id && anchor.edge_id === edge.id && anchor.edge_key === edge.key && anchor.endpoint === 'end' && (anchor.occurrence_id ?? null) === (startAnchor.occurrence_id ?? null));
+      if (!endAnchor) continue;
+      const start = startAnchor.model_point;
+      const end = endAnchor.model_point;
       const projectedStart: Vec2 = [dot3(start, right), dot3(start, pageUp)];
       const projectedEnd: Vec2 = [dot3(end, right), dot3(end, pageUp)];
       const paperStart = projectedToPaper(projectedStart, center, view);
@@ -64,13 +67,14 @@ export function drawingCenterlineEdgeCandidates(
       candidates.push({
         depth: dot3(midpoint3(start, end), direction),
         candidate: {
-          key: `${body.id}:${edge.id}`,
-          reference: drawingLineRef(body.id, edge.id, edge.key, start, end),
+          key: `${startAnchor.occurrence_id ?? 'definition'}:${body.id}:${edge.id}`,
+          reference: drawingLineRef(body.id, edge.id, edge.key, start, end, startAnchor.occurrence_id),
           paperStart,
           paperEnd,
           hidden,
         },
       });
+      }
     }
   }
 
@@ -102,7 +106,7 @@ export function drawingCenterlineEdgesCompatible(
 }
 
 export function sameDrawingLineRef(left: DrawingLineRefDto, right: DrawingLineRefDto): boolean {
-  return left.body_id === right.body_id && left.edge_id === right.edge_id;
+  return (left.occurrence_id ?? null) === (right.occurrence_id ?? null) && left.body_id === right.body_id && left.edge_id === right.edge_id;
 }
 
 /**

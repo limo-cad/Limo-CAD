@@ -327,8 +327,22 @@ pub struct DrawingBomItemDto {
     pub finish: String,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DrawingViewScope {
+    #[default]
+    Definition,
+    Assembly,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrawingViewDto {
+    /// Definition coordinates or authoritative solved assembly occurrences.
+    #[serde(default)]
+    pub scope: DrawingViewScope,
+    /// Empty selects all visible occurrences; selected containers include descendants.
+    #[serde(default)]
+    pub occurrence_ids: Vec<nbcad_assembly::OccurrenceId>,
     #[serde(default)]
     pub id: u64,
     pub name: String,
@@ -443,6 +457,8 @@ pub enum DrawingViewDerivationDto {
 /// topology.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrawingTopologyAnchorRefDto {
+    #[serde(default)]
+    pub occurrence_id: Option<nbcad_assembly::OccurrenceId>,
     pub body_id: BodyId,
     pub edge_id: EdgeId,
     pub edge_key: String,
@@ -575,6 +591,8 @@ pub enum DrawingOrdinateAxis {
 /// diagnostics and explicit user-confirmed reassociation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrawingCircularRefDto {
+    #[serde(default)]
+    pub occurrence_id: Option<nbcad_assembly::OccurrenceId>,
     pub body_id: BodyId,
     pub edge_id: EdgeId,
     pub edge_key: String,
@@ -589,6 +607,8 @@ pub struct DrawingCircularRefDto {
 /// explicit user-confirmed reassociation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrawingLineRefDto {
+    #[serde(default)]
+    pub occurrence_id: Option<nbcad_assembly::OccurrenceId>,
     pub body_id: BodyId,
     pub edge_id: EdgeId,
     pub edge_key: String,
@@ -1235,6 +1255,17 @@ impl DrawingDocumentDto {
                         view.name
                     ));
                 }
+                let mut occurrence_ids = HashSet::new();
+                if view.scope == DrawingViewScope::Definition && !view.occurrence_ids.is_empty() {
+                    return Err(
+                        "Definition drawing views cannot select assembly occurrences".into(),
+                    );
+                }
+                for occurrence in &view.occurrence_ids {
+                    if occurrence.0 == 0 || !occurrence_ids.insert(occurrence.0) {
+                        return Err("Drawing occurrence IDs must be unique and nonzero".into());
+                    }
+                }
                 let mut body_ids = HashSet::new();
                 for body_id in &view.body_ids {
                     if body_id.0 == 0 || !body_ids.insert(body_id.0) {
@@ -1851,7 +1882,11 @@ impl DrawingDocumentDto {
 }
 
 fn validate_anchor(anchor: &DrawingTopologyAnchorRefDto, annotation_id: u64) -> Result<(), String> {
-    if anchor.body_id.0 == 0 || anchor.edge_id.0 == 0 || anchor.edge_key.trim().is_empty() {
+    if anchor.occurrence_id.is_some_and(|id| id.0 == 0)
+        || anchor.body_id.0 == 0
+        || anchor.edge_id.0 == 0
+        || anchor.edge_key.trim().is_empty()
+    {
         return Err(format!(
             "drawing dimension {annotation_id} contains an invalid topology anchor"
         ));
@@ -1881,7 +1916,8 @@ fn validate_circular_ref(
     feature: &DrawingCircularRefDto,
     annotation_id: u64,
 ) -> Result<(), String> {
-    if feature.body_id.0 == 0
+    if feature.occurrence_id.is_some_and(|id| id.0 == 0)
+        || feature.body_id.0 == 0
         || feature.edge_id.0 == 0
         || feature.edge_key.trim().is_empty()
         || feature
@@ -1908,7 +1944,8 @@ fn validate_line_ref(feature: &DrawingLineRefDto, annotation_id: u64) -> Result<
         feature.fallback_end[1] - feature.fallback_start[1],
         feature.fallback_end[2] - feature.fallback_start[2],
     ];
-    if feature.body_id.0 == 0
+    if feature.occurrence_id.is_some_and(|id| id.0 == 0)
+        || feature.body_id.0 == 0
         || feature.edge_id.0 == 0
         || feature.edge_key.trim().is_empty()
         || feature
@@ -2217,6 +2254,8 @@ mod tests {
                 tolerance_note: DrawingToleranceNoteDto::default(),
                 title_block: DrawingTitleBlockDto::default(),
                 views: vec![DrawingViewDto {
+                    scope: Default::default(),
+                    occurrence_ids: vec![],
                     id: 1,
                     name: "Front".to_string(),
                     kind: DrawingViewKind::Front,

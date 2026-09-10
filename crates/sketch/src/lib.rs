@@ -41,6 +41,7 @@ pub use drawing::{
     DrawingSheetStyleDto, DrawingStandard, DrawingTemplateDto, DrawingTitleBlockDto,
     DrawingToleranceNoteDto, DrawingTolerancePreset, DrawingTopologyAnchorRefDto,
     DrawingViewAlignment, DrawingViewDerivationDto, DrawingViewDto, DrawingViewKind,
+    DrawingViewScope,
 };
 pub use dto::{
     err_json, ok_json, AddConstraintResult, AddLineResult, Arc3PointRequest, ArcCenterRequest,

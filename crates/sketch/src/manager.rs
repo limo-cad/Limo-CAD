@@ -59,7 +59,7 @@ use crate::dto::{
 };
 use crate::entity::EntityId;
 use crate::project::{
-    decode_project, ProjectCountersV2, ProjectDocumentV2, ProjectModelV4, ProjectPreferencesV2,
+    decode_project, ProjectCountersV2, ProjectDocumentV2, ProjectModelV5, ProjectPreferencesV2,
     PROJECT_FORMAT, PROJECT_SCHEMA_VERSION,
 };
 use crate::session::{
@@ -186,7 +186,7 @@ impl SketchManager {
                 "finish the active sketch before saving the project".to_string(),
             ));
         }
-        let model = ProjectModelV4 {
+        let model = ProjectModelV5 {
             format: PROJECT_FORMAT.to_string(),
             schema_version: PROJECT_SCHEMA_VERSION,
             document: ProjectDocumentV2 {
@@ -4733,6 +4733,8 @@ mod project_tests {
                     ..DrawingTitleBlockDto::default()
                 },
                 views: vec![DrawingViewDto {
+                    scope: Default::default(),
+                    occurrence_ids: vec![],
                     id: 9,
                     name: "Front".to_string(),
                     kind: DrawingViewKind::Front,
@@ -4752,6 +4754,7 @@ mod project_tests {
                         id: 12,
                         view_id: 9,
                         first: DrawingTopologyAnchorRefDto {
+                            occurrence_id: None,
                             body_id: BodyId(1),
                             edge_id: nbcad_core::EdgeId(101),
                             edge_key: "edge:0".to_string(),
@@ -4760,6 +4763,7 @@ mod project_tests {
                             circle_center: false,
                         },
                         second: DrawingTopologyAnchorRefDto {
+                            occurrence_id: None,
                             body_id: BodyId(1),
                             edge_id: nbcad_core::EdgeId(102),
                             edge_key: "edge:1".to_string(),
@@ -4778,6 +4782,7 @@ mod project_tests {
                         id: 13,
                         view_id: 9,
                         first: DrawingLineRefDto {
+                            occurrence_id: None,
                             body_id: BodyId(1),
                             edge_id: nbcad_core::EdgeId(201),
                             edge_key: "edge:center-left".to_string(),
@@ -4785,6 +4790,7 @@ mod project_tests {
                             fallback_end: [20.0, 0.0, 0.0],
                         },
                         second: DrawingLineRefDto {
+                            occurrence_id: None,
                             body_id: BodyId(1),
                             edge_id: nbcad_core::EdgeId(202),
                             edge_key: "edge:center-right".to_string(),

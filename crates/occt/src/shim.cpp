@@ -2649,6 +2649,8 @@ FfiInterferenceResult Kernel::exact_interference(
 
 FfiDrawingProjection Kernel::drawing_projection(
     const rust::Vec<std::uint64_t>& requested_body_ids,
+    const rust::Vec<FfiDrawingOccurrence>& occurrences,
+    bool assembly_scope,
     double direction_x,
     double direction_y,
     double direction_z,
@@ -2685,7 +2687,28 @@ FfiDrawingProjection Kernel::drawing_projection(
   right.Normalize();
 
   std::vector<TopoDS_Shape> source_shapes;
-  if (requested_body_ids.empty()) {
+  if (assembly_scope) {
+    if (occurrences.empty()) {
+      throw std::runtime_error("assembly drawing contains no occurrences");
+    }
+    for (const auto& occurrence : occurrences) {
+      const auto found = impl_->bodies.find(occurrence.body_id);
+      if (found == impl_->bodies.end()) {
+        throw std::runtime_error("drawing occurrence references a missing body");
+      }
+      const auto& t = occurrence.translation;
+      const auto& q = occurrence.rotation;
+      const double magnitude = std::sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+      if (!std::isfinite(magnitude) || magnitude <= 1.0e-12 ||
+          !std::isfinite(t[0]) || !std::isfinite(t[1]) || !std::isfinite(t[2])) {
+        throw std::runtime_error("drawing occurrence placement is not a finite rigid transform");
+      }
+      gp_Trsf transform;
+      transform.SetRotation(gp_Quaternion(q[0]/magnitude,q[1]/magnitude,q[2]/magnitude,q[3]/magnitude));
+      transform.SetTranslationPart(gp_Vec(t[0],t[1],t[2]));
+      source_shapes.push_back(BRepBuilderAPI_Transform(found->second, transform, true).Shape());
+    }
+  } else if (requested_body_ids.empty()) {
     for (const auto& [body_id, shape] : impl_->bodies) {
       (void)body_id;
       source_shapes.push_back(shape);

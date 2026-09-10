@@ -9,6 +9,7 @@ type Vec2 = [number, number];
 type Vec3 = [number, number, number];
 
 interface ProjectedLinearEdge {
+  occurrenceId?: number | null;
   bodyId: number;
   edgeId: number;
   edgeKey: string;
@@ -67,8 +68,11 @@ export function drawingChamferCandidates(
     for (const edge of body.edges) {
       const points = edge.points.map((point) => [point.x, point.y, point.z] as Vec3);
       if (!isLinear(points)) continue;
-      const startModel = points[0];
-      const endModel = points[points.length - 1];
+      for (const startAnchor of projection.anchors.filter((anchor) => anchor.body_id === body.id && anchor.edge_id === edge.id && anchor.edge_key === edge.key && anchor.endpoint === 'start')) {
+      const endAnchor = projection.anchors.find((anchor) => anchor.body_id === body.id && anchor.edge_id === edge.id && anchor.edge_key === edge.key && anchor.endpoint === 'end' && (anchor.occurrence_id ?? null) === (startAnchor.occurrence_id ?? null));
+      if (!endAnchor) continue;
+      const startModel = startAnchor.model_point;
+      const endModel = endAnchor.model_point;
       const delta = subtract3(endModel, startModel);
       const length = magnitude3(delta);
       if (length <= 1e-7) continue;
@@ -86,6 +90,7 @@ export function drawingChamferCandidates(
         Math.max(0.03, 0.12 / Math.max(view.scale, 0.01)),
       );
       edges.push({
+        occurrenceId: startAnchor.occurrence_id,
         bodyId: body.id,
         edgeId: edge.id,
         edgeKey: edge.key,
@@ -99,6 +104,7 @@ export function drawingChamferCandidates(
         depth: dot3(midpoint3(startModel, endModel), direction),
         hidden,
       });
+      }
     }
   }
 
@@ -106,7 +112,7 @@ export function drawingChamferCandidates(
   for (const edge of edges) {
     if (edge.hidden && !view.show_hidden_lines) continue;
     const references = edges
-      .filter((other) => other.bodyId === edge.bodyId && other.edgeId !== edge.edgeId)
+      .filter((other) => (other.occurrenceId ?? null) === (edge.occurrenceId ?? null) && other.bodyId === edge.bodyId && other.edgeId !== edge.edgeId)
       .map((other) => chamferReference(edge, other))
       .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null);
     if (!references.some((candidate) => candidate.chamferEndpoint === 'start')
@@ -124,7 +130,7 @@ export function drawingChamferCandidates(
     candidates.push({
       depth: edge.depth,
       candidate: {
-        key: `${edge.bodyId}:${edge.edgeId}`,
+        key: `${edge.occurrenceId ?? 'definition'}:${edge.bodyId}:${edge.edgeId}`,
         bodyId: edge.bodyId,
         edgeId: edge.edgeId,
         edgeKey: edge.edgeKey,
@@ -222,6 +228,7 @@ function anchorRef(
   endpoint: 'start' | 'end',
 ): DrawingTopologyAnchorRefDto {
   return {
+    occurrence_id: edge.occurrenceId,
     body_id: edge.bodyId,
     edge_id: edge.edgeId,
     edge_key: edge.edgeKey,

@@ -153,7 +153,7 @@ async function drawingProjections(sheet: DrawingSheetDto): Promise<DrawingProjec
   const scene = useAppStore.getState().solidScene;
   return Promise.all(
     sheet.views.map((view) =>
-      engine.drawingProjection(drawingProjectionRequestForView(view, sheet.views, scene)),
+      engine.drawingProjection(drawingProjectionRequestForView(view, sheet.views, scene, useAppStore.getState().assemblySolution)),
     ),
   );
 }

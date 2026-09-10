@@ -65,6 +65,7 @@ impl Paper {
 pub fn export_sheet(
     document: &DrawingDocumentDto,
     scene: &SolidSceneDto,
+    assembly: &AssemblyDocumentDto,
     request: &DrawingExportRequest,
     mut project: impl FnMut(&DrawingProjectionRequest) -> Result<DrawingProjectionDto, String>,
 ) -> Result<String, String> {
@@ -128,7 +129,7 @@ pub fn export_sheet(
     );
     let mut projections = BTreeMap::new();
     for view in &sheet.views {
-        let req = projection_request(view, &sheet.views, scene)?;
+        let req = projection_request(view, &sheet.views, scene, assembly)?;
         let projection = project(&req)?;
         if projection.bounds.iter().any(|v| !v.is_finite()) {
             return Err("Projection contains non-finite bounds".into());
@@ -316,30 +317,9 @@ fn norm(a: [f64; 3]) -> Result<[f64; 3], String> {
 fn model_anchor(
     a: &DrawingTopologyAnchorRefDto,
     scene: &SolidSceneDto,
+    assembly: &AssemblyDocumentDto,
 ) -> Result<[f64; 3], String> {
-    let e = scene
-        .bodies
-        .iter()
-        .find(|b| b.id == a.body_id)
-        .and_then(|b| {
-            b.edges
-                .iter()
-                .find(|e| e.id == a.edge_id && e.key == a.edge_key)
-        })
-        .ok_or("Drawing reference is stale; reassociate it before export")?;
-    if a.circle_center {
-        let c = e
-            .circle
-            .as_ref()
-            .ok_or("Drawing anchor is no longer circular")?;
-        return Ok([c.center.x, c.center.y, c.center.z]);
-    }
-    let p = match a.endpoint {
-        DrawingEdgeEndpoint::Start => e.points.first(),
-        DrawingEdgeEndpoint::End => e.points.last(),
-    }
-    .ok_or("Drawing edge has no endpoints")?;
-    Ok([p.x, p.y, p.z])
+    crate::resolve_drawing_anchor(scene, assembly, a).map_err(|e| e.to_string())
 }
 /// Resolve view intent from current topology, without accepting stale fallback
 /// coordinates. Section orientation follows the same parent/cut-line basis as
@@ -348,11 +328,13 @@ pub fn projection_request(
     view: &DrawingViewDto,
     views: &[DrawingViewDto],
     scene: &SolidSceneDto,
+    assembly: &AssemblyDocumentDto,
 ) -> Result<DrawingProjectionRequest, String> {
     fn resolve(
         v: &DrawingViewDto,
         views: &[DrawingViewDto],
         scene: &SolidSceneDto,
+        assembly: &AssemblyDocumentDto,
         path: &mut Vec<u64>,
     ) -> Result<([f64; 3], [f64; 3], Option<DrawingSectionPlaneDto>), String> {
         if path.contains(&v.id) {
@@ -377,9 +359,9 @@ pub fn projection_request(
                     .iter()
                     .find(|p| p.id == *parent_view_id)
                     .ok_or("Derived view parent is missing")?;
-                let (pd, _, _) = resolve(parent, views, scene, path)?;
-                let a = model_anchor(first, scene)?;
-                let b = model_anchor(second, scene)?;
+                let (pd, _, _) = resolve(parent, views, scene, assembly, path)?;
+                let a = model_anchor(first, scene, assembly)?;
+                let b = model_anchor(second, scene, assembly)?;
                 let edge = norm(std::array::from_fn(|i| b[i] - a[i]))?;
                 let mut direction = norm(cross(edge, norm(pd)?))?;
                 if dot(direction, v.direction) < 0. {
@@ -413,8 +395,9 @@ pub fn projection_request(
                     .iter()
                     .find(|p| p.id == *parent_view_id)
                     .ok_or("Derived view parent is missing")?;
-                let (pd, _, _) = resolve(parent, views, scene, path)?;
+                let (pd, _, _) = resolve(parent, views, scene, assembly, path)?;
                 let anchor = |endpoint| DrawingTopologyAnchorRefDto {
+                    occurrence_id: reference.occurrence_id,
                     body_id: reference.body_id,
                     edge_id: reference.edge_id,
                     edge_key: reference.edge_key.clone(),
@@ -422,8 +405,8 @@ pub fn projection_request(
                     fallback_point: [0.; 3],
                     circle_center: false,
                 };
-                let a = model_anchor(&anchor(DrawingEdgeEndpoint::Start), scene)?;
-                let b = model_anchor(&anchor(DrawingEdgeEndpoint::End), scene)?;
+                let a = model_anchor(&anchor(DrawingEdgeEndpoint::Start), scene, assembly)?;
+                let b = model_anchor(&anchor(DrawingEdgeEndpoint::End), scene, assembly)?;
                 let edge = norm(std::array::from_fn(|i| b[i] - a[i]))?;
                 let mut direction = norm(cross(edge, norm(pd)?))?;
                 if *flipped {
@@ -439,14 +422,17 @@ pub fn projection_request(
                     .iter()
                     .find(|p| p.id == *parent_view_id)
                     .ok_or("Derived view parent is missing")?;
-                resolve(parent, views, scene, path)
+                resolve(parent, views, scene, assembly, path)
             }
         };
         path.pop();
         result
     }
-    let (direction, up, section_plane) = resolve(view, views, scene, &mut Vec::new())?;
+    let (direction, up, section_plane) = resolve(view, views, scene, assembly, &mut Vec::new())?;
     Ok(DrawingProjectionRequest {
+        scope: view.scope,
+        occurrence_ids: view.occurrence_ids.clone(),
+        resolved_occurrences: None,
         body_ids: view.body_ids.clone(),
         direction,
         up,
@@ -627,14 +613,20 @@ fn anchor_point(a: &DrawingTopologyAnchorRefDto, p: &DrawingProjectionDto) -> Re
         return p
             .circles
             .iter()
-            .find(|c| c.body_id == a.body_id && c.edge_id == a.edge_id && c.edge_key == a.edge_key)
+            .find(|c| {
+                c.occurrence_id == a.occurrence_id
+                    && c.body_id == a.body_id
+                    && c.edge_id == a.edge_id
+                    && c.edge_key == a.edge_key
+            })
             .map(|c| c.center)
             .ok_or_else(|| "Circular dimension anchor is stale or not normal to the view".into());
     }
     p.anchors
         .iter()
         .find(|r| {
-            r.body_id == a.body_id
+            r.occurrence_id == a.occurrence_id
+                && r.body_id == a.body_id
                 && r.edge_id == a.edge_id
                 && r.edge_key == a.edge_key
                 && matches!(
@@ -759,7 +751,7 @@ p.line(vec![c,d],"DIMENSION",&s.style.dimension);arrows(p,c,d,&s.style);
         DrawingAnnotationDto::RadialDimension{view_id,feature,mode,leader_angle_deg,offset,prefix,suffix,precision,presentation,..}=> {
 
             let (v,pr)=view_projection(*view_id,s,projections)?;
-let c=pr.circles.iter().find(|c|c.body_id==feature.body_id&&c.edge_id==feature.edge_id&&c.edge_key==feature.edge_key).ok_or("Radial dimension reference is stale or not circular in this view")?;
+let c=pr.circles.iter().find(|c|c.occurrence_id==feature.occurrence_id&&c.body_id==feature.body_id&&c.edge_id==feature.edge_id&&c.edge_key==feature.edge_key).ok_or("Radial dimension reference is stale or not circular in this view")?;
             let center=paper_point(v,c.center,pr);
 let r=c.radius*v.scale;
 let a=leader_angle_deg.to_radians();
@@ -926,8 +918,13 @@ mod tests {
             .unwrap(),
         );
         doc.next_annotation_id = 3;
-        let req =
-            projection_request(&doc.sheets[0].views[0], &doc.sheets[0].views, &scene).unwrap();
+        let req = projection_request(
+            &doc.sheets[0].views[0],
+            &doc.sheets[0].views,
+            &scene,
+            &AssemblyDocumentDto::default(),
+        )
+        .unwrap();
         let mut projection:DrawingProjectionDto=serde_json::from_value(json!({"visible":[{"points":[[10.,0.],[10.+length,0.]]}],"hidden":[],"section":[],"bounds":[10.,0.,10.+length,0.]})).unwrap();
         projection.anchors = crate::drawing_projection_anchors(&scene, &req, &projection).unwrap();
         (doc, scene, projection)
@@ -939,19 +936,36 @@ mod tests {
             sheet_id: 1,
             format: DrawingExportFormat::Svg,
         };
-        let export = || export_sheet(&doc, &scene, &request, |_| Ok(projection.clone())).unwrap();
+        let export = || {
+            export_sheet(
+                &doc,
+                &scene,
+                &AssemblyDocumentDto::default(),
+                &request,
+                |_| Ok(projection.clone()),
+            )
+            .unwrap()
+        };
         let text = export();
         assert_eq!(text, export());
         assert!(text.contains("80.00000,70.00000 120.00000,70.00000"));
         assert!(text.contains(">20.00</text>"));
         assert!(text.contains("&lt;check &amp; fit&gt; Ø"));
         let (doc, scene, projection) = fixture(25.);
-        let edited = export_sheet(&doc, &scene, &request, |_| Ok(projection.clone())).unwrap();
+        let edited = export_sheet(
+            &doc,
+            &scene,
+            &AssemblyDocumentDto::default(),
+            &request,
+            |_| Ok(projection.clone()),
+        )
+        .unwrap();
         assert!(edited.contains(">25.00</text>"));
         assert!(!edited.contains("999.00000"));
         let dxf = export_sheet(
             &doc,
             &scene,
+            &AssemblyDocumentDto::default(),
             &DrawingExportRequest {
                 format: DrawingExportFormat::Dxf,
                 ..request
@@ -970,6 +984,7 @@ mod tests {
         let error = export_sheet(
             &doc,
             &scene,
+            &AssemblyDocumentDto::default(),
             &DrawingExportRequest {
                 sheet_id: 1,
                 format: DrawingExportFormat::Svg,

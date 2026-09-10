@@ -10,6 +10,7 @@ namespace nbcad_occt {
 struct FfiJob;
 struct FfiMesh;
 struct FfiDrawingProjection;
+struct FfiDrawingOccurrence;
 struct FfiInterferenceResult;
 
 class Kernel {
@@ -31,6 +32,8 @@ class Kernel {
       rust::Str occurrence_placements_hex) const;
   FfiDrawingProjection drawing_projection(
       const rust::Vec<std::uint64_t>& body_ids,
+      const rust::Vec<FfiDrawingOccurrence>& occurrences,
+      bool assembly_scope,
       double direction_x,
       double direction_y,
       double direction_z,

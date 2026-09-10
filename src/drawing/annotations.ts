@@ -138,6 +138,7 @@ export function drawingAnchorRef(
   anchor: DrawingProjectionAnchorDto,
 ): DrawingTopologyAnchorRefDto {
   return {
+    occurrence_id: anchor.occurrence_id,
     body_id: anchor.body_id,
     edge_id: anchor.edge_id,
     edge_key: anchor.edge_key,
@@ -150,6 +151,7 @@ export function drawingCircleCenterAnchorRef(
   circle: DrawingProjectedCircleDto,
 ): DrawingTopologyAnchorRefDto {
   return {
+    occurrence_id: circle.occurrence_id,
     body_id: circle.body_id,
     edge_id: circle.edge_id,
     edge_key: circle.edge_key,
@@ -163,6 +165,7 @@ export function drawingCircleCenterAnchorRef(
 
 export function drawingCircularRef(circle: DrawingProjectedCircleDto): DrawingCircularRefDto {
   return {
+    occurrence_id: circle.occurrence_id,
     body_id: circle.body_id,
     edge_id: circle.edge_id,
     edge_key: circle.edge_key,
@@ -179,8 +182,10 @@ export function drawingLineRef(
   edgeKey: string,
   start: [number, number, number],
   end: [number, number, number],
+  occurrenceId?: number | null,
 ): DrawingLineRefDto {
   return {
+    occurrence_id: occurrenceId,
     body_id: bodyId,
     edge_id: edgeId,
     edge_key: edgeKey,
@@ -209,16 +214,17 @@ export function resolveDrawingAnchor(
 ): ResolvedDrawingAnchor | null {
   if (reference.circle_center) {
     const exact = projection.circles.find((candidate) =>
-      candidate.body_id === reference.body_id && candidate.edge_id === reference.edge_id
+      (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id && candidate.edge_id === reference.edge_id
         && candidate.edge_key === reference.edge_key,
     );
     const circle = exact ?? projection.circles.find((candidate) =>
-      candidate.body_id === reference.body_id && candidate.edge_key === reference.edge_key,
+      (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id && candidate.edge_key === reference.edge_key,
     );
     if (!circle) return null;
     return {
       anchor: {
-        body_id: circle.body_id,
+        occurrence_id: circle.occurrence_id,
+    body_id: circle.body_id,
         edge_id: circle.edge_id,
         edge_key: circle.edge_key,
         endpoint: reference.endpoint,
@@ -231,13 +237,13 @@ export function resolveDrawingAnchor(
     };
   }
   const exact = projection.anchors.find((candidate) =>
-    candidate.body_id === reference.body_id
+    (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id
       && candidate.edge_id === reference.edge_id
       && candidate.edge_key === reference.edge_key
       && candidate.endpoint === reference.endpoint,
   );
   const anchor = exact ?? projection.anchors.find((candidate) =>
-    candidate.body_id === reference.body_id
+    (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id
       && candidate.edge_key === reference.edge_key
       && candidate.endpoint === reference.endpoint,
   );
@@ -348,22 +354,22 @@ export function resolveDrawingLine(
   projection: DrawingProjectionDto,
 ): ResolvedDrawingLine | null {
   const exactStart = projection.anchors.find((candidate) =>
-    candidate.body_id === reference.body_id
+    (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id
       && candidate.edge_id === reference.edge_id
       && candidate.endpoint === 'start',
   );
   const exactEnd = projection.anchors.find((candidate) =>
-    candidate.body_id === reference.body_id
+    (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id
       && candidate.edge_id === reference.edge_id
       && candidate.endpoint === 'end',
   );
   const start = exactStart ?? projection.anchors.find((candidate) =>
-    candidate.body_id === reference.body_id
+    (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id
       && candidate.edge_key === reference.edge_key
       && candidate.endpoint === 'start',
   );
   const end = exactEnd ?? projection.anchors.find((candidate) =>
-    candidate.body_id === reference.body_id
+    (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id
       && candidate.edge_key === reference.edge_key
       && candidate.endpoint === 'end',
   );
@@ -437,10 +443,10 @@ export function resolveDrawingCircle(
   projection: DrawingProjectionDto,
 ): ResolvedDrawingCircle | null {
   const exact = projection.circles.find((candidate) =>
-    candidate.body_id === reference.body_id && candidate.edge_id === reference.edge_id,
+    (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id && candidate.edge_id === reference.edge_id,
   );
   const circle = exact ?? projection.circles.find((candidate) =>
-    candidate.body_id === reference.body_id && candidate.edge_key === reference.edge_key,
+    (candidate.occurrence_id ?? null) === (reference.occurrence_id ?? null) && candidate.body_id === reference.body_id && candidate.edge_key === reference.edge_key,
   );
   if (!circle) return null;
   return {

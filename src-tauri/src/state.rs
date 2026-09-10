@@ -3,8 +3,7 @@ use std::sync::Mutex;
 
 use nbcad_core::{BodyAppearance, DocumentDto};
 use nbcad_occt::{
-    drawing_projection_anchors, drawing_projection_circles, exact_interference_report,
-    exact_pair_result, DrawingProjectionRequest, OcctKernel,
+    exact_interference_report, exact_pair_result, DrawingProjectionRequest, OcctKernel,
 };
 use nbcad_sketch::{
     approximate_pair_result, contact_violation_score, err_json, host, ok_json, BodyPoseDto,
@@ -699,15 +698,10 @@ impl AppState {
         let content = nbcad_occt::drawing_export::export_sheet(
             &inner.manager.drawing_document(),
             &scene,
+            &inner.manager.assembly_document(),
             &request,
             |r| {
-                let mut p = inner
-                    .kernel
-                    .drawing_projection(r)
-                    .map_err(|e| e.to_string())?;
-                p.anchors = drawing_projection_anchors(&scene, r, &p).map_err(|e| e.to_string())?;
-                p.circles = drawing_projection_circles(&scene, r, &p).map_err(|e| e.to_string())?;
-                Ok(p)
+                        nbcad_occt::project_drawing(&inner.kernel, &scene, &inner.manager.assembly_document(), r).map_err(|e|e.to_string())
             },
         );
         match content {
@@ -732,20 +726,13 @@ impl AppState {
         if !scene.errors.is_empty() {
             return err_json("Resolve timeline errors before generating a drawing view.");
         }
-        match inner.kernel.drawing_projection(&request) {
-            Ok(mut projection) => match drawing_projection_anchors(&scene, &request, &projection) {
-                Ok(anchors) => {
-                    projection.anchors = anchors;
-                    match drawing_projection_circles(&scene, &request, &projection) {
-                        Ok(circles) => {
-                            projection.circles = circles;
-                            ok_json(projection)
-                        }
-                        Err(error) => err_json(error.to_string()),
-                    }
-                }
-                Err(error) => err_json(error.to_string()),
-            },
+        match nbcad_occt::project_drawing(
+            &inner.kernel,
+            &scene,
+            &inner.manager.assembly_document(),
+            &request,
+        ) {
+            Ok(projection) => ok_json(projection),
             Err(error) => err_json(error.to_string()),
         }
     }

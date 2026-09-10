@@ -1356,7 +1356,8 @@ function ProjectedDrawingView({
   const [hoveredChamferKey, setHoveredChamferKey] = useState<string | null>(null);
   const [hoveredCircleKey, setHoveredCircleKey] = useState<string | null>(null);
   const [hoveredCenterlineEdgeKey, setHoveredCenterlineEdgeKey] = useState<string | null>(null);
-  const projectionRequest = drawingProjectionRequestForView(view, allViews, scene);
+  const assemblySolution = useAppStore((state) => state.assemblySolution);
+  const projectionRequest = drawingProjectionRequestForView(view, allViews, scene, assemblySolution);
   const requestKey = JSON.stringify(projectionRequest);
 
   useEffect(() => {
@@ -1367,7 +1368,7 @@ function ProjectedDrawingView({
       .then((result) => { if (!cancelled) setProjection(result); })
       .catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason)); });
     return () => { cancelled = true; };
-  }, [requestKey, scene]);
+  }, [requestKey, scene, assemblySolution]);
 
   const style = useDrawingStyle();
   const visibleLine = drawingSvgLineAttributes(style, 'visible');
@@ -1615,12 +1616,12 @@ function ProjectedDrawingView({
         const active = anchorDraft?.viewId === view.id && anchorDraft.anchors.some((candidate) => sameDrawingAnchor(candidate, reference))
           || pointLineDimensionDraft?.viewId === view.id
             && sameDrawingAnchor(pointLineDimensionDraft.point, reference);
-        return <circle key={`${anchor.body_id}-${anchor.edge_id}-${anchor.endpoint}`} data-testid="drawing-annotation-anchor" data-body-id={anchor.body_id} data-edge-id={anchor.edge_id} cx={paper[0]} cy={paper[1]} r={active ? 1.7 : 1.15} fill={active ? '#6654c7' : '#fff'} stroke={active ? '#6654c7' : '#1688c9'} strokeWidth={active ? 0.65 : 0.48} className="cursor-crosshair" onPointerDown={(event) => { if (event.button !== 0) return; event.preventDefault(); event.stopPropagation(); if (repairTarget?.kind === 'anchor') { if (confirmRepair(repairTarget.label)) completeRepair(repairTarget.update(drawingAnchorRef(anchor))); } else if (derivedRepairTarget?.kind === 'anchor') { if (confirmRepair(derivedRepairTarget.label)) completeDerivedRepair(derivedRepairTarget.update(drawingAnchorRef(anchor))); } else onPickAnchor(view.id, anchor, paper); }} />;
+        return <circle key={`${anchor.occurrence_id ?? 'definition'}-${anchor.body_id}-${anchor.edge_id}-${anchor.endpoint}`} data-testid="drawing-annotation-anchor" data-body-id={anchor.body_id} data-edge-id={anchor.edge_id} cx={paper[0]} cy={paper[1]} r={active ? 1.7 : 1.15} fill={active ? '#6654c7' : '#fff'} stroke={active ? '#6654c7' : '#1688c9'} strokeWidth={active ? 0.65 : 0.48} className="cursor-crosshair" onPointerDown={(event) => { if (event.button !== 0) return; event.preventDefault(); event.stopPropagation(); if (repairTarget?.kind === 'anchor') { if (confirmRepair(repairTarget.label)) completeRepair(repairTarget.update(drawingAnchorRef(anchor))); } else if (derivedRepairTarget?.kind === 'anchor') { if (confirmRepair(derivedRepairTarget.label)) completeDerivedRepair(derivedRepairTarget.update(drawingAnchorRef(anchor))); } else onPickAnchor(view.id, anchor, paper); }} />;
       })}
       {pickingCircles && circleTargets.map((circle) => {
         const center = drawingProjectedPointToPaper(displayView, projection, circle.center);
         const feature = drawingCircularRef(circle);
-        const key = `${circle.body_id}-${circle.edge_id}`;
+        const key = `${circle.occurrence_id ?? 'definition'}-${circle.body_id}-${circle.edge_id}`;
         const active = centerPicking && (
           circleDraft?.viewId === view.id
             && circleDraft.features.some((candidate) => sameDrawingCircle(candidate, feature))
@@ -3470,6 +3471,7 @@ function DrawingInspector({
   placement: ViewPlacementInspectorState | null;
   chamfer: ChamferPlacementInspectorState | null;
 }) {
+  const assembly = useAppStore((state) => state.assemblyDocument);
   const scene = useAppStore((state) => state.solidScene);
   const view = sheet.views.find((candidate) => candidate.id === selectedViewId) ?? null;
   const annotation = sheet.annotations.find((candidate) => candidate.id === selectedAnnotationId) ?? null;
@@ -3478,6 +3480,8 @@ function DrawingInspector({
     <div className="mb-3 text-[10px] font-semibold tracking-[0.16em] text-mute">{placement ? 'PLACING VIEW' : chamfer ? 'CHAMFER NOTE' : annotation ? 'ANNOTATION' : view ? 'DRAWING VIEW' : 'SHEET PROPERTIES'}</div>
     {placement ? <ViewPlacementInspector placement={placement} /> : chamfer ? <ChamferPlacementInspector chamfer={chamfer} /> : annotation ? <AnnotationInspector annotation={annotation} sheet={sheet} run={run} /> : view ? <>
       <Field label="Name"><input className="drawing-input" value={view.name} onChange={(event) => run(updateDrawingView(view.id, { name: event.target.value || 'View' }))} /></Field>
+      <Field label="Model scope"><select className="drawing-input" value={view.scope ?? 'definition'} onChange={(event) => run(updateDrawingView(view.id, { scope: event.target.value as 'definition' | 'assembly', occurrence_ids: [] }))}><option value="definition">Part definitions</option><option value="assembly">Placed assembly</option></select></Field>
+      {view.scope === 'assembly' && <Field label="Occurrence"><select className="drawing-input" value={(view.occurrence_ids ?? []).length === 1 ? view.occurrence_ids![0] : ''} onChange={(event) => run(updateDrawingView(view.id, { occurrence_ids: event.target.value ? [Number(event.target.value)] : [] }))}><option value="">All visible occurrences</option>{assembly.component_structure.occurrences.map((occurrence) => <option key={occurrence.id} value={occurrence.id}>{occurrence.name}</option>)}</select></Field>}
       <Field label="Projection group scale"><select className="drawing-input" value={view.scale} onChange={(event) => run(updateDrawingView(view.id, { scale: Number(event.target.value) }))}>{drawingScales.map((scale) => <option key={scale} value={scale}>{scaleLabel(scale)}</option>)}</select></Field>
       {view.parent_view_id !== null && <div className="mb-3 rounded border border-accent/30 bg-accent/8 p-2 text-[10px] leading-relaxed text-mute"><span className="font-semibold text-accent">GROUPED VIEW</span><br />{view.alignment === 'vertical' ? 'X position' : view.alignment === 'horizontal' ? 'Y position' : 'Scale'} follows {drawingViewGroupRoot(sheet, view.id)?.name ?? 'base view'}.</div>}
       {view.derivation && <DerivedViewInspector view={view} run={run} />}
@@ -4056,8 +4060,8 @@ function nextDerivedViewLabel(sheet: DrawingSheetDto, prefix: string): string {
   return `${normalizedPrefix} ${sheet.views.length + 1}`;
 }
 
-function sameDrawingAnchor(left: DrawingTopologyAnchorRefDto, right: DrawingTopologyAnchorRefDto): boolean { return left.body_id === right.body_id && left.edge_id === right.edge_id && left.endpoint === right.endpoint && Boolean(left.circle_center) === Boolean(right.circle_center); }
-function sameDrawingCircle(left: DrawingCircularRefDto, right: DrawingCircularRefDto): boolean { return left.body_id === right.body_id && left.edge_id === right.edge_id; }
+function sameDrawingAnchor(left: DrawingTopologyAnchorRefDto, right: DrawingTopologyAnchorRefDto): boolean { return (left.occurrence_id ?? null) === (right.occurrence_id ?? null) && left.body_id === right.body_id && left.edge_id === right.edge_id && left.endpoint === right.endpoint && Boolean(left.circle_center) === Boolean(right.circle_center); }
+function sameDrawingCircle(left: DrawingCircularRefDto, right: DrawingCircularRefDto): boolean { return (left.occurrence_id ?? null) === (right.occurrence_id ?? null) && left.body_id === right.body_id && left.edge_id === right.edge_id; }
 function uniqueProjectionCircleCenters(circles: DrawingProjectedCircleDto[]): DrawingProjectedCircleDto[] {
   const byCenter = new Map<string, DrawingProjectedCircleDto>();
   for (const circle of circles) {

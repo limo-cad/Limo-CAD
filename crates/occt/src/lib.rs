@@ -5,6 +5,8 @@
 //! target build on machines that do not have the OCCT SDK installed.
 
 pub mod drawing_export;
+mod drawing_instances;
+pub use drawing_instances::{project_drawing, resolve_drawing_anchor, resolve_drawing_line};
 mod interference;
 pub use interference::{exact_interference_report, exact_pair_result};
 
@@ -20,6 +22,13 @@ use serde::{Deserialize, Serialize};
 /// model toward the viewer; `up` is the desired page-up direction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingProjectionRequest {
+    #[serde(default)]
+    pub scope: nbcad_sketch::DrawingViewScope,
+    #[serde(default)]
+    pub occurrence_ids: Vec<nbcad_assembly::OccurrenceId>,
+    /// Host-resolved poses never come from an MCP or desktop request payload.
+    #[serde(skip)]
+    pub resolved_occurrences: Option<Vec<nbcad_assembly::InstanceBodyPoseDto>>,
     #[serde(default)]
     pub body_ids: Vec<BodyId>,
     pub direction: [f64; 3],
@@ -75,6 +84,8 @@ pub struct DrawingProjectionDto {
 /// an ellipse on paper and cannot carry an unambiguous diameter/radius mark.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingProjectedCircleDto {
+    #[serde(default)]
+    pub occurrence_id: Option<nbcad_assembly::OccurrenceId>,
     pub body_id: BodyId,
     pub edge_id: EdgeId,
     pub edge_key: String,
@@ -98,6 +109,8 @@ pub enum DrawingProjectionAnchorEndpoint {
 /// edges sharing one geometric vertex are distinct associative references.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingProjectionAnchorDto {
+    #[serde(default)]
+    pub occurrence_id: Option<nbcad_assembly::OccurrenceId>,
     pub body_id: BodyId,
     pub edge_id: EdgeId,
     pub edge_key: String,
@@ -118,12 +131,9 @@ pub fn drawing_projection_anchors(
     let direction = normalize(request.direction)?;
     let right = normalize(cross(request.up, direction))?;
     let page_up = normalize(cross(direction, right))?;
-    let selected = request.body_ids.iter().copied().collect::<HashSet<_>>();
+
     let mut anchors = Vec::new();
-    for body in &scene.bodies {
-        if !selected.is_empty() && !selected.contains(&body.id) {
-            continue;
-        }
+    for (body, occurrence) in drawing_instances::drawing_bodies(scene, request)? {
         for edge in &body.edges {
             let Some(first) = edge.points.first() else {
                 continue;
@@ -135,7 +145,10 @@ pub fn drawing_projection_anchors(
                 (DrawingProjectionAnchorEndpoint::Start, first),
                 (DrawingProjectionAnchorEndpoint::End, last),
             ] {
-                let model_point = [model_point.x, model_point.y, model_point.z];
+                let model_point = drawing_instances::placed_point(
+                    [model_point.x, model_point.y, model_point.z],
+                    occurrence.as_ref(),
+                )?;
                 let point = [dot(model_point, right), dot(model_point, page_up)];
                 let hidden = !point_touches_polylines(
                     point,
@@ -143,6 +156,7 @@ pub fn drawing_projection_anchors(
                     request.deflection.max(1.0e-4) * 2.5,
                 );
                 anchors.push(DrawingProjectionAnchorDto {
+                    occurrence_id: occurrence.map(|pose| pose.occurrence_id),
                     body_id: body.id,
                     edge_id: edge.id,
                     edge_key: edge.key.clone(),
@@ -156,6 +170,7 @@ pub fn drawing_projection_anchors(
     }
     anchors.sort_by_key(|anchor| {
         (
+            anchor.occurrence_id.map(|id| id.0),
             anchor.body_id,
             anchor.edge_id,
             endpoint_order(anchor.endpoint),
@@ -174,18 +189,20 @@ pub fn drawing_projection_circles(
     let direction = normalize(request.direction)?;
     let right = normalize(cross(request.up, direction))?;
     let page_up = normalize(cross(direction, right))?;
-    let selected = request.body_ids.iter().copied().collect::<HashSet<_>>();
+
     let mut candidates = Vec::new();
-    for body in &scene.bodies {
-        if !selected.is_empty() && !selected.contains(&body.id) {
-            continue;
-        }
+    for (body, occurrence) in drawing_instances::drawing_bodies(scene, request)? {
         for edge in &body.edges {
             let points = edge
                 .points
                 .iter()
-                .map(|point| [point.x, point.y, point.z])
-                .collect::<Vec<_>>();
+                .map(|point| {
+                    drawing_instances::placed_point(
+                        [point.x, point.y, point.z],
+                        occurrence.as_ref(),
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?;
             let Some((center_model, normal_model, radius, closed)) = fit_circle(&points) else {
                 continue;
             };
@@ -205,6 +222,7 @@ pub fn drawing_projection_circles(
             });
             candidates.push((
                 DrawingProjectedCircleDto {
+                    occurrence_id: occurrence.map(|pose| pose.occurrence_id),
                     body_id: body.id,
                     edge_id: edge.id,
                     edge_key: edge.key.clone(),
@@ -243,7 +261,13 @@ pub fn drawing_projection_circles(
         .into_iter()
         .map(|(circle, _)| circle)
         .collect::<Vec<_>>();
-    circles.sort_by_key(|circle| (circle.body_id, circle.edge_id));
+    circles.sort_by_key(|circle| {
+        (
+            circle.occurrence_id.map(|id| id.0),
+            circle.body_id,
+            circle.edge_id,
+        )
+    });
     Ok(circles)
 }
 
@@ -498,6 +522,9 @@ mod drawing_anchor_tests {
             errors: vec![],
         };
         let request = DrawingProjectionRequest {
+            scope: Default::default(),
+            occurrence_ids: vec![],
+            resolved_occurrences: None,
             body_ids: vec![BodyId(3)],
             direction: [0.0, 0.0, 1.0],
             up: [0.0, 1.0, 0.0],
@@ -564,6 +591,9 @@ mod drawing_anchor_tests {
             errors: vec![],
         };
         let request = DrawingProjectionRequest {
+            scope: Default::default(),
+            occurrence_ids: vec![],
+            resolved_occurrences: None,
             body_ids: vec![BodyId(3)],
             direction: [0.0, 0.0, 1.0],
             up: [0.0, 1.0, 0.0],
@@ -636,6 +666,9 @@ mod drawing_anchor_tests {
             errors: vec![],
         };
         let request = DrawingProjectionRequest {
+            scope: Default::default(),
+            occurrence_ids: vec![],
+            resolved_occurrences: None,
             body_ids: vec![],
             direction: [0.0, 0.0, 1.0],
             up: [0.0, 1.0, 0.0],

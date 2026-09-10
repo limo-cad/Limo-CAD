@@ -20,6 +20,11 @@ use crate::{
 
 #[cxx::bridge(namespace = "nbcad_occt")]
 mod ffi {
+    struct FfiDrawingOccurrence {
+        body_id: u64,
+        translation: [f64; 3],
+        rotation: [f64; 4],
+    }
     struct FfiJob {
         feature_id: u64,
         kind: u8,
@@ -160,6 +165,8 @@ mod ffi {
         fn drawing_projection(
             self: &Kernel,
             body_ids: &Vec<u64>,
+            occurrences: &Vec<FfiDrawingOccurrence>,
+            assembly_scope: bool,
             direction_x: f64,
             direction_y: f64,
             direction_z: f64,
@@ -375,6 +382,27 @@ impl OcctKernel {
                 ));
             }
         }
+        let assembly_scope = request.scope == nbcad_sketch::DrawingViewScope::Assembly;
+        if assembly_scope
+            && request
+                .resolved_occurrences
+                .as_ref()
+                .is_none_or(Vec::is_empty)
+        {
+            return Err(OcctError(
+                "Assembly drawing requires nonempty host-resolved occurrences".into(),
+            ));
+        }
+        let occurrences = request
+            .resolved_occurrences
+            .iter()
+            .flatten()
+            .map(|pose| ffi::FfiDrawingOccurrence {
+                body_id: pose.body_id.0,
+                translation: pose.translation,
+                rotation: pose.rotation,
+            })
+            .collect::<Vec<_>>();
         let body_ids = request.body_ids.iter().map(|id| id.0).collect::<Vec<_>>();
         let raw = self
             .inner
@@ -382,6 +410,8 @@ impl OcctKernel {
             .ok_or_else(|| OcctError("OCCT kernel was released".to_string()))?
             .drawing_projection(
                 &body_ids,
+                &occurrences,
+                assembly_scope,
                 request.direction[0],
                 request.direction[1],
                 request.direction[2],
@@ -1861,6 +1891,9 @@ mod tests {
             .unwrap();
         let projection = kernel
             .drawing_projection(&DrawingProjectionRequest {
+                scope: Default::default(),
+                occurrence_ids: vec![],
+                resolved_occurrences: None,
                 body_ids: vec![BodyId(1)],
                 direction: [0.0, 0.0, 1.0],
                 up: [0.0, 1.0, 0.0],
@@ -1930,6 +1963,9 @@ mod tests {
             .unwrap();
 
         let request = |depth| DrawingProjectionRequest {
+            scope: Default::default(),
+            occurrence_ids: vec![],
+            resolved_occurrences: None,
             body_ids: vec![BodyId(1)],
             direction: [0.0, 0.0, 1.0],
             up: [0.0, 1.0, 0.0],

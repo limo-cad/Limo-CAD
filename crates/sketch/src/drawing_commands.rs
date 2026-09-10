@@ -143,6 +143,7 @@ impl SketchManager {
             ));
         }
         let before = self.drawing_document();
+        let assembly = self.assembly_document();
         let mut next = before.clone();
         match command {
             DrawingCommand::CreateSheet(r) => {
@@ -196,6 +197,13 @@ impl SketchManager {
                         DrawingViewDerivationDto::Section { first, second, .. }
                         | DrawingViewDerivationDto::RemovedSection { first, second, .. } => {
                             for a in [first, second] {
+                                validate_instance(
+                                    &assembly,
+                                    &scene,
+                                    &r.view,
+                                    a.occurrence_id,
+                                    a.body_id,
+                                )?;
                                 validate_edge(
                                     &scene,
                                     &r.view,
@@ -207,6 +215,13 @@ impl SketchManager {
                             }
                         }
                         DrawingViewDerivationDto::Detail { center, .. } => {
+                            validate_instance(
+                                &assembly,
+                                &scene,
+                                &r.view,
+                                center.occurrence_id,
+                                center.body_id,
+                            )?;
                             validate_edge(
                                 &scene,
                                 &r.view,
@@ -217,6 +232,13 @@ impl SketchManager {
                             )?;
                         }
                         DrawingViewDerivationDto::Auxiliary { reference, .. } => {
+                            validate_instance(
+                                &assembly,
+                                &scene,
+                                &r.view,
+                                reference.occurrence_id,
+                                reference.body_id,
+                            )?;
                             validate_edge(
                                 &scene,
                                 &r.view,
@@ -229,6 +251,7 @@ impl SketchManager {
                         DrawingViewDerivationDto::Broken { .. } => {}
                     }
                 }
+                validate_view_selection(&assembly, &scene, &r.view)?;
                 r.view.id = next.next_view_id;
                 next.next_view_id = next
                     .next_view_id
@@ -269,25 +292,24 @@ impl SketchManager {
                     ));
                 }
                 for anchor in [&r.first, &r.second] {
-                    let edge = scene
-                        .bodies
-                        .iter()
-                        .find(|b| b.id == anchor.body_id)
-                        .and_then(|b| {
-                            b.edges
-                                .iter()
-                                .find(|e| e.id == anchor.edge_id && e.key == anchor.edge_key)
-                        });
-                    if edge.is_none()
-                        || (!view.body_ids.is_empty() && !view.body_ids.contains(&anchor.body_id))
-                        || (anchor.circle_center && edge.unwrap().circle.is_none())
-                    {
-                        return Err(SessionError::Solid(
-                            "Dimension anchor is missing, stale, or excluded from the view.".into(),
-                        ));
-                    }
+                    validate_edge(
+                        &scene,
+                        view,
+                        anchor.body_id,
+                        anchor.edge_id,
+                        &anchor.edge_key,
+                        anchor.circle_center,
+                    )?;
+                    validate_instance(
+                        &assembly,
+                        &scene,
+                        view,
+                        anchor.occurrence_id,
+                        anchor.body_id,
+                    )?;
                 }
-                if r.first.body_id == r.second.body_id
+                if r.first.occurrence_id == r.second.occurrence_id
+                    && r.first.body_id == r.second.body_id
                     && r.first.edge_id == r.second.edge_id
                     && r.first.edge_key == r.second.edge_key
                     && r.first.circle_center == r.second.circle_center
@@ -328,6 +350,13 @@ impl SketchManager {
                     &r.feature.edge_key,
                     true,
                 )?;
+                validate_instance(
+                    &assembly,
+                    &scene,
+                    view,
+                    r.feature.occurrence_id,
+                    r.feature.body_id,
+                )?;
                 let id = annotation_id(&mut next)?;
                 sheet(&mut next, r.sheet_id)?.annotations.push(
                     DrawingAnnotationDto::RadialDimension {
@@ -348,6 +377,7 @@ impl SketchManager {
                 let view = dimension_view(sheet(&mut next, r.sheet_id)?, r.view_id)?;
                 let scene = self.solid_scene();
                 for a in [&r.vertex, &r.first, &r.second] {
+                    validate_instance(&assembly, &scene, view, a.occurrence_id, a.body_id)?;
                     validate_edge(
                         &scene,
                         view,
@@ -448,6 +478,82 @@ fn annotation_id(doc: &mut DrawingDocumentDto) -> Result<u64, SessionError> {
         .checked_add(1)
         .ok_or_else(|| SessionError::Solid("Annotation IDs exhausted".into()))?;
     Ok(id)
+}
+fn validate_view_selection(
+    assembly: &nbcad_assembly::AssemblyDocumentDto,
+    scene: &nbcad_solid::SolidSceneDto,
+    view: &DrawingViewDto,
+) -> Result<(), SessionError> {
+    if view.scope == DrawingViewScope::Definition {
+        if !view.occurrence_ids.is_empty() {
+            return Err(SessionError::Solid(
+                "Definition drawing views cannot select occurrences.".into(),
+            ));
+        }
+        return Ok(());
+    }
+    if !assembly.solve(scene).solved {
+        return Err(SessionError::Solid(
+            "Resolve assembly diagnostics before adding an assembly drawing.".into(),
+        ));
+    }
+    if view.occurrence_ids.iter().any(|id| {
+        !assembly
+            .component_structure
+            .occurrences
+            .iter()
+            .any(|o| o.id == *id)
+    }) {
+        return Err(SessionError::Solid(
+            "Drawing view selects a missing occurrence.".into(),
+        ));
+    }
+    Ok(())
+}
+fn validate_instance(
+    assembly: &nbcad_assembly::AssemblyDocumentDto,
+    scene: &nbcad_solid::SolidSceneDto,
+    view: &DrawingViewDto,
+    occurrence: Option<nbcad_assembly::OccurrenceId>,
+    body: nbcad_core::BodyId,
+) -> Result<(), SessionError> {
+    match (view.scope, occurrence) {
+        (DrawingViewScope::Definition, None) => Ok(()),
+        (DrawingViewScope::Assembly, Some(id)) => {
+            let solution = assembly.solve(scene);
+            if !solution.solved
+                || !solution
+                    .instance_body_poses
+                    .iter()
+                    .any(|p| p.occurrence_id == id && p.body_id == body && p.visible)
+            {
+                return Err(SessionError::Solid(
+                    "Drawing anchor references a missing, hidden or unsolved occurrence.".into(),
+                ));
+            }
+            let mut current = Some(id);
+            for _ in 0..=assembly.component_structure.occurrences.len() {
+                let Some(id) = current else {
+                    break;
+                };
+                if view.occurrence_ids.is_empty() || view.occurrence_ids.contains(&id) {
+                    return Ok(());
+                }
+                current = assembly
+                    .component_structure
+                    .occurrences
+                    .iter()
+                    .find(|o| o.id == id)
+                    .and_then(|o| o.parent_occurrence_id);
+            }
+            Err(SessionError::Solid(
+                "Drawing anchor occurrence is excluded from this view.".into(),
+            ))
+        }
+        _ => Err(SessionError::Solid(
+            "Dimension occurrence identity must match the drawing view scope.".into(),
+        )),
+    }
 }
 fn dimension_view(sheet: &DrawingSheetDto, id: u64) -> Result<&DrawingViewDto, SessionError> {
     sheet

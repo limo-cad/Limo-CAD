@@ -3989,6 +3989,7 @@ dependencies = [
  "nbcad-assembly",
  "nbcad-core",
  "nbcad-export",
+ "nbcad-sketch",
  "nbcad-solid",
  "serde",
  "serde_json",

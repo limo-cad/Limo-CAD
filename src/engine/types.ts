@@ -1724,6 +1724,8 @@ export interface DrawingBomItemDto {
 }
 
 export interface DrawingViewDto {
+  scope?: 'definition' | 'assembly';
+  occurrence_ids?: number[];
   id: number;
   name: string;
   kind: DrawingViewKind;
@@ -1814,6 +1816,7 @@ export type DrawingChainDimensionLayout = 'chain' | 'baseline' | 'continued';
 export type DrawingOrdinateAxis = 'x' | 'y' | 'both';
 
 export interface DrawingTopologyAnchorRefDto {
+  occurrence_id?: number | null;
   body_id: number;
   edge_id: number;
   edge_key: string;
@@ -1824,6 +1827,7 @@ export interface DrawingTopologyAnchorRefDto {
 }
 
 export interface DrawingCircularRefDto {
+  occurrence_id?: number | null;
   body_id: number;
   edge_id: number;
   edge_key: string;
@@ -1835,6 +1839,7 @@ export interface DrawingCircularRefDto {
 
 /** Stable exact-topology reference to a straight model edge. */
 export interface DrawingLineRefDto {
+  occurrence_id?: number | null;
   body_id: number;
   edge_id: number;
   edge_key: string;
@@ -2175,6 +2180,8 @@ export interface DrawingDocumentDto {
 }
 
 export interface DrawingProjectionRequest {
+  scope?: 'definition' | 'assembly';
+  occurrence_ids?: number[];
   body_ids: number[];
   direction: [number, number, number];
   up: [number, number, number];
@@ -2194,6 +2201,7 @@ export interface DrawingPolylineDto {
 }
 
 export interface DrawingProjectionAnchorDto {
+  occurrence_id?: number | null;
   body_id: number;
   edge_id: number;
   edge_key: string;
@@ -2205,6 +2213,7 @@ export interface DrawingProjectionAnchorDto {
 }
 
 export interface DrawingProjectedCircleDto {
+  occurrence_id?: number | null;
   body_id: number;
   edge_id: number;
   edge_key: string;

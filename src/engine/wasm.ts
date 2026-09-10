@@ -13,7 +13,7 @@ import init, { WasmEngine as WasmEngineInner } from '../engine-wasm/pkg/nbcad_wa
 import { unwrapEnvelope, type Engine } from './index';
 import { restoreLoadedDatumHistoryFrames } from './historyFrames';
 import { BrowserOcctKernel } from './occtBrowser';
-import { projectSceneForDrawing } from '../drawing/projection';
+import { drawingInstanceScene, projectSceneForDrawing } from '../drawing/projection';
 
 /** wasm-pack typings lag until `npm run build:wasm`; keep additive methods typed here. */
 type WasmEngineMethods = WasmEngineInner & {
@@ -495,7 +495,12 @@ export class WasmEngine implements Engine {
   }
 
   async drawingProjection(request: DrawingProjectionRequest): Promise<DrawingProjectionDto> {
-    return projectSceneForDrawing(await this.solidScene(), request);
+    let scene = await this.solidScene();
+    if (request.scope === 'assembly') {
+      scene = drawingInstanceScene(scene, await this.assemblySolution(), await this.assemblyDocument(), request.occurrence_ids ?? []);
+      if (scene.bodies.length === 0) throw new Error('The selected assembly drawing contains no visible body occurrences.');
+    }
+    return projectSceneForDrawing(scene, request);
   }
 
   async setBodyAppearance(appearance: BodyAppearance): Promise<BodyAppearance[]> {

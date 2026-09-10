@@ -43,9 +43,12 @@ recipes: linear, radial and angular dimensions, notes, title information and BOM
 It rejects other annotation kinds and dual-unit presentation explicitly. The
 existing interactive export retains its wider annotation coverage. Migrating
 that presentation code to Rust remains work; do not represent this layer as
-complete native parity with every drawing-editor annotation. Assembly occurrence
-projection is a separate support layer and must be integrated before assembly
-drawing acceptance.
+complete native parity with every drawing-editor annotation. Assembly views explicitly select `scope: "assembly"` and optional occurrence
+IDs. Exact hidden-line removal runs on the combined placed B-reps, including
+repeated instances. Associative references include occurrence identity; a
+reference excluded from the view rejects atomically. Schema 5 prevents older
+readers from silently dropping that placement identity. Schema 1–4 files migrate
+with their earlier definition-view semantics.
 
 Physical inspection is still needed for print fits, load/creep qualification and
 the purchased generator's measured mounting dimensions. A successful drawing
