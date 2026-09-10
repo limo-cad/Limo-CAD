@@ -216,6 +216,11 @@ unsafe impl Send for ffi::Kernel {}
 
 pub struct OcctKernel {
     inner: UniquePtr<ffi::Kernel>,
+    /// Only a fully successful replay may seed the next append. The jobs
+    /// include all resolved geometry inputs, not just feature IDs/revisions.
+    successful_jobs: Option<Vec<KernelJobDto>>,
+    #[cfg(test)]
+    last_applied_jobs: usize,
 }
 
 impl std::fmt::Debug for OcctKernel {
@@ -230,14 +235,33 @@ impl OcctKernel {
         if inner.is_null() {
             return Err(OcctError("OCCT kernel allocation failed".to_string()));
         }
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            successful_jobs: None,
+            #[cfg(test)]
+            last_applied_jobs: 0,
+        })
     }
 
     pub fn recompute(&mut self, plan: &RecomputePlanDto) -> Result<KernelSceneDto, OcctError> {
+        // Invalidate before touching the kernel. A conversion, native Boolean,
+        // or tessellation failure can leave a partial native state; the next
+        // request must rebuild it even when that request matches an old plan.
+        let previous = self.successful_jobs.take();
+        let reused = previous
+            .as_ref()
+            .filter(|jobs| plan.errors.is_empty() && plan.jobs.starts_with(jobs))
+            .map_or(0, Vec::len);
         let mut pinned = self.inner.pin_mut();
-        pinned.as_mut().reset();
+        if reused == 0 {
+            pinned.as_mut().reset();
+        }
+        #[cfg(test)]
+        {
+            self.last_applied_jobs = 0;
+        }
         let mut errors = plan.errors.clone();
-        for job in &plan.jobs {
+        for job in &plan.jobs[reused..] {
             let ffi_job = match to_ffi_job(job) {
                 Ok(job) => job,
                 Err(error) => {
@@ -248,6 +272,10 @@ impl OcctKernel {
                     break;
                 }
             };
+            #[cfg(test)]
+            {
+                self.last_applied_jobs += 1;
+            }
             if let Err(error) = pinned.as_mut().apply_job(&ffi_job) {
                 errors.push(KernelFeatureErrorDto {
                     feature_id: job.feature_id(),
@@ -271,6 +299,9 @@ impl OcctKernel {
                 .mesh(body_id)
                 .map_err(|error| OcctError(error.to_string()))?;
             bodies.push(from_ffi_mesh(raw)?);
+        }
+        if errors.is_empty() {
+            self.successful_jobs = Some(plan.jobs.clone());
         }
         Ok(KernelSceneDto { bodies, errors })
     }
@@ -1877,6 +1908,90 @@ mod tests {
             .unwrap();
         assert!(roundtrip.errors.is_empty());
         assert_eq!(roundtrip.bodies.len(), 1);
+    }
+
+    #[test]
+    fn append_replay_matches_cold_geometry_and_rebuilds_on_edit_rollback_or_failure() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let mut plan = RecomputePlanDto {
+            transaction_id: 1,
+            jobs: vec![box_job(1, 1)],
+            errors: vec![],
+        };
+        let original = kernel.recompute(&plan).unwrap();
+        assert_eq!(kernel.last_applied_jobs, 1);
+        plan.transaction_id += 1;
+        assert_eq!(kernel.recompute(&plan).unwrap(), original);
+        assert_eq!(
+            kernel.last_applied_jobs, 0,
+            "transaction IDs alone do not invalidate geometry"
+        );
+        let mut second = box_job(2, 2);
+        if let KernelJobDto::Extrude(job) = &mut second {
+            for profile in &mut job.profiles {
+                for p in &mut profile.points {
+                    p.x += 5.;
+                }
+            }
+        }
+        plan.jobs.push(second);
+        assert_eq!(
+            kernel.recompute(&plan).unwrap(),
+            OcctKernel::new().unwrap().recompute(&plan).unwrap()
+        );
+        assert_eq!(kernel.last_applied_jobs, 1);
+        plan.jobs
+            .push(KernelJobDto::Combine(nbcad_solid::KernelCombineJobDto {
+                feature_id: FeatureId(3),
+                target_body_id: BodyId(1),
+                tool_body_ids: vec![BodyId(2)],
+                operation: CombineOperation::Join,
+                keep_tools: false,
+            }));
+        let combined = kernel.recompute(&plan).unwrap();
+        assert_eq!(combined.bodies.len(), 1);
+        assert_eq!(
+            combined,
+            OcctKernel::new().unwrap().recompute(&plan).unwrap()
+        );
+        assert_eq!(kernel.last_applied_jobs, 1);
+        let good = plan.clone();
+        // A failed append must never mark its partially changed native state as reusable.
+        plan.jobs
+            .push(KernelJobDto::Combine(nbcad_solid::KernelCombineJobDto {
+                feature_id: FeatureId(4),
+                target_body_id: BodyId(1),
+                tool_body_ids: vec![BodyId(999)],
+                operation: CombineOperation::Join,
+                keep_tools: false,
+            }));
+        assert!(!kernel.recompute(&plan).unwrap().errors.is_empty());
+        assert!(kernel.successful_jobs.is_none());
+        assert_eq!(kernel.recompute(&good).unwrap(), combined);
+        assert_eq!(kernel.last_applied_jobs, 3);
+        plan = good;
+        if let KernelJobDto::Extrude(job) = &mut plan.jobs[0] {
+            job.end_offset += 2.;
+        }
+        let edited = kernel.recompute(&plan).unwrap();
+        assert_eq!(edited, OcctKernel::new().unwrap().recompute(&plan).unwrap());
+        assert_ne!(edited, combined);
+        assert_eq!(kernel.last_applied_jobs, 3);
+        plan.jobs.truncate(1);
+        assert_eq!(
+            kernel.recompute(&plan).unwrap(),
+            OcctKernel::new().unwrap().recompute(&plan).unwrap()
+        );
+        assert_eq!(kernel.last_applied_jobs, 1);
+        plan.errors.push(KernelFeatureErrorDto {
+            feature_id: FeatureId(9),
+            message: "missing sketch".into(),
+        });
+        assert!(!kernel.recompute(&plan).unwrap().errors.is_empty());
+        assert!(kernel.successful_jobs.is_none());
+        plan.errors.clear();
+        kernel.recompute(&plan).unwrap();
+        assert_eq!(kernel.last_applied_jobs, 1);
     }
 
     #[test]
