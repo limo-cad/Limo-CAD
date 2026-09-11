@@ -9,6 +9,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgDir = path.join(here, '..', 'src', 'engine-wasm', 'pkg');
@@ -107,6 +108,53 @@ check('redo brings the first line back', redone.sketch.entities.length === 3);
 const ended = unwrap(engine.end_sketch());
 check('end_sketch returns the document', ended.document.name === 'Untitled');
 check('no active sketch afterwards', unwrap(engine.active_sketch()) === null);
+
+// Exercise the generated optional-string binding, not a mocked Engine adapter.
+// Save As must copy the requested name without altering the live sketch history;
+// only guarded name adoption after a successful write may update the document.
+const originalName = 'Original design';
+check('legacy string rename remains supported',
+  unwrap(engine.document_set_name(JSON.stringify(originalName))).name === originalName);
+const originalJson = unwrap(engine.project_export_model());
+const originalModel = JSON.parse(originalJson);
+check('legacy no-argument project export remains supported', originalModel.document.name === originalName);
+check('omitted optional export payload accepts undefined and null',
+  unwrap(engine.project_export_model(undefined)) === originalJson
+    && unwrap(engine.project_export_model(null)) === originalJson);
+check('guarded export without a saved name preserves the original snapshot',
+  unwrap(engine.project_export_model(JSON.stringify({expected_model_json: originalJson}))) === originalJson);
+const savedName = 'Saved copy Ω';
+const savedModel = JSON.parse(unwrap(engine.project_export_model(JSON.stringify({
+  expected_model_json: JSON.stringify(originalModel, null, 2),
+  save_name: `  ${savedName}  `,
+}))));
+const expectedSavedModel = {...originalModel, document: {...originalModel.document, name: savedName}};
+check('guarded Save As copies and trims the requested name while preserving the complete model',
+  isDeepStrictEqual(savedModel, expectedSavedModel));
+check('Save As snapshot leaves the live name and history unchanged',
+  unwrap(engine.project_export_model()) === originalJson && unwrap(engine.document()).name === originalName);
+check('guarded name adoption accepts the captured current model',
+  unwrap(engine.document_set_name(JSON.stringify({name: savedName, expected_model_json: originalJson}))).name === savedName);
+const adoptedJson = unwrap(engine.project_export_model());
+check('name adoption preserves all other project data',
+  isDeepStrictEqual(JSON.parse(adoptedJson), expectedSavedModel));
+for (const [label, response] of [
+  ['stale saved-copy export', engine.project_export_model(JSON.stringify({expected_model_json: originalJson, save_name: 'Wrong copy'}))],
+  ['stale name adoption', engine.document_set_name(JSON.stringify({expected_model_json: originalJson, name: 'Wrong live name'}))],
+]) {
+  const envelope = JSON.parse(response);
+  check(`${label} rejects a mismatched snapshot`, envelope.ok === false && /document changed/i.test(envelope.error));
+  check(`${label} preserves the current name and entire model`,
+    unwrap(engine.document()).name === savedName && unwrap(engine.project_export_model()) === adoptedJson);
+}
+for (const [label, payload] of [
+  ['blank saved name', {expected_model_json: adoptedJson, save_name: '   '}],
+  ['missing snapshot precondition', {save_name: 'Unchecked copy'}],
+  ['malformed expected model', {expected_model_json: '{', save_name: 'Invalid copy'}],
+]) {
+  check(`${label} returns an error envelope`, JSON.parse(engine.project_export_model(JSON.stringify(payload))).ok === false);
+  check(`${label} preserves the current model`, unwrap(engine.project_export_model()) === adoptedJson);
+}
 
 engine.free();
 if (failures > 0) {
