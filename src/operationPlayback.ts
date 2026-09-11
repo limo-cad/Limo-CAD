@@ -47,9 +47,21 @@ export class PresentationController {
   private lastClock = 0;
   private credits = 0;
   private paceMs = 0;
+  private documentRevision = 0;
   private listeners = new Set<() => void>();
   constructor(private clock: () => number = Date.now) { this.lastClock = clock(); }
   snapshot = (): PresentationSnapshot => this.state;
+  documentVersion = (): number => this.documentRevision;
+  /** New/Open/tab hydration replaces document UI, unlike an ordinary edit or
+   * Save. Async operations use this revision to recognize their document. */
+  documentChanged(): void {
+    this.documentRevision += 1;
+    this.remainingMs = 0; this.credits = 0; this.paceMs = 0;
+    this.lastClock = this.clock();
+    this.emit({active: false, visible: false, mode: 'fast', speed: 1,
+      paused: false, stopped: false, finished: false, text: '', chapter: '', operation: '',
+      step_index: 0, step_count: 0, highlighted_body_ids: [], highlighted_sketch_entity_ids: []});
+  }
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener); return () => { this.listeners.delete(listener); };
   };

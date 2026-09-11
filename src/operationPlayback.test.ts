@@ -106,6 +106,25 @@ check(Boolean(closeControl) && !/\sdisabled(?:\s|=|>)/.test(closeControl!), 'The
 presentation.control({ command: 'dismiss' });
 check(renderControls() === '' && renderReopen().includes('Complete'), 'A completed bar can be removed and reopened');
 
+const documentReset = new PresentationController(() => now);
+const initialPresentation = JSON.stringify(documentReset.snapshot());
+documentReset.configurePace(700);
+documentReset.control({command: 'note', text: 'Previous document', chapter: 'Assembly', step_index: 2, step_count: 3, duration_ms: 1000});
+documentReset.emphasize([4], [5]);
+documentReset.control({command: 'step'});
+check(documentReset.documentVersion() === 0 && documentReset.status().step_pending, 'Ordinary presentation controls retain the document revision');
+let observedRevision = -1;
+documentReset.subscribe(() => { observedRevision = documentReset.documentVersion(); });
+documentReset.documentChanged();
+check(documentReset.documentVersion() === 1 && observedRevision === 1, 'Replacement advances the revision before notifying observers');
+check(JSON.stringify(documentReset.snapshot()) === initialPresentation && documentReset.status().wait_ms === 0
+  && !documentReset.status().step_pending && documentReset.canApply(), 'Replacement clears prior controls, holds, step permits and highlights');
+documentReset.control({command: 'configure', mode: 'present'});
+documentReset.modelApplied();
+check(documentReset.documentVersion() === 1 && documentReset.canApply(), 'An ordinary model edit retains its owner without inheriting the old pace');
+documentReset.documentChanged();
+check(documentReset.documentVersion() === 2, 'Repeated replacement advances the same document revision');
+
 const lane = new SerialPlayback();
 let release!: () => void;
 const barrier = new Promise<void>(resolve => { release = resolve; });

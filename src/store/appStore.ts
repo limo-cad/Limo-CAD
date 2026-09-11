@@ -9,6 +9,7 @@
  * active tool).
  */
 import { create } from 'zustand';
+import { presentation } from '../operationPlayback';
 import { synchronizeSnapshotVisibility } from '../sessionSnapshot';
 import type {
   AssemblyDocumentDto,
@@ -1240,6 +1241,7 @@ export const useAppStore = create<AppState>()((set) => ({
       projectVisibility,
       dirty: false,
     });
+    presentation.documentChanged();
   },
 
   refreshAfterInboxApply: async (opName) => {
@@ -2113,7 +2115,7 @@ export const useAppStore = create<AppState>()((set) => ({
     assemblyDocument = emptyAssemblyDocument(),
     projectVisibility = emptyProjectVisibility(),
     assemblySolution = emptyAssemblySolution(),
-  ) =>
+  ) => {
     set({
       ...resetDocumentUiState(),
       document: update.document,
@@ -2128,7 +2130,9 @@ export const useAppStore = create<AppState>()((set) => ({
       projectVisibility,
       dirty: false,
       projectFileName: fileName,
-    }),
+    });
+    presentation.documentChanged();
+  },
 
   markClean: (fileName) =>
     set((state) => ({
