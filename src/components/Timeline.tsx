@@ -67,8 +67,8 @@ import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { DeleteFeatureDialog } from './DeleteFeatureDialog';
 
 function editTimelineFeature(feature: FeatureDto) {
-  void beginTimelineFeatureEdit(feature.id, async (engine) => {
-    if (feature.kind === 'sketch') return editSketch(feature.name);
+  void beginTimelineFeatureEdit(feature.id, async (engine, assertCurrent) => {
+    if (feature.kind === 'sketch') return editSketch(feature.name, assertCurrent);
     if (feature.kind === 'extrude') openExtrude(feature.id);
     if (feature.kind === 'revolve') openRevolve(feature.id);
     if (feature.kind === 'sweep') openSweep(feature.id);
@@ -84,7 +84,9 @@ function editTimelineFeature(feature: FeatureDto) {
     if (feature.kind === 'construction_plane') {
       // The stage view deliberately hides this datum while it is being
       // edited, so resolve its retained definition through the engine.
-      const definition = (await engine.datumPlaneDefinitions()).find(
+      const definitions = await engine.datumPlaneDefinitions();
+      await assertCurrent();
+      const definition = definitions.find(
         (plane) => plane.feature_id === feature.id,
       );
       if (!definition) {

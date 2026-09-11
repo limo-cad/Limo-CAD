@@ -24,7 +24,7 @@ const wasmBindingContract={name:'wasm-binding-contract',resolveId(id){if(id.ends
  document(){return ok({name:this.model,features:[],rollback_index:0,browser:[],settings:{units:'mm'}})}
  solid_scene(){return ok({bodies:[],errors:[]})} free(){} }`;
 }};
-const server=await createServer({configFile:false,optimizeDeps:{noDiscovery:true,entries:[],include:['react','react-dom/client','react/jsx-runtime','react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0,watch:null},logLevel:'error',plugins:[wasmBindingContract,{name:'mcp-contract',configureServer(server){server.middlewares.use('/mcp-contract',(_req,res)=>{
+const server=await createServer({configFile:false,optimizeDeps:{noDiscovery:true,entries:[],include:['react','react-dom','react-dom/client','react/jsx-runtime','react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0,watch:null},logLevel:'error',plugins:[wasmBindingContract,{name:'mcp-contract',configureServer(server){server.middlewares.use('/mcp-contract',(_req,res)=>{
  res.setHeader('Content-Type','text/html');
  res.end('<!doctype html><html><body><main data-mcp-surface="test-surface"><button>Run</button><button disabled>Disabled</button><label>Name<input value="old"></label><label>Choice<select><option value="a">A</option><option disabled value="b">B</option></select></label><button id="hidden" hidden>Hidden</button></main></body></html>');
 });}}]});
@@ -219,6 +219,11 @@ try {
   })]);}finally{clearTimeout(timer);}
  });
  console.log('PASS production history metadata: '+JSON.stringify(historyMetadata));
+ const historyEditors=await historyPage.evaluate(async()=>{
+  const {checkHistoryEditorCallbacks}=await import('/src/engine/historyEditor.browser.test.ts');
+  return checkHistoryEditorCallbacks();
+ });
+ console.log('PASS production history editor callbacks: '+JSON.stringify(historyEditors));
  await historyPage.close();
 } finally {await browser?.close();await server.close();}
 

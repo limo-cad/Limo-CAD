@@ -288,7 +288,7 @@ async function discardTimelineHistoryMutation(
  */
 export async function beginTimelineFeatureEdit(
   featureId: number,
-  openEditor: (engine: Engine) => void | Promise<void>,
+  openEditor: (engine: Engine, assertCurrent: () => Promise<void>) => void | Promise<void>,
 ): Promise<void> {
   const state = useAppStore.getState();
   const document = state.document;
@@ -328,7 +328,7 @@ export async function beginTimelineFeatureEdit(
     state.setHistoryEdit(checkpoint);
     // Moving the cursor only prepares the editor; it is not a document edit.
     useAppStore.setState({ dirty: checkpoint.restoreDirty });
-    await openEditor(engine);
+    await openEditor(engine, owner.assertCurrent);
     await owner.assertCurrent();
   } catch (error) {
     if (!await owner.settled()) {
@@ -442,16 +442,28 @@ export async function finishSketch(): Promise<void> {
 /** Re-enter a finished sketch (browser double-click / pencil, M1d). The
  * engine moves the retained session back to active with entities,
  * constraints, dimensions, and undo intact. */
-export async function editSketch(name: string): Promise<void> {
-  const engine = await getEngine();
-  const sketch = await engine.editSketch(name);
-  const s = useAppStore.getState();
-  s.setActiveTool(null);
-  s.setSelectedEntity(null);
-  s.setHoveredEntity(null);
-  s.setActiveSketch(sketch);
-  s.setFinishedSketches(await engine.finishedSketches());
-  s.setMode('sketch');
+export async function editSketch(name: string, assertOwner?: () => Promise<void>): Promise<void> {
+  const assertCurrent = assertOwner ?? captureHistoryStageOwner().assertCurrent;
+  try {
+    const engine = await getEngine();
+    await assertCurrent();
+    const sketch = await engine.editSketch(name);
+    await assertCurrent();
+    const finishedSketches = await engine.finishedSketches();
+    await assertCurrent();
+    const s = useAppStore.getState();
+    s.setActiveTool(null);
+    s.setSelectedEntity(null);
+    s.setHoveredEntity(null);
+    s.setActiveSketch(sketch);
+    s.setFinishedSketches(finishedSketches);
+    s.setMode('sketch');
+  } catch (error) {
+    // Timeline editing owns its rollback cleanup; a direct Browser edit has
+    // no editor checkpoint to unwind after its document has been replaced.
+    if (!assertOwner && error instanceof HistoryStageOwnershipError) return;
+    throw error;
+  }
 }
 
 export async function undoSketch(): Promise<void> {
