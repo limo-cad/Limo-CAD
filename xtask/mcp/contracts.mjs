@@ -209,6 +209,17 @@ try {
  });
  console.log('PASS production project Save ownership: '+JSON.stringify(saveOwnership));
  await savePage.close();
+ const historyPage=await browser.newPage();
+ await historyPage.goto(server.resolvedUrls.local[0]+'mcp-contract');
+ const historyMetadata=await historyPage.evaluate(async()=>{
+  const {checkHistoryMetadata}=await import('/src/engine/historyMetadata.browser.test.ts');
+  let timer;
+  try{return await Promise.race([checkHistoryMetadata(),new Promise((_,reject)=>{
+   timer=setTimeout(()=>reject(new Error('History metadata contract timed out')),15000);
+  })]);}finally{clearTimeout(timer);}
+ });
+ console.log('PASS production history metadata: '+JSON.stringify(historyMetadata));
+ await historyPage.close();
 } finally {await browser?.close();await server.close();}
 
 

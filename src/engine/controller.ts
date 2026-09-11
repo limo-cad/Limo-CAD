@@ -185,35 +185,73 @@ async function beginSketchOn(
   }
 }
 
-/** Publish a history-stage replay together with its stage-scoped inputs. */
+class HistoryStageOwnershipError extends Error {
+  constructor(message: string, readonly ownsUi: () => boolean = () => false) { super(message); }
+}
+
+function captureHistoryStageOwner() {
+  const state = useAppStore.getState();
+  const revision = projectTransitions.capture();
+  const documentVersion = presentation.documentVersion();
+  let document = state.document;
+  const ownsUi = () => {
+    const current = useAppStore.getState();
+    return current.activeProjectTabId === state.activeProjectTabId && presentation.documentVersion() === documentVersion;
+  };
+  const settled = async () => {
+    try {
+      await projectTransitions.assertCurrent(revision);
+      return ownsUi() && useAppStore.getState().document === document;
+    } catch { return false; }
+  };
+  return {
+    ownsUi,
+    settled,
+    assertCurrent: async () => { if (!await settled()) throw new HistoryStageOwnershipError('The document changed while updating history.', ownsUi); },
+    published: (next: SolidUpdateDto) => { document = next.document; },
+  };
+}
+
+/** Publish a history stage and restore its materials and stable eye choices. */
 async function applyHistoryStageUpdate(
   engine: Engine,
   update: SolidUpdateDto,
+  owner: ReturnType<typeof captureHistoryStageOwner>,
 ): Promise<void> {
-  const [finishedSketches, datumPlanes] = await Promise.all([
+  await owner.assertCurrent();
+  const previousAppearances = useAppStore.getState().bodyAppearances;
+  const [finishedSketches, datumPlanes, bodyAppearances] = await Promise.all([
     engine.finishedSketches(),
     engine.datumPlaneDefinitions(),
+    engine.bodyAppearances(),
   ]);
+  await owner.assertCurrent();
   const state = useAppStore.getState();
   state.applySolidUpdate(update);
+  owner.published(update);
   state.setFinishedSketches(finishedSketches);
   state.applyDatumPlaneUpdate({
     document: update.document,
     planes: datumPlanes,
   });
+  state.setBodyAppearances(state.bodyAppearances === previousAppearances ? bodyAppearances : state.bodyAppearances);
+  // A Browser eye change may not have reached native publication yet. Keep
+  // the current project intent, remapping it to the recreated Browser nodes.
+  state.applyProjectVisibility(state.projectVisibility);
 }
 
 interface TimelineHistoryMutation {
-  featureId: number;
+  checkpoint: HistoryEditCheckpoint;
   projectKey: string;
   finish: () => void;
 }
 
 let timelineHistoryMutation: TimelineHistoryMutation | null = null;
 
-function finishTimelineHistoryMutation(featureId: number): void {
-  const mutation = timelineHistoryMutation;
-  if (!mutation || mutation.featureId !== featureId) return;
+function finishTimelineHistoryMutation(mutation: TimelineHistoryMutation | null, discardEditor = false): void {
+  if (!mutation || timelineHistoryMutation !== mutation) return;
+  const state = useAppStore.getState();
+  if (discardEditor && state.historyEdit === mutation.checkpoint) state.setHistoryEdit(null);
   timelineHistoryMutation = null;
   mutation.finish();
 }
@@ -226,14 +264,19 @@ function finishTimelineHistoryMutation(featureId: number): void {
  */
 async function discardTimelineHistoryMutation(
   checkpoint: HistoryEditCheckpoint,
+  owner: ReturnType<typeof captureHistoryStageOwner>,
+  mutation: TimelineHistoryMutation | null,
 ): Promise<void> {
   await new Promise<void>((resolve) => queueMicrotask(resolve));
-  const mutation = timelineHistoryMutation;
-  if (mutation?.featureId === checkpoint.featureId) {
+  if (!await owner.settled()) {
+    finishTimelineHistoryMutation(mutation, owner.ownsUi());
+    return;
+  }
+  if (mutation && timelineHistoryMutation === mutation) {
     authorizeNextSolidRedo(mutation.projectKey);
   }
   useAppStore.setState({ dirty: checkpoint.restoreDirty });
-  finishTimelineHistoryMutation(checkpoint.featureId);
+  finishTimelineHistoryMutation(mutation);
 }
 
 /**
@@ -258,49 +301,60 @@ export async function beginTimelineFeatureEdit(
   ) return;
   const featureIndex = document.features.findIndex((feature) => feature.id === featureId);
   if (featureIndex < 0) return;
+  const owner = captureHistoryStageOwner();
   const restoreRollbackIndex = document.rollback_index;
   const checkpoint: HistoryEditCheckpoint = {
     featureId,
     restoreRollbackIndex,
     restoreDirty: state.dirty,
   };
-  timelineHistoryMutation = {
-    featureId,
+  const mutation = {
+    checkpoint,
     projectKey: currentHistoryProjectKey(),
     finish: beginHistoryMutation(),
   };
+  timelineHistoryMutation = mutation;
 
   state.setSolidBusy(true);
   let engine: Engine | null = null;
   let staged = false;
   try {
     engine = await getEngine();
+    await owner.assertCurrent();
     const update = await engine.setRollback(featureIndex);
+    await owner.assertCurrent();
     staged = true;
-    await applyHistoryStageUpdate(engine, update);
+    await applyHistoryStageUpdate(engine, update, owner);
     state.setHistoryEdit(checkpoint);
     // Moving the cursor only prepares the editor; it is not a document edit.
     useAppStore.setState({ dirty: checkpoint.restoreDirty });
     await openEditor(engine);
+    await owner.assertCurrent();
   } catch (error) {
+    if (!await owner.settled()) {
+      finishTimelineHistoryMutation(mutation, owner.ownsUi());
+      return;
+    }
     // Opening a sketch can still fail (for example a broken support face).
     // Do not strand the document at the pre-feature cursor in that case.
     if (engine && staged) {
       try {
         const restored = await engine.setRollback(restoreRollbackIndex);
-        await applyHistoryStageUpdate(engine, restored);
+        await applyHistoryStageUpdate(engine, restored, owner);
       } catch {
         // The original failure is the useful error to report.
       }
     }
+    if (!await owner.settled()) { finishTimelineHistoryMutation(mutation, owner.ownsUi()); return; }
     state.setHistoryEdit(null);
-    await discardTimelineHistoryMutation(checkpoint);
+    await discardTimelineHistoryMutation(checkpoint, owner, mutation);
+    if (!await owner.settled()) return;
     state.setConstraintDialog({
       titleKey: 'constraints.invalidTitle',
       message: error instanceof Error ? error.message : 'Could not open history editor',
     });
   } finally {
-    state.setSolidBusy(false);
+    if (owner.ownsUi()) state.setSolidBusy(false);
   }
 }
 
@@ -308,16 +362,25 @@ export async function beginTimelineFeatureEdit(
 async function resumeTimelineFeatureEdit(
   engine: Engine,
   featureId: number | undefined,
+  checkpoint: HistoryEditCheckpoint | null,
 ): Promise<SolidUpdateDto | null> {
   if (!featureId || featureId <= 0) return null;
   const state = useAppStore.getState();
-  const checkpoint = state.historyEdit;
   if (!checkpoint || checkpoint.featureId !== featureId) return null;
-  const update = await engine.setRollback(checkpoint.restoreRollbackIndex);
-  await applyHistoryStageUpdate(engine, update);
-  state.setHistoryEdit(null);
-  finishTimelineHistoryMutation(checkpoint.featureId);
-  return update;
+  const mutation = timelineHistoryMutation?.checkpoint === checkpoint ? timelineHistoryMutation : null;
+  try {
+    if (state.historyEdit !== checkpoint) throw new HistoryStageOwnershipError('The history editor changed.');
+    const owner = captureHistoryStageOwner();
+    await owner.assertCurrent();
+    const update = await engine.setRollback(checkpoint.restoreRollbackIndex);
+    await applyHistoryStageUpdate(engine, update, owner);
+    state.setHistoryEdit(null);
+    finishTimelineHistoryMutation(mutation);
+    return update;
+  } catch (error) {
+    if (error instanceof HistoryStageOwnershipError) finishTimelineHistoryMutation(mutation, error.ownsUi());
+    throw error;
+  }
 }
 
 /** Cancel an editor and restore the timeline stage it replaced. */
@@ -328,21 +391,26 @@ export async function cancelTimelineFeatureEdit(close: () => void): Promise<void
     close();
     return;
   }
+  const owner = captureHistoryStageOwner();
+  const mutation = timelineHistoryMutation?.checkpoint === checkpoint ? timelineHistoryMutation : null;
   state.setSolidBusy(true);
   try {
     const engine = await getEngine();
+    await owner.assertCurrent();
     const update = await engine.setRollback(checkpoint.restoreRollbackIndex);
-    await applyHistoryStageUpdate(engine, update);
+    await applyHistoryStageUpdate(engine, update, owner);
     state.setHistoryEdit(null);
-    await discardTimelineHistoryMutation(checkpoint);
+    await discardTimelineHistoryMutation(checkpoint, owner, mutation);
+    if (!await owner.settled()) return;
     close();
   } catch (error) {
+    if (!await owner.settled()) { finishTimelineHistoryMutation(mutation, owner.ownsUi()); return; }
     state.setConstraintDialog({
       titleKey: 'constraints.invalidTitle',
       message: error instanceof Error ? error.message : 'Could not restore history',
     });
   } finally {
-    state.setSolidBusy(false);
+    if (owner.ownsUi()) state.setSolidBusy(false);
   }
 }
 
@@ -360,9 +428,10 @@ export async function finishSketch(): Promise<void> {
   s.setFinishedSketches(await engine.finishedSketches());
   s.setMode('solid');
   try {
-    const restored = await resumeTimelineFeatureEdit(engine, historyFeatureId);
+    const restored = await resumeTimelineFeatureEdit(engine, historyFeatureId, s.historyEdit);
     if (!restored) s.applySolidUpdate(await engine.recomputeSolids());
   } catch (error) {
+    if (error instanceof HistoryStageOwnershipError) return;
     s.setConstraintDialog({
       titleKey: 'constraints.invalidTitle',
       message: error instanceof Error ? error.message : 'Solid recompute failed',
@@ -688,6 +757,7 @@ export async function submitConstructionPlane(
   featureId?: number,
 ): Promise<void> {
   const state = useAppStore.getState();
+  let ownsCompletion = true;
   state.setSolidBusy(true);
   try {
     const engine = await getEngine();
@@ -700,7 +770,7 @@ export async function submitConstructionPlane(
     // by it. Recompute immediately so dependent solids do not remain drawn
     // at the old plane until the next unrelated modeling command.
     if (historyEdit) {
-      const restored = await resumeTimelineFeatureEdit(engine, featureId);
+      const restored = await resumeTimelineFeatureEdit(engine, featureId, state.historyEdit);
       if (restored) displayedDocument = restored.document;
     } else {
       state.applyDatumPlaneUpdate(update);
@@ -723,13 +793,14 @@ export async function submitConstructionPlane(
       state.toggleExpanded(folder.id);
     }
   } catch (error) {
+    if (error instanceof HistoryStageOwnershipError) { ownsCompletion = error.ownsUi(); return; }
     state.setConstraintDialog({
       titleKey: 'constraints.invalidTitle',
       message:
         error instanceof Error ? error.message : 'Construction plane failed',
     });
   } finally {
-    state.setSolidBusy(false);
+    if (ownsCompletion) state.setSolidBusy(false);
   }
 }
 
@@ -738,13 +809,14 @@ export async function submitBodyFeature(
   featureId?: number,
 ): Promise<void> {
   const state = useAppStore.getState();
+  let ownsCompletion = true;
   state.setSolidBusy(true);
   try {
     const engine = await getEngine();
     const update = featureId
       ? await engine.editBodyFeature(featureId, request)
       : await engine.bodyFeature(request);
-    const restored = await resumeTimelineFeatureEdit(engine, featureId);
+    const restored = await resumeTimelineFeatureEdit(engine, featureId, state.historyEdit);
     const displayed = restored ?? update;
     if (!restored) state.applySolidUpdate(update);
     state.clearSolidSelection();
@@ -756,12 +828,13 @@ export async function submitBodyFeature(
       state.toggleExpanded(bodies.id);
     }
   } catch (error) {
+    if (error instanceof HistoryStageOwnershipError) { ownsCompletion = error.ownsUi(); return; }
     state.setConstraintDialog({
       titleKey: 'constraints.invalidTitle',
       message: error instanceof Error ? error.message : 'Body operation failed',
     });
   } finally {
-    state.setSolidBusy(false);
+    if (ownsCompletion) state.setSolidBusy(false);
   }
 }
 
@@ -818,6 +891,7 @@ export async function submitExtrude(
   featureId?: number,
 ): Promise<void> {
   const state = useAppStore.getState();
+  let ownsCompletion = true;
   state.setSolidBusy(true);
   try {
     const engine = await getEngine();
@@ -825,7 +899,7 @@ export async function submitExtrude(
       featureId && featureId > 0
         ? await engine.editExtrude(featureId, request)
         : await engine.extrude(request);
-    const restored = await resumeTimelineFeatureEdit(engine, featureId);
+    const restored = await resumeTimelineFeatureEdit(engine, featureId, state.historyEdit);
     const displayed = restored ?? update;
     if (!restored) state.applySolidUpdate(update);
     state.clearSolidSelection();
@@ -835,12 +909,13 @@ export async function submitExtrude(
       state.toggleExpanded(bodies.id);
     }
   } catch (error) {
+    if (error instanceof HistoryStageOwnershipError) { ownsCompletion = error.ownsUi(); return; }
     state.setConstraintDialog({
       titleKey: 'extrude.errorTitle',
       message: error instanceof Error ? error.message : 'Extrude failed',
     });
   } finally {
-    state.setSolidBusy(false);
+    if (ownsCompletion) state.setSolidBusy(false);
   }
 }
 
@@ -849,6 +924,7 @@ export async function submitRevolve(
   featureId?: number,
 ): Promise<void> {
   const state = useAppStore.getState();
+  let ownsCompletion = true;
   state.setSolidBusy(true);
   try {
     const engine = await getEngine();
@@ -856,7 +932,7 @@ export async function submitRevolve(
       featureId && featureId > 0
         ? await engine.editRevolve(featureId, request)
         : await engine.revolve(request);
-    const restored = await resumeTimelineFeatureEdit(engine, featureId);
+    const restored = await resumeTimelineFeatureEdit(engine, featureId, state.historyEdit);
     const displayed = restored ?? update;
     if (!restored) state.applySolidUpdate(update);
     state.clearSolidSelection();
@@ -866,12 +942,13 @@ export async function submitRevolve(
       state.toggleExpanded(bodies.id);
     }
   } catch (error) {
+    if (error instanceof HistoryStageOwnershipError) { ownsCompletion = error.ownsUi(); return; }
     state.setConstraintDialog({
       titleKey: 'constraints.invalidTitle',
       message: error instanceof Error ? error.message : 'Revolve failed',
     });
   } finally {
-    state.setSolidBusy(false);
+    if (ownsCompletion) state.setSolidBusy(false);
   }
 }
 
@@ -881,6 +958,7 @@ async function submitAdvancedSolid(
   kind: 'sweep' | 'loft' | 'rib',
 ): Promise<void> {
   const state = useAppStore.getState();
+  let ownsCompletion = true;
   state.setSolidBusy(true);
   try {
     const engine = await getEngine();
@@ -898,7 +976,7 @@ async function submitAdvancedSolid(
         ? await engine.editRib(featureId, request as RibRequest)
         : await engine.rib(request as RibRequest);
     }
-    const restored = await resumeTimelineFeatureEdit(engine, featureId);
+    const restored = await resumeTimelineFeatureEdit(engine, featureId, state.historyEdit);
     const displayed = restored ?? update;
     if (!restored) state.applySolidUpdate(update);
     state.clearSolidSelection();
@@ -910,12 +988,13 @@ async function submitAdvancedSolid(
       state.toggleExpanded(bodies.id);
     }
   } catch (error) {
+    if (error instanceof HistoryStageOwnershipError) { ownsCompletion = error.ownsUi(); return; }
     state.setConstraintDialog({
       titleKey: 'constraints.invalidTitle',
       message: error instanceof Error ? error.message : `${kind} failed`,
     });
   } finally {
-    state.setSolidBusy(false);
+    if (ownsCompletion) state.setSolidBusy(false);
   }
 }
 
@@ -955,6 +1034,7 @@ async function submitRefinement(
   featureId?: number,
 ): Promise<void> {
   const state = useAppStore.getState();
+  let ownsCompletion = true;
   state.setSolidBusy(true);
   try {
     const engine = await getEngine();
@@ -969,36 +1049,40 @@ async function submitRefinement(
         : featureId
           ? await engine.editHole(featureId, request as HoleRequest)
           : await engine.hole(request as HoleRequest);
-    const restored = await resumeTimelineFeatureEdit(engine, featureId);
+    const restored = await resumeTimelineFeatureEdit(engine, featureId, state.historyEdit);
     if (!restored) state.applySolidUpdate(update);
     state.clearSolidSelection();
     if (kind === 'fillet') state.closeFilletDialog();
     else if (kind === 'chamfer') state.closeChamferDialog();
     else state.closeHoleDialog();
   } catch (error) {
+    if (error instanceof HistoryStageOwnershipError) { ownsCompletion = error.ownsUi(); return; }
     state.setConstraintDialog({
       titleKey: 'constraints.invalidTitle',
       message: error instanceof Error ? error.message : `${kind} failed`,
     });
   } finally {
-    state.setSolidBusy(false);
+    if (ownsCompletion) state.setSolidBusy(false);
   }
 }
 
 export async function setTimelineRollback(rollbackIndex: number): Promise<void> {
   const state = useAppStore.getState();
-  if (state.historyEdit) return;
+  if (state.historyEdit || state.projectBusy || state.solidBusy) return;
+  const owner = captureHistoryStageOwner();
   state.setSolidBusy(true);
   try {
     const engine = await getEngine();
-    await applyHistoryStageUpdate(engine, await engine.setRollback(rollbackIndex));
+    await owner.assertCurrent();
+    await applyHistoryStageUpdate(engine, await engine.setRollback(rollbackIndex), owner);
   } catch (error) {
+    if (!await owner.settled()) return;
     state.setConstraintDialog({
       titleKey: 'constraints.invalidTitle',
       message: error instanceof Error ? error.message : 'Recompute failed',
     });
   } finally {
-    state.setSolidBusy(false);
+    if (owner.ownsUi()) state.setSolidBusy(false);
   }
 }
 

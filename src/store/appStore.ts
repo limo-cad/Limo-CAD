@@ -90,21 +90,25 @@ function emptyProjectVisibility(): ProjectVisibilityDto {
 function persistedVisibilityFromHidden(
   document: DocumentDto | null,
   hidden: Record<NodeId, boolean>,
+  retained: ProjectVisibilityDto,
 ): ProjectVisibilityDto {
-  if (!document) return emptyProjectVisibility();
-  const hiddenBodyIds = new Set<number>();
-  const hiddenDatumPlaneIds = new Set<number>();
-  const hiddenSketchNames = new Set<string>();
+  if (!document) return retained;
+  // Browser nodes describe the evaluated stage. Preserve stable choices for
+  // retained objects outside it, and update only identities represented here.
+  const hiddenBodyIds = new Set(retained.hidden_body_ids);
+  const hiddenDatumPlaneIds = new Set(retained.hidden_datum_plane_ids);
+  const hiddenSketchNames = new Set(retained.hidden_sketch_names);
   const visit = (nodes: BrowserNode[]) => {
     for (const node of nodes) {
-      if (hidden[node.id]) {
-        if (node.kind === 'body' && node.reference_id !== null) {
-          hiddenBodyIds.add(node.reference_id);
-        } else if (node.kind === 'construction_plane' && node.reference_id !== null) {
-          hiddenDatumPlaneIds.add(node.reference_id);
-        } else if (node.kind === 'sketch' && node.name) {
-          hiddenSketchNames.add(node.name);
-        }
+      if (node.kind === 'body' && node.reference_id !== null) {
+        if (hidden[node.id]) hiddenBodyIds.add(node.reference_id);
+        else hiddenBodyIds.delete(node.reference_id);
+      } else if (node.kind === 'construction_plane' && node.reference_id !== null) {
+        if (hidden[node.id]) hiddenDatumPlaneIds.add(node.reference_id);
+        else hiddenDatumPlaneIds.delete(node.reference_id);
+      } else if (node.kind === 'sketch' && node.name) {
+        if (hidden[node.id]) hiddenSketchNames.add(node.name);
+        else hiddenSketchNames.delete(node.name);
       }
       visit(node.children);
     }
@@ -2315,7 +2319,7 @@ export const useAppStore = create<AppState>()((set) => ({
       if (!hidden[id]) delete hidden[id];
       return {
         hidden,
-        projectVisibility: persistedVisibilityFromHidden(state.document, hidden),
+        projectVisibility: persistedVisibilityFromHidden(state.document, hidden, state.projectVisibility),
         dirty: true,
       };
     }),
