@@ -1064,12 +1064,13 @@ impl Drop for SessionBridgeState {
 /// Apply one pending inbox op under the publisher lock so revision check,
 /// live engine apply, and revision advance are atomic w.r.t. other applies
 /// and UI mutation notes.
+#[cfg(test)]
 fn apply_one_inbox_op(
     state: &SessionBridgeState,
     window_label: &str,
     engine: &AppState,
 ) -> Result<Value, String> {
-    apply_or_reject_one_inbox_op(state, window_label, engine, None)
+    apply_or_reject_one_inbox_op(state, window_label, engine, None, None)
 }
 
 fn apply_or_reject_one_inbox_op(
@@ -1077,6 +1078,7 @@ fn apply_or_reject_one_inbox_op(
     window_label: &str,
     engine: &AppState,
     reject_reason: Option<&str>,
+    expected_owner: Option<(&str, &str)>,
 ) -> Result<Value, String> {
     let process_instance_id = state.process_instance_id.clone();
     let _ = state.write_process_instance_file();
@@ -1093,6 +1095,18 @@ fn apply_or_reject_one_inbox_op(
         }));
     };
     let engine_active = engine.active_project_session_id();
+    // Polls are asynchronous too: an A poll (including a delayed rejection)
+    // must never consume B's inbox after same-tab Open or tab activation.
+    // Compare before touching either queue while holding the replacement lock.
+    if let Some((document, session)) = expected_owner {
+        if document != engine_active
+            || publisher.active_project_session_id.as_deref() != Some(document)
+            || publisher.by_project.get(document).map(|project| project.session_id.as_str())
+                != Some(session)
+        {
+            return Ok(Value::Null);
+        }
+    }
     match publisher.active_project_session_id.as_deref() {
         Some(bound) if bound != engine_active => {
             return Ok(json!({
@@ -1643,15 +1657,18 @@ pub fn mcp_session_bridge_apply_inbox(
     state: tauri::State<'_, SessionBridgeState>,
     engine: tauri::State<'_, AppState>,
     reject_reason: Option<String>,
+    document_id: Option<String>,
+    session_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    if let Some(reason) = reject_reason {
+    let (Some(document), Some(session)) = (document_id, session_id) else {
+        return Ok(Value::Null);
+    };
+    if let Some(reason) = &reject_reason {
         if reason.trim().is_empty() || reason.len() > 1000 {
             return Err("playback rejection needs a nonempty reason of at most 1000 bytes".into());
         }
-        apply_or_reject_one_inbox_op(&state, window.label(), &engine, Some(&reason))
-    } else {
-        apply_one_inbox_op(&state, window.label(), &engine)
     }
+    apply_or_reject_one_inbox_op(&state, window.label(), &engine, reject_reason.as_deref(), Some((&document, &session)))
 }
 
 #[cfg(test)]
@@ -2114,6 +2131,19 @@ mod tests {
                 current
             );
 
+            write_inbox(&current, 1, "cad_set_document_name", 1, json!({"name":"Current edit"}));
+            for reason in [None, Some("Playback stopped in original document")] {
+                assert!(apply_or_reject_one_inbox_op(&state, "main", &engine, reason,
+                    Some(("same-tab", &original))).unwrap().is_null());
+                assert!(apply_or_reject_one_inbox_op(&state, "main", &engine, reason,
+                    Some(("another-tab", &current))).unwrap().is_null());
+                assert_eq!(pending_inbox_seqs(&current), vec![1]);
+                assert_eq!(engine.document_snapshot().name, "Replacement");
+            }
+            assert_eq!(apply_or_reject_one_inbox_op(&state, "main", &engine, None,
+                Some(("same-tab", &current))).unwrap()["applied"], true);
+            assert_eq!(engine.document_snapshot().name, "Current edit");
+
             // An unverified failure cannot preserve script access. A failure
             // before mutation is allowed to do so only with the explicit marker.
             state.run_project_replacement("main", &engine, || {
@@ -2269,7 +2299,7 @@ mod tests {
         );
         let engine = AppState::new();
         let stopped =
-            apply_or_reject_one_inbox_op(&state, "main", &engine, Some("Playback stopped"))
+            apply_or_reject_one_inbox_op(&state, "main", &engine, Some("Playback stopped"), None)
                 .unwrap();
         assert_eq!(stopped["reason"], "playback_stopped");
         assert_eq!(stopped["engine_revision"], generation);
