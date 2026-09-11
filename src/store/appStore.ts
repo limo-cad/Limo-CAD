@@ -892,6 +892,7 @@ export interface AppState {
   requestLookAt: () => void;
   toggleExpanded: (id: NodeId) => void;
   toggleHidden: (id: NodeId) => void;
+  applyProjectVisibility: (visibility: ProjectVisibilityDto) => void;
   selectNode: (id: NodeId | null) => void;
   setSelectedBody: (id: number | null) => void;
   /** Replace an ordered body selection; index 0 is the primary/target role. */
@@ -2323,6 +2324,12 @@ export const useAppStore = create<AppState>()((set) => ({
         dirty: true,
       };
     }),
+
+  applyProjectVisibility: (projectVisibility) => set((state) => ({
+    projectVisibility,
+    hidden: state.document ? hiddenFromPersistedVisibility(state.document, projectVisibility) : {},
+    dirty: true,
+  })),
 
   selectNode: (id) => set({ selectedNode: id }),
 

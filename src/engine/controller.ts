@@ -6,6 +6,8 @@
  * are issued by the Viewport directly against `getEngine()`.
  */
 import { getEngine, type Engine } from './index';
+import { projectTransitions } from '../files/projectTransitions';
+import { presentation } from '../operationPlayback';
 import type {
   BodyFeatureRequestDto,
   DatumPlaneRequest,
