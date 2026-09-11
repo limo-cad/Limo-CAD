@@ -62,6 +62,12 @@ reconstruct the model; a failed refresh cannot stamp the new fence. The old
 PR89 examples are superseded by the native recipes and Rust regressions in the
 collection, with their old branch/history preserved.
 
+The [September 10 correction evidence](review-corrections-2026-09-10.md)
+records the current rebuild, standalone PR108 checks, full live bench replay,
+and the saved-file regression that exposed lost materials during temporary
+history rollback. Its shared history prerequisites live in PR108; PR115 adds
+the corresponding MCP inbox refresh.
+
 ## Keep developing from the current tip
 
 Start independent fixes on current main. Start changes that consume pending
