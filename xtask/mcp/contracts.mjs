@@ -239,6 +239,14 @@ try {
  });
  console.log('PASS production script document ownership: '+JSON.stringify(ownership));
  await ownershipPage.close();
+ const controlPage=await browser.newPage();
+ await controlPage.goto(server.resolvedUrls.local[0]+'mcp-contract');
+ const controls=await controlPage.evaluate(async()=>{
+  const {checkControlDocumentOwnership}=await import('/src/scripts/controlOwnership.browser.test.ts');
+  return checkControlDocumentOwnership();
+ });
+ console.log('PASS production control document ownership: '+JSON.stringify(controls));
+ await controlPage.close();
 } finally {await browser?.close();await server.close();}
 
 

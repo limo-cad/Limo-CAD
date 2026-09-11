@@ -27,10 +27,16 @@ export async function applyLiveUiControl(publishChangedState: () => Promise<void
   try {
     const before = useAppStore.getState();
     const document = before.document;
+    const ownerRevision = presentation.documentVersion();
+    const ownsDocument = () => ownerRevision === presentation.documentVersion();
     const request = await invoke<ViewRequest | null>('mcp_session_bridge_control');
     if (!request) return;
     const response: Record<string, unknown> = { request_id: request.id, session_id: request.session_id };
     try {
+      // Native can deliver A's control just before Open and its IPC reply can
+      // reach JavaScript after B is hydrated. Reject before even changing pace,
+      // opening a file, clicking a control or moving the replacement's camera.
+      if (!ownsDocument()) throw new Error('Document changed before the UI request could run; inspect the current document');
       if (request.ui) {
         if (request.expires_ms < Date.now()) throw new Error('UI request expired');
         if (request.ui.pace_ms !== undefined) setPlaybackPace(request.ui.pace_ms);
@@ -97,7 +103,9 @@ export async function applyLiveUiControl(publishChangedState: () => Promise<void
     } catch (error) {
       response.status = 'failed';
       response.error = String(error);
-      if (request.ui) response.ui = inspectUi(useAppStore.getState().document);
+      // Inspecting here would replace the shared control snapshot and retire
+      // B's freshly inspected control IDs merely because A replied late.
+      if (request.ui && ownsDocument()) response.ui = inspectUi(useAppStore.getState().document);
     }
     await invoke('mcp_session_bridge_control', { response });
   } catch (error) {
