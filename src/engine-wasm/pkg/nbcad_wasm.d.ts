@@ -146,6 +146,7 @@ export class WasmEngine {
      */
     document(): string;
     document_set_name(payload: string): string;
+    drawing_apply(payload: string): string;
     drawing_document(): string;
     drawing_set_document(payload: string): string;
     /**
@@ -368,6 +369,7 @@ export interface InitOutput {
     readonly wasmengine_delete_entity: (a: number, b: number, c: number) => [number, number];
     readonly wasmengine_document: (a: number) => [number, number];
     readonly wasmengine_document_set_name: (a: number, b: number, c: number) => [number, number];
+    readonly wasmengine_drawing_apply: (a: number, b: number, c: number) => [number, number];
     readonly wasmengine_drawing_document: (a: number) => [number, number];
     readonly wasmengine_drawing_set_document: (a: number, b: number, c: number) => [number, number];
     readonly wasmengine_edit_dimension: (a: number, b: number, c: number) => [number, number];
