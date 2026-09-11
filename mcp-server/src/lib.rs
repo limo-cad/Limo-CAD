@@ -740,7 +740,7 @@ impl CadServer {
             .ok_or("submission omitted sequence")?;
         let applied = await_playback_receipt(
             || {
-                self.await_inbox_apply(&json!({"seq":seq,"timeout_ms":30000,"refresh":!self.script_running,"poll_ms":10}))
+                self.await_inbox_apply(&json!({"session_id":session_id,"seq":seq,"timeout_ms":30000,"refresh":!self.script_running,"poll_ms":10}))
             },
             || {
                 session::request_ui(
@@ -882,7 +882,7 @@ impl CadServer {
             "writeback": false,
             "applied": false,
             "base_generation": base_generation,
-            "hint": "UI/engine applies inbox via host::handle; call cad_await_apply (or cad_refresh after publish)",
+            "hint": "UI/engine applies inbox via host::handle; pass this session_id and seq to cad_await_apply (or cad_refresh after publish)",
         }))
     }
 
@@ -891,9 +891,17 @@ impl CadServer {
     /// model. Active-sketch-only snapshots are reported but not misrepresented
     /// as a model refresh.
     fn await_inbox_apply(&mut self, arguments: &Value) -> Result<Value, String> {
-        let Some(session_id) = self.attached_document_id.clone() else {
+        let Some(attached_session_id) = self.attached_document_id.clone() else {
             return Err(session::not_attached_error());
         };
+        let session_id = match arguments.get("session_id") {
+            Some(value) => value
+                .as_str()
+                .ok_or("session_id must be a string")?
+                .to_string(),
+            None => attached_session_id.clone(),
+        };
+        let owns_attachment = session_id == attached_session_id;
         let seq = arguments
             .get("seq")
             .and_then(Value::as_u64)
@@ -921,7 +929,7 @@ impl CadServer {
             .and_then(Value::as_bool)
             .unwrap_or(false);
         let status = result.get("status").and_then(Value::as_str).unwrap_or("");
-        if refresh && status == "applied" && published && model_published {
+        if refresh && owns_attachment && status == "applied" && published && model_published {
             if let Some(replacement) = result["active_session_id"].as_str().map(str::to_owned) {
                 if self.script_running {
                     return Err("Active document changed during script playback; no later commands were submitted".into());
@@ -943,7 +951,7 @@ impl CadServer {
                 );
             }
         }
-        if self.script_running && result["project_replaced"] == true {
+        if self.script_running && owns_attachment && result["project_replaced"] == true {
             return Err(
                 "Active document changed during script playback; no later commands were submitted"
                     .into(),
@@ -3803,6 +3811,10 @@ fn tool_specs() -> Vec<ToolSpec> {
             "While attached, poll until inbox/applied/<seq>.json or inbox/failed/<seq>.json appears. For applied ops, also wait until an explicit published_generation catches up to the engine. Completed-model publications optionally cad_refresh (refresh default true); active-sketch-only publications return model_published:false, active_sketch_published:true, refreshed:false because model.json intentionally remains the last completed model. timeout_ms 0 is a single status probe. Still snapshot/UI-owned apply — not in-process co-link. Does not write model.json.",
             object_schema(
                 json!({
+                    "session_id": {
+                        "type": "string",
+                        "description": "Receipt owner returned by cad_submit. Pass it with seq across document/attachment changes. Defaults to the current attachment; reading another session's receipt never changes or refreshes this attachment."
+                    },
                     "seq": {
                         "type": "integer",
                         "minimum": 1,
@@ -4647,6 +4659,38 @@ mod tests {
         assert_eq!(
             session::require_model_json(&original).unwrap(),
             original_model
+        );
+        session::write_session(
+            &replacement,
+            "inbox/applied/2.json",
+            &json!({"name":"cad_set_document_name","base_generation":0}).to_string(),
+        )
+        .unwrap();
+        let old_wait = server
+            .await_inbox_apply(&json!({"session_id":original,"seq":2,"timeout_ms":0}))
+            .unwrap();
+        assert_eq!(
+            old_wait["status"], "closed",
+            "receipt IDs are scoped to their original session"
+        );
+        let current_wait = server
+            .await_inbox_apply(&json!({"seq":2,"timeout_ms":0,"refresh":false}))
+            .unwrap();
+        assert_eq!(
+            current_wait["status"], "applied",
+            "omitting session retains current-attachment semantics"
+        );
+        let retained = server
+            .await_inbox_apply(&json!({"session_id":original,"seq":1,"timeout_ms":0}))
+            .unwrap();
+        assert_eq!(retained["status"], "applied");
+        assert_eq!(
+            retained["refreshed"], false,
+            "reading an older receipt cannot change the current snapshot"
+        );
+        assert_eq!(
+            server.attached_document_id.as_deref(),
+            Some(replacement.as_str())
         );
 
         // An already-running interpreter cannot carry its remaining commands

@@ -119,6 +119,11 @@ under `NBCAD_SESSION_DIR`. An unattached MCP process owns its own document.
 not extra calls required after each edit. Old desktops that do not support the
 shared interface reject live writes with a version/ownership error. Live routing
 landed in #91 and closed #11; multi-document brokering remains #12.
+When using those diagnostics, retain both `session_id` and `seq` from
+`cad_submit` and pass both to `cad_await_apply`. Sequence numbers belong to one
+session. A successful whole-document replacement waits for its new publisher
+and updates the initiating attachment; other queued work stays with the retired
+document. Reading an old session's receipt does not change the current attachment.
 
 ## Authored recipes
 
