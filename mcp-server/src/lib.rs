@@ -922,8 +922,16 @@ impl CadServer {
             .unwrap_or(false);
         let status = result.get("status").and_then(Value::as_str).unwrap_or("");
         if refresh && status == "applied" && published && model_published {
-            self.load_snapshot_model(&session_id, false)?;
-            self.apply_snapshot_focus(&session_id);
+            if let Some(replacement) = result["active_session_id"].as_str().map(str::to_owned) {
+                if self.script_running {
+                    return Err("Active document changed during script playback; no later commands were submitted".into());
+                }
+                self.attach_read_only_snapshot(&json!({"session_id": replacement}))?;
+                result["attached_session_id"] = json!(replacement);
+            } else {
+                self.load_snapshot_model(&session_id, false)?;
+                self.apply_snapshot_focus(&session_id);
+            }
             if let Some(object) = result.as_object_mut() {
                 object.insert("refreshed".to_string(), Value::Bool(true));
                 object.insert(
@@ -934,6 +942,12 @@ impl CadServer {
                     ),
                 );
             }
+        }
+        if self.script_running && result["project_replaced"] == true {
+            return Err(
+                "Active document changed during script playback; no later commands were submitted"
+                    .into(),
+            );
         }
         Ok(result)
     }
@@ -4579,6 +4593,95 @@ mod tests {
         assert!(error.contains("bad"));
         assert_eq!(server.manager.document_dto().name, "Before failure");
         assert!(!server.script_running);
+    }
+
+    #[test]
+    fn replacement_receipt_follows_only_its_new_publisher_and_stops_scripts() {
+        let _guard = session::ENV_LOCK.lock().unwrap();
+        let original = session::test_session_uuid();
+        let replacement = session::test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("nbcad-replacement-receipt-{original}"));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let (_, original_model) = write_box_session(&original);
+        let mut server = CadServer::new().unwrap();
+        server
+            .call_tool("cad_attach", json!({"session_id":original}))
+            .unwrap();
+        let receipt = json!({"seq":1,"name":"cad_load_project_model","base_generation":50,
+            "project_replaced":true,"previous_session_id":original,
+            "active_session_id":replacement,"document_id":"same-native-tab"});
+        session::write_session(&original, "inbox/applied/1.json", &receipt.to_string()).unwrap();
+        session::write_closed_tombstone(&original).unwrap();
+        let waiting = server
+            .await_inbox_apply(&json!({"seq":1,"timeout_ms":0}))
+            .unwrap();
+        assert_eq!(
+            waiting["status"], "timeout",
+            "replacement must await its own first publication"
+        );
+        assert_eq!(waiting["active_session_id"], replacement);
+        assert_eq!(
+            server.attached_document_id.as_deref(),
+            Some(original.as_str())
+        );
+        assert_eq!(
+            session::await_inbox_apply(&original, 2, 0, 1).unwrap()["status"],
+            "closed",
+            "another sequence must not borrow the replacement receipt"
+        );
+        let mut new_model: Value = serde_json::from_str(&original_model).unwrap();
+        new_model["document"]["name"] = json!("Replacement only");
+        let publisher = replacement.clone();
+        let delayed = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            session::publish_applied_snapshot(&publisher, &new_model.to_string()).unwrap();
+        });
+        let completed = server
+            .await_inbox_apply(&json!({"seq":1,"timeout_ms":2000,"poll_ms":5}))
+            .unwrap();
+        delayed.join().unwrap();
+        assert_eq!(completed["status"], "applied");
+        assert_eq!(completed["refreshed"], true);
+        assert_eq!(completed["attached_session_id"], replacement);
+        assert_eq!(server.manager.document_dto().name, "Replacement only");
+        assert_eq!(
+            session::require_model_json(&original).unwrap(),
+            original_model
+        );
+
+        // An already-running interpreter cannot carry its remaining commands
+        // across a whole-document replacement, even when refresh is disabled.
+        server.attached_document_id = Some(original.clone());
+        server.script_running = true;
+        let error = server
+            .await_inbox_apply(&json!({"seq":1,"timeout_ms":0,"refresh":false}))
+            .unwrap_err();
+        assert!(error.contains("Active document changed"));
+        assert_eq!(
+            server.attached_document_id.as_deref(),
+            Some(original.as_str())
+        );
+        server.script_running = false;
+        session::write_closed_tombstone(&replacement).unwrap();
+        session::write_session(
+            &replacement,
+            "heartbeat.json",
+            &json!({"generation":2}).to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            session::await_inbox_apply(&original, 1, 0, 1).unwrap()["status"],
+            "closed"
+        );
+
+        let mut wrong = receipt;
+        wrong["previous_session_id"] = json!(replacement);
+        session::write_session(&original, "inbox/applied/1.json", &wrong.to_string()).unwrap();
+        assert!(session::await_inbox_apply(&original, 1, 0, 1)
+            .unwrap_err()
+            .contains("ownership"));
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

@@ -1380,6 +1380,7 @@ pub enum InboxReceipt {
     Applied {
         base_generation: u64,
         name: Option<String>,
+        replacement_session_id: Option<String>,
     },
     Failed {
         error: Option<String>,
@@ -1411,9 +1412,31 @@ pub fn inbox_op_receipt(session_id: &str, seq: u64) -> Result<InboxReceipt, Stri
     let applied = session_path(session_id, &format!("inbox/applied/{seq}.json"))?;
     if applied.is_file() {
         let parsed = parse_receipt_file(&applied);
+        let replacement_session_id = if parsed["project_replaced"] == true {
+            if parsed["previous_session_id"] != session_id
+                || !matches!(
+                    parsed["name"].as_str(),
+                    Some("cad_new_project" | "cad_load_project_model")
+                )
+                || parsed["document_id"].as_str().is_none_or(str::is_empty)
+            {
+                return Err("Invalid document replacement receipt ownership".into());
+            }
+            let replacement = parsed["active_session_id"]
+                .as_str()
+                .ok_or("Document replacement receipt omitted its new session")?;
+            require_valid_session_id(replacement)?;
+            if replacement == session_id {
+                return Err("Document replacement receipt reused its retired session".into());
+            }
+            Some(replacement.to_string())
+        } else {
+            None
+        };
         return Ok(InboxReceipt::Applied {
             base_generation: read_optional_u64(&parsed, "base_generation").unwrap_or(0),
             name: read_optional_string(&parsed, "name"),
+            replacement_session_id,
         });
     }
     let failed = session_path(session_id, &format!("inbox/failed/{seq}.json"))?;
@@ -1535,17 +1558,34 @@ pub fn await_inbox_apply(
     loop {
         let elapsed_ms = now_ms().saturating_sub(started);
         let receipt = inbox_op_receipt(session_id, seq)?;
-        let current_generation = read_heartbeat_generation(session_id).ok();
+        let replacement_session_id = match &receipt {
+            InboxReceipt::Applied {
+                replacement_session_id,
+                ..
+            } => replacement_session_id.as_deref(),
+            _ => None,
+        };
+        // Only this sequence's explicit replacement receipt can follow the new
+        // publisher. Other pending work remains owned by the retired document.
+        let publication_session = replacement_session_id.unwrap_or(session_id);
+        let current_generation = read_heartbeat_generation(publication_session).ok();
         let publication = match &receipt {
             InboxReceipt::Applied {
                 base_generation, ..
-            } => snapshot_publication_after(session_id, *base_generation),
+            } => snapshot_publication_after(
+                publication_session,
+                if replacement_session_id.is_some() {
+                    0
+                } else {
+                    *base_generation
+                },
+            ),
             _ => None,
         };
         // A replacement cannot publish any more work for the retired identity.
         // Keep completed/failed receipts inspectable, but do not make an active
         // interpreter wait for its full timeout on a now-unreachable publisher.
-        if is_session_closed(session_id)
+        if is_session_closed(publication_session)
             && publication.is_none()
             && !matches!(&receipt, InboxReceipt::Failed { .. })
         {
@@ -1553,6 +1593,7 @@ pub fn await_inbox_apply(
                 InboxReceipt::Applied {
                     name,
                     base_generation,
+                    ..
                 } => (true, name.clone(), Some(*base_generation)),
                 _ => (false, None, None),
             };
@@ -1598,6 +1639,7 @@ pub fn await_inbox_apply(
             InboxReceipt::Applied {
                 base_generation,
                 name,
+                replacement_session_id,
             } => {
                 if let Some(publication) = publication {
                     let model_published = publication.model_published();
@@ -1609,7 +1651,7 @@ pub fn await_inbox_apply(
                     } else {
                         "UI applied and publisher metadata advanced, but no completed model or active-sketch snapshot was published"
                     };
-                    return Ok(json!({
+                    let mut result = json!({
                         "status": "applied",
                         "timed_out": false,
                         "seq": seq,
@@ -1631,7 +1673,13 @@ pub fn await_inbox_apply(
                         "writeback": false,
                         "elapsed_ms": elapsed_ms,
                         "hint": hint,
-                    }));
+                    });
+                    if let Some(replacement) = replacement_session_id {
+                        result["project_replaced"] = json!(true);
+                        result["previous_session_id"] = json!(session_id);
+                        result["active_session_id"] = json!(replacement);
+                    }
+                    return Ok(result);
                 }
                 // Applied, but the explicit publisher generation has not caught
                 // up to the current engine generation yet.
@@ -1654,6 +1702,11 @@ pub fn await_inbox_apply(
                         "hint": "apply receipt present but publisher snapshot has not caught up to the engine generation; retry cad_await_apply",
                     });
                     insert_publication_fields(&mut result, &empty_publication_fields());
+                    if let Some(replacement) = replacement_session_id {
+                        result["project_replaced"] = json!(true);
+                        result["previous_session_id"] = json!(session_id);
+                        result["active_session_id"] = json!(replacement);
+                    }
                     return Ok(result);
                 }
             }
@@ -1733,6 +1786,7 @@ pub fn last_apply_receipt(session_id: &str) -> Result<Option<Value>, String> {
         InboxReceipt::Applied {
             base_generation,
             name,
+            ..
         } => json!({
             "seq": seq,
             "status": "applied",
@@ -3243,6 +3297,7 @@ mod tests {
             InboxReceipt::Applied {
                 base_generation,
                 name,
+                ..
             } => {
                 assert_eq!(base_generation, 1);
                 assert_eq!(name.as_deref(), Some("cad_set_document_name"));
