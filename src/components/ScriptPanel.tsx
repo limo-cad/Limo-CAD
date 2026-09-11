@@ -1,18 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { BookOpen, FileCode2, FolderOpen, Play, X } from 'lucide-react';
 import {
   closeScripts, editScriptSource, errorMessage, loadScriptPath, openScriptFile, previewExample, runLoadedScript, saveScriptSource,
-  showScriptExample, stopScript, useScriptWorkspace, validateScriptSource,
+  showScriptExample, stopScript, useScriptWorkspace, validateScriptSource, ownsScriptPlayback,
   type ScriptPreviewFrame,
 } from '../scripts/workspace';
 import { useAppStore } from '../store/appStore';
 import { ScriptPreview } from './ScriptPreview';
+import { presentation } from '../operationPlayback';
+import { useSurfaceDismiss } from './useSurfaceDismiss';
 
 const button = 'rounded border border-edge px-2 py-1.5 text-xs hover:bg-edge disabled:opacity-40';
 
 /** A docked document companion: source and lessons never cover the model. */
 export function ScriptPanel() {
   const state = useScriptWorkspace();
+  const playback = useSyncExternalStore(presentation.subscribe, presentation.snapshot, presentation.snapshot);
+  const { surface, dismiss, onKeyDown } = useSurfaceDismiss(state.open, closeScripts, 'button[aria-label="Scripts"]');
   const editing = useAppStore(s => !!s.activeSketch || !!s.historyEdit || s.projectBusy || s.solidBusy);
   const [frames, setFrames] = useState<ScriptPreviewFrame[] | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -27,14 +31,18 @@ export function ScriptPanel() {
   }, [state.open, state.selectedExample]);
   if (!state.open) return null;
   const busy = state.loading || state.running;
+  const live = state.running && ownsScriptPlayback() && playback.active;
+  const mode = live ? playback.mode : state.mode;
+  const speed = live ? playback.speed : state.speed;
+  const speeds = [...new Set([0.25, 0.5, 1, 2, 4, 8, 16, speed])].sort((a, b) => a - b);
   const shortError = state.error?.split(': {')[0].slice(0, 300);
   return (
-    <aside aria-label="Scripts" data-interface-group="document/scripts"
+    <aside ref={surface} onKeyDown={onKeyDown} aria-label="Scripts" data-script-companion data-interface-group="document/scripts"
       className="flex w-[380px] min-w-0 shrink-0 flex-col border-l border-edge bg-panel text-ink">
       <header className="flex shrink-0 items-center justify-between border-b border-edge px-4 py-3">
         <div><h2 className="flex items-center gap-2 text-sm font-semibold"><BookOpen size={16} /> Scripts</h2>
           <p className="mt-1 text-xs text-mute">Learn a feature or replay a complete design.</p></div>
-        <button className={button} aria-label="Close scripts" onClick={closeScripts}><X size={14} /></button>
+        <button className={button} aria-label="Close scripts" onClick={dismiss}><X size={14} /></button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         <button className={`${button} flex w-full items-center justify-center gap-2`} disabled={busy}
@@ -89,12 +97,12 @@ export function ScriptPanel() {
       </div>
       {state.info && <footer className="shrink-0 space-y-3 border-t border-edge p-4">
         <div className="flex items-center gap-2 text-xs">
-          <label className="flex flex-1 items-center gap-2">Mode<select aria-label="Script run mode" className="min-w-0 flex-1 rounded border border-edge bg-header p-1" value={state.mode} disabled={busy}
+          <label className="flex flex-1 items-center gap-2">Mode<select aria-label="Script run mode" className="min-w-0 flex-1 rounded border border-edge bg-header p-1" value={mode} disabled={busy}
             onChange={event => useScriptWorkspace.setState({ mode: event.target.value as 'present' | 'fast' })}>
             <option value="present">Presentation</option><option value="fast">Maximum speed</option></select></label>
-          {state.mode === 'present' && <label className="flex items-center gap-1">Speed<select aria-label="Script speed" className="rounded border border-edge bg-header p-1" value={state.speed} disabled={busy}
+          {mode === 'present' && <label className="flex items-center gap-1">Speed<select aria-label="Script speed" className="rounded border border-edge bg-header p-1" value={speed} disabled={busy}
             onChange={event => useScriptWorkspace.setState({ speed: Number(event.target.value) })}>
-            {[0.5, 1, 2, 4, 8, 16].map(speed => <option key={speed} value={speed}>{speed}×</option>)}</select></label>}
+            {speeds.map(speed => <option key={speed} value={speed}>{speed}×</option>)}</select></label>}
         </div>
         <button className="flex w-full items-center justify-center gap-2 rounded bg-accent px-3 py-2 text-sm text-white disabled:opacity-40"
           disabled={!state.running && (state.loading || editing)} onClick={() => state.running ? stopScript() : void runLoadedScript()}>

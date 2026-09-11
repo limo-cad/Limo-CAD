@@ -52,6 +52,10 @@ export const useScriptWorkspace = create<ScriptWorkspace>(() => ({
 let examplesRequest: Promise<ScriptExample[]> | null = null;
 const previews = new Map<string, Promise<ScriptPreviewFrame[]>>();
 let currentRun: { cancelled: boolean; nativeStarted: boolean } | null = null;
+/** Launch preferences remain separate from controls for this document's run. */
+export function ownsScriptPlayback(): boolean {
+  return !!currentRun?.nativeStarted;
+}
 export function errorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error) return String(error.message);
   return String(error);

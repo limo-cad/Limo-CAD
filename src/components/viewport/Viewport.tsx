@@ -1,6 +1,7 @@
 import { drivePointer } from '../../uiPointer';
 import { registerSessionCamera, unregisterSessionCamera } from './cameraApi';
 import { presentation } from '../../operationPlayback';
+import { listenForModelKeys } from '../../modelKeyboard';
 /**
  * Native Bevy viewport interaction layer with noBS CAD navigation and the
  * sketch environment.
@@ -11525,7 +11526,7 @@ export function Viewport() {
     };
     window.addEventListener('pointercancel', cancelModalNavigation);
     window.addEventListener('blur', cancelModalNavigation);
-    window.addEventListener('keydown', onKeyDown, true);
+    const removeModelKeys = listenForModelKeys(onKeyDown, true);
 
     // --- Overlay camera API (Orientation Dial / navigation bar / Look At) ---
     let savedView: { position: CAD.Vector3; target: CAD.Vector3; up: CAD.Vector3 } | null =
@@ -12848,7 +12849,7 @@ export function Viewport() {
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', cancelModalNavigation);
       window.removeEventListener('blur', cancelModalNavigation);
-      window.removeEventListener('keydown', onKeyDown, true);
+      removeModelKeys();
       controls.removeEventListener('change', onControlsChange);
       wakeControllerFrame = () => undefined;
       controls.dispose();

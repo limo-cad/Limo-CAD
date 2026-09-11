@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { presentation, type PresentationSnapshot } from '../operationPlayback';
+import { useSurfaceDismiss } from './useSurfaceDismiss';
 
 const buttonClass = 'shrink-0 rounded border border-edge bg-panel px-2 py-1 text-xs hover:bg-edge disabled:opacity-40';
 function label(state: PresentationSnapshot): string {
@@ -20,12 +21,14 @@ export function PresentationReopen() {
 /** The visible controls and MCP operate the same presentation controller. */
 export function PresentationControls() {
   const state = useSyncExternalStore(presentation.subscribe, presentation.snapshot, presentation.snapshot);
+  const { surface, dismiss, onKeyDown } = useSurfaceDismiss(state.active && state.visible,
+    () => presentation.control({ command: 'dismiss' }), 'button[aria-label="Show playback controls"]');
   if (!state.active || !state.visible) return null;
   const complete = state.finished || state.stopped;
   const presets = [0.25, 0.5, 1, 2, 4, 8, 16];
   const speeds = presets.includes(state.speed) ? presets : [...presets, state.speed].sort((a, b) => a - b);
   return (
-    <section aria-label="Playback" data-interface-group="document/presentation"
+    <section ref={surface} onKeyDown={onKeyDown} aria-label="Playback" data-script-companion data-interface-group="document/presentation"
       className="min-w-0 shrink-0 border-t border-edge bg-header px-3 py-2 text-ink">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1 basis-72">
@@ -49,7 +52,7 @@ export function PresentationControls() {
           </label>
           <button type="button" className={buttonClass} disabled={complete} onClick={() => presentation.control({ command: 'stop' })}>Stop</button>
           <button type="button" className={buttonClass} aria-label="Close playback controls" title="Hide this bar without changing playback"
-            onClick={() => presentation.control({ command: 'dismiss' })}>Close</button>
+            onClick={dismiss}>Close</button>
         </div>
       </div>
       {state.step_count > 0 && <progress aria-label="Presentation progress" className="mt-1 block h-0.5 w-full accent-emerald-500" value={state.step_index} max={state.step_count} />}

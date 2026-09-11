@@ -9,6 +9,7 @@
 import { useEffect, useRef } from 'react';
 import { installOperationFeedback } from './operationPlayback';
 import { PresentationControls } from './components/PresentationControls';
+import { listenForModelKeys } from './modelKeyboard';
 import { ScriptPanel } from './components/ScriptPanel';
 import { useTranslation } from './i18n';
 import { useAppStore } from './store/appStore';
@@ -387,8 +388,7 @@ export default function App() {
         void deleteEntities([...ids]);
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return listenForModelKeys(onKeyDown);
   }, []);
 
   return (
