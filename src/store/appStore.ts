@@ -1261,6 +1261,7 @@ export const useAppStore = create<AppState>()((set) => ({
 
   refreshAfterInboxApply: async (opName, ownerRevision = presentation.documentVersion(), replacingDocument = false) => {
     const ownsDocument = () => ownerRevision === presentation.documentVersion();
+    const visibilityBefore = useAppStore.getState().projectVisibility;
     const engine = await getEngine();
     if (!ownsDocument()) return;
     if (opName?.startsWith('drawing_')) {
@@ -1319,6 +1320,12 @@ export const useAppStore = create<AppState>()((set) => ({
       set({engineKind: engine.kind, dirty: true});
       return;
     }
+    // History changes the evaluated scene, not the user's visibility intent.
+    // An eye toggle made during these reads has not reached native publication
+    // yet; preserve it when remapping choices onto recreated Browser nodes.
+    const currentVisibility = useAppStore.getState().projectVisibility;
+    const refreshedVisibility = opName === 'solid_set_rollback' && currentVisibility !== visibilityBefore
+      ? currentVisibility : projectVisibility;
     set({
       document: doc,
       engineKind: engine.kind,
@@ -1330,8 +1337,8 @@ export const useAppStore = create<AppState>()((set) => ({
       assemblyDocument,
       assemblySolution,
       activeSketch,
-      hidden: hiddenFromPersistedVisibility(doc, projectVisibility),
-      projectVisibility,
+      hidden: hiddenFromPersistedVisibility(doc, refreshedVisibility),
+      projectVisibility: refreshedVisibility,
       dirty: true,
     });
     if (opName?.startsWith('sketch_')) {

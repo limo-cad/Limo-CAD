@@ -263,10 +263,13 @@ export async function applyInboxNow(): Promise<void> {
     presentation.modelApplied();
     if (publishTimer) { clearTimeout(publishTimer); publishTimer = null; }
     try {
-      if (!result.project_replaced && result.result?.scene && result.result.document && !result.name?.startsWith('sketch_')) {
+      if (!result.project_replaced && result.result?.scene && result.result.document
+        && !result.name?.startsWith('sketch_') && result.name !== 'solid_set_rollback') {
         useAppStore.getState().applySolidUpdate(result.result);
       } else {
-        // Targeted / live refresh with dirty:true — never loadDocument (clears dirty).
+        // History can recreate bodies and Browser nodes. Its materials and
+        // stable eye choices need the canonical refresh, just like a load.
+        // Keep dirty:true — never loadDocument (which clears dirty).
         await useAppStore.getState().refreshAfterInboxApply(result.name, ownerRevision, result.project_replaced);
         if (result.project_replaced && presentation.documentVersion() === ownerRevision + 1) ownerRevision += 1;
       }
