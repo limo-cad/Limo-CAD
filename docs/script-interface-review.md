@@ -40,8 +40,11 @@ camera after leaving Drawings. PR113 supplies the shared Show refs operation;
 saved clean copies hide all 43/24 vise sketches/datums and 105/105 turbine
 sketches/datums without changing any geometry or body visibility. PR114 corrects
 the stale final step count and prevents a later Save from overwriting the final
-camera feedback. PR115 fixes export recovery after a proven unchanged Open
-rejection, while retaining guards after uncertain native replacement.
+camera feedback. PR108 owns export recovery after a proven unchanged Open
+rejection, guarded STEP/mesh export and Save ownership, while retaining guards
+after uncertain native replacement. The original PR115 recovery fix is now in
+that owning layer. PR115 addresses document/session ownership during script
+startup, inbox work, publication and delayed presentation controls.
 
 ## Before promoting the draft
 
