@@ -9679,199 +9679,6 @@ mod tests {
     }
 
     #[test]
-    fn assembly_inbox_refresh_clears_joint_motion_preview() {
-        // Viewport prefers jointPreviewSolution, then mechanismPreview.solution,
-        // then jointMotionPreview.solution, over assemblySolution. Targeted
-        // inbox refresh must clear all three stored previews, not only bump
-        // their generation counters.
-        let source = include_str!("../../src/store/appStore.ts");
-        let start = source
-            .find("refreshAfterInboxApply: async (opName)")
-            .expect("refreshAfterInboxApply");
-        let assembly = source[start..]
-            .find("if (opName?.startsWith('assembly_'))")
-            .expect("assembly inbox branch");
-        let branch = &source[start + assembly..];
-        let end = branch
-            .find("const doc = await engine.getDocument()")
-            .expect("end of targeted assembly refresh");
-        let targeted = &branch[..end];
-        assert!(
-            targeted.contains("jointPreviewSolution: null"),
-            "assembly inbox refresh must clear jointPreviewSolution"
-        );
-        assert!(
-            targeted.contains("jointMotionPreview: null"),
-            "assembly inbox refresh must clear jointMotionPreview so a stale motion pose cannot hide the new assemblySolution"
-        );
-        assert!(
-            targeted.contains("mechanismPreview: null"),
-            "assembly inbox refresh must clear mechanismPreview; viewport prefers it over jointMotionPreview and assemblySolution"
-        );
-        assert!(
-            targeted.contains("dirty: true"),
-            "assembly inbox refresh must keep dirty:true (never loadDocument)"
-        );
-    }
-
-    #[test]
-    fn apply_inbox_now_never_falls_through_to_load_document() {
-        // applyInboxNow: dead-letter / !applied return before any store write.
-        // scene+document -> applySolidUpdate (dirty:true). Else
-        // refreshAfterInboxApply (dirty:true). The old loadDocument() else
-        // branch cleared dirty and left previews in place.
-        let source = include_str!("../../src/sessionBridge.ts");
-        let start = source
-            .find("async function applyInboxNow()")
-            .expect("applyInboxNow");
-        let end = source[start..]
-            .find("async function heartbeatNow()")
-            .expect("end of applyInboxNow");
-        let body = &source[start..start + end];
-        assert!(
-            !body.contains("loadDocument("),
-            "applyInboxNow must not call loadDocument (dirty:false): {body}"
-        );
-        let not_applied = body
-            .find("if (!result?.applied) return;")
-            .expect("early return when not applied");
-        let solid = body.find("applySolidUpdate").expect("solid-update path");
-        let refresh = body
-            .find("refreshAfterInboxApply")
-            .expect("dirty refresh path");
-        assert!(
-            not_applied < solid && not_applied < refresh,
-            "already-applied / empty inbox must no-op before any store mutation"
-        );
-        assert!(
-            body.contains("refreshAfterInboxApply(result.name)"),
-            "non-solid inbox results (joint DTO, assembly document) must take refreshAfterInboxApply"
-        );
-        // applyInboxAll does not exist. A drain-all sibling must not reintroduce
-        // loadDocument / dirty:false or skip the already-applied early return.
-        assert!(
-            !source.contains("applyInboxAll")
-                && !source.contains("apply_inbox_all")
-                && !source.contains("applyAllInbox"),
-            "leftover apply-all must not exist beside applyInboxNow: {source}"
-        );
-        let store = include_str!("../../src/store/appStore.ts");
-        let refresh_defs = store
-            .matches("refreshAfterInboxApply: async (opName)")
-            .count();
-        assert_eq!(
-            refresh_defs, 1,
-            "leftover refreshAfterInboxApply must be the single #63 path, not a leftover copy"
-        );
-        let refresh_start = store
-            .find("refreshAfterInboxApply: async (opName)")
-            .expect("refreshAfterInboxApply");
-        let refresh_end = store[refresh_start..]
-            .find("setDocument:")
-            .expect("end of leftover refreshAfterInboxApply");
-        let leftover = &store[refresh_start..refresh_start + refresh_end];
-        assert!(
-            !leftover.contains("loadDocument("),
-            "leftover refreshAfterInboxApply must stay on the #63 contract (no loadDocument): {leftover}"
-        );
-        assert!(
-            leftover.contains("dirty: true"),
-            "leftover refreshAfterInboxApply must keep dirty:true"
-        );
-        assert!(
-            leftover.contains("jointPreviewSolution: null")
-                && leftover.contains("jointMotionPreview: null")
-                && leftover.contains("mechanismPreview: null"),
-            "leftover assembly refresh must clear all three previews"
-        );
-        // solid_delete_feature returns scene+document, so applyInboxNow takes
-        // applySolidUpdate — not refreshAfterInboxApply. Body-delete cleanup
-        // must still drop stale joint selection and the three previews, then
-        // re-read assemblyDocument so a leftover joint ghost cannot linger.
-        let apply_solid = store
-            .find("applySolidUpdate: (update) => {")
-            .expect("applySolidUpdate");
-        let apply_solid_end = store[apply_solid..]
-            .find("applyDatumPlaneUpdate:")
-            .expect("end applySolidUpdate");
-        let solid_fn = &store[apply_solid..apply_solid + apply_solid_end];
-        assert!(
-            solid_fn.contains("dirty: true"),
-            "applySolidUpdate (body-delete inbox) must keep dirty:true: {solid_fn}"
-        );
-        assert!(
-            solid_fn.contains("jointPreviewSolution: null")
-                && solid_fn.contains("jointMotionPreview: null")
-                && solid_fn.contains("mechanismPreview: null"),
-            "applySolidUpdate must clear all three previews after body-delete: {solid_fn}"
-        );
-        assert!(
-            solid_fn.contains("engine.assemblyDocument()")
-                && solid_fn.contains("engine.assemblySolution()")
-                && solid_fn.contains("jointStillExists")
-                && solid_fn.contains("selectedJointId"),
-            "applySolidUpdate must refresh assembly and drop a deleted joint selection: {solid_fn}"
-        );
-        // Native apply archives + bumps before JS leftover refresh. A throw
-        // after that success must still publish so cad_refresh sees the joint.
-        let publish = body
-            .find("scheduleSessionBridgePublish()")
-            .expect("publish after native apply");
-        assert!(
-            publish > not_applied && publish > solid && publish > refresh,
-            "publish must follow the applied:true leftover refresh, not run on empty/dead-letter"
-        );
-        assert!(
-            body.contains("} finally {")
-                && body[publish..].contains("scheduleSessionBridgePublish()"),
-            "publish must live in a finally so a leftover refresh throw cannot skip it: {body}"
-        );
-        let dead = body
-            .find("if (result?.dead_lettered)")
-            .expect("dead-lettered return");
-        assert!(
-            dead < publish,
-            "dead-letter must return before finally publish so the next applyInboxNow tick can take seq 2"
-        );
-        assert!(
-            body.contains("queue unblocked"),
-            "dead-letter path must leave the poller free to apply the lowest remaining pending seq"
-        );
-        // Pass 7 moved publish into finally. Write must still carry the
-        // reserved session/project identity — never active_mut() / later attach.
-        let publish_now = source
-            .find("async function publishNow()")
-            .expect("publishNow");
-        let publish_now_end = source[publish_now..]
-            .find("async function applyInboxNow()")
-            .expect("end publishNow");
-        let publish_body = &source[publish_now..publish_now + publish_now_end];
-        assert!(
-            publish_body.contains("session_id: reservation.session_id")
-                && publish_body.contains("project_session_id: reservation.project_session_id"),
-            "finally publish must write reserved session_id + project_session_id: {publish_body}"
-        );
-        assert!(
-            !publish_body.contains("active_mut"),
-            "JS publish must not target active_mut(): {publish_body}"
-        );
-        let native = include_str!("../../src-tauri/src/session_bridge.rs");
-        let write_start = native
-            .find("fn write_for_window(")
-            .expect("write_for_window");
-        let write_end = native[write_start..]
-            .find("fn heartbeat_for_window(")
-            .expect("end write_for_window");
-        let write_fn = &native[write_start..write_start + write_end];
-        assert!(
-            write_fn.contains("session write requires reserved session_id")
-                && write_fn.contains("session_identity_mismatch")
-                && !write_fn.contains("active_mut()"),
-            "native write must resolve reserved identity, never active_mut(): {write_fn}"
-        );
-    }
-
-    #[test]
     fn leftover_and_native_apply_share_error_class_and_archive() {
         // Hunt 2: helper vs native — same archive destination (failed vs applied)
         // and same user-visible error class. Do not bikeshed wording.
@@ -10291,15 +10098,14 @@ mod tests {
     /// Joint create/update return a DTO, not a solid update. Old applyInboxNow
     /// fell through to loadDocument() (dirty:false). refreshAfterInboxApply
     /// keeps dirty:true for that path.
-    fn assert_joint_dto_keeps_dirty(host_result: &Value, label: &str) {
-        // applyInboxNow: scene+document -> applySolidUpdate (already dirty:true);
-        // otherwise refreshAfterInboxApply (dirty:true). Joint DTOs take the
-        // second path — the old loadDocument() fallback cleared dirty.
+    fn assert_joint_dto_result(host_result: &Value, label: &str) {
+        // Assert the native wire shape here; actual frontend dirty/preview
+        // behavior is exercised by inboxCompletion.browser.test.ts.
         let is_solid_update =
             host_result.get("scene").is_some() && host_result.get("document").is_some();
         assert!(
             !is_solid_update,
-            "{label}: joint DTO must take refreshAfterInboxApply (dirty:true), not loadDocument: {host_result}"
+            "{label}: expected a joint result, not a solid update: {host_result}"
         );
         assert!(
             host_result.get("id").is_some() && host_result.get("kind").is_some(),
@@ -10390,7 +10196,7 @@ mod tests {
         assert_eq!(created.host_result["name"], "Hinge1");
         assert_eq!(created.host_result["kind"], "revolute");
         let joint_id = created.host_result["id"].as_u64().expect("joint id");
-        assert_joint_dto_keeps_dirty(&created.host_result, "create");
+        assert_joint_dto_result(&created.host_result, "create");
 
         server.call_tool("cad_refresh", json!({})).unwrap();
         let after_create = server
@@ -10422,7 +10228,7 @@ mod tests {
         assert_eq!(updated.op.name, "assembly_update_joint");
         assert_eq!(updated.host_result["name"], "Hinge1Renamed");
         assert_eq!(updated.host_result["id"].as_u64(), Some(joint_id));
-        assert_joint_dto_keeps_dirty(&updated.host_result, "update");
+        assert_joint_dto_result(&updated.host_result, "update");
 
         server.call_tool("cad_refresh", json!({})).unwrap();
         let after_update = server
@@ -10797,7 +10603,7 @@ mod tests {
         assert_eq!(submitted["submitted"], true);
 
         let created = apply_inbox_on_separate_host(&unique);
-        assert_joint_dto_keeps_dirty(&created.host_result, "create");
+        assert_joint_dto_result(&created.host_result, "create");
         server.call_tool("cad_refresh", json!({})).unwrap();
         let after_create = server.call_tool("assembly_document", json!({})).unwrap();
         let joint_id = created.host_result["id"].as_u64().unwrap();
@@ -10862,7 +10668,7 @@ mod tests {
             )
             .expect("submit update with explicit nulls");
         let updated = apply_inbox_on_separate_host(&unique);
-        assert_joint_dto_keeps_dirty(&updated.host_result, "update-nulls");
+        assert_joint_dto_result(&updated.host_result, "update-nulls");
         assert_eq!(updated.host_result["id"].as_u64(), Some(joint_id));
 
         // cad_script is not read-safe while attached. Detach keeps the
@@ -11081,7 +10887,7 @@ mod tests {
             .unwrap();
         let created = apply_inbox_on_separate_host(&unique);
         let joint_id = created.host_result["id"].as_u64().unwrap();
-        assert_joint_dto_keeps_dirty(&created.host_result, "create-parity");
+        assert_joint_dto_result(&created.host_result, "create-parity");
 
         let mut joint = created.host_result.clone();
         if let Some(object) = joint.as_object_mut() {
@@ -11102,7 +10908,7 @@ mod tests {
             .unwrap();
         let updated = apply_inbox_on_separate_host(&unique);
         assert_eq!(updated.host_result["id"].as_u64(), Some(joint_id));
-        assert_joint_dto_keeps_dirty(&updated.host_result, "update-parity");
+        assert_joint_dto_result(&updated.host_result, "update-parity");
 
         let load_while_attached = server
             .call_tool(
@@ -11603,7 +11409,7 @@ mod tests {
             )
             .unwrap();
         let created = apply_inbox_on_separate_host(&unique);
-        assert_joint_dto_keeps_dirty(&created.host_result, "create-before-refresh");
+        assert_joint_dto_result(&created.host_result, "create-before-refresh");
         let joint_id = created.host_result["id"].as_u64().unwrap();
 
         let stale = server.call_tool("assembly_document", json!({})).unwrap();
@@ -11634,29 +11440,12 @@ mod tests {
         let updated = apply_inbox_on_separate_host(&unique);
         assert_eq!(updated.host_result["id"].as_u64(), Some(joint_id));
         assert_eq!(updated.host_result["name"], "HingeFastRenamed");
-        assert_joint_dto_keeps_dirty(&updated.host_result, "update-before-refresh");
+        assert_joint_dto_result(&updated.host_result, "update-before-refresh");
 
         server.call_tool("cad_refresh", json!({})).unwrap();
         let after = server.call_tool("assembly_document", json!({})).unwrap();
         assert_joint_visible(&after, joint_id, "HingeFastRenamed");
         assert_eq!(after["joints"].as_array().map(Vec::len), Some(1));
-
-        let source = include_str!("../../src/store/appStore.ts");
-        let start = source
-            .find("refreshAfterInboxApply: async (opName)")
-            .expect("refreshAfterInboxApply");
-        let assembly = source[start..]
-            .find("if (opName?.startsWith('assembly_'))")
-            .expect("assembly inbox branch");
-        let branch = &source[start + assembly..];
-        let end = branch
-            .find("const doc = await engine.getDocument()")
-            .expect("end of targeted assembly refresh");
-        let targeted = &branch[..end];
-        assert!(
-            targeted.contains("jointMotionPreview: null") && targeted.contains("dirty: true"),
-            "preview still cleared and dirty true after chained apply"
-        );
 
         std::env::remove_var("NBCAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
@@ -11715,7 +11504,7 @@ mod tests {
         assert_eq!(created.op.name, "assembly_create_joint");
         assert_eq!(created.host_result["name"], "HingeDetach");
         let joint_id = created.host_result["id"].as_u64().unwrap();
-        assert_joint_dto_keeps_dirty(&created.host_result, "apply-after-detach");
+        assert_joint_dto_result(&created.host_result, "apply-after-detach");
 
         let detached = server.call_tool("assembly_document", json!({})).unwrap();
         assert!(
@@ -11786,7 +11575,7 @@ mod tests {
         assert_eq!(created.op.name, "assembly_create_joint");
         assert_eq!(created.host_result["name"], "HingeReattach");
         let joint_id = created.host_result["id"].as_u64().unwrap();
-        assert_joint_dto_keeps_dirty(&created.host_result, "apply-after-reattach");
+        assert_joint_dto_result(&created.host_result, "apply-after-reattach");
 
         let attached = server.call_tool("assembly_document", json!({})).unwrap();
         assert!(
@@ -12172,7 +11961,7 @@ mod tests {
         let occ_a = created.host_result["advanced"]["connector_a_occurrence_id"]
             .as_u64()
             .expect("occ A");
-        assert_joint_dto_keeps_dirty(&created.host_result, "create-before-body-delete");
+        assert_joint_dto_result(&created.host_result, "create-before-body-delete");
 
         let generation = session::read_heartbeat_generation(&unique).unwrap();
         server

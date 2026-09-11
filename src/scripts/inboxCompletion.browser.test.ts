@@ -3,7 +3,7 @@ import {applyInboxNow, publishCurrentSession} from '../sessionBridge';
 import {presentation} from '../operationPlayback';
 import {projectTransitions} from '../files/projectTransitions';
 import {applicationExitBarrier, createExitController} from '../files/applicationExit';
-import type {DocumentDto} from '../engine/types';
+import {DEFAULT_JOINT_ADVANCED, type DocumentDto, type JointDefinitionDto, type AssemblySolutionDto} from '../engine/types';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -110,7 +110,85 @@ export async function checkInboxCompletion() {
       exit.dispose();
       outcomes.push(phase);
     }
-    return {ownedPublicationAndExit: outcomes};
+    // Native assembly commands return joint DTOs, rather than SolidUpdate.
+    // Exercise the real dispatch and store refresh, including the preview
+    // layers that would otherwise hide the authoritative solved pose.
+    const setup = projectTransitions.begin();
+    useAppStore.getState().loadProjectState({document: docA, scene}, [], [], 'A.nbcad');
+    useAppStore.setState({engineKind: 'tauri', activeProjectTabId: 'same-tab',
+      projectTabs: [{id: 'same-tab', name: 'A', fileName: 'A.nbcad', dirty: false, workspaceTab: 'solid'}]});
+    setup(true, true);
+    const connector: JointDefinitionDto['connector_a'] = {body_id: 1, face_id: 1, face_key: 'plane', kind: 'planar_face',
+      frame: {origin: [0, 0, 0], primary_axis: [0, 0, 1], secondary_axis: [1, 0, 0]}};
+    const joint: JointDefinitionDto = {id: 7, name: 'Hinge', kind: 'revolute', connector_a: connector,
+      connector_b: {...connector, body_id: 2}, flipped: false, angle_offset_deg: 0, linear_offset_mm: 0,
+      limits: null, angle_limits: null, linear_limits: null, advanced: DEFAULT_JOINT_ADVANCED, enabled: true};
+    let assembly = {...initial.assemblyDocument, joints: [] as JointDefinitionDto[]};
+    let solution: AssemblySolutionDto = {...initial.assemblySolution, body_poses: []};
+    let reply: unknown;
+    let snapshots = 0;
+    let assemblyReads = 0;
+    w.__TAURI_INTERNALS__ = {async invoke(command, args = {}) {
+      if (command === 'mcp_session_bridge_reserve') return {session_id: 'assembly-session', project_session_id: 'same-tab', generation: 1};
+      if (command === 'mcp_session_bridge_write') {
+        const payload = JSON.parse(args.payload as string);
+        check(payload.session_id === 'assembly-session' && payload.project_session_id === 'same-tab', 'Every inbox publication retains its reserved owner');
+        snapshots++; return {skipped: false};
+      }
+      if (command === 'mcp_session_bridge_apply_inbox') return reply;
+      if (command === 'get_document') return docA;
+      if (command === 'engine_project_export_model') return ok(JSON.stringify({document: docA, assembly}));
+      if (command === 'engine_project_visibility') return ok(initial.projectVisibility);
+      if (command === 'engine_active_sketch') return ok(null);
+      if (command === 'engine_solid_scene') return ok(scene);
+      if (command === 'engine_assembly_document') { assemblyReads++; return ok(assembly); }
+      if (command === 'engine_assembly_solution') return ok(solution);
+      if (command === 'engine_drawing_document') return ok(initial.drawingDocument);
+      if (['engine_finished_sketches', 'engine_datum_plane_definitions', 'engine_body_appearances'].includes(command)) return ok([]);
+      throw new Error(`Unexpected assembly inbox command: ${command}`);
+    }};
+    check(await publishCurrentSession(), 'Publish the assembly fixture owner');
+    const assemblyVersion = presentation.documentVersion();
+    for (const name of ['empty', 'dead-letter', 'assembly_create_joint', 'assembly_update_joint', 'solid_delete_feature']) {
+      const staleSolution = {...solution, solved: false};
+      useAppStore.setState({dirty: false, selectedJointId: joint.id, jointEditingId: joint.id,
+        jointPreviewSolution: staleSolution,
+        jointMotionPreview: {jointId: joint.id, angleOffsetDeg: 45, linearOffsetMm: 0,
+          secondaryAngleOffsetDeg: 0, tertiaryAngleOffsetDeg: 0, secondaryLinearOffsetMm: 0,
+          motion: {joint_id: joint.id, angle_offset_deg: 45, linear_offset_mm: 0,
+            secondary_angle_offset_deg: 0, tertiary_angle_offset_deg: 0, secondary_linear_offset_mm: 0},
+          solution: staleSolution},
+        mechanismPreview: {solution: staleSolution, joint_motions: [], converged: true, iterations: 1,
+          position_error_mm: 0, orientation_error_deg: 0}});
+      const before = useAppStore.getState();
+      const writesBefore = snapshots;
+      const readsBefore = assemblyReads;
+      if (name === 'empty' || name === 'dead-letter') {
+        reply = {applied: false, dead_lettered: name === 'dead-letter'};
+        await applyInboxNow();
+        check(useAppStore.getState() === before && snapshots === writesBefore && assemblyReads === readsBefore,
+          `${name}: unapplied work must not refresh, alter dirty/previews or publish`);
+      } else {
+        const deleting = name === 'solid_delete_feature';
+        const nextJoint = {...joint, name: name === 'assembly_update_joint' ? 'Renamed hinge' : joint.name};
+        assembly = {...assembly, joints: deleting ? [] : [nextJoint]};
+        solution = {...solution, body_poses: [{body_id: 2, translation: [0, 0, deleting ? 0 : name === 'assembly_update_joint' ? 20 : 10], rotation: [0, 0, 0, 1]}]};
+        reply = {applied: true, name, result: deleting ? {document: docA, scene} : nextJoint};
+        await applyInboxNow();
+        const after = useAppStore.getState();
+        check(after.dirty && presentation.documentVersion() === assemblyVersion,
+          `${name}: an inbox edit must stay unsaved and preserve its document owner`);
+        check(after.jointPreviewSolution === null && after.jointMotionPreview === null && after.mechanismPreview === null,
+          `${name}: all stale preview poses must be cleared`);
+        check(JSON.stringify(after.assemblyDocument) === JSON.stringify(assembly)
+          && JSON.stringify(after.assemblySolution) === JSON.stringify(solution),
+          `${name}: the fresh assembly and solved pose must replace the prior state`);
+        check(snapshots === writesBefore + 1 && assemblyReads > readsBefore, `${name}: refreshed state must publish exactly once`);
+        if (deleting) check(after.selectedJointId === null && after.jointEditingId === null,
+          'Body deletion must clear selection and editing of the removed joint');
+      }
+    }
+    return {ownedPublicationAndExit: outcomes, assemblyDtoRefresh: true, deletedJointCleanup: true, unappliedInboxUnchanged: true};
   } finally {
     const restore = projectTransitions.begin();
     useAppStore.setState(initial); presentation.documentChanged();
