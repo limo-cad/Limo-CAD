@@ -1549,6 +1549,16 @@ pub fn await_inbox_apply(
     timeout_ms: u64,
     poll_ms: u64,
 ) -> Result<Value, String> {
+    await_inbox_apply_observing(session_id, seq, timeout_ms, poll_ms, || {})
+}
+
+fn await_inbox_apply_observing(
+    session_id: &str,
+    seq: u64,
+    timeout_ms: u64,
+    poll_ms: u64,
+    mut after_receipt: impl FnMut(),
+) -> Result<Value, String> {
     require_valid_session_id(session_id)?;
     let timeout_ms = clamp_await_timeout_ms(timeout_ms);
     let poll_ms = poll_ms.max(1).min(1_000);
@@ -1582,6 +1592,7 @@ pub fn await_inbox_apply(
             ),
             _ => None,
         };
+        after_receipt();
         // A replacement cannot publish any more work for the retired identity.
         // Keep completed/failed receipts inspectable, but do not make an active
         // interpreter wait for its full timeout on a now-unreachable publisher.
@@ -1589,6 +1600,30 @@ pub fn await_inbox_apply(
             && publication.is_none()
             && !matches!(&receipt, InboxReceipt::Failed { .. })
         {
+            // Receipt and tombstone are separate atomic files. A native
+            // replacement can publish its receipt after our first read and
+            // close the old session before this observation. Recheck behind
+            // that closure fence before declaring its work unreachable.
+            if inbox_op_receipt(session_id, seq)? != receipt {
+                continue;
+            }
+            if let InboxReceipt::Applied {
+                base_generation, ..
+            } = &receipt
+            {
+                if snapshot_publication_after(
+                    publication_session,
+                    if replacement_session_id.is_some() {
+                        0
+                    } else {
+                        *base_generation
+                    },
+                )
+                .is_some()
+                {
+                    continue;
+                }
+            }
             let (applied, name, base_generation) = match &receipt {
                 InboxReceipt::Applied {
                     name,
@@ -3390,6 +3425,43 @@ mod tests {
 
         std::env::remove_var("NBCAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn replacement_receipt_arriving_between_poll_and_closure_is_not_lost() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let original = test_session_uuid();
+        let replacement = test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("nbcad-replacement-closure-{original}"));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        write_session(
+            &original,
+            "heartbeat.json",
+            &json!({"generation":1}).to_string(),
+        )
+        .unwrap();
+        let mut scheduled = false;
+        let result = await_inbox_apply_observing(&original,1,0,1,|| {
+            if scheduled { return; }
+            scheduled = true;
+            // Exact native order, deliberately between the receipt and closed
+            // observations instead of relying on a timing-sensitive thread.
+            write_session(&original,"inbox/applied/1.json",&json!({
+                "name":"cad_new_project","base_generation":1,"project_replaced":true,
+                "previous_session_id":original,"active_session_id":replacement,"document_id":"same-tab"
+            }).to_string()).unwrap();
+            write_closed_tombstone(&original).unwrap();
+            publish_applied_snapshot(&replacement,"replacement model").unwrap();
+        }).unwrap();
+        assert_eq!(result["status"], "applied");
+        assert_eq!(result["active_session_id"], replacement);
+        assert_eq!(result["model_published"], true);
+        assert_eq!(
+            await_inbox_apply(&original, 2, 0, 1).unwrap()["status"],
+            "closed"
+        );
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
