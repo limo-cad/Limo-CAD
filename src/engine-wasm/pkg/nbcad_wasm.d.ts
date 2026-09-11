@@ -122,6 +122,7 @@ export class WasmEngine {
      * `payload`: serialized `CircularPatternRequest`.
      */
     circular_pattern(payload: string): string;
+    construction_set_visibility(payload: string): string;
     datum_plane_create(payload: string): string;
     datum_plane_definitions(): string;
     datum_plane_edit(payload: string): string;
@@ -360,6 +361,7 @@ export interface InitOutput {
     readonly wasmengine_chamfer_definitions: (a: number) => [number, number];
     readonly wasmengine_chamfer_lines: (a: number, b: number, c: number) => [number, number];
     readonly wasmengine_circular_pattern: (a: number, b: number, c: number) => [number, number];
+    readonly wasmengine_construction_set_visibility: (a: number, b: number, c: number) => [number, number];
     readonly wasmengine_datum_plane_create: (a: number, b: number, c: number) => [number, number];
     readonly wasmengine_datum_plane_definitions: (a: number) => [number, number];
     readonly wasmengine_datum_plane_edit: (a: number, b: number, c: number) => [number, number];
