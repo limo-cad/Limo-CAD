@@ -207,6 +207,7 @@ fn request_control(
         .or(attached)
         .ok_or("Live control needs session_id or an attached desktop session")?;
     require_valid_session_id(session_id)?;
+    require_open_session(session_id)?;
     let view = arguments
         .get("view")
         .and_then(Value::as_str)
@@ -513,6 +514,14 @@ pub fn is_session_closed(session_id: &str) -> bool {
     session_path(session_id, CLOSED_TOMBSTONE)
         .map(|path| path.is_file())
         .unwrap_or(false)
+}
+
+fn require_open_session(session_id: &str) -> Result<(), String> {
+    if is_session_closed(session_id) {
+        Err(format!("session '{session_id}' was closed or replaced; select a current document before submitting new work"))
+    } else {
+        Ok(())
+    }
 }
 
 /// Mark a session directory closed so it leaves the live `windows[]` set.
@@ -1201,6 +1210,7 @@ pub fn pending_inbox_seqs(session_id: &str) -> Result<Vec<u64>, String> {
 /// retries the next free sequence.
 pub fn write_inbox_op(session_id: &str, op: &InboxOp) -> Result<u64, String> {
     require_valid_session_id(session_id)?;
+    require_open_session(session_id)?;
     let body = serde_json::to_string_pretty(&op.to_json())
         .map_err(|error| format!("encode inbox op: {error}"))?;
     const MAX_ATTEMPTS: u32 = 1024;
@@ -1526,6 +1536,37 @@ pub fn await_inbox_apply(
         let elapsed_ms = now_ms().saturating_sub(started);
         let receipt = inbox_op_receipt(session_id, seq)?;
         let current_generation = read_heartbeat_generation(session_id).ok();
+        let publication = match &receipt {
+            InboxReceipt::Applied {
+                base_generation, ..
+            } => snapshot_publication_after(session_id, *base_generation),
+            _ => None,
+        };
+        // A replacement cannot publish any more work for the retired identity.
+        // Keep completed/failed receipts inspectable, but do not make an active
+        // interpreter wait for its full timeout on a now-unreachable publisher.
+        if is_session_closed(session_id)
+            && publication.is_none()
+            && !matches!(&receipt, InboxReceipt::Failed { .. })
+        {
+            let (applied, name, base_generation) = match &receipt {
+                InboxReceipt::Applied {
+                    name,
+                    base_generation,
+                } => (true, name.clone(), Some(*base_generation)),
+                _ => (false, None, None),
+            };
+            let mut result = json!({
+                "status":"closed", "timed_out":false, "seq":seq,
+                "session_id":session_id, "name":name, "base_generation":base_generation,
+                "current_generation":current_generation, "applied":applied,
+                "dead_lettered":false, "published":false, "refreshed":false,
+                "session_mode":"ui_owned_apply", "writeback":false, "elapsed_ms":elapsed_ms,
+                "hint":"The document was closed or replaced before this operation was published. Its retained receipt is unchanged; inspect the original document before retrying.",
+            });
+            insert_publication_fields(&mut result, &empty_publication_fields());
+            return Ok(result);
+        }
 
         match receipt {
             InboxReceipt::Failed {
@@ -1558,7 +1599,7 @@ pub fn await_inbox_apply(
                 base_generation,
                 name,
             } => {
-                if let Some(publication) = snapshot_publication_after(session_id, base_generation) {
+                if let Some(publication) = publication {
                     let model_published = publication.model_published();
                     let active_sketch_published = publication.active_sketch_published();
                     let hint = if model_published {
@@ -3294,6 +3335,122 @@ mod tests {
 
         std::env::remove_var("NBCAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn retired_session_ends_unpublished_awaits_and_retains_completed_receipts() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let id = test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("nbcad-retired-await-{id}"));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        write_session(
+            &id,
+            "heartbeat.json",
+            &json!({"updated_ms":now_ms(),"generation":1}).to_string(),
+        )
+        .unwrap();
+        let seq = write_inbox_op(
+            &id,
+            &InboxOp::unstamped("cad_set_document_name", json!({"name":"A"}), 1),
+        )
+        .unwrap();
+        let waiting = id.clone();
+        let closer = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            write_closed_tombstone(&waiting).unwrap();
+        });
+        let pending = await_inbox_apply(&id, seq, 1000, 5).unwrap();
+        closer.join().unwrap();
+        assert_eq!(pending["status"], "closed");
+        assert_eq!(pending["timed_out"], false);
+        assert_eq!(pending["applied"], false);
+        assert_eq!(pending_inbox_seqs(&id).unwrap(), vec![seq]);
+
+        // An operation can finish just before replacement but lose its final
+        // publication. Keep that distinction instead of claiming it never ran.
+        archive_inbox_op(&id, seq).unwrap();
+        let applied = await_inbox_apply(&id, seq, 0, 5).unwrap();
+        assert_eq!(applied["status"], "closed");
+        assert_eq!(applied["applied"], true);
+        assert_eq!(applied["published"], false);
+        assert_eq!(applied["dead_lettered"], false);
+        publish_applied_snapshot(&id, "original completed model").unwrap();
+        let completed = await_inbox_apply(&id, seq, 0, 5).unwrap();
+        assert_eq!(completed["status"], "applied");
+        assert_eq!(completed["model_published"], true);
+        assert_eq!(require_model_json(&id).unwrap(), "original completed model");
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn retired_session_rejects_new_live_work_but_delivers_its_open_reply() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let id = test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("nbcad-retired-control-{id}"));
+        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        write_session(
+            &id,
+            "heartbeat.json",
+            &json!({"updated_ms":now_ms(),"generation":1}).to_string(),
+        )
+        .unwrap();
+        write_closed_tombstone(&id).unwrap();
+        assert!(write_inbox_op(
+            &id,
+            &InboxOp::unstamped("cad_set_document_name", json!({"name":"A"}), 1)
+        )
+        .unwrap_err()
+        .contains("closed or replaced"));
+        assert!(request_ui(
+            &json!({"action":"presentation","command":"stop"}),
+            Some(&id)
+        )
+        .unwrap_err()
+        .contains("closed or replaced"));
+        assert!(pending_inbox_seqs(&id).unwrap().is_empty());
+        assert!(!dir.join(&id).join("controls").exists());
+
+        clear_closed_tombstone(&id).unwrap();
+        let target = id.clone();
+        let peer = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            loop {
+                if let Ok(entries) = fs::read_dir(session_dir().join(&target).join("controls")) {
+                    for entry in entries.flatten() {
+                        if !entry
+                            .file_name()
+                            .to_string_lossy()
+                            .ends_with(".request.json")
+                        {
+                            continue;
+                        }
+                        let request: Value =
+                            serde_json::from_str(&fs::read_to_string(entry.path()).unwrap())
+                                .unwrap();
+                        write_closed_tombstone(&target).unwrap();
+                        // The desktop must be allowed to acknowledge the Open
+                        // that retired this session after hydrating its new model.
+                        std::thread::sleep(std::time::Duration::from_millis(25));
+                        write_session(
+                            &target,
+                            &format!("controls/{}.result.json", request["id"].as_str().unwrap()),
+                            &json!({"status":"applied","active_session_id":"replacement"})
+                                .to_string(),
+                        )
+                        .unwrap();
+                        return;
+                    }
+                }
+                assert!(std::time::Instant::now() < deadline);
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        });
+        let reply = request_ui(&json!({"action":"file","command":"open"}), Some(&id)).unwrap();
+        peer.join().unwrap();
+        assert_eq!(reply["active_session_id"], "replacement");
+        std::env::remove_var("NBCAD_SESSION_DIR");
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
