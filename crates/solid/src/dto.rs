@@ -690,7 +690,10 @@ pub struct StepExportRequest {
 }
 
 /// Shared optimistic precondition for exact and mesh export hosts.
-pub fn check_export_model_snapshot(expected: Option<&str>, current: &str) -> Result<(), &'static str> {
+pub fn check_export_model_snapshot(
+    expected: Option<&str>,
+    current: &str,
+) -> Result<(), &'static str> {
     if expected.is_some_and(|expected| expected != current) {
         return Err("The document changed while preparing export. Start the export again.");
     }
