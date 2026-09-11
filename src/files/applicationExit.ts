@@ -35,17 +35,27 @@ export function createExitController(actions: ExitActions, barrier = application
       if (pending || disposed) return;
       pending = true;
       try {
-        // A control already in progress may create unsaved work. Decide only
-        // after it completes, rather than trusting its pre-operation state.
-        await barrier.wait();
-        if (disposed) return;
-        if (actions.dirty()) {
-          const decision = await actions.decide();
-          if (decision === 'cancel' || disposed) return;
-          if (decision === 'save' && !(await actions.save())) return;
+        while (!disposed) {
+          // A control already in progress may create unsaved work. Decide only
+          // after it completes, rather than trusting its pre-operation state.
+          await barrier.wait();
+          if (disposed) return;
+          let discard = false;
+          if (actions.dirty()) {
+            const decision = await actions.decide();
+            if (decision === 'cancel' || disposed) return;
+            discard = decision === 'discard';
+            if (decision === 'save' && !(await actions.save())) return;
+          }
+          await barrier.wait();
+          if (disposed) return;
+          // A late control can create more work after Save succeeds. Its
+          // acknowledgement releases shutdown, but does not save that work.
+          // An explicit Discard remains authorization to finish quitting.
+          if (!discard && actions.dirty()) continue;
+          await actions.exit();
+          return;
         }
-        await barrier.wait();
-        if (!disposed) await actions.exit();
       } catch (error) {
         actions.error(error);
       } finally {

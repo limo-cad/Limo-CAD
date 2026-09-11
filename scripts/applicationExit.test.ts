@@ -5,10 +5,11 @@ for (const dirty of [false, true]) {
   for (const decision of ['cancel', 'discard', 'save'] as const) {
     for (const saved of [false, true]) {
       let exits = 0, prompts = 0, saves = 0;
+      let currentDirty = dirty;
       const controller = createExitController({
-        dirty: () => dirty,
+        dirty: () => currentDirty,
         decide: async () => { prompts++; return decision; },
-        save: async () => { saves++; return saved; },
+        save: async () => { saves++; if (saved) currentDirty = false; return saved; },
         exit: async () => { exits++; },
         error: error => { throw error; },
       });
@@ -52,6 +53,50 @@ await requestedDuringMutation;
 assert.equal(latePrompts, 1, 'Work created by the pending control must be guarded');
 assert.equal(lateExits, 0);
 
+for (const nextDecision of ['cancel', 'discard', 'save'] as const) {
+  const afterSaveBarrier = new ExitBarrier();
+  let unsaved = true, prompts = 0, saves = 0, exits = 0;
+  const order: string[] = [];
+  const afterSave = createExitController({
+    dirty: () => unsaved,
+    decide: async () => { prompts++; return prompts === 1 ? 'save' : nextDecision; },
+    save: async () => {
+      saves++; unsaved = false;
+      if (saves === 1) {
+        // Save finished, then another live control created work while its
+        // acknowledgement was still holding the final shutdown barrier.
+        const acknowledge = afterSaveBarrier.hold();
+        queueMicrotask(() => { unsaved = true; order.push('late edit acknowledged'); acknowledge(); });
+      }
+      return true;
+    },
+    exit: async () => { exits++; order.push('exit'); },
+    error: error => { throw error; },
+  }, afterSaveBarrier);
+  await afterSave.request();
+  assert.equal(prompts, 2, 'New work after Save needs its own unsaved-work decision');
+  assert.equal(exits, Number(nextDecision !== 'cancel'));
+  assert.equal(saves, nextDecision === 'save' ? 2 : 1);
+  assert.equal(unsaved, nextDecision !== 'save', 'Only successful Save may clear newly created work');
+  assert.deepEqual(order, nextDecision === 'cancel' ? ['late edit acknowledged'] : ['late edit acknowledged', 'exit']);
+}
+
+const discardBarrier = new ExitBarrier();
+const discardOrder: string[] = [];
+const discard = createExitController({
+  dirty: () => true,
+  decide: async () => {
+    const acknowledge = discardBarrier.hold();
+    queueMicrotask(() => { discardOrder.push('discard acknowledged'); acknowledge(); });
+    return 'discard';
+  },
+  save: async () => { throw new Error('Discard must not save'); },
+  exit: async () => { discardOrder.push('exit'); },
+  error: error => { throw error; },
+}, discardBarrier);
+await discard.request();
+assert.deepEqual(discardOrder, ['discard acknowledged', 'exit'], 'Explicit Discard must finish after its own control acknowledgement');
+
 let attempts = 0, errors = 0;
 const retry = createExitController({
   dirty: () => false, decide: async () => 'cancel', save: async () => false,
@@ -65,4 +110,4 @@ assert.equal(errors, 1);
 retry.dispose();
 await retry.request();
 assert.equal(attempts, 2);
-console.log('PASS exit: clean, save, discard, cancel, failed save, duplicate requests, acknowledgement ordering, error recovery, disposal');
+console.log('PASS exit: clean, save, discard, cancel, failed save, duplicate requests, acknowledgement ordering, late edits after Save, error recovery, disposal');
