@@ -715,8 +715,9 @@ pub fn auto_focus_for_tool(name: &str) -> Option<FocusPack> {
     None
 }
 
-/// Focus mapping for tests and future UI snapshot bridge (parked).
+/// Focus-mapping fixture for snapshot bridge tests.
 /// Keep dialog keys aligned with `activeSolidDialog` in the desktop app.
+#[cfg(test)]
 pub fn focus_from_ui(
     mode: &str,
     active_tool: Option<&str>,

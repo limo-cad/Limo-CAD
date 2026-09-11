@@ -516,6 +516,7 @@ pub fn is_session_closed(session_id: &str) -> bool {
 }
 
 /// Mark a session directory closed so it leaves the live `windows[]` set.
+#[cfg(test)]
 pub fn write_closed_tombstone(session_id: &str) -> Result<(), String> {
     let body = serde_json::to_string_pretty(&json!({
         "closed_ms": now_ms(),
@@ -526,6 +527,7 @@ pub fn write_closed_tombstone(session_id: &str) -> Result<(), String> {
 }
 
 /// Clear a close marker when the same session UUID is republished.
+#[cfg(test)]
 pub fn clear_closed_tombstone(session_id: &str) -> Result<(), String> {
     let path = session_path(session_id, CLOSED_TOMBSTONE)?;
     if path.exists() {
@@ -986,6 +988,7 @@ impl InboxOp {
         value
     }
 
+    #[cfg(test)]
     pub fn from_json(value: &Value) -> Result<Self, String> {
         let name = value
             .get("name")
@@ -1008,6 +1011,7 @@ impl InboxOp {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone)]
 pub struct ApplyResult {
     pub seq: u64,
@@ -1072,6 +1076,7 @@ pub fn generation_conflict_error(
 }
 
 /// Structured error when a stamped inbox op targets a different session/window.
+#[cfg(test)]
 pub fn session_identity_mismatch_error(
     destination_session_id: &str,
     destination_window_id: Option<&str>,
@@ -1098,6 +1103,7 @@ pub fn session_identity_mismatch_error(
 /// Return a structured identity-mismatch error when a stamped op does not
 /// match the destination session / window this apply is bound to.
 /// Unstamped ops (missing fields) keep current behavior.
+#[cfg(test)]
 pub fn inbox_op_identity_mismatch(
     destination_session_id: &str,
     destination_window_id: Option<&str>,
@@ -1226,6 +1232,7 @@ fn exclusive_create_file(path: &Path, content: &str) -> std::io::Result<()> {
     result
 }
 
+#[cfg(test)]
 pub fn read_inbox_op(session_id: &str, seq: u64) -> Result<InboxOp, String> {
     let body = read_session_file(session_id, &format!("inbox/{seq}.json"))?;
     let parsed: Value = serde_json::from_str(&body)
@@ -1233,6 +1240,7 @@ pub fn read_inbox_op(session_id: &str, seq: u64) -> Result<InboxOp, String> {
     InboxOp::from_json(&parsed)
 }
 
+#[cfg(test)]
 fn archive_inbox_op(session_id: &str, seq: u64) -> Result<(), String> {
     let src = session_path(session_id, &format!("inbox/{seq}.json"))?;
     let dest = session_path(session_id, &format!("inbox/applied/{seq}.json"))?;
@@ -1250,6 +1258,7 @@ fn archive_inbox_op(session_id: &str, seq: u64) -> Result<(), String> {
     }
 }
 
+#[cfg(test)]
 fn dead_letter_inbox_op(session_id: &str, seq: u64, error: &str) -> Result<(), String> {
     let src = session_path(session_id, &format!("inbox/{seq}.json"))?;
     if let Some(parent) = session_path(session_id, "inbox/failed")?.parent() {
@@ -1279,12 +1288,12 @@ fn dead_letter_inbox_op(session_id: &str, seq: u64, error: &str) -> Result<(), S
 }
 
 /// Read the lowest pending inbox op, check `base_generation` against heartbeat,
-/// call `host_apply`, then archive the op. Does **not** write model.json —
-/// the caller (UI publisher or test) publishes the new snapshot.
+/// call the test's `host_apply`, then archive the op. Does **not** write model.json;
+/// the test publishes its new snapshot separately.
 ///
-/// `host_apply` must target the **live** engine (desktop) or a **separate**
-/// SketchManager loaded from the published model (tests). Never the attached
-/// MCP in-memory copy.
+/// `host_apply` targets a separate SketchManager loaded from the published model,
+/// never the attached MCP copy. Production inbox apply belongs to the desktop.
+#[cfg(test)]
 pub fn apply_inbox_op<F>(session_id: &str, host_apply: F) -> Result<ApplyResult, String>
 where
     F: FnOnce(&str, Value) -> Result<Value, String>,
@@ -1783,6 +1792,7 @@ pub fn session_status_json(
 /// Test/helper: replace model.json and bump heartbeat generation.
 /// Used after a successful host apply on a **separate** SketchManager.
 /// Not an MCP writeback path — the live UI publisher is the production writer.
+#[cfg(test)]
 pub fn publish_applied_snapshot(session_id: &str, model_json: &str) -> Result<u64, String> {
     let next = read_heartbeat_generation(session_id)
         .unwrap_or(0)
