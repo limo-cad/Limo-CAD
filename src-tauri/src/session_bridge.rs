@@ -803,12 +803,9 @@ fn retire_project_publisher(
         .by_project
         .insert(document.to_string(), replacement);
     let project = publisher.active_mut();
-    if let Err(error) = write_engine_revision_heartbeat(
-        project,
-        window_label,
-        Some(document),
-        process_instance_id,
-    ) {
+    if let Err(error) =
+        write_engine_revision_heartbeat(project, window_label, Some(document), process_instance_id)
+    {
         eprintln!("session bridge could not publish replacement identity: {error}");
     }
     project.session_id.clone()
@@ -923,7 +920,11 @@ impl SessionBridgeState {
         let result = replace();
         if !project_replacement_is_unchanged(&result) {
             retire_project_publisher(
-                publisher, window_label, &document, &self.process_instance_id, ProjectPublisher::new(),
+                publisher,
+                window_label,
+                &document,
+                &self.process_instance_id,
+                ProjectPublisher::new(),
             );
         }
         drop(publishers);
@@ -1154,7 +1155,9 @@ fn apply_project_replacement_inbox(
     let written = (|| -> Result<(), String> {
         if let Ok(result) = &outcome {
             atomic_write(
-                &inbox_dir(&session_id).join("results").join(format!("{seq}.json")),
+                &inbox_dir(&session_id)
+                    .join("results")
+                    .join(format!("{seq}.json")),
                 &result.to_string(),
             )?;
         }
@@ -1162,7 +1165,9 @@ fn apply_project_replacement_inbox(
         // before closed.json. Otherwise it can mistake an in-progress receipt
         // for unrelated work stranded on a retired session and return early.
         atomic_write(
-            &inbox_dir(&session_id).join(receipt_directory).join(format!("{seq}.json")),
+            &inbox_dir(&session_id)
+                .join(receipt_directory)
+                .join(format!("{seq}.json")),
             &receipt.to_string(),
         )?;
         fs::remove_file(inbox_dir(&session_id).join(format!("{seq}.json")))
@@ -1171,7 +1176,13 @@ fn apply_project_replacement_inbox(
     if let Some(replacement) = replacement {
         // Retire even when receipt IO fails: the native model has changed and
         // uncertainty must never authorize an old request against its successor.
-        retire_project_publisher(publisher, window_label, &document, process_instance_id, replacement);
+        retire_project_publisher(
+            publisher,
+            window_label,
+            &document,
+            process_instance_id,
+            replacement,
+        );
     }
     written?;
     let project = publisher.active_mut();
@@ -1208,7 +1219,10 @@ fn apply_or_reject_one_inbox_op(
     if let Some((document, session)) = expected_owner {
         if document != engine_active
             || publisher.active_project_session_id.as_deref() != Some(document)
-            || publisher.by_project.get(document).map(|project| project.session_id.as_str())
+            || publisher
+                .by_project
+                .get(document)
+                .map(|project| project.session_id.as_str())
                 != Some(session)
         {
             return Ok(Value::Null);
@@ -1415,7 +1429,13 @@ fn apply_or_reject_one_inbox_op(
     }
     if matches!(name.as_str(), "cad_new_project" | "cad_load_project_model") {
         let result = apply_project_replacement_inbox(
-            publisher, window_label, engine, &process_instance_id, &parsed, &name, seq,
+            publisher,
+            window_label,
+            engine,
+            &process_instance_id,
+            &parsed,
+            &name,
+            seq,
         );
         drop(publishers);
         let _ = state.write_process_instance_file();
@@ -1783,7 +1803,13 @@ pub fn mcp_session_bridge_apply_inbox(
             return Err("playback rejection needs a nonempty reason of at most 1000 bytes".into());
         }
     }
-    apply_or_reject_one_inbox_op(&state, window.label(), &engine, reject_reason.as_deref(), Some((&document, &session)))
+    apply_or_reject_one_inbox_op(
+        &state,
+        window.label(),
+        &engine,
+        reject_reason.as_deref(),
+        Some((&document, &session)),
+    )
 }
 
 #[cfg(test)]
@@ -2130,7 +2156,8 @@ mod tests {
                     engine.bind_project_session("same-tab")
                 }));
                 envelope_ok(&engine.engine_call("document_set_name", r#""Original""#));
-                let original_model = parse_engine_envelope(engine.engine_call("project_export_model", "")).unwrap();
+                let original_model =
+                    parse_engine_envelope(engine.engine_call("project_export_model", "")).unwrap();
                 let (original, ticket) = reserve(&state, "main");
                 let mut initial = payload(&original, ticket, "original");
                 initial.model_json = Some(original_model.as_str().unwrap().to_string());
@@ -2140,31 +2167,61 @@ mod tests {
                 // Encoding and prepare failures must retain the original UUID,
                 // model, export tickets and ability to accept later operations.
                 for (index, arguments) in [
-                    json!({}), json!({"model_json":17}), json!({"model_json":"not JSON"}),
+                    json!({}),
+                    json!({"model_json":17}),
+                    json!({"model_json":"not JSON"}),
                     json!({"model_json":r#"{"format":"nbcad-project","schema_version":9999}"#}),
-                ].into_iter().enumerate() {
+                ]
+                .into_iter()
+                .enumerate()
+                {
                     let seq = index as u64 + 1;
                     write_inbox(&original, seq, "cad_load_project_model", 1, arguments);
                     let rejected = apply_or_reject_one_inbox_op(
-                        &state, "main", &engine, None, Some(("same-tab", &original)),
-                    ).unwrap();
+                        &state,
+                        "main",
+                        &engine,
+                        None,
+                        Some(("same-tab", &original)),
+                    )
+                    .unwrap();
                     assert_eq!(rejected["applied"], false);
                     assert_eq!(rejected["dead_lettered"], true);
                     assert!(rejected.get("project_replaced").is_none());
                     assert_eq!(reserve(&state, "main").0, original);
                     assert!(!closed_tombstone_path(&original).exists());
-                    assert_eq!(parse_engine_envelope(engine.engine_call("project_export_model", "")).unwrap(), original_model);
+                    assert_eq!(
+                        parse_engine_envelope(engine.engine_call("project_export_model", ""))
+                            .unwrap(),
+                        original_model
+                    );
                 }
 
                 let donor = AppState::new();
                 envelope_ok(&donor.engine_call("document_set_name", r#""Replacement""#));
-                let model = parse_engine_envelope(donor.engine_call("project_export_model", "")).unwrap();
-                let arguments = if name == "cad_load_project_model" { json!({"model_json":model}) } else { json!({}) };
+                let model =
+                    parse_engine_envelope(donor.engine_call("project_export_model", "")).unwrap();
+                let arguments = if name == "cad_load_project_model" {
+                    json!({"model_json":model})
+                } else {
+                    json!({})
+                };
                 write_inbox(&original, 5, name, 1, arguments);
-                write_inbox(&original, 6, "cad_set_document_name", 2, json!({"name":"Stale queued edit"}));
+                write_inbox(
+                    &original,
+                    6,
+                    "cad_set_document_name",
+                    2,
+                    json!({"name":"Stale queued edit"}),
+                );
                 let applied = apply_or_reject_one_inbox_op(
-                    &state, "main", &engine, None, Some(("same-tab", &original)),
-                ).unwrap();
+                    &state,
+                    "main",
+                    &engine,
+                    None,
+                    Some(("same-tab", &original)),
+                )
+                .unwrap();
                 assert_eq!(applied["applied"], true);
                 assert_eq!(applied["project_replaced"], true);
                 assert_eq!(applied["session_id"], original);
@@ -2173,35 +2230,86 @@ mod tests {
                 let current = applied["active_session_id"].as_str().unwrap();
                 assert_ne!(current, original);
                 assert_eq!(applied["engine_revision"], 1);
-                assert_eq!(engine.document_snapshot().name, if name == "cad_load_project_model" { "Replacement" } else { "Untitled" });
+                assert_eq!(
+                    engine.document_snapshot().name,
+                    if name == "cad_load_project_model" {
+                        "Replacement"
+                    } else {
+                        "Untitled"
+                    }
+                );
                 assert!(closed_tombstone_path(&original).exists());
-                let receipt: Value = serde_json::from_str(&fs::read_to_string(
-                    inbox_dir(&original).join("applied/5.json"),
-                ).unwrap()).unwrap();
-                for key in ["project_replaced", "previous_session_id", "active_session_id", "document_id"] {
-                    assert_eq!(receipt[key], applied[key], "the initiating receipt must retain {key}");
+                let receipt: Value = serde_json::from_str(
+                    &fs::read_to_string(inbox_dir(&original).join("applied/5.json")).unwrap(),
+                )
+                .unwrap();
+                for key in [
+                    "project_replaced",
+                    "previous_session_id",
+                    "active_session_id",
+                    "document_id",
+                ] {
+                    assert_eq!(
+                        receipt[key], applied[key],
+                        "the initiating receipt must retain {key}"
+                    );
                 }
                 assert_eq!(receipt["name"], name);
                 assert_eq!(receipt["base_generation"], 1);
-                let result: Value = serde_json::from_str(&fs::read_to_string(
-                    inbox_dir(&original).join("results/5.json"),
-                ).unwrap()).unwrap();
+                let result: Value = serde_json::from_str(
+                    &fs::read_to_string(inbox_dir(&original).join("results/5.json")).unwrap(),
+                )
+                .unwrap();
                 assert_eq!(result, applied["result"]);
-                assert_eq!(fs::read_to_string(dir.join(&original).join("model.json")).unwrap(), original_model.as_str().unwrap());
+                assert_eq!(
+                    fs::read_to_string(dir.join(&original).join("model.json")).unwrap(),
+                    original_model.as_str().unwrap()
+                );
                 assert_eq!(pending_inbox_seqs(&original), vec![6]);
-                assert!(apply_or_reject_one_inbox_op(&state, "main", &engine, None,
-                    Some(("same-tab", &original))).unwrap().is_null());
-                assert_eq!(apply_one_inbox_op(&state, "main", &engine).unwrap()["applied"], false);
+                assert!(apply_or_reject_one_inbox_op(
+                    &state,
+                    "main",
+                    &engine,
+                    None,
+                    Some(("same-tab", &original))
+                )
+                .unwrap()
+                .is_null());
+                assert_eq!(
+                    apply_one_inbox_op(&state, "main", &engine).unwrap()["applied"],
+                    false
+                );
                 assert_eq!(pending_inbox_seqs(&original), vec![6]);
-                assert_eq!(state.write_for_window("main", payload(&original, stale_ticket, "stale")).unwrap()["skipped"], true);
-                assert!(state.active_script_session("main", &engine, "same-tab", current).is_err());
+                assert_eq!(
+                    state
+                        .write_for_window("main", payload(&original, stale_ticket, "stale"))
+                        .unwrap()["skipped"],
+                    true
+                );
+                assert!(state
+                    .active_script_session("main", &engine, "same-tab", current)
+                    .is_err());
                 let (published, ticket) = reserve(&state, "main");
                 assert_eq!(published, current);
                 let mut publication = payload(current, ticket, "replacement");
-                publication.model_json = Some(parse_engine_envelope(engine.engine_call("project_export_model", "")).unwrap().as_str().unwrap().to_string());
+                publication.model_json = Some(
+                    parse_engine_envelope(engine.engine_call("project_export_model", ""))
+                        .unwrap()
+                        .as_str()
+                        .unwrap()
+                        .to_string(),
+                );
                 state.write_for_window("main", publication).unwrap();
-                assert_eq!(state.active_script_session("main", &engine, "same-tab", current).unwrap(), current);
-                assert_eq!(read_process_lease(&state, &dir)["windows"][0]["active_session_id"], current);
+                assert_eq!(
+                    state
+                        .active_script_session("main", &engine, "same-tab", current)
+                        .unwrap(),
+                    current
+                );
+                assert_eq!(
+                    read_process_lease(&state, &dir)["windows"][0]["active_session_id"],
+                    current
+                );
             }
         }
         std::env::remove_var("NBCAD_SESSION_DIR");
@@ -2337,17 +2445,46 @@ mod tests {
                 current
             );
 
-            write_inbox(&current, 1, "cad_set_document_name", 1, json!({"name":"Current edit"}));
+            write_inbox(
+                &current,
+                1,
+                "cad_set_document_name",
+                1,
+                json!({"name":"Current edit"}),
+            );
             for reason in [None, Some("Playback stopped in original document")] {
-                assert!(apply_or_reject_one_inbox_op(&state, "main", &engine, reason,
-                    Some(("same-tab", &original))).unwrap().is_null());
-                assert!(apply_or_reject_one_inbox_op(&state, "main", &engine, reason,
-                    Some(("another-tab", &current))).unwrap().is_null());
+                assert!(apply_or_reject_one_inbox_op(
+                    &state,
+                    "main",
+                    &engine,
+                    reason,
+                    Some(("same-tab", &original))
+                )
+                .unwrap()
+                .is_null());
+                assert!(apply_or_reject_one_inbox_op(
+                    &state,
+                    "main",
+                    &engine,
+                    reason,
+                    Some(("another-tab", &current))
+                )
+                .unwrap()
+                .is_null());
                 assert_eq!(pending_inbox_seqs(&current), vec![1]);
                 assert_eq!(engine.document_snapshot().name, "Replacement");
             }
-            assert_eq!(apply_or_reject_one_inbox_op(&state, "main", &engine, None,
-                Some(("same-tab", &current))).unwrap()["applied"], true);
+            assert_eq!(
+                apply_or_reject_one_inbox_op(
+                    &state,
+                    "main",
+                    &engine,
+                    None,
+                    Some(("same-tab", &current))
+                )
+                .unwrap()["applied"],
+                true
+            );
             assert_eq!(engine.document_snapshot().name, "Current edit");
 
             // An unverified failure cannot preserve script access. A failure
