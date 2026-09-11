@@ -326,6 +326,7 @@ impl SessionBridgeState {
         Ok(project.session_id.clone())
     }
 
+    #[cfg(test)]
     fn reserve_for_window(&self, window_label: &str) -> Result<serde_json::Value, String> {
         self.reserve_for_window_on_project(window_label, None)
     }
@@ -655,6 +656,7 @@ fn pending_inbox_seqs(session_id: &str) -> Vec<u64> {
     seqs
 }
 
+#[cfg(test)]
 fn read_session_generation(session_id: &str) -> Option<u64> {
     let body = fs::read_to_string(session_root().join(session_id).join("heartbeat.json")).ok()?;
     let parsed: Value = serde_json::from_str(&body).ok()?;
@@ -932,6 +934,7 @@ impl SessionBridgeState {
         result
     }
 
+    #[cfg(test)]
     fn engine_revision_for_window(&self, window_label: &str) -> Result<Option<u64>, String> {
         let mut publishers = self
             .publishers
