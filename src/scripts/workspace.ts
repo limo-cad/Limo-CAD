@@ -6,7 +6,7 @@ import type { SolidSceneDto } from '../engine/types';
 import { chooseOpenFile, chooseSaveTarget, writeSaveTarget } from '../files/fileIO';
 import { newProject } from '../files/projectFiles';
 import { presentation } from '../operationPlayback';
-import { publishNow } from '../sessionBridge';
+import { publishCurrentSession } from '../sessionBridge';
 import { useAppStore } from '../store/appStore';
 
 export interface ScriptExample {
@@ -51,7 +51,13 @@ export const useScriptWorkspace = create<ScriptWorkspace>(() => ({
 
 let examplesRequest: Promise<ScriptExample[]> | null = null;
 const previews = new Map<string, Promise<ScriptPreviewFrame[]>>();
-let currentRun: { cancelled: boolean; nativeStarted: boolean } | null = null;
+let currentRun: { cancelled: boolean; nativeStarted: boolean; ownerRevision: number | null } | null = null;
+let documentRevision = presentation.documentVersion();
+presentation.subscribe(() => {
+  if (documentRevision === presentation.documentVersion()) return;
+  documentRevision = presentation.documentVersion();
+  useScriptWorkspace.setState({completed: false});
+});
 export function errorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error) return String(error.message);
   return String(error);
@@ -153,39 +159,59 @@ export async function runLoadedScript(): Promise<void> {
     return;
   }
   useScriptWorkspace.setState({ running: true, completed: false, error: null });
-  const attempt = { cancelled: false, nativeStarted: false };
+  const attempt = { cancelled: false, nativeStarted: false, ownerRevision: presentation.documentVersion() as number | null };
   currentRun = attempt;
   const checkCancelled = () => {
+    if (attempt.ownerRevision !== null && attempt.ownerRevision !== presentation.documentVersion()) {
+      attempt.cancelled = true;
+      throw new Error('The document changed during script playback. The previous design is preserved.');
+    }
     if (attempt.cancelled) throw new Error('Script stopped.');
   };
   // Stop can arrive while the native worker is starting. Preserve that intent
   // when its initial configure message arrives, rather than clearing the stop.
   const unsubscribe = presentation.subscribe(() => {
     const playback = presentation.snapshot();
-    if (attempt.cancelled && attempt.nativeStarted && !playback.stopped && !playback.finished) {
+    if (attempt.ownerRevision !== null && attempt.ownerRevision !== presentation.documentVersion()) attempt.cancelled = true;
+    if (attempt.cancelled && attempt.nativeStarted && playback.active
+      && attempt.ownerRevision === presentation.documentVersion() && !playback.stopped && !playback.finished) {
       presentation.control({ command: 'stop' });
     }
   });
   try {
     // The shared UI receipt waits for document handoff, then acknowledges the
     // new session. Playback itself stays asynchronous so controls remain usable.
-    await trackEngineOperation(async operationOwner => {
+    const owner = await trackEngineOperation(async operationOwner => {
       // Validate before creating a document or changing the existing one.
       const info = await inspect(state.source);
       checkCancelled();
       useScriptWorkspace.setState({ info });
       await Promise.allSettled([...previews.values()]);
       checkCancelled();
+      // This one deliberate New is the handoff from the user's retained
+      // design. Every replacement after it invalidates this run's ownership.
+      const newDocumentRevision = presentation.documentVersion() + 1;
+      attempt.ownerRevision = null;
       if (!await newProject(operationOwner)) throw new Error('A new design could not be created.');
+      attempt.ownerRevision = newDocumentRevision;
       checkCancelled();
-      if (!await publishNow()) throw new Error('The new design is not ready. Please try Run again.');
+      const owner = await publishCurrentSession();
       checkCancelled();
+      if (!owner?.documentId) throw new Error('The new design is not ready. Please try Run again.');
+      return owner;
     });
+    checkCancelled();
     attempt.nativeStarted = true;
-    await invoke('native_script_run', { source: state.source, mode: state.mode, speed: state.speed });
+    await invoke('native_script_run', { source: state.source, mode: state.mode, speed: state.speed,
+      documentId: owner.documentId, sessionId: owner.sessionId });
     checkCancelled();
     useScriptWorkspace.setState({ completed: true });
   } catch (error) {
+    const playback = presentation.snapshot();
+    if (attempt.nativeStarted && attempt.ownerRevision === presentation.documentVersion()
+      && playback.active && !playback.finished && !playback.stopped) {
+      presentation.control({command: 'stop'});
+    }
     useScriptWorkspace.setState({ error: errorMessage(error) });
   } finally {
     unsubscribe();
@@ -195,7 +221,9 @@ export async function runLoadedScript(): Promise<void> {
 }
 export function stopScript(): void {
   if (currentRun) currentRun.cancelled = true;
-  if (currentRun?.nativeStarted) presentation.control({ command: 'stop' });
+  if (currentRun?.nativeStarted && currentRun.ownerRevision === presentation.documentVersion()) {
+    presentation.control({ command: 'stop' });
+  }
 }
 
 /** Cached immutable geometry, computed in an unattached native engine. */

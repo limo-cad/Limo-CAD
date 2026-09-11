@@ -225,6 +225,20 @@ try {
  });
  console.log('PASS production history editor callbacks: '+JSON.stringify(historyEditors));
  await historyPage.close();
+ const ownershipPage=await browser.newPage();
+ await ownershipPage.goto(server.resolvedUrls.local[0]+'mcp-contract');
+ const ownership=await ownershipPage.evaluate(async()=>{
+  const {checkScriptDocumentOwnership}=await import('/src/scripts/documentOwnership.browser.test.ts');
+  const {checkInboxDocumentOwnership}=await import('/src/scripts/inboxOwnership.browser.test.ts');
+  let timer;
+  try{return await Promise.race([(async()=>({
+   script:await checkScriptDocumentOwnership(),inbox:await checkInboxDocumentOwnership(),
+  }))(),new Promise((_,reject)=>{
+   timer=setTimeout(()=>reject(new Error('Script document ownership contract timed out')),15000);
+  })]);}finally{clearTimeout(timer);}
+ });
+ console.log('PASS production script document ownership: '+JSON.stringify(ownership));
+ await ownershipPage.close();
 } finally {await browser?.close();await server.close();}
 
 

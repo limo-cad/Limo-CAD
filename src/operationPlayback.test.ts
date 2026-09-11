@@ -65,6 +65,12 @@ const stoppedSnapshot = completedRun.snapshot();
 completedRun.applied('File: save');
 check(completedRun.snapshot() === stoppedSnapshot && stoppedSnapshot.step_index === 1 && !stoppedSnapshot.finished,
   'A stopped run retains partial progress and its last operation');
+const stoppedDocumentVersion = completedRun.documentVersion();
+completedRun.documentChanged();
+check(completedRun.documentVersion() !== stoppedDocumentVersion && completedRun.canApply()
+  && !completedRun.snapshot().active && !completedRun.snapshot().visible && !completedRun.snapshot().stopped
+  && completedRun.snapshot().text === '' && completedRun.snapshot().step_count === 0,
+  'A document boundary releases the old stop gate, caption, progress and controls');
 player.configurePace(350);
 player.modelApplied();
 check(!player.canApply(), 'Explicit legacy pace remains supported');

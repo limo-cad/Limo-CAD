@@ -782,7 +782,7 @@ export interface AppState {
   setActiveTab: (tab: string) => void;
   loadDocument: () => Promise<void>;
   /** Refresh live engine state after MCP inbox apply without clearing dirty. */
-  refreshAfterInboxApply: (opName?: string) => Promise<void>;
+  refreshAfterInboxApply: (opName?: string, ownerRevision?: number) => Promise<void>;
   setDocument: (doc: DocumentDto) => void;
   setActiveSketch: (sketch: SketchDto | null) => void;
   setFinishedSketches: (sketches: SketchDto[]) => void;
@@ -1258,10 +1258,13 @@ export const useAppStore = create<AppState>()((set) => ({
     presentation.documentChanged();
   },
 
-  refreshAfterInboxApply: async (opName) => {
+  refreshAfterInboxApply: async (opName, ownerRevision = presentation.documentVersion()) => {
+    const ownsDocument = () => ownerRevision === presentation.documentVersion();
     const engine = await getEngine();
+    if (!ownsDocument()) return;
     if (opName?.startsWith('drawing_')) {
       const drawingDocument=await engine.drawingDocument();
+      if (!ownsDocument()) return;
       set({drawingDocument,dirty:true,activeTab:'drawing',drawingTool:null,drawingPendingViewKind:null,
         selectedDrawingViewId:null,selectedDrawingAnnotationId:null,drawingSheetSetupOpen:drawingDocument.sheets.length===0});
       return;
@@ -1278,6 +1281,7 @@ export const useAppStore = create<AppState>()((set) => ({
         engine.solidScene(),
         engine.getDocument(),
       ]);
+      if (!ownsDocument()) return;
       set((state) => ({
         document: doc,
         solidScene,
@@ -1306,6 +1310,7 @@ export const useAppStore = create<AppState>()((set) => ({
       engine.projectVisibility(),
       engine.activeSketch(),
     ]);
+    if (!ownsDocument()) return;
     set({
       document: doc,
       engineKind: engine.kind,

@@ -124,9 +124,22 @@ interface PublishWriteResult {
   engine_revision?: number;
 }
 
+interface PublishedSession {
+  sessionId: string;
+  documentId: string | null;
+}
+let inboxOwner: (PublishedSession & {documentRevision: number}) | null = null;
+
 export async function publishNow(): Promise<boolean> {
+  return (await publishCurrentSession()) !== null;
+}
+
+/** The identity belongs to the exact reservation whose snapshot write passed,
+ * not a later active-tab query that could silently retarget script startup. */
+export async function publishCurrentSession(): Promise<PublishedSession | null> {
   const state = useAppStore.getState();
-  if (state.engineKind !== 'tauri') return false;
+  if (state.engineKind !== 'tauri') return null;
+  const documentRevision = presentation.documentVersion();
   const focus = focusFromUi(state.mode, state.activeTool, activeSolidDialog(state));
   try {
     // Reserve captures engine_revision and project/session identity before
@@ -162,20 +175,38 @@ export async function publishNow(): Promise<boolean> {
       ) {
         continue;
       }
-      return !written?.skipped;
+      if (written?.skipped || documentRevision !== presentation.documentVersion()) return null;
+      const owner = {
+        sessionId: reservation.session_id, documentId: reservation.project_session_id ?? null,
+      };
+      inboxOwner = {...owner, documentRevision};
+      return owner;
     }
   } catch (error) {
     console.debug('[sessionBridge] publish failed', error);
   }
-  return false;
+  return null;
 }
 
 /** Apply one MCP inbox op on the live engine, then let the publisher run. */
-async function applyInboxNow(): Promise<void> {
+export async function applyInboxNow(): Promise<void> {
   const state = useAppStore.getState();
   if (state.engineKind !== 'tauri' || inboxApplying) return;
+  const ownerRevision = presentation.documentVersion();
+  const ownsDocument = () => ownerRevision === presentation.documentVersion();
+  // Reuse the exact successfully published identity. Asking native for the
+  // current session during a delayed poll could instead return a replacement.
+  if (inboxOwner?.documentRevision !== ownerRevision || !inboxOwner.documentId) return;
+  const owner = {documentId: inboxOwner.documentId, sessionId: inboxOwner.sessionId};
   if (presentation.snapshot().stopped) {
-    await invoke('mcp_session_bridge_apply_inbox', { rejectReason: 'Playback stopped' });
+    inboxApplying = true;
+    try {
+      await invoke('mcp_session_bridge_apply_inbox', {...owner, rejectReason: 'Playback stopped'});
+    } catch (error) {
+      console.debug('[sessionBridge] inbox reject failed', error);
+    } finally {
+      inboxApplying = false;
+    }
     return;
   }
   // Control requests stay responsive in their own lane; no paused promise
@@ -190,7 +221,8 @@ async function applyInboxNow(): Promise<void> {
   try {
     const drawingBefore=useAppStore.getState().drawingDocument;
     const drawingProject=currentHistoryProjectKey();
-    const result = await invoke<InboxApplyResult>('mcp_session_bridge_apply_inbox');
+    const result = await invoke<InboxApplyResult>('mcp_session_bridge_apply_inbox', owner);
+    if (!ownsDocument()) return;
     changed = Boolean(result?.applied);
     if (result?.dead_lettered) {
       console.warn('[sessionBridge] inbox op dead-lettered; queue unblocked', result);
@@ -205,8 +237,9 @@ async function applyInboxNow(): Promise<void> {
         useAppStore.getState().applySolidUpdate(result.result);
       } else {
         // Targeted / live refresh with dirty:true — never loadDocument (clears dirty).
-        await useAppStore.getState().refreshAfterInboxApply(result.name);
+        await useAppStore.getState().refreshAfterInboxApply(result.name, ownerRevision);
       }
+      if (!ownsDocument()) return;
       published = true;
       if(result.name?.startsWith('drawing_')&&result.name!=='drawing_select_sheet') {
         recordDrawingHistory(drawingProject,drawingBefore,useAppStore.getState().drawingDocument);
@@ -221,15 +254,17 @@ async function applyInboxNow(): Promise<void> {
       // Native already archived the seq and bumped engine_revision. Publish
       // even if leftover store refresh throws so cad_refresh sees the live
       // engine. Next applyInboxNow is a no-op on the archived seq.
-      await presentOperation(result.name ?? 'Model operation');
+      if (ownsDocument()) await presentOperation(result.name ?? 'Model operation');
       // Sequential scripts need this result before their next operation.
       // Publishing now removes the old 300 ms debounce from every command.
-      if (!await publishNow()) scheduleSessionBridgePublish();
+      if (ownsDocument() && !await publishNow() && ownsDocument()) scheduleSessionBridgePublish();
     }
   } catch (error) {
     console.debug('[sessionBridge] inbox apply failed', error);
   } finally {
-    releaseTransition(changed, published);
+    // The replacement has its own transition/publication. A late result from
+    // its predecessor must neither invalidate nor bless the current model.
+    releaseTransition(ownsDocument() && changed, published);
     inboxApplying = false;
   }
 }
