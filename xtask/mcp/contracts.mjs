@@ -14,7 +14,17 @@ function visit(node){
 }
 visit(dispatcher);
 
-const server=await createServer({configFile:false,optimizeDeps:{noDiscovery:true,entries:[],include:['react','react-dom/client','react/jsx-runtime','react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0},logLevel:'error',plugins:[{name:'mcp-contract',configureServer(server){server.middlewares.use('/mcp-contract',(_req,res)=>{
+const wasmBindingContract={name:'wasm-binding-contract',resolveId(id){if(id.endsWith('/engine-wasm/pkg/nbcad_wasm'))return '\0wasm-binding-contract';},load(id){
+ if(id!=='\0wasm-binding-contract')return;
+ // Only the generated binding is replaced; adapter methods and context switching are real.
+ return `const ok=value=>JSON.stringify({ok:true,value}); export default async function init(){}
+ export class WasmEngine { model='original model';
+ project_export_model(){return ok(this.model)}
+ document_set_name(payload){this.model=JSON.parse(payload);return this.document()}
+ document(){return ok({name:this.model,features:[],rollback_index:0,browser:[],settings:{units:'mm'}})}
+ solid_scene(){return ok({bodies:[],errors:[]})} free(){} }`;
+}};
+const server=await createServer({configFile:false,optimizeDeps:{noDiscovery:true,entries:[],include:['react','react-dom/client','react/jsx-runtime','react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0,watch:null},logLevel:'error',plugins:[wasmBindingContract,{name:'mcp-contract',configureServer(server){server.middlewares.use('/mcp-contract',(_req,res)=>{
  res.setHeader('Content-Type','text/html');
  res.end('<!doctype html><html><body><main data-mcp-surface="test-surface"><button>Run</button><button disabled>Disabled</button><label>Name<input value="old"></label><label>Choice<select><option value="a">A</option><option disabled value="b">B</option></select></label><button id="hidden" hidden>Hidden</button></main></body></html>');
 });}}]});
@@ -178,6 +188,19 @@ try {
  });
  console.log('PASS production project-open/export recovery: '+JSON.stringify(recovery));
  await recoveryPage.close();
+ const stepPage=await browser.newPage();
+ await stepPage.goto(server.resolvedUrls.local[0]+'mcp-contract');
+ const step=await stepPage.evaluate(async()=>{
+  const {checkStepExportOwnership}=await import('/src/files/projectFiles.browser.test.ts');
+  return checkStepExportOwnership();
+ });
+ console.log('PASS production STEP export ownership: '+JSON.stringify(step));
+ const browserStep=await stepPage.evaluate(async()=>{
+  const {checkBrowserStepExportOwnership}=await import('/src/engine/stepExport.browser.test.ts');
+  return checkBrowserStepExportOwnership();
+ });
+ console.log('PASS browser STEP adapter ownership: '+JSON.stringify(browserStep));
+ await stepPage.close();
 } finally {await browser?.close();await server.close();}
 
 

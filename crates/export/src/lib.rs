@@ -102,17 +102,8 @@ impl Default for MeshExportRequest {
 
 impl MeshExportRequest {
     pub fn check_model_snapshot(&self, current: &str) -> Result<(), ExportError> {
-        if self
-            .expected_model_json
-            .as_deref()
-            .is_some_and(|expected| expected != current)
-        {
-            return Err(ExportError(
-                "The document changed while choosing mesh export options. Start the export again."
-                    .into(),
-            ));
-        }
-        Ok(())
+        nbcad_solid::check_export_model_snapshot(self.expected_model_json.as_deref(), current)
+            .map_err(|message| ExportError(message.into()))
     }
 }
 

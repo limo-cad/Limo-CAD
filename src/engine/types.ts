@@ -2265,6 +2265,8 @@ export interface StepOccurrencePlacementDto {
 
 /** Empty body_ids exports every active body. */
 export interface StepExportRequest {
+  /** Optional exact project snapshot; checked atomically before native export. */
+  expected_model_json?: string;
   body_ids: number[];
   thread_metadata: StepThreadMetadataDto[];
   /** Omit or leave empty for a raw part export. */

@@ -674,6 +674,9 @@ pub struct StepOccurrencePlacementDto {
 /// STEP export selection. An empty body list means every active body.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct StepExportRequest {
+    /// Hosts enforce this precondition under the same ownership lock as export.
+    #[serde(default)]
+    pub expected_model_json: Option<String>,
     #[serde(default)]
     pub body_ids: Vec<BodyId>,
     /// Namespaced manufacturing metadata written into FILE_DESCRIPTION.
@@ -684,6 +687,14 @@ pub struct StepExportRequest {
     /// unplaced copy per source body. Empty retains part-export behavior.
     #[serde(default)]
     pub occurrences: Vec<StepOccurrencePlacementDto>,
+}
+
+/// Shared optimistic precondition for exact and mesh export hosts.
+pub fn check_export_model_snapshot(expected: Option<&str>, current: &str) -> Result<(), &'static str> {
+    if expected.is_some_and(|expected| expected != current) {
+        return Err("The document changed while preparing export. Start the export again.");
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-import { runMeshExport } from './meshExportFlow';
+import { runExport } from './exportFlow';
 import type { MeshExportScope } from '../engine/types';
 import { ProjectTransitions } from './projectTransitions';
 
@@ -36,7 +36,7 @@ function fixture() {
       same(owner, capturedOwner, 'Selection document changed');
     },
     async captureModel() { return model; },
-    async chooseScope() { calls.push('scope'); choosing.resolve(); return choose.promise; },
+    async chooseOptions() { calls.push('scope'); choosing.resolve(); return choose.promise; },
     async render(_scope: MeshExportScope, expected: string) {
       calls.push('render');
       same(model, expected, 'Native snapshot precondition failed');
@@ -53,7 +53,7 @@ function fixture() {
 
 async function main() {
   const pending = fixture();
-  const exportPromise = runMeshExport(pending.flow);
+  const exportPromise = runExport(pending.flow);
   await pending.choosing.promise;
   pending.openFromMcp();
   pending.choose.resolve('definition');
@@ -64,7 +64,7 @@ async function main() {
   const capturing = fixture();
   const capture = deferred<string>();
   capturing.flow.captureModel = () => capture.promise;
-  const capturePromise = runMeshExport(capturing.flow);
+  const capturePromise = runExport(capturing.flow);
   capturing.openFromMcp();
   capture.resolve('model B');
   await rejects(capturePromise, /Selection document changed/);
@@ -77,7 +77,7 @@ async function main() {
     captureStarted.resolve();
     return unpublishedSnapshot.promise;
   };
-  const unpublishedExport = runMeshExport(unpublished.flow);
+  const unpublishedExport = runExport(unpublished.flow);
   await captureStarted.promise;
   const finishOpen = unpublished.transitions.begin();
   unpublished.openFromMcp(false); // Native B, but A's store objects are still visible.
@@ -95,7 +95,7 @@ async function main() {
     if (++ownershipChecks === 3) waitingOnPoll.resolve();
     await originalOwnerCheck();
   };
-  const polledExport = runMeshExport(polling.flow);
+  const polledExport = runExport(polling.flow);
   await polling.choosing.promise;
   const finishEmptyPoll = polling.transitions.begin();
   polling.choose.resolve('definition');
@@ -122,21 +122,21 @@ async function main() {
     return originalRender(scope, expected);
   };
   queued.choose.resolve('assembly');
-  await rejects(runMeshExport(queued.flow), /Native snapshot precondition failed/);
+  await rejects(runExport(queued.flow), /Native snapshot precondition failed/);
   same(queued.calls, ['scope', 'render']);
   same(queued.written, []);
 
   const saving = fixture();
   saving.flow.chooseTarget = async () => { saving.openFromMcp(); return 'A.3mf'; };
   saving.choose.resolve('definition');
-  same(await runMeshExport(saving.flow), true);
+  same(await runExport(saving.flow), true);
   same(saving.written, ['A.3mf:model A'], 'Save must write already captured bytes');
 
   const cancelled = fixture();
   cancelled.choose.resolve(null);
-  same(await runMeshExport(cancelled.flow), false);
+  same(await runExport(cancelled.flow), false);
   same(cancelled.calls, ['scope']);
   same(cancelled.written, []);
-  console.log('Mesh export ownership, same-tab replacement, queued edit and captured-save checks passed.');
+  console.log('Export ownership, same-tab replacement, queued edit and captured-save checks passed.');
 }
 await main();

@@ -1,4 +1,4 @@
-const changedMessage = 'The document changed while choosing mesh export options. Start the export again.';
+const changedMessage = 'The document changed while preparing export. Start the export again.';
 
 /** Own a native project change until its frontend state has been published.
  * A tab ID or store object cannot identify the model during that interval. */

@@ -5,7 +5,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MeshExportDialog } from '../components/MeshExportDialog';
 import { useAppStore } from '../store/appStore';
-import { openProject, closeProject, export3mf, exportStl } from './projectFiles';
+import { openProject, closeProject, export3mf, exportStl, exportStep } from './projectFiles';
 import { createNbcadArchive } from './nbcad';
 import { I18nProvider } from '../i18n';
 import { switchProjectTab } from './projectTabs';
@@ -151,6 +151,94 @@ export async function checkProjectLoadRecovery() {
   } finally {
     root.unmount();
     rootElement.remove();
+    delete w.__TAURI_INTERNALS__;
+  }
+}
+
+/** Exercise STEP's real frontend and Tauri adapter at the native IPC boundary. */
+export async function checkStepExportOwnership() {
+  const check = (value: unknown, message: string) => { if (!value) throw new Error(message); };
+  const documentA: DocumentDto = {name: 'Threaded part A', settings: {units: 'mm'},
+    features: [{id: 3, name: 'Tapped hole', kind: 'hole', suppressed: false, status: {state: 'ok'}}],
+    rollback_index: 1, browser: []};
+  const documentB: DocumentDto = {...documentA, name: 'Unrelated part B'};
+  const scene: SolidSceneDto = {bodies: [{id: 7, name: 'Part A', feature_id: 3,
+    mesh: {positions: [], normals: [], indices: []}, faces: [], edges: []}], errors: []};
+  const original = useAppStore.getState();
+  const modelA = JSON.stringify({document: documentA});
+  const modelB = JSON.stringify({document: documentB});
+  let nativeModel = modelA;
+  let mode: 'picker' | 'metadata' | 'queued' | 'cancel' = 'picker';
+  let captured: Record<string, unknown>[] = [];
+  let saves = 0;
+  let writes: {path: string; bytes: number[]}[] = [];
+  const trace: string[] = [];
+  const reset = () => {
+    nativeModel = modelA;
+    captured = []; writes = []; saves = 0; trace.length = 0;
+    useAppStore.setState({document: documentA, solidScene: scene, dirty: false, solidBusy: false,
+      activeSketch: null, activeProjectTabId: 'step-owner', selectedBody: 7, selectedOccurrenceId: 71,
+      assemblySolution: {...original.assemblySolution, instance_body_poses: [{body_id: 7,
+        occurrence_id: 71, component_id: 17, visible: true, translation: [42, 0, 0], rotation: [0, 0, 0, 1]}]},
+    });
+  };
+  const replaceOwner = () => { nativeModel = modelB; useAppStore.setState({document: documentB}); };
+  const ok = (value: unknown) => JSON.stringify({ok: true, value});
+  const w = window as typeof window & {__TAURI_INTERNALS__?: {invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>}};
+  w.__TAURI_INTERNALS__ = {async invoke(command, args = {}) {
+    if (command === 'engine_project_export_model') return ok(nativeModel);
+    if (command === 'engine_hole_definitions') {
+      trace.push('metadata');
+      if (mode === 'metadata') replaceOwner();
+      return ok([{body_id: 7, feature_id: 3, name: 'Tapped hole', diameter: 5,
+        positions: [{x: 0, y: 0}], thread: {designation: 'M6 x 1 - 6H'}}]);
+    }
+    if (command === 'engine_body_feature_definitions') return ok([]);
+    if (command === 'engine_export_step') {
+      const request = JSON.parse(args.payload as string);
+      if (mode === 'queued') nativeModel = modelB;
+      if (request.expected_model_json !== undefined) {
+        check(request.expected_model_json === nativeModel, 'The document changed before native STEP export');
+      }
+      trace.push('render'); captured.push(request);
+      return Array.from(new TextEncoder().encode(JSON.stringify({model: nativeModel, request})));
+    }
+    if (command === 'plugin:dialog|save') {
+      trace.push('picker'); saves++;
+      if (mode === 'picker') replaceOwner();
+      return mode === 'cancel' ? null : (args.options as {defaultPath: string}).defaultPath;
+    }
+    if (command === 'write_binary_file_atomic') {
+      trace.push('write'); writes.push({path: args.path as string, bytes: args.bytes as number[]}); return null;
+    }
+    throw new Error(`Unexpected STEP command: ${command}`);
+  }};
+  try {
+    reset();
+    check(await exportStep(true), 'Selected STEP must save captured bytes');
+    check(nativeModel === modelB && useAppStore.getState().document === documentB, 'Save picker must really switch owners');
+    check(JSON.stringify(trace) === JSON.stringify(['metadata', 'render', 'picker', 'write']), 'STEP must capture metadata and bytes before Save');
+    check(captured.length === 1 && writes.length === 1 && writes[0].path === 'Threaded part A-Body7.step', 'STEP keeps the original selection/name');
+    check(captured[0].expected_model_json === modelA, 'STEP must include the exact captured model precondition');
+    const saved = JSON.parse(new TextDecoder().decode(new Uint8Array(writes[0].bytes)));
+    check(saved.model === modelA && JSON.stringify(saved.request.body_ids) === '[7]', 'Saved STEP belongs to A');
+    check(saved.request.thread_metadata[0].thread.designation === 'M6 x 1 - 6H', 'Saved metadata belongs to A');
+    check(saved.request.occurrences[0].occurrence_id === 71
+      && JSON.stringify(saved.request.occurrences[0].translation) === '[42,0,0]', 'Saved placement belongs to A');
+    for (const failure of ['metadata', 'queued'] as const) {
+      reset(); mode = failure;
+      let error: unknown;
+      try { await exportStep(true); } catch (cause) { error = cause; }
+      check(/document changed/i.test(String(error)), `${failure} owner change must reject`);
+      check(captured.length === 0 && saves === 0 && writes.length === 0, 'Rejected STEP cannot render or write');
+    }
+    reset(); mode = 'cancel';
+    check(!await exportStep(false), 'Cancel keeps the document without a saved file');
+    check(captured.length === 1 && saves === 1 && writes.length === 0, 'Cancel discards already captured bytes');
+    return {capturedBeforePicker: true, selectionMetadataAndPlacement: true,
+      metadataOwnerGuard: true, queuedNativeGuard: true, cancellation: true};
+  } finally {
+    useAppStore.setState(original);
     delete w.__TAURI_INTERNALS__;
   }
 }

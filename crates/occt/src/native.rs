@@ -1881,6 +1881,7 @@ mod tests {
 
         let placed_step = kernel
             .export_step(&StepExportRequest {
+                expected_model_json: None,
                 body_ids: Vec::new(),
                 thread_metadata: Vec::new(),
                 occurrences: vec![StepOccurrencePlacementDto {
@@ -1914,6 +1915,7 @@ mod tests {
 
         let metadata_step = kernel
             .export_step(&StepExportRequest {
+                expected_model_json: None,
                 body_ids: Vec::new(),
                 thread_metadata: vec![StepThreadMetadataDto {
                     body_id: BodyId(1),

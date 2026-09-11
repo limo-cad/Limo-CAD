@@ -831,7 +831,15 @@ export class WasmEngine implements Engine {
   }
 
   async exportStep(request: StepExportRequest): Promise<Uint8Array> {
-    return (await this.browserKernel()).exportStep(request);
+    const owner = this.activeContext;
+    const kernel = await this.browserKernel();
+    // Lazy OCCT initialization yields to tab changes and model edits. After
+    // checking ownership, no await may separate the snapshot check and export.
+    if (this.activeContext !== owner || (request.expected_model_json !== undefined
+      && unwrapEnvelope<string>(owner.inner.project_export_model()) !== request.expected_model_json)) {
+      throw new Error('The document changed while preparing export. Start the export again.');
+    }
+    return kernel.exportStep(request);
   }
 
   async exportStl(request: MeshExportRequest): Promise<Uint8Array> {

@@ -344,6 +344,15 @@ impl CadServer {
                     serde_json::from_value(arguments)
                         .map_err(|error| format!("invalid STEP export request: {error}"))?
                 };
+                if request.expected_model_json.is_some() {
+                    nbcad_solid::check_export_model_snapshot(
+                        request.expected_model_json.as_deref(),
+                        &self
+                            .manager
+                            .export_project_model()
+                            .map_err(|e| e.to_string())?,
+                    )?;
+                }
                 let bytes = self
                     .kernel
                     .export_step(&request)
@@ -3441,6 +3450,19 @@ fn tool_specs() -> Vec<ToolSpec> {
             Payload::Object,
             object_schema(
                 json!({
+                    "expected_model_json": {"type":"string","description":"Optional exact cad_project_model string. Rejects if the current model differs before exporting geometry."},
+                    "occurrences": {"type":"array","description":"Optional solved occurrence copies; omit for part-local geometry.","items":{
+                        "type":"object","additionalProperties":false,
+                        "required":["occurrence_id","component_id","body_id","translation","rotation"],
+                        "properties":{
+                            "occurrence_id":{"type":"integer","minimum":1},
+                            "component_id":{"type":"integer","minimum":1},
+                            "body_id":{"type":"integer","minimum":1},
+                            "name":{"type":"string"},
+                            "translation":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},
+                            "rotation":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4}
+                        }
+                    }},
                     "body_ids": {
                         "type": "array",
                         "items": {"type": "integer", "minimum": 1},
@@ -6265,7 +6287,7 @@ mod tests {
     }
 
     #[test]
-    fn mesh_export_snapshot_rejects_mcp_open_and_assembly_edits() {
+    fn mesh_and_step_export_snapshots_reject_mcp_open_and_assembly_edits() {
         let (mut server, initial) = mcp_box();
         let body = initial["scene"]["bodies"][0]["id"].clone();
         let expected = server.manager.export_project_model().unwrap();
@@ -6273,6 +6295,28 @@ mod tests {
         let original = server
             .call_tool("solid_export_3mf", request.clone())
             .unwrap();
+        let step_request = json!({"body_ids":[body],"expected_model_json":expected,
+            "occurrences":[{"occurrence_id":1,"component_id":1,"body_id":body,
+                "translation":[42.,0.,0.],"rotation":[0.,0.,0.,1.],"name":"Selected occurrence"}]});
+        let specs = tool_specs();
+        schema_accepts(
+            &specs
+                .iter()
+                .find(|spec| spec.name == "solid_export_step")
+                .unwrap()
+                .input_schema,
+            &step_request,
+        )
+        .unwrap();
+        let step = server
+            .call_tool("solid_export_step", step_request.clone())
+            .unwrap();
+        let step_bytes = BASE64
+            .decode(step["bytes_base64"].as_str().unwrap())
+            .unwrap();
+        assert!(String::from_utf8(step_bytes)
+            .unwrap()
+            .contains("MANIFOLD_SOLID_BREP"));
         let (mut replacement, _) = mcp_box();
         let document = replacement
             .call_tool("assembly_document", json!({}))
@@ -6294,6 +6338,10 @@ mod tests {
                 .unwrap_err()
                 .contains("document changed"));
         }
+        assert!(server
+            .call_tool("solid_export_step", step_request.clone())
+            .unwrap_err()
+            .contains("document changed"));
         assert_eq!(
             server.manager.export_project_model().unwrap(),
             replacement_model
@@ -6302,6 +6350,9 @@ mod tests {
         assert!(server
             .call_tool("solid_export_stl", json!({"body_ids":[body]}))
             .is_ok());
+        assert!(server
+            .call_tool("solid_export_step", json!({"body_ids":[body]}))
+            .is_ok());
         server
             .call_tool("cad_load_project_model", json!({"model_json":expected}))
             .unwrap();
@@ -6309,6 +6360,7 @@ mod tests {
             server.call_tool("solid_export_3mf", request).unwrap()["bytes_base64"],
             original["bytes_base64"]
         );
+        assert!(server.call_tool("solid_export_step", step_request).is_ok());
     }
 
     #[test]

@@ -33,7 +33,7 @@ import {
 } from './projectTabs';
 import { requestUnsavedDecision } from './unsavedChanges';
 import { requestMeshExportScope } from '../components/MeshExportDialog';
-import { runMeshExport } from './meshExportFlow';
+import { runExport } from './exportFlow';
 import { projectTransitions } from './projectTransitions';
 
 const PROJECT_TYPE: SaveType = {
@@ -307,6 +307,7 @@ export async function openProject(options?: { filePath: string; discardChanges?:
 }
 
 export async function exportStep(selectedOnly: boolean): Promise<boolean> {
+  const transition = projectTransitions.capture();
   assertNoFeatureEdit();
   const state = useAppStore.getState();
   if (state.activeSketch) {
@@ -327,82 +328,86 @@ export async function exportStep(selectedOnly: boolean): Promise<boolean> {
   }
   const documentName = withoutExtension(state.document?.name ?? state.projectFileName ?? 'Untitled');
   const suffix = selectedOnly && state.selectedBody !== null ? `-Body${state.selectedBody}` : '';
-  const target = await chooseSaveTarget(`${documentName}${suffix}.step`, STEP_TYPE);
-  if (!target) return false;
   const engine = await getEngine();
-  const activeFeatureIds = new Set(
-    (state.document?.features ?? [])
-      .slice(0, state.document?.rollback_index ?? 0)
-      .filter((feature) => !feature.suppressed)
-      .map((feature) => feature.id),
-  );
-  const [holeDefinitions, bodyFeatureDefinitions] = await Promise.all([
-    engine.holeDefinitions(),
-    engine.bodyFeatureDefinitions(),
-  ]);
-  const internalThreadMetadata = holeDefinitions.flatMap((definition) => {
-    if (
-      !definition.thread
-      || !bodyIds.includes(definition.body_id)
-      || !activeFeatureIds.has(definition.feature_id)
-    ) {
-      return [];
-    }
-    return [{
-      body_id: definition.body_id,
-      feature_id: definition.feature_id,
-      feature_name: definition.name,
-      position_count: Math.max(1, definition.positions.length),
-      external: false,
-      predrill_diameter: definition.diameter,
-      thread: definition.thread,
-    }];
+  return runExport({
+    assertSelectionOwner: exportSelectionOwner(transition, state),
+    captureModel: () => engine.exportProjectModel(),
+    chooseOptions: async () => {
+      const activeFeatureIds = new Set(
+        (state.document?.features ?? [])
+          .slice(0, state.document?.rollback_index ?? 0)
+          .filter((feature) => !feature.suppressed)
+          .map((feature) => feature.id),
+      );
+      const [holeDefinitions, bodyFeatureDefinitions] = await Promise.all([
+        engine.holeDefinitions(),
+        engine.bodyFeatureDefinitions(),
+      ]);
+      const internalThreadMetadata = holeDefinitions.flatMap((definition) => {
+        if (
+          !definition.thread
+          || !bodyIds.includes(definition.body_id)
+          || !activeFeatureIds.has(definition.feature_id)
+        ) {
+          return [];
+        }
+        return [{
+          body_id: definition.body_id,
+          feature_id: definition.feature_id,
+          feature_name: definition.name,
+          position_count: Math.max(1, definition.positions.length),
+          external: false,
+          predrill_diameter: definition.diameter,
+          thread: definition.thread,
+        }];
+      });
+      const externalThreadMetadata = bodyFeatureDefinitions.flatMap((definition) => {
+        if (
+          definition.type !== 'external_thread'
+          || !bodyIds.includes(definition.body_id)
+          || !activeFeatureIds.has(definition.feature_id)
+        ) {
+          return [];
+        }
+        return [{
+          body_id: definition.body_id,
+          feature_id: definition.feature_id,
+          feature_name: definition.name,
+          position_count: 1,
+          external: true,
+          predrill_diameter: definition.cylinder.radius * 2,
+          thread: definition.thread,
+        }];
+      });
+      return {
+        thread_metadata: [...internalThreadMetadata, ...externalThreadMetadata],
+        occurrences: state.assemblySolution.instance_body_poses
+          .filter((pose) => pose.visible)
+          .filter((pose) => bodyIds.includes(pose.body_id))
+          .filter((pose) => (
+            !selectedOnly
+            || state.selectedOccurrenceId === null
+            || pose.occurrence_id === state.selectedOccurrenceId
+          ))
+          .map((pose) => {
+            const occurrence = state.assemblyDocument.component_structure.occurrences.find(
+              (candidate) => candidate.id === pose.occurrence_id,
+            );
+            return {
+              occurrence_id: pose.occurrence_id,
+              component_id: pose.component_id,
+              body_id: pose.body_id,
+              name: occurrence?.name ?? `Occurrence ${pose.occurrence_id}`,
+              translation: pose.translation,
+              rotation: pose.rotation,
+            };
+          }),
+      };
+    },
+    render: (options, expected_model_json) => engine.exportStep({body_ids: bodyIds, ...options, expected_model_json}),
+    chooseTarget: () => chooseSaveTarget(`${documentName}${suffix}.step`, STEP_TYPE),
+    write: writeSaveTarget,
   });
-  const externalThreadMetadata = bodyFeatureDefinitions.flatMap((definition) => {
-    if (
-      definition.type !== 'external_thread'
-      || !bodyIds.includes(definition.body_id)
-      || !activeFeatureIds.has(definition.feature_id)
-    ) {
-      return [];
-    }
-    return [{
-      body_id: definition.body_id,
-      feature_id: definition.feature_id,
-      feature_name: definition.name,
-      position_count: 1,
-      external: true,
-      predrill_diameter: definition.cylinder.radius * 2,
-      thread: definition.thread,
-    }];
-  });
-  const bytes = await engine.exportStep({
-    body_ids: bodyIds,
-    thread_metadata: [...internalThreadMetadata, ...externalThreadMetadata],
-    occurrences: state.assemblySolution.instance_body_poses
-      .filter((pose) => pose.visible)
-      .filter((pose) => bodyIds.includes(pose.body_id))
-      .filter((pose) => (
-        !selectedOnly
-        || state.selectedOccurrenceId === null
-        || pose.occurrence_id === state.selectedOccurrenceId
-      ))
-      .map((pose) => {
-        const occurrence = state.assemblyDocument.component_structure.occurrences.find(
-          (candidate) => candidate.id === pose.occurrence_id,
-        );
-        return {
-          occurrence_id: pose.occurrence_id,
-          component_id: pose.component_id,
-          body_id: pose.body_id,
-          name: occurrence?.name ?? `Occurrence ${pose.occurrence_id}`,
-          translation: pose.translation,
-          rotation: pose.rotation,
-        };
-      }),
-  });
-  await writeSaveTarget(target, bytes);
-  return true;
 }
 
 function meshExportBodyIds(selectedOnly: boolean): number[] {
@@ -439,22 +444,13 @@ async function exportMesh(format: 'stl' | '3mf', selectedOnly: boolean): Promise
   const transition = projectTransitions.capture();
   const state = useAppStore.getState();
   const bodyIds = meshExportBodyIds(selectedOnly);
-  const assertSelectionOwner = async () => {
-    await projectTransitions.assertCurrent(transition);
-    const current = useAppStore.getState();
-    if (current.solidBusy || current.activeProjectTabId !== state.activeProjectTabId || current.document !== state.document
-      || current.solidScene !== state.solidScene || current.assemblyDocument !== state.assemblyDocument
-      || current.bodyAppearances !== state.bodyAppearances) {
-      throw new Error('The document changed while choosing mesh export options. Start the export again.');
-    }
-  };
   const documentName = withoutExtension(state.document?.name ?? state.projectFileName ?? 'Untitled');
   const suffix = selectedOnly && state.selectedBody !== null ? `-Body${state.selectedBody}` : '';
   const engine = await getEngine();
-  return runMeshExport({
-    assertSelectionOwner,
+  return runExport({
+    assertSelectionOwner: exportSelectionOwner(transition, state),
     captureModel: () => engine.exportProjectModel(),
-    chooseScope: requestMeshExportScope,
+    chooseOptions: requestMeshExportScope,
     render: async (scope, expected_model_json) => {
       const request = {body_ids: bodyIds, scope, expected_model_json,
         linear_deflection: 0.15, angular_deflection: 0.35, include_appearance: format === '3mf'};
@@ -469,6 +465,19 @@ async function exportMesh(format: 'stl' | '3mf', selectedOnly: boolean): Promise
     },
     write: writeSaveTarget,
   });
+}
+
+function exportSelectionOwner(transition: ReturnType<typeof projectTransitions.capture>, state: ReturnType<typeof useAppStore.getState>) {
+  return async () => {
+    await projectTransitions.assertCurrent(transition);
+    const current = useAppStore.getState();
+    if (current.solidBusy || current.activeProjectTabId !== state.activeProjectTabId || current.document !== state.document
+      || current.solidScene !== state.solidScene || current.assemblyDocument !== state.assemblyDocument
+      || current.assemblySolution !== state.assemblySolution || current.activeSketch !== state.activeSketch
+      || current.bodyAppearances !== state.bodyAppearances) {
+      throw new Error('The document changed while preparing export. Start the export again.');
+    }
+  };
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

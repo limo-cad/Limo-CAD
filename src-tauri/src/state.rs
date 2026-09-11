@@ -681,6 +681,15 @@ impl AppState {
             .lock()
             .map_err(|_| "engine lock poisoned".to_string())?;
         let inner = workspace.active();
+        if request.expected_model_json.is_some() {
+            nbcad_solid::check_export_model_snapshot(
+                request.expected_model_json.as_deref(),
+                &inner
+                    .manager
+                    .export_project_model()
+                    .map_err(|e| e.to_string())?,
+            )?;
+        }
         if !inner.manager.solid_scene().errors.is_empty() {
             return Err("Resolve timeline errors before exporting STEP.".to_string());
         }
@@ -1109,7 +1118,7 @@ mod tests {
     }
 
     #[test]
-    fn mesh_export_precondition_runs_under_the_owning_workspace_lock() {
+    fn export_precondition_runs_under_the_owning_workspace_lock() {
         let state = AppState::new();
         value(state.bind_project_session("same-tab"));
         let expected = value(state.engine_call("project_export_model", ""));
@@ -1117,6 +1126,7 @@ mod tests {
         std::thread::scope(|threads| {
             let mut workspace = state.inner.lock().unwrap();
             let exporting = threads.spawn(|| state.export_stl(&request.to_string()));
+            let exporting_step = threads.spawn(|| state.export_step(&request.to_string()));
             // A queued engine mutation gets the lock before export can start.
             // A frontend identity check cannot prevent this scheduling order.
             value(host::handle(
@@ -1126,6 +1136,11 @@ mod tests {
             ));
             drop(workspace);
             assert!(exporting
+                .join()
+                .unwrap()
+                .unwrap_err()
+                .contains("document changed"));
+            assert!(exporting_step
                 .join()
                 .unwrap()
                 .unwrap_err()
