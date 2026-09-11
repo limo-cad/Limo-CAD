@@ -2,9 +2,35 @@
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ScriptPreview } from '../components/ScriptPreview';
+import { FeatureScriptPreview } from '../components/FeatureScriptPreview';
 import { useAppStore } from '../store/appStore';
 import { presentation } from '../operationPlayback';
 import { previewExample, renderScriptPreview, type ScriptPreviewFrame } from './workspace';
+
+/** Real ribbon parent/focus/closing timers; the driver uses browser input. */
+export function mountNativePreviewNavigation() {
+  const w = window as typeof window & { __TAURI_INTERNALS__?: { invoke: (command: string) => Promise<unknown> } };
+  const native = w.__TAURI_INTERNALS__;
+  const example = { id: 'navigation-test', name: 'Navigation lesson', summary: '', group: 'solid/modify', operation: 'solid_fillet',
+    kind: 'lesson', focus_operations: ['solid_fillet'], operations: ['solid_fillet'], preview: true, source: 'immutable navigation fixture' };
+  const pixel = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=='), value => value.charCodeAt(0)).buffer;
+  w.__TAURI_INTERNALS__ = { async invoke(command) {
+    if (command === 'native_script_examples') return [example];
+    if (command === 'native_script_preview') return { preview_id: 'navigation', captions: ['Stock', 'Changed'] };
+    if (command === 'native_script_preview_open') return 'navigation-view';
+    if (command === 'native_script_preview_render') return pixel;
+    if (command === 'native_script_preview_close' || command === 'native_script_preview_release') return;
+    throw new Error(`Preview navigation unexpectedly used ${command}`);
+  } };
+  const container = document.createElement('div'); document.body.append(container);
+  const root = createRoot(container);
+  root.render(createElement(FeatureScriptPreview, { group: 'solid/modify', operation: 'solid_fillet', label: 'Fillet',
+    children: createElement('button', { type: 'button' }, 'Fillet') }));
+  return () => {
+    root.unmount(); container.remove();
+    if (native) w.__TAURI_INTERNALS__ = native; else delete w.__TAURI_INTERNALS__;
+  };
+}
 
 export async function checkNativeScriptPreview() {
   const check = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };

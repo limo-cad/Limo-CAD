@@ -19,6 +19,7 @@ export function ScriptPreview({ frames, autoPlay = true }: { frames: ScriptPrevi
   const [image, setImage] = useState<ImageResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const imageUrl = useRef<string | null>(null);
+  const model = useRef<HTMLDivElement>(null);
   const view = useRef<RenderView | null>(null);
   const drag = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
   const reducedMotion = useRef(false);
@@ -90,13 +91,22 @@ export function ScriptPreview({ frames, autoPlay = true }: { frames: ScriptPrevi
     void pump();
   }, [frames, frame, pose]);
 
-  const choose = (next: number) => { setPlaying(false); setIndex(Math.max(0, Math.min(frames.length - 1, next))); };
+  const choose = (next: number, button: HTMLButtonElement) => {
+    const target = Math.max(0, Math.min(frames.length - 1, next));
+    // Disabling the focused boundary button can blur to the document body and
+    // dismiss the enclosing ribbon card. Move focus before React disables it;
+    // passive autoplay and unfocused programmatic navigation leave focus alone.
+    if ((target === 0 || target === frames.length - 1) && document.activeElement === button) {
+      model.current?.focus();
+    }
+    setPlaying(false); setIndex(target);
+  };
   const turn = (yaw: number, pitch: number) => { setPlaying(false); setPose({ yaw, pitch: Math.max(-1.3, Math.min(1.3, pitch)) }); };
   const fit = () => { setPlaying(false); setPose({ ...HOME }); };
   const visibleImage = image?.previewId === frame?.previewId && image?.frameIndex === frame?.frameIndex ? image : null;
   return (
     <div data-script-preview className="min-w-0 text-[11px] text-ink">
-      <div role="img" tabIndex={0}
+      <div ref={model} role="img" tabIndex={0}
         aria-label={frame ? `Example model: ${frame.caption}` : 'No preview geometry'}
         aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home"
         title="Drag or use arrow keys to turn this example. Home fits the model. The open design is unchanged."
@@ -127,9 +137,9 @@ export function ScriptPreview({ frames, autoPlay = true }: { frames: ScriptPrevi
       </div>
       <p className="mt-2 min-h-8 leading-4" aria-live="polite">{error ?? frame?.caption ?? 'No preview is available.'}</p>
       <div className="mt-2 flex items-center gap-1 text-[10px]">
-        <button type="button" className="rounded px-2 py-1 hover:bg-edge disabled:opacity-40" disabled={current === 0} onClick={() => choose(current - 1)} aria-label="Previous preview step">Previous</button>
+        <button type="button" className="rounded px-2 py-1 hover:bg-edge disabled:opacity-40" disabled={current === 0} onClick={event => choose(current - 1, event.currentTarget)} aria-label="Previous preview step">Previous</button>
         <span className="text-mute tabular-nums">{frames.length ? current + 1 : 0}/{frames.length}</span>
-        <button type="button" className="rounded px-2 py-1 hover:bg-edge disabled:opacity-40" disabled={current >= frames.length - 1} onClick={() => choose(current + 1)} aria-label="Next preview step">Next</button>
+        <button type="button" className="rounded px-2 py-1 hover:bg-edge disabled:opacity-40" disabled={current >= frames.length - 1} onClick={event => choose(current + 1, event.currentTarget)} aria-label="Next preview step">Next</button>
         <button type="button" className="ml-auto rounded px-2 py-1 hover:bg-edge disabled:opacity-40" disabled={frames.length < 2} onClick={() => {
           setIndex(0); setPlaying(!reducedMotion.current);
         }} aria-label="Replay feature preview">Replay</button>

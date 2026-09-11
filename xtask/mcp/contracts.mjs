@@ -182,6 +182,51 @@ try {
  });
  console.log('PASS production native script preview: '+JSON.stringify(nativePreview));
  await scriptPage.close();
+ const navigationPage=await browser.newPage();
+ try {
+  await navigationPage.goto(server.resolvedUrls.local[0]+'mcp-contract');
+  await navigationPage.evaluate(async()=>{
+   const {mountNativePreviewNavigation}=await import('/src/scripts/preview.browser.test.ts');
+   window.unmountPreviewNavigation=mountNativePreviewNavigation();
+  });
+  await navigationPage.getByRole('button',{name:'Fillet',exact:true}).focus();
+  const card=navigationPage.getByRole('dialog',{name:'Fillet example'});
+  await card.waitFor();
+  await card.getByText('2/2',{exact:true}).waitFor();
+  const model=card.getByRole('img');
+  await model.focus();
+  await navigationPage.keyboard.press('Home');
+  await card.getByRole('button',{name:'Previous preview step'}).click();
+  await card.getByText('1/2',{exact:true}).waitFor();
+  await navigationPage.mouse.move(800,500);
+  await navigationPage.waitForTimeout(200);
+  assert.equal(await card.count(),1,'Reaching the first frame must not blur a disabled Previous button and dismiss its parent');
+  assert.equal(await model.evaluate(element=>document.activeElement===element),true,'Boundary navigation transfers focus into model inspection');
+  await card.getByRole('button',{name:'Next preview step'}).focus();
+  await navigationPage.keyboard.press('Enter');
+  await card.getByText('2/2',{exact:true}).waitFor();
+  await navigationPage.waitForTimeout(200);
+  assert.equal(await card.count(),1,'Keyboard navigation to the last frame must preserve the parent card');
+  assert.equal(await model.evaluate(element=>document.activeElement===element),true);
+  await navigationPage.evaluate(async()=>{
+   const {inspectUi,operateUi}=await import('/src/uiControl.ts');
+   const previous=inspectUi().surfaces.flatMap(surface=>surface.controls).find(control=>control.label==='Previous preview step');
+   if (!previous) throw new Error('MCP must expose the ordinary preview navigation control');
+   operateUi({action:'click',target:previous.id});
+  });
+  await card.getByText('1/2',{exact:true}).waitFor();
+  await navigationPage.waitForTimeout(200);
+  assert.equal(await model.evaluate(element=>document.activeElement===element),true,'MCP navigation shares the focus-safe boundary action');
+  const replay=card.getByRole('button',{name:'Replay feature preview'});
+  await replay.click();
+  await card.getByText('1/2',{exact:true}).waitFor();
+  await card.getByText('2/2',{exact:true}).waitFor();
+  assert.equal(await replay.evaluate(element=>document.activeElement===element),true,'Passive autoplay must preserve the chosen focus');
+  console.log('PASS production preview boundary navigation: pointer Previous, keyboard Next, MCP click, parent dismissal timers, passive focus');
+ } finally {
+  await navigationPage.evaluate(()=>window.unmountPreviewNavigation?.());
+  await navigationPage.close();
+ }
  const recoveryPage=await browser.newPage();
  await recoveryPage.goto(server.resolvedUrls.local[0]+'mcp-contract');
  const recovery=await recoveryPage.evaluate(async()=>{
