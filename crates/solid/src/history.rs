@@ -193,6 +193,93 @@ impl SolidDocument {
         .collect()
     }
 
+    /// Bodies produced by retained history, including outputs outside the
+    /// current rollback stage or consumed by a later feature. Mere references
+    /// from modifiers cannot keep a deleted creator's metadata alive.
+    pub fn retained_body_ids(&self) -> BTreeSet<BodyId> {
+        let mut retained = BTreeSet::new();
+        let mut add_outputs = |operation, outputs: &[BodyId], targets: &[BodyId]| match operation {
+            ExtrudeOperation::NewBody => retained.extend(outputs.iter().copied()),
+            ExtrudeOperation::Join if targets.is_empty() => {
+                retained.extend(outputs.first().copied());
+            }
+            ExtrudeOperation::Join | ExtrudeOperation::Cut | ExtrudeOperation::Intersect => {}
+        };
+        for definition in &self.extrudes {
+            let count = definition
+                .source_face
+                .map(|_| 1)
+                .unwrap_or(definition.profile_indices.len());
+            add_outputs(
+                definition.operation,
+                &definition.new_body_ids[..count.min(definition.new_body_ids.len())],
+                &definition.target_body_ids,
+            );
+        }
+        for definition in &self.revolves {
+            add_outputs(
+                definition.operation,
+                &definition.new_body_ids[..definition
+                    .profile_indices
+                    .len()
+                    .min(definition.new_body_ids.len())],
+                &definition.target_body_ids,
+            );
+        }
+        for definition in &self.sweeps {
+            add_outputs(
+                definition.operation,
+                std::slice::from_ref(&definition.new_body_id),
+                &definition.target_body_ids,
+            );
+        }
+        for definition in &self.lofts {
+            add_outputs(
+                definition.operation,
+                std::slice::from_ref(&definition.new_body_id),
+                &definition.target_body_ids,
+            );
+        }
+        for definition in &self.ribs {
+            add_outputs(
+                definition.operation,
+                &definition.new_body_ids[..definition
+                    .line_entity_ids
+                    .len()
+                    .min(definition.new_body_ids.len())],
+                &definition.target_body_ids,
+            );
+        }
+        for definition in &self.body_features {
+            match definition {
+                BodyFeatureDefinitionDto::MoveCopy {
+                    copy,
+                    result_body_ids,
+                    ..
+                } => {
+                    if *copy {
+                        retained.extend(result_body_ids.iter().copied());
+                    }
+                }
+                BodyFeatureDefinitionDto::Mirror { new_body_ids, .. }
+                | BodyFeatureDefinitionDto::RectangularPattern { new_body_ids, .. }
+                | BodyFeatureDefinitionDto::CircularPattern { new_body_ids, .. } => {
+                    retained.extend(new_body_ids.iter().copied());
+                }
+                BodyFeatureDefinitionDto::SplitBody { new_body_id, .. } => {
+                    retained.insert(*new_body_id);
+                }
+                BodyFeatureDefinitionDto::ImportStep { body_id, .. } => {
+                    retained.insert(*body_id);
+                }
+                BodyFeatureDefinitionDto::ExternalThread { .. }
+                | BodyFeatureDefinitionDto::Shell { .. }
+                | BodyFeatureDefinitionDto::Combine { .. } => {}
+            }
+        }
+        retained
+    }
+
     pub fn scene(&self) -> &SolidSceneDto {
         &self.scene
     }
@@ -5195,6 +5282,67 @@ mod tests {
                 extrude_job(&plan.jobs[0]).end_offset
             ),
             (-10.0, 10.0)
+        );
+    }
+
+    #[test]
+    fn retained_body_ids_drop_removed_outputs_after_profile_edit() {
+        let mut doc = SolidDocument::new();
+        let plan = doc
+            .prepare_add(
+                FeatureId(2),
+                "Extrude1",
+                request(vec![0, 1]),
+                &catalog(),
+                &active(&[1, 2]),
+            )
+            .unwrap();
+        let bodies = extrude_job(&plan.jobs[0]).result_body_ids.clone();
+        doc.commit(
+            plan.transaction_id,
+            KernelSceneDto {
+                bodies: bodies.iter().copied().map(raw_body).collect(),
+                errors: vec![],
+            },
+        )
+        .unwrap();
+        assert_eq!(doc.retained_body_ids(), bodies.iter().copied().collect());
+
+        let plan = doc.prepare_recompute(&catalog(), &active(&[1])).unwrap();
+        doc.commit(
+            plan.transaction_id,
+            KernelSceneDto {
+                bodies: vec![],
+                errors: vec![],
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            doc.retained_body_ids(),
+            bodies.iter().copied().collect(),
+            "rollback retains both outputs"
+        );
+
+        let plan = doc
+            .prepare_edit(FeatureId(2), request(vec![0]), &catalog(), &active(&[1, 2]))
+            .unwrap();
+        doc.commit(
+            plan.transaction_id,
+            KernelSceneDto {
+                bodies: vec![raw_body(bodies[0])],
+                errors: vec![],
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            doc.definitions()[0].new_body_ids.len(),
+            2,
+            "the second ID remains reserved for later editing"
+        );
+        assert_eq!(
+            doc.retained_body_ids(),
+            [bodies[0]].into_iter().collect(),
+            "reserved IDs no longer produced by the feature are not retained bodies"
         );
     }
 

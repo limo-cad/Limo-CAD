@@ -1352,18 +1352,18 @@ impl SketchManager {
         Ok(self.body_appearances.clone())
     }
 
+    fn retained_presentation_body_ids(&self) -> BTreeSet<nbcad_core::BodyId> {
+        let mut retained = self.solids.retained_body_ids();
+        retained.extend(self.solids.scene().bodies.iter().map(|body| body.id));
+        retained
+    }
+
     fn scrubbed_body_appearances(&self) -> Vec<BodyAppearance> {
-        let live: BTreeSet<_> = self
-            .solids
-            .scene()
-            .bodies
-            .iter()
-            .map(|body| body.id)
-            .collect();
+        let retained = self.retained_presentation_body_ids();
         let mut kept: Vec<_> = self
             .body_appearances
             .iter()
-            .filter(|entry| live.contains(&entry.body_id))
+            .filter(|entry| retained.contains(&entry.body_id))
             .cloned()
             .collect();
         kept.sort_by_key(|entry| entry.body_id.0);
@@ -1375,13 +1375,7 @@ impl SketchManager {
     }
 
     fn scrubbed_project_visibility(&self) -> ProjectVisibilityDto {
-        let live_bodies = self
-            .solids
-            .scene()
-            .bodies
-            .iter()
-            .map(|body| body.id.0)
-            .collect::<BTreeSet<_>>();
+        let retained_bodies = self.retained_presentation_body_ids();
         let live_datums = self
             .datum_planes
             .iter()
@@ -1398,7 +1392,7 @@ impl SketchManager {
             .hidden_body_ids
             .iter()
             .copied()
-            .filter(|id| live_bodies.contains(id))
+            .filter(|id| retained_bodies.contains(&nbcad_core::BodyId(*id)))
             .collect::<Vec<_>>();
         hidden_body_ids.sort_unstable();
         hidden_body_ids.dedup();
@@ -4551,6 +4545,167 @@ mod project_tests {
         assert_eq!(restored[0].material_name, "PLA Red");
         assert_eq!(restored[0].color.r, 200);
         assert_eq!(loaded.project_visibility(), visibility);
+
+        // Opening a project repairs datum frames by visiting earlier history
+        // stages. Those temporary scenes must not delete later body metadata.
+        let final_rollback = loaded.document.features().rollback_index;
+        let plan = loaded
+            .prepare_set_rollback(SetRollbackRequest { rollback_index: 0 })
+            .unwrap();
+        commit_plan(&mut loaded, plan, basis);
+        assert!(loaded.solid_scene().bodies.is_empty());
+        assert_eq!(loaded.body_appearances(), restored);
+        assert_eq!(loaded.project_visibility(), visibility);
+
+        // Saving at a rollback marker must preserve the metadata too, so
+        // advancing a reopened project restores the same colored/hidden body.
+        let staged_json = loaded.export_project_model().unwrap();
+        let mut staged = SketchManager::new();
+        let plan = staged.prepare_load_project(staged_json).unwrap();
+        commit_plan(&mut staged, plan, basis);
+        assert!(staged.solid_scene().bodies.is_empty());
+        assert_eq!(staged.body_appearances(), restored);
+        assert_eq!(staged.project_visibility(), visibility);
+        let plan = staged
+            .prepare_set_rollback(SetRollbackRequest {
+                rollback_index: final_rollback,
+            })
+            .unwrap();
+        commit_plan(&mut staged, plan, basis);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&staged.export_project_model().unwrap())
+                .unwrap(),
+            parsed,
+            "a temporary rollback and staged roundtrip must preserve the complete project"
+        );
+
+        let feature_id = staged.extrude_definitions()[0].feature_id;
+        let plan = staged
+            .prepare_delete_feature(DeleteFeatureRequest { feature_id })
+            .unwrap();
+        commit_plan(&mut staged, plan, basis);
+        assert!(
+            staged.body_appearances().is_empty(),
+            "actual creator deletion removes its appearance"
+        );
+        assert!(
+            staged.project_visibility().hidden_body_ids.is_empty(),
+            "actual creator deletion removes its visibility"
+        );
+    }
+
+    #[test]
+    fn consumed_body_metadata_survives_history_navigation_but_not_creator_deletion() {
+        use nbcad_core::{BodyAppearance, Rgba8};
+        let mut manager = SketchManager::new();
+        let plane = PlaneRef::OriginPlane {
+            plane: OriginPlane::Xy,
+        };
+        let basis = plane.origin_basis().unwrap();
+        for name in ["Sketch1", "Sketch2"] {
+            manager.begin_sketch(plane).unwrap();
+            manager
+                .add_rectangle(RectangleRequest {
+                    mode: crate::dto::RectangleMode::TwoPoint,
+                    p1: crate::Vec2::new(0.0, 0.0),
+                    p2: crate::Vec2::new(20.0, 10.0),
+                    ctrl_held: false,
+                })
+                .unwrap();
+            manager.end_sketch().unwrap();
+            let plan = manager
+                .prepare_extrude(ExtrudeRequest {
+                    source_face: None,
+                    sketch_name: name.to_string(),
+                    profile_indices: vec![0],
+                    operation: ExtrudeOperation::NewBody,
+                    extent: ExtrudeExtent::Distance { distance: 15.0 },
+                    taper_angle_deg: 0.0,
+                    flip: false,
+                    target_body_ids: Vec::new(),
+                })
+                .unwrap();
+            commit_plan(&mut manager, plan, basis);
+        }
+        let bodies = manager.solid_scene().bodies;
+        let target = bodies[0].id;
+        let tool = bodies[1].id;
+        for body_id in [target, tool] {
+            manager
+                .set_body_appearance(BodyAppearance {
+                    body_id,
+                    color: Rgba8::opaque(200, 40, 40),
+                    material_name: "PLA Red".into(),
+                    filament_type: "PLA".into(),
+                    brand: "Generic".into(),
+                    color_name: "Red".into(),
+                    filament_id: None,
+                    preset_id: None,
+                    density_g_cm3: None,
+                    diameter_mm: 1.75,
+                })
+                .unwrap();
+        }
+        let appearances = manager.body_appearances();
+        let visibility = manager
+            .set_project_visibility(ProjectVisibilityDto {
+                hidden_body_ids: vec![target.0, tool.0],
+                ..Default::default()
+            })
+            .unwrap();
+        let before_combine = manager.document.features().rollback_index;
+        let plan = manager
+            .prepare_body_feature(nbcad_solid::BodyFeatureRequestDto::Combine(
+                nbcad_solid::CombineRequest {
+                    target_body_id: target,
+                    tool_body_ids: vec![tool],
+                    operation: nbcad_solid::CombineOperation::Join,
+                    keep_tools: false,
+                },
+            ))
+            .unwrap();
+        manager
+            .commit_solid(CommitKernelRequest {
+                transaction_id: plan.transaction_id,
+                scene: KernelSceneDto {
+                    bodies: vec![raw_body(target, basis)],
+                    errors: Vec::new(),
+                },
+            })
+            .unwrap();
+        assert_eq!(
+            manager.body_appearances(),
+            appearances,
+            "consumption retains the tool's historical appearance"
+        );
+        assert_eq!(manager.project_visibility(), visibility);
+        let plan = manager
+            .prepare_set_rollback(SetRollbackRequest {
+                rollback_index: before_combine,
+            })
+            .unwrap();
+        commit_plan(&mut manager, plan, basis);
+        assert_eq!(manager.solid_scene().bodies.len(), 2);
+        assert_eq!(manager.body_appearances(), appearances);
+        assert_eq!(manager.project_visibility(), visibility);
+
+        // The retained Combine still references this target, but deleting its
+        // creator must remove presentation metadata for the now-invalid ID.
+        let plan = manager
+            .prepare_delete_feature(DeleteFeatureRequest {
+                feature_id: bodies[0].feature_id,
+            })
+            .unwrap();
+        commit_plan(&mut manager, plan, basis);
+        assert_eq!(
+            manager
+                .body_appearances()
+                .iter()
+                .map(|a| a.body_id)
+                .collect::<Vec<_>>(),
+            vec![tool]
+        );
+        assert_eq!(manager.project_visibility().hidden_body_ids, vec![tool.0]);
     }
 
     #[test]
