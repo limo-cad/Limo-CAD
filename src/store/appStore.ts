@@ -10,6 +10,7 @@
  */
 import { create } from 'zustand';
 import { presentation } from '../operationPlayback';
+import { projectTransitions } from '../files/projectTransitions';
 import { synchronizeSnapshotVisibility } from '../sessionSnapshot';
 import type {
   AssemblyDocumentDto,
@@ -782,7 +783,7 @@ export interface AppState {
   setActiveTab: (tab: string) => void;
   loadDocument: () => Promise<void>;
   /** Refresh live engine state after MCP inbox apply without clearing dirty. */
-  refreshAfterInboxApply: (opName?: string, ownerRevision?: number) => Promise<void>;
+  refreshAfterInboxApply: (opName?: string, ownerRevision?: number, replacingDocument?: boolean) => Promise<void>;
   setDocument: (doc: DocumentDto) => void;
   setActiveSketch: (sketch: SketchDto | null) => void;
   setFinishedSketches: (sketches: SketchDto[]) => void;
@@ -1258,7 +1259,7 @@ export const useAppStore = create<AppState>()((set) => ({
     presentation.documentChanged();
   },
 
-  refreshAfterInboxApply: async (opName, ownerRevision = presentation.documentVersion()) => {
+  refreshAfterInboxApply: async (opName, ownerRevision = presentation.documentVersion(), replacingDocument = false) => {
     const ownsDocument = () => ownerRevision === presentation.documentVersion();
     const engine = await getEngine();
     if (!ownsDocument()) return;
@@ -1311,6 +1312,13 @@ export const useAppStore = create<AppState>()((set) => ({
       engine.activeSketch(),
     ]);
     if (!ownsDocument()) return;
+    if (replacingDocument) {
+      useAppStore.getState().loadProjectState({document: doc, scene: solidScene}, finishedSketches, datumPlanes,
+        useAppStore.getState().projectFileName, bodyAppearances, drawingDocument, assemblyDocument,
+        projectVisibility, assemblySolution);
+      set({engineKind: engine.kind, dirty: true});
+      return;
+    }
     set({
       document: doc,
       engineKind: engine.kind,
@@ -1326,7 +1334,7 @@ export const useAppStore = create<AppState>()((set) => ({
       projectVisibility,
       dirty: true,
     });
-    if (opName?.startsWith('sketch_') || opName === 'cad_load_project_model') {
+    if (opName?.startsWith('sketch_')) {
       // Inbox commands use the same engine as the interactive controller, but
       // do not call its mode transitions. Reflect the authoritative sketch
       // lifecycle before acknowledging/presenting the operation.
@@ -3114,18 +3122,22 @@ export function bodyAppearanceFor(bodyId: number): BodyAppearance {
  */
 export async function exportProjectModelWithVisibility(
   providedEngine?: Engine,
-  assertCurrent?: () => void | Promise<void>,
+  assertOwner?: () => void,
 ): Promise<string> {
-  await assertCurrent?.();
-  const engine = providedEngine ?? await getEngine();
-  await assertCurrent?.();
-  await synchronizeSnapshotVisibility(
-    useAppStore.getState().projectVisibility,
-    async () => { await assertCurrent?.(); return engine.projectVisibility(); },
-    async visibility => { await assertCurrent?.(); return engine.setProjectVisibility(visibility); },
-  );
-  await assertCurrent?.();
-  const model = await engine.exportProjectModel();
-  await assertCurrent?.();
-  return model;
+  const snapshot = projectTransitions.beginSnapshot();
+  const assertCurrent = () => { snapshot.assertCurrent(); assertOwner?.(); };
+  try {
+    assertCurrent();
+    const engine = providedEngine ?? await getEngine();
+    assertCurrent();
+    await synchronizeSnapshotVisibility(
+      useAppStore.getState().projectVisibility,
+      async () => { assertCurrent(); return engine.projectVisibility(); },
+      async visibility => { assertCurrent(); return engine.setProjectVisibility(visibility); },
+    );
+    assertCurrent();
+    const model = await engine.exportProjectModel();
+    assertCurrent();
+    return model;
+  } finally { snapshot.release(); }
 }

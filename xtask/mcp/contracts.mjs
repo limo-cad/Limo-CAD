@@ -230,9 +230,11 @@ try {
  const ownership=await ownershipPage.evaluate(async()=>{
   const {checkScriptDocumentOwnership}=await import('/src/scripts/documentOwnership.browser.test.ts');
   const {checkInboxDocumentOwnership}=await import('/src/scripts/inboxOwnership.browser.test.ts');
+  const {checkPublicationOwnership}=await import('/src/scripts/publicationOwnership.browser.test.ts');
+  const {checkInboxCompletion}=await import('/src/scripts/inboxCompletion.browser.test.ts');
   let timer;
   try{return await Promise.race([(async()=>({
-   script:await checkScriptDocumentOwnership(),inbox:await checkInboxDocumentOwnership(),
+   script:await checkScriptDocumentOwnership(),inbox:await checkInboxDocumentOwnership(),publication:await checkPublicationOwnership(),completion:await checkInboxCompletion(),
   }))(),new Promise((_,reject)=>{
    timer=setTimeout(()=>reject(new Error('Script document ownership contract timed out')),15000);
   })]);}finally{clearTimeout(timer);}

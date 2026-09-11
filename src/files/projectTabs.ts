@@ -26,7 +26,7 @@ import {
   type ProjectTabSummary,
 } from '../store/appStore';
 import type { SaveTarget } from './fileIO';
-import { projectTransitions } from './projectTransitions';
+import { projectTransitions, type ProjectTransitionRelease } from './projectTransitions';
 import type { EngineOperationOwner } from '../engine/activity';
 import { captureProjectOwner } from './projectOwnership';
 
@@ -230,7 +230,7 @@ async function snapshotActiveProjectTab(operationOwner?: EngineOperationOwner): 
   const viewState = activeViewState();
   const modelJson = sameViewState(existingRuntime?.viewState ?? null, viewState)
     ? existingRuntime!.modelJson
-    : await exportProjectModelWithVisibility(undefined, owner.assertCurrent);
+    : await exportProjectModelWithVisibility(undefined, owner.assertSettled);
   await owner.assertCurrent();
   const id = await ensureActiveProjectTab(modelJson);
   // Registration may assign the first tab ID; every existing tab still has
@@ -368,17 +368,18 @@ async function hydrateProjectTab(tabId: string): Promise<void> {
 }
 
 async function withProjectTransition(
-  operation: (replacingActiveModel: () => void) => Promise<boolean>,
+  operation: (replacingActiveModel: () => Promise<void>) => Promise<boolean>,
 ): Promise<boolean> {
   const state = useAppStore.getState();
   if (state.solidBusy || state.historyEdit) return false;
-  let releaseTransition: ((changed?: boolean, published?: boolean) => void) | undefined;
+  let releaseTransition: ProjectTransitionRelease | undefined;
   let changed = false;
   let published = false;
   state.setSolidBusy(true);
   try {
-    const result = await operation(() => {
+    const result = await operation(async () => {
       releaseTransition ??= projectTransitions.begin();
+      await releaseTransition.waitForSnapshots();
       changed = true;
     });
     // Closing an inactive tab or selecting the active tab can succeed without
@@ -395,11 +396,15 @@ async function withProjectTransition(
 /** Register the engine document loaded during application startup. */
 export async function initializeProjectTabs(): Promise<void> {
   const id = await ensureActiveProjectTab();
-  await (await getEngine()).bindProjectSession(id);
-  const runtime = runtimes.get(id);
-  if (runtime) {
-    runtimes.set(id, { ...runtime, resident: true, lastUsedAt: Date.now() });
-  }
+  const transition = projectTransitions.begin();
+  let published = false;
+  try {
+    await transition.waitForSnapshots();
+    await (await getEngine()).bindProjectSession(id);
+    const runtime = runtimes.get(id);
+    if (runtime) runtimes.set(id, { ...runtime, resident: true, lastUsedAt: Date.now() });
+    published = true;
+  } finally { transition(true, published); }
 }
 
 /** Add a fresh document while preserving the current one as an inactive tab. */
@@ -408,7 +413,7 @@ export function createProjectTab(operationOwner?: EngineOperationOwner): Promise
     await snapshotActiveProjectTab(operationOwner);
     const engine = await getEngine();
     const id = createTabId();
-    replacingActiveModel();
+    await replacingActiveModel();
     const update = await engine.createProjectSession(id);
     const modelJson = await engine.exportProjectModel();
     currentProjectTarget = null;
@@ -447,7 +452,7 @@ export function switchProjectTab(tabId: string): Promise<boolean> {
     if (tabId === state.activeProjectTabId) return true;
     if (!state.projectTabs.some((tab) => tab.id === tabId)) return false;
     await snapshotActiveProjectTab();
-    replacingActiveModel();
+    await replacingActiveModel();
     await hydrateProjectTab(tabId);
     return true;
   });
@@ -485,7 +490,7 @@ export function closeProjectTab(
     if (state.projectTabs.length > 1) {
       const adjacent =
         state.projectTabs[index + 1] ?? state.projectTabs[index - 1];
-      replacingActiveModel();
+      await replacingActiveModel();
       await hydrateProjectTab(adjacent.id);
       const runtime = runtimes.get(id);
       if (runtime?.resident) {
@@ -502,7 +507,7 @@ export function closeProjectTab(
     }
 
     const engine = await getEngine();
-    replacingActiveModel();
+    await replacingActiveModel();
     const update = await engine.newProject();
     const modelJson = await engine.exportProjectModel();
     dropApplicationHistory(id);
@@ -603,7 +608,7 @@ export async function collectRecoverableProjectTabs(): Promise<{
   let activeModelJson: string | null = null;
   if (state.dirty && !state.activeSketch && !state.historyEdit) {
     try {
-      activeModelJson = await exportProjectModelWithVisibility(undefined, owner.assertCurrent);
+      activeModelJson = await exportProjectModelWithVisibility(undefined, owner.assertSettled);
       owner.assertSettled();
       if (state.activeProjectTabId) {
         runtimes.set(state.activeProjectTabId, {
@@ -652,51 +657,54 @@ export async function restoreProjectTabs(
   requestedActiveId: string | null,
 ): Promise<boolean> {
   if (recovered.length === 0) return false;
-  const active =
-    recovered.find((tab) => tab.id === requestedActiveId) ?? recovered[0];
-  const { update, finishedSketches, datumPlanes, bodyAppearances, drawingDocument, assemblyDocument, assemblySolution, projectVisibility } =
-    await loadModelState(active.modelJson);
+  return withProjectTransition(async replacingActiveModel => {
+    await replacingActiveModel();
+    const active =
+      recovered.find((tab) => tab.id === requestedActiveId) ?? recovered[0];
+    const { update, finishedSketches, datumPlanes, bodyAppearances, drawingDocument, assemblyDocument, assemblySolution, projectVisibility } =
+      await loadModelState(active.modelJson);
 
-  runtimes.clear();
-  for (const tab of recovered) {
-    runtimes.set(tab.id, {
-      modelJson: tab.modelJson,
-      saveTarget: null,
-      resident: false,
-      lastUsedAt: Date.now(),
-      workspaceTab: 'solid',
-      viewState:
-        tab.id === active.id
-          ? { update, finishedSketches, datumPlanes, bodyAppearances, drawingDocument, assemblyDocument, assemblySolution, projectVisibility }
-          : null,
-    });
-  }
-  currentProjectTarget = null;
-  useAppStore
-    .getState()
-    .loadProjectState(
-      update,
-      finishedSketches,
-      datumPlanes,
-      active.fileName,
-      bodyAppearances,
-      drawingDocument,
-      assemblyDocument,
-      projectVisibility,
-      assemblySolution,
-    );
-  useAppStore.setState({
-    activeProjectTabId: active.id,
-    dirty: true,
-    projectTabs: recovered.map((tab) => ({
-      id: tab.id,
-      name: tab.id === active.id ? update.document.name : tab.name,
-      fileName: tab.fileName,
+    runtimes.clear();
+    for (const tab of recovered) {
+      runtimes.set(tab.id, {
+        modelJson: tab.modelJson,
+        saveTarget: null,
+        resident: false,
+        lastUsedAt: Date.now(),
+        workspaceTab: 'solid',
+        viewState:
+          tab.id === active.id
+            ? { update, finishedSketches, datumPlanes, bodyAppearances, drawingDocument, assemblyDocument, assemblySolution, projectVisibility }
+            : null,
+      });
+    }
+    currentProjectTarget = null;
+    useAppStore
+      .getState()
+      .loadProjectState(
+        update,
+        finishedSketches,
+        datumPlanes,
+        active.fileName,
+        bodyAppearances,
+        drawingDocument,
+        assemblyDocument,
+        projectVisibility,
+        assemblySolution,
+      );
+    useAppStore.setState({
+      activeProjectTabId: active.id,
       dirty: true,
-      workspaceTab: 'solid',
-    })),
+      projectTabs: recovered.map((tab) => ({
+        id: tab.id,
+        name: tab.id === active.id ? update.document.name : tab.name,
+        fileName: tab.fileName,
+        dirty: true,
+        workspaceTab: 'solid',
+      })),
+    });
+    return true;
   });
-  return true;
 }
 
 async function systemMemoryStatus(): Promise<SystemMemoryStatus | null> {

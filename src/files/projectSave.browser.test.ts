@@ -4,6 +4,7 @@ import { newProject, renameProject, saveProject } from './projectFiles';
 import { operateUiFile } from '../uiFiles';
 import { collectRecoverableProjectTabs, getCurrentProjectTarget, recordActiveProjectOpen } from './projectTabs';
 import { createNbcadArchive, readNbcadArchive } from './nbcad';
+import { projectTransitions } from './projectTransitions';
 import type { DocumentDto } from '../engine/types';
 
 export async function checkProjectSaveOwnership() {
@@ -22,6 +23,7 @@ export async function checkProjectSaveOwnership() {
   let beforeCapture: (() => Promise<void>) | undefined;
   let beforeGuardedCapture: (() => void) | undefined;
   let beforeRename: (() => void) | undefined;
+  let nativeGate: {phase: 'capture' | 'rename'; entered(): void; wait: Promise<void>} | undefined;
   let captures = 0;
   let renames = 0;
   const writes: {path: string; bytes: number[]}[] = [];
@@ -44,6 +46,7 @@ export async function checkProjectSaveOwnership() {
       return ok({document: doc(JSON.parse(nativeModel).document.name), scene: initial.solidScene});
     }
     if (command === 'engine_document_set_name') {
+      if (nativeGate?.phase === 'rename') { const gate = nativeGate; nativeGate = undefined; gate.entered(); await gate.wait; }
       beforeRename?.(); beforeRename = undefined;
       const input = JSON.parse(args.payload as string);
       if (typeof input !== 'string') requireModel(input.expected_model_json);
@@ -58,6 +61,7 @@ export async function checkProjectSaveOwnership() {
         const hook = beforeCapture; beforeCapture = undefined; await hook?.();
         return ok(nativeModel);
       }
+      if (nativeGate?.phase === 'capture') { const gate = nativeGate; nativeGate = undefined; gate.entered(); await gate.wait; }
       beforeGuardedCapture?.(); beforeGuardedCapture = undefined;
       const input = JSON.parse(args.payload as string);
       requireModel(input.expected_model_json);
@@ -94,6 +98,15 @@ export async function checkProjectSaveOwnership() {
     await open(original);
     useAppStore.setState({dirty: true});
   };
+  const waitForReplacement = async () => {
+    for (let turn = 0; turn < 30; turn++) {
+      // Let the real file-dialog module's dynamic import settle as well as
+      // ordinary promise continuations; no native call waits for UI Open.
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      try { projectTransitions.assertSettled(projectTransitions.capture()); } catch { return; }
+    }
+    throw new Error('Open must claim replacement ownership before native snapshot completion');
+  };
   useAppStore.setState({document: doc('Original'), dirty: true, activeProjectTabId: 'save-tab',
     projectTabs: [{id: 'save-tab', name: 'Original', fileName: 'original.nbcad', dirty: true, workspaceTab: 'solid'}]});
   await recordActiveProjectOpen(original, {kind: 'native', path: 'C:/original.nbcad', name: 'original.nbcad'});
@@ -123,13 +136,17 @@ export async function checkProjectSaveOwnership() {
     check(captures === capturesBeforeFailure && renames === 0 && writes.length === 0, 'Unverified ownership must not read or mutate the replacement');
 
     await restore();
-    beforeCapture = async () => { await open(); };
+    let pendingOpen: Promise<unknown> | undefined;
+    beforeCapture = async () => { pendingOpen = open(); await waitForReplacement(); };
     const racedRecovery = await collectRecoverableProjectTabs();
     check(racedRecovery.tabs[0]?.modelJson.trim() === original && racedRecovery.tabs[0]?.name === 'Original', 'Recovery racing same-tab Open must not pair the new runtime with old metadata');
+    await pendingOpen;
 
     await restore();
-    beforeCapture = async () => { await open(); };
-    check(/document changed/i.test(await settle(saveProject(true, target))), 'Save must reject replacement during initial snapshot capture');
+    beforeCapture = async () => { pendingOpen = open(); await waitForReplacement(); };
+    const captureFailure = await settle(saveProject(true, target));
+    check(/document changed/i.test(captureFailure), 'Save must reject replacement during initial snapshot capture: ' + captureFailure);
+    await pendingOpen;
     check(writes.length === 0 && renames === 0, 'A raced snapshot must not reach the write');
 
     await restore();
@@ -156,6 +173,29 @@ export async function checkProjectSaveOwnership() {
     check(/document changed/i.test(await settle(saveProject(true, target))), 'Post-write native name adoption must compare the captured model');
     check(nativeModel === replacement && useAppStore.getState().dirty && renames === 0, 'Failed adoption must leave the replacement and dirty flag untouched');
 
+    for (const phase of ['capture', 'save-adoption', 'rename-adoption'] as const) {
+      await restore();
+      let entered!: () => void;
+      const entering = new Promise<void>(resolve => { entered = resolve; });
+      let resume!: () => void;
+      const wait = new Promise<void>(resolve => { resume = resolve; });
+      nativeGate = {phase: phase === 'capture' ? 'capture' : 'rename', entered, wait};
+      const writesBefore = writes.length;
+      const saving = settle(phase === 'rename-adoption' ? renameProject('Renamed original') : saveProject(true, target));
+      await entering;
+      const identicalOpen = open(original);
+      await waitForReplacement();
+      check(nativeModel === original, 'Byte-identical Open must wait for the in-flight snapshot lease');
+      resume();
+      const outcome = await saving;
+      check(phase === 'capture' ? /document changed/i.test(outcome) : outcome === '',
+        'Capture cancels for pending Open; an already successful native rename adopts its original owner before Open');
+      await identicalOpen;
+      check(nativeModel === original && useAppStore.getState().document?.name === 'Original'
+        && getCurrentProjectTarget()?.name === 'original.nbcad', 'Late Save/Rename must not change an identical same-tab replacement');
+      if (phase === 'capture') check(writes.length === writesBefore, 'A capture canceled by Open must not write');
+    }
+
     await restore();
     check(await saveProject(true, target), 'A stable Save As must succeed');
     check(JSON.parse(nativeModel).document.name === 'original-copy' && !useAppStore.getState().dirty, 'Successful Save As must adopt its name and clean only its owner');
@@ -168,6 +208,6 @@ export async function checkProjectSaveOwnership() {
     check(await saveProject(), 'A proven unchanged rejected Open must leave Save available');
     return {savePickerOpenGuard: true, unverifiedSaveAndRenameGuard: true, unverifiedTabSnapshotGuard: true,
       retainedRecovery: true, captureRace: true, failedWrite: true, delayedWrite: true, nativeSnapshotGuard: true,
-      postWriteAdoptionGuard: true, successfulSaveAs: true, renameThenSave: true, rejectedOpenKeepsSave: true, busyNativeEditGuard: true};
+      postWriteAdoptionGuard: true, identicalReplacementLeases: true, successfulSaveAs: true, renameThenSave: true, rejectedOpenKeepsSave: true, busyNativeEditGuard: true};
   } finally { delete w.__TAURI_INTERNALS__; }
 }

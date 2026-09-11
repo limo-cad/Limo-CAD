@@ -1,5 +1,6 @@
 import {useAppStore} from '../store/appStore';
 import {presentation} from '../operationPlayback';
+import {trackEngineOperation} from '../engine/activity';
 import {closeScripts, runLoadedScript, stopScript, useScriptWorkspace, type ScriptInfo} from './workspace';
 import type {DocumentDto, SolidUpdateDto} from '../engine/types';
 
@@ -71,6 +72,14 @@ export async function checkScriptDocumentOwnership() {
     check(!calls.includes('engine_project_session_create') && !calls.includes('native_script_run'),
       'A replaced document during inspection must cancel before creating a tab or starting native commands');
 
+    const unrelatedNativeReply = deferred<void>();
+    const unrelatedOperation = trackEngineOperation(unrelatedNativeReply.promise);
+    await runLoadedScript();
+    check(!calls.includes('engine_project_session_create') && !calls.includes('native_script_run'),
+      'The script handoff token must not exempt an unrelated pending engine operation');
+    unrelatedNativeReply.resolve();
+    await unrelatedOperation;
+
     let replaceAfterNew = true;
     const stopWatchingNew = presentation.subscribe(() => {
       if (!replaceAfterNew) return;
@@ -117,7 +126,7 @@ export async function checkScriptDocumentOwnership() {
     check(presentation.snapshot().stopped && !useScriptWorkspace.getState().running
       && useScriptWorkspace.getState().error === 'Native receipt was lost',
       'A native failure without a completion control stops the owning playback and releases the workspace');
-    return {checks: ['inspection-owner', 'new-handoff-owner', 'published-session-identity', 'completion-owner', 'save-retains-record',
+    return {checks: ['inspection-owner', 'unrelated-engine-operation', 'new-handoff-owner', 'published-session-identity', 'completion-owner', 'save-retains-record',
       'close-during-run', 'same-tab-open-reset', 'stopped-run-isolation', 'late-native-completion', 'native-failure'],
       nativeRuns: calls.filter(call => call === 'native_script_run').length};
   } finally {

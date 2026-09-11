@@ -27,6 +27,7 @@ export async function checkInboxDocumentOwnership() {
       useAppStore.setState({engineKind: 'tauri'});
       presentation.control({command: 'configure', mode: 'present'});
       const inbox = deferred<unknown>();
+      const inboxEntered = deferred<void>();
       const queried = deferred<void>();
       const hydration = deferred<unknown>();
       const calls: string[] = [];
@@ -37,6 +38,7 @@ export async function checkInboxDocumentOwnership() {
         if (command === 'engine_project_export_model') return ok(JSON.stringify(update));
         if (command === 'mcp_session_bridge_apply_inbox') {
           check(args.documentId === 'document-A' && args.sessionId === 'session-A', 'Inbox calls must carry their published owner');
+          inboxEntered.resolve();
           return inbox.promise;
         }
         if (command === 'engine_drawing_document' && phase === 'drawing-refresh') {
@@ -58,6 +60,7 @@ export async function checkInboxDocumentOwnership() {
       check(await publishCurrentSession(), 'Publish A before polling');
       calls.length = 0;
       const applying = applyInboxNow();
+      await inboxEntered.promise;
       if (phase.endsWith('refresh')) {
         inbox.resolve({applied: true, name: phase === 'drawing-refresh' ? 'drawing_add_view'
           : phase === 'assembly-refresh' ? 'assembly_create_joint' : 'sketch_end'});
@@ -87,6 +90,7 @@ export async function checkInboxDocumentOwnership() {
       let nativeSessionId = 'session-A';
       let pendingB = 1;
       const delayedPoll = deferred<void>();
+      const pollEntered = deferred<void>();
       let pollCount = 0;
       w.__TAURI_INTERNALS__ = {async invoke(command, args = {}) {
         if (command === 'mcp_session_bridge_reserve') return {session_id: nativeSessionId, project_session_id: 'same-tab', generation: 1};
@@ -99,6 +103,7 @@ export async function checkInboxDocumentOwnership() {
           if (args.sessionId === 'session-A') {
             check(args.documentId === 'same-tab' && Boolean(args.rejectReason) === stopped,
               'Normal and stopped polls must carry both identities');
+            pollEntered.resolve();
             await delayedPoll.promise;
           }
           // Model the native publisher-lock check before it reads the queue.
@@ -113,12 +118,13 @@ export async function checkInboxDocumentOwnership() {
       check(await publishCurrentSession(), 'Publish A before its delayed poll');
       if (stopped) presentation.control({command: 'stop'});
       const applying = applyInboxNow();
+      await pollEntered.promise;
       nativeSessionId = 'session-B';
       useAppStore.getState().loadProjectState({...update, document: {...document, name: 'B'}}, [], [], 'B.nbcad');
-      check(await publishCurrentSession(), 'Publish the replacement in the same tab');
       delayedPoll.resolve();
       await applying;
       check(pendingB === 1, 'A delayed old poll/rejection must leave the replacement queue untouched');
+      check(await publishCurrentSession(), 'Publish the replacement in the same tab');
       await applyInboxNow();
       check(pendingB === 0 && pollCount === 2, 'The replacement must immediately consume its own inbox');
       outcomes.push(stopped ? 'stopped-poll-start' : 'poll-start');

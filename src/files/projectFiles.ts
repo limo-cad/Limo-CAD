@@ -135,12 +135,18 @@ export async function renameProject(requestedName?: string): Promise<boolean> {
 
   await owner.assertCurrent();
   const engine = await getEngine();
-  const expectedModelJson = await exportProjectModelWithVisibility(engine, owner.assertCurrent);
-  const document = await engine.setDocumentName(name, expectedModelJson);
-  await owner.assertCurrent();
-  useAppStore.setState({ document, dirty: true });
-  recordActiveProjectMetadata();
-  return true;
+  const expectedModelJson = await exportProjectModelWithVisibility(engine, owner.assertSettled);
+  const snapshot = projectTransitions.beginSnapshot();
+  try {
+    snapshot.assertCurrent(); owner.assertSettled();
+    const document = await engine.setDocumentName(name, expectedModelJson);
+    // A queued Open cannot begin native replacement until this lease ends.
+    // Finish adopting the successful native rename before releasing it.
+    snapshot.assertOwned(); owner.assertUnchanged();
+    useAppStore.setState({ document, dirty: true });
+    recordActiveProjectMetadata();
+    return true;
+  } finally { snapshot.release(); }
 }
 
 export async function saveProject(saveAs = false, targetOverride?: SaveTarget): Promise<boolean> {
@@ -155,7 +161,7 @@ export async function saveProject(saveAs = false, targetOverride?: SaveTarget): 
   }
   await owner.assertCurrent();
   const engine = await getEngine();
-  const expectedModelJson = await exportProjectModelWithVisibility(engine, owner.assertCurrent);
+  const expectedModelJson = await exportProjectModelWithVisibility(engine, owner.assertSettled);
   const existingTarget = !saveAs ? getCurrentProjectTarget() : null;
   const target =
     targetOverride ?? existingTarget ??
@@ -169,25 +175,34 @@ export async function saveProject(saveAs = false, targetOverride?: SaveTarget): 
   const designName = existingTarget
     ? state.document.name
     : withoutExtension(target.name);
-  const modelJson = await engine.exportProjectModel({expected_model_json: expectedModelJson, save_name: designName});
-  await owner.assertCurrent();
+  let modelJson: string;
+  const capture = projectTransitions.beginSnapshot();
+  try {
+    capture.assertCurrent(); owner.assertSettled();
+    modelJson = await engine.exportProjectModel({expected_model_json: expectedModelJson, save_name: designName});
+    capture.assertCurrent(); owner.assertSettled();
+  } finally { capture.release(); }
   // Rename a serialized copy under the engine lock. A failed write never
   // renames the live model, and captured bytes cannot turn into another tab.
   await writeSaveTarget(target, createNbcadArchive(modelJson));
   await owner.assertCurrent();
-  const document = await engine.setDocumentName(designName, expectedModelJson);
-  await owner.assertCurrent();
-  const reusableTarget = target.kind === 'download' ? null : target;
-  await recordActiveProjectSave(modelJson, reusableTarget, owner.assertSettled);
-  owner.assertSettled();
-  useAppStore.setState({
-    document,
-    dirty: false,
-    projectFileName: target.name,
-  });
-  recordActiveProjectMetadata();
-  if (!hasUnsavedProjects()) clearProjectRecovery();
-  return true;
+  const adoption = projectTransitions.beginSnapshot();
+  try {
+    adoption.assertCurrent(); owner.assertSettled();
+    const document = await engine.setDocumentName(designName, expectedModelJson);
+    adoption.assertOwned(); owner.assertUnchanged();
+    const reusableTarget = target.kind === 'download' ? null : target;
+    await recordActiveProjectSave(modelJson, reusableTarget, owner.assertUnchanged);
+    adoption.assertOwned(); owner.assertUnchanged();
+    useAppStore.setState({
+      document,
+      dirty: false,
+      projectFileName: target.name,
+    });
+    recordActiveProjectMetadata();
+    if (!hasUnsavedProjects()) clearProjectRecovery();
+    return true;
+  } finally { adoption.release(); }
 }
 
 /** Open a fresh untitled design in a new window-level document tab. */
@@ -273,6 +288,7 @@ export async function openProject(options?: { filePath: string; discardChanges?:
   let changed = false;
   let published = false;
   try {
+    await releaseTransition.waitForSnapshots();
     const engine = await getEngine();
     changed = true;
     const update = await engine.loadProjectModel(modelJson).catch((error: unknown) => {

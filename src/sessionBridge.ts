@@ -14,7 +14,7 @@
  * are dead-lettered. Not in-process shared memory. MCP never writebacks model.json.
  */
 import { invoke } from '@tauri-apps/api/core';
-import {currentHistoryProjectKey,recordDrawingHistory} from './engine/applicationHistory';
+import {currentHistoryProjectKey,dropApplicationHistory,recordDrawingHistory} from './engine/applicationHistory';
 import { listen } from '@tauri-apps/api/event';
 import { getEngine } from './engine';
 import { applyLiveUiControl } from './liveUiBridge';
@@ -22,7 +22,8 @@ import { SerialPlayback, presentOperation, presentation, wakePlayback } from './
 import { getSessionCamera } from './components/viewport/cameraApi';
 import { captureSessionSnapshot, synchronizeSnapshotVisibility } from './sessionSnapshot';
 import type { SolidUpdateDto } from './engine/types';
-import { projectTransitions } from './files/projectTransitions';
+import { projectTransitions, type ProjectTransitionRelease } from './files/projectTransitions';
+import { applicationExitBarrier } from './files/applicationExit';
 import {
   useAppStore,
   type AppMode,
@@ -100,6 +101,7 @@ let started = false;
 
 interface InboxApplyResult {
   applied: boolean;
+  project_replaced?: boolean;
   dead_lettered?: boolean;
   reason?: string;
   seq?: number;
@@ -136,29 +138,41 @@ export async function publishNow(): Promise<boolean> {
 
 /** The identity belongs to the exact reservation whose snapshot write passed,
  * not a later active-tab query that could silently retarget script startup. */
-export async function publishCurrentSession(): Promise<PublishedSession | null> {
+export async function publishCurrentSession(transition?: ProjectTransitionRelease): Promise<PublishedSession | null> {
   const state = useAppStore.getState();
   if (state.engineKind !== 'tauri') return null;
   const documentRevision = presentation.documentVersion();
   const focus = focusFromUi(state.mode, state.activeTool, activeSolidDialog(state));
+  let snapshot: ReturnType<typeof projectTransitions.beginSnapshot> | undefined;
   try {
+    snapshot = projectTransitions.beginSnapshot(transition);
+    const assertCurrent = () => {
+      snapshot!.assertCurrent();
+      if (documentRevision !== presentation.documentVersion()) throw new Error('The document changed during publication');
+    };
+    const owned = async <T,>(operation: () => Promise<T>): Promise<T> => {
+      assertCurrent();
+      const result = await operation();
+      assertCurrent();
+      return result;
+    };
     // Reserve captures engine_revision and project/session identity before
     // export. Write carries that identity so a tab switch cannot publish
     // this snapshot into another session. If a UI mutation lands before
     // write, native rejects the stale snapshot and we retry.
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      const engine = await getEngine();
+      const engine = await owned(getEngine);
       const { reservation, activeSketch, modelJson } = await captureSessionSnapshot({
         synchronizeVisibility: () => synchronizeSnapshotVisibility(
           useAppStore.getState().projectVisibility,
-          () => engine.projectVisibility(),
-          visibility => engine.setProjectVisibility(visibility),
+          () => owned(() => engine.projectVisibility()),
+          visibility => owned(() => engine.setProjectVisibility(visibility)),
         ),
-        reserve: () => invoke<PublishReservation>('mcp_session_bridge_reserve'),
-        activeSketch: () => engine.activeSketch(),
-        exportModel: () => engine.exportProjectModel(),
+        reserve: () => owned(() => invoke<PublishReservation>('mcp_session_bridge_reserve')),
+        activeSketch: () => owned(() => engine.activeSketch()),
+        exportModel: () => owned(() => engine.exportProjectModel()),
       });
-      const written = await invoke<PublishWriteResult>('mcp_session_bridge_write', {
+      const written = await owned(() => invoke<PublishWriteResult>('mcp_session_bridge_write', {
         payload: JSON.stringify({
           focus,
           model_json: modelJson,
@@ -167,7 +181,7 @@ export async function publishCurrentSession(): Promise<PublishedSession | null> 
           session_id: reservation.session_id,
           project_session_id: reservation.project_session_id ?? null,
         }),
-      });
+      }));
       if (
         written?.skipped &&
         (written.reason === 'engine_revision_changed' ||
@@ -184,6 +198,8 @@ export async function publishCurrentSession(): Promise<PublishedSession | null> 
     }
   } catch (error) {
     console.debug('[sessionBridge] publish failed', error);
+  } finally {
+    snapshot?.release();
   }
   return null;
 }
@@ -192,8 +208,9 @@ export async function publishCurrentSession(): Promise<PublishedSession | null> 
 export async function applyInboxNow(): Promise<void> {
   const state = useAppStore.getState();
   if (state.engineKind !== 'tauri' || inboxApplying) return;
-  const ownerRevision = presentation.documentVersion();
+  let ownerRevision = presentation.documentVersion();
   const ownsDocument = () => ownerRevision === presentation.documentVersion();
+  try { projectTransitions.assertSettled(projectTransitions.capture()); } catch { return; }
   // Reuse the exact successfully published identity. Asking native for the
   // current session during a delayed poll could instead return a replacement.
   if (inboxOwner?.documentRevision !== ownerRevision || !inboxOwner.documentId) return;
@@ -215,15 +232,28 @@ export async function applyInboxNow(): Promise<void> {
   // inboxApplying also suppresses a second engine_revision bump if any store
   // subscription still notes mutations: native apply already advanced it.
   inboxApplying = true;
+  const releaseExit = applicationExitBarrier.hold();
   const releaseTransition = projectTransitions.begin();
   let changed = true; // An uncertain native failure must invalidate captures.
   let published = false;
+  let replacingDocument = false;
   try {
+    await releaseTransition.waitForSnapshots();
+    if (!ownsDocument()) return;
     const drawingBefore=useAppStore.getState().drawingDocument;
     const drawingProject=currentHistoryProjectKey();
     const result = await invoke<InboxApplyResult>('mcp_session_bridge_apply_inbox', owner);
     if (!ownsDocument()) return;
-    changed = Boolean(result?.applied);
+    changed = Boolean(result?.applied || result?.project_replaced);
+    replacingDocument = Boolean(result?.project_replaced);
+    if (result?.project_replaced && !result.applied) {
+      // Native may have committed before a repair/transport failure. Retire
+      // old playback and preserve an unpublished transition until recovery.
+      presentation.documentChanged();
+      ownerRevision += 1;
+      useAppStore.setState({dirty: true});
+      return;
+    }
     if (result?.dead_lettered) {
       console.warn('[sessionBridge] inbox op dead-lettered; queue unblocked', result);
       // Keep polling so the next sequence can apply on a subsequent tick.
@@ -233,14 +263,16 @@ export async function applyInboxNow(): Promise<void> {
     presentation.modelApplied();
     if (publishTimer) { clearTimeout(publishTimer); publishTimer = null; }
     try {
-      if (result.result?.scene && result.result.document && !result.name?.startsWith('sketch_')) {
+      if (!result.project_replaced && result.result?.scene && result.result.document && !result.name?.startsWith('sketch_')) {
         useAppStore.getState().applySolidUpdate(result.result);
       } else {
         // Targeted / live refresh with dirty:true — never loadDocument (clears dirty).
-        await useAppStore.getState().refreshAfterInboxApply(result.name, ownerRevision);
+        await useAppStore.getState().refreshAfterInboxApply(result.name, ownerRevision, result.project_replaced);
+        if (result.project_replaced && presentation.documentVersion() === ownerRevision + 1) ownerRevision += 1;
       }
       if (!ownsDocument()) return;
       published = true;
+      if (result.project_replaced) dropApplicationHistory(drawingProject);
       if(result.name?.startsWith('drawing_')&&result.name!=='drawing_select_sheet') {
         recordDrawingHistory(drawingProject,drawingBefore,useAppStore.getState().drawingDocument);
       }
@@ -251,21 +283,26 @@ export async function applyInboxNow(): Promise<void> {
         if (created.length) presentation.emphasize(created.map(body => body.id));
       }
     } finally {
-      // Native already archived the seq and bumped engine_revision. Publish
-      // even if leftover store refresh throws so cad_refresh sees the live
-      // engine. Next applyInboxNow is a no-op on the archived seq.
-      if (ownsDocument()) await presentOperation(result.name ?? 'Model operation');
+      // An archived native result still needs a coherent frontend snapshot.
+      // Failed hydration must not synchronize old visibility into the new
+      // model or bless a mixed document as ready for further commands.
+      if (ownsDocument() && published) await presentOperation(result.name ?? 'Model operation');
       // Sequential scripts need this result before their next operation.
       // Publishing now removes the old 300 ms debounce from every command.
-      if (ownsDocument() && !await publishNow() && ownsDocument()) scheduleSessionBridgePublish();
+      if (ownsDocument() && published && !await publishCurrentSession(releaseTransition) && ownsDocument()) scheduleSessionBridgePublish();
     }
   } catch (error) {
     console.debug('[sessionBridge] inbox apply failed', error);
+    if (ownsDocument() && changed && !published) {
+      if (replacingDocument) { presentation.documentChanged(); ownerRevision += 1; }
+      useAppStore.setState({dirty: true});
+    }
   } finally {
     // The replacement has its own transition/publication. A late result from
     // its predecessor must neither invalidate nor bless the current model.
     releaseTransition(ownsDocument() && changed, published);
     inboxApplying = false;
+    releaseExit();
   }
 }
 

@@ -5,10 +5,10 @@
  * high-frequency drawing calls (preview/add/move during pointer gestures)
  * are issued by the Viewport directly against `getEngine()`.
  */
-import { getEngine, type Engine } from './index';
+import { getEngine, ProjectLoadError, type Engine } from './index';
+import { synchronizeSnapshotVisibility } from '../sessionSnapshot';
 import { projectTransitions } from '../files/projectTransitions';
 import { presentation } from '../operationPlayback';
-import { synchronizeSnapshotVisibility } from '../sessionSnapshot';
 import type {
   BodyFeatureRequestDto,
   DatumPlaneRequest,
@@ -602,10 +602,18 @@ export async function redoApplicationHistory(): Promise<void> {
   const entry = takeSolidRedoSnapshot(projectKey);
   if (!entry) return;
   const finishHistoryMutation = beginHistoryMutation();
+  const transition = projectTransitions.begin();
+  let changed = false;
+  let published = false;
   state.setSolidBusy(true);
   try {
+    await transition.waitForSnapshots();
     const engine = await getEngine();
-    const update = await engine.loadProjectModel(entry.modelJson);
+    changed = true;
+    const update = await engine.loadProjectModel(entry.modelJson).catch((error: unknown) => {
+      changed = !(error instanceof ProjectLoadError && error.engineState === 'unchanged');
+      throw error;
+    });
     const [finishedSketches, datumPlanes, bodyAppearances] = await Promise.all([
       engine.finishedSketches(),
       engine.datumPlaneDefinitions(),
@@ -618,20 +626,23 @@ export async function redoApplicationHistory(): Promise<void> {
       planes: datumPlanes,
     });
     state.setBodyAppearances(bodyAppearances);
+    presentation.documentChanged();
+    published = true;
     // Let the store observer advance this tab's model generation while the
     // history transaction is still protected, then authorize the next older
     // Redo entry against the newly restored model.
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     authorizeNextSolidRedo(projectKey);
   } catch (error) {
-    // The project load is transactional. If replay fails, retain the Redo
-    // entry and leave the current model untouched.
+    // Retain the entry for retry; failed hydration may leave native ownership
+    // unverified, so its transition remains unpublished until a later load.
     returnSolidRedoSnapshot(projectKey, entry);
     state.setConstraintDialog({
       titleKey: 'constraints.invalidTitle',
       message: error instanceof Error ? error.message : 'Redo failed',
     });
   } finally {
+    transition(changed, published);
     state.setSolidBusy(false);
     finishHistoryMutation();
   }
