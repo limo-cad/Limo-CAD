@@ -739,12 +739,12 @@ export class WasmEngine implements Engine {
     return this.executeSolidPlan(plan);
   }
 
-  async setDocumentName(name: string): Promise<DocumentDto> {
-    return unwrapEnvelope(this.inner.document_set_name(JSON.stringify(name)));
+  async setDocumentName(name: string, expectedModelJson?: string): Promise<DocumentDto> {
+    return unwrapEnvelope(this.inner.document_set_name(JSON.stringify(expectedModelJson === undefined ? name : { name, expected_model_json: expectedModelJson })));
   }
 
-  async exportProjectModel(): Promise<string> {
-    return unwrapEnvelope(this.inner.project_export_model());
+  async exportProjectModel(options?: { expected_model_json: string; save_name?: string }): Promise<string> {
+    return unwrapEnvelope(this.inner.project_export_model(options === undefined ? undefined : JSON.stringify(options)));
   }
 
   async bindProjectSession(sessionId: string): Promise<void> {

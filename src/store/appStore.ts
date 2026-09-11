@@ -3085,12 +3085,18 @@ export function bodyAppearanceFor(bodyId: number): BodyAppearance {
  */
 export async function exportProjectModelWithVisibility(
   providedEngine?: Engine,
+  assertCurrent?: () => void | Promise<void>,
 ): Promise<string> {
+  await assertCurrent?.();
   const engine = providedEngine ?? await getEngine();
+  await assertCurrent?.();
   await synchronizeSnapshotVisibility(
     useAppStore.getState().projectVisibility,
-    () => engine.projectVisibility(),
-    visibility => engine.setProjectVisibility(visibility),
+    async () => { await assertCurrent?.(); return engine.projectVisibility(); },
+    async visibility => { await assertCurrent?.(); return engine.setProjectVisibility(visibility); },
   );
-  return engine.exportProjectModel();
+  await assertCurrent?.();
+  const model = await engine.exportProjectModel();
+  await assertCurrent?.();
+  return model;
 }

@@ -237,12 +237,10 @@ macro_rules! engine_command {
 
 engine_command!(engine_begin_sketch, "begin_sketch");
 engine_command!(engine_document_set_name, "document_set_name");
-engine_command!(
-    engine_project_export_model,
-    "project_export_model",
-    no_payload,
-    read
-);
+#[tauri::command]
+fn engine_project_export_model(state: tauri::State<'_, AppState>, payload: Option<String>) -> String {
+    state.engine_call("project_export_model", payload.as_deref().unwrap_or(""))
+}
 engine_command!(engine_end_sketch, "end_sketch", no_payload);
 engine_command!(
     engine_finished_sketches,

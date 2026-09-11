@@ -41,15 +41,77 @@ enum BeginSketchPayload {
     Plane(PlaneRef),
 }
 
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum DocumentNamePayload {
+    Name(String),
+    Guarded {
+        name: String,
+        expected_model_json: String,
+    },
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectExportPayload {
+    expected_model_json: String,
+    save_name: Option<String>,
+}
+
+fn require_project_snapshot(
+    manager: &SketchManager,
+    expected: &str,
+) -> Result<String, SessionError> {
+    let current = manager.export_project_model()?;
+    let expected: serde_json::Value = serde_json::from_str(expected)
+        .map_err(|error| SessionError::Solid(format!("invalid expected project model: {error}")))?;
+    let actual: serde_json::Value =
+        serde_json::from_str(&current).map_err(|error| SessionError::Solid(error.to_string()))?;
+    if actual != expected {
+        return Err(SessionError::Solid(
+            "The document changed while saving. Start Save again.".into(),
+        ));
+    }
+    Ok(current)
+}
+
 /// Dispatch one engine call. Unknown methods and malformed payloads yield
 /// an error envelope, never a panic.
 pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> String {
     match method {
         "document" => ok_json(manager.document_dto()),
-        "document_set_name" => {
-            with_payload(payload, |name: String| manager.set_document_name(name))
+        "document_set_name" => with_payload(payload, |request: DocumentNamePayload| {
+            let name = match request {
+                DocumentNamePayload::Name(name) => name,
+                DocumentNamePayload::Guarded {
+                    name,
+                    expected_model_json,
+                } => {
+                    require_project_snapshot(manager, &expected_model_json)?;
+                    name
+                }
+            };
+            manager.set_document_name(name)
+        }),
+        "project_export_model" if payload.is_empty() || payload == "null" => {
+            to_json(manager.export_project_model())
         }
-        "project_export_model" => to_json(manager.export_project_model()),
+        "project_export_model" => with_payload(payload, |request: ProjectExportPayload| {
+            let current = require_project_snapshot(manager, &request.expected_model_json)?;
+            let Some(name) = request.save_name else {
+                return Ok(current);
+            };
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(SessionError::Solid("document name cannot be empty".into()));
+            }
+            // Save As serializes the requested name without renaming the live
+            // model before disk IO succeeds. This runs under the host's manager
+            // lock, so the check and snapshot cannot straddle another edit.
+            let mut saved: serde_json::Value = serde_json::from_str(&current)
+                .map_err(|error| SessionError::Solid(error.to_string()))?;
+            saved["document"]["name"] = name.into();
+            Ok(saved.to_string())
+        }),
         "project_prepare_new" => to_json(manager.prepare_new_project()),
         "project_prepare_load" => {
             with_payload(payload, |model: String| manager.prepare_load_project(model))
@@ -433,5 +495,82 @@ fn to_json<R: Serialize>(result: Result<R, SessionError>) -> String {
             .to_string(),
             _ => err_json(e.to_string()),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{json, Value};
+
+    fn value(response: String) -> Value {
+        let envelope: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(envelope["ok"], true, "{envelope}");
+        envelope["value"].clone()
+    }
+
+    #[test]
+    fn guarded_save_copy_and_name_adoption_preserve_the_captured_model() {
+        let mut manager = SketchManager::new();
+        value(handle(&mut manager, "document_set_name", r#""Original""#));
+        let original = value(handle(&mut manager, "project_export_model", ""));
+        let model: Value = serde_json::from_str(original.as_str().unwrap()).unwrap();
+        let request = json!({
+            "expected_model_json": serde_json::to_string_pretty(&model).unwrap(),
+            "save_name": "  Saved copy  "
+        });
+        let saved = value(handle(
+            &mut manager,
+            "project_export_model",
+            &request.to_string(),
+        ));
+        let mut expected = model.clone();
+        expected["document"]["name"] = json!("Saved copy");
+        assert_eq!(
+            serde_json::from_str::<Value>(saved.as_str().unwrap()).unwrap(),
+            expected
+        );
+        assert_eq!(
+            value(handle(&mut manager, "project_export_model", "")),
+            original,
+            "serializing Save As must not rename or rewrite live document history"
+        );
+        value(handle(
+            &mut manager,
+            "document_set_name",
+            &json!({
+                "name": "Saved copy", "expected_model_json": original
+            })
+            .to_string(),
+        ));
+        assert_eq!(manager.document_dto().name, "Saved copy");
+        for (method, payload) in [
+            ("project_export_model", request),
+            (
+                "document_set_name",
+                json!({"name":"Stale save", "expected_model_json":original}),
+            ),
+        ] {
+            let response: Value =
+                serde_json::from_str(&handle(&mut manager, method, &payload.to_string())).unwrap();
+            assert_eq!(response["ok"], false);
+            assert!(response["error"]
+                .as_str()
+                .unwrap()
+                .contains("document changed"));
+        }
+        assert_eq!(manager.document_dto().name, "Saved copy");
+        let current = value(handle(&mut manager, "project_export_model", ""));
+        let invalid: Value = serde_json::from_str(&handle(
+            &mut manager,
+            "project_export_model",
+            &json!({"expected_model_json": current, "save_name":"   "}).to_string(),
+        ))
+        .unwrap();
+        assert_eq!(invalid["ok"], false);
+        assert_eq!(
+            value(handle(&mut manager, "project_export_model", "")),
+            current
+        );
     }
 }

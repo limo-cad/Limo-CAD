@@ -35,6 +35,7 @@ import { requestUnsavedDecision } from './unsavedChanges';
 import { requestMeshExportScope } from '../components/MeshExportDialog';
 import { runExport } from './exportFlow';
 import { projectTransitions } from './projectTransitions';
+import { captureProjectOwner } from './projectOwnership';
 
 const PROJECT_TYPE: SaveType = {
   description: 'noBS CAD Project',
@@ -115,9 +116,13 @@ function assertNoFeatureEdit(): void {
  * filename as the project name. */
 export async function renameProject(requestedName?: string): Promise<boolean> {
   assertNoFeatureEdit();
-  const state = useAppStore.getState();
+  const owner = captureProjectOwner();
+  const { state } = owner;
   if (state.document === null) {
     throw new Error(translate('file.noOpenProject'));
+  }
+  if (state.activeSketch) {
+    throw new Error(translate('file.finishBeforeSave'));
   }
   const input =
     requestedName ??
@@ -127,7 +132,11 @@ export async function renameProject(requestedName?: string): Promise<boolean> {
   if (!name) throw new Error(translate('file.renameEmpty'));
   if (name === state.document.name) return true;
 
-  const document = await (await getEngine()).setDocumentName(name);
+  await owner.assertCurrent();
+  const engine = await getEngine();
+  const expectedModelJson = await exportProjectModelWithVisibility(engine, owner.assertCurrent);
+  const document = await engine.setDocumentName(name, expectedModelJson);
+  await owner.assertCurrent();
   useAppStore.setState({ document, dirty: true });
   recordActiveProjectMetadata();
   return true;
@@ -135,45 +144,47 @@ export async function renameProject(requestedName?: string): Promise<boolean> {
 
 export async function saveProject(saveAs = false, targetOverride?: SaveTarget): Promise<boolean> {
   assertNoFeatureEdit();
-  const state = useAppStore.getState();
+  const owner = captureProjectOwner();
+  const { state } = owner;
   if (state.document === null) {
     throw new Error(translate('file.noOpenProject'));
   }
   if (state.activeSketch) {
     throw new Error(translate('file.finishBeforeSave'));
   }
+  await owner.assertCurrent();
+  const engine = await getEngine();
+  const expectedModelJson = await exportProjectModelWithVisibility(engine, owner.assertCurrent);
   const existingTarget = !saveAs ? getCurrentProjectTarget() : null;
   const target =
     targetOverride ?? existingTarget ??
     (await chooseSaveTarget(currentSuggestedName(), PROJECT_TYPE));
   if (!target) return false;
 
-  const engine = await getEngine();
+  await owner.assertCurrent();
   // An explicit Rename Project changes model identity without moving the
   // file. Only a new destination (first Save or Save As) derives the model
   // name from the filename selected by the user.
   const designName = existingTarget
     ? state.document.name
     : withoutExtension(target.name);
-  const originalName = state.document?.name ?? 'Untitled';
-  const document = await engine.setDocumentName(designName);
-  let modelJson: string;
-  try {
-    modelJson = await exportProjectModelWithVisibility(engine);
-    await writeSaveTarget(target, createNbcadArchive(modelJson));
-  } catch (error) {
-    if (designName !== originalName) {
-      await engine.setDocumentName(originalName).catch(() => undefined);
-    }
-    throw error;
-  }
+  const modelJson = await engine.exportProjectModel({expected_model_json: expectedModelJson, save_name: designName});
+  await owner.assertCurrent();
+  // Rename a serialized copy under the engine lock. A failed write never
+  // renames the live model, and captured bytes cannot turn into another tab.
+  await writeSaveTarget(target, createNbcadArchive(modelJson));
+  await owner.assertCurrent();
+  const document = await engine.setDocumentName(designName, expectedModelJson);
+  await owner.assertCurrent();
   const reusableTarget = target.kind === 'download' ? null : target;
+  await recordActiveProjectSave(modelJson, reusableTarget, owner.assertSettled);
+  owner.assertSettled();
   useAppStore.setState({
     document,
     dirty: false,
     projectFileName: target.name,
   });
-  await recordActiveProjectSave(modelJson, reusableTarget);
+  recordActiveProjectMetadata();
   if (!hasUnsavedProjects()) clearProjectRecovery();
   return true;
 }

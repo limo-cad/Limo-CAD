@@ -509,12 +509,12 @@ export class TauriEngine implements Engine {
     });
   }
 
-  async setDocumentName(name: string): Promise<DocumentDto> {
-    return this.call('engine_document_set_name', name);
+  async setDocumentName(name: string, expectedModelJson?: string): Promise<DocumentDto> {
+    return this.call('engine_document_set_name', expectedModelJson === undefined ? name : { name, expected_model_json: expectedModelJson });
   }
 
-  async exportProjectModel(): Promise<string> {
-    return this.call('engine_project_export_model');
+  async exportProjectModel(options?: { expected_model_json: string; save_name?: string }): Promise<string> {
+    return this.call('engine_project_export_model', options);
   }
 
   private async projectSessionCall<T>(

@@ -220,7 +220,7 @@ export class WasmEngine {
      */
     preview_segment_locked(payload: string): string;
     profile_catalog(): string;
-    project_export_model(): string;
+    project_export_model(payload?: string | null): string;
     project_prepare_load(payload: string): string;
     project_prepare_new(): string;
     project_set_visibility(payload: string): string;
@@ -395,7 +395,7 @@ export interface InitOutput {
     readonly wasmengine_preview_segment: (a: number, b: number, c: number) => [number, number];
     readonly wasmengine_preview_segment_locked: (a: number, b: number, c: number) => [number, number];
     readonly wasmengine_profile_catalog: (a: number) => [number, number];
-    readonly wasmengine_project_export_model: (a: number) => [number, number];
+    readonly wasmengine_project_export_model: (a: number, b: number, c: number) => [number, number];
     readonly wasmengine_project_prepare_load: (a: number, b: number, c: number) => [number, number];
     readonly wasmengine_project_prepare_new: (a: number) => [number, number];
     readonly wasmengine_project_set_visibility: (a: number, b: number, c: number) => [number, number];

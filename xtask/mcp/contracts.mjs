@@ -201,6 +201,14 @@ try {
  });
  console.log('PASS browser STEP adapter ownership: '+JSON.stringify(browserStep));
  await stepPage.close();
+ const savePage=await browser.newPage();
+ await savePage.goto(server.resolvedUrls.local[0]+'mcp-contract');
+ const saveOwnership=await savePage.evaluate(async()=>{
+  const {checkProjectSaveOwnership}=await import('/src/files/projectSave.browser.test.ts');
+  return await checkProjectSaveOwnership();
+ });
+ console.log('PASS production project Save ownership: '+JSON.stringify(saveOwnership));
+ await savePage.close();
 } finally {await browser?.close();await server.close();}
 
 

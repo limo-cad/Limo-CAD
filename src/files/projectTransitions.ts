@@ -28,11 +28,15 @@ export class ProjectTransitions {
     return this.revision;
   }
 
+  assertSettled(revision: number): void {
+    if (this.pending.size || !this.published || revision !== this.revision) throw new Error(changedMessage);
+  }
+
   async assertCurrent(revision: number): Promise<void> {
     // A connected CAD polls continuously. Wait for an outstanding empty poll;
     // it must not randomly reject a valid export or invalidate its ownership.
     while (this.pending.size) await Promise.all(this.pending);
-    if (!this.published || revision !== this.revision) throw new Error(changedMessage);
+    this.assertSettled(revision);
   }
 }
 

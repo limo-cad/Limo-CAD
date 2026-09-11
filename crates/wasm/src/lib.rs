@@ -36,8 +36,8 @@ impl WasmEngine {
         host::handle(&mut self.manager, "document_set_name", payload)
     }
 
-    pub fn project_export_model(&mut self) -> String {
-        host::handle(&mut self.manager, "project_export_model", "")
+    pub fn project_export_model(&mut self, payload: Option<String>) -> String {
+        host::handle(&mut self.manager, "project_export_model", payload.as_deref().unwrap_or(""))
     }
 
     pub fn project_prepare_new(&mut self) -> String {
