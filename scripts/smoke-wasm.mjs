@@ -125,7 +125,9 @@ check('guarded export without a saved name preserves the original snapshot',
   unwrap(engine.project_export_model(JSON.stringify({expected_model_json: originalJson}))) === originalJson);
 const savedName = 'Saved copy Ω';
 const savedModel = JSON.parse(unwrap(engine.project_export_model(JSON.stringify({
-  expected_model_json: JSON.stringify(originalModel, null, 2),
+  // Forward the captured engine text exactly as the product does. A JavaScript
+  // parse/stringify changes 1.0 to 1 and can round native integer identifiers.
+  expected_model_json: originalJson,
   save_name: `  ${savedName}  `,
 }))));
 const expectedSavedModel = {...originalModel, document: {...originalModel.document, name: savedName}};
