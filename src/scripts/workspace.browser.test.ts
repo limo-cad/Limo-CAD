@@ -5,6 +5,7 @@ import {ScriptPanel} from '../components/ScriptPanel';
 import {inspectUi, operateUi} from '../uiControl';
 import {closeScripts, editScriptSource, runLoadedScript, showScriptExample,
   useScriptWorkspace, validateScriptSource, type ScriptExample, type ScriptInfo} from './workspace';
+import {checkScriptHandoffOwnership} from './handoff.browser.test';
 
 export async function checkScriptSourceOwnership() {
   const check = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
@@ -67,7 +68,8 @@ export async function checkScriptSourceOwnership() {
     resolveInspect(info(example.source));
     await retry;
     check(useScriptWorkspace.getState().error === null && useScriptWorkspace.getState().open, 'A subsequent explicit load recovers');
-    return {checks: ['busy-source-lock', 'MCP-readonly', 'load-run-exclusion', 'close-during-load', 'inspection-failure-recovery'], calls};
+    return {checks: ['busy-source-lock', 'MCP-readonly', 'load-run-exclusion', 'close-during-load', 'inspection-failure-recovery'], calls,
+      handoff: await checkScriptHandoffOwnership()};
   } finally {
     root.unmount(); container.remove();
     useScriptWorkspace.setState(initial);

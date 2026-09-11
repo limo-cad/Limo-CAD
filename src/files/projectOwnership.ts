@@ -1,16 +1,16 @@
 import { useAppStore } from '../store/appStore';
-import { pendingEngineOperations } from '../engine/activity';
+import { pendingEngineOperations, type EngineOperationOwner } from '../engine/activity';
 import { projectTransitions } from './projectTransitions';
 
 /** Retain the published document and every frontend-owned part of its model.
  * A tab ID survives Open, and dirty alone does not identify a later edit. */
-export function captureProjectOwner(allowSolidBusy = false) {
+export function captureProjectOwner(allowSolidBusy = false, operationOwner?: EngineOperationOwner) {
   const state = useAppStore.getState();
   const revision = projectTransitions.capture();
   const assertSettled = () => {
     projectTransitions.assertSettled(revision);
     const current = useAppStore.getState();
-    if ((!allowSolidBusy && current.solidBusy) || pendingEngineOperations() > 0
+    if ((!allowSolidBusy && current.solidBusy) || pendingEngineOperations(operationOwner) > 0
       || (!state.projectBusy && current.projectBusy)
       || current.activeProjectTabId !== state.activeProjectTabId
       || current.document !== state.document || current.solidScene !== state.solidScene

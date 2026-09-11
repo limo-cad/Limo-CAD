@@ -35,6 +35,7 @@ import { requestUnsavedDecision } from './unsavedChanges';
 import { requestMeshExportScope } from '../components/MeshExportDialog';
 import { runExport } from './exportFlow';
 import { projectTransitions } from './projectTransitions';
+import type { EngineOperationOwner } from '../engine/activity';
 import { captureProjectOwner } from './projectOwnership';
 
 const PROJECT_TYPE: SaveType = {
@@ -190,8 +191,8 @@ export async function saveProject(saveAs = false, targetOverride?: SaveTarget): 
 }
 
 /** Open a fresh untitled design in a new window-level document tab. */
-export function newProject(): Promise<boolean> {
-  return createProjectTab();
+export function newProject(operationOwner?: EngineOperationOwner): Promise<boolean> {
+  return createProjectTab(operationOwner);
 }
 
 /** Close one document tab; the last tab is replaced with a fresh Untitled. */

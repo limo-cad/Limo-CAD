@@ -169,18 +169,18 @@ export async function runLoadedScript(): Promise<void> {
   try {
     // The shared UI receipt waits for document handoff, then acknowledges the
     // new session. Playback itself stays asynchronous so controls remain usable.
-    await trackEngineOperation((async () => {
+    await trackEngineOperation(async operationOwner => {
       // Validate before creating a document or changing the existing one.
       const info = await inspect(state.source);
       checkCancelled();
       useScriptWorkspace.setState({ info });
       await Promise.allSettled([...previews.values()]);
       checkCancelled();
-      if (!await newProject()) throw new Error('A new design could not be created.');
+      if (!await newProject(operationOwner)) throw new Error('A new design could not be created.');
       checkCancelled();
       if (!await publishNow()) throw new Error('The new design is not ready. Please try Run again.');
       checkCancelled();
-    })());
+    });
     attempt.nativeStarted = true;
     await invoke('native_script_run', { source: state.source, mode: state.mode, speed: state.speed });
     checkCancelled();

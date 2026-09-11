@@ -27,6 +27,7 @@ import {
 } from '../store/appStore';
 import type { SaveTarget } from './fileIO';
 import { projectTransitions } from './projectTransitions';
+import type { EngineOperationOwner } from '../engine/activity';
 import { captureProjectOwner } from './projectOwnership';
 
 interface ProjectTabRuntime {
@@ -212,9 +213,9 @@ async function ensureActiveProjectTab(
   return id;
 }
 
-async function snapshotActiveProjectTab(): Promise<string> {
+async function snapshotActiveProjectTab(operationOwner?: EngineOperationOwner): Promise<string> {
   // The tab wrapper itself owns solidBusy, before replacing the active model.
-  const owner = captureProjectOwner(true);
+  const owner = captureProjectOwner(true, operationOwner);
   const { state } = owner;
   await owner.assertCurrent();
   if (state.historyEdit) {
@@ -402,9 +403,9 @@ export async function initializeProjectTabs(): Promise<void> {
 }
 
 /** Add a fresh document while preserving the current one as an inactive tab. */
-export function createProjectTab(): Promise<boolean> {
+export function createProjectTab(operationOwner?: EngineOperationOwner): Promise<boolean> {
   return withProjectTransition(async (replacingActiveModel) => {
-    await snapshotActiveProjectTab();
+    await snapshotActiveProjectTab(operationOwner);
     const engine = await getEngine();
     const id = createTabId();
     replacingActiveModel();
