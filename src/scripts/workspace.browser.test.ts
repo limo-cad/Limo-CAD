@@ -10,8 +10,10 @@ export async function checkScriptSourceOwnership() {
   const check = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
   const initial = useScriptWorkspace.getState();
   const info = (source: string): ScriptInfo => ({name: source, source, step_count: 1, check_count: 0});
-  const example: ScriptExample = {id: 'replacement', name: 'Replacement', summary: '', kind: 'lesson',
-    focus_operations: [], operations: [], preview: false, source: 'replacement source'};
+  // The lifecycle fixture also runs before the collection metadata migration.
+  const exampleData = {id: 'replacement', name: 'Replacement', summary: '', group: 'document', operation: 'cad_document',
+    kind: 'lesson', focus_operations: [], operations: [], preview: false, source: 'replacement source'};
+  const example: ScriptExample = exampleData;
   let resolveInspect!: (value: ScriptInfo) => void;
   let rejectInspect!: (reason: Error) => void;
   const calls: string[] = [];

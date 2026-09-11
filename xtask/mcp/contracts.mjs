@@ -14,7 +14,7 @@ function visit(node){
 }
 visit(dispatcher);
 
-const server=await createServer({configFile:false,optimizeDeps:{noDiscovery:true,entries:[]},server:{host:'127.0.0.1',port:0},logLevel:'error',plugins:[{name:'mcp-contract',configureServer(server){server.middlewares.use('/mcp-contract',(_req,res)=>{
+const server=await createServer({configFile:false,optimizeDeps:{noDiscovery:true,entries:[],include:['react','react-dom/client','react/jsx-runtime','react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0},logLevel:'error',plugins:[{name:'mcp-contract',configureServer(server){server.middlewares.use('/mcp-contract',(_req,res)=>{
  res.setHeader('Content-Type','text/html');
  res.end('<!doctype html><html><body><main data-mcp-surface="test-surface"><button>Run</button><button disabled>Disabled</button><label>Name<input value="old"></label><label>Choice<select><option value="a">A</option><option disabled value="b">B</option></select></label><button id="hidden" hidden>Hidden</button></main></body></html>');
 });}}]});
