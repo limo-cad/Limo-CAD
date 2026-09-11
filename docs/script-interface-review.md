@@ -61,7 +61,10 @@ startup, inbox work, publication and delayed presentation controls.
   status and speed must agree, and controls must reclaim viewport space when
   closed. Keep keyboard dismissal and inspection available without hover timing
   traps or a popup that obstructs ordinary modeling. Passing control contracts
-  alone does not approve this layout.
+  alone does not approve this layout. During the latest attached fast-mode vise
+  run, status still reported 0/692 while drawing operations were being applied;
+  the final script report correctly completed all 692 steps. Expose inexpensive
+  in-flight progress without adding a publication roundtrip for each step.
 - **Stage construction for teaching.** The grouped closing-view operation now
   exists. During long builds, retained sketches/datums and overlapping part
   definitions can still obscure the current sketch before assembly placement.

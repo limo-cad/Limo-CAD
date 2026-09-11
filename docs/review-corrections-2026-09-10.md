@@ -84,6 +84,46 @@ the active session, exported a valid 417,078-byte 3MF afterward, retired the
 session on native New, and rejected a write addressed to that retired session.
 Other applications and user documents were preserved throughout validation.
 
+## Refreshed vise and turbine verification
+
+The same rebuilt binaries also completed two independent headless runs of each
+manufacturing candidate. Both runs matched each other and the earlier saved
+reference model, sketches, geometry and solved assembly exactly:
+
+- Vise: 692 steps and 55 final checks per run; 93.287 and 90.158 seconds.
+- Turbine: 1,622 steps and 11 final checks per run; 232.508 and 198.761 seconds.
+
+Both then completed attached desktop runs in fast mode, using one owned window
+in the background. The vise completed in 254.526 seconds and the turbine in
+860.710 seconds, with the same checks and exact reference comparison passing.
+These runs overlapped other verification and are not controlled performance
+benchmarks. Their purpose is to qualify the shared history/session correction
+against the other two complete recipes, including their drawings.
+
+MCP Save and File/Open preserved every saved project value, including all five
+vise and 16 turbine material assignments. Saved archive SHA-256 values:
+
+- Vise: `4349d78aa21280861aa777fe6c41e2cfdae9f53e551c97b7b99c3e7097f2f99d`
+- Turbine: `a7ba4f197738722b53a1c954c5757e002911560591f164d2f0dccf14f5645965`
+
+MCP Close acknowledged the request and the owned process then exited; no CAD
+process remained. A close acknowledgement is not an instantaneous process-exit
+observation. The local evidence is retained under `flagship-refresh` alongside
+the bench verification. Earlier manufacturing manifests remain historical;
+these new runs do not add physical fit, load, wear or generator-output evidence.
+
+## Published CI follow-up
+
+The first new [PR100 macOS packaging job](https://github.com/jackControls/noBS-CAD/actions/runs/34554969245/job/103125612038)
+compiled and ad-hoc signed the app, then failed in `bundle_dmg.sh`. Its log did
+not expose the underlying subprocess failure. Successful packages on other
+layers do not establish the cause of that failure.
+
+Independent main-based [PR117](https://github.com/jackControls/noBS-CAD/pull/117)
+enables the locked Tauri CLI's debug output in the existing ad-hoc DMG step.
+Production signing and validation are unchanged. This repairs missing diagnostic
+output; the original disk-image failure still needs a confirmed outcome.
+
 ## Binary identification
 
 - Desktop SHA-256: `341E41E7EFCC4AADE18C0BA9878850371C3B997157DF837A8A99459029906D61`
