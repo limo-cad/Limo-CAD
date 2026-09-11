@@ -176,6 +176,11 @@ try {
   })]);}finally{clearTimeout(timer);}
  });
  console.log('PASS production script source lifecycle: '+JSON.stringify(scripts));
+ const nativePreview=await scriptPage.evaluate(async()=>{
+  const {checkNativeScriptPreview}=await import('/src/scripts/preview.browser.test.ts');
+  return checkNativeScriptPreview();
+ });
+ console.log('PASS production native script preview: '+JSON.stringify(nativePreview));
  await scriptPage.close();
  const recoveryPage=await browser.newPage();
  await recoveryPage.goto(server.resolvedUrls.local[0]+'mcp-contract');

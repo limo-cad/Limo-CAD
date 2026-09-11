@@ -2,7 +2,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { create } from 'zustand';
 import { isTauriRuntime } from '../engine';
 import { trackEngineOperation } from '../engine/activity';
-import type { SolidSceneDto } from '../engine/types';
 import { chooseOpenFile, chooseSaveTarget, writeSaveTarget } from '../files/fileIO';
 import { newProject } from '../files/projectFiles';
 import { presentation } from '../operationPlayback';
@@ -27,7 +26,7 @@ export interface ScriptInfo {
   path?: string;
   chapters?: Array<{ chapter?: string; text: string }>;
 }
-export interface ScriptPreviewFrame { caption: string; scene: SolidSceneDto }
+export interface ScriptPreviewFrame { caption: string; previewId: string; frameIndex: number }
 interface ScriptWorkspace {
   open: boolean;
   loading: boolean;
@@ -51,6 +50,7 @@ export const useScriptWorkspace = create<ScriptWorkspace>(() => ({
 
 let examplesRequest: Promise<ScriptExample[]> | null = null;
 const previews = new Map<string, Promise<ScriptPreviewFrame[]>>();
+const previewSources = new WeakMap<ScriptPreviewFrame, { key: string; example: ScriptExample; previewId: string }>();
 let currentRun: { cancelled: boolean; nativeStarted: boolean; ownerRevision: number | null } | null = null;
 let documentRevision = presentation.documentVersion();
 presentation.subscribe(() => {
@@ -234,14 +234,51 @@ export function previewExample(example: ScriptExample): Promise<ScriptPreviewFra
   if (!previews.has(key)) {
     if (useScriptWorkspace.getState().running) return Promise.reject(new Error('A script is running. Preview it after playback finishes.'));
     // Bound retained previews; failures can be retried after an active run ends.
-    if (previews.size >= 8) previews.delete(previews.keys().next().value!);
-    previews.set(key, invoke<{ exports: { preview_frames: ScriptPreviewFrame[] } }>(
+    if (previews.size >= 8) {
+      const oldest = previews.keys().next().value!;
+      void previews.get(oldest)!.then(frames => {
+        return invoke('native_script_preview_release', { previewId: frames[0].previewId });
+      }).catch(() => undefined);
+      previews.delete(oldest);
+    }
+    previews.set(key, invoke<{ preview_id: string; captions: string[] }>(
       'native_script_preview', { source: example.source },
     ).then(report => {
-      const frames = report.exports.preview_frames;
-      if (!Array.isArray(frames) || !frames.length) throw new Error('The script did not provide preview frames.');
-      return frames;
+      if (!Array.isArray(report.captions) || !report.captions.length || !report.preview_id) throw new Error('The script did not provide preview frames.');
+      const source = { key, example, previewId: report.preview_id };
+      return report.captions.map((caption, frameIndex) => {
+        const frame = { caption, previewId: report.preview_id, frameIndex };
+        previewSources.set(frame, source);
+        return frame;
+      });
     }).catch(error => { previews.delete(key); throw error; }));
   }
   return previews.get(key)!;
+}
+
+/** Native pixels from immutable frames; no live camera/model commands. */
+export async function renderScriptPreview(frame: ScriptPreviewFrame, viewId: string, revision: number,
+  pose: { yaw: number; pitch: number }, width: number, height: number): Promise<Blob> {
+  const render = (previewId: string) => invoke<ArrayBuffer>('native_script_preview_render', { request: {
+    previewId, frameIndex: frame.frameIndex, viewId, revision, width, height, ...pose,
+  } });
+  const source = previewSources.get(frame);
+  const requestedId = source?.previewId ?? frame.previewId;
+  let bytes: ArrayBuffer;
+  try { bytes = await render(requestedId); }
+  catch (error) {
+    if (!source || !errorMessage(error).includes('Feature preview expired')) throw error;
+    // Rust also bounds cached bytes, so it may evict before the browser's
+    // entry-count LRU. Rebuild the same immutable source once, never the model.
+    const cached = previews.get(source.key);
+    if (cached && (await cached)[0].previewId === requestedId && previews.get(source.key) === cached) previews.delete(source.key);
+    const refreshed = await previewExample(source.example);
+    source.previewId = refreshed[0].previewId;
+    bytes = await render(source.previewId);
+  }
+  return new Blob([bytes], { type: 'image/png' });
+}
+export function openScriptPreview(): Promise<string> { return invoke<string>('native_script_preview_open'); }
+export function closeScriptPreview(viewId: string): void {
+  void invoke('native_script_preview_close', { viewId }).catch(() => undefined);
 }

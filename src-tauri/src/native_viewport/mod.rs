@@ -13,6 +13,8 @@
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 mod platform;
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+pub(crate) use platform::script_preview;
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 mod profile_outline;
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub mod ui;

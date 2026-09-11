@@ -7,11 +7,15 @@ use std::sync::{
 
 use serde_json::{json, Value};
 
+use crate::native_viewport::script_preview::{
+    Frame, PreviewDescriptor, PreviewService, RenderRequest,
+};
 use crate::{session_bridge::SessionBridgeState, state::AppState};
 
 #[derive(Default)]
 pub struct NativeScriptState {
     active: Arc<AtomicBool>,
+    previews: Arc<PreviewService>,
 }
 
 struct RunningScript(Arc<AtomicBool>);
@@ -76,14 +80,63 @@ pub async fn native_script_run(
 pub async fn native_script_preview(
     state: tauri::State<'_, NativeScriptState>,
     source: String,
-) -> Result<Value, Value> {
+) -> Result<PreviewDescriptor, Value> {
     let running = state.acquire()?;
+    let previews = state.previews.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _running = running;
-        nbcad_mcp::preview_script(&source).map_err(|error| failure("preview_failed", error))
+        let mut report =
+            nbcad_mcp::preview_script(&source).map_err(|error| failure("preview_failed", error))?;
+        let frames: Vec<Frame> = serde_json::from_value(report["exports"]["preview_frames"].take())
+            .map_err(|error| failure("preview_failed", error))?;
+        previews
+            .retain(frames)
+            .map_err(|error| failure("preview_failed", error))
     })
     .await
     .map_err(|error| failure("script_worker_failed", error))?
+}
+
+#[tauri::command]
+pub fn native_script_preview_open(
+    state: tauri::State<'_, NativeScriptState>,
+) -> Result<String, Value> {
+    state
+        .previews
+        .open_view()
+        .map_err(|error| failure("preview_failed", error))
+}
+
+#[tauri::command]
+pub async fn native_script_preview_render(
+    state: tauri::State<'_, NativeScriptState>,
+    request: RenderRequest,
+) -> Result<tauri::ipc::Response, Value> {
+    let response = state
+        .previews
+        .render(request)
+        .map_err(|error| failure("preview_failed", error))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        response
+            .wait()
+            .map(tauri::ipc::Response::new)
+            .map_err(|error| failure("preview_failed", error))
+    })
+    .await
+    .map_err(|error| failure("preview_worker_failed", error))?
+}
+
+#[tauri::command]
+pub fn native_script_preview_close(state: tauri::State<'_, NativeScriptState>, view_id: String) {
+    state.previews.close_view(&view_id);
+}
+
+#[tauri::command]
+pub fn native_script_preview_release(
+    state: tauri::State<'_, NativeScriptState>,
+    preview_id: String,
+) {
+    state.previews.release(&preview_id);
 }
 
 #[tauri::command]

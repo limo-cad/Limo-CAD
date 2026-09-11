@@ -116,6 +116,9 @@ use super::{
 };
 use crate::state::BOOTSTRAP_SESSION_ID;
 
+#[path = "script_preview.rs"]
+pub(crate) mod script_preview;
+
 #[cfg(target_os = "linux")]
 const INITIAL_PHYSICAL_SIZE: u32 = 1;
 #[cfg(not(target_os = "linux"))]
@@ -2250,15 +2253,7 @@ struct CadSketchPointOutlineGizmos;
 #[derive(Default, Reflect, GizmoConfigGroup)]
 struct CadSketchPointGizmos;
 
-fn build_bevy_app(
-    view_handle: NativeViewHandle,
-    scale_factor: f32,
-) -> Result<bevy::app::App, String> {
-    let mut app = bevy::app::App::new();
-    #[cfg(target_os = "linux")]
-    let present_mode = PresentMode::Fifo;
-    #[cfg(not(target_os = "linux"))]
-    let present_mode = PresentMode::AutoNoVsync;
+fn cad_render_plugin() -> RenderPlugin {
     let render_plugin = RenderPlugin {
         // This renderer advances only in response to bridge commands. On
         // Windows, asynchronously compiled PBR/UI pipelines can otherwise
@@ -2284,6 +2279,18 @@ fn build_bevy_app(
         })),
         ..render_plugin
     };
+    render_plugin
+}
+
+fn build_bevy_app(
+    view_handle: NativeViewHandle,
+    scale_factor: f32,
+) -> Result<bevy::app::App, String> {
+    let mut app = bevy::app::App::new();
+    #[cfg(target_os = "linux")]
+    let present_mode = PresentMode::Fifo;
+    #[cfg(not(target_os = "linux"))]
+    let present_mode = PresentMode::AutoNoVsync;
     let plugins = DefaultPlugins
         .build()
         .set(WindowPlugin {
@@ -2304,18 +2311,10 @@ fn build_bevy_app(
             exit_condition: ExitCondition::DontExit,
             close_when_requested: false,
         })
-        .set(render_plugin);
+        .set(cad_render_plugin());
     #[cfg(target_os = "linux")]
     let plugins = plugins.disable::<PipelinedRenderingPlugin>();
-    app.add_plugins(plugins)
-        .init_gizmo_group::<CadHighlightGizmos>()
-        .init_gizmo_group::<CadSketchGizmos>()
-        .init_gizmo_group::<CadPickFeedbackHaloGizmos>()
-        .init_gizmo_group::<CadPickFeedbackGizmos>()
-        .init_gizmo_group::<CadDirectPickFeedbackGizmos>()
-        .init_gizmo_group::<CadProfileBorderGizmos>()
-        .init_gizmo_group::<CadSketchPointOutlineGizmos>()
-        .init_gizmo_group::<CadSketchPointGizmos>();
+    app.add_plugins(plugins);
 
     let (window_entity, holder) = {
         let world = app.world_mut();
@@ -2337,6 +2336,23 @@ fn build_bevy_app(
         Some(raw_handle.clone());
     app.world_mut().entity_mut(window_entity).insert(raw_handle);
 
+    install_cad_scene(&mut app);
+    app.finish();
+    app.cleanup();
+    Ok(app)
+}
+
+/// The embedded viewport and immutable script previews run these exact systems
+/// in separate worlds. A preview never replaces the live model or camera.
+fn install_cad_scene(app: &mut bevy::app::App) {
+    app.init_gizmo_group::<CadHighlightGizmos>()
+        .init_gizmo_group::<CadSketchGizmos>()
+        .init_gizmo_group::<CadPickFeedbackHaloGizmos>()
+        .init_gizmo_group::<CadPickFeedbackGizmos>()
+        .init_gizmo_group::<CadDirectPickFeedbackGizmos>()
+        .init_gizmo_group::<CadProfileBorderGizmos>()
+        .init_gizmo_group::<CadSketchPointOutlineGizmos>()
+        .init_gizmo_group::<CadSketchPointGizmos>();
     let initial_palette = ViewportPalette::default();
     app.insert_resource(ClearColor(rgb(initial_palette.background)))
         .insert_resource(GlobalAmbientLight {
@@ -2373,17 +2389,17 @@ fn build_bevy_app(
             )
                 .chain(),
         );
-
-    app.finish();
-    app.cleanup();
-    Ok(app)
 }
+
+#[derive(Resource)]
+struct SceneImageTarget(Handle<Image>);
 
 fn setup_scene(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut gizmo_config: ResMut<GizmoConfigStore>,
+    target: Option<Res<SceneImageTarget>>,
 ) {
     configure_viewport_line_widths(
         &mut gizmo_config,
@@ -2413,41 +2429,52 @@ fn setup_scene(
 
     let camera = ViewportCamera::default();
     let (key_transform, fill_transform) = camera_relative_light_transforms(camera);
-    commands.spawn((
-        Name::new("React-synchronized CAD camera"),
-        NativeViewportCamera,
-        NativeCadCamera,
-        Camera3d::default(),
-        BoxShadowSamples(6),
-        Projection::Perspective(PerspectiveProjection {
-            fov: camera.vertical_fov_degrees.to_radians(),
-            near: 0.1,
-            far: 20_000.0,
-            ..default()
-        }),
-        camera_transform(camera),
-    ));
+    let model_camera = commands
+        .spawn((
+            Name::new("React-synchronized CAD camera"),
+            NativeViewportCamera,
+            NativeCadCamera,
+            Camera3d::default(),
+            BoxShadowSamples(6),
+            Projection::Perspective(PerspectiveProjection {
+                fov: camera.vertical_fov_degrees.to_radians(),
+                near: 0.1,
+                far: 20_000.0,
+                ..default()
+            }),
+            camera_transform(camera),
+        ))
+        .id();
 
-    commands.spawn((
-        Name::new("CAD transient overlay camera"),
-        NativeViewportCamera,
-        NativeOverlayCamera,
-        IsDefaultUiCamera,
-        Camera3d::default(),
-        Camera {
-            order: 1,
-            clear_color: ClearColorConfig::None,
-            ..default()
-        },
-        Projection::Perspective(PerspectiveProjection {
-            fov: camera.vertical_fov_degrees.to_radians(),
-            near: 0.1,
-            far: 20_000.0,
-            ..default()
-        }),
-        camera_transform(camera),
-        RenderLayers::layer(1),
-    ));
+    let overlay_camera = commands
+        .spawn((
+            Name::new("CAD transient overlay camera"),
+            NativeViewportCamera,
+            NativeOverlayCamera,
+            IsDefaultUiCamera,
+            Camera3d::default(),
+            Camera {
+                order: 1,
+                clear_color: ClearColorConfig::None,
+                ..default()
+            },
+            Projection::Perspective(PerspectiveProjection {
+                fov: camera.vertical_fov_degrees.to_radians(),
+                near: 0.1,
+                far: 20_000.0,
+                ..default()
+            }),
+            camera_transform(camera),
+            RenderLayers::layer(1),
+        ))
+        .id();
+    if let Some(target) = target {
+        for camera in [model_camera, overlay_camera] {
+            commands
+                .entity(camera)
+                .insert(bevy::camera::RenderTarget::Image(target.0.clone().into()));
+        }
+    }
 
     commands.spawn((
         Name::new("CAD key light"),
@@ -2639,6 +2666,7 @@ fn rebuild_occt_meshes(
 
 fn apply_camera(
     camera: Res<CameraResource>,
+    image_target: Option<Res<SceneImageTarget>>,
     mut revisions: ResMut<RenderedRevisions>,
     mut query: Query<(&mut Transform, &mut Projection), With<NativeViewportCamera>>,
     mut key_lights: Query<
@@ -2670,6 +2698,12 @@ fn apply_camera(
                 .vertical_fov_degrees
                 .clamp(1.0, 150.0)
                 .to_radians();
+            if image_target.is_some() {
+                let distance = Vec3::from_array(camera.camera.position)
+                    .distance(Vec3::from_array(camera.camera.target));
+                perspective.near = (distance / 100_000.0).max(0.001);
+                perspective.far = (distance * 3.0).max(100.0);
+            }
         }
     }
     let (key_transform, fill_transform) = camera_relative_light_transforms(camera.camera);
