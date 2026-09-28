@@ -1,5 +1,4 @@
 use super::*;
-use serde_json::json;
 use std::sync::mpsc;
 
 fn synthetic(closed: Arc<AtomicBool>) -> (SixDofConnection, SixDofMouseInfo) {
@@ -28,50 +27,6 @@ fn synthetic(closed: Arc<AtomicBool>) -> (SixDofConnection, SixDofMouseInfo) {
             serial_number: Some("fixture-only".into()),
         },
     )
-}
-
-#[test]
-fn tauri_adapter_keeps_existing_event_names_and_exact_wire_payloads() {
-    for (event, name, payload) in [
-        (
-            SixDofEvent::Motion(MotionPacket {
-                translation: Some([-350, 0, 350]),
-                rotation: None,
-            }),
-            "six-dof-mouse-motion",
-            json!({"translation":[-350,0,350]}),
-        ),
-        (
-            SixDofEvent::Motion(MotionPacket {
-                translation: None,
-                rotation: Some([1, 2, -3]),
-            }),
-            "six-dof-mouse-motion",
-            json!({"rotation":[1,2,-3]}),
-        ),
-        (
-            SixDofEvent::Motion(MotionPacket {
-                translation: Some([0; 3]),
-                rotation: Some([0; 3]),
-            }),
-            "six-dof-mouse-motion",
-            json!({"translation":[0,0,0],"rotation":[0,0,0]}),
-        ),
-        (
-            SixDofEvent::Button(ButtonPacket { button: 32 }),
-            "six-dof-mouse-button",
-            json!({"button":32}),
-        ),
-        (
-            SixDofEvent::Error("Disconnected: device unavailable".into()),
-            "six-dof-mouse-error",
-            json!("Disconnected: device unavailable"),
-        ),
-    ] {
-        let (actual_name, actual_payload) = event.web_event();
-        assert_eq!(actual_name, name);
-        assert_eq!(serde_json::to_value(actual_payload).unwrap(), payload);
-    }
 }
 
 #[test]

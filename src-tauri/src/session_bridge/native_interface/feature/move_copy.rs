@@ -400,7 +400,6 @@ impl Gizmo {
     }
 }
 
-#[cfg(feature = "dev-bevy-host")]
 pub(super) fn pointer(
     world: &mut World,
     services: &super::super::controller::NativeServices,

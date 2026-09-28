@@ -217,19 +217,14 @@ pub(crate) fn cancel_native_pointer(world: &mut World, handle: &NativeInterfaceH
 /// controller tests without initializing an OS event loop or GPU.
 pub(crate) fn build(configure: impl FnOnce(&mut App, NativeInterfaceHandle)) -> App {
     let mut app = App::new();
-    // Keep migration windows within the existing desktop's supported size;
-    // the native forms must not silently overlap below the product minimum.
-    let desktop: serde_json::Value = serde_json::from_str(include_str!("../../tauri.conf.json"))
-        .expect("The bundled desktop configuration is valid JSON");
-    let dimensions = &desktop["app"]["windows"][0];
     let plugins = DefaultPlugins
         .set(WindowPlugin {
             primary_window: Some(Window {
                 title: "noBS CAD".into(),
                 resolution: WindowResolution::new(1360, 860),
                 resize_constraints: bevy::window::WindowResizeConstraints {
-                    min_width: dimensions["minWidth"].as_f64().unwrap_or(1200.) as f32,
-                    min_height: dimensions["minHeight"].as_f64().unwrap_or(760.) as f32,
+                    min_width: 1200.,
+                    min_height: 760.,
                     ..default()
                 },
                 present_mode: bevy::window::PresentMode::Fifo,

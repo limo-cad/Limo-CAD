@@ -21,7 +21,6 @@ fn interface_camera_cannot_render_world_grid_or_transient_geometry() {
     assert!(!layers.intersects(&RenderLayers::layer(1)));
 }
 
-#[cfg(feature = "dev-bevy-host")]
 #[test]
 fn scene_only_changes_require_a_new_submission_without_rebinding_controls() {
     let (mut app, handle, _, wakes) = fixture();
@@ -360,7 +359,6 @@ fn closing_a_modal_restores_previous_focus_only_if_the_control_survives() {
     assert!(handle.inspect().is_ok());
 }
 
-#[cfg(feature = "dev-bevy-host")]
 #[test]
 fn submitted_receipt_cannot_claim_a_newer_unrendered_layout() {
     let (mut app, handle, entity, _) = fixture();

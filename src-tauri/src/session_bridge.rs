@@ -1013,7 +1013,6 @@ impl SessionBridgeState {
         result
     }
 
-    #[cfg(any(test, feature = "dev-bevy-host"))]
     fn engine_revision_for_window(&self, window_label: &str) -> Result<Option<u64>, String> {
         let mut publishers = self
             .publishers
@@ -1517,7 +1516,6 @@ fn apply_or_reject_one_inbox_op(
         return result;
     }
     let outcome = (|| {
-        #[cfg(feature = "dev-bevy-host")]
         let edit_history = if model_changed {
             let next_revision = project
                 .engine_revision
@@ -1534,7 +1532,6 @@ fn apply_or_reject_one_inbox_op(
         };
         let result = dispatch_inbox_on_engine(engine, &name, &arguments)?;
         // The model has committed even if publication below later fails.
-        #[cfg(feature = "dev-bevy-host")]
         if let Some(history) = edit_history {
             project.native_history = history;
         }
@@ -1602,140 +1599,6 @@ fn apply_or_reject_one_inbox_op(
             }))
         }
     }
-}
-
-/// Reserve a monotonic generation before the frontend starts an async export.
-#[tauri::command]
-pub fn mcp_session_bridge_reserve(
-    window: tauri::WebviewWindow,
-    state: tauri::State<'_, SessionBridgeState>,
-    engine: tauri::State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
-    state.reserve_for_window_on_project(window.label(), Some(&engine.active_project_session_id()))
-}
-
-/// Publish a read-only snapshot for MCP attach.
-///
-/// Payload JSON: `{ focus, model_json?, active_sketch_json?, generation,
-/// session_id, project_session_id? }`. `session_id` (and project identity
-/// when reserved) must match the reservation; write never targets the
-/// currently active tab by generation alone.
-#[tauri::command]
-pub fn mcp_session_bridge_write(
-    window: tauri::WebviewWindow,
-    state: tauri::State<'_, SessionBridgeState>,
-    payload: String,
-) -> Result<serde_json::Value, String> {
-    let parsed: PublishPayload = serde_json::from_str(&payload)
-        .map_err(|error| format!("invalid session payload: {error}"))?;
-    state.write_for_window(window.label(), parsed)
-}
-
-/// Wake the UI from native events, rather than depending on background WebView
-/// timers. The UI remains the owner of live apply and presentation ordering.
-pub fn start_mcp_wake_loop(app: tauri::AppHandle) {
-    use tauri::{Emitter, Manager};
-    std::thread::spawn(move || {
-        let mut awake_until = HashMap::<String, u64>::new();
-        let mut last_keepalive = now_ms();
-        loop {
-            std::thread::sleep(std::time::Duration::from_millis(25));
-            let windows = app.webview_windows();
-            if windows.is_empty() {
-                break;
-            }
-            if now_ms().saturating_sub(last_keepalive) >= 10_000 {
-                last_keepalive = now_ms();
-                for window in windows.values() {
-                    let _ = window.emit("mcp-keepalive", ());
-                }
-            }
-            let state = app.state::<SessionBridgeState>();
-            let targets = match state.publishers.lock() {
-                Ok(publishers) => publishers
-                    .iter()
-                    .filter_map(|(label, publisher)| {
-                        publisher
-                            .active_project_session_id
-                            .as_ref()
-                            .and_then(|id| publisher.by_project.get(id))
-                            .map(|project| (label.clone(), project.session_id.clone()))
-                    })
-                    .collect::<Vec<_>>(),
-                Err(_) => break,
-            };
-            for (label, session_id) in targets {
-                let root = session_root().join(session_id);
-                let has_work = [root.join("controls"), root.join("inbox")]
-                    .iter()
-                    .any(|dir| {
-                        fs::read_dir(dir).ok().is_some_and(|entries| {
-                            entries.filter_map(Result::ok).any(|entry| {
-                                entry.file_type().is_ok_and(|kind| kind.is_file())
-                                    && entry.path().extension().is_some_and(|ext| ext == "json")
-                                    && !entry
-                                        .file_name()
-                                        .to_string_lossy()
-                                        .ends_with(".result.json")
-                            })
-                        })
-                    });
-                if has_work {
-                    awake_until.insert(label.clone(), now_ms() + 3_000);
-                }
-                if awake_until
-                    .get(&label)
-                    .is_some_and(|until| *until > now_ms())
-                {
-                    if let Some(window) = windows.get(&label) {
-                        let _ = window.emit("mcp-work", ());
-                    }
-                }
-            }
-        }
-    });
-}
-
-/// Window state is inspected after requesting the transition; focus is subject
-/// to the operating system's foreground policy, never inferred from success.
-#[tauri::command]
-pub fn mcp_path_exists(path: String) -> bool {
-    std::path::Path::new(&path).exists()
-}
-
-#[tauri::command]
-pub fn mcp_window_control(window: tauri::WebviewWindow, mode: String) -> Result<Value, String> {
-    match mode.as_str() {
-        "foreground" => {
-            window.show().map_err(|e| e.to_string())?;
-            window.unminimize().map_err(|e| e.to_string())?;
-            window.set_focus().map_err(|e| e.to_string())?;
-        }
-        "background" => window.minimize().map_err(|e| e.to_string())?,
-        "close" => {
-            // Same CloseRequested event as title-bar X / Alt+F4. The frontend
-            // guard owns confirmation and waits for the MCP reply before exit.
-            window.close().map_err(|e| e.to_string())?;
-            return Ok(json!({"close_requested": true}));
-        }
-        "inspect" => (),
-        _ => return Err("mode must be foreground, background, close, or inspect".into()),
-    }
-    Ok(
-        json!({"visible": window.is_visible().map_err(|e| e.to_string())?,
-        "minimized": window.is_minimized().map_err(|e| e.to_string())?,
-        "focused": window.is_focused().map_err(|e| e.to_string())?}),
-    )
-}
-
-#[tauri::command]
-pub fn mcp_session_bridge_control(
-    window: tauri::WebviewWindow,
-    state: tauri::State<'_, SessionBridgeState>,
-    engine: tauri::State<'_, AppState>,
-    response: Option<Value>,
-) -> Result<Value, String> {
-    control_for_window(&state, window.label(), &engine, response)
 }
 
 fn control_for_window(
@@ -1970,7 +1833,6 @@ fn pending_control_requests(dir: &Path) -> Vec<(PathBuf, Value)> {
         .collect()
 }
 
-#[cfg(feature = "dev-bevy-host")]
 fn reject_native_control(session: &str, id: &str, code: &str, reason: &str) -> Result<(), String> {
     let dir = session_root().join(session).join("controls");
     if let Some((path, _)) = pending_control_requests(&dir)
@@ -1987,7 +1849,6 @@ fn reject_native_control(session: &str, id: &str, code: &str, reason: &str) -> R
     Ok(())
 }
 
-#[cfg(feature = "dev-bevy-host")]
 fn reject_busy_controls(session: &str, except_id: Option<&str>) -> Result<(), String> {
     let dir = session_root().join(session).join("controls");
     for (path, request) in pending_control_requests(&dir) {
@@ -2012,55 +1873,6 @@ fn reject_busy_controls(session: &str, except_id: Option<&str>) -> Result<(), St
         let _ = fs::remove_file(path);
     }
     Ok(())
-}
-
-/// Refresh `heartbeat.json` only — no model export / generation bump.
-#[tauri::command]
-pub fn mcp_session_bridge_heartbeat(
-    window: tauri::WebviewWindow,
-    state: tauri::State<'_, SessionBridgeState>,
-) -> Result<serde_json::Value, String> {
-    state.heartbeat_for_window(window.label())
-}
-
-/// Advance authoritative engine revision on a local UI mutation (no debounce).
-#[tauri::command]
-pub fn mcp_session_bridge_note_mutation(
-    window: tauri::WebviewWindow,
-    state: tauri::State<'_, SessionBridgeState>,
-) -> Result<serde_json::Value, String> {
-    state.note_mutation_for_window(window.label())
-}
-
-/// Apply one pending MCP inbox op on the live engine (UI-owned write).
-///
-/// Called from the session-bridge TS poll. After a successful apply the
-/// frontend store updates and the existing publisher writes a new snapshot.
-/// MCP `cad_refresh` then sees the same body. Never writes model.json here.
-#[tauri::command]
-pub fn mcp_session_bridge_apply_inbox(
-    window: tauri::WebviewWindow,
-    state: tauri::State<'_, SessionBridgeState>,
-    engine: tauri::State<'_, AppState>,
-    reject_reason: Option<String>,
-    document_id: Option<String>,
-    session_id: Option<String>,
-) -> Result<serde_json::Value, String> {
-    let (Some(document), Some(session)) = (document_id, session_id) else {
-        return Ok(Value::Null);
-    };
-    if let Some(reason) = &reject_reason {
-        if reason.trim().is_empty() || reason.len() > 1000 {
-            return Err("playback rejection needs a nonempty reason of at most 1000 bytes".into());
-        }
-    }
-    apply_or_reject_one_inbox_op(
-        &state,
-        window.label(),
-        &engine,
-        reject_reason.as_deref(),
-        Some((&document, &session)),
-    )
 }
 
 #[cfg(test)]

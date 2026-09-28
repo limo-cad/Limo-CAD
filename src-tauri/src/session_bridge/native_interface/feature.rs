@@ -24,15 +24,11 @@ pub(crate) use crate::native_forms::{SolidField, SolidFieldView, SolidFormKind};
 
 mod apply;
 pub(super) mod editing;
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) mod manipulator;
 mod move_copy;
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) mod panel;
-#[cfg(feature = "dev-bevy-host")]
 mod picking;
 mod preview;
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) use picking::{handle_canvas_pick, hover_references};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,7 +48,6 @@ pub(crate) enum FeatureControl {
     Field(SolidField),
     Pick(SolidField),
     Clear(SolidField),
-    #[cfg(feature = "dev-bevy-host")]
     Scroll(i32),
     Choose {
         field: SolidField,
@@ -248,7 +243,6 @@ struct Editor {
     move_view: Option<move_copy::View>,
     move_hover: Option<move_copy::Handle>,
     move_drag: Option<move_copy::Drag>,
-    #[cfg(feature = "dev-bevy-host")]
     offset_drag: Option<manipulator::Drag>,
 }
 
@@ -807,7 +801,6 @@ fn reduce_owned(
                 return Err("The rendered design is not current".into());
             }
             let model = snapshot.model(None);
-            #[cfg(feature = "dev-bevy-host")]
             crate::native_editor::support::cancel(world, owner)?;
             let form = if let (SolidFormKind::Rib, Some(id)) = (kind, feature_id) {
                 let definitions: Vec<nbcad_solid::RibDefinitionDto> = serde_json::from_value(
@@ -906,7 +899,6 @@ fn reduce_owned(
                 move_view: None,
                 move_hover: None,
                 move_drag: None,
-                #[cfg(feature = "dev-bevy-host")]
                 offset_drag: None,
             };
             if feature_id.is_none()
@@ -1141,7 +1133,6 @@ fn reduce_owned(
         }
         let model = editor.snapshot.model(editor.form.parameter_sketch());
         match action {
-            #[cfg(feature = "dev-bevy-host")]
             FeatureControl::Scroll(delta) => {
                 if !super::is_activation(input) {
                     return Err("Activate a panel scroll control".into());
@@ -1416,5 +1407,5 @@ fn reduce_owned(
     result
 }
 
-#[cfg(all(test, feature = "dev-bevy-host"))]
+#[cfg(test)]
 mod tests;

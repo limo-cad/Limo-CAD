@@ -4,7 +4,6 @@
 use bevy::prelude::{Component, Entity, Resource, World};
 use nbcad_interface::{ControlInput, DocumentContext};
 use serde_json::{json, Value};
-use tauri::{Emitter, Manager};
 
 use super::{
     bump_engine_revision, dispatch_inbox_on_engine, dispatch_project_replacement,
@@ -20,7 +19,6 @@ use crate::{
     state::AppState,
 };
 
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) mod controller;
 pub(crate) mod feature;
 mod history;
@@ -345,29 +343,17 @@ impl SessionBridgeState {
 /// competing camera/selection implementation.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum NativeCommand {
-    #[cfg(feature = "dev-bevy-host")]
     Sketch(crate::native_editor::EditorCommand),
-    #[cfg(feature = "dev-bevy-host")]
     File(controller::files::FileCommand),
-    #[cfg(feature = "dev-bevy-host")]
     Browser(controller::browser::BrowserCommand),
-    #[cfg(feature = "dev-bevy-host")]
     Assembly(controller::assembly::Command),
-    #[cfg(feature = "dev-bevy-host")]
     History(controller::history::HistoryCommand),
-    #[cfg(feature = "dev-bevy-host")]
     Presentation(controller::presentation::Command),
-    #[cfg(feature = "dev-bevy-host")]
     Workbench(controller::workbench::Command),
-    #[cfg(feature = "dev-bevy-host")]
     Cam(controller::workbench::cam::Command),
-    #[cfg(feature = "dev-bevy-host")]
     Drawing(controller::workbench::drawing_editor::Command),
-    #[cfg(feature = "dev-bevy-host")]
     BodyAppearance(u64, controller::body_appearance::Command),
-    #[cfg(feature = "dev-bevy-host")]
     AppSettings(controller::app_settings::Command),
-    #[cfg(feature = "dev-bevy-host")]
     SixDof(controller::six_dof::Command),
     Feature(feature::FeatureCommand),
     Mutation {
@@ -433,21 +419,6 @@ fn is_activation(input: &ControlInput) -> bool {
                 && matches!(chord.key.as_str(), "Enter" | " " | "Space"))
 }
 
-pub(crate) fn execute_action(
-    app: &tauri::AppHandle,
-    world: &mut World,
-    handle: &NativeInterfaceHandle,
-    action: &NativeInterfaceAction,
-) -> Result<Value, String> {
-    reduce_action(
-        &app.state::<AppState>(),
-        &app.state::<SessionBridgeState>(),
-        world,
-        handle,
-        action,
-    )
-}
-
 /// One reducer for both hosts and both human/MCP control paths.
 pub(crate) fn reduce_action(
     engine: &AppState,
@@ -470,11 +441,9 @@ pub(crate) fn reduce_action(
     if !control.visible || control.disabled {
         return Err("Native control is no longer available".into());
     }
-    #[cfg(feature = "dev-bevy-host")]
     if controller::assembly::joint::active(world) && matches!(&binding.command,NativeCommand::Feature(_) | NativeCommand::Sketch(_)) {
         return Err("Finish or cancel the joint editor before starting another modeling command".into());
     }
-    #[cfg(feature = "dev-bevy-host")]
     if matches!(&binding.command, NativeCommand::Feature(_) | NativeCommand::Sketch(_)) && (controller::assembly::motion::active(world) || controller::assembly::studies::active(world)) {
         bridge.with_native_document_receipt(engine,&action.context,|revision|{
             handle.validate_action(action)?;
@@ -493,7 +462,6 @@ pub(crate) fn reduce_action(
             || handle.validate_action(action),
         );
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Sketch(crate::native_editor::EditorCommand::Size {generation,field,..}) = &binding.command {
         use crate::native_editor::EditorCommand;
         let text=match &action.control.input {
@@ -509,7 +477,6 @@ pub(crate) fn reduce_action(
         return crate::native_editor::execute(world,engine,bridge,&action.context,
             EditorCommand::Size {generation:*generation,field:*field,text},||handle.validate_action(action));
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Sketch(crate::native_editor::EditorCommand::Interaction(command)) =
         &binding.command
     {
@@ -546,65 +513,51 @@ pub(crate) fn reduce_action(
             );
         }
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::File(command) = &binding.command {
         return controller::files::reduce(world, handle, engine, bridge, action, command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::AppSettings(command) = &binding.command {
         return controller::app_settings::reduce(world, handle, engine, bridge, action, *command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::SixDof(command) = &binding.command {
         return controller::six_dof::reduce(world, handle, action, *command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Browser(command) = &binding.command {
         return controller::browser::reduce(world, handle, engine, bridge, action, command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Assembly(command) = &binding.command {
         return controller::assembly::reduce(world, handle, engine, bridge, action, command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::History(command) = &binding.command {
         return controller::history::reduce(world, handle, engine, bridge, action, command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Presentation(command) = &binding.command {
         return controller::presentation::reduce(world, handle, engine, bridge, action, command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Cam(command) = &binding.command {
         return controller::workbench::cam::reduce(world, handle, engine, bridge, action, command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Drawing(command) = &binding.command {
         return controller::workbench::drawing_editor::reduce(world, handle, engine, bridge, action, command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::BodyAppearance(generation, command) = &binding.command {
         return controller::body_appearance::reduce(world, handle, engine, bridge, action, *generation, command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Workbench(controller::workbench::Command::CamExport(command)) = &binding.command {
         return controller::workbench::cam_export::reduce(world, handle, engine, bridge, action, command);
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Workbench(controller::workbench::Command::CamView(controller::workbench::cam_view::Command::Seek)) = &binding.command {
         return bridge.with_native_document_receipt(engine, &action.context, |revision| {
             handle.validate_action(action)?;
             controller::workbench::cam_view::seek(world, &action.context, revision, &action.control.input)
         });
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Workbench(controller::workbench::Command::CamView(command @ (controller::workbench::cam_view::Command::Detail | controller::workbench::cam_view::Command::Tolerance))) = &binding.command {
         return bridge.with_native_document_receipt(engine, &action.context, |revision| {
             handle.validate_action(action)?;
             controller::workbench::cam_view::settings::reduce(world, &action.context, revision, command, &action.control.input)
         });
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Workbench(controller::workbench::Command::CamView(controller::workbench::cam_view::Command::Nc(serial, command))) = &binding.command {
         return bridge.with_native_document_receipt(engine, &action.context, |revision| {
             handle.validate_action(action)?;
@@ -614,33 +567,21 @@ pub(crate) fn reduce_action(
     if !is_activation(&action.control.input) {
         return Err("This native button does not handle the requested input".into());
     }
-    #[cfg(feature = "dev-bevy-host")]
     if let NativeCommand::Workbench(command) = &binding.command {
         bridge.with_native_document_owner(engine, &action.context, || handle.validate_action(action))?;
         return controller::workbench::execute(world, command);
     }
     match binding.command {
-        #[cfg(feature="dev-bevy-host")]
         NativeCommand::ClearSelection if crate::native_editor::active(engine)?.is_some()=>crate::native_editor::execute(world,engine,bridge,&action.context,crate::native_editor::EditorCommand::Interaction(crate::native_editor::InteractionCommand::Select),||handle.validate_action(action)),
-        #[cfg(feature="dev-bevy-host")]
         NativeCommand::Sketch(command)=>crate::native_editor::execute(world,engine,bridge,&action.context,command,||handle.validate_action(action)),
-        #[cfg(feature="dev-bevy-host")]
         NativeCommand::File(_)=>unreachable!("File fields are reduced before button activation"),
-        #[cfg(feature="dev-bevy-host")]
         NativeCommand::AppSettings(_)=>unreachable!("Settings fields are reduced before button activation"),
-        #[cfg(feature="dev-bevy-host")]
         NativeCommand::SixDof(_)=>unreachable!("3D mouse input is reduced before button activation"),
-        #[cfg(feature="dev-bevy-host")]
         NativeCommand::Assembly(_)=>unreachable!("Assembly input is reduced before button activation"),
-        #[cfg(feature="dev-bevy-host")]
         NativeCommand::Browser(_)=>unreachable!("Browser input is reduced before button activation"),
-        #[cfg(feature="dev-bevy-host")]
         NativeCommand::History(_)=>unreachable!("History input is reduced before button activation"),
-        #[cfg(feature="dev-bevy-host")]
         NativeCommand::Presentation(_)=>unreachable!("Presentation input is reduced before button activation"),
-        #[cfg(feature="dev-bevy-host")]
         NativeCommand::Cam(_)=>unreachable!("CAM fields are reduced before button activation"),
-        #[cfg(feature = "dev-bevy-host")]
         NativeCommand::Drawing(_) | NativeCommand::BodyAppearance(_, _)=>unreachable!("Document fields are reduced before button activation"),
         NativeCommand::Feature(_)=>unreachable!("Extrude fields are reduced before button activation"),
         NativeCommand::CancelClose | NativeCommand::DiscardAndClose => {
@@ -651,7 +592,6 @@ pub(crate) fn reduce_action(
         }
         NativeCommand::Undo | NativeCommand::Redo => {
             let redo = matches!(binding.command, NativeCommand::Redo);
-            #[cfg(feature="dev-bevy-host")]
             if controller::worker::available(world) {
                 let receipt = bridge.native_document_receipt(engine, &action.context)?;
                 let operation = if redo { "redo" } else { "undo" };
@@ -666,9 +606,7 @@ pub(crate) fn reduce_action(
             operation,
             arguments,
         } => {
-            #[cfg(feature="dev-bevy-host")]
             controller::workbench::drawing_editor::guard_ribbon_edit(world, &operation)?;
-            #[cfg(feature="dev-bevy-host")]
             if controller::worker::available(world) {
                 let receipt = bridge.native_document_receipt(engine, &action.context)?;
                 let completion_operation = operation.clone();
@@ -779,36 +717,6 @@ pub(crate) fn finish_mutation(
         "document_epoch":result.context.epoch,"engine_revision":result.engine_revision,
         "publication_pending":publication_error.is_some(),"publication":publication,
         "publication_error":publication_error,"render_error":refresh.err()})
-}
-
-/// Called on the existing native UI thread before layout/render publication.
-/// The typed command is obtained from the same retained widget MCP resolves.
-pub(crate) fn drain_actions(
-    app: &tauri::AppHandle,
-    world: &mut World,
-    handle: &NativeInterfaceHandle,
-) {
-    let actions = match handle.take_actions() {
-        Ok(actions) => actions,
-        Err(error) => {
-            eprintln!("Native interface queue failed: {error}");
-            return;
-        }
-    };
-    for action in actions {
-        let result = execute_action(app, world, handle, &action);
-        let response = match result {
-            Ok(value) => json!({"status":"applied","value":value}),
-            Err(error) => json!({"status":"failed","error":error}),
-        };
-        if let Err(error) = app.emit_to(
-            &action.context.window_id,
-            "native-interface-action",
-            response,
-        ) {
-            eprintln!("Native interface result delivery failed: {error}");
-        }
-    }
 }
 
 #[cfg(test)]

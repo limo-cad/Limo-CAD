@@ -38,7 +38,6 @@ pub(super) fn begin(
     if editor.form.is_busy() {
         return Err("The feature is still applying".into());
     }
-    #[cfg(feature = "dev-bevy-host")]
     {
         use crate::session_bridge::native_interface::controller::worker;
         if worker::available(world) {

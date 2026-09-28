@@ -286,7 +286,6 @@ fn install(
         move_view: None,
         move_hover: None,
         move_drag: None,
-        #[cfg(feature = "dev-bevy-host")]
         offset_drag: None,
     };
     native_viewport::apply_interface_edit_model(world, editor.snapshot.viewport.clone())?;
@@ -315,7 +314,6 @@ pub(super) fn begin(
         validate()?;
         Ok(receipt)
     })?;
-    #[cfg(feature = "dev-bevy-host")]
     {
         use super::super::controller::worker;
         if worker::available(world) {

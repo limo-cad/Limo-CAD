@@ -6731,7 +6731,6 @@ fn apply_model_state(world: &mut World, next: &ViewportModel) {
 
 /// Install the same renderer/picker state for a Winit-owned window. The CAD
 /// systems and retained geometry cache are shared with the embedded host.
-#[cfg(feature = "dev-bevy-host")]
 pub(super) fn install_native_scene(app: &mut bevy::app::App) {
     install_cad_scene(app);
     app.insert_resource(SharedPickState(Arc::new(Mutex::new(PickState::default()))));
@@ -6739,10 +6738,9 @@ pub(super) fn install_native_scene(app: &mut bevy::app::App) {
 
 /// Production scene initialization without starting an OS window or renderer.
 /// Tests inspect the same authoritative resources used by both native hosts.
-#[cfg(all(test, feature = "dev-bevy-host"))]
+#[cfg(test)]
 pub(crate) fn interface_scene_fixture() -> bevy::app::App {
     let mut app = bevy::app::App::new();
-    #[cfg(feature = "dev-bevy-host")]
     app.add_plugins((
         bevy::app::TaskPoolPlugin::default(),
         bevy::asset::AssetPlugin::default(),
@@ -6755,7 +6753,7 @@ pub(crate) fn interface_scene_fixture() -> bevy::app::App {
 /// Run the production mesh update without a renderer, then report retained
 /// entity and strong asset identities. This measures lifecycle, not GPU memory
 /// or frame latency; no OS window, graphics adapter or input loop is created.
-#[cfg(all(test, feature = "dev-bevy-host"))]
+#[cfg(test)]
 pub(crate) fn interface_geometry_fixture_snapshot(world: &mut World) -> serde_json::Value {
     use bevy::ecs::system::RunSystemOnce;
     #[derive(Resource)]
@@ -6825,7 +6823,6 @@ pub(crate) fn interface_pick(
 /// Pick the visible support using the same trimmed faces, camera ray and
 /// screen-sized reference quads as the renderer. Construction overlays win
 /// before origin overlays, then trimmed faces, as in the original picker.
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) fn interface_support_pick(
     world: &World,
     session_id: &str,
@@ -6905,7 +6902,6 @@ pub(crate) fn interface_support_pick(
     }))
 }
 
-#[cfg(feature = "dev-bevy-host")]
 fn ray_reference_quad(origin: Vec3, direction: Vec3, basis: PlaneBasis, half: f32) -> Option<f32> {
     let normal = Vec3::from_array(basis.normal.map(|v| v as f32));
     let denominator = direction.dot(normal);
@@ -6941,13 +6937,11 @@ pub(crate) fn apply_interface_preview(
 
 /// The same retained stock channel used by the React host, guarded by the
 /// native document owner before a background simulation can become visible.
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) fn interface_cam_stock_snapshot(world: &World) -> (u64, Option<ViewportCamStock>) {
     let resource = world.resource::<CamStockResource>();
     (resource.revision, resource.value.clone())
 }
 
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) fn apply_interface_cam_stock(
     world: &mut World,
     session_id: &str,
@@ -6966,7 +6960,6 @@ pub(crate) fn apply_interface_cam_stock(
     Ok(())
 }
 
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) fn apply_interface_sketch_lines(
     world: &mut World,
     session_id: &str,
@@ -7030,7 +7023,6 @@ pub(crate) fn apply_interface_edit_model(
 
 /// Refresh the existing renderer's materials, grid and HUD together. Geometry
 /// intent and the engine revision are untouched by application appearance.
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) fn apply_interface_palette(world: &mut World, palette: ViewportPalette) {
     if world.resource::<PaletteResource>().0 == palette { return; }
     *world.resource_mut::<ClearColor>() = ClearColor(rgb(palette.background));
@@ -7068,7 +7060,6 @@ pub(crate) fn interface_model_revision(world: &World) -> u64 {
 
 /// Borrow only the navigation sources; camera updates do not invalidate this
 /// stamp and motion never clones selection arrays or document geometry.
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) fn interface_navigation_source(world: &World) -> ([u32; 2], &ViewportPresentation) {
     let model = world.get_resource_ref::<ModelResource>().expect("rendered model");
     let presentation = world.get_resource_ref::<PresentationResource>().expect("presentation");
@@ -7187,7 +7178,6 @@ pub(crate) fn interface_world_point(
 
 /// The full window renders UI while the CAD cameras/picker use its inner
 /// logical canvas. Winit supplies the OS scale factor, not a webview estimate.
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) fn apply_interface_viewport(
     world: &mut World,
     rect: nbcad_interface::Rect,
@@ -7391,7 +7381,6 @@ fn rebind_cached_model_session(world: &mut World, from: &str, to: &str) -> bool 
 /// A successful native File close retires this exact document's cached
 /// entities and their strong asset handles. Other windows and warm tabs retain
 /// their geometry; the File controller must not pass its whole tab inventory.
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) fn retire_interface_model_session(world: &mut World, session_id: &str) {
     drop_cached_model_session(world, session_id);
 }
@@ -7567,7 +7556,6 @@ fn camera_pick_ray(
 }
 
 mod edge_picking;
-#[cfg(feature = "dev-bevy-host")]
 #[path = "physical_pick.rs"]
 pub(crate) mod physical_pick;
 
@@ -8036,7 +8024,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[cfg(feature = "dev-bevy-host")]
     fn world_projection_round_trips_the_actual_pick_camera_and_rejects_retired_owners() {
         let mut app = interface_scene_fixture();
         app.world_mut().resource_mut::<ModelResource>().session_id = "owned".into();
@@ -9079,7 +9066,6 @@ mod tests {
         assert_eq!(max_y - min_y, 100.0);
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     #[test]
     fn support_picking_uses_finite_visible_quads_and_forward_rays() {
         let xy = nbcad_core::PlaneRef::ORIGIN_PLANES[0]
@@ -9714,7 +9700,6 @@ mod tests {
         assert!((color.blue - 240.0 / 255.0).abs() < 1.0e-6);
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     #[test]
     fn isolated_edit_model_cannot_reuse_live_meshes_with_the_same_geometry_counter() {
         let mut app = interface_scene_fixture();

@@ -2,7 +2,7 @@
 //! client framework so the official driver remains the sole owner of the
 //! physical device; raw HID stays available as the Windows/macOS fallback.
 //! Both transports deliver the same typed events to a host-owned sink. The
-//! release shell adapts those events to its existing Tauri event contract.
+//! native controller routes those events to the focused document camera.
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -11,7 +11,6 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
 
 mod raw;
 
@@ -56,24 +55,6 @@ pub(crate) enum SixDofEvent {
 /// Its host owns focus/document gating and camera updates; transport packets
 /// keep the existing device axis order and scale.
 pub(crate) type SixDofEventSink = Arc<dyn Fn(SixDofEvent) + Send + Sync>;
-
-#[derive(Clone, Copy, Serialize)]
-#[serde(untagged)]
-enum WebPayload<'a> {
-    Motion(&'a MotionPacket),
-    Button(&'a ButtonPacket),
-    Error(&'a str),
-}
-
-impl SixDofEvent {
-    fn web_event(&self) -> (&'static str, WebPayload<'_>) {
-        match self {
-            Self::Motion(packet) => ("six-dof-mouse-motion", WebPayload::Motion(packet)),
-            Self::Button(packet) => ("six-dof-mouse-button", WebPayload::Button(packet)),
-            Self::Error(error) => ("six-dof-mouse-error", WebPayload::Error(error)),
-        }
-    }
-}
 
 struct RawHidWorker {
     stop: Arc<AtomicBool>,
@@ -223,22 +204,6 @@ pub(crate) fn devices() -> Result<Vec<SixDofMouseInfo>, String> {
         .collect())
 }
 
-#[tauri::command]
-pub async fn six_dof_mouse_devices() -> Result<Vec<SixDofMouseInfo>, String> {
-    devices()
-}
-
-#[tauri::command]
-pub async fn six_dof_mouse_connect(
-    app: AppHandle,
-    state: State<'_, SixDofMouseState>,
-) -> Result<SixDofMouseInfo, String> {
-    state.connect(Arc::new(move |event| {
-        let (name, payload) = event.web_event();
-        let _ = app.emit(name, payload);
-    }))
-}
-
 fn open_connection(sink: SixDofEventSink) -> Result<(SixDofConnection, SixDofMouseInfo), String> {
     #[cfg(target_os = "macos")]
     let installed_driver_error = match mac_driver::Connection::connect(sink.clone()) {
@@ -280,11 +245,6 @@ fn open_connection(sink: SixDofEventSink) -> Result<(SixDofConnection, SixDofMou
         sink,
     )?;
     Ok((SixDofConnection::RawHid(worker), result))
-}
-
-#[tauri::command]
-pub async fn six_dof_mouse_disconnect(state: State<'_, SixDofMouseState>) -> Result<(), String> {
-    state.disconnect()
 }
 
 #[cfg(target_os = "macos")]

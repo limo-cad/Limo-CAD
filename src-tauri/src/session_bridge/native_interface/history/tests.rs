@@ -1,7 +1,6 @@
 use super::super::tests::Fixture;
 use super::*;
 
-#[cfg(feature = "dev-bevy-host")]
 mod attached_reads;
 
 fn edit(fixture: &Fixture, owner: &DocumentContext, operation: &str, arguments: Value) {

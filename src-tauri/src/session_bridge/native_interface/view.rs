@@ -9,15 +9,10 @@ use crate::{
     native_viewport::{self, ViewportCamera, ViewportModel, ViewportPresentation},
     state::AppState,
 };
-#[cfg(feature = "dev-bevy-host")]
 mod motion;
-#[cfg(feature = "dev-bevy-host")]
 mod navigation;
-#[cfg(feature = "dev-bevy-host")]
 pub(super) mod six_dof;
-#[cfg(feature = "dev-bevy-host")]
 pub(super) use motion::{advance, cancel, pending, poll, request};
-#[cfg(feature = "dev-bevy-host")]
 pub(super) use navigation::{navigate, pointer_active};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,9 +86,6 @@ pub(super) fn apply(
     command: NativeCommand,
 ) -> Result<Value, String> {
     let (session, camera, mut presentation, size) = native_viewport::interface_view_snapshot(world);
-    #[cfg(not(feature = "dev-bevy-host"))]
-    let mut camera = camera;
-    #[cfg(feature = "dev-bevy-host")]
     let _ = size;
     if session != owner.document_id {
         return Err("The rendered document is not current".into());
@@ -101,7 +93,6 @@ pub(super) fn apply(
     match command {
         NativeCommand::ClearSelection => {
             clear_selection(&mut presentation);
-            #[cfg(feature="dev-bevy-host")]
             super::controller::workbench::execute(world,&super::controller::workbench::Command::Navigation(super::controller::workbench::NavigationTool::Select))?;
         },
         NativeCommand::SelectBody {
@@ -126,7 +117,6 @@ pub(super) fn apply(
             presentation.selected_occurrence_id = occurrence_id;
         }
         NativeCommand::Fit | NativeCommand::Orient(_) => {
-            #[cfg(feature = "dev-bevy-host")]
             {
                 let view = match command {
                     NativeCommand::Orient(direction) => format!("{direction:?}").to_lowercase(),
@@ -138,22 +128,6 @@ pub(super) fn apply(
                     revision,
                     &json!({"view":view,"fit":true,"duration_ms":300,"expires_ms":crate::session_bridge::now_ms()+5000}),
                 );
-            }
-            #[cfg(not(feature = "dev-bevy-host"))]
-            {
-                let _ = revision;
-                let direction = match command {
-                    NativeCommand::Orient(direction) => Some(direction),
-                    _ => None,
-                };
-                camera = fit_camera(
-                    world,
-                    &model_snapshot(engine),
-                    &presentation,
-                    camera,
-                    size,
-                    direction,
-                )?;
             }
         }
         _ => return Err("The requested command is not a view operation".into()),

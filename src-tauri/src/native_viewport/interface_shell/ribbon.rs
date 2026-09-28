@@ -694,7 +694,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "dev-bevy-host")]
     fn retained_glyphs_follow_theme_without_replacing_fixed_colors_or_bindings() {
         let mut app = App::new();
         app.init_resource::<Assets<Image>>()

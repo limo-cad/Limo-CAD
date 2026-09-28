@@ -44,17 +44,7 @@ fn main() -> std::process::ExitCode {
         };
     }
 
-    #[cfg(all(target_os = "linux", not(feature = "dev-bevy-host")))]
-    {
-        // GTK 3 exposes child widget windows as real X11 windows, which lets
-        // wgpu own a Vulkan surface beneath WebKitGTK. Under native Wayland it
-        // exposes the top-level wl_surface instead; GTK and Vulkan would then
-        // attach competing buffers to one compositor-owned surface. Ubuntu's
-        // Wayland desktop supplies XWayland for this compatibility path.
-        std::env::set_var("GDK_BACKEND", "x11");
-    }
-    // Prepare before either worker or GUI startup: WebKitGTK can spawn helpers
-    // immediately, and none may inherit the agent's output pipe.
+    // Prepare before GUI/platform helpers can inherit the agent output pipe.
     if let Err(error) = nbcad_mcp::prepare_desktop_stdio() {
         eprintln!("Could not prepare local stdio MCP: {error}");
         return std::process::ExitCode::FAILURE;
@@ -71,16 +61,11 @@ fn main() -> std::process::ExitCode {
     {
         eprintln!("Could not start local stdio MCP: {error}");
     }
-    #[cfg(feature = "dev-bevy-host")]
     {
         nbcad_lib::native_viewport::winit_host::run_with_recipe(match startup {
             Startup::Recipe(recipe) => Some(recipe),
             _ => None,
         })
     }
-    #[cfg(not(feature = "dev-bevy-host"))]
-    {
-        nbcad_lib::run();
-        std::process::ExitCode::SUCCESS
-    }
+
 }

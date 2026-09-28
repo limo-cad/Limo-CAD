@@ -16,7 +16,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub(crate) mod commands;
 pub(crate) mod locale;
 pub(crate) mod palette;
 
@@ -219,7 +218,6 @@ impl Store {
         Self::at(crate::app_config::directory(identifier)?)
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn native() -> Result<Self, String> {
         Self::at(crate::app_config::native_directory()?)
     }

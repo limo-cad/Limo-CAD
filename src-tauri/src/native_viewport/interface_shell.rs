@@ -21,9 +21,7 @@ use nbcad_interface::{
 
 use super::ui::{ViewportUiAssets, ViewportUiTheme};
 
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) mod fields;
-#[cfg(feature = "dev-bevy-host")]
 mod ime_diagnostics;
 mod geometry;
 pub(crate) mod ranges;
@@ -179,7 +177,6 @@ struct Capture {
 }
 
 struct Shared {
-    #[cfg(feature = "dev-bevy-host")]
     ime_diagnostics: Option<ime_diagnostics::Trace>,
     registry: SurfaceRegistry,
     desired_frame: Option<InterfaceFrame>,
@@ -201,7 +198,6 @@ struct Shared {
 impl Default for Shared {
     fn default() -> Self {
         Self {
-            #[cfg(feature = "dev-bevy-host")]
             ime_diagnostics: ime_diagnostics::Trace::opt_in(),
             registry: SurfaceRegistry::new(),
             desired_frame: None,
@@ -296,7 +292,6 @@ impl NativeInterfaceHandle {
             .map_err(|_| "Native interface lock poisoned")?;
         current_context(&shared)?;
         let snapshot = shared.registry.inspect().map_err(|e| e.to_string())?;
-        #[cfg(feature = "dev-bevy-host")]
         let snapshot = {
             let mut snapshot = snapshot;
             if let Some(trace) = &shared.ime_diagnostics {
@@ -315,7 +310,6 @@ impl NativeInterfaceHandle {
 
     /// Read native presentation metadata without copying editor buffers or
     /// consuming MCP inspection IDs. The callback must not re-enter the handle.
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn read_surface<T>(
         &self,
         read: impl FnOnce(&DocumentContext, &SurfaceFrame) -> T,
@@ -330,7 +324,6 @@ impl NativeInterfaceHandle {
 
     /// Assistive input uses the same stamped control as pointer and MCP input.
     /// A queued accessibility request cannot follow a control rebind or tab.
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn assistive_action(
         &self,
         action: &NativeInterfaceAction,
@@ -360,7 +353,6 @@ impl NativeInterfaceHandle {
         Ok(())
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn assistive_edit(&self,original:&NativeInterfaceAction,input:ControlInput)->Result<(),String>{
         let mut shared=self.shared.lock().map_err(|_|"Native interface lock poisoned")?;
         if current_context(&shared)?!=original.context{return Err("Native interface document changed".into());}
@@ -370,7 +362,6 @@ impl NativeInterfaceHandle {
         drop(shared);(self.wake)();Ok(())
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn resolve_retained(
         &self,
         key: ControlKey,
@@ -464,7 +455,6 @@ impl NativeInterfaceHandle {
         Ok(self.shared.lock().map_err(|_|"Native interface lock poisoned")?.actions.pop_front())
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn resolve_input(
         &self,
         key: ControlKey,
@@ -488,7 +478,6 @@ impl NativeInterfaceHandle {
         })
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn enqueue_action(&self, action: NativeInterfaceAction) -> Result<(), String> {
         let mut shared = self
             .shared
@@ -510,12 +499,10 @@ impl NativeInterfaceHandle {
         Ok(())
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn focused_key(&self) -> Option<ControlKey> {
         self.shared.lock().ok()?.focused
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn hit_key(&self, point: [f64; 2]) -> Option<ControlKey> {
         let shared = self.shared.lock().ok()?;
         hit(&shared, point)
@@ -577,7 +564,6 @@ impl NativeInterfaceHandle {
         Ok(())
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn submitted_revision(&self, revision: u64) -> Result<(), String> {
         let mut shared = self
             .shared
@@ -600,7 +586,6 @@ impl NativeInterfaceHandle {
         Ok(())
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn wait_for_submission(&self, revision: u64) -> bool {
         let Ok(mut shared) = self.shared.lock() else {
             return false;
@@ -612,7 +597,6 @@ impl NativeInterfaceHandle {
         false
     }
 
-    #[cfg(feature = "dev-bevy-host")]
     pub(crate) fn cancel_submission_wait(&self) {
         if let Ok(mut shared) = self.shared.lock() {
             shared.submission_waiter = None;
@@ -1055,7 +1039,6 @@ struct InterfaceButtonStyle(ViewportUiTheme);
 
 /// Theme changes repaint retained controls and their native editors. Semantic
 /// keys, focus and unfinished text survive the change.
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) fn refresh_theme(world: &mut World, theme: ViewportUiTheme) {
     let mut controls = world.query::<(&mut InterfaceButtonStyle, Option<&PrimaryButton>, Option<&DestructiveButton>, Option<&InterfaceReference>, Option<&DimensionInk>)>();
     for (mut style, primary, destructive, reference, dimension) in controls.iter_mut(world) {
@@ -1185,7 +1168,6 @@ pub(crate) fn reference_caption(world: &mut World, entity: Entity) {
 
 /// A dimension label remains a real inspectable button, painted in the same
 /// color as its extension lines. Field/dialog styles are unaffected.
-#[cfg(feature = "dev-bevy-host")]
 pub(crate) fn dimension_label(world: &mut World, entity: Entity, color: Color) {
     world.entity_mut(entity).insert(DimensionInk(color));
     let mut style = world.get_mut::<InterfaceButtonStyle>(entity).unwrap();
