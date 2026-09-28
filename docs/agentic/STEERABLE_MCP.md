@@ -43,8 +43,10 @@ Revisioned MCP→UI sync remains future work. Installer / UI launch: [#32](https
 
 ## Print export
 
-Prefer `solid_export_3mf` for slicers. Metadata targets (Bambu/Orca/Prusa/Cura)
-are compatible hints — not a full pre-sliced project. STL is geometry-only.
+Prefer `solid_export_3mf` for slicers. `standard`, `bambu_studio`, and
+`orca_slicer` write the same portable model, with no slicer project profile.
+Prusa and Cura still get metadata hints. None of these is a sliced project.
+STL is geometry-only.
 
 ## Related reading
 

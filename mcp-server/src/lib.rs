@@ -5856,7 +5856,10 @@ mod tests {
                 let mut model = archive.by_name("3D/3dmodel.model").unwrap();
                 let mut xml = String::new();
                 std::io::Read::read_to_string(&mut model, &mut xml).unwrap();
-                assert!(xml.contains("noBS CAD"), "{target} application name");
+                assert!(
+                    xml.contains(r#"<metadata name="Application">noBS CAD</metadata>"#),
+                    "{target} application name"
+                );
                 assert!(
                     !xml.contains("BambuStudio"),
                     "{target} must not impersonate Bambu"

@@ -103,8 +103,6 @@
     "filamentType": "Tipo de filamento",
     "slicerTarget": "3MF para rebanador",
     "slicerStandard": "3MF estándar",
-    "slicerBambu": "Bambu Studio",
-    "slicerOrca": "Orca Slicer",
     "slicerPrusa": "PrusaSlicer",
     "slicerCura": "UltiMaker Cura"
   },

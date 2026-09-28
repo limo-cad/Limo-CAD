@@ -103,8 +103,6 @@
     "filamentType": "耗材类型",
     "slicerTarget": "用于切片软件的 3MF",
     "slicerStandard": "标准 3MF",
-    "slicerBambu": "Bambu Studio",
-    "slicerOrca": "Orca Slicer",
     "slicerPrusa": "PrusaSlicer",
     "slicerCura": "UltiMaker Cura"
   },

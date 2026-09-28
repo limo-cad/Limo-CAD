@@ -103,8 +103,6 @@
     "filamentType": "Filament type",
     "slicerTarget": "3MF for slicer",
     "slicerStandard": "Standard 3MF",
-    "slicerBambu": "Bambu Studio",
-    "slicerOrca": "Orca Slicer",
     "slicerPrusa": "PrusaSlicer",
     "slicerCura": "UltiMaker Cura"
   },

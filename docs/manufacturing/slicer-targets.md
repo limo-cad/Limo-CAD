@@ -10,6 +10,8 @@
 | `prusa_slicer` | + `Metadata/Slic3r_PE.config` filament arrays + `Slic3r_PE_model.config` object/volume extruder metadata (required — PS ignores basematerials) |
 | `cura` | Consortium `basematerials` + `Metadata/cura_materials.json` hint list |
 
+The appearance panel lists `standard`, `prusa_slicer`, and `cura`. `bambu_studio` and `orca_slicer` stay valid for MCP and saved exports; both write the `standard` package, so the panel does not offer them as separate choices.
+
 ## What this is / is not
 
 **Is:** a model file you can hand to someone else. Drag it onto the plate in Bambu Studio or Orca and it uses the printer already selected there. The base-material name is chemistry and color (`PETG, Jade White`), not a machine preset.

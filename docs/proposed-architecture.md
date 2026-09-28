@@ -86,8 +86,9 @@ metadata ([goals.md](goals.md)).
 Describe as a **target with testable scope**, not current functionality.
 (No 3MF writer on `main` today.)
 
-**Branch note (`feat/3mf-print-export`):** native 3MF/STL export + MCP print pack
-(Metadata hints for Bambu/Orca/Prusa/Cura — not a full sliced G-code project).
+**Branch note (`feat/3mf-print-export`):** native 3MF/STL export + MCP print pack.
+Bambu and Orca take the same portable model as `standard`. Prusa and Cura still
+get metadata hints. Not a full sliced G-code project.
 
 ---
 

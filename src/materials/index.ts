@@ -64,10 +64,9 @@ export type SlicerTargetId =
   | 'prusa_slicer'
   | 'cura';
 
+/** Choices in the appearance panel. Bambu and Orca stay in the enum for MCP callers; they write the same file as `standard`. */
 export const SLICER_TARGETS: Array<{ id: SlicerTargetId; labelKey: string }> = [
   { id: 'standard', labelKey: 'bodyAppearance.slicerStandard' },
-  { id: 'bambu_studio', labelKey: 'bodyAppearance.slicerBambu' },
-  { id: 'orca_slicer', labelKey: 'bodyAppearance.slicerOrca' },
   { id: 'prusa_slicer', labelKey: 'bodyAppearance.slicerPrusa' },
   { id: 'cura', labelKey: 'bodyAppearance.slicerCura' },
 ];
@@ -76,15 +75,9 @@ const SLICER_KEY = 'nbcad:slicerTarget:v1';
 
 export function readSlicerTarget(): SlicerTargetId {
   const value = localStorage.getItem(SLICER_KEY);
-  if (
-    value === 'bambu_studio'
-    || value === 'orca_slicer'
-    || value === 'prusa_slicer'
-    || value === 'cura'
-    || value === 'standard'
-  ) {
-    return value;
-  }
+  // Older builds stored these as their own menu entries. They write the standard model.
+  if (value === 'bambu_studio' || value === 'orca_slicer') return 'standard';
+  if (value === 'prusa_slicer' || value === 'cura' || value === 'standard') return value;
   return 'standard';
 }
 
