@@ -85,9 +85,9 @@ After SDK setup, use the shared package entry point on macOS:
 cargo xtask package
 ```
 
-It selects `scripts/bundle-macos.mjs`, which:
+The Rust packager:
 
-1. runs `scripts/stage-occt-macos.mjs`;
+1. validates native SDK and signing prerequisites;
 2. discovers the recursive OCCT/TBB dylib closure with `otool -L`;
 3. copies the closure to generated `src-tauri/occt-libs`;
 4. changes dylib IDs and non-system dependencies to `@rpath`;
@@ -170,8 +170,8 @@ and creates a ZIP plus SHA-256 file:
 cargo xtask package
 ```
 
-This selects the running Rust toolchain's architecture and the existing
-`scripts/bundle-windows-portable.ps1` builder. Install the matching SDK first;
+This selects the running Rust toolchain's architecture and the Rust portable
+ZIP builder. Install the matching SDK first;
 the [Windows setup](WINDOWS_PACKAGING.md#local-windows-build) also documents
 explicit `--target` selection and `OCCT_ROOT` overrides.
 
@@ -202,16 +202,8 @@ It creates and audits a `.deb`, an AppImage, their SHA-256 files, and the
 required project/OCCT license notices. See [Ubuntu 26.04 packaging](LINUX_PACKAGING.md)
 for the exact SDK, runtime requirements, and verification commands.
 
-<details>
-<summary>Underlying builders for packaging maintenance</summary>
-
-`cargo xtask package` dispatches to the existing macOS and Linux JavaScript
-builders or the Windows PowerShell builder. The `bundle:macos`, `bundle:linux`
-and `bundle:windows:portable` npm aliases still invoke those same scripts for
-CI and packaging diagnostics. They are implementation details of the shared
-entry point, not separate application build paths.
-
-</details>
+Native packaging is implemented in `xtask/src/package/`. Deleted legacy scripts
+and npm aliases have no compatibility wrappers.
 
 ## 6. Browser/WASM development
 

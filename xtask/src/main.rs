@@ -71,6 +71,7 @@ fn run() -> Result<()> {
 
     match command.as_str() {
         "package" => package::run(args),
+        "verify-linux-recipe-handler" => package::verify_recipe_handler(args),
         "version" => release_tooling::version::run(args),
         "check-release-tag" => release_tooling::tag::run(args),
         "run-script" => replay::run(args),
@@ -107,8 +108,10 @@ Commands:
                 --sync updates carriers without changing historical release notes.
   check-release-tag TAG SHA
                 Require a v<VERSION> tag on a commit already merged into main.
-  package       Build the host desktop package using the existing platform bundler.
+  package       Build and audit the host desktop package entirely through Rust.
                 Use --help for prerequisites and optional Windows target selection.
+  verify-linux-recipe-handler
+                Verify the owned packaged recipe association; used by Linux package checks.
   run-script    Run a .nbcad.jsonc file or --recipe ID using the Rust MCP client. Use --server PATH,
                 plus --server-arg --headless for packaged workers without a window. Repeat --server-arg for literal arguments.
                 --init-timeout-seconds N bounds startup only (default: 30); modeling waits remain unbounded.

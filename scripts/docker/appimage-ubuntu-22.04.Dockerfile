@@ -1,7 +1,7 @@
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PATH=/root/.cargo/bin:/opt/node/bin:${PATH}
+ENV PATH=/root/.cargo/bin:${PATH}
 ENV OCCT_ROOT=/opt/opencascade
 ENV LD_LIBRARY_PATH=/opt/opencascade/lib
 
@@ -58,15 +58,5 @@ RUN /tmp/build-occt-linux.sh /opt/opencascade && rm /tmp/build-occt-linux.sh
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
       | sh -s -- -y --profile minimal --default-toolchain stable
-
-# Ubuntu 22.04's nodejs is too old for the native packaging scripts; use Node 22.
-RUN cd /tmp \
-    && curl --proto '=https' --tlsv1.2 -sSfLO https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt \
-    && archive="$(grep -o 'node-v22[^ ]*-linux-x64\.tar\.xz' SHASUMS256.txt)" \
-    && curl --proto '=https' --tlsv1.2 -sSfLO "https://nodejs.org/dist/latest-v22.x/$archive" \
-    && grep " $archive\$" SHASUMS256.txt | sha256sum -c - \
-    && mkdir -p /opt/node \
-    && tar -xJf "$archive" -C /opt/node --strip-components=1 \
-    && rm -f "$archive" SHASUMS256.txt
 
 WORKDIR /workspace

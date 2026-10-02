@@ -195,9 +195,6 @@ jobs:
         shell: bash
         run: echo "CARGO_TARGET_DIR=$RUNNER_TEMP/native-package-target" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - name: Install Ubuntu desktop and disposable-input SDK
         uses: ./.github/actions/setup-linux-desktop
         with:
@@ -218,7 +215,7 @@ jobs:
           bundle_root="$(realpath -m "$CARGO_TARGET_DIR/release/bundle")"
           test "$bundle_root" = "$RUNNER_TEMP/native-package-target/release/bundle"
           rm -rf -- "$bundle_root/deb" "$bundle_root/appimage"
-          node scripts/bundle-linux.mjs
+          cargo xtask package
           test "$(find "$bundle_root/deb" -maxdepth 1 -name '*.deb' | wc -l)" -eq 1
           test "$(find "$bundle_root/appimage" -maxdepth 1 -name '*.AppImage' | wc -l)" -eq 1
       - name: Exercise extracted DEB and AppImage at 100% and 200% scale
@@ -294,11 +291,6 @@ jobs:
           key: native-host-${{ runner.arch }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'crates/**/Cargo.toml') }}
           restore-keys: |
             native-host-${{ runner.arch }}-
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
 
       - name: Test concurrent first-use OCCT projection
         if: matrix.family == 'all' || matrix.family == 'keyboard'
@@ -512,9 +504,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -583,9 +572,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target

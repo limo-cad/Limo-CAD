@@ -55,7 +55,7 @@ DLL names maintained by hand.
 ## Local Windows build
 
 Install PowerShell 7, the Visual Studio C++ Build Tools (including the architecture
-you are building), a current Windows SDK, Node.js and npm, and Rust. Clone vcpkg
+you are building), a current Windows SDK and Rust. Clone vcpkg
 into `.vcpkg` and select the commit pinned by `vcpkg.json`:
 
 ```powershell
@@ -104,14 +104,8 @@ Once the native SDK is configured, `cargo xtask package` alone selects the
 running Rust toolchain's architecture. An explicit `--target` is useful for
 building the other Windows architecture; `OCCT_ROOT` must match that target.
 
-<details>
-<summary>Underlying builder for packaging maintenance</summary>
-
-The Rust entry point delegates to `scripts/bundle-windows-portable.ps1` with the
-selected target. The existing `npm run bundle:windows:portable` alias invokes
-that same builder; it remains available to CI and packaging diagnostics.
-
-</details>
+Native packaging is implemented in `xtask/src/package/`. Deleted legacy scripts
+and npm aliases have no compatibility wrappers.
 
 ## GitHub Actions
 

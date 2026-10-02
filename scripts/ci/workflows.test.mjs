@@ -82,7 +82,7 @@ test('the AppImage is built on the oldest supported glibc and run on the newest 
   const build = job(desktop, 'build-linux-appimage');
   assert.match(build, /^    container: ubuntu:22\.04$/m);
   assert.match(build, /scripts\/build-occt-linux\.sh \/opt\/opencascade/);
-  assert.match(build, /node scripts\/bundle-linux\.mjs appimage/);
+  assert.match(build, /cargo xtask package --bundle appimage/);
   assert.match(build, /test "\$\(printf '%s\\n' "\$required" GLIBC_2\.35 \| sort -V \| tail -n 1\)" = GLIBC_2\.35/);
   assert.match(build, /scripts\/verify-linux-viewport\.sh \\\n\s+"\$appimage" \\\n\s+x11/);
   const verify = job(desktop, 'verify-linux-appimage');
@@ -104,7 +104,7 @@ test('the AppImage is built on the oldest supported glibc and run on the newest 
   }
   // The Debian package keeps Ubuntu 26.04's OCCT and no longer builds the AppImage.
   const deb = job(desktop, 'build-linux-ubuntu');
-  assert.match(deb, /node scripts\/bundle-linux\.mjs deb/);
+  assert.match(deb, /cargo xtask package --bundle deb/);
   assert.doesNotMatch(deb, /\.AppImage/);
   // The AppImage SDK Dockerfile and the CI job install the same packages.
   const dockerfile = read('scripts/docker/appimage-ubuntu-22.04.Dockerfile');
@@ -118,20 +118,20 @@ test('the AppImage is built on the oldest supported glibc and run on the newest 
     assert.match(verify, new RegExp(`^            ${tool} \\\\$`, 'm'));
   }
   // Winit and RFD load these libraries/tools at runtime; ELF linkage misses them.
-  const debBuilder = read('scripts/native-linux-package.mjs');
+  const debBuilder = read('xtask/src/package/linux.rs');
   const nativeSdk = read('.github/actions/setup-linux-desktop/action.yml');
   for (const dependency of ['libx11-xcb1', 'libxcursor1', 'libxi6', 'libdbus-1-3', 'zenity']) {
     assert(dockerPackages.includes(dependency), `AppImage build runtime misses ${dependency}`);
     assert(nativeSdk.includes(dependency), `Ubuntu SDK misses ${dependency}`);
-    assert.match(debBuilder, new RegExp(`^Depends:.*\\b${dependency}\\b`, 'm'));
+    assert.match(debBuilder, new RegExp(`const DEPENDS:.*\\b${dependency}\\b`));
   }
   // Host graphics drivers must get matching client libraries, while the app's
   // direct server dependency remains bundled for X11-only/minimal desktops.
-  const bundler = read('scripts/bundle-linux.mjs');
+  const bundler = read('xtask/src/package/linux.rs');
   for (const library of ['client', 'cursor', 'egl']) {
-    assert.match(bundler, new RegExp(`'libwayland-${library}\\.so\\*'`));
+    assert.match(bundler, new RegExp(`"libwayland-${library}\\.so"`));
   }
-  assert.doesNotMatch(bundler, /'libwayland-server\.so\*'/);
+  assert.doesNotMatch(bundler, /"libwayland-server\.so"/);
 });
 
 test('a tag release is published only from a pushed tag and only once it is complete', () => {

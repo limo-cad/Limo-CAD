@@ -81,10 +81,10 @@ docker run --rm \
   -v "$PWD:/workspace" \
   -w /workspace \
   nbcad-appimage-ubuntu-22.04 \
-  sh -lc 'node scripts/bundle-linux.mjs appimage'
+  sh -lc 'cargo xtask package --bundle appimage'
 ```
 
-`node scripts/bundle-linux.mjs deb` builds only the Debian package.
+`cargo xtask package --bundle deb` builds only the Debian package.
 
 The 26.04 container deliberately extracts only the Ubuntu STEP development headers
 from `libocct-data-exchange-dev`; installing that package normally also pulls
@@ -101,7 +101,7 @@ checks. It includes:
 - Desktop portals and their GTK backend for native file and print dialogs;
 - Vulkan, Wayland, X11/XKB (including `libxkbcommon-x11-dev`) and udev development files;
 - OCCT 7.9 foundation, modeling and data-exchange libraries/headers;
-- Rust stable, Node 22 and npm; and
+- Rust (the pinned toolchain); and
 - Native packaging utilities including `patchelf`, `file`, FUSE 2 and
   `squashfs-tools` (the AppImage permission audit reads the image with
   `unsquashfs`).
@@ -130,14 +130,8 @@ Ubuntu package copyright notices and referenced common-license texts. After
 extraction it checks ELF dependencies and resolves them against the bundled
 libraries; falling back to an unstaged host dependency fails the audit.
 
-<details>
-<summary>Underlying builder for packaging maintenance</summary>
-
-The Rust entry point delegates to `scripts/bundle-linux.mjs`. The existing
-`npm run bundle:linux` alias invokes that same builder; it remains available
-to CI and packaging diagnostics.
-
-</details>
+Native packaging is implemented in `xtask/src/package/`. Deleted legacy scripts
+and npm aliases have no compatibility wrappers.
 
 ## Native package verification
 

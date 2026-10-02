@@ -28,9 +28,6 @@ jobs:
             -Out (Join-Path $env:RUNNER_TEMP 'windows-ime-stock') `
             -ProvisionJapanese -ExerciseIme
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target

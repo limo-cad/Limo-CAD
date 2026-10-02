@@ -88,10 +88,6 @@ jobs:
                 reason: "build or dependency configuration",
               },
               {
-                pattern: /^scripts\/desktop-package\.mjs$/,
-                reason: "native packaging metadata",
-              },
-              {
                 pattern: /^(LICENSE|THIRD_PARTY_NOTICES\.md)$/,
                 reason: "bundled legal notice",
               },
@@ -107,19 +103,14 @@ jobs:
 
             const windowsMatches = platformMatches([
               {
-                pattern: /^scripts\/(?:bundle-windows-portable|verify-windows-viewport)\.ps1$/,
+                pattern: /^scripts\/verify-windows-viewport\.ps1$/,
                 reason: "Windows packaging script",
               },
             ]);
-            const macosMatches = platformMatches([
-              {
-                pattern: /^scripts\/(?:bundle-macos|stage-occt-macos)\.mjs$/,
-                reason: "macOS packaging script",
-              },
-            ]);
+            const macosMatches = platformMatches([]);
             const linuxMatches = platformMatches([
               {
-                pattern: /^scripts\/(?:bundle-linux\.mjs|native-linux-package\.mjs|linux-xkb-runtime\.mjs|build-occt-linux\.sh|verify-linux-(?:viewport|native-package)\.sh)$/,
+                pattern: /^scripts\/(?:build-occt-linux\.sh|verify-linux-(?:viewport|native-package)\.sh)$/,
                 reason: "Linux packaging, OCCT build or native package verification script",
               },
               {
@@ -183,11 +174,6 @@ jobs:
           runner-cache-key: ${{ matrix.runner_cache_key }}
           msvc-component: ${{ matrix.msvc_component }}
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Read the application version
         id: app_version
         shell: bash
@@ -205,7 +191,7 @@ jobs:
         env:
           OCCT_ROOT: ${{ steps.occt.outputs.root }}
         run: |
-          & pwsh -NoProfile -File scripts/bundle-windows-portable.ps1 -Target "${{ matrix.rust_target }}"
+          cargo xtask package --target "${{ matrix.rust_target }}"
           if ($LASTEXITCODE -ne 0) { throw "Native portable build failed" }
 
       - name: Verify packaged MCP without an OCCT SDK
@@ -284,11 +270,6 @@ jobs:
       - name: Check out noBS CAD
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Read the application version
         id: app_version
         shell: bash
@@ -326,7 +307,7 @@ jobs:
           test "$bundle_root" = "$GITHUB_WORKSPACE/src-tauri/target/release/bundle"
           rm -rf -- "$bundle_root/deb" "$bundle_root/appimage"
           # The AppImage is built by build-linux-appimage on Ubuntu 22.04.
-          node scripts/bundle-linux.mjs deb
+          cargo xtask package --bundle deb
           test "$(find "$bundle_root/deb" -maxdepth 1 -name '*.deb' | wc -l)" -eq 1
 
       - name: Verify DEB MCP without a display
@@ -455,12 +436,6 @@ jobs:
       - name: Check out noBS CAD
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
       - name: Read the application version
         id: app_version
         shell: bash
@@ -504,7 +479,7 @@ jobs:
           bundle_root="$(realpath -m src-tauri/target/release/bundle)"
           test "$bundle_root" = "$GITHUB_WORKSPACE/src-tauri/target/release/bundle"
           rm -rf -- "$bundle_root/deb" "$bundle_root/appimage"
-          node scripts/bundle-linux.mjs appimage
+          cargo xtask package --bundle appimage
           test "$(find "$bundle_root/appimage" -maxdepth 1 -name '*.AppImage' | wc -l)" -eq 1
 
       - name: Refuse an AppImage that needs a newer glibc than Ubuntu 22.04
@@ -575,11 +550,6 @@ jobs:
     steps:
       - name: Check out noBS CAD
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
 
       - name: Read the application version
         id: app_version
@@ -687,11 +657,6 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Read the application version
         id: app_version
         shell: bash
@@ -786,7 +751,7 @@ jobs:
         shell: bash
         env:
           APPLE_SIGNING_IDENTITY: "-"
-        run: node scripts/bundle-macos.mjs
+        run: cargo xtask package
 
       - name: Build Developer ID signed and notarized DMG
         if: env.MACOS_DISTRIBUTION_BUILD == 'true'
@@ -795,7 +760,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/nbcad-notary-api-key.p8
-        run: node scripts/bundle-macos.mjs
+        run: cargo xtask package
 
       - name: Verify Developer ID signature and notarization ticket
         if: env.MACOS_DISTRIBUTION_BUILD == 'true'

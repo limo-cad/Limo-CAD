@@ -67,47 +67,5 @@ else
 fi
 # The Wayland lifecycle fixture further isolates its child in a private native
 # profile. Query that exact child's association, not the outer display harness.
-node --input-type=module - "$evidence" "$server" "$artifact" "$backend" <<'NODE'
-import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-const [evidence, server, artifact, backend] = process.argv.slice(2);
-let data = process.env.XDG_DATA_HOME;
-let config = process.env.XDG_CONFIG_HOME;
-if (backend === 'wayland') {
-  const report = JSON.parse(fs.readFileSync(path.join(evidence, 'native-wayland.json'), 'utf8'));
-  assert.equal(report.passed, true);
-  assert.equal(report.desktop?.passed, true);
-  const profile = report.desktop.native_profile;
-  const session = report.desktop.session_directory;
-  assert.ok(typeof profile === 'string' && path.isAbsolute(profile), 'Missing owned native profile');
-  assert.ok(typeof session === 'string' && path.isAbsolute(session), 'Missing owned session directory');
-  assert.equal(path.dirname(fs.realpathSync(profile)), fs.realpathSync(session), 'Native profile left its owned session');
-  data = path.join(profile, 'data');
-  config = path.join(profile, 'config');
-}
-assert.ok(data && config, 'Missing isolated XDG directories');
-const queried = spawnSync('xdg-mime', ['query', 'default', 'x-scheme-handler/nbcad'], {
-  encoding: 'utf8', env: { ...process.env, XDG_DATA_HOME: data, XDG_CONFIG_HOME: config },
-});
-assert.equal(queried.status, 0, `xdg-mime failed: ${queried.error ?? queried.stderr}`);
-assert.equal(queried.stdout.trim(), 'nbcad.desktop', 'Owned native recipe handler was not registered');
-const registered = path.join(data, 'applications', 'nbcad.desktop');
-const checked = spawnSync('desktop-file-validate', [registered], { encoding: 'utf8' });
-assert.equal(checked.status, 0, `Invalid registered desktop entry: ${checked.error ?? checked.stderr}`);
-const contents = fs.readFileSync(registered, 'utf8');
-// Only AppImages register their original launchable artifact. A DEB is an
-// archive; the extracted/installed native executable owns its association.
-const executable = artifact.endsWith('.AppImage') ? artifact : fs.realpathSync(server);
-// Desktop Entry string escaping and Exec argument quoting are separate layers.
-const quoted = '"' + [...executable].map(c =>
-  c === '\\' ? '\\\\\\\\' : ['"', '`', '$'].includes(c) ? '\\\\' + c : c === '%' ? '%%' : c
-).join('') + '" %u';
-assert.equal(contents.split(/\r?\n/).find(line => line.startsWith('Exec=')), `Exec=${quoted}`,
-  'Recipe handler did not retain the exact packaged executable and URL argument');
-fs.copyFileSync(registered, path.join(evidence, 'registered.desktop'));
-fs.writeFileSync(path.join(evidence, 'recipe-handler.json'), JSON.stringify({
-  passed: true, data_home: data, config_home: config, executable, desktop_id: queried.stdout.trim(),
-}, null, 2) + '\n');
-NODE
+cargo xtask verify-linux-recipe-handler \
+  --evidence "$evidence" --server "$server" --artifact "$artifact" --backend "$backend"

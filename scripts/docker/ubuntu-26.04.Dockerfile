@@ -60,10 +60,4 @@ RUN apt-get update \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
       | sh -s -- -y --profile minimal --default-toolchain stable
 
-# Keep the reproducible SDK rooted in the official Ubuntu 26.04 archive. CI
-# still uses setup-node for the pinned Node 22 release toolchain.
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends nodejs npm \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /workspace

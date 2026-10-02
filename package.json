@@ -15,14 +15,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:bevy-ui:capture": "node scripts/capture-bevy-ui.mjs",
     "build": "tsc && vite build",
-    "build:desktop": "cargo build --manifest-path src-tauri/Cargo.toml --locked --release --bin nbcad",
     "preview": "vite preview",
-    "stage:occt": "node scripts/stage-occt-macos.mjs",
-    "bundle:macos": "node scripts/bundle-macos.mjs",
-    "bundle:linux": "node scripts/bundle-linux.mjs",
-    "bundle:windows:portable": "pwsh -NoProfile -File scripts/bundle-windows-portable.ps1",
     "build:wasm": "wasm-pack build crates/wasm --target web --out-dir ../../src/engine-wasm/pkg --out-name nbcad_wasm",
     "smoke:wasm": "node scripts/smoke-wasm.mjs",
     "test:frontend": "npm run test:preferences && npm run test:constraint-glyphs && npm run test:revolve-axis && npm run test:modeling-picker && npm run test:screen-picker && npm run test:center-pick && npm run test:viewport-theme && npm run test:project-archive && npm run test:profile-picker && npm run test:presentation && npm run test:drawing-instances && npm run test:export-flow && npm run test:arc-sweep",
@@ -90,8 +84,7 @@
     "e2e:ribbon": "node scripts/run-e2e.mjs e2e-ribbon-responsive.mjs",
     "e2e:files": "node scripts/run-e2e.mjs e2e-m2.mjs",
     "build:help-index": "node scripts/build-help-index.mjs",
-    "check:help": "npm run check:knowledge && npm run build:help-index",
-    "dev:desktop": "cargo run --manifest-path src-tauri/Cargo.toml --bin nbcad"
+    "check:help": "npm run check:knowledge && npm run build:help-index"
   },
   "dependencies": {
     "earcut": "3.2.4",

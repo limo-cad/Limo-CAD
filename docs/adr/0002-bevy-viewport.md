@@ -223,7 +223,7 @@ using the same production UI builders as the embedded viewport. The capture is
 served by a development-only Vite route beside a React reference surface:
 
 ```text
-npm run dev:bevy-ui:capture
+cargo run --locked --manifest-path src-tauri/Cargo.toml --features dev-ui-lab --bin bevy-ui-lab -- public/__bevy_ui__/native.png
 npm run dev
 http://127.0.0.1:5173/?bevy-ui-lab=compare
 ```

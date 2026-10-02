@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 anyhow = "1.0.104"
 base64 = "0.23.1"
+serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["float_roundtrip", "preserve_order"] }
 regex = "1.13.1"
 semver = "1.0.28"
