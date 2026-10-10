@@ -158,6 +158,136 @@ fn solid_and_view(fixture: &Fixture) -> NamedViewConfigurationDto {
 }
 
 #[test]
+fn applied_inbox_named_view_recall_updates_camera_without_moving_source_geometry() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let saved = solid_and_view(&fixture);
+    let source = serde_json::to_value(fixture.engine.viewport_snapshot().2).unwrap();
+    fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &fixture.owner(),
+            "project_set_visibility",
+            &json!({"hidden_body_ids":saved.visible_body_ids}),
+            || Ok(()),
+        )
+        .unwrap();
+    let mut app = native_viewport::interface_scene_fixture();
+    let bodies = refresh_native_model(&fixture.engine, app.world_mut(), true).unwrap();
+    let (document, mut camera, mut presentation, _) =
+        native_viewport::interface_view_snapshot(app.world());
+    camera.position = [14., -20., 60.];
+    camera.target = [1., 2., 3.];
+    camera.up = [0., 1., 0.];
+    presentation.selected_surface_point = Some(limo_cad_solid::Point3Dto {
+        x: 3.,
+        y: 2.,
+        z: 3.,
+    });
+    native_viewport::apply_interface_view(
+        app.world_mut(),
+        &document,
+        Some(camera),
+        Some(presentation),
+    )
+    .unwrap();
+    fixture
+        .bridge
+        .publish_native_document(&fixture.engine, &fixture.owner(), "solid")
+        .unwrap();
+    let session = fixture
+        .bridge
+        .session_id_for_window("main")
+        .unwrap()
+        .unwrap();
+    let revision = fixture
+        .bridge
+        .engine_revision_for_window("main")
+        .unwrap()
+        .unwrap();
+    let owner = fixture.owner();
+    app.world_mut().insert_resource(NativeRenderedDocument {
+        owner: owner.clone(),
+        revision,
+        bodies,
+    });
+    let inbox = crate::session_bridge::session_root()
+        .join(&session)
+        .join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+    std::fs::write(
+        inbox.join("1.json"),
+        json!({"name":"recall_named_view","arguments":{"name":saved.name},
+            "base_generation":revision,"session_id":session,"window_id":"main",
+            "document_id":owner.document_id})
+        .to_string(),
+    )
+    .unwrap();
+    let applied = crate::session_bridge::apply_or_reject_one_inbox_op_with_presentation_guard(
+        &fixture.bridge,
+        "main",
+        &fixture.engine,
+        None,
+        Some((&owner.document_id, &session)),
+        false,
+    )
+    .unwrap();
+    assert_eq!(applied["applied"], true);
+    assert_eq!(applied["model_changed"], true);
+    let recalled: limo_cad_sketch::RecallNamedViewDto =
+        serde_json::from_value(applied["result"].clone()).unwrap();
+    let mut rejected = applied.clone();
+    rejected["applied"] = json!(false);
+    after_mutation(app.world_mut(), "inbox", &rejected).unwrap();
+    let (_, unchanged_camera, unchanged_presentation, _) =
+        native_viewport::interface_view_snapshot(app.world());
+    assert_eq!(unchanged_camera.position, camera.position);
+    assert_eq!(unchanged_camera.target, camera.target);
+    assert_eq!(unchanged_camera.up, camera.up);
+    assert!(unchanged_presentation.selected_surface_point.is_some());
+    let mutation = NativeMutationResult {
+        context: owner,
+        engine_revision: applied["engine_revision"].as_u64().unwrap(),
+        value: applied.clone(),
+    };
+    let prepared =
+        prepare_native_presentation(&fixture.engine, &fixture.bridge, &mutation, "inbox");
+    app.world_mut().insert_resource(prepared);
+    let outcome = finish_mutation(
+        &fixture.engine,
+        &fixture.bridge,
+        app.world_mut(),
+        "inbox",
+        mutation,
+    );
+    assert!(outcome["render_error"].is_null(), "{outcome}");
+    assert_eq!(outcome["operation"], "inbox");
+    assert_eq!(
+        outcome["result"], applied,
+        "Keep the existing inbox receipt shape"
+    );
+    let (_, camera, presentation, _) = native_viewport::interface_view_snapshot(app.world());
+    assert_eq!(camera.position, saved.camera.position.map(|v| v as f32));
+    assert_eq!(camera.target, saved.camera.target.map(|v| v as f32));
+    assert_eq!(camera.up, saved.camera.up.map(|v| v as f32));
+    assert_eq!(
+        presentation.hidden_body_ids,
+        recalled.visibility.hidden_body_ids
+    );
+    assert_eq!(*presentation.body_poses, recalled.solution.body_poses);
+    assert_eq!(
+        *presentation.instance_body_poses,
+        recalled.solution.instance_body_poses
+    );
+    assert!(presentation.selected_surface_point.is_none());
+    assert_eq!(
+        serde_json::to_value(fixture.engine.viewport_snapshot().2).unwrap(),
+        source
+    );
+}
+
+#[test]
 fn translated_and_rotated_saved_view_resets_before_source_forms_without_losing_ids() {
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
     let fixture = Fixture::new();

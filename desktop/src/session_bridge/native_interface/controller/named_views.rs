@@ -560,6 +560,17 @@ pub(crate) fn after_mutation(
     operation: &str,
     result: &Value,
 ) -> Result<(), String> {
+    // Attached MCP operations arrive as an applied inbox receipt. The engine
+    // updates visibility and poses, but its camera still needs the same native
+    // presentation update as a Recall activated in the Named Views editor.
+    let (operation, result) = if operation == "inbox" && result["applied"] == true {
+        match (result["name"].as_str(), result.get("result")) {
+            (Some(operation), Some(result)) => (operation, result),
+            _ => (operation, result),
+        }
+    } else {
+        (operation, result)
+    };
     let was_previewing = world.get_resource::<State>().is_some_and(|s| s.previewing);
     if let Some(mut state) = world.get_resource_mut::<State>() {
         state.previewing = false;
