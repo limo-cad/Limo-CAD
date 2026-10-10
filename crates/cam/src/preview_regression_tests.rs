@@ -1,4 +1,4 @@
-// Included in planner::tests to reuse small deterministic jobs.
+
 
 fn preview_face() -> CamOperationDto {
     CamOperationDto::Face {
@@ -30,7 +30,7 @@ fn facing_coverage_uses_flat_land_not_the_outer_diameter() {
 
     face.diameter = 10.0;
     face.corner_radius = Some(1.0);
-    // The 10 mm outer bands cover, but the 8 mm flat lands leave ridges.
+
     assert!(!facing_clears_stock_floor(&face, &stock, &[-5.0, 5.0], -48.5, 48.5));
     assert!(!facing_clears_stock_floor(&face, &stock, &[-7.0, 2.0, 7.0], -48.5, 48.5));
     assert!(facing_clears_stock_floor(&face, &stock, &[-7.0, 0.0, 7.0], -48.5, 48.5));
@@ -62,8 +62,8 @@ fn corner_treated_facing_certifies_a_fully_covered_floor_in_both_linking_modes()
             assert!(stock.removed_voxels > 0);
             assert!(stock.collisions.is_empty(), "{:?}", stock.collisions);
 
-            // Narrow the cutter without changing the rows: ridges must not
-            // authorize the drill's low rapid plane.
+
+
             doc.tools[0].diameter = 10.0;
             assert!(plan_setup(&doc, 1).unwrap_err().0.contains("incoming stock top"));
         }
@@ -100,8 +100,8 @@ fn later_invalid_operation_cannot_erase_earlier_paths_stock_or_playback() {
     assert!(plan_setup_through(&doc, 1, 99).is_err());
     assert_eq!(serde_json::to_value(&doc).unwrap(), original, "preview must not mutate saved intent");
 
-    // Invalid parameter/height/linking records after the boundary are outside
-    // the preview as well, not just failures raised during motion generation.
+
+
     if let CamOperationDto::Drill { bottom_z, .. } = &mut doc.setups[0].operations[1] { *bottom_z = 20.0; }
     assert!(doc.validate().is_err());
     assert!(plan_setup_through(&doc, 1, 8).is_ok());

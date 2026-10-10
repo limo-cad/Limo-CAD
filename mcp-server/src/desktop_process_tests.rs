@@ -39,7 +39,7 @@ impl Drop for TestDirectory {
 struct OwnedChild(DesktopChild);
 impl Drop for OwnedChild {
     fn drop(&mut self) {
-        // Cleanup is limited to the exact process handle created by this test.
+
         if self.0.try_wait().ok().flatten().is_none() {
             unsafe {
                 TerminateProcess(self.0.process.as_raw_handle(), 1);
@@ -111,7 +111,7 @@ fn desktop_does_not_retain_launcher_pipes_and_exit_259_is_observed() {
         unsafe { SetHandleInformation(read.as_raw_handle(), HANDLE_FLAG_INHERIT, 0) },
         0
     );
-    // Deliberately leave the writer inheritable, as MCP/PowerShell handles are.
+
     let mut child = OwnedChild(spawn(&executable).unwrap());
     assert!(child.0.id() > 0);
     drop(write);

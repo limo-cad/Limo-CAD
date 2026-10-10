@@ -1,46 +1,54 @@
-//! Binary STL writer (geometry only; millimetres assumed).
+//! STL writer: binary for exact f32 geometry, otherwise lossless f64 ASCII.
 
-use crate::{ExportError, TriangleMesh};
+use std::fmt::Write;
+
+use crate::{mesh_weld::validate_mesh_buffers, ExportError, TriangleMesh};
 
 pub fn write_stl(meshes: &[TriangleMesh]) -> Result<Vec<u8>, ExportError> {
     if meshes.is_empty() {
         return Err(ExportError("There are no active bodies to export.".into()));
     }
-    let triangle_count: u32 = meshes.iter().map(|mesh| mesh.triangle_count() as u32).sum();
+    for mesh in meshes {
+        validate_mesh_buffers(mesh)?;
+    }
+    // Binary STL stores f32 vertices. Use one ASCII artifact when any native
+    // coordinate would change, rather than quantizing narrow source features.
+    let binary = meshes.iter().all(|mesh| {
+        mesh.positions.iter().all(|&value| {
+            let represented = value as f32;
+            represented.is_finite() && f64::from(represented) == value
+        })
+    });
+    if !binary {
+        return write_ascii_stl(meshes);
+    }
+
+    let triangle_count = meshes.iter().try_fold(0_u32, |count, mesh| {
+        let additional = u32::try_from(mesh.triangle_count()).map_err(|_| {
+            ExportError("STL triangle count exceeds the binary format limit".into())
+        })?;
+        count
+            .checked_add(additional)
+            .ok_or_else(|| ExportError("STL triangle count exceeds the binary format limit".into()))
+    })?;
     let mut out = Vec::with_capacity(84 + triangle_count as usize * 50);
     let mut header = [0u8; 80];
-    let label = b"noBS CAD binary STL (millimetres)";
+    let label = b"Limo CAD binary STL (millimetres)";
     header[..label.len()].copy_from_slice(label);
     out.extend_from_slice(&header);
     out.extend_from_slice(&triangle_count.to_le_bytes());
 
     for mesh in meshes {
-        if mesh.positions.len() % 3 != 0 {
-            return Err(ExportError(format!(
-                "body {} has a malformed position buffer",
-                mesh.body_id.0
-            )));
-        }
-        if mesh.indices.len() % 3 != 0 {
-            return Err(ExportError(format!(
-                "body {} has a malformed index buffer",
-                mesh.body_id.0
-            )));
-        }
-        for tri in mesh.indices.chunks_exact(3) {
-            let (a, b, c) = (
-                vertex(&mesh.positions, tri[0])?,
-                vertex(&mesh.positions, tri[1])?,
-                vertex(&mesh.positions, tri[2])?,
-            );
-            let normal = triangle_normal(a, b, c);
-            out.extend_from_slice(&normal[0].to_le_bytes());
-            out.extend_from_slice(&normal[1].to_le_bytes());
-            out.extend_from_slice(&normal[2].to_le_bytes());
-            for point in [a, b, c] {
-                out.extend_from_slice(&point[0].to_le_bytes());
-                out.extend_from_slice(&point[1].to_le_bytes());
-                out.extend_from_slice(&point[2].to_le_bytes());
+        for (triangle_index, tri) in mesh.indices.as_chunks::<3>().0.iter().enumerate() {
+            let points = triangle_points(mesh, tri);
+            let normal = checked_normal(mesh, triangle_index, points)?;
+            for value in normal {
+                out.extend_from_slice(&(value as f32).to_le_bytes());
+            }
+            for point in points {
+                for value in point {
+                    out.extend_from_slice(&(value as f32).to_le_bytes());
+                }
             }
             out.extend_from_slice(&0u16.to_le_bytes());
         }
@@ -48,25 +56,59 @@ pub fn write_stl(meshes: &[TriangleMesh]) -> Result<Vec<u8>, ExportError> {
     Ok(out)
 }
 
-fn vertex(positions: &[f32], index: u32) -> Result<[f32; 3], ExportError> {
-    let start = index as usize * 3;
-    if start + 2 >= positions.len() {
-        return Err(ExportError("triangle index out of range".into()));
+fn write_ascii_stl(meshes: &[TriangleMesh]) -> Result<Vec<u8>, ExportError> {
+    let mut out = String::from("solid LimoCAD\n");
+    for mesh in meshes {
+        for (triangle_index, tri) in mesh.indices.as_chunks::<3>().0.iter().enumerate() {
+            let points = triangle_points(mesh, tri);
+            let normal = checked_normal(mesh, triangle_index, points)?;
+            // Display formatting emits shortest-roundtrip f64 decimals.
+            writeln!(
+                out,
+                "  facet normal {} {} {}",
+                normal[0], normal[1], normal[2]
+            )
+            .unwrap();
+            out.push_str("    outer loop\n");
+            for point in points {
+                writeln!(out, "      vertex {} {} {}", point[0], point[1], point[2]).unwrap();
+            }
+            out.push_str("    endloop\n  endfacet\n");
+        }
     }
-    Ok([positions[start], positions[start + 1], positions[start + 2]])
+    out.push_str("endsolid LimoCAD\n");
+    Ok(out.into_bytes())
 }
 
-fn triangle_normal(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> [f32; 3] {
+fn triangle_points(mesh: &TriangleMesh, indices: &[u32; 3]) -> [[f64; 3]; 3] {
+    indices.map(|index| {
+        let begin = index as usize * 3;
+        [
+            mesh.positions[begin],
+            mesh.positions[begin + 1],
+            mesh.positions[begin + 2],
+        ]
+    })
+}
+
+fn checked_normal(
+    mesh: &TriangleMesh,
+    triangle_index: usize,
+    [a, b, c]: [[f64; 3]; 3],
+) -> Result<[f64; 3], ExportError> {
     let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    let n = [
+    let normal = [
         u[1] * v[2] - u[2] * v[1],
         u[2] * v[0] - u[0] * v[2],
         u[0] * v[1] - u[1] * v[0],
     ];
-    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-    if len <= f32::EPSILON {
-        return [0.0, 0.0, 0.0];
+    let length = normal[0].hypot(normal[1]).hypot(normal[2]);
+    if !length.is_finite() || length == 0.0 {
+        return Err(ExportError(format!(
+            "body {} triangle {}: STL vertices form a zero-area or non-finite triangle",
+            mesh.body_id.0, triangle_index
+        )));
     }
-    [n[0] / len, n[1] / len, n[2] / len]
+    Ok(normal.map(|value| value / length))
 }

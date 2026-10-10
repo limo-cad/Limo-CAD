@@ -5,12 +5,12 @@ description: Optional JSONC recipe versioning for teaching and replay; working d
 status: draft
 updated: 2026-09-20
 topics: workflow, modeling, mcp, export, sessions
-keywords: VERSION, DESIGN_VERSION, design_v, nbcad.jsonc, JSONC, design version, script naming, recipe, blank document, cad_interface, AGENTIC.md, chunking, hand-authored
+keywords: VERSION, DESIGN_VERSION, design_v, limo.jsonc, JSONC, design version, script naming, recipe, blank document, cad_interface, AGENTIC.md, chunking, hand-authored
 ---
 
 # Design VERSION and JSONC script naming
 
-Working designs are saved `.nbcad` projects, constructed and edited through
+Working designs are saved `.limo` projects, constructed and edited through
 MCP. Agents should not maintain presentation copies for normal iteration.
 See [the MCP workflow](agent-mcp-workflow.md).
 
@@ -51,11 +51,11 @@ string.
 
 | `VERSION` | Live script filename |
 |-----------|----------------------|
-| `"M.N"` | `design_vM_N.nbcad.jsonc` (dot → underscore) |
-| `"M.N.P"` (optional patch) | `design_vM_N_P.nbcad.jsonc` |
+| `"M.N"` | `design_vM_N.limo.jsonc` (dot → underscore) |
+| `"M.N.P"` (optional patch) | `design_vM_N_P.limo.jsonc` |
 
-Examples: `"16.31"` → `design/design_v16_31.nbcad.jsonc` (path under the design
-package as the repo already uses); `"11.2"` → `design_v11_2.nbcad.jsonc`.
+Examples: `"16.31"` → `design/design_v16_31.limo.jsonc` (path under the design
+package as the repo already uses); `"11.2"` → `design_v11_2.limo.jsonc`.
 
 Do **not** rely on VERSION-only-inside with a stable unversioned name when you
 are cutting INJS / working-package revisions — the versioned filename is part
@@ -69,10 +69,10 @@ not revision-cut working packages.
 
 ## Cut rule (working tree)
 
-After a new `design_v*.nbcad.jsonc` is committed and proven (blank-doc replay /
+After a new `design_v*.limo.jsonc` is committed and proven (blank-doc replay /
 checks as needed):
 
-1. Delete prior `design_v*.nbcad.jsonc` files from the **working tree** in the
+1. Delete prior `design_v*.limo.jsonc` files from the **working tree** in the
    **same** change set.
 2. Also delete any leftover `gen_v*.py` (or other generator stubs) that only
    served an obsolete path.
@@ -99,22 +99,22 @@ If the product only supports a **single** script file today:
   `cad_script` demos start from a blank doc (or intentional wipe) — see
   [MCP workflow](agent-mcp-workflow.md).
 - When publishing working-design scripts via `cad_interface` / path, prefer the
-  **versioned** `design_vM_N.nbcad.jsonc` filename that matches `VERSION`.
+  **versioned** `design_vM_N.limo.jsonc` filename that matches `VERSION`.
 - Print / interchange packages may include `VERSION` in export names when the
-  human asks; keep history in `.nbcad` and use 3MF for print packages when
+  human asks; keep history in `.limo` and use 3MF for print packages when
   available ([export and print](export-print.md)).
 
 ## Golden path checklist
 
 1. Set or bump one `VERSION` / `DESIGN_VERSION` (document in `AGENTIC.md`).
-2. For working designs (INJS): name the live script `design_vM_N.nbcad.jsonc`
+2. For working designs (INJS): name the live script `design_vM_N.limo.jsonc`
    from that string (dot → underscore) **and** embed the same string in JSONC
    `"version"` / meta.
 3. For catalog demos: stable recipe id OK; still embed `VERSION` in metadata.
 4. Prefer small JSONC chapters / clear section headers — hand-edit, not a
    Python generator.
 5. Prove the new script (blank-doc replay / checks).
-6. Prune prior `design_v*.nbcad.jsonc` (and any leftover `gen_v*.py`) in the
+6. Prune prior `design_v*.limo.jsonc` (and any leftover `gen_v*.py`) in the
    same commit.
 
 Related: [MCP workflow](agent-mcp-workflow.md) (blank-document scripts),

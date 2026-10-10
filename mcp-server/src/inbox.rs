@@ -5,7 +5,7 @@
 //! and is released on exit, including a crash. Keep its file in place: deleting
 //! it would allow two publishers to lock different files with the same name.
 
-use std::fs::{self, File, OpenOptions, TryLockError};
+use std::fs::{self, File, TryLockError};
 #[cfg(test)]
 use std::io::Write;
 use std::io::{self, ErrorKind};
@@ -17,7 +17,11 @@ use std::time::{Duration, Instant};
 pub(crate) const PUBLISH_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(crate) fn sequences(dir: &Path) -> io::Result<Vec<u64>> {
-    let entries = match fs::read_dir(dir) {
+    sequences_in(&limo_cad_session_storage::root(), dir)
+}
+
+fn sequences_in(registry: &Path, dir: &Path) -> io::Result<Vec<u64>> {
+    let entries = match limo_cad_session_storage::read_dir_from(registry, dir) {
         Ok(entries) => entries,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => return Err(error),
@@ -46,17 +50,15 @@ pub(crate) fn sequences(dir: &Path) -> io::Result<Vec<u64>> {
     Ok(seqs)
 }
 
-pub(crate) fn next_sequence(inbox: &Path) -> io::Result<u64> {
+pub(crate) fn next_sequence(registry: &Path, inbox: &Path) -> io::Result<u64> {
     let mut max = 0;
-    // The reader moves pending entries into applied/failed, never backwards.
-    // Scan pending first, then both archives, so a concurrent move cannot make
-    // an allocated sequence disappear between scans.
+
     for dir in [
         inbox.to_path_buf(),
         inbox.join("applied"),
         inbox.join("failed"),
     ] {
-        for seq in sequences(&dir)? {
+        for seq in sequences_in(registry, &dir)? {
             max = max.max(seq);
         }
     }
@@ -65,7 +67,7 @@ pub(crate) fn next_sequence(inbox: &Path) -> io::Result<u64> {
 }
 
 fn lock_publishers(inbox: &Path, timeout: Duration) -> io::Result<File> {
-    let lock = OpenOptions::new()
+    let lock = limo_cad_session_storage::private_options()
         .create(true)
         .truncate(false)
         .read(true)
@@ -99,30 +101,29 @@ impl Drop for StagedFile {
 }
 
 #[cfg(test)]
-pub(crate) fn publish(inbox: &Path, content: &[u8]) -> io::Result<u64> {
-    publish_with(inbox, |file| file.write_all(content))
+pub(crate) fn publish(registry: &Path, inbox: &Path, content: &[u8]) -> io::Result<u64> {
+    publish_with(registry, inbox, |file| file.write_all(content))
 }
 
 #[cfg(test)]
-fn publish_with(inbox: &Path, write: impl FnOnce(&mut File) -> io::Result<()>) -> io::Result<u64> {
-    publish_with_timeout(inbox, PUBLISH_TIMEOUT, write)
+fn publish_with(
+    registry: &Path,
+    inbox: &Path,
+    write: impl FnOnce(&mut File) -> io::Result<()>,
+) -> io::Result<u64> {
+    publish_with_timeout(registry, inbox, PUBLISH_TIMEOUT, write)
 }
 
-// Keep the application's bounded wait separate from the safety stress tests'
-// budgets for many contending, durable writes on slower filesystems: the
-// archive stress test below and `session::write_inbox_op_within`.
 pub(crate) fn publish_with_timeout(
+    registry: &Path,
     inbox: &Path,
     timeout: Duration,
     write: impl FnOnce(&mut File) -> io::Result<()>,
 ) -> io::Result<u64> {
-    fs::create_dir_all(inbox)?;
+    limo_cad_session_storage::create_dir_all_from(registry, inbox)?;
     let _lock = lock_publishers(inbox, timeout)?;
-    let seq = next_sequence(inbox)?;
-    // Only the publisher holding the OS lock touches this ignored path. A
-    // crash after publication can leave it hard-linked to a pending command
-    // or archived receipt. Unlink it first: truncating it would corrupt that
-    // already-published payload through its shared inode.
+    let seq = next_sequence(registry, inbox)?;
+
     let stage_path = inbox.join(".publish.tmp");
     match fs::remove_file(&stage_path) {
         Ok(()) => {}
@@ -131,19 +132,16 @@ pub(crate) fn publish_with_timeout(
     }
     let staged = StagedFile(stage_path);
     {
-        let mut file = OpenOptions::new()
+        let mut file = limo_cad_session_storage::private_options()
             .create_new(true)
             .write(true)
             .open(&staged.0)?;
         write(&mut file)?;
         file.sync_all()?;
     }
-    // Unlike rename, hard_link cannot replace an existing destination on any
-    // supported platform. Both paths live in the same directory/filesystem.
-    // Do not fall back to copying: that would expose partial JSON again.
+
     fs::hard_link(&staged.0, inbox.join(format!("{seq}.json")))?;
-    // Publication succeeded even if best-effort temp cleanup fails. Returning
-    // an error now would encourage callers to submit the same operation twice.
+
     Ok(seq)
 }
 
@@ -161,7 +159,7 @@ mod tests {
         fn new() -> Self {
             static NEXT: AtomicU64 = AtomicU64::new(0);
             let dir = std::env::temp_dir().join(format!(
-                "nbcad-inbox-{}-{}-{}",
+                "limo-cad-inbox-{}-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -169,6 +167,12 @@ mod tests {
                     .as_nanos(),
                 NEXT.fetch_add(1, Ordering::Relaxed),
             ));
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                fs::DirBuilder::new().mode(0o700).create(&dir).unwrap();
+            }
+            #[cfg(not(unix))]
             fs::create_dir_all(&dir).unwrap();
             Self(dir)
         }
@@ -187,7 +191,7 @@ mod tests {
         let (paused_tx, paused_rx) = mpsc::channel();
         let (resume_tx, resume_rx) = mpsc::channel();
         let writer = std::thread::spawn(move || {
-            publish_with(&inbox, |file| {
+            publish_with(&inbox, &inbox, |file| {
                 file.write_all(b"{\"name\":")?;
                 paused_tx.send(()).unwrap();
                 resume_rx.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -195,16 +199,15 @@ mod tests {
             })
         });
         paused_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-        // This is exactly when the old create_new(final_path) writer exposed
-        // empty/truncated JSON to the desktop's numeric-file scanner.
-        let pending_during_write = sequences(&dir.0).unwrap();
+
+        let pending_during_write = sequences_in(&dir.0, &dir.0).unwrap();
         resume_tx.send(()).unwrap();
         assert_eq!(writer.join().unwrap().unwrap(), 1);
         assert!(
             pending_during_write.is_empty(),
             "partial command was published"
         );
-        assert_eq!(sequences(&dir.0).unwrap(), vec![1]);
+        assert_eq!(sequences_in(&dir.0, &dir.0).unwrap(), vec![1]);
         assert_eq!(
             fs::read_to_string(dir.0.join("1.json")).unwrap(),
             r#"{"name":"solid_fillet","base_generation":170}"#
@@ -215,16 +218,16 @@ mod tests {
     #[test]
     fn failed_write_and_abandoned_stage_leave_no_command() {
         let dir = TestDir::new();
-        let error = publish_with(&dir.0, |file| {
+        let error = publish_with(&dir.0, &dir.0, |file| {
             file.write_all(b"{\"name\":")?;
             Err(io::Error::other("injected write failure"))
         })
         .unwrap_err();
         assert!(error.to_string().contains("injected write failure"));
-        assert!(sequences(&dir.0).unwrap().is_empty());
+        assert!(sequences_in(&dir.0, &dir.0).unwrap().is_empty());
         assert!(!dir.0.join(".publish.tmp").exists());
         fs::write(dir.0.join(".publish.tmp"), "abandoned partial payload").unwrap();
-        assert_eq!(publish(&dir.0, b"complete").unwrap(), 1);
+        assert_eq!(publish(&dir.0, &dir.0, b"complete").unwrap(), 1);
         assert_eq!(fs::read(dir.0.join("1.json")).unwrap(), b"complete");
     }
 
@@ -238,9 +241,8 @@ mod tests {
             let stage = dir.0.join(".publish.tmp");
             fs::write(&stage, b"previous published command").unwrap();
             fs::hard_link(&stage, &previous).unwrap();
-            // Simulate death after hard_link, before temporary unlink. The
-            // reader may already have moved the published command to archive.
-            assert_eq!(publish(&dir.0, b"next command").unwrap(), 10);
+
+            assert_eq!(publish(&dir.0, &dir.0, b"next command").unwrap(), 10);
             assert_eq!(fs::read(previous).unwrap(), b"previous published command");
             assert_eq!(fs::read(dir.0.join("10.json")).unwrap(), b"next command");
         }
@@ -255,31 +257,22 @@ mod tests {
         fs::write(dir.0.join("failed/9.json"), "legacy failed").unwrap();
         const WRITERS: usize = 8;
         const EACH: usize = 16;
-        // This tests publication/sequence safety, not whether 128 fsyncs fit
-        // within ten seconds or OS lock scheduling is fair within five. All
-        // workers share one bounded stress budget; production keeps its 5s
-        // timeout, tested independently below.
+
         let deadline = Instant::now() + Duration::from_secs(120);
         let (published_tx, published_rx) = mpsc::channel();
         std::thread::scope(|scope| {
             let inbox = &dir.0;
             let reader = scope.spawn(move || {
                 let mut observed = Vec::new();
-                // Drain every notification, even if an earlier scan already
-                // saw a later publisher's file before that publisher sent its
-                // wakeup. Otherwise the final send could race receiver exit.
+
                 for _ in 0..WRITERS * EACH {
-                    // Do not busy-scan the directory while writers are doing
-                    // durable I/O. The notification is only a wakeup: still
-                    // discover/read/archive real numeric files concurrently
-                    // with the other writers, just as the desktop reader does.
                     let remaining = deadline
                         .checked_duration_since(Instant::now())
                         .expect("reader exceeded the publication stress deadline");
                     published_rx
                         .recv_timeout(remaining)
                         .expect("reader did not receive every command");
-                    for seq in sequences(inbox).unwrap() {
+                    for seq in sequences_in(inbox, inbox).unwrap() {
                         let src = inbox.join(format!("{seq}.json"));
                         let body = fs::read_to_string(&src).unwrap();
                         assert!(
@@ -303,7 +296,7 @@ mod tests {
                                 let remaining = deadline
                                     .checked_duration_since(Instant::now())
                                     .expect("writer exceeded the publication stress deadline");
-                                let seq = publish_with_timeout(inbox, remaining, |file| {
+                                let seq = publish_with_timeout(inbox, inbox, remaining, |file| {
                                     file.write_all(payload.as_bytes())
                                 })
                                 .unwrap();
@@ -314,8 +307,7 @@ mod tests {
                     })
                 })
                 .collect();
-            // A failed writer must disconnect the reader once all publishers
-            // exit, not leave it waiting on a sender owned by this parent.
+
             drop(published_tx);
             let mut expected: Vec<_> = writers
                 .into_iter()
@@ -328,7 +320,7 @@ mod tests {
                 observed.iter().map(|(seq, _)| *seq).collect::<Vec<_>>(),
                 (10..10 + (WRITERS * EACH) as u64).collect::<Vec<_>>()
             );
-            assert!(sequences(&dir.0).unwrap().is_empty());
+            assert!(sequences_in(&dir.0, &dir.0).unwrap().is_empty());
         });
     }
 
@@ -339,7 +331,7 @@ mod tests {
         let error = lock_publishers(&dir.0, Duration::from_millis(20)).unwrap_err();
         assert_eq!(error.kind(), ErrorKind::TimedOut);
         drop(owner);
-        assert_eq!(publish(&dir.0, b"complete").unwrap(), 1);
+        assert_eq!(publish(&dir.0, &dir.0, b"complete").unwrap(), 1);
     }
 
     #[test]
@@ -347,26 +339,26 @@ mod tests {
         let dir = TestDir::new();
         let owner = lock_publishers(&dir.0, Duration::from_secs(1)).unwrap();
         let mut wrote = false;
-        let error = publish_with_timeout(&dir.0, Duration::from_millis(20), |file| {
+        let error = publish_with_timeout(&dir.0, &dir.0, Duration::from_millis(20), |file| {
             wrote = true;
             file.write_all(b"must not be published")
         })
         .unwrap_err();
         assert_eq!(error.kind(), ErrorKind::TimedOut);
         assert!(!wrote, "a timed-out publisher must not call its writer");
-        assert!(sequences(&dir.0).unwrap().is_empty());
+        assert!(sequences_in(&dir.0, &dir.0).unwrap().is_empty());
         assert!(!dir.0.join(".publish.tmp").exists());
         drop(owner);
-        assert_eq!(publish(&dir.0, b"complete").unwrap(), 1);
+        assert_eq!(publish(&dir.0, &dir.0, b"complete").unwrap(), 1);
         assert_eq!(fs::read(dir.0.join("1.json")).unwrap(), b"complete");
     }
 
     #[test]
     fn publication_never_overwrites_an_existing_destination() {
         let dir = TestDir::new();
-        let error = publish_with(&dir.0, |file| {
+        let error = publish_with(&dir.0, &dir.0, |file| {
             file.write_all(b"new command")?;
-            // Simulate a legacy publisher which does not take our lock.
+
             fs::write(dir.0.join("1.json"), b"already published")
         })
         .unwrap_err();
@@ -376,14 +368,14 @@ mod tests {
             b"already published"
         );
         assert!(!dir.0.join(".publish.tmp").exists());
-        assert_eq!(publish(&dir.0, b"next command").unwrap(), 2);
+        assert_eq!(publish(&dir.0, &dir.0, b"next command").unwrap(), 2);
     }
 
     #[test]
     fn sequence_exhaustion_or_unreadable_archive_cannot_reuse_a_number() {
         let dir = TestDir::new();
         fs::write(dir.0.join(format!("{}.json", u64::MAX)), b"last command").unwrap();
-        assert!(publish(&dir.0, b"new command")
+        assert!(publish(&dir.0, &dir.0, b"new command")
             .unwrap_err()
             .to_string()
             .contains("exhausted"));
@@ -393,14 +385,14 @@ mod tests {
         );
         let other = TestDir::new();
         fs::write(other.0.join("applied"), b"not a readable archive directory").unwrap();
-        assert!(publish(&other.0, b"new command").is_err());
-        assert!(sequences(&other.0).unwrap().is_empty());
+        assert!(publish(&other.0, &other.0, b"new command").is_err());
+        assert!(sequences_in(&other.0, &other.0).unwrap().is_empty());
     }
 
     #[test]
     #[ignore = "subprocess fixture invoked by killed_publisher_releases_os_lock"]
     fn inbox_lock_child() {
-        let inbox = PathBuf::from(std::env::var_os("NBCAD_INBOX_LOCK_TEST_DIR").unwrap());
+        let inbox = PathBuf::from(std::env::var_os("LIMO_CAD_INBOX_LOCK_TEST_DIR").unwrap());
         let _lock = lock_publishers(&inbox, Duration::from_secs(1)).unwrap();
         fs::write(inbox.join(".publish.tmp"), b"abandoned partial payload").unwrap();
         fs::write(inbox.join("child-ready"), b"ready").unwrap();
@@ -422,7 +414,7 @@ mod tests {
         let mut child = Child(
             std::process::Command::new(std::env::current_exe().unwrap())
                 .args(["--ignored", "inbox_lock_child"])
-                .env("NBCAD_INBOX_LOCK_TEST_DIR", &dir.0)
+                .env("LIMO_CAD_INBOX_LOCK_TEST_DIR", &dir.0)
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
@@ -447,9 +439,9 @@ mod tests {
                 .kind(),
             ErrorKind::TimedOut
         );
-        assert!(sequences(&dir.0).unwrap().is_empty());
-        drop(child); // Force-kill, not graceful unlock or Rust destructors.
-        assert_eq!(publish(&dir.0, b"complete").unwrap(), 1);
+        assert!(sequences_in(&dir.0, &dir.0).unwrap().is_empty());
+        drop(child);
+        assert_eq!(publish(&dir.0, &dir.0, b"complete").unwrap(), 1);
         assert_eq!(fs::read(dir.0.join("1.json")).unwrap(), b"complete");
     }
 }

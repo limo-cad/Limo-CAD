@@ -53,8 +53,6 @@ fn sweep_contains(a0: f64, a1: f64, a: f64) -> bool {
 }
 
 impl SketchSession {
-    // --- Entity-model helpers ---
-
     fn arc_endpoint_points(&self, arc: EntityId) -> Vec<EntityId> {
         self.sketch
             .constraints()
@@ -93,6 +91,28 @@ impl SketchSession {
                 } => center == point && points.contains(&start) && points.contains(&end),
                 _ => false,
             })
+    }
+
+    /// An acquired point may follow a selected curve, but it must not carry
+    /// unselected lines, other curves or rectangle diagonals with it.
+    fn center_has_unselected_geometry(
+        &self,
+        point: EntityId,
+        selection: &BTreeSet<EntityId>,
+        points: &BTreeSet<EntityId>,
+    ) -> bool {
+        self.sketch.is_referenced_by_entity(point)
+            || self
+                .sketch
+                .relations_pointing_at(point)
+                .any(|constraint| match *constraint {
+                    Constraint::CenterCoincident { curve, .. } => !selection.contains(&curve),
+                    Constraint::SpanMidpoint { start, end, .. } => {
+                        !points.contains(&start) || !points.contains(&end)
+                    }
+                    Constraint::ArcEndpointCoincident { arc, .. } => !selection.contains(&arc),
+                    _ => false,
+                })
     }
 
     /// Include the centers needed to preserve incidences inside a selection.
@@ -154,9 +174,7 @@ impl SketchSession {
         }
         let direct_points = points.clone();
         self.include_selection_centers(ids, &mut points);
-        // Prune until stable: excluding an external anchor may also exclude a
-        // dependent center. Explicitly selected points/endpoints keep their
-        // existing transform semantics and are never pruned here.
+
         loop {
             let external: Vec<_> = points
                 .difference(&direct_points)
@@ -282,7 +300,7 @@ impl SketchSession {
                 *end = new_point;
             }
         }
-        let _ = old; // kept — see doc comment above
+        let _ = old;
         new_point
     }
 
@@ -462,9 +480,19 @@ impl SketchSession {
         &mut self,
         f: impl FnOnce(&mut Self) -> Result<R, SessionError>,
     ) -> Result<ToolResult, SessionError> {
+        self.mutate_with_undo_stays(|session| {
+            f(session)?;
+            Ok(crate::solver::SolveStays::default())
+        })
+    }
+
+    fn mutate_with_undo_stays(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Result<crate::solver::SolveStays, SessionError>,
+    ) -> Result<ToolResult, SessionError> {
         let before = self.sketch.snapshot();
-        let entities = match f(self) {
-            Ok(entities) => entities,
+        let stays = match f(self) {
+            Ok(stays) => stays,
             Err(error) => {
                 self.sketch.restore(before);
                 self.recompute();
@@ -472,7 +500,7 @@ impl SketchSession {
             }
         };
         self.sketch.cleanup_generated_points(&before);
-        let analysis = crate::solver::solve(&mut self.sketch, &[]);
+        let analysis = crate::solver::solve_with_stays(&mut self.sketch, &[], &stays);
         if !analysis.converged {
             self.sketch.restore(before);
             self.recompute();
@@ -482,14 +510,11 @@ impl SketchSession {
         }
         self.analysis = Some(analysis);
         self.push_command(before);
-        let _ = entities;
         Ok(ToolResult {
             entities: Vec::new(),
             sketch: self.dto(),
         })
     }
-
-    // --- Fillet ---
 
     pub fn fillet_preview(
         &self,
@@ -520,8 +545,11 @@ impl SketchSession {
         let radius = self.eval_text(&request.radius_text)?;
         let l1 = self.line_seg(l1_id)?;
         let l2 = self.line_seg(l2_id)?;
-        let result = fillet::fillet_lines(&l1, &l2, radius).map_err(|e| {
-            SessionError::InvalidConstraint(format!("fillet: {e:?}").to_lowercase())
+        let result = fillet::fillet_lines(&l1, &l2, radius).map_err(|error| match error {
+            fillet::FilletError::NotPositive => SessionError::InvalidConstraint(
+                "Fillet radius must be greater than zero. Enter a finite positive radius.".into(),
+            ),
+            error => SessionError::InvalidConstraint(format!("fillet: {error:?}").to_lowercase()),
         })?;
         let v = line_vertex(&l1, &l2).unwrap_or(result.arc.center);
         let _ = v;
@@ -538,7 +566,6 @@ impl SketchSession {
         let (l1, l2, arc, t1, t2) = self.compute_fillet(request)?;
         let radius_text = request.radius_text.clone();
         self.mutate_with_undo(move |s| {
-            // Retarget each line's vertex-side endpoint to its tangent point.
             let v = line_vertex(&s.line_seg(l1)?, &s.line_seg(l2)?).unwrap();
             let corner1 = s.vertex_endpoint(l1, v);
             let corner2 = s.vertex_endpoint(l2, v);
@@ -547,11 +574,7 @@ impl SketchSession {
             s.preserve_midpoint_span(l2, corner2);
             let p1 = s.retarget_line_end(l1, v, t1);
             let p2 = s.retarget_line_end(l2, v, t2);
-            // Keep the original corner as a persistent constraint reference,
-            // anchored at the two edges' intersection. Lines that meet only
-            // on their finite/infinite supports get a real virtual-corner
-            // point instead of misusing whichever endpoint happened to be
-            // nearest the intersection.
+
             let corner = shared_corner.unwrap_or_else(|| s.sketch.add_generated_point(v));
             s.anchor_corner_reference(corner, l1, l2);
             let (a0, a1) = geom_sweep_to_entity(arc.start_angle, arc.end_angle, arc.ccw);
@@ -565,10 +588,7 @@ impl SketchSession {
                 .add_constraint(Constraint::Tangent { a: l1, b: arc_id });
             s.sketch
                 .add_constraint(Constraint::Tangent { a: l2, b: arc_id });
-            // Trim anchors (2026-07-19 bug): glue each trimmed endpoint to
-            // the arc endpoint it touches. Infinite-line tangency alone
-            // leaves the endpoint free to slide along the line — a driving
-            // dim on the trimmed edge then drags the trim back open.
+
             let arc_start = arc.center + Vec2::new(arc.radius * a0.cos(), arc.radius * a0.sin());
             let (end1, end2) = if arc_start.distance(t1) <= arc_start.distance(t2) {
                 (
@@ -591,7 +611,7 @@ impl SketchSession {
                 arc: arc_id,
                 end: end2,
             });
-            // Radius dimension (D9 parity: expression when typed).
+
             let param = s.param_from_text_pub(ParamKind::Length, Some(&radius_text), arc.radius)?;
             let pos = arc.center
                 + Vec2::new(
@@ -610,8 +630,6 @@ impl SketchSession {
             Ok(())
         })
     }
-
-    // --- Chamfer (equal-distance this round) ---
 
     pub(super) fn resolve_chamfer(
         &self,
@@ -644,6 +662,11 @@ impl SketchSession {
         Ok((l1, l2, distance, result.point_on_l1, result.point_on_l2))
     }
 
+    pub fn chamfer_preview(&self, request: &ChamferRequest) -> Result<PreviewCurve, SessionError> {
+        let (_, _, _, a, b) = self.resolve_chamfer(request)?;
+        Ok(PreviewCurve::Line { a, b })
+    }
+
     pub fn chamfer_lines(&mut self, request: &ChamferRequest) -> Result<ToolResult, SessionError> {
         let (l1, l2, distance, p1, p2) = self.resolve_chamfer(request)?;
         self.mutate_with_undo(move |s| {
@@ -658,9 +681,7 @@ impl SketchSession {
             let corner = shared_corner.unwrap_or_else(|| s.sketch.add_generated_point(v));
             s.anchor_corner_reference(corner, l1, l2);
             let line_id = s.sketch.add_entity(Entity::line(t1, t2));
-            // One driving cutback plus an equal-distance relation keeps both
-            // sides of an equal-distance chamfer parametric without showing
-            // duplicate dimension annotations.
+
             s.sketch.add_constraint(Constraint::EqualDistance {
                 origin: corner,
                 a: t1,
@@ -668,6 +689,19 @@ impl SketchSession {
             });
             let param =
                 s.param_from_text_pub(ParamKind::Length, Some(&request.distance_text), distance)?;
+            let corner_position = s.sketch.point_position(corner).unwrap_or(v);
+            let arm = p1 - corner_position;
+            let span = arm.x.hypot(arm.y);
+            let mut text_pos = (corner_position + p1) * 0.5;
+            if span.is_finite() && span > 0.0 {
+                let mut normal = Vec2::new(-arm.y / span, arm.x / span);
+                if normal.dot(p2 - corner_position) > 0.0 {
+                    normal = normal * -1.0;
+                }
+                // New labels start 6 mm outside the corner, away from relation glyphs.
+                // This is not a collision guarantee for all fonts/zoom; saved labels stay put.
+                text_pos = text_pos + normal * 6.0;
+            }
             s.add_constraint_bound(
                 Constraint::Distance {
                     from: corner,
@@ -675,15 +709,13 @@ impl SketchSession {
                     value: distance,
                 },
                 param,
-                (s.sketch.point_position(corner).unwrap_or(v) + p1) * 0.5,
+                text_pos,
                 false,
             )?;
             let _ = line_id;
             Ok(())
         })
     }
-
-    // --- Offset ---
 
     fn offset_side(&self, entity: EntityId, cursor: Vec2) -> Result<f64, SessionError> {
         match self.sketch.entity(entity) {
@@ -720,7 +752,12 @@ impl SketchSession {
         let distance = magnitude * side;
         let curve = self.to_offset_curve(entity)?;
         offset::offset_curve(&curve, distance)
-            .map_err(|e| SessionError::InvalidConstraint(format!("offset: {e:?}").to_lowercase()))
+            .map_err(|error| match error {
+                offset::OffsetError::CollapseToPoint => SessionError::InvalidConstraint(
+                    "Inward offset distance must be smaller than the circle or arc radius. Reduce the distance or reverse the offset direction.".into(),
+                ),
+                error => SessionError::InvalidConstraint(format!("offset: {error:?}").to_lowercase()),
+            })
     }
 
     fn to_offset_curve(&self, entity: EntityId) -> Result<offset::Curve, SessionError> {
@@ -778,16 +815,13 @@ impl SketchSession {
                     let a = s.sketch.add_generated_point(seg.a);
                     let b = s.sketch.add_generated_point(seg.b);
                     let line_id = s.sketch.add_entity(Entity::line(a, b));
-                    // Offset distance dim between parallel lines (D9).
+
                     if s.is_line_id(source) {
                         s.sketch.add_constraint(Constraint::Parallel {
                             a: source,
                             b: line_id,
                         });
-                        // A line offset is a translated peer, not an
-                        // arbitrarily long parallel line. Equal length also
-                        // stabilizes later distance edits in the
-                        // under-constrained solver.
+
                         s.sketch.add_constraint(Constraint::Equal {
                             a: source,
                             b: line_id,
@@ -816,8 +850,7 @@ impl SketchSession {
                         center: c.center,
                         radius: c.radius,
                     });
-                    // A derived circle is still a circle the user can pick, so
-                    // it needs the same selectable center as a drawn one.
+
                     s.attach_owned_center(id, c.center);
                     s.constrain_radial_offset(
                         source,
@@ -871,8 +904,7 @@ impl SketchSession {
             a: source,
             b: target,
         });
-        // Order the radii by the cursor-selected side, keeping the raw signed
-        // parameter meaningful when a later edit crosses the source radius.
+
         let (from, to) = if (target_radius - source_radius) * distance >= 0.0 {
             (source, target)
         } else {
@@ -880,6 +912,8 @@ impl SketchSession {
         };
         let magnitude = distance;
         let param = self.param_from_text_pub(ParamKind::Length, Some(distance_text), magnitude)?;
+        let text_pos =
+            self.radial_offset_text_position(center, (source_radius + target_radius) * 0.5);
         self.add_constraint_bound(
             Constraint::Distance {
                 from,
@@ -887,13 +921,47 @@ impl SketchSession {
                 value: magnitude,
             },
             param,
-            center + Vec2::new((source_radius + target_radius) * 0.5, 0.0),
+            text_pos,
             false,
         )?;
         Ok(())
     }
 
-    // --- Trim / Extend ---
+    fn radial_offset_text_position(&self, center: Vec2, radius: f64) -> Vec2 {
+        let candidates = [
+            center + Vec2::new(radius, 0.0),
+            center + Vec2::new(0.0, radius),
+            center + Vec2::new(-radius, 0.0),
+            center + Vec2::new(0.0, -radius),
+        ];
+        let anchors: Vec<_> = self
+            .sketch
+            .constraints()
+            .filter_map(|(id, _)| self.sketch.dim_placement(&id))
+            .filter(|point| point.x.is_finite() && point.y.is_finite())
+            .collect();
+        let clearance = |candidate: Vec2| {
+            anchors
+                .iter()
+                .map(|anchor| candidate.distance(*anchor))
+                .fold(f64::INFINITY, f64::min)
+        };
+        let mut best = candidates[0];
+        let mut best_clearance = clearance(best);
+        // This 4 mm creation-only heuristic spaces saved anchors, not text bounds.
+        // It cannot guarantee separation at every zoom/font; existing placements stay put.
+        if best_clearance >= 4.0 {
+            return best;
+        }
+        for candidate in candidates.into_iter().skip(1) {
+            let candidate_clearance = clearance(candidate);
+            if candidate_clearance > best_clearance {
+                best = candidate;
+                best_clearance = candidate_clearance;
+            }
+        }
+        best
+    }
 
     /// Intersections of `entity` with every other entity (angle-filtered
     /// for arcs).
@@ -909,8 +977,6 @@ impl SketchSession {
                         let a = trimext::LineSeg { a: l1.a, b: l1.b };
                         let b = trimext::LineSeg { a: l2.a, b: l2.b };
                         if let Some((pt, _, u)) = trimext::line_line(&a, &b) {
-                            // A trim boundary is the rendered target
-                            // segment, not its infinite supporting line.
                             if (-EPS..=1.0 + EPS).contains(&u) {
                                 cuts.push(pt);
                             }
@@ -1147,126 +1213,124 @@ impl SketchSession {
         let entity = request.entity;
         let click = request.click;
         let cuts = self.cuts_for(entity);
-        self.mutate_with_undo(move |s| {
-            match s.sketch.entity(entity).cloned() {
-                Some(Entity::Line { .. }) => {
-                    let l = s.line_seg(entity)?;
-                    let seg = trimext::LineSeg { a: l.a, b: l.b };
-                    let trim = trimext::trim_line_parts(&seg, click, &cuts).ok_or(
-                        SessionError::InvalidConstraint("nothing to trim here".to_string()),
-                    )?;
-                    let (original_start, original_end) = s
-                        .sketch
-                        .line_endpoint_ids(entity)
-                        .ok_or(SessionError::EntityNotFound(entity))?;
-                    let horizontal = s.sketch.has_constraint_on(entity, |constraint| {
-                        matches!(constraint, Constraint::Horizontal { .. })
-                    });
-                    let vertical = s.sketch.has_constraint_on(entity, |constraint| {
-                        matches!(constraint, Constraint::Vertical { .. })
-                    });
-                    match trim.kept.as_slice() {
-                        [piece] if piece.a.distance(l.a) <= EPS => {
-                            let cut = s.sketch.add_generated_point(piece.b);
-                            if let Some(Entity::Line { end, .. }) = s.sketch.entity_mut(entity) {
-                                *end = cut;
-                            }
-                            s.sketch.remove_unused_generated_points([original_end]);
+        self.mutate_with_undo(move |s| match s.sketch.entity(entity).cloned() {
+            Some(Entity::Line { .. }) => {
+                let l = s.line_seg(entity)?;
+                let seg = trimext::LineSeg { a: l.a, b: l.b };
+                let trim = trimext::trim_line_parts(&seg, click, &cuts).ok_or(
+                    SessionError::InvalidConstraint("nothing to trim here".to_string()),
+                )?;
+                let (original_start, original_end) = s
+                    .sketch
+                    .line_endpoint_ids(entity)
+                    .ok_or(SessionError::EntityNotFound(entity))?;
+                let horizontal = s.sketch.has_constraint_on(entity, |constraint| {
+                    matches!(constraint, Constraint::Horizontal { .. })
+                });
+                let vertical = s.sketch.has_constraint_on(entity, |constraint| {
+                    matches!(constraint, Constraint::Vertical { .. })
+                });
+                match trim.kept.as_slice() {
+                    [piece] if piece.a.distance(l.a) <= EPS => {
+                        let cut = s.sketch.add_generated_point(piece.b);
+                        if let Some(Entity::Line { end, .. }) = s.sketch.entity_mut(entity) {
+                            *end = cut;
                         }
-                        [piece] => {
-                            let cut = s.sketch.add_generated_point(piece.a);
-                            if let Some(Entity::Line { start, .. }) = s.sketch.entity_mut(entity) {
-                                *start = cut;
-                            }
-                            s.sketch.remove_unused_generated_points([original_start]);
+                        s.sketch.remove_unused_generated_points([original_end]);
+                    }
+                    [piece] => {
+                        let cut = s.sketch.add_generated_point(piece.a);
+                        if let Some(Entity::Line { start, .. }) = s.sketch.entity_mut(entity) {
+                            *start = cut;
                         }
-                        [first, second] => {
-                            let first_cut = s.sketch.add_generated_point(first.b);
-                            let second_cut = s.sketch.add_generated_point(second.a);
-                            if let Some(Entity::Line { end, .. }) = s.sketch.entity_mut(entity) {
-                                *end = first_cut;
-                            }
-                            let second_line =
-                                s.sketch.add_entity(Entity::line(second_cut, original_end));
-                            if horizontal {
-                                s.sketch.add_constraint(Constraint::Horizontal {
-                                    entity: second_line,
-                                });
-                            }
-                            if vertical {
-                                s.sketch.add_constraint(Constraint::Vertical {
-                                    entity: second_line,
-                                });
-                            }
+                        s.sketch.remove_unused_generated_points([original_start]);
+                    }
+                    [first, second] => {
+                        let first_cut = s.sketch.add_generated_point(first.b);
+                        let second_cut = s.sketch.add_generated_point(second.a);
+                        if let Some(Entity::Line { end, .. }) = s.sketch.entity_mut(entity) {
+                            *end = first_cut;
                         }
-                        _ => {
-                            return Err(SessionError::InvalidConstraint(
-                                "trim would remove the entire line".to_string(),
-                            ))
+                        let second_line =
+                            s.sketch.add_entity(Entity::line(second_cut, original_end));
+                        if horizontal {
+                            s.sketch.add_constraint(Constraint::Horizontal {
+                                entity: second_line,
+                            });
+                        }
+                        if vertical {
+                            s.sketch.add_constraint(Constraint::Vertical {
+                                entity: second_line,
+                            });
                         }
                     }
-                    Ok(())
-                }
-                Some(Entity::Circle { center, radius }) => {
-                    let (a0, a1) = (0.0, TAU);
-                    let cut_angles: Vec<f64> = cuts.iter().map(|c| angle_of(center, *c)).collect();
-                    let trim = s
-                        .trim_sweep_parts(a0, a1, &cut_angles, angle_of(center, click), true)
-                        .ok_or(SessionError::InvalidConstraint(
-                            "nothing to trim here".to_string(),
-                        ))?;
-                    let (k0, k1) = trim.kept[0];
-                    // Circle becomes an arc in place (keeps id + constraints).
-                    if let Some(slot) = s.sketch.entity_mut(entity) {
-                        *slot = Entity::Arc {
-                            center,
-                            radius,
-                            start_angle: k0,
-                            end_angle: k1,
-                        };
-                    }
-                    s.rebind_arc_endpoints(entity, &[entity]);
-                    Ok(())
-                }
-                Some(Entity::Arc { .. }) => {
-                    let (center, radius) = s.circle_of(entity).unwrap();
-                    let (a0, a1) = s.arc_sweep(entity).unwrap();
-                    let cut_angles: Vec<f64> = cuts.iter().map(|c| angle_of(center, *c)).collect();
-                    let trim = s
-                        .trim_sweep_parts(a0, a1, &cut_angles, angle_of(center, click), false)
-                        .ok_or(SessionError::InvalidConstraint(
-                            "nothing to trim here".to_string(),
-                        ))?;
-                    let Some(&(k0, k1)) = trim.kept.first() else {
+                    _ => {
                         return Err(SessionError::InvalidConstraint(
-                            "trim would remove the entire arc".to_string(),
-                        ));
+                            "trim would remove the entire line".to_string(),
+                        ))
+                    }
+                }
+                Ok(())
+            }
+            Some(Entity::Circle { center, radius }) => {
+                let (a0, a1) = (0.0, TAU);
+                let cut_angles: Vec<f64> = cuts.iter().map(|c| angle_of(center, *c)).collect();
+                let trim = s
+                    .trim_sweep_parts(a0, a1, &cut_angles, angle_of(center, click), true)
+                    .ok_or(SessionError::InvalidConstraint(
+                        "nothing to trim here".to_string(),
+                    ))?;
+                let (k0, k1) = trim.kept[0];
+
+                if let Some(slot) = s.sketch.entity_mut(entity) {
+                    *slot = Entity::Arc {
+                        center,
+                        radius,
+                        start_angle: k0,
+                        end_angle: k1,
                     };
-                    if let Some(Entity::Arc {
+                }
+                s.rebind_arc_endpoints(entity, &[entity]);
+                Ok(())
+            }
+            Some(Entity::Arc { .. }) => {
+                let (center, radius) = s.circle_of(entity).unwrap();
+                let (a0, a1) = s.arc_sweep(entity).unwrap();
+                let cut_angles: Vec<f64> = cuts.iter().map(|c| angle_of(center, *c)).collect();
+                let trim = s
+                    .trim_sweep_parts(a0, a1, &cut_angles, angle_of(center, click), false)
+                    .ok_or(SessionError::InvalidConstraint(
+                        "nothing to trim here".to_string(),
+                    ))?;
+                let Some(&(k0, k1)) = trim.kept.first() else {
+                    return Err(SessionError::InvalidConstraint(
+                        "trim would remove the entire arc".to_string(),
+                    ));
+                };
+                if let Some(Entity::Arc {
+                    start_angle,
+                    end_angle,
+                    ..
+                }) = s.sketch.entity_mut(entity)
+                {
+                    *start_angle = k0;
+                    *end_angle = k1;
+                }
+                let mut parts = vec![entity];
+                if let Some(&(start_angle, end_angle)) = trim.kept.get(1) {
+                    parts.push(s.sketch.add_entity(Entity::Arc {
+                        center,
+                        radius,
                         start_angle,
                         end_angle,
-                        ..
-                    }) = s.sketch.entity_mut(entity)
-                    {
-                        *start_angle = k0;
-                        *end_angle = k1;
-                    }
-                    let mut parts = vec![entity];
-                    if let Some(&(start_angle, end_angle)) = trim.kept.get(1) {
-                        parts.push(s.sketch.add_entity(Entity::Arc {
-                            center,
-                            radius,
-                            start_angle,
-                            end_angle,
-                        }));
-                    }
-                    s.rebind_arc_endpoints(entity, &parts);
-                    Ok(())
+                    }));
                 }
-                _ => Err(SessionError::InvalidConstraint(
-                    "Trim needs a line, circle, or arc".to_string(),
-                )),
+                s.rebind_arc_endpoints(entity, &parts);
+                Ok(())
             }
+            _ => Err(SessionError::InvalidConstraint(
+                "Trim needs a line, circle, or arc".to_string(),
+            )),
         })
     }
 
@@ -1317,8 +1381,6 @@ impl SketchSession {
                         if let Some((point, t, u)) =
                             trimext::line_line(&source, &trimext::LineSeg { a: seg.a, b: seg.b })
                         {
-                            // The boundary is the actual target segment, not
-                            // its infinite extension.
                             if (-EPS..=1.0 + EPS).contains(&u) {
                                 consider(point, t, other_id);
                             }
@@ -1378,9 +1440,7 @@ impl SketchSession {
             } else {
                 return Err(SessionError::EntityNotFound(point_id));
             };
-            // Preserve the extend relationship parametrically. The endpoint
-            // remains on the selected boundary when later dimensions move
-            // either curve.
+
             s.sketch.add_constraint(Constraint::Coincident {
                 a: extended_point,
                 b: boundary,
@@ -1389,107 +1449,97 @@ impl SketchSession {
         })
     }
 
-    // --- Break ---
-
     pub fn break_curve(&mut self, request: &BreakRequest) -> Result<ToolResult, SessionError> {
         let entity = request.entity;
         let at = request.at;
-        self.mutate_with_undo(move |s| {
-            match s.sketch.entity(entity).cloned() {
-                Some(Entity::Line { start, end }) => {
-                    let l = s.line_seg(entity)?;
-                    let t = nearest_param(&l, at).clamp(0.02, 0.98);
-                    let p = Vec2::new(l.a.x + t * (l.b.x - l.a.x), l.a.y + t * (l.b.y - l.a.y));
-                    let (sa, sb) = (
-                        s.sketch.point_position(start).unwrap(),
-                        s.sketch.point_position(end).unwrap(),
-                    );
-                    // Original line keeps `start`; split point is new.
-                    let mid = s.sketch.add_generated_point(p);
-                    // Second piece: mid → old end.
-                    let line2 = s.sketch.add_entity(Entity::line(mid, end));
-                    // Retarget original end to mid.
-                    if let Some(Entity::Line { end: e, .. }) = s.sketch.entity_mut(entity) {
-                        *e = mid;
-                    }
-                    // Copy H/V onto the second piece (trivial constraint copy).
-                    let hv: Vec<Constraint> = s
-                        .sketch
-                        .constraints()
-                        .filter(|(_, c)| {
-                            matches!(c, Constraint::Horizontal { entity: e } if *e == entity)
-                                || matches!(c, Constraint::Vertical { entity: e } if *e == entity)
-                        })
-                        .map(|(_, c)| *c)
-                        .collect();
-                    for c in hv {
-                        let nc = match c {
-                            Constraint::Horizontal { .. } => {
-                                Constraint::Horizontal { entity: line2 }
-                            }
-                            Constraint::Vertical { .. } => Constraint::Vertical { entity: line2 },
-                            _ => unreachable!(),
-                        };
-                        s.sketch.add_constraint(nc);
-                    }
-                    let _ = (sa, sb);
-                    Ok(())
+        self.mutate_with_undo(move |s| match s.sketch.entity(entity).cloned() {
+            Some(Entity::Line { start, end }) => {
+                let l = s.line_seg(entity)?;
+                let t = nearest_param(&l, at).clamp(0.02, 0.98);
+                let p = Vec2::new(l.a.x + t * (l.b.x - l.a.x), l.a.y + t * (l.b.y - l.a.y));
+                let (sa, sb) = (
+                    s.sketch.point_position(start).unwrap(),
+                    s.sketch.point_position(end).unwrap(),
+                );
+
+                let mid = s.sketch.add_generated_point(p);
+
+                let line2 = s.sketch.add_entity(Entity::line(mid, end));
+
+                if let Some(Entity::Line { end: e, .. }) = s.sketch.entity_mut(entity) {
+                    *e = mid;
                 }
-                Some(Entity::Circle { center, radius }) => {
-                    let a = angle_of(center, at);
-                    if let Some(slot) = s.sketch.entity_mut(entity) {
-                        *slot = Entity::Arc {
-                            center,
-                            radius,
-                            start_angle: a,
-                            // Equal angles encode a zero sweep in the entity
-                            // model. Keep a full turn so Break opens the
-                            // circle at the selected point without erasing it.
-                            end_angle: a + TAU,
-                        };
-                    }
-                    s.rebind_arc_endpoints(entity, &[entity]);
-                    Ok(())
+
+                let hv: Vec<Constraint> = s
+                    .sketch
+                    .constraints()
+                    .filter(|(_, c)| {
+                        matches!(c, Constraint::Horizontal { entity: e } if *e == entity)
+                            || matches!(c, Constraint::Vertical { entity: e } if *e == entity)
+                    })
+                    .map(|(_, c)| *c)
+                    .collect();
+                for c in hv {
+                    let nc = match c {
+                        Constraint::Horizontal { .. } => Constraint::Horizontal { entity: line2 },
+                        Constraint::Vertical { .. } => Constraint::Vertical { entity: line2 },
+                        _ => unreachable!(),
+                    };
+                    s.sketch.add_constraint(nc);
                 }
-                Some(Entity::Arc {
-                    center,
-                    radius,
-                    start_angle,
-                    end_angle,
-                }) => {
-                    let a = angle_of(center, at);
-                    if !sweep_contains(start_angle, end_angle, a) {
-                        return Err(SessionError::InvalidConstraint(
-                            "break point is not on the arc".to_string(),
-                        ));
-                    }
-                    let span = (end_angle - start_angle).rem_euclid(TAU);
-                    let offset = (a - start_angle).rem_euclid(TAU);
-                    if offset <= EPS || span - offset <= EPS {
-                        return Err(SessionError::InvalidConstraint(
-                            "break point must be inside the arc".to_string(),
-                        ));
-                    }
-                    if let Some(Entity::Arc { end_angle: e, .. }) = s.sketch.entity_mut(entity) {
-                        *e = a;
-                    }
-                    let second = s.sketch.add_entity(Entity::Arc {
+                let _ = (sa, sb);
+                Ok(())
+            }
+            Some(Entity::Circle { center, radius }) => {
+                let a = angle_of(center, at);
+                if let Some(slot) = s.sketch.entity_mut(entity) {
+                    *slot = Entity::Arc {
                         center,
                         radius,
                         start_angle: a,
-                        end_angle,
-                    });
-                    s.rebind_arc_endpoints(entity, &[entity, second]);
-                    Ok(())
+
+                        end_angle: a + TAU,
+                    };
                 }
-                _ => Err(SessionError::InvalidConstraint(
-                    "Break needs a line, circle, or arc".to_string(),
-                )),
+                s.rebind_arc_endpoints(entity, &[entity]);
+                Ok(())
             }
+            Some(Entity::Arc {
+                center,
+                radius,
+                start_angle,
+                end_angle,
+            }) => {
+                let a = angle_of(center, at);
+                if !sweep_contains(start_angle, end_angle, a) {
+                    return Err(SessionError::InvalidConstraint(
+                        "break point is not on the arc".to_string(),
+                    ));
+                }
+                let span = (end_angle - start_angle).rem_euclid(TAU);
+                let offset = (a - start_angle).rem_euclid(TAU);
+                if offset <= EPS || span - offset <= EPS {
+                    return Err(SessionError::InvalidConstraint(
+                        "break point must be inside the arc".to_string(),
+                    ));
+                }
+                if let Some(Entity::Arc { end_angle: e, .. }) = s.sketch.entity_mut(entity) {
+                    *e = a;
+                }
+                let second = s.sketch.add_entity(Entity::Arc {
+                    center,
+                    radius,
+                    start_angle: a,
+                    end_angle,
+                });
+                s.rebind_arc_endpoints(entity, &[entity, second]);
+                Ok(())
+            }
+            _ => Err(SessionError::InvalidConstraint(
+                "Break needs a line, circle, or arc".to_string(),
+            )),
         })
     }
-
-    // --- Mirror / Pattern / Move / Scale ---
 
     pub fn mirror_entities(&mut self, request: &MirrorRequest) -> Result<ToolResult, SessionError> {
         if !self.is_line_id(request.axis_line) {
@@ -1523,9 +1573,7 @@ impl SketchSession {
             }
         }
         let mut source_points = self.owned_points(ids);
-        // A copy is independent of unselected owners, but must still have its
-        // own copy of a shared center. Otherwise copying a rectangle whose
-        // center also hosts a circle silently discards its SpanMidpoint.
+
         self.include_selection_centers(ids, &mut source_points);
 
         let mut point_map = BTreeMap::new();
@@ -1537,11 +1585,7 @@ impl SketchSession {
             let copied = self.sketch.add_entity(Entity::Point {
                 position: transform(position),
             });
-            // Preserve the source's ownership. A handle the tools own stays a
-            // generated handle in the occurrence even when the user selected it
-            // explicitly — a copied center rectangle must keep centered resize.
-            // Explicitly selected authored points stay authored. An implicit
-            // copy of an external anchor is a handle owned by the occurrence.
+
             if !ids.contains(&source) || self.sketch.is_generated_point(source) {
                 self.sketch.mark_generated_point(copied);
             }
@@ -1551,9 +1595,7 @@ impl SketchSession {
         let mut entity_map = point_map.clone();
         for id in ids {
             match self.sketch.entity(*id).cloned() {
-                Some(Entity::Point { .. }) => {
-                    // Already materialized and reused by copied lines.
-                }
+                Some(Entity::Point { .. }) => {}
                 Some(Entity::Line { start, end }) => {
                     let copied = self.sketch.add_entity(Entity::line(
                         *point_map.get(&start).expect("mapped line start"),
@@ -1613,8 +1655,7 @@ impl SketchSession {
                                 end,
                             });
                     }
-                    // Legacy/derived arcs may have no handles at all. Bring
-                    // the new occurrence up to the same contract as drawing.
+
                     for (end, angle) in [
                         (ArcEndpoint::Start, copied_start),
                         (
@@ -1638,9 +1679,7 @@ impl SketchSession {
                 None => return Err(SessionError::EntityNotFound(*id)),
             }
         }
-        // Preserve internal incidences, including separately authored points
-        // acquired by curve centers. Never pull in an unselected external
-        // anchor or a dimension referencing geometry outside the occurrence.
+
         let relations: Vec<_> = self
             .sketch
             .constraints()
@@ -1655,9 +1694,7 @@ impl SketchSession {
                         curve: *entity_map.get(&curve)?,
                     })
                 }
-                // A selected center rectangle's diagonal relation survives the
-                // copy when its center and both corners were carried, so the
-                // occurrence is a real center rectangle rather than a plain one.
+
                 Constraint::SpanMidpoint { point, start, end } => Some(Constraint::SpanMidpoint {
                     point: *entity_map.get(&point)?,
                     start: *entity_map.get(&start)?,
@@ -1673,11 +1710,7 @@ impl SketchSession {
         for relation in relations {
             self.sketch.add_constraint(relation);
         }
-        // Every copied circle owns its own center handle, exactly like a freshly
-        // drawn one. The remap above preserves a source handle that was copied
-        // with it, so this only materializes a handle for circles whose source
-        // had none to carry (derived, legacy or acquired-center curves). It must
-        // run after the remap to see the relations the remap just added.
+
         let copied_circles: Vec<(EntityId, Vec2)> = ids
             .iter()
             .filter_map(|id| match self.sketch.entity(*id) {
@@ -1836,17 +1869,29 @@ impl SketchSession {
     ) -> Result<ToolResult, SessionError> {
         let (dx, dy) = (request.dx, request.dy);
         let ids: BTreeSet<EntityId> = request.entity_ids.iter().copied().collect();
+        if ids.is_empty() || !dx.is_finite() || !dy.is_finite() {
+            return Err(SessionError::InvalidConstraint(
+                "Move/Copy requires selected geometry and finite distances".into(),
+            ));
+        }
+        for &id in &ids {
+            if self.sketch.entity(id).is_none() {
+                return Err(SessionError::EntityNotFound(id));
+            }
+        }
         let copy = request.copy;
-        self.mutate_with_undo(move |s| {
+        if !copy && dx == 0. && dy == 0. {
+            return Ok(ToolResult {
+                entities: Vec::new(),
+                sketch: self.dto(),
+            });
+        }
+        self.mutate_with_undo_stays(move |s| {
             if copy {
                 let delta = Vec2::new(dx, dy);
                 s.copy_entities_transformed(&ids, |point| point + delta, false)?;
+                Ok(crate::solver::SolveStays::default())
             } else {
-                // Lines store geometry in shared point entities. Translate
-                // every selected point exactly once, even when several
-                // selected lines reference it. Curves move their own inline
-                // center, and `owned_points` supplies the handles that have to
-                // travel with them.
                 let point_ids = s.owned_points(&ids);
                 let mut direct_ids = Vec::new();
                 for id in &ids {
@@ -1860,73 +1905,137 @@ impl SketchSession {
                         None => return Err(SessionError::EntityNotFound(*id)),
                     }
                 }
-                for point_id in point_ids {
+                for &point_id in &point_ids {
                     s.translate_entity(point_id, dx, dy)?;
                 }
                 for id in direct_ids {
                     s.translate_entity(id, dx, dy)?;
                 }
+                s.rigid_transform_stays(&ids, &point_ids)
             }
-            Ok(())
         })
     }
 
     fn translate_entity(&mut self, id: EntityId, dx: f64, dy: f64) -> Result<(), SessionError> {
-        match self.sketch.entity(id).cloned() {
-            Some(Entity::Point { .. }) => {
-                if let Some(Entity::Point { position }) = self.sketch.entity_mut(id) {
-                    *position = Vec2::new(position.x + dx, position.y + dy);
-                }
+        let entity = self
+            .sketch
+            .entity_mut(id)
+            .ok_or(SessionError::EntityNotFound(id))?;
+        match entity {
+            Entity::Point { position } => {
+                *position = Vec2::new(position.x + dx, position.y + dy);
             }
-            Some(Entity::Line { start, end }) => {
-                for pid in [start, end] {
+            Entity::Line { start, end } => {
+                let points = [*start, *end];
+                for pid in points {
                     if let Some(Entity::Point { position }) = self.sketch.entity_mut(pid) {
                         *position = Vec2::new(position.x + dx, position.y + dy);
                     }
                 }
             }
-            Some(Entity::Circle { .. }) | Some(Entity::Arc { .. }) => {
-                match self.sketch.entity_mut(id) {
-                    Some(Entity::Circle { center, .. }) | Some(Entity::Arc { center, .. }) => {
-                        *center = Vec2::new(center.x + dx, center.y + dy);
-                    }
-                    _ => {}
+            Entity::Circle { center, .. } | Entity::Arc { center, .. } => {
+                *center = Vec2::new(center.x + dx, center.y + dy);
+            }
+            Entity::Spline { points } => {
+                for p in points {
+                    *p = Vec2::new(p.x + dx, p.y + dy);
                 }
             }
-            // Splines translate by shifting every fit point (self-contained).
-            Some(Entity::Spline { .. }) => {
-                if let Some(Entity::Spline { points }) = self.sketch.entity_mut(id) {
-                    for p in points.iter_mut() {
-                        *p = Vec2::new(p.x + dx, p.y + dy);
-                    }
-                }
-            }
-            None => return Err(SessionError::EntityNotFound(id)),
         }
         Ok(())
     }
 
+    fn rigid_transform_stays(
+        &self,
+        ids: &BTreeSet<EntityId>,
+        points: &BTreeSet<EntityId>,
+    ) -> Result<crate::solver::SolveStays, SessionError> {
+        let mut rigid_entities: Vec<_> = points.iter().copied().collect();
+        for &id in ids {
+            match self.sketch.entity(id) {
+                Some(Entity::Circle { .. } | Entity::Arc { .. } | Entity::Spline { .. }) => {
+                    rigid_entities.push(id);
+                }
+                Some(_) => {}
+                None => return Err(SessionError::EntityNotFound(id)),
+            }
+        }
+        rigid_entities.extend(self.sketch.constraints().filter_map(|(_, constraint)| {
+            match *constraint {
+                Constraint::CenterCoincident { point, curve }
+                    if ids.contains(&curve)
+                        && !points.contains(&point)
+                        && self.center_has_unselected_geometry(point, ids, points) =>
+                {
+                    Some(point)
+                }
+                _ => None,
+            }
+        }));
+        rigid_entities.sort_unstable();
+        rigid_entities.dedup();
+        let finite_point = |p: &Vec2| p.x.is_finite() && p.y.is_finite();
+        for &id in &rigid_entities {
+            let finite = match self.sketch.entity(id) {
+                Some(Entity::Point { position }) => finite_point(position),
+                Some(Entity::Circle { center, radius }) => {
+                    finite_point(center) && radius.is_finite()
+                }
+                Some(Entity::Arc {
+                    center,
+                    radius,
+                    start_angle,
+                    end_angle,
+                }) => {
+                    finite_point(center)
+                        && radius.is_finite()
+                        && start_angle.is_finite()
+                        && end_angle.is_finite()
+                }
+                Some(Entity::Spline { points }) => points.iter().all(finite_point),
+                Some(Entity::Line { .. }) => true,
+                None => return Err(SessionError::EntityNotFound(id)),
+            };
+            if !finite {
+                return Err(SessionError::InvalidConstraint(
+                    "Transform would put geometry outside finite coordinates".into(),
+                ));
+            }
+        }
+        Ok(crate::solver::SolveStays {
+            rigid_entities,
+            ..Default::default()
+        })
+    }
+
     pub fn scale_entities(&mut self, request: &ScaleRequest) -> Result<ToolResult, SessionError> {
         let factor = self.eval_text(&request.factor_text)?;
-        if factor.abs() < 1e-12 {
+        if !factor.is_finite() || factor.abs() < 1e-12 {
             return Err(SessionError::InvalidConstraint(
-                "scale factor must be non-zero".to_string(),
+                "scale factor must be finite and non-zero".to_string(),
             ));
         }
         let origin = request.origin;
         let ids: BTreeSet<EntityId> = request.entity_ids.iter().copied().collect();
-        self.mutate_with_undo(move |s| {
-            // Scale in place: endpoints, centers, and radii scale about origin.
-            // `owned_points` also supplies the curve handles and a selected
-            // center rectangle's center, so they land exactly on the scaled
-            // geometry instead of being pulled there by the solver.
-            for id in &ids {
-                if s.sketch.entity(*id).is_none() {
-                    return Err(SessionError::EntityNotFound(*id));
-                }
+        if ids.is_empty() || !origin.x.is_finite() || !origin.y.is_finite() {
+            return Err(SessionError::InvalidConstraint(
+                "Scale requires selected geometry and a finite origin".into(),
+            ));
+        }
+        for &id in &ids {
+            if self.sketch.entity(id).is_none() {
+                return Err(SessionError::EntityNotFound(id));
             }
-            let point_ids: Vec<EntityId> = s.owned_points(&ids).into_iter().collect();
-            for pid in point_ids {
+        }
+        if factor == 1. {
+            return Ok(ToolResult {
+                entities: Vec::new(),
+                sketch: self.dto(),
+            });
+        }
+        self.mutate_with_undo_stays(move |s| {
+            let point_ids = s.owned_points(&ids);
+            for &pid in &point_ids {
                 if let Some(Entity::Point { position }) = s.sketch.entity_mut(pid) {
                     *position = origin + (*position - origin) * factor;
                 }
@@ -1958,11 +2067,9 @@ impl SketchSession {
                     _ => {}
                 }
             }
-            Ok(())
+            s.rigid_transform_stays(&ids, &point_ids)
         })
     }
-
-    // --- Polygon ---
 
     pub fn polygon_create(&mut self, request: &PolygonRequest) -> Result<ToolResult, SessionError> {
         let radius = self.eval_text(&request.radius_text)?;
@@ -1977,7 +2084,12 @@ impl SketchSession {
             request.rotation_deg.to_radians(),
             mode,
         )
-        .map_err(|e| SessionError::InvalidConstraint(format!("polygon: {e:?}").to_lowercase()))?;
+        .map_err(|error| match error {
+            polygon::PolyError::NotPositive => SessionError::InvalidConstraint(
+                "Polygon radius must be greater than zero. Enter a positive radius.".into(),
+            ),
+            error => SessionError::InvalidConstraint(format!("polygon: {error:?}").to_lowercase()),
+        })?;
         self.mutate_with_undo(move |s| {
             let mut point_ids = Vec::with_capacity(vertices.len());
             for v in &vertices {

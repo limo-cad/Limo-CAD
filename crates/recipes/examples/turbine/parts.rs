@@ -5,10 +5,8 @@ impl Author {
     pub(super) fn supports(&mut self) {
         self.block(
             "base",
-            [-75., -70.],
-            [95., 70.],
-            0.,
-            D.base_height,
+            ([-75., -70.], [95., 70.]),
+            (0., D.base_height),
             "new_body",
             None,
         );
@@ -16,18 +14,15 @@ impl Author {
             "base_shaft_clearance",
             [0., 0.],
             18.,
-            0.,
-            D.base_height,
+            (0., D.base_height),
             "cut",
             Some("base"),
         );
-        // A real straight tool approach reaches the collar after assembly.
+
         self.begin("lower_collar_key_access", "xz", 0.);
         self.circle([0., D.lower_collar() + D.collar_width / 2.], 6.);
         self.extrude("lower_collar_key_access", 70., "cut", Some("base"));
-        // Preserve the complete circular driver envelope while relieving its
-        // unsupported crown. The 45-degree tangent sides meet a 1 mm ceiling,
-        // leaving 1.457 mm of base stock above a short transverse closure.
+
         let key_center = D.lower_collar() + D.collar_width / 2.;
         let tangent = 3. * std::f64::consts::FRAC_1_SQRT_2;
         let ceiling = key_center + 3. * std::f64::consts::SQRT_2 - 0.5;
@@ -51,14 +46,14 @@ impl Author {
             (10. - g, -g),
         ] {
             let n = self.uid("base_fastener");
-            self.cylinder(&n, [x, y], 3.4, 0., D.base_height, "cut", Some("base"));
+            self.cylinder(&n, [x, y], 3.4, (0., D.base_height), "cut", Some("base"));
             let n = self.uid("base_head_recess");
-            self.cylinder(&n, [x, y], 6.4, 0., 3.2, "cut", Some("base"));
+            self.cylinder(&n, [x, y], 6.4, (0., 3.2), "cut", Some("base"));
         }
         for x in [-63., 83.] {
             for y in [-58., 58.] {
                 let n = self.uid("bench_anchor");
-                self.cylinder(&n, [x, y], 5.5, 0., D.base_height, "cut", Some("base"));
+                self.cylinder(&n, [x, y], 5.5, (0., D.base_height), "cut", Some("base"));
             }
         }
         self.round_vertical_corners(
@@ -72,13 +67,12 @@ impl Author {
             true,
             [0., 0., 0.],
         );
-        self.cylinder("tower", [0., 0.], 52., 0., 6., "new_body", None);
+        self.cylinder("tower", [0., 0.], 52., (0., 6.), "new_body", None);
         self.cylinder(
             "tower_column",
             [0., 0.],
             36.,
-            0.,
-            42.,
+            (0., 42.),
             "join",
             Some("tower"),
         );
@@ -86,8 +80,7 @@ impl Author {
             "tower_relief",
             [0., 0.],
             17.8,
-            0.,
-            42.,
+            (0., 42.),
             "cut",
             Some("tower"),
         );
@@ -95,8 +88,7 @@ impl Author {
             "tower_lower_seat",
             [0., 0.],
             22.3,
-            0.,
-            7.,
+            (0., 7.),
             "cut",
             Some("tower"),
         );
@@ -104,25 +96,22 @@ impl Author {
             "tower_upper_seat",
             [0., 0.],
             22.3,
-            35.,
-            7.,
+            (35., 7.),
             "cut",
             Some("tower"),
         );
         self.block(
             "tower_split",
-            [-0.6, -27.],
-            [0.6, 0.],
-            0.,
-            42.,
+            ([-0.6, -27.], [0.6, 0.]),
+            (0., 42.),
             "cut",
             Some("tower"),
         );
-        self.clamp("tower_clamp_lower", "tower", -14., 4.5, 3.2, 5., 6.4);
-        self.clamp("tower_clamp_upper", "tower", -14., 37.5, 3.2, 5., 6.4);
+        self.clamp("tower_clamp_lower", "tower", (-14., 4.5), 3.2, 5., 6.4);
+        self.clamp("tower_clamp_upper", "tower", (-14., 37.5), 3.2, 5., 6.4);
         for x in [-22., 22.] {
             let n = self.uid("tower_mount");
-            self.cylinder(&n, [x, 0.], 3.4, 0., 6., "cut", Some("tower"));
+            self.cylinder(&n, [x, 0.], 3.4, (0., 6.), "cut", Some("tower"));
         }
         self.component(
             "tower",
@@ -131,8 +120,6 @@ impl Author {
             [0., 0., D.base_height],
         );
 
-        // Separate race surfaces expose forbidden shim/shield and rotating/
-        // stationary contact that a single solid bearing annulus conceals.
         self.ring("bearing", 22., D.bearing_outer_recess, 7.);
         self.component(
             "bearing",
@@ -175,7 +162,14 @@ impl Author {
             "bearing_shield",
             [0., 0., D.upper_bearing() + 6.6],
         );
-        self.cylinder("shaft", [0., 0.], 8., 0., D.shaft_length, "new_body", None);
+        self.cylinder(
+            "shaft",
+            [0., 0.],
+            8.,
+            (0., D.shaft_length),
+            "new_body",
+            None,
+        );
         self.component(
             "shaft",
             "Purchased straight 8 x300 mm steel shaft",
@@ -214,25 +208,21 @@ impl Author {
     pub(super) fn adjustable_generator(&mut self) {
         self.block(
             "motor_bracket",
-            [-10., 18.],
-            [10., 34.],
-            0.,
-            4.,
+            ([-10., 18.], [10., 34.]),
+            (0., 4.),
             "new_body",
             None,
         );
         for x in [-10., 10.] {
             let n = self.uid("motor_bracket_foot");
-            self.cylinder(&n, [x, 34.], 10., 0., 4., "join", Some("motor_bracket"));
+            self.cylinder(&n, [x, 34.], 10., (0., 4.), "join", Some("motor_bracket"));
             let n = self.uid("motor_bracket_bolt");
-            self.cylinder(&n, [x, 34.], 3.4, 0., 4., "cut", Some("motor_bracket"));
+            self.cylinder(&n, [x, 34.], 3.4, (0., 4.), "cut", Some("motor_bracket"));
         }
         self.block(
             "motor_bracket_upright",
-            [-13.5, 23.],
-            [13.5, 29.],
-            0.,
-            44.,
+            ([-13.5, 23.], [13.5, 29.]),
+            (0., 44.),
             "join",
             Some("motor_bracket"),
         );
@@ -276,8 +266,7 @@ impl Author {
             "motor",
             [0., 0.],
             D.motor_case_diameter,
-            0.,
-            D.motor_case_length,
+            (0., D.motor_case_length),
             "new_body",
             None,
         );
@@ -291,8 +280,7 @@ impl Author {
             "motor_shaft",
             [0., 0.],
             2.,
-            0.,
-            D.motor_shaft_length,
+            (0., D.motor_shaft_length),
             "new_body",
             None,
         );
@@ -319,16 +307,15 @@ impl Author {
         );
         for (x, y) in [(g, g), (-g, g), (g, -g), (-g, -g)] {
             let n = self.uid("guard_boss");
-            self.cylinder(&n, [x, y], 8., 0., D.guard_height, "join", Some("guard"));
+            self.cylinder(&n, [x, y], 8., (0., D.guard_height), "join", Some("guard"));
             let n = self.uid("guard_bore");
-            self.cylinder(&n, [x, y], 3.4, 0., D.guard_height, "cut", Some("guard"));
+            self.cylinder(&n, [x, y], 3.4, (0., D.guard_height), "cut", Some("guard"));
             for z in [0., D.guard_height - 3.] {
                 let n = self.uid("guard_captive_nut");
                 self.nut_pocket(&n, "guard", [x, y], z);
             }
         }
-        // Pointed roof prints progressively; the wire does not share a clamp
-        // split and never needs to cross the moving gear plane or shaft hole.
+
         self.begin("guard_wire_exit", "yz", 57.);
         self.polygon(&[[-4., 8.], [4., 8.], [4., 12.], [0., 16.], [-4., 12.]]);
         self.extrude("guard_wire_exit", 12., "cut", Some("guard"));
@@ -349,8 +336,7 @@ impl Author {
             "guard_lid",
             [0., 0.],
             D.guard_diameter,
-            0.,
-            3.,
+            (0., 3.),
             "new_body",
             None,
         );
@@ -358,14 +344,13 @@ impl Author {
             "guard_lid_axis",
             [-10., 0.],
             30.,
-            0.,
-            3.,
+            (0., 3.),
             "cut",
             Some("guard_lid"),
         );
         for (x, y) in [(g, g), (-g, g), (g, -g), (-g, -g)] {
             let n = self.uid("lid_hole");
-            self.cylinder(&n, [x, y], 3.4, 0., 3., "cut", Some("guard_lid"));
+            self.cylinder(&n, [x, y], 3.4, (0., 3.), "cut", Some("guard_lid"));
         }
         self.round_rim("guard_lid", D.guard_diameter / 2., 3., 0.6);
         self.round_rim("guard_lid", 15., 3., 0.4);

@@ -81,7 +81,7 @@ fn grouped_planar_and_vertical_sweeps_match_the_complete_ungrouped_union() {
     for x in [-2., 2.] {
         cuts.record(&tool, Point3Dto::new(x, 0., 2.), Point3Dto::new(x, 0., -3.));
     }
-    // A ramp must remain a separate 3D sweep, not join a planar group.
+
     cuts.record(
         &tool,
         Point3Dto::new(0., -2., -2.),

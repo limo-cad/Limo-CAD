@@ -1,13 +1,38 @@
 [package]
 name = "xtask"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 description = "Repo maintenance tasks (MCP client install, etc.)"
 license = "LGPL-2.1-or-later"
+repository.workspace = true
 publish = false
 
+[features]
+default = []
+native-control-harness = ["dep:arboard"]
+
 [dependencies]
-anyhow = "1"
-base64 = "0.22"
-serde_json = { version = "1", features = ["float_roundtrip"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
+limo-cad-export = { path = "../crates/export", features = ["test-utils"] }
+limo-cad-session-storage = { path = "../crates/session-storage" }
+anyhow.workspace = true
+base64.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["float_roundtrip", "raw_value"] }
+serde_yaml_ng = "0.10"
+limo-cad-core = { path = "../crates/core" }
+regex.workspace = true
+semver.workspace = true
+tempfile.workspace = true
+toml_edit.workspace = true
+sha2.workspace = true
+zip = { workspace = true, features = ["deflate"] }
+ureq.workspace = true
+time = { workspace = true, features = ["parsing"] }
+tar.workspace = true
+flate2 = { workspace = true, features = ["rust_backend"] }
+sysinfo = { workspace = true, features = ["system"] }
+
+[target.'cfg(windows)'.dependencies]
+arboard = { version = "=3.6.1", default-features = false, optional = true }
+find-msvc-tools = "=0.1.14"
+windows = { workspace = true, features = ["Win32_UI_WindowsAndMessaging"] }

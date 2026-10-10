@@ -1,0 +1,30 @@
+name: Repository Rust toolchain
+description: Use rust-toolchain.toml for the compiler, rustfmt, Clippy and target installation
+inputs:
+  directory:
+    description: Checkout containing rust-toolchain.toml
+    default: '.'
+  target:
+    description: Optional additional Rust target triple
+    default: ''
+outputs:
+  toolchain:
+    description: Active pinned compiler, including host triple
+    value: ${{ steps.rust.outputs.toolchain }}
+runs:
+  using: composite
+  steps:
+    - name: Install repository toolchain
+      id: rust
+      shell: bash
+      working-directory: ${{ inputs.directory }}
+      env:
+        LIMO_CAD_RUST_TARGET: ${{ inputs.target }}
+      run: |
+        set -euo pipefail
+        rustup show
+        limo_cad_toolchain="$(rustup show active-toolchain)"
+        echo "toolchain=${limo_cad_toolchain%% *}" >> "$GITHUB_OUTPUT"
+        if [[ -n "$LIMO_CAD_RUST_TARGET" ]]; then
+          rustup target add "$LIMO_CAD_RUST_TARGET"
+        fi

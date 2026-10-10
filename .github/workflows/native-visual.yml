@@ -1,8 +1,22 @@
 name: Native sketch visual regressions
 
-# Explicitly opt-in: this uses a real Metal GPU, not a browser screenshot or
-# the headless geometry test. Failure artifacts are the production render.
 on:
+  pull_request:
+    paths:
+      - 'desktop/src/native_viewport/**'
+      - 'desktop/Cargo.toml'
+      - 'desktop/Cargo.lock'
+      - 'crates/core/**'
+      - 'crates/solid/**'
+      - 'crates/sketch/**'
+      - 'crates/occt/**'
+      - 'crates/native-engine/**'
+      - 'xtask/src/repository_ci.rs'
+      - '.github/workflows/native-visual.yml'
+      - '.github/actions/setup-rust/**'
+      - '.github/actions/setup-unix-occt/**'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
   workflow_dispatch:
 
 permissions:
@@ -10,35 +24,38 @@ permissions:
 
 concurrency:
   group: native-visual-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  native-platform-input:
+    # A manual full qualification retains all real OS-input families. Renderer
+    # PR changes run the GPU matrix without rebuilding those unrelated fixtures.
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/native-host-tests.yml
+    with:
+      desktop-input: true
+
   native-visual:
     runs-on: macos-14
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
+          workspaces: desktop -> target
           key: native-visual
       - name: Install native geometry kernel
-        run: brew install opencascade
+        uses: ./.github/actions/setup-unix-occt
       - name: Verify projected boundaries and thin-wall occlusion on the GPU
         env:
-          NBCAD_PREVIEW_PROOF_DIR: ${{ github.workspace }}/docs/qa/native-boundary
-        run: OCCT_ROOT="$(brew --prefix opencascade)" cargo test --locked --manifest-path src-tauri/Cargo.toml --lib native_sketch_boundary_visual_matrix -- --ignored --nocapture
+          LIMO_CAD_PREVIEW_PROOF_DIR: ${{ github.workspace }}/docs/qa/native-boundary
+        run: cargo xtask ci native-ignored-test sketch-visual
       - name: Retain native visual evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: native-sketch-visuals
           path: docs/qa/native-boundary/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14

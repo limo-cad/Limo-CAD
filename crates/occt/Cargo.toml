@@ -1,24 +1,27 @@
 [package]
-name = "nbcad-occt"
+name = "limo-cad-occt"
 version.workspace = true
-edition = "2021"
-description = "Native Open CASCADE adapter for noBS CAD"
+edition.workspace = true
+description = "Native Open CASCADE adapter for Limo CAD"
 license = "LGPL-2.1-or-later"
-repository = "https://github.com/limo-cad/Limo-CAD"
+repository.workspace = true
 
 [features]
 default = []
-native-occt = []
+native-occt = ["dep:cxx", "dep:cxx-build"]
 
 [dependencies]
-nbcad-assembly = { path = "../assembly" }
-nbcad-sketch = { path = "../sketch" }
-cxx = "1"
-nbcad-core = { path = "../core" }
-nbcad-solid = { path = "../solid" }
-nbcad-export = { path = "../export" }
-serde_json = "1"
-serde = { version = "1", features = ["derive"] }
+limo-cad-assembly = { path = "../assembly" }
+limo-cad-sketch = { path = "../sketch" }
+cxx = { workspace = true, optional = true }
+limo-cad-core = { path = "../core" }
+limo-cad-solid = { path = "../solid" }
+limo-cad-export = { path = "../export" }
+serde_json.workspace = true
+serde = { workspace = true, features = ["derive"] }
+ttf-parser.workspace = true
+usvg = { workspace = true, features = ["text", "system-fonts"] }
+unicode-segmentation.workspace = true
 
 [build-dependencies]
-cxx-build = "1"
+cxx-build = { workspace = true, optional = true }

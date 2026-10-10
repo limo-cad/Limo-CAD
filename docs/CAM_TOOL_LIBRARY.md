@@ -33,7 +33,7 @@ The default is the original per-user `cam-tool-library.json` inside the app's
 platform config folder. The panel shows the exact path; nothing is migrated
 on upgrade. A small `cam-library-storage.json` preference stays in that config
 folder and records the chosen directory. The preference is per device/user,
-not embedded in `.nbcad` projects or the central collection.
+not embedded in `.limo` projects or the central collection.
 
 **Settings → CAM → Custom posts** manages a separate `cam-posts` directory
 under the same OS-user configuration root. It does not follow a relocated
@@ -41,7 +41,7 @@ central library. See [private posts](CAM_POSTS.md) for import/profile behavior.
 
 ## Failure and concurrency behavior
 
-`src-tauri/src/cam_library.rs` owns filesystem operations. Native commands run
+`desktop/src/cam_library.rs` owns filesystem operations. Native commands run
 on background blocking workers so a slow mounted volume does not block the
 render/UI thread. Reads and writes validate tool geometry, unique internal
 IDs and the allocation counter, with a 16 MB library-size bound.

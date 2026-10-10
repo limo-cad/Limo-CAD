@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-10",
+  "case": "ui/sketch/parallel",
+  "status": "passed",
+  "runtime_revision": "93823f6d609799932209bcbeae3938d6fb2e0ce6",
+  "runtime_modified": false,
+  "build_pair": "matched",
+  "executable_sha256": "45a253fce260fd6d7454d12d62cc037ebe8a6695a237e4f559f8d412bec2681a",
+  "operator": "One operator; guarded Rust cad_computer_control individual interactive requests; read-only MCP verification",
+  "fixture": "D:/limo-cad-maintenance/ui-models/Parallel check.limo",
+  "checkpoint": "examples/checkpoints/surface-ui-sketch-parallel-human-ui.limo",
+  "reopened_session": "1bf97146-1f5f-49ee-a94a-ce672d4384e8",
+  "expected": "Two free sloped lines become parallel; inappropriate geometry rejects safely; retained relation, Undo/Redo and persistence agree with the visible UI.",
+  "passed": [
+    "Empty-selection Parallel mode presents selection guidance; Escape clears it.",
+    "Drew two separate lines through the UI: [-30,4] to [-8,18], and [-22,-16] to [16,-10]. No initial constraints; eight degrees of freedom.",
+    "Selected the two lines in Parallel mode. One parallel relation binds line IDs 3 and 6; seven degrees of freedom remain. First line is unchanged; second rotates visibly. Normalized direction cross product is 5.666238840468196e-17.",
+    "Undo restores exact original entities and constraints. Redo restores exact constrained entities and constraints. Active session was checked after each history action.",
+    "Clicked the retained glyph. Panel identifies parallel and Geometry: 3, 6, with readable Delete/Close controls and no overlap. Deletion removes the relation and restores eight DOF; Undo restores the exact constrained result.",
+    "Finished the sketch, saved through the native dialog, and verified the archive model equals the live model. Reopened through the native dialog after visibly verifying the full filename; followed the replacement session and verified the complete reopened model equals the saved model.",
+    "Reopened sketch editing and selected two endpoints in Parallel mode. Visible message says Parallel: select two lines. Escape cancels; entities and constraints remain exactly equal to the accepted constrained fixture."
+  ],
+  "functional": "passed",
+  "interaction": "passed",
+  "polish": "passed",
+  "scope": "Representative XY line-line relation; empty selection, wrong point geometry, cancel, retained deletion, exact Undo/Redo and native save/reopen. Parallel has no numeric retained value. Other constraint commands and arbitrary combinations are not qualified by this receipt.",
+  "control_observations": [
+    "One Undo request was blocked before input because rendered state changed. Fresh observation and one retry succeeded.",
+    "A separate newly launched CAD process took foreground ownership. Guarded focus restored the owned test window; the other window was not operated or restarted.",
+    "Initial Save filename captures showed partial text. The operator submitted the first incomplete path too early; the dialog remained open. Corrected to Parallel check.limo, verified the complete visible name and exact native text readback, then verified actual saved model content. No unsupported claim about the cause of the earlier partial text is made."
+  ],
+  "evidence_root": "D:/limo-cad-maintenance",
+  "evidence": [
+    "resume-parallel-empty.png",
+    "resume-parallel-baseline.json",
+    "resume-parallel-applied.json",
+    "resume-parallel-applied.png",
+    "resume-parallel-undo.json",
+    "resume-parallel-redo.json",
+    "resume-parallel-retained.png",
+    "resume-parallel-deleted.json",
+    "resume-parallel-delete-undo.json",
+    "resume-parallel-short-save-name.png",
+    "resume-parallel-native-text-receipt.json",
+    "resume-parallel-saved-model.json",
+    "resume-parallel-reopen-name.png",
+    "resume-parallel-reopened-model.json",
+    "resume-parallel-reopened.png",
+    "resume-parallel-invalid-points.png",
+    "resume-parallel-invalid-cancel.json"
+  ]
+}

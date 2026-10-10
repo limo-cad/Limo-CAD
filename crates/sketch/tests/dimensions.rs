@@ -2,8 +2,8 @@
 //! re-solve on edit, conflict rejection, auto-dimension on typed input,
 //! formula-driven dimensions, lock/snap composition.
 
-use nbcad_core::EdgeId;
-use nbcad_sketch::{
+use limo_cad_core::EdgeId;
+use limo_cad_sketch::{
     Constraint, DimensionMode, DimensionRequest, EditDimensionRequest, LockedRectangleRequest,
     LockedSegmentRequest, MoveDimensionRequest, OriginPlane, PlaneRef, RectangleMode,
     SetDimensionModeRequest, SketchSession, Vec2,
@@ -42,9 +42,9 @@ fn locked_seg_text(
     }
 }
 
-fn line(dto: &nbcad_sketch::SketchDto, id: nbcad_sketch::EntityId) -> (Vec2, Vec2) {
+fn line(dto: &limo_cad_sketch::SketchDto, id: limo_cad_sketch::EntityId) -> (Vec2, Vec2) {
     match dto.entities.iter().find(|e| e.id() == id) {
-        Some(nbcad_sketch::EntityDto::Line { start, end, .. }) => (*start, *end),
+        Some(limo_cad_sketch::EntityDto::Line { start, end, .. }) => (*start, *end),
         other => panic!("expected line, got {other:?}"),
     }
 }
@@ -63,9 +63,9 @@ fn assert_same_bearing(before: Vec2, after: Vec2, context: &str) {
     );
 }
 
-fn point(dto: &nbcad_sketch::SketchDto, id: nbcad_sketch::EntityId) -> Vec2 {
+fn point(dto: &limo_cad_sketch::SketchDto, id: limo_cad_sketch::EntityId) -> Vec2 {
     match dto.entities.iter().find(|entity| entity.id() == id) {
-        Some(nbcad_sketch::EntityDto::Point { position, .. }) => *position,
+        Some(limo_cad_sketch::EntityDto::Point { position, .. }) => *position,
         other => panic!("expected point, got {other:?}"),
     }
 }
@@ -109,9 +109,6 @@ fn support_edge_midpoint_remains_exact_through_dimension_edits_and_history() {
     assert!(close(point(&edited, line.start_point_id), v(10.0, 0.0)));
     assert!(close(point(&edited, line.end_point_id), v(25.0, 0.0)));
 
-    // A recomputed support edge refreshes the authoritative target by its
-    // stable id. Undo/redo must retain that new target rather than restoring
-    // the old sampled coordinate from a command snapshot.
     s.set_reference_midpoints(vec![(edge, v(12.0, 3.0))]);
     assert!(close(point(&s.dto(), line.start_point_id), v(12.0, 3.0)));
     let undone = s.undo().unwrap().sketch;
@@ -119,8 +116,6 @@ fn support_edge_midpoint_remains_exact_through_dimension_edits_and_history() {
     let redone = s.redo().unwrap().sketch;
     assert!(close(point(&redone, line.start_point_id), v(12.0, 3.0)));
 }
-
-// --- Dimensional solver equations + DOF ------------------------------------
 
 #[test]
 fn distance_dim_drives_line_length_and_counts_dof() {
@@ -140,8 +135,6 @@ fn distance_dim_drives_line_length_and_counts_dof() {
     assert_eq!(dto.dimensions[0].param_name.as_deref(), Some("d1"));
     assert_eq!(dto.dimensions[0].text, "40.00");
 
-    // Editing the parameter re-solves the geometry. Anchor the start so
-    // the direction of travel is deterministic.
     s.toggle_fix(l.start_point_id).unwrap();
     let cid = dto.dimensions[0].constraint_id;
     let r = s
@@ -438,7 +431,7 @@ fn diameter_dim_drives_circle_radius() {
     let mut s = session();
     let c = s
         .add_circle(
-            nbcad_sketch::CircleMode::CenterDiameter,
+            limo_cad_sketch::CircleMode::CenterDiameter,
             v(50.0, 50.0),
             v(60.0, 50.0),
         )
@@ -464,7 +457,7 @@ fn diameter_dim_drives_circle_radius() {
         .find(|e| e.id() == c.entities[0])
         .unwrap()
     {
-        nbcad_sketch::EntityDto::Circle { radius, .. } => {
+        limo_cad_sketch::EntityDto::Circle { radius, .. } => {
             assert!((radius - 17.5).abs() < 1e-9)
         }
         _ => panic!("expected circle"),
@@ -474,7 +467,7 @@ fn diameter_dim_drives_circle_radius() {
 #[test]
 fn angle_dim_drives_line_direction() {
     let mut s = session();
-    // ctrl=true: no H inference — l2 starts at ~1.15°.
+
     let l1 = s.add_line(v(0.0, 0.0), v(50.0, 0.0), true).unwrap();
     let l2 = s.add_line(v(0.0, 0.0), v(50.0, 5.0), true).unwrap();
     let d = s
@@ -486,8 +479,7 @@ fn angle_dim_drives_line_direction() {
         .unwrap();
     assert_eq!(d.sketch.dimensions[0].kind, "angle");
     assert!(d.sketch.dimensions[0].text.ends_with('°'));
-    // Anchor l1 fully (start is shared with l2's start, so l1's direction
-    // and both starts are pinned); l2 rotates about the shared start.
+
     s.toggle_fix(l1.start_point_id).unwrap();
     s.toggle_fix(l1.end_point_id).unwrap();
     let r = s
@@ -555,7 +547,7 @@ fn radial_and_angular_reference_dimensions_follow_solved_geometry() {
 
     let circle = s
         .add_circle(
-            nbcad_sketch::CircleMode::CenterDiameter,
+            limo_cad_sketch::CircleMode::CenterDiameter,
             v(40.0, 0.0),
             v(50.0, 0.0),
         )
@@ -654,13 +646,13 @@ fn fully_dimensioned_rectangle_is_fully_defined() {
     let mut s = session();
     let rect = s
         .add_rectangle(
-            nbcad_sketch::RectangleMode::TwoPoint,
+            limo_cad_sketch::RectangleMode::TwoPoint,
             v(5.0, 5.0),
             v(45.0, 25.0),
         )
         .unwrap();
     let lines = &rect.entities[4..8];
-    // Width + height dims.
+
     s.add_dimension(DimensionRequest {
         entities: vec![lines[0]],
         text_pos: v(20.0, -15.0),
@@ -674,7 +666,7 @@ fn fully_dimensioned_rectangle_is_fully_defined() {
     })
     .unwrap();
     assert_eq!(s.dto().dof.value, 2, "w+h dims leave only position free");
-    // Anchor one corner → fully defined.
+
     s.toggle_fix(rect.entities[0]).unwrap();
     let dto = s.dto();
     assert_eq!(dto.dof.value, 0);
@@ -691,7 +683,7 @@ fn explicit_duplicate_driver_is_rejected_without_an_orphan_parameter() {
         value_text: None,
     })
     .unwrap();
-    // A second, different distance on the same line must be rejected.
+
     let err = s
         .add_dimension(DimensionRequest {
             entities: vec![l.entity_id],
@@ -701,7 +693,7 @@ fn explicit_duplicate_driver_is_rejected_without_an_orphan_parameter() {
         .unwrap_err();
     let msg = err.to_string();
     assert!(msg.contains("already driven"), "{msg}");
-    // Only the first dimension survived.
+
     assert_eq!(s.dto().dimensions.len(), 1);
     assert_eq!(s.sketch().params().all().len(), 1);
 }
@@ -918,8 +910,6 @@ fn conversion_protects_existing_drivers_and_parameter_dependencies() {
     assert!(error.to_string().contains("Another driving dimension"));
 }
 
-// --- Auto-dimension on typed input (D9) ---------------------------------------
-
 #[test]
 fn typed_length_and_angle_create_dimensions_with_annotations() {
     let mut s = session();
@@ -942,10 +932,10 @@ fn typed_length_and_angle_create_dimensions_with_annotations() {
     assert_eq!(dist.param_expression.as_deref(), Some("25*2"));
     let ang = dto.dimensions.iter().find(|d| d.kind == "angle").unwrap();
     assert_eq!(ang.text, "30.00°");
-    // Names auto-assigned in creation order.
+
     assert_eq!(dist.param_name.as_deref(), Some("d1"));
     assert_eq!(ang.param_name.as_deref(), Some("d2"));
-    // One undo removes line + both dimensions.
+
     let undone = s.undo().unwrap();
     assert_eq!(undone.sketch.entities.len(), 0);
     assert_eq!(undone.sketch.dimensions.len(), 0);
@@ -976,9 +966,6 @@ fn formula_dimensions_chain_and_edit_reevaluates_dependents() {
     assert_eq!(dto.dimensions[1].text, "25.00");
     assert_eq!(dto.dimensions[1].param_expression.as_deref(), Some("d1/2"));
 
-    // Edit d1 → both lines update (starts anchored for determinism). The
-    // first start was already acquired at the origin, so adding Fix there
-    // would now be correctly rejected as a redundant relation.
     s.toggle_fix(l2.start_point_id).unwrap();
     let cid = dto.dimensions[0].constraint_id;
     let r = s
@@ -1022,7 +1009,7 @@ fn cycle_through_dimension_edit_surfaces_a_clear_error() {
     ))
     .unwrap();
     let dto = s.dto();
-    // Point d1 at d2 → cycle d1 → d2 → d1 (d2 = d1).
+
     let err = s
         .edit_dimension(EditDimensionRequest {
             constraint_id: dto.dimensions[0].constraint_id,
@@ -1032,7 +1019,7 @@ fn cycle_through_dimension_edit_surfaces_a_clear_error() {
     let msg = err.to_string();
     assert!(msg.contains("circular reference"), "{msg}");
     assert!(msg.contains("d1") && msg.contains("d2"), "{msg}");
-    // Rolled back: the parameter value is unchanged.
+
     assert_eq!(s.dto().dimensions[0].value, 50.0);
 }
 
@@ -1098,15 +1085,12 @@ fn dimension_on_fully_constrained_geometry_becomes_reference() {
     );
 }
 
-// --- Lock/snap composition (D9 bug fix) ----------------------------------------
-
 #[test]
 fn locked_length_still_snaps_to_points_on_the_circle() {
     let mut s = session();
-    // A reference point exactly 50 mm from the origin.
+
     let p = s.add_point(v(50.0, 0.0)).unwrap();
-    // Cursor near the point (direction off by ~2°) — without composition
-    // the endpoint would land next to the point, not on it.
+
     let r = s
         .add_line_locked(&locked_seg_text(
             v(0.0, 0.0),
@@ -1126,7 +1110,7 @@ fn locked_length_still_snaps_to_points_on_the_circle() {
 #[test]
 fn locked_length_axis_inference_still_works() {
     let mut s = session();
-    // Cursor near-horizontal: H inference on the remaining freedom.
+
     let r = s
         .add_line_locked(&locked_seg_text(
             v(10.0, 10.0),
@@ -1146,7 +1130,7 @@ fn locked_length_axis_inference_still_works() {
 #[test]
 fn locked_angle_still_snaps_to_points_on_the_ray() {
     let mut s = session();
-    let p = s.add_point(v(30.0, 30.0)).unwrap(); // on the 45° ray
+    let p = s.add_point(v(30.0, 30.0)).unwrap();
     let r = s
         .add_line_locked(&locked_seg_text(
             v(0.0, 0.0),
@@ -1186,7 +1170,7 @@ fn dimension_move_and_delete() {
         s.sketch().params().get(pid).is_none(),
         "orphan param removed"
     );
-    // Undo restores constraint + parameter + placement.
+
     let undone = s.undo().unwrap();
     assert_eq!(undone.sketch.dimensions.len(), 1);
     assert_eq!(undone.sketch.dimensions[0].text_pos, v(5.0, 40.0));

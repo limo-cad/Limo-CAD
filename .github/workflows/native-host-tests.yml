@@ -1,0 +1,663 @@
+name: Native desktop host tests
+
+
+on:
+  workflow_dispatch:
+    inputs:
+      desktop-input:
+        description: Exercise OS keyboard and clipboard input on the disposable runner desktop
+        type: boolean
+        default: false
+      native-packages:
+        description: Build diagnostic Bevy DEB/AppImage packages and test their owned X11 desktop input
+        type: boolean
+        default: false
+      linux-only:
+        description: Only run Ubuntu desktop shell and native host checks, including optional desktop input
+        type: boolean
+        default: false
+      input-family:
+        description: Select an isolated input family; windows-ime and switching run dedicated disposable checks
+        type: choice
+        default: all
+        options: [all, keyboard, paper, annotations, cam, drawing-output, centers, scripts, hole, mechanism, windows-ime, windows-print, switching]
+      ime-probe-only:
+        description: Only probe disposable IME prerequisites, skipping all native and package builds
+        type: boolean
+        default: false
+      ime-native-macos:
+        description: Only validate actual Bevy Japanese IME input on disposable macOS, after a same-job stock probe
+        type: boolean
+        default: false
+      ime-probe-macos:
+        description: With ime-probe-only, use macOS instead of Windows
+        type: boolean
+        default: false
+      ime-provision-japanese:
+        description: With ime-probe-only, provision Windows Japanese capabilities or enable the installed macOS source
+        type: boolean
+        default: false
+      ime-exercise:
+        description: With ime-probe-only, send real keys to an owned stock text control (does not validate Bevy)
+        type: boolean
+        default: false
+      ime-profile-diagnosis:
+        description: With ime-probe-only, diagnose Windows TSF without keys; with ime-native-macos, trace existing Winit IME callbacks
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      desktop-input:
+        type: boolean
+        default: false
+      native-packages:
+        type: boolean
+        default: false
+      linux-only:
+        type: boolean
+        default: false
+      input-family:
+        type: string
+        default: all
+      ime-probe-only:
+        type: boolean
+        default: false
+      ime-native-macos:
+        type: boolean
+        default: false
+      ime-probe-macos:
+        type: boolean
+        default: false
+      ime-provision-japanese:
+        type: boolean
+        default: false
+      ime-exercise:
+        type: boolean
+        default: false
+      ime-profile-diagnosis:
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'VERSION'
+      - 'REPOSITORY'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - '.github/actions/setup-rust/**'
+      - '.github/workflows/native-host-tests.yml'
+      - '.github/workflows/native-switching.yml'
+      - '.github/workflows/windows-native-ime.yml'
+      - '.github/actions/setup-windows-occt/**'
+      - 'vcpkg.json'
+      - 'vcpkg-configuration.json'
+      - 'native/occt-overlay/**'
+      - '.github/actions/setup-unix-occt/**'
+      - 'knowledge/**'
+      - 'interface/**'
+      - '.github/actions/setup-linux-desktop/**'
+      - 'scripts/*linux*'
+      - 'xtask/**'
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'VERSION'
+      - 'REPOSITORY'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - '.github/actions/setup-rust/**'
+      - '.github/workflows/native-host-tests.yml'
+      - '.github/workflows/native-switching.yml'
+      - '.github/workflows/windows-native-ime.yml'
+      - '.github/actions/setup-windows-occt/**'
+      - 'vcpkg.json'
+      - 'vcpkg-configuration.json'
+      - 'native/occt-overlay/**'
+      - '.github/actions/setup-unix-occt/**'
+      - 'knowledge/**'
+      - 'interface/**'
+      - '.github/actions/setup-linux-desktop/**'
+      - 'scripts/*linux*'
+      - 'xtask/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-host-tests-${{ github.workflow }}-${{ github.ref }}${{ inputs.ime-probe-only && (inputs.ime-probe-macos && '-ime-probe-macos' || '-ime-probe') || inputs.ime-native-macos && '-ime-native-macos' || inputs.input-family == 'windows-ime' && '-windows-ime' || inputs.input-family == 'windows-print' && '-windows-print' || inputs.input-family == 'switching' && '-switching' || inputs.linux-only && format('-linux-only-{0}', inputs.input-family || 'all') || '' }}
+  # Preserve explicit/manual qualification; cancel only superseded PR checks.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  switching-measurement:
+    if: inputs.desktop-input && inputs.input-family == 'switching' && !inputs.ime-probe-only && !inputs.ime-native-macos
+    uses: ./.github/workflows/native-switching.yml
+
+  windows-native-ime:
+    if: inputs.desktop-input && inputs.input-family == 'windows-ime' && !inputs.ime-probe-only && !inputs.ime-native-macos
+    uses: ./.github/workflows/windows-native-ime.yml
+
+  windows-ime-probe:
+    name: Inventory or explicitly provision the disposable Windows IME
+    if: inputs.ime-probe-only && !inputs.ime-probe-macos
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe Windows IME prerequisites
+        timeout-minutes: 35
+        shell: powershell
+        env:
+          PROBE_PROVISION: ${{ inputs.ime-provision-japanese }}
+          PROBE_EXERCISE: ${{ inputs.ime-exercise }}
+          PROBE_DIAGNOSE: ${{ inputs.ime-profile-diagnosis }}
+        run: |
+          $probeArgs = @{ Out = Join-Path $env:RUNNER_TEMP 'windows-ime-probe' }
+          if ($env:PROBE_PROVISION -eq 'true') { $probeArgs.ProvisionJapanese = $true }
+          if ($env:PROBE_EXERCISE -eq 'true') { $probeArgs.ExerciseIme = $true }
+          if ($env:PROBE_DIAGNOSE -eq 'true') { $probeArgs.DiagnoseProfile = $true }
+          & .\xtask\platform\windows-ime-probe.ps1 @probeArgs
+      - name: Retain inventory, provisioning status, and actual IME messages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-ime-prerequisite-probe
+          path: ${{ runner.temp }}/windows-ime-probe/
+          if-no-files-found: error
+          retention-days: 14
+
+  macos-ime-probe:
+    name: Inventory or exercise the disposable macOS IME
+    if: inputs.ime-probe-only && inputs.ime-probe-macos
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and probe the stock macOS text control
+        timeout-minutes: 5
+        shell: bash
+        env:
+          PROBE_PROVISION: ${{ inputs.ime-provision-japanese }}
+          PROBE_EXERCISE: ${{ inputs.ime-exercise }}
+        run: bash xtask/platform/run-macos-ime-probe.sh "$RUNNER_TEMP/macos-ime-probe"
+      - name: Retain macOS inventory and actual AppKit input callbacks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-ime-prerequisite-probe
+          path: ${{ runner.temp }}/macos-ime-probe/
+          if-no-files-found: error
+          retention-days: 14
+
+  packaged-native-host:
+    name: Opt-in Ubuntu packaged Bevy host
+    if: inputs.native-packages && !inputs.ime-probe-only && !inputs.linux-only && !inputs.ime-native-macos && inputs.input-family != 'windows-ime' && inputs.input-family != 'windows-print' && inputs.input-family != 'switching'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    env:
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Isolate diagnostic package outputs
+        shell: bash
+        run: echo "CARGO_TARGET_DIR=$RUNNER_TEMP/native-package-target" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-rust
+      - name: Install Ubuntu desktop and disposable-input SDK
+        uses: ./.github/actions/setup-linux-desktop
+        with:
+          desktop-input: 'true'
+      - name: Install checked OCCT SDK
+        uses: ./.github/actions/setup-unix-occt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ runner.temp }}/native-package-target
+          key: native-package-linux-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock', 'desktop/Cargo.lock', 'desktop/Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            native-package-linux-${{ runner.arch }}-
+      - name: Build and audit locked diagnostic Bevy packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle_root="$(realpath -m "$CARGO_TARGET_DIR/release/bundle")"
+          test "$bundle_root" = "$RUNNER_TEMP/native-package-target/release/bundle"
+          rm -rf -- "$bundle_root/deb" "$bundle_root/appimage"
+          cargo xtask package
+          test "$(find "$bundle_root/deb" -maxdepth 1 -name '*.deb' | wc -l)" -eq 1
+          test "$(find "$bundle_root/appimage" -maxdepth 1 -name '*.AppImage' | wc -l)" -eq 1
+      - name: Exercise extracted DEB and AppImage at 100% and 200% scale
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle_root="$CARGO_TARGET_DIR/release/bundle"
+          deb="$(find "$bundle_root/deb" -maxdepth 1 -name '*.deb' -print -quit)"
+          appimage="$(find "$bundle_root/appimage" -maxdepth 1 -name '*.AppImage' -print -quit)"
+          bash scripts/verify-linux-native-package.sh "$deb" "$RUNNER_TEMP/native-package-evidence/deb"
+          bash scripts/verify-linux-native-package.sh "$appimage" "$RUNNER_TEMP/native-package-evidence/appimage"
+      - name: Retain packaged native diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-package-linux-diagnostics
+          path: ${{ runner.temp }}/native-package-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain diagnostic packages (never publish a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-package-linux
+          path: |
+            ${{ runner.temp }}/native-package-target/release/bundle/deb/*.deb*
+            ${{ runner.temp }}/native-package-target/release/bundle/appimage/*.AppImage*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  native-host-tests:
+    name: ${{ inputs.desktop-input && format('Ubuntu desktop shell and native host ({0})', matrix.family) || 'Ubuntu desktop shell and native host' }}
+    if: ${{ !inputs.ime-probe-only && !inputs.ime-native-macos && inputs.input-family != 'windows-ime' && inputs.input-family != 'windows-print' && inputs.input-family != 'switching' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        family: ${{ fromJSON(!inputs.desktop-input && '["all"]' || inputs.input-family && inputs.input-family != 'all' && format('[{0}]', toJSON(inputs.input-family)) || '["keyboard","paper","annotations","cam","drawing-output","centers","scripts","hole","mechanism"]') }}
+    steps:
+      - name: Validate the selected input family
+        env:
+          INPUT_FAMILY: ${{ matrix.family }}
+        run: |
+          case "$INPUT_FAMILY" in
+            all|keyboard|paper|annotations|cam|drawing-output|centers|scripts|hole|mechanism) ;;
+            *) echo 'Unknown input family'; exit 1 ;;
+          esac
+      - name: Check out Limo CAD
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Install Ubuntu desktop SDK
+        uses: ./.github/actions/setup-linux-desktop
+        with:
+          desktop-input: ${{ inputs.desktop-input }}
+
+      - name: Install checked OCCT SDK
+        uses: ./.github/actions/setup-unix-occt
+
+      - name: Cache Rust build
+        id: rust-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/target
+          key: native-host-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'desktop/Cargo.lock', 'desktop/Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            native-host-${{ runner.arch }}-
+
+      - name: Test concurrent first-use OCCT projection
+        if: matrix.family == 'all' || matrix.family == 'keyboard'
+        run: cargo test --locked -p limo-cad-occt --features native-occt --test concurrent_drawing_init
+
+      - name: Lint every native target and feature
+        if: matrix.family == 'all' || matrix.family == 'keyboard'
+        run: cargo clippy --locked --manifest-path desktop/Cargo.toml --all-targets --all-features --no-deps -- -D warnings
+
+      - name: Test the native Bevy host
+        if: matrix.family == 'all' || matrix.family == 'keyboard'
+        run: cargo test --locked --manifest-path desktop/Cargo.toml
+
+      - name: Build the live native host
+        id: native-build
+        if: inputs.desktop-input
+        run: cargo build --locked --manifest-path desktop/Cargo.toml --bin limo-cad
+
+      - name: Verify installed CJK and emoji fonts through Bevy shaping
+        if: inputs.desktop-input && matrix.family == 'keyboard'
+        run: cargo xtask ci native-ignored-test fonts
+
+      - name: Exercise X11 keyboard and clipboard at 100% and 200% scale
+        if: inputs.desktop-input && matrix.family == 'keyboard'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-platform --desktop-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-$scale"
+          done
+
+      - name: Exercise real IBus preedit, commit, cancel and candidate placement
+        if: inputs.desktop-input && matrix.family == 'keyboard'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" dbus-run-session -- \
+              xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              bash xtask/platform/run-linux-ime.sh \
+              "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              "$RUNNER_TEMP/native-input-linux-ime-$scale"
+          done
+
+      - name: Validate native lessons and imported scripts in retained documents
+        if: inputs.desktop-input && matrix.family == 'scripts'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-scripts-platform --desktop-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-scripts-$scale"
+          done
+
+      - name: Validate native drawing files and File menu captures at 100% and 200%
+        if: ${{ !cancelled() && inputs.desktop-input && steps.native-build.outcome == 'success' && matrix.family == 'drawing-output' }}
+        shell: bash
+        env:
+          LIMO_CAD_NATIVE_PAPER_DIAGNOSTICS: '1'
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-drawing-output-platform --desktop-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-drawing-output-$scale"
+          done
+
+      - name: Validate drilled-solid hole notes, exact exports, and window captures
+        if: inputs.desktop-input && matrix.family == 'hole'
+        shell: bash
+        env:
+          LIMO_CAD_NATIVE_PAPER_DIAGNOSTICS: '1'
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-drawing-hole-platform --desktop-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-hole-$scale"
+          done
+
+      - name: Exercise real XTEST constrained mechanism dragging and exact history
+        if: inputs.desktop-input && matrix.family == 'mechanism'
+        shell: bash
+        env:
+          LIMO_CAD_NATIVE_PAPER_DIAGNOSTICS: '1'
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-mechanism-platform --desktop-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-mechanism-$scale"
+          done
+
+      - name: Exercise real XTEST chamfer picking, placement and dragging at 100% and 200%
+        if: ${{ !cancelled() && inputs.desktop-input && steps.native-build.outcome == 'success' && matrix.family == 'annotations' }}
+        shell: bash
+        env:
+          LIMO_CAD_NATIVE_PAPER_DIAGNOSTICS: '1'
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-chamfer-platform --desktop-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-chamfer-$scale"
+          done
+
+      - name: Validate native center annotation controls and captures at 100% and 200%
+        if: ${{ !cancelled() && inputs.desktop-input && steps.native-build.outcome == 'success' && matrix.family == 'centers' }}
+        shell: bash
+        env:
+          LIMO_CAD_NATIVE_PAPER_DIAGNOSTICS: '1'
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-centers-platform --desktop-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-centers-$scale"
+          done
+
+      - name: Exercise real XTEST revision-cloud placement and dragging at 100% and 200%
+        if: ${{ !cancelled() && inputs.desktop-input && steps.native-build.outcome == 'success' && matrix.family == 'annotations' }}
+        shell: bash
+        env:
+          LIMO_CAD_NATIVE_PAPER_DIAGNOSTICS: '1'
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-cloud-platform --desktop-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-cloud-$scale"
+          done
+
+      - name: Exercise real XTEST paper navigation and annotation click/drag at 100% and 200%
+        if: ${{ !cancelled() && inputs.desktop-input && steps.native-build.outcome == 'success' && matrix.family == 'paper' }}
+        shell: bash
+        env:
+          LIMO_CAD_NATIVE_PAPER_DIAGNOSTICS: '1'
+        run: |
+          set -euo pipefail
+          python3 xtask/platform/test_native_drawing_linux.py
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-drawing-platform --desktop-input --authoring-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-drawing-$scale"
+          done
+
+      - name: Exercise real XTEST CAM row dragging and WCS picking at 100% and 200%
+        if: ${{ !cancelled() && inputs.desktop-input && steps.native-build.outcome == 'success' && matrix.family == 'cam' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 xtask/platform/test_native_cam_row_linux.py
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-cam-platform --desktop-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-cam-$scale"
+          done
+
+      - name: Exercise real XTEST CAM geometry and linking picks at 100% and 200%
+        if: ${{ !cancelled() && inputs.desktop-input && steps.native-build.outcome == 'success' && matrix.family == 'cam' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              cargo xtask test-mcp native-cam-geometry-platform --desktop-input \
+              --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+              --out "$RUNNER_TEMP/native-input-linux-cam-geometry-$scale"
+          done
+
+      - name: Retain Linux input snapshots and native captures
+        if: always() && inputs.desktop-input
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-input-linux-${{ matrix.family }}
+          path: ${{ runner.temp }}/native-input-linux-*/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Preserve successful build cache after a live-check failure
+        if: failure() && inputs.desktop-input && steps.native-build.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/target
+          key: native-host-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'desktop/Cargo.lock', 'desktop/Cargo.toml', 'crates/**/Cargo.toml') }}
+
+  macos-native-host-tests:
+    name: macOS native Bevy host
+    if: ${{ !inputs.ime-probe-only && (!inputs.linux-only || inputs.ime-native-macos) && inputs.input-family != 'windows-ime' && inputs.input-family != 'windows-print' && inputs.input-family != 'switching' }}
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: desktop -> target
+          key: native-host-macos
+          cache-on-failure: true
+      - name: Install native geometry kernel
+        uses: ./.github/actions/setup-unix-occt
+      - name: Test concurrent first-use OCCT projection
+        run: cargo test --locked -p limo-cad-occt --features native-occt --test concurrent_drawing_init
+
+      - name: Lint every native target and feature
+        run: cargo clippy --locked --manifest-path desktop/Cargo.toml --all-targets --all-features --no-deps -- -D warnings
+      - name: Test the native Bevy host
+        run: cargo test --locked --manifest-path desktop/Cargo.toml --lib
+      - name: Build the live native host
+        if: inputs.desktop-input || inputs.ime-native-macos
+        env:
+          IME_TRACE: ${{ inputs.ime-native-macos && inputs.ime-profile-diagnosis }}
+        run: |
+          features=()
+          if [ "$IME_TRACE" = true ]; then features=(--features dev-native-ime-trace); fi
+          cargo build --locked --manifest-path desktop/Cargo.toml "${features[@]}" --bin limo-cad
+      - name: Verify installed CJK and emoji fonts through Bevy shaping
+        if: inputs.desktop-input || inputs.ime-native-macos
+        run: cargo xtask ci native-ignored-test fonts
+      - name: Exercise macOS Command shortcuts and clipboard
+        if: inputs.desktop-input && !inputs.ime-native-macos
+        run: |
+          cargo xtask test-mcp native-platform --desktop-input \
+            --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+            --out "$RUNNER_TEMP/native-input-macos"
+      - name: Verify same-job stock macOS IME prerequisite
+        if: inputs.ime-native-macos
+        timeout-minutes: 5
+        env:
+          PROBE_PROVISION: 'true'
+          PROBE_EXERCISE: 'true'
+        run: bash xtask/platform/run-macos-ime-probe.sh "$RUNNER_TEMP/native-input-macos-stock"
+      - name: Exercise actual Bevy Japanese composition, commit and cancellation
+        if: inputs.ime-native-macos
+        env:
+          LIMO_CAD_NATIVE_IME_TEST: macos-japanese
+          LIMO_CAD_NATIVE_IME_TRACE: ${{ inputs.ime-profile-diagnosis && '1' || '0' }}
+        run: |
+          if [ "$LIMO_CAD_NATIVE_IME_TRACE" = 1 ]; then export RUST_LOG=off,winit=trace; fi
+          cargo xtask test-mcp native-platform --desktop-input --ime-japanese \
+            --ime-stock-report "$RUNNER_TEMP/native-input-macos-stock/report.json" \
+            --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+            --out "$RUNNER_TEMP/native-input-macos-japanese"
+      - name: Retain macOS input snapshots and native captures
+        if: always() && (inputs.desktop-input || inputs.ime-native-macos)
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-input-macos
+          path: ${{ runner.temp }}/native-input-macos*/
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows-native-host-tests:
+    name: Windows native Bevy host
+    if: ${{ !inputs.ime-probe-only && !inputs.linux-only && !inputs.ime-native-macos && inputs.input-family != 'windows-ime' && inputs.input-family != 'switching' }}
+    runs-on: windows-2025
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: desktop -> target
+          key: native-host-windows
+          cache-on-failure: true
+      - name: Install native geometry kernel
+        id: occt
+        uses: ./.github/actions/setup-windows-occt
+        with:
+          triplet: x64-windows
+          runner-cache-key: windows-2025-x64-windows-msvc
+          msvc-component: Microsoft.VisualStudio.Component.VC.Tools.x86.x64
+      - name: Use the native geometry kernel
+        shell: pwsh
+        env:
+          OCCT_SDK: ${{ steps.occt.outputs.root }}
+        run: |
+          "OCCT_ROOT=$env:OCCT_SDK" >> $env:GITHUB_ENV
+          "$env:OCCT_SDK\bin" >> $env:GITHUB_PATH
+      - name: Test concurrent first-use OCCT projection
+        if: inputs.input-family != 'windows-print'
+        run: cargo test --locked -p limo-cad-occt --features native-occt --test concurrent_drawing_init
+
+      - name: Lint every native target and feature
+        if: inputs.input-family != 'windows-print'
+        run: cargo clippy --locked --manifest-path desktop/Cargo.toml --all-targets --all-features --no-deps -- -D warnings
+      - name: Test the native Bevy host
+        if: inputs.input-family != 'windows-print'
+        run: cargo test --locked --manifest-path desktop/Cargo.toml --lib
+      - name: Build the live native host
+        if: inputs.desktop-input
+        run: cargo build --locked --manifest-path desktop/Cargo.toml --features native-computer-control --bin limo-cad
+      - name: Verify installed CJK and emoji fonts through Bevy shaping
+        if: inputs.desktop-input && inputs.input-family != 'windows-print'
+        run: cargo xtask ci native-ignored-test fonts
+      - name: Exercise Windows keyboard and clipboard
+        if: inputs.desktop-input && inputs.input-family != 'windows-print'
+        shell: pwsh
+        run: |
+          cargo run --quiet --locked -p xtask --features native-control-harness -- test-mcp native-platform --desktop-input `
+            --server "$env:GITHUB_WORKSPACE\desktop\target\debug\limo-cad.exe" `
+            --out "$env:RUNNER_TEMP\native-input-windows"
+      - name: Exercise production Windows UI Automation without foreground input
+        if: inputs.desktop-input && inputs.input-family != 'windows-print'
+        shell: pwsh
+        run: |
+          cargo run --quiet --locked -p xtask --features native-control-harness -- test-mcp native-platform --desktop-input --accessibility `
+            --server "$env:GITHUB_WORKSPACE\desktop\target\debug\limo-cad.exe" `
+            --out "$env:RUNNER_TEMP\native-accessibility-windows"
+      - name: Retain Windows input snapshots and native captures
+        if: always() && inputs.desktop-input
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-input-windows
+          path: |
+            ${{ runner.temp }}/native-input-windows/
+            ${{ runner.temp }}/native-accessibility-windows/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Cancel the owned Windows print dialog without submitting
+        if: inputs.desktop-input
+        shell: pwsh
+        env:
+          LIMO_CAD_NATIVE_PRINT_TEST: windows-cancel
+        run: |
+          cargo run --quiet --locked -p xtask --features native-control-harness -- test-mcp native-platform --desktop-input --print-cancel `
+            --server "$env:GITHUB_WORKSPACE\desktop\target\debug\limo-cad.exe" `
+            --out "$env:RUNNER_TEMP\native-print-windows"
+      - name: Retain Windows print dialog cancellation evidence
+        if: always() && inputs.desktop-input
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-print-windows
+          path: ${{ runner.temp }}/native-print-windows/
+          if-no-files-found: warn
+          retention-days: 14

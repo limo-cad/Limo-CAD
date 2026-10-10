@@ -226,8 +226,8 @@ adjustment opt-in and tolerance-bounded, and commit only after review.
 ## Reproduce
 
 ```sh
-cargo test -p nbcad-sketch --test constraint_pair_permutations
-cargo test -p nbcad-sketch --test overconstraint_hardening
+cargo test -p limo-cad-sketch --test constraint_pair_permutations
+cargo test -p limo-cad-sketch --test overconstraint_hardening
 ```
 
 Related UI verification:

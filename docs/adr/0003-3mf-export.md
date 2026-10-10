@@ -23,7 +23,7 @@ current implementation.
 
 ## Decision and current implementation
 
-1. Native OCCT tessellation feeds one Rust writer in `nbcad-export`: **3MF**
+1. Native OCCT tessellation feeds one Rust writer in `limo-cad-export`: **3MF**
    for print packages and binary **STL** for geometry-only interchange.
 2. Both the desktop File menu and MCP (`solid_export_3mf`, `solid_export_stl`)
    use this export implementation. Native mesh export is not implemented by the
@@ -38,7 +38,7 @@ current implementation.
 5. Assembly scope exports visible solved occurrences with their placement and
    repetition; definition scope exports retained bodies in part coordinates.
 6. Keep **STEP** for exact CAD interchange. **3MF/STL** contain manufacturing
-   meshes; **`.nbcad`** retains the editable sketches, features and assembly.
+   meshes; **`.limo`** retains the editable sketches, features and assembly.
 7. **STL** does not preserve materials or colors. Material assignments and export
    success do not establish physical print fit or strength.
 

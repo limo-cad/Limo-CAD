@@ -2,7 +2,7 @@
 //! Keep the platform consumer from rebuilding a complementary positive arc.
 #[test]
 fn native_projection_draws_the_same_samples_used_for_snapping() {
-    let source = include_str!("../../../src-tauri/src/native_viewport/platform.rs");
+    let source = include_str!("../../../desktop/src/native_viewport/platform.rs");
     let draw = source
         .split("fn draw_projected_edges<")
         .nth(1)

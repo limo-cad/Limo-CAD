@@ -17,7 +17,7 @@ on:
       - "v*"
 
 env:
-  NBCAD_BUILD_CHANNEL: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'preview' }}
+  LIMO_CAD_BUILD_CHANNEL: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'preview' }}
 
 permissions:
   contents: read
@@ -25,12 +25,10 @@ permissions:
 
 concurrency:
   group: desktop-packages-${{ github.ref }}
-  cancel-in-progress: true
+  # Keep release/manual receipts; cancel obsolete PR builds before they occupy runners.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  frontend_regressions:
-    uses: ./.github/workflows/frontend.yml
-
   version_preflight:
     uses: ./.github/workflows/version-guard.yml
 
@@ -43,107 +41,20 @@ jobs:
       macos_should_build: ${{ steps.classify.outputs.macos_should_build }}
       linux_should_build: ${{ steps.classify.outputs.linux_should_build }}
     steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          key: desktop-input-classifier
       - name: Inspect changed paths
         id: classify
-        uses: actions/github-script@v9
-        with:
-          script: |
-            if (context.eventName !== "pull_request") {
-              core.info(`${context.eventName} runs always build all desktop packages.`);
-              core.setOutput("windows_should_build", "true");
-              core.setOutput("macos_should_build", "true");
-              core.setOutput("linux_should_build", "true");
-              return;
-            }
-
-            const files = await github.paginate(
-              github.rest.pulls.listFiles,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: context.payload.pull_request.number,
-                per_page: 100,
-              },
-            );
-
-            const commonBuildInputs = [
-              {
-                pattern: /^(src|src-tauri|crates|public)\//,
-                reason: "application or native source",
-              },
-              {
-                pattern: /^(mcp-server|knowledge|interface|examples\/scripts|xtask)\//,
-                reason: "embedded MCP library or knowledge, interface catalog, native script, or package verifier",
-              },
-              {
-                pattern: /^\.github\/actions\//,
-                reason: "shared GitHub Action",
-              },
-              {
-                pattern: /^\.github\/workflows\/desktop-packages\.yml$/,
-                reason: "desktop packaging workflow",
-              },
-              {
-                pattern:
-                  /^(Cargo\.toml|Cargo\.lock|package\.json|package-lock\.json|vcpkg\.json|index\.html|tsconfig\.json|vite\.config\.ts|postcss\.config\.js|tailwind\.config\.js|\.npmrc|rust-toolchain(?:\.toml)?)$/,
-                reason: "build or dependency configuration",
-              },
-              {
-                pattern: /^(LICENSE|THIRD_PARTY_NOTICES\.md)$/,
-                reason: "bundled legal notice",
-              },
-            ];
-
-            const platformMatches = (platformInputs) =>
-              files.flatMap(({ filename }) => {
-                const rule = [...commonBuildInputs, ...platformInputs].find(
-                  ({ pattern }) => pattern.test(filename),
-                );
-                return rule ? [`${filename} (${rule.reason})`] : [];
-              });
-
-            const windowsMatches = platformMatches([
-              {
-                pattern: /^scripts\/(?:bundle-windows-portable|verify-windows-viewport)\.ps1$/,
-                reason: "Windows packaging script",
-              },
-            ]);
-            const macosMatches = platformMatches([
-              {
-                pattern: /^scripts\/(?:bundle-macos|stage-occt-macos)\.mjs$/,
-                reason: "macOS packaging script",
-              },
-            ]);
-            const linuxMatches = platformMatches([
-              {
-                pattern: /^scripts\/(?:bundle-linux\.mjs|verify-linux-viewport\.sh|build-occt-linux\.sh)$/,
-                reason: "Linux packaging, OCCT build or native viewport verification script",
-              },
-              {
-                pattern: /^scripts\/docker\/(?:ubuntu-26\.04|appimage-ubuntu-22\.04)\.Dockerfile$/,
-                reason: "Linux build SDK",
-              },
-            ]);
-
-            const report = (platform, output, matches) => {
-              const shouldBuild = matches.length > 0;
-              core.setOutput(output, String(shouldBuild));
-              if (shouldBuild) {
-                core.info(`${platform} build required by:\n${matches.join("\n")}`);
-              } else {
-                core.info(
-                  `Skipping ${platform} build; none of ${files.length} changed files affect that packaged application.`,
-                );
-              }
-            };
-
-            report("Windows", "windows_should_build", windowsMatches);
-            report("macOS", "macos_should_build", macosMatches);
-            report("Linux", "linux_should_build", linuxMatches);
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: cargo xtask ci desktop-changes
 
   build-windows-portable:
     name: Windows ${{ matrix.architecture }} portable ZIP
-    needs: [classify_changes, frontend_regressions, version_preflight]
+    needs: [classify_changes, version_preflight]
     if: needs.classify_changes.outputs.windows_should_build == 'true'
     strategy:
       fail-fast: false
@@ -164,13 +75,16 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     env:
-      # Pull-request/manual packages retain symbols for diagnostics. A v* tag
-      # is the production boundary and must ship a stripped Rust executable.
       CARGO_PROFILE_RELEASE_STRIP: ${{ github.ref_type == 'tag' && 'symbols' || 'none' }}
 
     steps:
-      - name: Check out noBS CAD
+      - name: Check out Limo CAD
         uses: actions/checkout@v4
+
+      - name: Set up repository Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.rust_target }}
 
       - name: Set up cached OpenCASCADE SDK
         id: occt
@@ -180,109 +94,127 @@ jobs:
           runner-cache-key: ${{ matrix.runner_cache_key }}
           msvc-component: ${{ matrix.msvc_component }}
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
       - name: Read the application version
         id: app_version
         shell: bash
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Rust targets
-        shell: pwsh
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-          rustup target add ${{ matrix.rust_target }}
-
-      - name: Install JavaScript dependencies
-        run: npm ci
+      - name: Fetch and verify embedded material catalog
+        run: cargo xtask materials --fetch --check
+      - name: Fetch and verify embedded printer profiles
+        run: cargo xtask printer-profiles --fetch --check
 
       - name: Build portable ZIP
         shell: pwsh
         env:
           OCCT_ROOT: ${{ steps.occt.outputs.root }}
         run: |
-          $bundleArguments = @(
-            "run",
-            "bundle:windows:portable",
-            "--",
-            "-Target",
-            "${{ matrix.rust_target }}"
-          )
-          & npm.cmd @bundleArguments
-          if ($LASTEXITCODE -ne 0) {
-            throw "npm.cmd exited with code $LASTEXITCODE"
+          $dirty = git status --porcelain --untracked-files=normal
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect package source identity' }
+          if (-not [string]::IsNullOrWhiteSpace(($dirty -join "`n"))) {
+            throw "Packaging requires clean build inputs: $dirty"
           }
+          cargo xtask package --target "${{ matrix.rust_target }}"
+          if ($LASTEXITCODE -ne 0) { throw "Native portable build failed" }
 
       - name: Verify packaged MCP without an OCCT SDK
         shell: pwsh
         run: |
-          $archive = Get-ChildItem "src-tauri\target\${{ matrix.rust_target }}\release\bundle\portable" -Filter "*.zip" -File
+          $archive = Get-ChildItem "desktop\target\${{ matrix.rust_target }}\release\bundle\portable" -Filter "*.zip" -File
           if (@($archive).Count -ne 1) { throw "Expected one portable ZIP" }
-          $verifyRoot = Join-Path $env:RUNNER_TEMP "nbcad-mcp-package-${{ matrix.architecture }}"
+          $verifyRoot = Join-Path $env:RUNNER_TEMP "limo-cad-mcp-package-${{ matrix.architecture }}"
           Expand-Archive -LiteralPath $archive.FullName -DestinationPath $verifyRoot
-          $executable = Get-ChildItem -LiteralPath $verifyRoot -Filter "noBS-CAD.exe" -File -Recurse
+          $executable = Get-ChildItem -LiteralPath $verifyRoot -Filter "Limo-CAD.exe" -File -Recurse
           if (@($executable).Count -ne 1) { throw "Expected one packaged executable" }
-          $uriKey = 'HKEY_CURRENT_USER\Software\Classes\nbcad\shell\open\command'
+          $uriKey = 'HKEY_CURRENT_USER\Software\Classes\limo-cad\shell\open\command'
           $uriBefore = [Microsoft.Win32.Registry]::GetValue($uriKey, '', $null)
-          cargo xtask verify-package-mcp --server $executable.FullName --server-arg --headless --out "$env:RUNNER_TEMP\nbcad-viewport-diagnostics\${{ matrix.architecture }}\mcp.json"
+          cargo xtask verify-package-mcp --server $executable.FullName --server-arg --headless --out "$env:RUNNER_TEMP\limo-cad-viewport-diagnostics\${{ matrix.architecture }}\mcp.json"
           if ($LASTEXITCODE -ne 0) { throw "Packaged MCP verification failed" }
           if ([Microsoft.Win32.Registry]::GetValue($uriKey, '', $null) -cne $uriBefore) {
             throw "Headless MCP changed the desktop URI handler"
           }
 
-      - name: Verify packaged native viewport
+      - name: Verify default packaged desktop stdio
         shell: pwsh
         run: |
-          $verifyRoot = Join-Path $env:RUNNER_TEMP "nbcad-mcp-package-${{ matrix.architecture }}"
-          $executable = Get-ChildItem -LiteralPath $verifyRoot -Filter 'noBS-CAD.exe' -File -Recurse
+          $verifyRoot = Join-Path $env:RUNNER_TEMP "limo-cad-mcp-package-${{ matrix.architecture }}"
+          $executable = Get-ChildItem -LiteralPath $verifyRoot -Filter 'Limo-CAD.exe' -File -Recurse
           if (@($executable).Count -ne 1) { throw "Expected one extracted packaged executable" }
-          cargo xtask verify-package-mcp --server $executable.FullName --server-arg --headless --desktop --out "$env:RUNNER_TEMP\nbcad-viewport-diagnostics\${{ matrix.architecture }}\desktop-stdio.json"
+          cargo xtask verify-package-mcp --server $executable.FullName --server-arg --headless --desktop --out "$env:RUNNER_TEMP\limo-cad-viewport-diagnostics\${{ matrix.architecture }}\desktop-stdio.json"
           if ($LASTEXITCODE -ne 0) { throw "Default desktop stdio verification failed" }
+
+      - name: Qualify control-enabled source host with isolated packaged runtime
+        shell: pwsh
+        env:
+          OCCT_ROOT: ${{ steps.occt.outputs.root }}
+          VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
+          LIMO_CAD_BUILD_REVISION: ${{ github.sha }}
+        run: |
+          $verifyRoot = Join-Path $env:RUNNER_TEMP "limo-cad-mcp-package-${{ matrix.architecture }}"
+          $executable = Get-ChildItem -LiteralPath $verifyRoot -Filter 'Limo-CAD.exe' -File -Recurse
+          if (@($executable).Count -ne 1) { throw "Expected one extracted packaged executable" }
+          $packageHash = (Get-FileHash -LiteralPath $executable.FullName -Algorithm SHA256).Hash
+          $archive = Get-ChildItem 'desktop/target/${{ matrix.rust_target }}/release/bundle/portable' -Filter '*.zip' -File
+          if (@($archive).Count -ne 1) { throw "Expected one default portable ZIP" }
+          $archiveHash = (Get-FileHash -LiteralPath $archive.FullName -Algorithm SHA256).Hash
+          # Reuse compilation cache; the archived and extracted default payloads are already frozen.
+          $probeTarget = Join-Path $env:GITHUB_WORKSPACE 'desktop/target'
+          cargo build --locked --release --manifest-path desktop/Cargo.toml --bin limo-cad --features native-computer-control --target "${{ matrix.rust_target }}" --target-dir $probeTarget
+          if ($LASTEXITCODE -ne 0) { throw "Control-enabled source host build failed" }
+          $probeRoot = Join-Path $env:RUNNER_TEMP "limo-cad-control-source-host-${{ matrix.architecture }}"
+          if (Test-Path -LiteralPath $probeRoot) { throw "Source host qualification directory already exists" }
+          Copy-Item -LiteralPath $executable.DirectoryName -Destination $probeRoot -Recurse
+          $probeExecutable = Join-Path $probeRoot 'Limo-CAD.exe'
+          Copy-Item -LiteralPath (Join-Path $probeTarget '${{ matrix.rust_target }}/release/limo-cad.exe') -Destination $probeExecutable -Force
+          $diagnostics = Join-Path $env:RUNNER_TEMP 'limo-cad-viewport-diagnostics/${{ matrix.architecture }}/controlled-source-host'
+          New-Item -ItemType Directory -Path $diagnostics -Force | Out-Null
+          @{scope='control-enabled source host; default artifact OS input is not qualified';revision=$env:LIMO_CAD_BUILD_REVISION;feature='native-computer-control';default_archive_sha256=$archiveHash;default_package_sha256=$packageHash;source_host_sha256=(Get-FileHash -LiteralPath $probeExecutable -Algorithm SHA256).Hash} | ConvertTo-Json |
+            Set-Content -LiteralPath (Join-Path $diagnostics 'host-identity.json')
           & .\scripts\verify-windows-viewport.ps1 `
-            -PackageDirectory $executable.DirectoryName `
-            -DiagnosticsDirectory "$env:RUNNER_TEMP\nbcad-viewport-diagnostics\${{ matrix.architecture }}"
-          # This normal launch runs on an ephemeral GitHub runner account.
-          # The quoted URL placeholder supplies one argument to the strict parser.
-          $uriBase = 'HKEY_CURRENT_USER\Software\Classes\nbcad'
+            -PackageDirectory $probeRoot `
+            -DiagnosticsDirectory $diagnostics `
+            -ControlledSourceHost
+          if ((Get-FileHash -LiteralPath $executable.FullName -Algorithm SHA256).Hash -cne $packageHash) {
+            throw "Source host qualification changed the default packaged executable"
+          }
+          if ((Get-FileHash -LiteralPath $archive.FullName -Algorithm SHA256).Hash -cne $archiveHash) {
+            throw "Source host qualification changed the default portable ZIP"
+          }
+          $uriBase = 'HKEY_CURRENT_USER\Software\Classes\limo-cad'
           $handler = [Microsoft.Win32.Registry]::GetValue("$uriBase\shell\open\command", '', $null)
           $expected = '"' + $executable.FullName + '" "%1"'
           if (-not [string]::Equals($handler, $expected, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "Recipe URI handler does not point to the extracted package: $handler"
+            throw "Recipe URI handler does not point to the default packaged executable: $handler"
           }
           if ($null -eq [Microsoft.Win32.Registry]::GetValue($uriBase, 'URL Protocol', $null)) {
             throw "Recipe URI protocol marker is missing"
           }
-          @{scheme='nbcad';command=$handler;status='registered'} | ConvertTo-Json |
-            Set-Content "$env:RUNNER_TEMP\nbcad-viewport-diagnostics\${{ matrix.architecture }}\recipe-uri.json"
+          @{scheme='limo-cad';command=$handler;status='registered';scope='default package registration retained; URI delivery not exercised'} | ConvertTo-Json |
+            Set-Content -LiteralPath (Join-Path $diagnostics 'recipe-uri.json')
 
       - name: Upload Windows viewport diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: noBS-CAD-windows-${{ matrix.architecture }}-viewport-diagnostics
-          path: ${{ runner.temp }}\nbcad-viewport-diagnostics\${{ matrix.architecture }}
+          name: Limo-CAD-windows-${{ matrix.architecture }}-viewport-diagnostics
+          path: ${{ runner.temp }}\limo-cad-viewport-diagnostics\${{ matrix.architecture }}
           if-no-files-found: warn
           retention-days: 7
 
       - name: Upload portable release
         uses: actions/upload-artifact@v4
         with:
-          name: noBS-CAD-${{ steps.app_version.outputs.version }}-windows-${{ matrix.architecture }}
+          name: Limo-CAD-${{ steps.app_version.outputs.version }}-windows-${{ matrix.architecture }}
           path: |
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/portable/*.zip
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/portable/*.sha256
+            desktop/target/${{ matrix.rust_target }}/release/bundle/portable/*.zip
+            desktop/target/${{ matrix.rust_target }}/release/bundle/portable/*.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
 
   build-linux-ubuntu:
     name: Ubuntu 26.04 x64 DEB
-    needs: [classify_changes, frontend_regressions, version_preflight]
+    needs: [classify_changes, version_preflight]
     if: needs.classify_changes.outputs.linux_should_build == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 180
@@ -291,74 +223,24 @@ jobs:
       CARGO_PROFILE_RELEASE_STRIP: ${{ github.ref_type == 'tag' && 'symbols' || 'none' }}
 
     steps:
-      - name: Check out noBS CAD
+      - name: Check out Limo CAD
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
 
       - name: Read the application version
         id: app_version
         shell: bash
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Rust targets
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
+      - name: Set up repository Rust toolchain
+        uses: ./.github/actions/setup-rust
 
-      - name: Install Ubuntu 26.04 desktop and OpenCASCADE SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential \
-            ca-certificates \
-            clang \
-            cmake \
-            dbus-x11 \
-            desktop-file-utils \
-            file \
-            libayatana-appindicator3-dev \
-            libfuse2t64 \
-            libgtk-3-dev \
-            libocct-data-exchange-7.9 \
-            libocct-foundation-dev \
-            libocct-modeling-algorithms-dev \
-            libocct-modeling-data-dev \
-            librsvg2-dev \
-            libssl-dev \
-            libudev-dev \
-            libvulkan-dev \
-            libwayland-dev \
-            libwebkit2gtk-4.1-dev \
-            libx11-dev \
-            libxdo-dev \
-            libxkbcommon-dev \
-            mesa-vulkan-drivers \
-            ninja-build \
-            patchelf \
-            vulkan-tools \
-            weston \
-            xauth \
-            xdg-utils \
-            xwayland \
-            xvfb
+      - name: Install Ubuntu desktop SDK
+        uses: ./.github/actions/setup-linux-desktop
+        with:
+          desktop-input: 'true'
 
-          # Ubuntu's STEP development package recommends the VTK/IVTK SDK,
-          # which noBS CAD does not use. Extract its headers after installing
-          # the exact OCCT runtime and lower-level development libraries.
-          pushd "$RUNNER_TEMP"
-          apt-get download libocct-data-exchange-dev
-          package="$(find . -maxdepth 1 -name 'libocct-data-exchange-dev_*.deb' -print -quit)"
-          test -n "$package"
-          sudo dpkg-deb --extract "$package" /
-          popd
+      - name: Install checked OCCT SDK
+        uses: ./.github/actions/setup-unix-occt
 
       - name: Restore Rust build cache
         uses: actions/cache@v4
@@ -366,45 +248,44 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src-tauri/target
-          key: linux-ubuntu-26.04-${{ runner.arch }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'crates/**/Cargo.toml') }}
+            desktop/target
+          key: linux-ubuntu-26.04-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'desktop/Cargo.lock', 'desktop/Cargo.toml', 'crates/**/Cargo.toml', 'vcpkg.json') }}
           restore-keys: |
             linux-ubuntu-26.04-${{ runner.arch }}-
 
-      - name: Install JavaScript dependencies
-        run: npm ci
+      - name: Fetch and verify embedded material catalog
+        run: cargo xtask materials --fetch --check
+      - name: Fetch and verify embedded printer profiles
+        run: cargo xtask printer-profiles --fetch --check
 
-      - name: Build and audit the Debian package
+      - name: Build and audit Linux packages
         shell: bash
         run: |
           set -euo pipefail
-          # Rust cache restores include old bundle outputs. Preserve compiled
-          # dependencies, but never smoke-test or upload a previous package.
-          bundle_root="$(realpath -m src-tauri/target/release/bundle)"
-          test "$bundle_root" = "$GITHUB_WORKSPACE/src-tauri/target/release/bundle"
+          bundle_root="$(realpath -m desktop/target/release/bundle)"
+          test "$bundle_root" = "$GITHUB_WORKSPACE/desktop/target/release/bundle"
           rm -rf -- "$bundle_root/deb" "$bundle_root/appimage"
-          # The AppImage is built by build-linux-appimage on Ubuntu 22.04.
-          npm run bundle:linux -- deb
+          cargo xtask package --bundle deb
           test "$(find "$bundle_root/deb" -maxdepth 1 -name '*.deb' | wc -l)" -eq 1
 
       - name: Verify DEB MCP without a display
         shell: bash
         run: |
           set -euo pipefail
-          deb="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)"
+          deb="$(find desktop/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)"
           test -n "$deb"
-          mcp_root="$RUNNER_TEMP/nbcad-mcp-deb"
+          mcp_root="$RUNNER_TEMP/limo-cad-mcp-deb"
           mkdir -p "$mcp_root"
           dpkg-deb -x "$deb" "$mcp_root"
           env -u DISPLAY -u WAYLAND_DISPLAY cargo xtask verify-package-mcp \
-            --server "$mcp_root/usr/bin/nbcad" --server-arg --headless \
-            --out "$RUNNER_TEMP/nbcad-linux-viewport-diagnostics/mcp-deb.json"
+            --server "$mcp_root/usr/bin/limo-cad" --server-arg --headless \
+            --out "$RUNNER_TEMP/limo-cad-linux-viewport-diagnostics/mcp-deb.json"
 
-      - name: Verify packaged native viewport on X11 and XWayland
+      - name: Verify packaged native interface on X11 and Wayland
         shell: bash
         run: |
           set -euo pipefail
-          deb="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)"
+          deb="$(find desktop/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)"
           if [[ -z "$deb" ]]; then
             echo "Debian package was not created" >&2
             exit 1
@@ -413,48 +294,45 @@ jobs:
           scripts/verify-linux-viewport.sh \
             "$deb" \
             x11 \
-            "$RUNNER_TEMP/nbcad-linux-viewport-diagnostics/x11"
+            "$RUNNER_TEMP/limo-cad-linux-viewport-diagnostics/x11"
           scripts/verify-linux-viewport.sh \
             "$deb" \
-            xwayland \
-            "$RUNNER_TEMP/nbcad-linux-viewport-diagnostics/xwayland"
+            wayland \
+            "$RUNNER_TEMP/limo-cad-linux-viewport-diagnostics/wayland"
           vulkan_icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
           test -n "$vulkan_icd"
           xvfb-run -a -s "-screen 0 1440x900x24" dbus-run-session -- \
             env WGPU_BACKEND=vulkan VK_ICD_FILENAMES="$vulkan_icd" \
-            LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 \
+            LIBGL_ALWAYS_SOFTWARE=1 \
             cargo xtask verify-package-mcp \
-              --server "$RUNNER_TEMP/nbcad-mcp-deb/usr/bin/nbcad" --server-arg --headless --desktop \
-              --out "$RUNNER_TEMP/nbcad-linux-viewport-diagnostics/desktop-stdio.json"
+              --server "$RUNNER_TEMP/limo-cad-mcp-deb/usr/bin/limo-cad" --server-arg --headless --desktop \
+              --out "$RUNNER_TEMP/limo-cad-linux-viewport-diagnostics/desktop-stdio.json"
 
       - name: Upload Linux viewport diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: noBS-CAD-linux-viewport-diagnostics
-          path: ${{ runner.temp }}/nbcad-linux-viewport-diagnostics
+          name: Limo-CAD-linux-viewport-diagnostics
+          path: ${{ runner.temp }}/limo-cad-linux-viewport-diagnostics
           if-no-files-found: warn
           retention-days: 7
 
       - name: Upload Ubuntu release
         uses: actions/upload-artifact@v4
         with:
-          name: noBS-CAD-${{ steps.app_version.outputs.version }}-ubuntu-26.04-x64
+          name: Limo-CAD-${{ steps.app_version.outputs.version }}-ubuntu-26.04-x64
           path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/deb/*.deb.sha256
+            desktop/target/release/bundle/deb/*.deb
+            desktop/target/release/bundle/deb/*.deb.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
 
   build-linux-appimage:
     name: Linux x64 AppImage (Ubuntu 22.04 build)
-    needs: [classify_changes, frontend_regressions, version_preflight]
+    needs: [classify_changes, version_preflight]
     if: needs.classify_changes.outputs.linux_should_build == 'true'
     runs-on: ubuntu-latest
-    # The AppImage bundles every library but the C library, so it runs where
-    # glibc is at least the build system's. Build it on the oldest supported
-    # Ubuntu; scripts/docker/appimage-ubuntu-22.04.Dockerfile is the same SDK.
     container: ubuntu:22.04
     timeout-minutes: 180
     env:
@@ -462,7 +340,6 @@ jobs:
       CARGO_PROFILE_RELEASE_STRIP: ${{ github.ref_type == 'tag' && 'symbols' || 'none' }}
       DEBIAN_FRONTEND: noninteractive
       OCCT_ROOT: /opt/opencascade
-      # linuxdeploy resolves the OCCT libraries it bundles through this path.
       LD_LIBRARY_PATH: /opt/opencascade/lib
 
     steps:
@@ -481,64 +358,49 @@ jobs:
             desktop-file-utils \
             file \
             git \
-            libayatana-appindicator3-dev \
+            libdbus-1-3 \
             libfontconfig-dev \
             libfreetype-dev \
             libfuse2 \
-            libgtk-3-dev \
-            librsvg2-dev \
-            libssl-dev \
             libudev-dev \
             libvulkan-dev \
             libwayland-dev \
-            libwebkit2gtk-4.1-dev \
             libx11-dev \
-            libxdo-dev \
+            libx11-xcb1 \
+            libxcursor1 \
+            libxi6 \
             libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            pkg-config \
             mesa-vulkan-drivers \
             ninja-build \
             patchelf \
             squashfs-tools \
             vulkan-tools \
             xauth \
+            xclip \
             xdg-utils \
+            xdotool \
             xvfb \
             xz-utils \
+            zenity \
             zstd
 
-      - name: Check out noBS CAD
+      - name: Check out Limo CAD
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
 
       - name: Read the application version
         id: app_version
         shell: bash
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Rust
         shell: bash
         run: |
           set -euo pipefail
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-            | sh -s -- -y --profile minimal --default-toolchain stable
+            | sh -s -- -y --profile minimal --default-toolchain none
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-
-      - name: Restore OCCT 7.9 build
-        id: occt
-        uses: actions/cache@v4
-        with:
-          path: /opt/opencascade
-          key: occt-ubuntu-22.04-${{ runner.arch }}-${{ hashFiles('scripts/build-occt-linux.sh') }}
-
-      - name: Build OCCT 7.9 from pinned source
-        if: steps.occt.outputs.cache-hit != 'true'
-        shell: bash
-        run: scripts/build-occt-linux.sh /opt/opencascade
 
       - name: Restore Rust build cache
         uses: actions/cache@v4
@@ -546,29 +408,62 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src-tauri/target
-          key: linux-appimage-ubuntu-22.04-${{ runner.arch }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'crates/**/Cargo.toml', 'scripts/build-occt-linux.sh') }}
+            target/debug
+            desktop/target
+          key: linux-appimage-ubuntu-22.04-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock', 'xtask/Cargo.toml', 'desktop/Cargo.lock', 'desktop/Cargo.toml', 'crates/**/Cargo.toml') }}
           restore-keys: |
             linux-appimage-ubuntu-22.04-${{ runner.arch }}-
 
-      - name: Install JavaScript dependencies
-        run: npm ci
+      - name: Fingerprint the OCCT compiler and FreeType SDK
+        id: occt_key
+        shell: bash
+        run: cargo xtask build-occt --prefix /opt/opencascade --github-key
+
+      - name: Restore compatible OCCT SDK and build objects
+        id: occt
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            /opt/opencascade
+            ${{ runner.temp }}/limo-cad-occt-cache
+          key: occt-ubuntu-22.04-v2-${{ runner.arch }}-${{ steps.occt_key.outputs.sdk_key }}
+
+      - name: Build or verify OCCT 7.9 from pinned source
+        id: occt_build
+        env:
+          LIMO_CAD_BUILD_CACHE: ${{ runner.temp }}/limo-cad-occt-cache
+        shell: bash
+        run: cargo xtask build-occt --prefix /opt/opencascade
+
+      - name: Save verified OCCT before application checks
+        if: steps.occt.outputs.cache-hit != 'true' && steps.occt_build.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /opt/opencascade
+            ${{ runner.temp }}/limo-cad-occt-cache
+          key: ${{ steps.occt.outputs.cache-primary-key }}
+
+      - name: Fetch and verify embedded material catalog
+        run: cargo xtask materials --fetch --check
+      - name: Fetch and verify embedded printer profiles
+        run: cargo xtask printer-profiles --fetch --check
 
       - name: Build and audit the AppImage
         shell: bash
         run: |
           set -euo pipefail
-          bundle_root="$(realpath -m src-tauri/target/release/bundle)"
-          test "$bundle_root" = "$GITHUB_WORKSPACE/src-tauri/target/release/bundle"
+          bundle_root="$(realpath -m desktop/target/release/bundle)"
+          test "$bundle_root" = "$GITHUB_WORKSPACE/desktop/target/release/bundle"
           rm -rf -- "$bundle_root/deb" "$bundle_root/appimage"
-          npm run bundle:linux -- appimage
+          cargo xtask package --bundle appimage
           test "$(find "$bundle_root/appimage" -maxdepth 1 -name '*.AppImage' | wc -l)" -eq 1
 
       - name: Refuse an AppImage that needs a newer glibc than Ubuntu 22.04
         shell: bash
         run: |
           set -euo pipefail
-          appimage="$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
+          appimage="$(find desktop/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
           work="$(mktemp -d)"
           ( cd "$work" && "$GITHUB_WORKSPACE/$appimage" --appimage-extract >/dev/null )
           required="$(find "$work/squashfs-root" -type f -print0 \
@@ -584,40 +479,40 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          appimage="$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
+          appimage="$(find desktop/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
           test -n "$appimage"
           env -u DISPLAY -u WAYLAND_DISPLAY cargo xtask verify-package-mcp \
             --server "$appimage" --server-arg --appimage-extract-and-run --server-arg --headless \
-            --out "$RUNNER_TEMP/nbcad-linux-appimage-diagnostics/mcp-appimage.json"
+            --out "$RUNNER_TEMP/limo-cad-linux-appimage-diagnostics/mcp-appimage.json"
 
       - name: Verify packaged native viewport on X11
         shell: bash
         run: |
           set -euo pipefail
-          appimage="$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
+          appimage="$(find desktop/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
           test -n "$appimage"
           chmod +x scripts/verify-linux-viewport.sh
           scripts/verify-linux-viewport.sh \
             "$appimage" \
             x11 \
-            "$RUNNER_TEMP/nbcad-linux-appimage-diagnostics/x11"
+            "$RUNNER_TEMP/limo-cad-linux-appimage-diagnostics/x11"
 
       - name: Upload AppImage diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: noBS-CAD-linux-appimage-diagnostics
-          path: ${{ runner.temp }}/nbcad-linux-appimage-diagnostics
+          name: Limo-CAD-linux-appimage-diagnostics
+          path: ${{ runner.temp }}/limo-cad-linux-appimage-diagnostics
           if-no-files-found: warn
           retention-days: 7
 
       - name: Upload AppImage release
         uses: actions/upload-artifact@v4
         with:
-          name: noBS-CAD-${{ steps.app_version.outputs.version }}-linux-x64-appimage
+          name: Limo-CAD-${{ steps.app_version.outputs.version }}-linux-x64-appimage
           path: |
-            src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/appimage/*.AppImage.sha256
+            desktop/target/release/bundle/appimage/*.AppImage
+            desktop/target/release/bundle/appimage/*.AppImage.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -630,30 +525,17 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Check out noBS CAD
+      - name: Check out Limo CAD
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
 
       - name: Read the application version
         id: app_version
         shell: bash
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Rust targets
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
+      - name: Set up repository Rust toolchain
+        uses: ./.github/actions/setup-rust
 
-      # AppImages intentionally use the host's graphics loaders and Wayland
-      # client ABI so a newer GPU driver never loads an older bundled copy.
-      # The hosted runner is a minimal server image, so install that desktop
-      # runtime contract explicitly along with the headless display and
-      # software Vulkan driver; the AppImage must bring everything else.
       - name: Install Ubuntu 26.04 headless desktop runtime
         shell: bash
         run: |
@@ -664,19 +546,28 @@ jobs:
             dbus-x11 \
             desktop-file-utils \
             libegl1 \
+            libdbus-1-3 \
+            libx11-6 \
+            libx11-xcb1 \
+            libxcursor1 \
+            libxi6 \
+            libxkbcommon-x11-0 \
             libvulkan1 \
             libwayland-client0 \
             libwayland-cursor0 \
             libwayland-egl1 \
             mesa-vulkan-drivers \
             xauth \
+            xclip \
             xdg-utils \
-            xvfb
+            xdotool \
+            xvfb \
+            zenity
 
       - name: Download the AppImage
         uses: actions/download-artifact@v4
         with:
-          name: noBS-CAD-${{ steps.app_version.outputs.version }}-linux-x64-appimage
+          name: Limo-CAD-${{ steps.app_version.outputs.version }}-linux-x64-appimage
           path: ${{ runner.temp }}/appimage
 
       - name: Verify AppImage MCP and native viewport on X11
@@ -689,31 +580,29 @@ jobs:
           chmod +x "$appimage"
           env -u DISPLAY -u WAYLAND_DISPLAY cargo xtask verify-package-mcp \
             --server "$appimage" --server-arg --appimage-extract-and-run --server-arg --headless \
-            --out "$RUNNER_TEMP/nbcad-linux-appimage-26.04-diagnostics/mcp-appimage.json"
+            --out "$RUNNER_TEMP/limo-cad-linux-appimage-26.04-diagnostics/mcp-appimage.json"
           chmod +x scripts/verify-linux-viewport.sh
           scripts/verify-linux-viewport.sh \
             "$appimage" \
             x11 \
-            "$RUNNER_TEMP/nbcad-linux-appimage-26.04-diagnostics/x11"
+            "$RUNNER_TEMP/limo-cad-linux-appimage-26.04-diagnostics/x11"
 
       - name: Upload AppImage diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: noBS-CAD-linux-appimage-26.04-diagnostics
-          path: ${{ runner.temp }}/nbcad-linux-appimage-26.04-diagnostics
+          name: Limo-CAD-linux-appimage-26.04-diagnostics
+          path: ${{ runner.temp }}/limo-cad-linux-appimage-26.04-diagnostics
           if-no-files-found: warn
           retention-days: 7
 
   build-macos-apple-silicon:
     name: macOS Apple silicon DMG
-    needs: [classify_changes, frontend_regressions, version_preflight]
+    needs: [classify_changes, version_preflight]
     if: needs.classify_changes.outputs.macos_should_build == 'true'
     runs-on: macos-15
     timeout-minutes: 120
     env:
-      # Tags are always production builds. A manual production run is the
-      # credential/notarization dry-run path before creating a release tag.
       MACOS_DISTRIBUTION_BUILD: >-
         ${{ github.ref_type == 'tag' ||
             (github.event_name == 'workflow_dispatch' && inputs.macos_signing == 'production') }}
@@ -723,7 +612,7 @@ jobs:
             'symbols' || 'none' }}
 
     steps:
-      - name: Check out noBS CAD
+      - name: Check out Limo CAD
         uses: actions/checkout@v4
 
       - name: Verify Apple silicon runner
@@ -735,37 +624,18 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
       - name: Read the application version
         id: app_version
         shell: bash
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Rust targets
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-          rustup target add aarch64-apple-darwin
+      - name: Set up repository Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          target: aarch64-apple-darwin
 
-      - name: Install JavaScript dependencies
-        run: npm ci
-
-      - name: Install pinned OpenCASCADE 7.9.3
-        shell: bash
-        run: |
-          brew install opencascade
-          occt_version="$(brew list --versions opencascade | awk '{ print $2 }')"
-          if [[ "$occt_version" != "7.9.3" ]]; then
-            echo "Expected OpenCASCADE 7.9.3, got $occt_version" >&2
-            exit 1
-          fi
-          echo "OCCT_ROOT=$(brew --prefix opencascade)" >> "$GITHUB_ENV"
+      - name: Install checked OpenCASCADE 7.9.3
+        uses: ./.github/actions/setup-unix-occt
 
       - name: Import Developer ID Application certificate
         if: env.MACOS_DISTRIBUTION_BUILD == 'true'
@@ -778,8 +648,8 @@ jobs:
           : "${APPLE_CERTIFICATE:?Missing APPLE_CERTIFICATE repository secret}"
           : "${APPLE_CERTIFICATE_PASSWORD:?Missing APPLE_CERTIFICATE_PASSWORD repository secret}"
 
-          certificate_path="$RUNNER_TEMP/nbcad-signing-certificate.p12"
-          keychain_path="$RUNNER_TEMP/nbcad-signing.keychain-db"
+          certificate_path="$RUNNER_TEMP/limo-cad-signing-certificate.p12"
+          keychain_path="$RUNNER_TEMP/limo-cad-signing.keychain-db"
           keychain_password="$(openssl rand -hex 32)"
 
           printf '%s' "$APPLE_CERTIFICATE" |
@@ -825,7 +695,7 @@ jobs:
           : "${APPLE_API_KEY:?Missing APPLE_API_KEY repository secret}"
           : "${APPLE_API_PRIVATE_KEY:?Missing APPLE_API_PRIVATE_KEY repository secret}"
 
-          api_key_path="$RUNNER_TEMP/nbcad-notary-api-key.p8"
+          api_key_path="$RUNNER_TEMP/limo-cad-notary-api-key.p8"
           printf '%s' "$APPLE_API_PRIVATE_KEY" > "$api_key_path"
           chmod 600 "$api_key_path"
           if ! grep -q '^-----BEGIN PRIVATE KEY-----$' "$api_key_path"; then
@@ -833,14 +703,17 @@ jobs:
             exit 1
           fi
 
+      - name: Fetch and verify embedded material catalog
+        run: cargo xtask materials --fetch --check
+      - name: Fetch and verify embedded printer profiles
+        run: cargo xtask printer-profiles --fetch --check
+
       - name: Build ad-hoc signed DMG
         if: env.MACOS_DISTRIBUTION_BUILD != 'true'
         shell: bash
         env:
           APPLE_SIGNING_IDENTITY: "-"
-          # Tauri otherwise hides the DMG subprocess output on failure.
-          TAURI_CLI_VERBOSITY: '1'
-        run: npm run bundle:macos
+        run: cargo xtask package
 
       - name: Build Developer ID signed and notarized DMG
         if: env.MACOS_DISTRIBUTION_BUILD == 'true'
@@ -848,15 +721,15 @@ jobs:
         env:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_PATH: ${{ runner.temp }}/nbcad-notary-api-key.p8
-        run: npm run bundle:macos
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/limo-cad-notary-api-key.p8
+        run: cargo xtask package
 
       - name: Verify Developer ID signature and notarization ticket
         if: env.MACOS_DISTRIBUTION_BUILD == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          app="src-tauri/target/release/bundle/macos/noBS CAD.app"
+          app="desktop/target/release/bundle/macos/Limo CAD.app"
           signature_details="$(codesign --display --verbose=4 "$app" 2>&1)"
           if ! grep -q '^Authority=Developer ID Application:' <<< "$signature_details"; then
             echo "$signature_details"
@@ -876,15 +749,15 @@ jobs:
       - name: Verify packaged architecture and launch
         shell: bash
         run: |
-          app="src-tauri/target/release/bundle/macos/noBS CAD.app"
-          executable="$app/Contents/MacOS/nbcad"
+          app="desktop/target/release/bundle/macos/Limo CAD.app"
+          executable="$app/Contents/MacOS/limo-cad"
           if ! lipo -archs "$executable" | tr ' ' '\n' | grep -qx arm64; then
             echo "Packaged executable is not Apple silicon:" >&2
             lipo -info "$executable" >&2
             exit 1
           fi
 
-          log="$RUNNER_TEMP/nbcad-macos-smoke.log"
+          log="$RUNNER_TEMP/limo-cad-macos-smoke.log"
           "$executable" >"$log" 2>&1 &
           pid=$!
           sleep 15
@@ -906,11 +779,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dmg="$(find src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
+          dmg="$(find desktop/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
           test -n "$dmg"
-          mount="$RUNNER_TEMP/nbcad-mcp-dmg"
-          stage="$GITHUB_WORKSPACE/src-tauri/occt-libs"
-          hidden_stage="$GITHUB_WORKSPACE/src-tauri/occt-libs.mcp-verification"
+          mount="$RUNNER_TEMP/limo-cad-mcp-dmg"
+          stage="$GITHUB_WORKSPACE/desktop/occt-libs"
+          hidden_stage="$GITHUB_WORKSPACE/desktop/occt-libs.mcp-verification"
           test ! -e "$hidden_stage"
           mkdir -p "$mount"
           stage_moved=false
@@ -920,42 +793,39 @@ jobs:
           }
           trap cleanup_mcp_package EXIT
           hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount"
-          # Audit the actual DMG's LaunchServices metadata, not generated config.
-          python3 - "$mount/noBS CAD.app/Contents/Info.plist" "$RUNNER_TEMP/nbcad-macos-uri.json" <<'PY'
+          python3 - "$mount/Limo CAD.app/Contents/Info.plist" "$RUNNER_TEMP/limo-cad-macos-uri.json" <<'PY'
           import json, plistlib, sys
           with open(sys.argv[1], 'rb') as file:
               info = plistlib.load(file)
           schemes = [scheme for entry in info.get('CFBundleURLTypes', [])
                      for scheme in entry.get('CFBundleURLSchemes', [])]
-          if 'nbcad' not in schemes or info.get('CFBundleExecutable') != 'nbcad':
-              raise SystemExit('Packaged app is missing its nbcad recipe URI association')
+          if 'limo-cad' not in schemes or info.get('CFBundleExecutable') != 'limo-cad':
+              raise SystemExit('Packaged app is missing its limo-cad recipe URI association')
           with open(sys.argv[2], 'w') as file:
-              json.dump({'scheme': 'nbcad', 'executable': info['CFBundleExecutable'],
+              json.dump({'scheme': 'limo-cad', 'executable': info['CFBundleExecutable'],
                          'status': 'declared-in-dmg'}, file, indent=2)
           PY
-          # The executable has a build-time rpath as well as its portable one.
-          # Hide that generated staging directory to require the DMG's libraries.
           mv "$stage" "$hidden_stage"
           stage_moved=true
           cargo xtask verify-package-mcp \
-            --server "$mount/noBS CAD.app/Contents/MacOS/nbcad" \
-            --server-arg --headless --desktop --out "$RUNNER_TEMP/nbcad-mcp-macos.json"
+            --server "$mount/Limo CAD.app/Contents/MacOS/limo-cad" \
+            --server-arg --headless --desktop --out "$RUNNER_TEMP/limo-cad-mcp-macos.json"
 
       - name: Upload macOS MCP verification
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: noBS-CAD-macos-mcp-diagnostics
+          name: Limo-CAD-macos-mcp-diagnostics
           path: |
-            ${{ runner.temp }}/nbcad-mcp-macos.json
-            ${{ runner.temp }}/nbcad-macos-uri.json
+            ${{ runner.temp }}/limo-cad-mcp-macos.json
+            ${{ runner.temp }}/limo-cad-macos-uri.json
           if-no-files-found: warn
           retention-days: 7
 
       - name: Create checksum
         shell: bash
         run: |
-          dmg="$(find src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
+          dmg="$(find desktop/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
           if [[ -z "$dmg" ]]; then
             echo "DMG was not created" >&2
             exit 1
@@ -970,10 +840,10 @@ jobs:
       - name: Upload Apple silicon release
         uses: actions/upload-artifact@v4
         with:
-          name: noBS-CAD-${{ steps.app_version.outputs.version }}-macos-arm64
+          name: Limo-CAD-${{ steps.app_version.outputs.version }}-macos-arm64
           path: |
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/dmg/*.sha256
+            desktop/target/release/bundle/dmg/*.dmg
+            desktop/target/release/bundle/dmg/*.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -982,15 +852,11 @@ jobs:
         if: always() && env.MACOS_DISTRIBUTION_BUILD == 'true'
         shell: bash
         run: |
-          security delete-keychain "$RUNNER_TEMP/nbcad-signing.keychain-db" 2>/dev/null || true
+          security delete-keychain "$RUNNER_TEMP/limo-cad-signing.keychain-db" 2>/dev/null || true
           rm -f \
-            "$RUNNER_TEMP/nbcad-signing-certificate.p12" \
-            "$RUNNER_TEMP/nbcad-notary-api-key.p8"
+            "$RUNNER_TEMP/limo-cad-signing-certificate.p12" \
+            "$RUNNER_TEMP/limo-cad-notary-api-key.p8"
 
-  # Only a pushed `v*` tag publishes. The runner already holds every package it
-  # built, so the assets never travel through a workstation, and a flaky local
-  # connection cannot half-publish a release. A manual run on a tag rebuilds for
-  # diagnosis only and never rewrites a published release.
   publish_release:
     name: Publish the tag release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -1003,31 +869,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      # The repository default stays read-only; this job alone may write the
-      # release. It never touches the branch.
       contents: write
     steps:
-      - name: Check out noBS CAD
+      - name: Check out Limo CAD
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
 
-      # version_preflight already refused a bad tag before the package matrix;
-      # this is the job holding `contents: write`, so it decides again for
-      # itself before anything is published.
       - name: Refuse a release tag that does not name VERSION on main
-        run: node scripts/ci/check-release-tag.mjs "$GITHUB_REF_NAME" "$GITHUB_SHA"
+        run: cargo xtask check-release-tag "$GITHUB_REF_NAME" "$GITHUB_SHA"
 
       - name: Download this run's packages
         uses: actions/download-artifact@v4
         with:
-          # Every artifact keeps its own `dist/<artifact name>/` directory, so
-          # the `*-viewport-diagnostics` and `*-mcp-diagnostics` artifacts that
-          # match this pattern too are excluded by path below.
-          pattern: noBS-CAD-*
+          pattern: Limo-CAD-*
           path: dist
           merge-multiple: false
 
@@ -1037,16 +893,18 @@ jobs:
           set -euo pipefail
           checked=0
           while IFS= read -r sum; do
-            # One LF per line: `shasum -c` here, and on a user's machine, reads
-            # a trailing CR as part of the file name and reports the package
-            # missing. Older Windows bundles wrote CRLF.
             perl -pi -e 's/\r$//' "$sum"
             ( cd "$(dirname "$sum")" && shasum -a 256 -c "$(basename "$sum")" )
             checked=$((checked + 1))
           done < <(find dist -type f -name '*.sha256' ! -path '*diagnostics*' | sort)
-          # Windows x64/ARM64, macOS, DEB and AppImage. A missing platform means
-          # the release must not go out with a gap in it.
           test "$checked" -eq 5
+
+      - name: Reject control-enabled or mismatched Windows release packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t packages < <(find dist -type f -name '*.zip' ! -path '*diagnostics*' | sort)
+          python3 scripts/ci/verify-default-windows-package.py --version "$(cat VERSION)" --revision "$GITHUB_SHA" "${packages[@]}"
 
       - name: Publish packages, checksums and notes
         shell: bash
@@ -1060,8 +918,6 @@ jobs:
             echo "::error::$notes is missing; commit the release notes with the version bump."
             exit 1
           fi
-          # The notes are written before the tag exists, so the tag's commit is
-          # substituted here. `{{commit}}` is optional.
           published_notes="$RUNNER_TEMP/release-notes.md"
           sed "s/{{commit}}/${GITHUB_SHA}/g" "$notes" > "$published_notes"
 
@@ -1073,8 +929,6 @@ jobs:
           sums=()
           while IFS= read -r sum; do sums+=("$sum"); done < <(find dist -type f -name '*.sha256' ! -path '*diagnostics*' | sort)
 
-          # SHA256SUMS.txt covers the installed packages, with bare file names,
-          # which is the shape the previous release pages use.
           : > dist/SHA256SUMS.txt
           for binary in "${binaries[@]}"; do
             printf '%s  %s\n' "$(shasum -a 256 "$binary" | cut -d' ' -f1)" "$(basename "$binary")" \
@@ -1082,33 +936,26 @@ jobs:
           done
           sort -k2 dist/SHA256SUMS.txt -o dist/SHA256SUMS.txt
 
-          # A pre-release tag such as v0.3.0-rc.1 must not take the Latest badge.
           if [[ "$tag" == *-* ]]; then
             channel=(--prerelease)
           else
             channel=(--latest)
           fi
 
-          # A new release stays a draft until every asset is attached, so the
-          # public page, the Latest badge and watcher notifications never show
-          # an incomplete release. A re-run edits the existing release in place.
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release edit "$tag" \
-              --title "noBS CAD ${tag#v}" \
+              --title "Limo CAD ${tag#v}" \
               --notes-file "$published_notes"
           else
             gh release create "$tag" \
-              --title "noBS CAD ${tag#v}" \
+              --title "Limo CAD ${tag#v}" \
               --notes-file "$published_notes" \
               --verify-tag \
               --draft
           fi
 
-          # Idempotent: a re-run of the same tag replaces what it uploaded before.
           gh release upload "$tag" "${binaries[@]}" "${sums[@]}" dist/SHA256SUMS.txt --clobber
 
-          # Five packages, five checksums and SHA256SUMS.txt: publish only once
-          # all of them are attached.
           uploaded="$(gh release view "$tag" --json assets --jq '.assets | length')"
           test "$uploaded" -eq 11
           gh release edit "$tag" --draft=false "${channel[@]}"

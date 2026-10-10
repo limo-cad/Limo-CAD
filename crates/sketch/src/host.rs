@@ -1,12 +1,12 @@
-//! Host dispatch: the single JSON entry point both engine hosts (Tauri
+//! Host dispatch: the single JSON entry point both engine hosts (native
 //! commands, wasm-bindgen exports) funnel through, so native and browser
 //! behavior are identical by construction.
 //!
 //! Every method takes a JSON-string payload and returns the JSON envelope
 //! (`ok_json`/`err_json`, with optional structured `data` for conflict
-//! reports). Method names match the frontend `Engine` interface one-to-one.
+//! reports). Native UI and MCP hosts use the same operation names.
 
-use nbcad_solid::{
+use limo_cad_solid::{
     BodyFeatureRequestDto, CommitKernelRequest, DatumPlaneRequest, DeleteFeatureRequest,
     EditBodyFeatureRequest, EditDatumPlaneRequest, EditExtrudeRequest, EditHoleRequest,
     EditLoftRequest, EditRevolveRequest, EditRibRequest, EditSolidChamferRequest,
@@ -33,12 +33,22 @@ use crate::manager::SketchManager;
 use crate::plane::PlaneRef;
 use crate::session::SessionError;
 use crate::{JointId, SetJointMotionRequestDto};
+mod print_heights;
+mod print_intent;
+mod print_modifiers;
 
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum BeginSketchPayload {
     Options(BeginSketchRequest),
     Plane(PlaneRef),
+}
+
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum EditSketchPayload {
+    Name(String),
+    Options(crate::EditSketchRequest),
 }
 
 #[derive(serde::Deserialize)]
@@ -55,6 +65,15 @@ enum DocumentNamePayload {
 #[serde(deny_unknown_fields)]
 struct SetNamedViewsPayload {
     views: Vec<crate::NamedViewConfigurationDto>,
+    #[serde(default)]
+    expected_model_json: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExportViewSolutionPayload {
+    #[serde(default)]
+    name: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -68,6 +87,13 @@ struct RecallNamedViewPayload {
 struct RenameNamedViewPayload {
     name: String,
     new_name: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RenameSolidFeaturePayload {
+    feature_id: limo_cad_core::FeatureId,
+    name: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -104,11 +130,259 @@ enum CamPlanPayload {
     },
 }
 
+/// Dispatch observation through an immutable manager reference. A returned
+/// response is a read even when validation rejects its payload.
+pub fn handle_read_only(manager: &SketchManager, method: &str, payload: &str) -> Option<String> {
+    if viewport_preview(method) && viewport_payload(payload).is_some() {
+        return None;
+    }
+    match method {
+        "print_intent_get" | "print_intent_effective" => {
+            return print_intent::handle_read_only(manager, method, payload)
+        }
+        "print_intent_height_binding" => {
+            return print_heights::handle_read_only(manager, method, payload)
+        }
+        "print_modifier_effective" => {
+            return print_modifiers::handle_read_only(manager, method, payload)
+        }
+        _ => {}
+    }
+    Some(match method {
+        "document" => ok_json(manager.document_dto()),
+        "project_export_model" if payload.is_empty() || payload == "null" => {
+            to_json(manager.export_project_model())
+        }
+        "project_export_model" => with_payload(payload, |request: ProjectExportPayload| {
+            let current = require_project_snapshot(manager, &request.expected_model_json)?;
+            let Some(name) = request.save_name else {
+                return Ok(current);
+            };
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(SessionError::Solid("document name cannot be empty".into()));
+            }
+
+            let mut saved: serde_json::Value = serde_json::from_str(&current)
+                .map_err(|error| SessionError::Solid(error.to_string()))?;
+            saved["document"]["name"] = name.into();
+            Ok(saved.to_string())
+        }),
+        "finished_sketches" => ok_json(manager.finished_sketches()),
+        "active_sketch" => ok_json(manager.active_snapshot()),
+        "profile_catalog" => ok_json(manager.profile_catalog()),
+        "solid_scene" => ok_json(manager.solid_scene_ref()),
+        "body_appearances" => ok_json(manager.body_appearances()),
+        "project_visibility" => ok_json(manager.project_visibility()),
+        "named_views" => ok_json(manager.named_views()),
+        "named_view_solution" => with_payload(payload, |request: ExportViewSolutionPayload| {
+            manager.export_view_solution(request.name.as_deref())
+        }),
+        "drawing_document" => ok_json(manager.drawing_document_ref()),
+        "assembly_document" => ok_json(manager.assembly_document_ref()),
+        "assembly_solution" => ok_json(manager.assembly_solution()),
+        "assembly_preview_joint" => with_payload(payload, |request| manager.preview_joint(request)),
+        "assembly_preview_joint_update" => {
+            with_payload(payload, |request| manager.preview_joint_update(request))
+        }
+        "assembly_preview_joint_motion" => {
+            with_payload(payload, |request: SetJointMotionRequestDto| {
+                manager.preview_joint_motion(request)
+            })
+        }
+        "assembly_preview_joint_coordinates" => with_payload(payload, |request| {
+            manager.preview_joint_coordinates(request)
+        }),
+        "assembly_preview_mechanism_drag" => {
+            with_payload(payload, |request| manager.preview_mechanism_drag(request))
+        }
+        "assembly_sample_motion_study" => {
+            with_payload(payload, |request| manager.sample_motion_study(request))
+        }
+        "assembly_export_motion_path_csv" => {
+            with_payload(payload, |request| manager.export_motion_path_csv(request))
+        }
+        "assembly_interference_check" => with_payload(payload, |request| {
+            manager.approximate_interference_check(request)
+        }),
+        "assembly_evaluate_motion_study" => with_payload(payload, |request| {
+            manager.approximate_motion_study_evaluation(request)
+        }),
+        "assembly_swept_collision_check" => with_payload(payload, |request| {
+            manager.approximate_swept_collision_check(request)
+        }),
+        "geometry_edge_chain" => {
+            with_payload(payload, |request| manager.geometry_edge_chain(request))
+        }
+        "cam_chamfer_geometry" => {
+            with_payload(payload, |request| manager.cam_chamfer_geometry(request))
+        }
+        "cam_document" => ok_json(manager.cam_document()),
+        "cam_cutter_mesh" => {
+            with_payload(payload, |geometry: limo_cad_cam::CamCutterGeometryDto| {
+                limo_cad_cam::cutter_mesh(geometry).map_err(crate::SessionError::Solid)
+            })
+        }
+        "cam_toolpath_statuses" => to_json(manager.cam_toolpath_statuses()),
+        "cam_plan" => with_payload(payload, |request: CamPlanPayload| match request {
+            CamPlanPayload::Setup(setup_id) => manager.cam_plan(setup_id),
+            CamPlanPayload::Through {
+                setup_id,
+                through_operation_id,
+            } => match through_operation_id {
+                Some(operation_id) => manager.cam_plan_through(setup_id, operation_id),
+                None => manager.cam_plan(setup_id),
+            },
+        }),
+        "cam_post" => with_payload(payload, |request| manager.cam_post(request)),
+        "cam_analyze_nbpost" => {
+            with_payload(payload, |request| manager.cam_analyze_nbpost(request))
+        }
+        "cam_simulate" => with_payload(payload, |request| manager.cam_simulate(request)),
+        "cam_simulate_gcode" => {
+            with_payload(payload, |request| manager.cam_simulate_gcode(request))
+        }
+        "cam_post_events" => {
+            with_payload(payload, |setup_id: u64| manager.cam_post_events(setup_id))
+        }
+        "extrude_definitions" => ok_json(manager.extrude_definitions()),
+        "revolve_definitions" => ok_json(manager.revolve_definitions()),
+        "sweep_definitions" => ok_json(manager.sweep_definitions()),
+        "loft_definitions" => ok_json(manager.loft_definitions()),
+        "rib_definitions" => ok_json(manager.rib_definitions()),
+        "fillet_definitions" => ok_json(manager.fillet_definitions()),
+        "chamfer_definitions" => ok_json(manager.chamfer_definitions()),
+        "hole_definitions" => ok_json(manager.hole_definitions()),
+        "datum_plane_definitions" => ok_json(manager.datum_plane_definitions()),
+        "body_feature_definitions" => ok_json(manager.body_feature_definitions()),
+        "preview_creation_point" => {
+            with_payload(payload, |r: crate::dto::CreationPointPreviewRequest| {
+                manager.preview_creation_point(r)
+            })
+        }
+        "preview_segment" => with_payload(payload, |r: SegmentRequest| manager.preview_segment(r)),
+        "preview_creation" => with_payload(payload, |r: crate::dto::CreationPreviewRequest| {
+            manager.preview_creation(r)
+        }),
+        "eval_expression" => with_payload(payload, |r: EvalExpressionRequest| {
+            manager.eval_expression(r)
+        }),
+        "preview_segment_locked" => with_payload(payload, |r: LockedSegmentRequest| {
+            manager.preview_segment_locked(r)
+        }),
+        "preview_rectangle_locked" => with_payload(payload, |r: LockedRectangleRequest| {
+            manager.preview_rectangle_locked(r)
+        }),
+        "preview_circle_locked" => with_payload(payload, |r: LockedCircleRequest| {
+            manager.preview_circle_locked(r)
+        }),
+        "fillet_preview" => with_payload(payload, |r: FilletRequest| manager.fillet_preview(&r)),
+        "chamfer_preview" => with_payload(payload, |r: ChamferRequest| manager.chamfer_preview(r)),
+        "offset_preview" => with_payload(payload, |r: OffsetRequest| manager.offset_preview(&r)),
+        "trim_preview" => with_payload(payload, |r: TrimRequest| manager.trim_preview(&r)),
+        _ => return None,
+    })
+}
+
+fn viewport_preview(method: &str) -> bool {
+    matches!(
+        method,
+        "preview_creation_point"
+            | "preview_segment"
+            | "preview_segment_locked"
+            | "preview_creation"
+            | "preview_rectangle_locked"
+            | "preview_circle_locked"
+    )
+}
+fn viewport_creation(method: &str) -> bool {
+    matches!(
+        method,
+        "add_line"
+            | "add_line_locked"
+            | "add_line_midpoint"
+            | "add_point"
+            | "add_rectangle"
+            | "add_rectangle_locked"
+            | "add_circle"
+            | "add_circle_locked"
+            | "add_arc_3pt"
+            | "add_arc_center"
+            | "add_slot"
+            | "add_spline"
+            | "polygon_create"
+    )
+}
+fn viewport_payload(payload: &str) -> Option<serde_json::Value> {
+    let value: serde_json::Value = serde_json::from_str(payload).ok()?;
+    value.get("viewport_snap").map(|_| value.clone())
+}
+fn dispatch_viewport(
+    manager: &mut SketchManager,
+    method: &str,
+    mut value: serde_json::Value,
+) -> String {
+    let context = value
+        .as_object_mut()
+        .unwrap()
+        .remove("viewport_snap")
+        .unwrap();
+    let context = match serde_json::from_value(context) {
+        Ok(context) => context,
+        Err(error) => return err_json(format!("bad viewport snap context: {error}")),
+    };
+    match manager.with_viewport_snap(context, |manager| {
+        handle(manager, method, &value.to_string())
+    }) {
+        Ok(response) => response,
+        Err(error) => err_json(error.to_string()),
+    }
+}
+
+/// Read-only previews may temporarily scope runtime snap distances under the
+/// engine lock. They must bypass geometry-cache invalidation and model fences.
+pub fn handle_viewport_preview(
+    manager: &mut SketchManager,
+    method: &str,
+    payload: &str,
+) -> Option<String> {
+    if !viewport_preview(method) {
+        return None;
+    }
+    viewport_payload(payload).map(|value| dispatch_viewport(manager, method, value))
+}
+
 /// Dispatch one engine call. Unknown methods and malformed payloads yield
 /// an error envelope, never a panic.
 pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> String {
+    if viewport_creation(method) || viewport_preview(method) {
+        if let Some(value) = viewport_payload(payload) {
+            return dispatch_viewport(manager, method, value);
+        }
+    }
+    if let Some(response) = handle_read_only(manager, method, payload) {
+        return response;
+    }
+    if matches!(
+        method,
+        "print_intent_height_binding"
+            | "print_intent_upsert_height_range"
+            | "print_intent_upsert_layer_profile"
+            | "print_intent_remove_height"
+            | "print_intent_rebind_height"
+    ) {
+        return print_heights::handle(manager, method, payload);
+    }
+    if method.starts_with("print_intent_") {
+        return print_intent::handle(manager, method, payload);
+    }
+    if method.starts_with("print_modifier_") {
+        return print_modifiers::handle(manager, method, payload);
+    }
     match method {
-        "document" => ok_json(manager.document_dto()),
+        "solid_rename_feature" => with_payload(payload, |request: RenameSolidFeaturePayload| {
+            manager.rename_solid_feature(request.feature_id, request.name)
+        }),
         "document_set_name" => with_payload(payload, |request: DocumentNamePayload| {
             let name = match request {
                 DocumentNamePayload::Name(name) => name,
@@ -122,26 +396,6 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
             };
             manager.set_document_name(name)
         }),
-        "project_export_model" if payload.is_empty() || payload == "null" => {
-            to_json(manager.export_project_model())
-        }
-        "project_export_model" => with_payload(payload, |request: ProjectExportPayload| {
-            let current = require_project_snapshot(manager, &request.expected_model_json)?;
-            let Some(name) = request.save_name else {
-                return Ok(current);
-            };
-            let name = name.trim();
-            if name.is_empty() {
-                return Err(SessionError::Solid("document name cannot be empty".into()));
-            }
-            // Save As serializes the requested name without renaming the live
-            // model before disk IO succeeds. This runs under the host's manager
-            // lock, so the check and snapshot cannot straddle another edit.
-            let mut saved: serde_json::Value = serde_json::from_str(&current)
-                .map_err(|error| SessionError::Solid(error.to_string()))?;
-            saved["document"]["name"] = name.into();
-            Ok(saved.to_string())
-        }),
         "project_prepare_new" => to_json(manager.prepare_new_project()),
         "project_prepare_load" => {
             with_payload(payload, |model: String| manager.prepare_load_project(model))
@@ -151,17 +405,16 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
             BeginSketchPayload::Plane(plane) => manager.begin_sketch(plane),
         }),
         "end_sketch" => to_json(manager.end_sketch()),
-        "finished_sketches" => ok_json(manager.finished_sketches()),
-        "edit_sketch" => with_payload(payload, |name: String| manager.edit_sketch(&name)),
-        "active_sketch" => ok_json(manager.active_snapshot()),
-        "profile_catalog" => ok_json(manager.profile_catalog()),
-        "solid_scene" => ok_json(manager.solid_scene()),
-        "body_appearances" => ok_json(manager.body_appearances()),
-        "project_visibility" => ok_json(manager.project_visibility()),
+        "edit_sketch" => with_payload(payload, |request: EditSketchPayload| match request {
+            EditSketchPayload::Name(name) => manager.edit_sketch(&name),
+            EditSketchPayload::Options(request) => match request.occurrence_id {
+                Some(occurrence) => manager.edit_sketch_in_occurrence(&request.name, occurrence),
+                None => manager.edit_sketch(&request.name),
+            },
+        }),
         "project_set_visibility" => with_payload(payload, |visibility| {
             manager.set_project_visibility(visibility)
         }),
-        "named_views" => ok_json(manager.named_views()),
         "clear_named_view" => ok_json(manager.clear_named_view()),
         "upsert_named_view" => with_payload(payload, |view| manager.upsert_named_view(view)),
         "rename_named_view" => with_payload(payload, |request: RenameNamedViewPayload| {
@@ -171,6 +424,11 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
             manager.delete_named_view(request.name)
         }),
         "set_named_views" => with_payload(payload, |request: SetNamedViewsPayload| {
+            limo_cad_solid::check_export_model_snapshot(
+                request.expected_model_json.as_deref(),
+                &manager.export_project_model()?,
+            )
+            .map_err(|e| crate::SessionError::Solid(e.into()))?;
             manager.set_named_views(request.views)
         }),
         "recall_named_view" => with_payload(payload, |request: RecallNamedViewPayload| {
@@ -188,6 +446,36 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         }),
         "drawing_delete_sheet" => with_payload(payload, |r| {
             manager.drawing_command(crate::drawing_commands::DrawingCommand::DeleteSheet(r))
+        }),
+        "drawing_update_view" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::UpdateView(r))
+        }),
+        "drawing_delete_view" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::DeleteView(r))
+        }),
+        "drawing_add_annotation" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::AddAnnotation(r))
+        }),
+        "drawing_update_annotation" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::UpdateAnnotation(r))
+        }),
+        "drawing_delete_annotation" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::DeleteAnnotation(r))
+        }),
+        "drawing_create_template" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::CreateTemplate(r))
+        }),
+        "drawing_apply_template" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::ApplyTemplate(r))
+        }),
+        "drawing_delete_template" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::DeleteTemplate(r))
+        }),
+        "drawing_add_revision" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::AddRevision(r))
+        }),
+        "drawing_set_release" => with_payload(payload, |r| {
+            manager.drawing_command(crate::drawing_commands::DrawingCommand::SetRelease(r))
         }),
         "drawing_add_view" => with_payload(payload, |r| {
             manager.drawing_command(crate::drawing_commands::DrawingCommand::AddView(r))
@@ -211,15 +499,12 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         "drawing_add_note" => with_payload(payload, |r| {
             manager.drawing_command(crate::drawing_commands::DrawingCommand::AddNote(r))
         }),
-        "drawing_document" => ok_json(manager.drawing_document()),
         "drawing_set_document" => {
             with_payload(payload, |drawing| manager.set_drawing_document(drawing))
         }
-        "assembly_document" => ok_json(manager.assembly_document()),
         "assembly_set_document" => {
             with_payload(payload, |document| manager.set_assembly_document(document))
         }
-        "assembly_solution" => ok_json(manager.assembly_solution()),
         "assembly_create_component" => {
             with_payload(payload, |request| manager.create_component(request))
         }
@@ -235,18 +520,17 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         "assembly_duplicate_occurrence" => {
             with_payload(payload, |request| manager.duplicate_occurrence(request))
         }
+        "assembly_remove_occurrence" => {
+            with_payload(payload, |request| manager.remove_occurrence(request))
+        }
         "assembly_set_occurrence_grounded" => {
             with_payload(payload, |request| manager.set_occurrence_grounded(request))
         }
         "assembly_set_occurrence_pose" => {
             with_payload(payload, |request| manager.set_occurrence_pose(request))
         }
-        "assembly_preview_joint" => with_payload(payload, |request| manager.preview_joint(request)),
         "assembly_create_joint" => with_payload(payload, |request| manager.create_joint(request)),
         "assembly_update_joint" => with_payload(payload, |request| manager.update_joint(request)),
-        "assembly_preview_joint_update" => {
-            with_payload(payload, |request| manager.preview_joint_update(request))
-        }
         "assembly_delete_joint" => with_payload(payload, |id: JointId| manager.delete_joint(id)),
         "assembly_set_joint_enabled" => {
             with_payload(payload, |request| manager.set_joint_enabled(request))
@@ -265,19 +549,8 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         "assembly_delete_gear_relation" => {
             with_payload(payload, |id| manager.delete_gear_relation(id))
         }
-        "assembly_preview_joint_motion" => {
-            with_payload(payload, |request: SetJointMotionRequestDto| {
-                manager.preview_joint_motion(request)
-            })
-        }
         "assembly_set_joint_coordinates" => {
             with_payload(payload, |request| manager.set_joint_coordinates(request))
-        }
-        "assembly_preview_joint_coordinates" => with_payload(payload, |request| {
-            manager.preview_joint_coordinates(request)
-        }),
-        "assembly_preview_mechanism_drag" => {
-            with_payload(payload, |request| manager.preview_mechanism_drag(request))
         }
         "assembly_apply_joint_motions" => {
             with_payload(payload, |request| manager.apply_joint_motions(request))
@@ -303,12 +576,6 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         "assembly_delete_motion_study" => {
             with_payload(payload, |id| manager.delete_motion_study(id))
         }
-        "assembly_sample_motion_study" => {
-            with_payload(payload, |request| manager.sample_motion_study(request))
-        }
-        "assembly_export_motion_path_csv" => {
-            with_payload(payload, |request| manager.export_motion_path_csv(request))
-        }
         "assembly_create_contact_set" => {
             with_payload(payload, |request| manager.create_contact_set(request))
         }
@@ -316,70 +583,21 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
             with_payload(payload, |contact| manager.update_contact_set(contact))
         }
         "assembly_delete_contact_set" => with_payload(payload, |id| manager.delete_contact_set(id)),
-        "assembly_interference_check" => with_payload(payload, |request| {
-            manager.approximate_interference_check(request)
-        }),
-        "assembly_evaluate_motion_study" => with_payload(payload, |request| {
-            manager.approximate_motion_study_evaluation(request)
-        }),
-        "assembly_swept_collision_check" => with_payload(payload, |request| {
-            manager.approximate_swept_collision_check(request)
-        }),
         "assembly_set_grounded_body" => {
             with_payload(payload, |body_id| manager.set_grounded_body(body_id))
         }
-        "geometry_edge_chain" => {
-            with_payload(payload, |request| manager.geometry_edge_chain(request))
-        }
-        "cam_chamfer_geometry" => {
-            with_payload(payload, |request| manager.cam_chamfer_geometry(request))
-        }
-        "cam_document" => ok_json(manager.cam_document()),
-        "cam_cutter_mesh" => with_payload(payload, |geometry: nbcad_cam::CamCutterGeometryDto| {
-            nbcad_cam::cutter_mesh(geometry).map_err(crate::SessionError::Solid)
-        }),
         "cam_set_document" => with_payload(payload, |cam| manager.set_cam_document(cam)),
-        "cam_toolpath_statuses" => to_json(manager.cam_toolpath_statuses()),
         "cam_regenerate_operation" => with_payload(payload, |operation_id: u64| {
             manager.cam_regenerate_operation(operation_id)
         }),
         "cam_regenerate_setup" => with_payload(payload, |setup_id: u64| {
             manager.cam_regenerate_setup(setup_id)
         }),
-        "cam_plan" => with_payload(payload, |request: CamPlanPayload| match request {
-            CamPlanPayload::Setup(setup_id) => manager.cam_plan(setup_id),
-            CamPlanPayload::Through {
-                setup_id,
-                through_operation_id,
-            } => match through_operation_id {
-                Some(operation_id) => manager.cam_plan_through(setup_id, operation_id),
-                None => manager.cam_plan(setup_id),
-            },
-        }),
-        "cam_post" => with_payload(payload, |request| manager.cam_post(request)),
-        "cam_analyze_nbpost" => {
-            with_payload(payload, |request| manager.cam_analyze_nbpost(request))
+        "set_body_appearance" => {
+            with_payload(payload, |appearance: limo_cad_core::BodyAppearance| {
+                manager.set_body_appearance(appearance)
+            })
         }
-        "cam_simulate" => with_payload(payload, |request| manager.cam_simulate(request)),
-        "cam_simulate_gcode" => {
-            with_payload(payload, |request| manager.cam_simulate_gcode(request))
-        }
-        "cam_post_events" => {
-            with_payload(payload, |setup_id: u64| manager.cam_post_events(setup_id))
-        }
-        "set_body_appearance" => with_payload(payload, |appearance: nbcad_core::BodyAppearance| {
-            manager.set_body_appearance(appearance)
-        }),
-        "extrude_definitions" => ok_json(manager.extrude_definitions()),
-        "revolve_definitions" => ok_json(manager.revolve_definitions()),
-        "sweep_definitions" => ok_json(manager.sweep_definitions()),
-        "loft_definitions" => ok_json(manager.loft_definitions()),
-        "rib_definitions" => ok_json(manager.rib_definitions()),
-        "fillet_definitions" => ok_json(manager.fillet_definitions()),
-        "chamfer_definitions" => ok_json(manager.chamfer_definitions()),
-        "hole_definitions" => ok_json(manager.hole_definitions()),
-        "datum_plane_definitions" => ok_json(manager.datum_plane_definitions()),
-        "body_feature_definitions" => ok_json(manager.body_feature_definitions()),
         "datum_plane_create" => with_payload(payload, |r: DatumPlaneRequest| {
             manager.create_datum_plane(r)
         }),
@@ -443,17 +661,7 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
             manager.prepare_reorder_feature(r)
         }),
         "solid_commit" => with_payload(payload, |r: CommitKernelRequest| manager.commit_solid(r)),
-        "preview_segment" => with_payload(payload, |r: SegmentRequest| manager.preview_segment(r)),
-        "preview_creation" => with_payload(payload, |r: crate::dto::CreationPreviewRequest| {
-            manager.preview_creation(r)
-        }),
-        "eval_expression" => with_payload(payload, |r: EvalExpressionRequest| {
-            manager.eval_expression(r)
-        }),
         "add_line" => with_payload(payload, |r: SegmentRequest| manager.add_line(r)),
-        "preview_segment_locked" => with_payload(payload, |r: LockedSegmentRequest| {
-            manager.preview_segment_locked(r)
-        }),
         "add_line_locked" => with_payload(payload, |r: LockedSegmentRequest| {
             manager.add_line_locked(r)
         }),
@@ -496,12 +704,9 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         "set_dimension_style" => with_payload(payload, |r: SetDimensionStyleRequest| {
             manager.set_dimension_style(r)
         }),
-        "fillet_preview" => with_payload(payload, |r: FilletRequest| manager.fillet_preview(&r)),
         "fillet_lines" => with_payload(payload, |r: FilletRequest| manager.fillet_lines(r)),
         "chamfer_lines" => with_payload(payload, |r: ChamferRequest| manager.chamfer_lines(r)),
-        "offset_preview" => with_payload(payload, |r: OffsetRequest| manager.offset_preview(&r)),
         "offset_curve" => with_payload(payload, |r: OffsetRequest| manager.offset_curve(r)),
-        "trim_preview" => with_payload(payload, |r: TrimRequest| manager.trim_preview(&r)),
         "trim_entity" => with_payload(payload, |r: TrimRequest| manager.trim_entity(r)),
         "extend_entity" => with_payload(payload, |r: ExtendRequest| manager.extend_entity(r)),
         "break_curve" => with_payload(payload, |r: BreakRequest| manager.break_curve(r)),
@@ -554,7 +759,6 @@ fn to_json<R: Serialize>(result: Result<R, SessionError>) -> String {
     match result {
         Ok(value) => ok_json(value),
         Err(e) => match &e {
-            // D4.2 conflict reports travel as structured `data`.
             SessionError::OverConstrained {
                 rejected,
                 conflicts_with,
@@ -574,8 +778,8 @@ fn to_json<R: Serialize>(result: Result<R, SessionError>) -> String {
             } => serde_json::json!({
                 "ok": false,
                 "error": e.to_string(),
-                // Keep the established report shape for existing clients;
-                // `reason` distinguishes dependency from contradiction.
+
+
                 "data": {
                     "reason": "redundant",
                     "rejected": rejected,

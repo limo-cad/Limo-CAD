@@ -1,7 +1,38 @@
-use serde_json::{json, Value};
-use std::sync::OnceLock;
+use serde_json::Value;
 
-use nbcad_script::MAX_SCRIPT_BYTES;
+use limo_cad_script::MAX_SCRIPT_BYTES;
+
+/// Keep native file exchange discoverable without enlarging the already broad
+/// interface JSON macro past Rust's default expansion depth.
+pub fn with_file_options(mut schema: Value) -> Value {
+    schema["properties"]["command"]["enum"]
+        .as_array_mut()
+        .unwrap()
+        .extend(
+            [
+                "new",
+                "close",
+                "import_step",
+                "export_step",
+                "export_3mf",
+                "export_stl",
+                "export_drawing_svg",
+                "export_drawing_dxf",
+                "export_profile_dxf",
+                "print_drawing",
+                "print_status",
+            ]
+            .map(Value::from),
+        );
+    schema["properties"]["selected_only"] = serde_json::json!({"type":"boolean","description":"For file exports, export only selected bodies or occurrences."});
+    schema["properties"]["scope"] = serde_json::json!({"type":"string","enum":["assembly","definition"],"description":"Required for 3MF/STL file export: placed assembly occurrences or one mesh per selected definition."});
+    schema["properties"]["named_view"] = serde_json::json!({"type":"string","description":"For assembly exports only: a saved presentation or print view. Empty selects assembled placement; omitted uses the current recalled view. Not accepted by action view; use recall_named_view with name to recall a saved camera, visibility and display offsets."});
+    schema["properties"]["print_bed"] = crate::print_bed_schema();
+    schema["properties"]["allow_layout_issues"] = serde_json::json!({"type":"boolean","default":false,"description":"Deliberately proceed after reviewing print-layout diagnostics. Timeline, ownership and unsaved-layout guards still apply."});
+    schema["properties"]["feature_id"] = serde_json::json!({"type":"integer","minimum":0,"description":"For export_profile_dxf: sketch feature ID from sketch_profiles."});
+    schema["properties"]["profile_index"] = serde_json::json!({"type":"integer","minimum":0,"maximum":4294967295u64,"description":"For export_profile_dxf: zero-based even-depth material-region index from sketch_profiles. Its immediate hole wires are included at 1:1 in local sketch-plane millimetres."});
+    schema
+}
 
 /// Authored text plus the expanded document the interpreter runs.
 #[derive(Debug)]
@@ -32,9 +63,9 @@ pub fn load_script(arguments: &Value) -> Result<LoadedScript, String> {
     }
     if let Some(recipe) = recipe {
         let id = recipe.as_str().ok_or("recipe must be an ID string")?;
-        let recipe = nbcad_recipes::find(id)?;
+        let recipe = limo_cad_recipes::find(id)?;
         let text: String = recipe.source.into();
-        if nbcad_script::has_unresolved_includes(&text)? {
+        if limo_cad_script::has_unresolved_includes(&text)? {
             return Err(format!(
                 "bundled recipe {id} has unresolved includes; flatten at catalog build time"
             ));
@@ -59,8 +90,8 @@ pub fn load_script(arguments: &Value) -> Result<LoadedScript, String> {
         (None, Some(path)) => {
             let path = path.as_str().ok_or("script path must be a string")?;
             let file = std::path::Path::new(path);
-            if !file.is_absolute() || !path.to_lowercase().ends_with(".nbcad.jsonc") {
-                return Err("script path must be an absolute .nbcad.jsonc file path".into());
+            if !file.is_absolute() || !path.to_lowercase().ends_with(".limo.jsonc") {
+                return Err("script path must be an absolute .limo.jsonc file path".into());
             }
             let metadata =
                 std::fs::metadata(file).map_err(|e| format!("read script {path}: {e}"))?;
@@ -106,7 +137,7 @@ fn expand_includes_if_needed(
     source: &str,
     base_dir: Option<&std::path::Path>,
 ) -> Result<String, String> {
-    if !nbcad_script::has_unresolved_includes(source)? {
+    if !limo_cad_script::has_unresolved_includes(source)? {
         return Ok(source.to_owned());
     }
     let base = base_dir.ok_or(
@@ -115,8 +146,8 @@ fn expand_includes_if_needed(
     let base_canon = std::fs::canonicalize(base)
         .map_err(|e| format!("canonicalize script base {}: {e}", base.display()))?;
 
-    nbcad_script::flatten_includes(source, |rel| {
-        nbcad_script::validate_include_path(rel)?;
+    limo_cad_script::flatten_includes(source, |rel| {
+        limo_cad_script::validate_include_path(rel)?;
         let joined = base.join(rel);
         let canon =
             std::fs::canonicalize(&joined).map_err(|e| format!("read include {rel}: {e}"))?;
@@ -135,36 +166,14 @@ fn expand_includes_if_needed(
 }
 
 /// The renderer and API consume the same product-owned grouping data.
-pub fn groups() -> &'static Vec<Value> {
-    static GROUPS: OnceLock<Vec<Value>> = OnceLock::new();
-    GROUPS.get_or_init(|| {
-        let catalog: Value = serde_json::from_str(include_str!("../../interface/catalog.json")).unwrap();
-        let mut groups = catalog["groups"].as_array().unwrap().clone();
-        for workspace in catalog["workspaces"].as_array().unwrap() {
-            for panel in workspace["panels"].as_array().unwrap() {
-                groups.push(json!({"id":format!("{}/{}",workspace["id"].as_str().unwrap(),panel["id"].as_str().unwrap()),
-                    "labelKey":panel["labelKey"],"operations":panel["operations"]}));
-            }
-        }
-        groups
-    })
-}
+pub use limo_cad_interface::catalog::{group_for, groups};
 
-pub fn group_for(operation: &str) -> Option<&'static str> {
-    groups()
-        .iter()
-        .find(|g| {
-            g["operations"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|n| n == operation)
-        })
-        .and_then(|g| g["id"].as_str())
-}
-
-pub fn validate_script(script: &nbcad_script::Script) -> Result<(), String> {
+pub fn validate_script(script: &limo_cad_script::Script) -> Result<(), String> {
     script.validate_calls(|group, operation| match group_for(operation) {
+        _ if operation == "cad_computer_control" => Err(
+            "Computer control requires one observed interactive action at a time, outside scripts"
+                .into(),
+        ),
         Some(expected) if group == expected => Ok(()),
         Some(expected) => Err(format!("{operation} belongs to {expected}, not {group}")),
         None => Err(format!("Unknown interface operation {operation}")),
@@ -174,14 +183,30 @@ pub fn validate_script(script: &nbcad_script::Script) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn file_schema_exposes_sheet_and_exact_profile_exports() {
+        let schema = with_file_options(json!({"properties":{"command":{"enum":["save"]}}}));
+        let commands = schema["properties"]["command"]["enum"].as_array().unwrap();
+        for command in [
+            "export_drawing_svg",
+            "export_drawing_dxf",
+            "export_profile_dxf",
+        ] {
+            assert!(commands.contains(&json!(command)));
+        }
+        assert_eq!(schema["properties"]["feature_id"]["type"], "integer");
+        assert_eq!(schema["properties"]["profile_index"]["maximum"], u32::MAX);
+    }
 
     #[test]
     fn bundled_recipe_calls_preflight_against_the_product_catalog() {
-        for recipe in nbcad_recipes::RECIPES {
-            let script = nbcad_script::Script::parse(recipe.source).unwrap();
+        for recipe in limo_cad_recipes::RECIPES {
+            let script = limo_cad_script::Script::parse(recipe.source).unwrap();
             validate_script(&script).unwrap_or_else(|error| panic!("{}: {error}", recipe.id));
         }
-        let script = nbcad_script::Script::parse(r#"{"version":1,"name":"wrong late group","steps":[{"note":"No geometry should run"}],"checks":[{"id":"late_inspection","call":{"group":"solid/inspect","operation":"solid_scene","arguments":{}}}]}"#).unwrap();
+        let script = limo_cad_script::Script::parse(r#"{"version":1,"name":"wrong late group","steps":[{"note":"No geometry should run"}],"checks":[{"id":"late_inspection","call":{"group":"solid/inspect","operation":"solid_scene","arguments":{}}}]}"#).unwrap();
         let error = validate_script(&script).unwrap_err();
         assert!(
             error.contains("late_inspection") && error.contains("solid/check"),
@@ -201,9 +226,9 @@ mod tests {
             json!({"recipe":1}),
             json!({"recipe":"not-a-recipe"}),
             json!({"recipe":"mounting-plate","source":"{}"}),
-            json!({"recipe":"mounting-plate","path":"/part.nbcad.jsonc"}),
-            json!({"source":"{}","path":"a.nbcad.jsonc"}),
-            json!({"path":"relative.nbcad.jsonc"}),
+            json!({"recipe":"mounting-plate","path":"/part.limo.jsonc"}),
+            json!({"source":"{}","path":"a.limo.jsonc"}),
+            json!({"path":"relative.limo.jsonc"}),
             json!({"source":"x".repeat(MAX_SCRIPT_BYTES+1)}),
         ] {
             assert!(script_source(&args).is_err());
@@ -220,11 +245,11 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         );
-        let dir = std::env::temp_dir().join(format!("nbcad-includes-{unique}"));
-        let outside = std::env::temp_dir().join(format!("nbcad-includes-outside-{unique}"));
+        let dir = std::env::temp_dir().join(format!("limo-cad-includes-{unique}"));
+        let outside = std::env::temp_dir().join(format!("limo-cad-includes-outside-{unique}"));
         std::fs::create_dir_all(dir.join("collections")).unwrap();
         std::fs::create_dir_all(&outside).unwrap();
-        let root = dir.join("root.nbcad.jsonc");
+        let root = dir.join("root.limo.jsonc");
         std::fs::write(
             &root,
             r#"{"version":1,"name":"Root","includes":["collections/a.collection.jsonc"],"steps":[{"id":"root","note":"root"}]}"#,
@@ -282,7 +307,7 @@ mod tests {
         #[cfg(unix)]
         {
             std::os::unix::fs::symlink(outside.join("secret.collection.jsonc"), &link).unwrap();
-            let linked_root = dir.join("linked.nbcad.jsonc");
+            let linked_root = dir.join("linked.limo.jsonc");
             std::fs::write(
                 &linked_root,
                 r#"{"version":1,"name":"Link","includes":["linked.collection.jsonc"],"steps":[{"id":"after","note":"after"}]}"#,

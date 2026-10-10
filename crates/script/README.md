@@ -1,6 +1,6 @@
 # Native script foundation
 
-`nbcad-script` parses versioned `.nbcad.jsonc` command sequences and executes them
+`limo-cad-script` parses versioned `.limo.jsonc` command sequences and executes them
 through a caller-supplied host function. It does not open a desktop window, own an
 MCP session, or implement CAD operations. The host supplies the existing grouped
 interface and remains responsible for document ownership and execution receipts.
@@ -11,7 +11,7 @@ skips presentation requests while retaining the same modeling commands and check
 Preflight rejects invalid references and nested session/transport changes; a failed
 operation stops execution before later steps run.
 
-The [editor schema](../../examples/scripts/nbcad-script.schema.json) describes the
+The [editor schema](../../examples/scripts/limo-cad-script.schema.json) describes the
 same version 1 format. The Rust parser is the runtime validation authority.
 
 `manufacturing.rs` retains the existing **garden-bench-specific** geometric
@@ -22,15 +22,15 @@ manufacturing rules system, a structural rating, or a fabrication qualification.
 This foundation contains no bundled design recipes or desktop integration. Those
 are subsequent stack changes that use this interpreter.
 
-Run the host-neutral tests with `cargo test -p nbcad-script`. They exercise JSONC
+Run the host-neutral tests with `cargo test -p limo-cad-script`. They exercise JSONC
 parsing, references, preflight, failure stopping, mode equivalence and the existing
 bench verification helpers without requiring OpenCASCADE or a desktop session.
 
 ## Collections
 
 A root script may declare `includes`. Each path is relative to the file that
-declares it (`.collection.jsonc` or `.nbcad.jsonc`). Hosts expand them with
+declares it (`.collection.jsonc` or `.limo.jsonc`). Hosts expand them with
 `parse_with_includes` / `flatten_includes` before execution. The crate never
-opens files itself. An included `.nbcad.jsonc` contributes steps and checks;
+opens files itself. An included `.limo.jsonc` contributes steps and checks;
 its version, starting state, verification, and exports stay with the root.
 Fast mode still skips presentation steps contributed by collections.

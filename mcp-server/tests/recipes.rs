@@ -15,7 +15,8 @@ struct RecipeArtifacts {
 }
 impl RecipeArtifacts {
     fn new() -> Self {
-        if let Some(path) = std::env::var_os("NBCAD_RECIPE_ARTIFACT_DIR").filter(|v| !v.is_empty())
+        if let Some(path) =
+            std::env::var_os("LIMO_CAD_RECIPE_ARTIFACT_DIR").filter(|v| !v.is_empty())
         {
             let path = std::path::PathBuf::from(path);
             std::fs::create_dir_all(&path).unwrap();
@@ -35,7 +36,7 @@ impl RecipeArtifacts {
             .as_nanos();
         for _ in 0..100 {
             let path = std::env::temp_dir().join(format!(
-                "nbcad-recipe-{}-{epoch}-{}",
+                "limo-cad-recipe-{}-{epoch}-{}",
                 std::process::id(),
                 SEQUENCE.fetch_add(1, Ordering::Relaxed)
             ));
@@ -56,8 +57,6 @@ impl RecipeArtifacts {
 impl Drop for RecipeArtifacts {
     fn drop(&mut self) {
         if self.temporary {
-            // This exact directory was exclusively created by temporary().
-            // Never remove the environment-provided destination or its parent.
             let _ = std::fs::remove_dir_all(&self.path);
         }
     }
@@ -85,10 +84,8 @@ struct Client {
 }
 impl Client {
     fn start() -> Self {
-        // An explicitly copied binary lets a retained-model diagnostic run
-        // without locking the shared build target on Windows.
-        let binary = std::env::var_os("NBCAD_RECIPE_MCP_BIN")
-            .unwrap_or_else(|| env!("CARGO_BIN_EXE_nbcad-mcp").into());
+        let binary = std::env::var_os("LIMO_CAD_RECIPE_MCP_BIN")
+            .unwrap_or_else(|| env!("CARGO_BIN_EXE_limo-cad-mcp").into());
         let mut command = Command::new(binary);
         command
             .stdin(Stdio::piped())
@@ -118,8 +115,7 @@ impl Client {
             input,
             replies,
             id: 0,
-            // Ordinary operations retain their existing bounded allowance.
-            // Complete flagship recipes receive a per-request budget below.
+
             timeout: Duration::from_secs(600),
             stage: "initialize MCP".into(),
         };
@@ -200,7 +196,7 @@ impl Client {
         error: Option<&str>,
     ) {
         let Some(directory) =
-            std::env::var_os("NBCAD_RECIPE_ARTIFACT_DIR").filter(|value| !value.is_empty())
+            std::env::var_os("LIMO_CAD_RECIPE_ARTIFACT_DIR").filter(|value| !value.is_empty())
         else {
             return;
         };
@@ -261,7 +257,7 @@ impl Client {
                     directory.display()
                 );
             } else {
-                eprintln!("Set NBCAD_RECIPE_ARTIFACT_DIR to retain recipe diagnostics.");
+                eprintln!("Set LIMO_CAD_RECIPE_ARTIFACT_DIR to retain recipe diagnostics.");
             }
         }
         assert_ne!(reply["isError"], true, "{operation}: {}", reply["content"]);
@@ -283,12 +279,10 @@ impl Client {
         )
     }
     fn compiled_recipe_source(&mut self, id: &str) -> Value {
-        // Compare the binary's catalog replay with an independent replay of
-        // this test build's exact source, even when using a copied MCP binary.
         self.call_with_timeout(
             "cad_interface",
             json!({"action":"script",
-            "source":nbcad_recipes::find(id).unwrap().source,"mode":"fast","validate":true}),
+            "source":limo_cad_recipes::find(id).unwrap().source,"mode":"fast","validate":true}),
             recipe_timeout(id, self.timeout),
         )
     }
@@ -304,10 +298,6 @@ impl Client {
 }
 
 fn recipe_timeout(id: &str, operation_timeout: Duration) -> Duration {
-    // These calls build thousands of steps plus the complete drawing package.
-    // The vise's first Windows CI replay took 594s and its independent replay
-    // exceeded 600s. Match the turbine's existing 900s construction allowance
-    // without extending later edits, interference queries or model reloads.
     match id {
         "d-screw-vise" | "vertical-axis-turbine" => operation_timeout.max(Duration::from_secs(900)),
         _ => operation_timeout,
@@ -335,7 +325,6 @@ fn receive_request_reply(
         if reply["id"] == id {
             return Ok(reply);
         }
-        // Other replies/notifications cannot reset the request's elapsed budget.
     }
 }
 
@@ -373,7 +362,7 @@ fn request_summary(method: &str, params: &Value) -> String {
         }
         details["arguments"] = Value::Object(summary);
     }
-    // Diagnostics are bounded even if a future test uses very long names or ID lists.
+
     serde_json::to_string(&details)
         .unwrap()
         .chars()
@@ -463,8 +452,8 @@ impl Drop for Client {
 fn mesh_measurement(body: &Value) -> ([f64; 3], [f64; 3], f64) {
     let positions = body["mesh"]["positions"].as_array().unwrap();
     let indices = body["mesh"]["indices"].as_array().unwrap();
-    assert!(!positions.is_empty() && positions.len() % 3 == 0);
-    assert!(!indices.is_empty() && indices.len() % 3 == 0);
+    assert!(!positions.is_empty() && positions.len().is_multiple_of(3));
+    assert!(!indices.is_empty() && indices.len().is_multiple_of(3));
     let mut min = [f64::INFINITY; 3];
     let mut max = [f64::NEG_INFINITY; 3];
     for (i, coordinate) in positions.iter().enumerate() {
@@ -474,7 +463,7 @@ fn mesh_measurement(body: &Value) -> ([f64; 3], [f64; 3], f64) {
         max[i % 3] = max[i % 3].max(value);
     }
     let mut volume = 0.;
-    for triangle in indices.chunks_exact(3) {
+    for triangle in indices.as_chunks::<3>().0 {
         let point = |index: &Value| {
             let start = index.as_u64().unwrap() as usize * 3;
             assert!(start + 2 < positions.len());
@@ -522,6 +511,79 @@ fn part_geometry(
         (actual_volume - volume).abs() / volume < relative_tolerance,
         "measured {actual_volume}, analytic {volume}"
     );
+}
+
+fn three_mf_geometry(bytes: &[u8], min: [f64; 3], max: [f64; 3], volume: f64, tolerance: f64) {
+    let meshes = limo_cad_export::test_reader::read_package(bytes)
+        .expect("decode actual 3MF build geometry and component transforms");
+    let bodies = meshes
+        .into_iter()
+        .map(|mesh| {
+            json!({"mesh": {
+                "positions": mesh.vertices.into_iter().flatten().collect::<Vec<_>>(),
+                "indices": mesh.triangles.into_iter().flatten().collect::<Vec<_>>()
+            }})
+        })
+        .collect::<Vec<_>>();
+    part_geometry(
+        &json!({"errors":[],"bodies":bodies}),
+        min,
+        max,
+        volume,
+        tolerance,
+    );
+}
+
+fn stl_mesh(bytes: &[u8]) -> Value {
+    let mut positions = Vec::new();
+    if bytes.starts_with(b"solid ") {
+        let text = std::str::from_utf8(bytes).expect("ASCII STL must be UTF-8");
+        let body = text
+            .strip_prefix("solid LimoCAD\n")
+            .and_then(|text| text.strip_suffix("endsolid LimoCAD\n"))
+            .expect("ASCII STL must have a complete solid envelope");
+        let lines: Vec<_> = body.lines().map(str::trim).collect();
+        assert!(!lines.is_empty() && lines.len().is_multiple_of(7));
+        let vector = |line: &str, prefix: &str| {
+            let numbers: Vec<f64> = line
+                .strip_prefix(prefix)
+                .expect("STL facet record")
+                .split_whitespace()
+                .map(|number| number.parse().expect("STL coordinate"))
+                .collect();
+            assert_eq!(numbers.len(), 3);
+            assert!(numbers.iter().all(|number| number.is_finite()));
+            numbers
+        };
+        for facet in lines.as_chunks::<7>().0 {
+            let normal = vector(facet[0], "facet normal ");
+            assert!((normal.iter().map(|v| v * v).sum::<f64>() - 1.).abs() < 1e-4);
+            assert_eq!(facet[1], "outer loop");
+            for vertex in &facet[2..5] {
+                positions.extend(vector(vertex, "vertex "));
+            }
+            assert_eq!(facet[5], "endloop");
+            assert_eq!(facet[6], "endfacet");
+        }
+    } else {
+        assert!(bytes.len() >= 84, "binary STL header");
+        let triangles = u32::from_le_bytes(bytes[80..84].try_into().unwrap()) as usize;
+        assert!(triangles > 0);
+        assert_eq!(bytes.len(), 84 + 50 * triangles);
+        for facet in bytes[84..].as_chunks::<50>().0 {
+            let values: Vec<_> = facet[..48]
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|value| f64::from(f32::from_le_bytes(*value)))
+                .collect();
+            assert!(values.iter().all(|value| value.is_finite()));
+            assert!((values[..3].iter().map(|v| v * v).sum::<f64>() - 1.).abs() < 1e-4);
+            positions.extend_from_slice(&values[3..]);
+        }
+    }
+    let indices: Vec<_> = (0..positions.len() / 3).collect();
+    json!({"mesh":{"positions":positions,"indices":indices}})
 }
 
 #[test]
@@ -610,12 +672,18 @@ fn native_part_recipes_preserve_analytic_geometry_restore_and_export() {
                     );
                 }
                 "stl" => {
-                    let triangles = u32::from_le_bytes(bytes[80..84].try_into().unwrap()) as usize;
-                    assert!(triangles > 0);
-                    assert_eq!(bytes.len(), 84 + 50 * triangles);
+                    // Native f64 coordinates use lossless ASCII whenever the
+                    // binary STL f32 representation would change geometry.
+                    part_geometry(
+                        &json!({"errors":[],"bodies":[stl_mesh(&bytes)]}),
+                        min,
+                        max,
+                        volume,
+                        tolerance,
+                    );
                 }
                 "3mf" => {
-                    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+                    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
                     let mut model = String::new();
                     archive
                         .by_name("3D/3dmodel.model")
@@ -627,6 +695,7 @@ fn native_part_recipes_preserve_analytic_geometry_restore_and_export() {
                             && model.contains("<triangle ")
                             && model.contains("<build>")
                     );
+                    three_mf_geometry(&bytes, min, max, volume, tolerance);
                 }
                 _ => unreachable!(),
             }
@@ -742,7 +811,7 @@ fn repeated_brackets_edit_one_definition_and_restore_in_fresh_processes() {
 fn recipe_discovery_is_shared_and_does_not_execute_construction() {
     let mut client = Client::start();
     let catalog = client.call("cad_interface", json!({"action":"recipes"}));
-    assert_eq!(catalog, nbcad_recipes::catalog(false));
+    assert_eq!(catalog, limo_cad_recipes::catalog(false));
     assert!(catalog
         .as_array()
         .unwrap()
@@ -788,9 +857,6 @@ fn assert_same_json(actual: &Value, expected: &Value, label: &str) {
     );
 }
 
-// Solver edit/restore can leave roundoff such as60.00000000000001 rather
-// than60.0. Measure it; preserve exact topology/IDs/indices and keep independent
-// cold replay byte-for-byte assertions separate from this geometric tolerance.
 fn geometry_restore_residual(actual: &Value, expected: &Value, path: String) -> (f64, String) {
     if actual == expected {
         return (0., path);
@@ -821,9 +887,6 @@ fn geometry_restore_residual(actual: &Value, expected: &Value, path: String) -> 
     }
 }
 
-// An edit can flip a tessellation diagonal without changing the CAD surface.
-// Compare the native topology separately; for changed mesh buffers compare the
-// oriented boundary of each coplanar triangle patch, not corresponding indices.
 fn restored_geometry_residual(actual: &Value, expected: &Value, path: String) -> (f64, String) {
     let mut actual_metadata = actual.clone();
     let mut expected_metadata = expected.clone();
@@ -862,21 +925,22 @@ fn assert_equivalent_mesh(actual: &Value, expected: &Value) {
     type Vertex = [i64; 3];
     type Triangle = [Vertex; 3];
     type Boundary = BTreeMap<([i64; 4], Vertex, Vertex), i32>;
-    let quantize = |v: &[Value]| -> Vertex {
+    let quantize = |v: &[Value; 3]| -> Vertex {
         std::array::from_fn(|i| (v[i].as_f64().unwrap() * 1e6).round() as i64)
     };
     let triangles = |mesh: &Value| -> (BTreeMap<Triangle, usize>, BTreeSet<Vertex>) {
         let vertices: Vec<_> = mesh["positions"]
             .as_array()
             .unwrap()
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(quantize)
             .collect();
         let normals = mesh["normals"].as_array().unwrap();
         assert_eq!(vertices.len() * 3, normals.len());
-        // Averaged shading normals depend on the tessellation diagonal. Their
-        // exact values belong to the independent replay check, not CAD extent.
-        for normal in normals.chunks_exact(3) {
+
+        for normal in normals.as_chunks::<3>().0 {
             let norm = normal
                 .iter()
                 .map(|v| v.as_f64().unwrap().powi(2))
@@ -884,7 +948,7 @@ fn assert_equivalent_mesh(actual: &Value, expected: &Value) {
             assert!(norm.is_finite() && (norm - 1.).abs() < 1e-5);
         }
         let mut triangles = BTreeMap::new();
-        for indices in mesh["indices"].as_array().unwrap().chunks_exact(3) {
+        for indices in mesh["indices"].as_array().unwrap().as_chunks::<3>().0 {
             let points: Triangle =
                 std::array::from_fn(|i| vertices[indices[i].as_u64().unwrap() as usize]);
             let triangle = (0..3)
@@ -980,9 +1044,9 @@ fn no_overlap(report: &Value) {
 }
 
 fn write_native_project(path: &std::path::Path, model: &Value) {
-    assert_eq!(model["format"], "nbcad-project");
-    let manifest = json!({"format":"nbcad-project","container_version":1,"model":"model.json","model_schema_version":model["schema_version"],"application":"noBS CAD","application_version":env!("CARGO_PKG_VERSION"),"saved_at":"1970-01-01T00:00:00Z"});
-    // Fixed epoch makes a rebuilt artifact reproducible; it is not the run date.
+    assert_eq!(model["format"], "limo-cad-project");
+    let manifest = json!({"format":"limo-cad-project","container_version":1,"model":"model.json","model_schema_version":model["schema_version"],"application":"Limo CAD","application_version":env!("CARGO_PKG_VERSION"),"saved_at":"1970-01-01T00:00:00Z"});
+
     let mut archive = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
     let options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
@@ -1005,7 +1069,7 @@ fn validate_print_3mf(export: &Value, count: usize, bed: [f64; 3], path: &std::p
         .decode(export["bytes_base64"].as_str().unwrap())
         .unwrap();
     std::fs::write(path, &bytes).unwrap();
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
     let mut xml = String::new();
     archive
         .by_name("3D/3dmodel.model")
@@ -1013,25 +1077,12 @@ fn validate_print_3mf(export: &Value, count: usize, bed: [f64; 3], path: &std::p
         .read_to_string(&mut xml)
         .unwrap();
     assert!(xml.contains("unit=\"millimeter\""));
-    fn attribute<'a>(tag: &'a str, name: &str) -> &'a str {
-        tag.split(&format!("{name}=\""))
-            .nth(1)
-            .unwrap()
-            .split('"')
-            .next()
-            .unwrap()
-    }
     let mut bounds = Vec::new();
-    for object in xml.split("<object ").skip(1) {
-        let object = object.split("</object>").next().unwrap();
-        let vertices: Vec<[f64; 3]> = object
-            .split("<vertex ")
-            .skip(1)
-            .map(|tag| ["x", "y", "z"].map(|axis| attribute(tag, axis).parse().unwrap()))
-            .collect();
-        if vertices.is_empty() {
-            continue;
-        }
+    for mesh in limo_cad_export::test_reader::read_package(&bytes)
+        .expect("read the emitted 3MF build in world coordinates")
+    {
+        let vertices = mesh.vertices;
+        assert!(!vertices.is_empty());
         let mut min = [f64::INFINITY; 3];
         let mut max = [f64::NEG_INFINITY; 3];
         for point in &vertices {
@@ -1048,11 +1099,9 @@ fn validate_print_3mf(export: &Value, count: usize, bed: [f64; 3], path: &std::p
                 "outside bed: {min:?}..{max:?}"
             );
         }
-        let mut edges = std::collections::BTreeMap::<(usize, usize), usize>::new();
+        let mut edges = std::collections::BTreeMap::<(usize, usize), (usize, i32)>::new();
         let mut signed_volume = 0.;
-        for triangle in object.split("<triangle ").skip(1) {
-            let indices =
-                ["v1", "v2", "v3"].map(|name| attribute(triangle, name).parse::<usize>().unwrap());
+        for indices in mesh.triangles {
             assert!(indices.iter().all(|index| *index < vertices.len()));
             let [a, b, c] = indices.map(|index| vertices[index]);
             signed_volume += (a[0] * (b[1] * c[2] - b[2] * c[1])
@@ -1065,15 +1114,17 @@ fn validate_print_3mf(export: &Value, count: usize, bed: [f64; 3], path: &std::p
                 [indices[2], indices[0]],
             ] {
                 assert_ne!(a, b);
-                *edges.entry((a.min(b), a.max(b))).or_default() += 1;
+                let edge = edges.entry((a.min(b), a.max(b))).or_default();
+                edge.0 += 1;
+                edge.1 += if a < b { 1 } else { -1 };
             }
         }
         assert!(
-            signed_volume > 1.,
+            signed_volume.is_finite() && signed_volume > 1.,
             "non-positive print volume {signed_volume}"
         );
         assert!(
-            !edges.is_empty() && edges.values().all(|incidence| *incidence == 2),
+            !edges.is_empty() && edges.values().all(|incidence| *incidence == (2, 0)),
             "non-manifold print mesh"
         );
         bounds.push((min, max));
@@ -1086,6 +1137,81 @@ fn validate_print_3mf(export: &Value, count: usize, bed: [f64; 3], path: &std::p
                 "print bodies overlap"
             );
         }
+    }
+}
+
+#[test]
+fn print_acceptance_checks_the_build_pose_and_rejects_an_off_bed_build() {
+    let artifacts = RecipeArtifacts::temporary();
+    let package = |transform: &str| {
+        let xml = format!(
+            r#"<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1"><mesh><vertices>
+<vertex x="0" y="0" z="43"/><vertex x="3" y="0" z="43"/>
+<vertex x="0" y="2" z="43"/><vertex x="0" y="0" z="48"/>
+</vertices><triangles>
+<triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="1" v3="3"/>
+<triangle v1="0" v2="3" v3="2"/><triangle v1="1" v2="2" v3="3"/>
+</triangles></mesh></object><object id="2"><components><component objectid="1"/></components></object></resources><build><item objectid="2" transform="{transform}"/></build></model>"#
+        );
+        let mut archive = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        archive
+            .start_file("3D/3dmodel.model", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        archive.write_all(xml.as_bytes()).unwrap();
+        json!({"bytes_base64":BASE64.encode(archive.finish().unwrap().into_inner())})
+    };
+    validate_print_3mf(
+        &package("1 0 0 0 1 0 0 0 1 10 20 -43"),
+        1,
+        [256.; 3],
+        &artifacts.path.join("on-bed.3mf"),
+    );
+    assert!(std::panic::catch_unwind(|| {
+        validate_print_3mf(
+            &package("1 0 0 0 1 0 0 0 1 10 20 0"),
+            1,
+            [256.; 3],
+            &artifacts.path.join("off-bed.3mf"),
+        );
+    })
+    .is_err());
+}
+
+#[test]
+fn three_mf_part_acceptance_rejects_empty_build_and_wrong_component_placement() {
+    let package = |item: &str| {
+        let xml = format!(
+            r#"<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1"><mesh><vertices>
+<vertex x="0" y="0" z="43"/><vertex x="3" y="0" z="43"/>
+<vertex x="0" y="2" z="43"/><vertex x="0" y="0" z="48"/>
+</vertices><triangles><triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="1" v3="3"/>
+<triangle v1="0" v2="3" v3="2"/><triangle v1="1" v2="2" v3="3"/>
+</triangles></mesh></object><object id="2"><components><component objectid="1"/></components></object></resources><build>{item}</build></model>"#
+        );
+        // Every negative fixture still passes the historical XML-presence checks.
+        assert!(
+            xml.contains("unit=\"millimeter\"")
+                && xml.contains("<triangle ")
+                && xml.contains("<build>")
+        );
+        let mut archive = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        archive
+            .start_file("3D/3dmodel.model", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        archive.write_all(xml.as_bytes()).unwrap();
+        archive.finish().unwrap().into_inner()
+    };
+    let placed = package(r#"<item objectid="2" transform="1 0 0 0 1 0 0 0 1 10 20 -43"/>"#);
+    three_mf_geometry(&placed, [10., 20., 0.], [13., 22., 5.], 5., 0.0001);
+    for incorrect in [package(""), package(r#"<item objectid="2"/>"#)] {
+        assert!(std::panic::catch_unwind(|| three_mf_geometry(
+            &incorrect,
+            [10., 20., 0.],
+            [13., 22., 5.],
+            5.,
+            0.0001
+        ))
+        .is_err());
     }
 }
 
@@ -1108,10 +1234,7 @@ fn d_screw_vise_coupon_replays_real_threads_and_exports_printable_meshes() {
         .iter()
         .all(|sketch| sketch["dof"]["value"] == 0));
 
-    // The author emits JSON with a leading comment header. Compare against
-    // its production inputs without replaying the complete vise or mirroring
-    // a thread-profile formula in this transport regression.
-    let production_source = nbcad_recipes::find("d-screw-vise").unwrap().source;
+    let production_source = limo_cad_recipes::find("d-screw-vise").unwrap().source;
     let production_json = production_source
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
@@ -1182,10 +1305,10 @@ fn d_screw_vise_coupon_replays_real_threads_and_exports_printable_meshes() {
         male["thread"]["rounded_profile"],
         exports["rounded_profile"]
     );
-    let thread: nbcad_solid::HoleThreadDto =
+    let thread: limo_cad_solid::HoleThreadDto =
         serde_json::from_value(male["thread"].clone()).unwrap();
     let female_diameters =
-        nbcad_solid::rounded_thread_diameters(&thread, nbcad_solid::ThreadFit::Internal)
+        limo_cad_solid::rounded_thread_diameters(&thread, limo_cad_solid::ThreadFit::Internal)
             .unwrap()
             .unwrap();
     assert_eq!(exports["nominal_female_mm"], female_diameters[0]);
@@ -1218,8 +1341,7 @@ fn d_screw_vise_coupon_replays_real_threads_and_exports_printable_meshes() {
                 .is_some_and(|r| (2. * r - female_diameters[2]).abs() < 1e-6)),
         "native female minor bore matches the mating profile"
     );
-    // These vertices are the actual captured cross-sections, including the
-    // enlarged female roof; a rectangular slot cannot satisfy this check.
+
     for (part, point) in [
         ("guide_male", [0., 6., 14.]),
         ("guide_male", [0., 14., 22.]),
@@ -1230,7 +1352,9 @@ fn d_screw_vise_coupon_replays_real_threads_and_exports_printable_meshes() {
             body(part)["mesh"]["positions"]
                 .as_array()
                 .unwrap()
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .any(|p| (0..3).all(|axis| (p[axis].as_f64().unwrap() - point[axis]).abs() < 1e-5)),
             "{part} lacks captured profile vertex {point:?}"
         );
@@ -1266,7 +1390,7 @@ fn d_screw_vise_coupon_replays_real_threads_and_exports_printable_meshes() {
     )
     .unwrap();
     write_native_project(
-        &directory.join("d-screw-vise-fit.nbcad"),
+        &directory.join("d-screw-vise-fit.limo"),
         &exports["final_model"],
     );
     let repeated = Client::start().recipe("d-screw-vise-fit");
@@ -1310,8 +1434,7 @@ fn d_screw_vise_coupon_replays_real_threads_and_exports_printable_meshes() {
 #[test]
 fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
     let mut client = Client::start();
-    // This is a full construction/drafting acceptance run, not a single-call
-    // unit test. The deadline remains bounded and failures still stop at once.
+
     client.timeout = Duration::from_secs(900);
     eprintln!("turbine acceptance: complete catalog construction and drawing replay");
     let report = client.recipe("vertical-axis-turbine");
@@ -1377,10 +1500,10 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
         );
     }
     let print_directory =
-        std::env::var_os("NBCAD_RECIPE_ARTIFACT_DIR").map(std::path::PathBuf::from);
+        std::env::var_os("LIMO_CAD_RECIPE_ARTIFACT_DIR").map(std::path::PathBuf::from);
     turbine::check_print_plates(exports, print_directory.as_deref());
     let interference = client.call("assembly_interference_check", json!({}));
-    if let Some(directory) = std::env::var_os("NBCAD_RECIPE_ARTIFACT_DIR") {
+    if let Some(directory) = std::env::var_os("LIMO_CAD_RECIPE_ARTIFACT_DIR") {
         let directory = std::path::PathBuf::from(directory);
         std::fs::create_dir_all(&directory).unwrap();
         std::fs::write(
@@ -1389,7 +1512,7 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
         )
         .unwrap();
         write_native_project(
-            &directory.join("vertical-axis-turbine.nbcad"),
+            &directory.join("vertical-axis-turbine.limo"),
             &exports["final_model"],
         );
         std::fs::write(
@@ -1427,9 +1550,6 @@ fn turbine_replays_edits_restores_prints_and_drives_native_geometry() {
 }
 
 fn validate_turbine_open_overlap(exports: &Value) {
-    // Real native witness solids test a continuous air corridor on either side
-    // of the shaft, above the short clamp hub. They exist only in this disposable
-    // test copy, never in the recipe, drawings or manufacturing artifacts.
     let mut probe = Client::restore(&exports["final_model"]);
     probe.call(
         "sketch_begin",
@@ -1474,8 +1594,6 @@ fn validate_turbine_open_overlap(exports: &Value) {
         .unwrap();
     let corridor_bottom = stage_pose["translation"][2].as_f64().unwrap() + 25.;
     for x in [0., -11.] {
-        // The actual lower stage pose locates the independent local Z25..90
-        // air corridor above the clamp, regardless of bearing stack height.
         probe.call("assembly_set_occurrence_pose", json!({"occurrence_id":witness,"local_pose":{"translation":[x,0.,corridor_bottom],"rotation":[0.,0.,0.,1.]}}));
         for part_name in ["stage", "shaft"] {
             let target =
@@ -1537,7 +1655,7 @@ fn turbine_fit_coupons_have_driving_fits_and_replay_as_closed_prints() {
     assert_eq!(parts.len(), 4);
     let sketches = exports["final_sketches"].as_array().unwrap();
     assert!(sketches.iter().all(|sketch| sketch["dof"]["value"] == 0));
-    let artifact_directory = std::env::var_os("NBCAD_RECIPE_ARTIFACT_DIR")
+    let artifact_directory = std::env::var_os("LIMO_CAD_RECIPE_ARTIFACT_DIR")
         .map(|path| std::path::PathBuf::from(path).join("fit-coupons"));
     if let Some(directory) = &artifact_directory {
         std::fs::create_dir_all(directory).unwrap();
@@ -1619,7 +1737,7 @@ fn turbine_fit_coupons_have_driving_fits_and_replay_as_closed_prints() {
         )
         .unwrap();
         write_native_project(
-            &directory.join("turbine-fit-coupons.nbcad"),
+            &directory.join("turbine-fit-coupons.limo"),
             &exports["final_model"],
         );
         std::fs::write(
@@ -1658,16 +1776,16 @@ fn validate_turbine_edit_and_motion(client: &mut Client, exports: &Value) {
 }
 
 /// Focused developer probe after a retained construction run:
-/// set NBCAD_TURBINE_SAVED_REPORT to that run's JSON report, then run
+/// set LIMO_CAD_TURBINE_SAVED_REPORT to that run's JSON report, then run
 /// `cargo test --test recipes turbine_saved_edit_motion_probe -- --ignored --exact`.
-/// NBCAD_RECIPE_MCP_BIN may select an explicitly copied native test binary.
+/// LIMO_CAD_RECIPE_MCP_BIN may select an explicitly copied native test binary.
 /// This reuses the normal checks; it does not replace independent construction,
 /// installation, print or physical qualification of a changed design.
 #[test]
 #[ignore = "requires an explicitly selected retained turbine report"]
 fn turbine_saved_edit_motion_probe() {
-    let path = std::env::var_os("NBCAD_TURBINE_SAVED_REPORT")
-        .expect("set NBCAD_TURBINE_SAVED_REPORT to a retained native turbine run report");
+    let path = std::env::var_os("LIMO_CAD_TURBINE_SAVED_REPORT")
+        .expect("set LIMO_CAD_TURBINE_SAVED_REPORT to a retained native turbine run report");
     let report: Value = serde_json::from_reader(
         std::fs::File::open(&path)
             .unwrap_or_else(|error| panic!("cannot open turbine report {path:?}: {error}")),
@@ -1675,7 +1793,7 @@ fn turbine_saved_edit_motion_probe() {
     .unwrap();
     let exports = &report["exports"];
     assert_eq!(
-        exports["final_model"]["format"], "nbcad-project",
+        exports["final_model"]["format"], "limo-cad-project",
         "input must contain native recipe exports"
     );
     let mut client = Client::restore(&exports["final_model"]);
@@ -1683,24 +1801,24 @@ fn turbine_saved_edit_motion_probe() {
 }
 
 /// Diagnose installation against a retained new-design native report using
-/// the exact main acceptance helper. Set NBCAD_TURBINE_SAVED_REPORT and run
+/// the exact main acceptance helper. Set LIMO_CAD_TURBINE_SAVED_REPORT and run
 /// `cargo test --test recipes turbine_saved_mechanical_probe -- --ignored --exact`.
 /// This deliberately does not accept a bare model or legacy report without
 /// actual hardware identities, ring envelopes and an explicit axial stack.
-/// Optional NBCAD_TURBINE_MECHANICAL_FOCUS=motor_adjuster_nuts selects only
+/// Optional LIMO_CAD_TURBINE_MECHANICAL_FOCUS=motor_adjuster_nuts selects only
 /// those two shared access checks for diagnosis; normal acceptance never reads it.
 #[test]
 #[ignore = "requires an explicitly selected retained turbine report with hardware metadata"]
 fn turbine_saved_mechanical_probe() {
-    let path = std::env::var_os("NBCAD_TURBINE_SAVED_REPORT")
-        .expect("set NBCAD_TURBINE_SAVED_REPORT to a retained native turbine run report");
+    let path = std::env::var_os("LIMO_CAD_TURBINE_SAVED_REPORT")
+        .expect("set LIMO_CAD_TURBINE_SAVED_REPORT to a retained native turbine run report");
     let report: Value = serde_json::from_reader(
         std::fs::File::open(&path)
             .unwrap_or_else(|error| panic!("cannot open turbine report {path:?}: {error}")),
     )
     .unwrap();
     let exports = &report["exports"];
-    assert_eq!(exports["final_model"]["format"], "nbcad-project");
+    assert_eq!(exports["final_model"]["format"], "limo-cad-project");
     assert!(
         exports["hardware"]
             .as_array()
@@ -1715,7 +1833,7 @@ fn turbine_saved_mechanical_probe() {
         exports["design"]["axial_stack"]["endplay_mm"].is_number(),
         "explicit axial stack is required"
     );
-    match std::env::var("NBCAD_TURBINE_MECHANICAL_FOCUS")
+    match std::env::var("LIMO_CAD_TURBINE_MECHANICAL_FOCUS")
         .ok()
         .as_deref()
     {

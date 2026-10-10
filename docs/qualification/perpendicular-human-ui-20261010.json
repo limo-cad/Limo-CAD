@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-10",
+  "case": "ui/sketch/perpendicular",
+  "status": "passed",
+  "runtime_revision": "93823f6d609799932209bcbeae3938d6fb2e0ce6",
+  "runtime_modified": false,
+  "build_pair": "matched",
+  "operator": "One operator; guarded Rust cad_computer_control individual interactive requests; read-only MCP verification",
+  "fixture": "D:/limo-cad-maintenance/ui-models/Perpendicular check.limo",
+  "checkpoint": "examples/checkpoints/surface-ui-sketch-perpendicular-human-ui.limo",
+  "reopened_session": "a1c87347-c3ee-43b3-a766-5ba9203ef2b4",
+  "expected": "Two free sloped lines become perpendicular; inappropriate geometry rejects safely; retained relation, Undo/Redo and persistence agree with the visible UI.",
+  "passed": [
+    "Empty-selection mode gives readable selection/Escape guidance; Escape cancels.",
+    "Two separate UI-drawn sloped lines begin with no constraints and eight DOF. Perpendicular adds one relation between line IDs 3 and 6, leaving seven DOF. The first line remains unchanged; the second visibly rotates. Normalized direction dot product is -5.4986434782970605e-17.",
+    "Undo restores exact original entities, constraints and DOF; Redo restores exact constrained entities, constraints and DOF. Active session checked after each history action.",
+    "Retained glyph opens a readable perpendicular panel identifying Geometry: 3, 6. Delete removes the relation and restores eight DOF; Undo restores the exact constrained fixture.",
+    "Selecting two endpoints reports Perpendicular: select two lines. Escape cancels with exact accepted entities, constraints and DOF preserved.",
+    "Finished sketch and saved through the native dialog after verifying complete visible filename Perpendicular check.limo. Saved archive model equals live model. Native file-list reopen replaces the session; attached to the fresh session and verified the complete reopened model equals the saved archive."
+  ],
+  "functional": "passed",
+  "interaction": "passed",
+  "polish": "passed",
+  "scope": "Representative XY line-line relation; empty selection, invalid points, cancel, retained deletion, Undo/Redo and native save/reopen. No numeric retained value. Other commands and arbitrary combinations remain separate.",
+  "control_observations": [
+    "Native file-list double-click opened the saved document but the remaining pointer sequence stopped with input_incomplete / Pointer target is occluded by another window as the dialog disappeared. No gesture retry. Fresh session discovery and model inspection verified actual successful reopen."
+  ],
+  "evidence_root": "D:/limo-cad-maintenance",
+  "evidence": [
+    "perpendicular-empty-guidance-20261010.png",
+    "perpendicular-baseline-20261010.json",
+    "perpendicular-applied-20261010.json",
+    "perpendicular-applied-20261010.png",
+    "perpendicular-undo-20261010.json",
+    "perpendicular-redo-20261010.json",
+    "perpendicular-retained-editor-20261010.png",
+    "perpendicular-deleted-20261010.json",
+    "perpendicular-delete-undo-20261010.json",
+    "perpendicular-invalid-points-20261010.png",
+    "perpendicular-invalid-cancel-20261010.json",
+    "perpendicular-save-name-20261010.png",
+    "perpendicular-saved-model-20261010.json",
+    "perpendicular-open-dialog-20261010.png",
+    "perpendicular-reopened-model-20261010.json",
+    "perpendicular-reopened-20261010.png"
+  ]
+}

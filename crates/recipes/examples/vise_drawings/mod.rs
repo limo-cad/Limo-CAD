@@ -74,8 +74,8 @@ fn view(
         projection_request: json!({
             "body_ids":body_ids,"scope":if assembly {"assembly"} else {"definition"},
             "direction":direction,"up":up,"include_hidden":show_hidden,
-            // Match native sheet export so this dimension-source projection
-            // also supplies its exact linework cache entry.
+
+
             "deflection":(0.08 / scale).max(0.01)
         }),
     }
@@ -141,8 +141,7 @@ fn radial(
     view: &View,
     key: &str,
     part: &str,
-    radius: f64,
-    angle: f64,
+    (radius, angle): (f64, f64),
     mode: &str,
 ) {
     let offset = if key == "frame_cartridge_cross_hole" {
@@ -301,8 +300,7 @@ pub fn add(a: &mut Author, parts: &[Value]) -> Vec<String> {
     ] {
         let sheet = sheet(a, part, title, false);
         let body = json!([a.body_id(part)]);
-        // Allocate separate paper regions for each actual part envelope, with
-        // a clear band for notes above the title block at y = 243 mm.
+
         let (top_position, top_scale, end_position, end_scale, iso_position, iso_scale) = match part
         {
             "frame" => ([103., 94.], 0.65, [292., 75.], 0.65, [290., 172.], 0.42),
@@ -354,9 +352,7 @@ pub fn add(a: &mut Author, parts: &[Value]) -> Vec<String> {
             false,
             None,
         );
-        // Only these five views supply dimension anchors. Other views are
-        // projected by native export, including the actual derived section;
-        // they need no separate, unused unsectioned projection here.
+
         if matches!(part, "frame" | "jaw" | "nut") {
             project_for_dimensions(a, &top);
         }
@@ -403,9 +399,7 @@ pub fn add(a: &mut Author, parts: &[Value]) -> Vec<String> {
                 let first = mouth(-D.guide_center - D.guide_base / 2. - D.guide_clearance);
                 let second = mouth(-D.guide_center + D.guide_base / 2. + D.guide_clearance);
                 a.call("vise_jaw_guide_mouth_dimension", "drawing/dimensions", "drawing_add_linear_dimension", json!({"sheet_id":sheet,"view_id":end.id,"first":first,"second":second,"mode":"horizontal","offset":16.,"precision":2}));
-                // Measure the front gripping wall at its carriage shoulder,
-                // where the editable width has distinct, unrounded vertices;
-                // the inset gussets are not gripping-width references.
+
                 let grip_corner = |y| {
                     anchor(
                         &end,
@@ -463,8 +457,7 @@ pub fn add(a: &mut Author, parts: &[Value]) -> Vec<String> {
                     &end,
                     "thrust_head_diameter",
                     part,
-                    16.,
-                    120.,
+                    (16., 120.),
                     "diameter",
                 );
                 notes(a,&sheet,part,222.,&["PRINT: front head face down; full round bearing and D-keyed blind socket are vertical.","Install AFTER the bare shaft passes the bridge. The neck and head detach as one complete fitting.","Closing thrust goes through the stub end into the blind floor and jaw shoulder; the M5 retains opening motion.","Fit the axial M5 while jaw is parked +85 mm, then return the jaw and fit the keeper. Inspect creep and wear."]);

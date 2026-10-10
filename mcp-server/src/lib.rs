@@ -1,30 +1,47 @@
-// The cad_interface schema is one large json! literal; the default macro
-// recursion limit is not enough once its property list grows past this size.
 #![recursion_limit = "256"]
 use std::time::Duration;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use nbcad_export::MeshExportRequest;
-use nbcad_mcp_mutate::{self, PayloadKind as Payload};
-use nbcad_occt::OcctKernel;
-use nbcad_sketch::{host, SketchManager};
-use nbcad_solid::{CommitKernelRequest, RecomputePlanDto, StepExportRequest};
+use limo_cad_export::MeshExportRequest;
+use limo_cad_mcp_mutate::{self, PayloadKind as Payload};
+use limo_cad_occt::OcctKernel;
+use limo_cad_sketch::{host, SketchManager};
+use limo_cad_solid::{CommitKernelRequest, RecomputePlanDto, StepExportRequest};
 use serde_json::{json, Map, Value};
 
+mod assembly_tools;
+mod broker;
+mod build_pair;
 mod cam_tools;
+#[cfg(test)]
+mod component_edit_tests;
+mod computer_control;
 mod desktop;
 mod disclosure;
+#[cfg(test)]
+mod drawing_command_tests;
 mod drawing_tools;
 mod inbox;
 mod interface;
 mod knowledge;
+#[cfg(test)]
+mod lesson_tests;
+mod local_slicer_tools;
+mod manufacturing_tools;
+mod print_height_tools;
+mod print_intent_tools;
+mod print_modifier_tools;
 mod prompts;
 mod script_export;
 mod session;
 mod stdio;
 mod summary;
 
-pub use stdio::{prepare_desktop_stdio, run_desktop_stdio, run_stdio, shutdown_desktop_stdio};
+pub use session::control_owner_error;
+pub use stdio::{
+    desktop_mcp_presence, prepare_desktop_stdio, run_desktop_stdio, run_stdio,
+    shutdown_desktop_stdio, DesktopMcpPresence,
+};
 
 use disclosure::{
     auto_focus_for_tool, tags_for_tool, AdvertisementState, DisclosureMode, DisclosureState,
@@ -35,18 +52,18 @@ const LATEST_PROTOCOL: &str = "2025-06-18";
 
 /// The same recipe catalog powers native discovery and MCP.
 pub fn script_examples() -> Value {
-    nbcad_recipes::catalog(true)
+    limo_cad_recipes::catalog(true)
 }
 
 /// No engine construction is needed to validate or hand off an installed lesson.
 pub fn recipe_id_from_uri(uri: &str) -> Result<&'static str, String> {
-    nbcad_recipes::from_open_uri(uri).map(|recipe| recipe.id)
+    limo_cad_recipes::from_open_uri(uri).map(|recipe| recipe.id)
 }
 
 /// A URL launch reuses a single unambiguous live window when possible. Ordinary
 /// launches remain independent processes, including recording/MCP windows.
 pub fn open_recipe_in_running_desktop(recipe: &str) -> Result<bool, String> {
-    nbcad_recipes::find(recipe)?;
+    limo_cad_recipes::find(recipe)?;
     desktop::open_recipe(recipe)
 }
 
@@ -56,9 +73,13 @@ pub fn open_recipe_in_running_desktop(recipe: &str) -> Result<bool, String> {
 /// is the text the user opened, including unresolved `includes` and comments.
 pub fn inspect_script(arguments: Value) -> Result<Value, String> {
     let loaded = interface::load_script(&arguments)?;
-    let script = nbcad_script::Script::parse(&loaded.expanded)?;
+    let script = limo_cad_script::Script::parse(&loaded.expanded)?;
     interface::validate_script(&script)?;
     let mut result = script.metadata();
+    result["authored_chapters"] = limo_cad_script::authored_chapters(
+        &loaded.authored,
+        result["step_count"].as_u64().unwrap_or(0) as usize,
+    )?;
     result["source"] = Value::String(loaded.expanded);
     result["authored_source"] = Value::String(loaded.authored);
     if let Some(path) = arguments.get("path") {
@@ -92,7 +113,7 @@ pub fn preview_script(source: &str) -> Result<Value, String> {
     if source.len() > 2 * 1024 * 1024 {
         return Err("Preview scripts must be no larger than 2 MiB".into());
     }
-    let metadata = nbcad_script::Script::parse(source)?.metadata();
+    let metadata = limo_cad_script::Script::parse(source)?.metadata();
     let steps = metadata["step_count"].as_u64().unwrap_or(0)
         + metadata["check_count"].as_u64().unwrap_or(0);
     if steps > 80 {
@@ -221,6 +242,8 @@ impl ToolSpec {
 }
 
 struct CadServer {
+    computer_control: computer_control::ComputerControl,
+    verification_owner_id: String,
     manager: SketchManager,
     kernel: OcctKernel,
     disclosure: DisclosureState,
@@ -234,6 +257,9 @@ struct CadServer {
     /// Last completed snapshot loaded into the read manager. UI-only controls
     /// can acknowledge without changing it; avoid replaying identical geometry.
     loaded_snapshot_json: Option<String>,
+    /// A completed UI transition whose snapshot could not be loaded. Model
+    /// commands remain blocked until an explicit attach/refresh succeeds.
+    failed_attachment: Option<AttachmentFailure>,
     pending_recompute_transaction: Option<u64>,
     /// Forward record of successful mutating `tools/call` entries for `cad_script`.
     tool_trace: Vec<Value>,
@@ -253,7 +279,7 @@ struct CadServer {
     script_running: bool,
     /// Interpreter-owned progress transported with both modes' existing inbox
     /// operations, never counted independently by the host or UI.
-    script_progress: Option<nbcad_script::RunProgress>,
+    script_progress: Option<limo_cad_script::RunProgress>,
     live_snapshot_dirty: bool,
     /// Desktop stdio starts with this process's live document, never an
     /// invisible independent model. After detach, selection must be explicit.
@@ -265,15 +291,28 @@ struct DesktopBinding {
     initial_selection_pending: bool,
 }
 
+struct AttachmentFailure {
+    session_id: String,
+    error: String,
+}
+
+enum SnapshotRefresh {
+    DeferDuringScript,
+    Immediate,
+}
+
 impl CadServer {
     fn new() -> Result<Self, String> {
         Ok(Self {
+            computer_control: computer_control::ComputerControl::default(),
+            verification_owner_id: limo_cad_export::slicer_verification::new_verification_owner(),
             manager: SketchManager::new(),
             kernel: OcctKernel::new().map_err(|error| error.to_string())?,
             disclosure: DisclosureState::new(),
             attached_document_id: None,
             attached_generation: None,
             loaded_snapshot_json: None,
+            failed_attachment: None,
             pending_recompute_transaction: None,
             tool_trace: Vec::new(),
             composite_depth: 0,
@@ -290,22 +329,62 @@ impl CadServer {
     fn call_tool(&mut self, name: &str, arguments: Value) -> Result<Value, String> {
         self.ensure_desktop_target(name, &arguments)?;
         let live_mutation = self.attached_document_id.is_some() && is_modeling_mutate(name);
-        let trace_args = arguments.clone();
+        let trace_args = (records_in_script(name) && !live_mutation && self.composite_depth == 0)
+            .then(|| arguments.clone());
         let result = self.dispatch_tool(name, arguments);
-        if result.is_ok() && is_modeling_mutate(name) {
+        if result.is_ok() && changes_model(name) {
             self.modeling_mutations += 1;
+            let _ = limo_cad_export::slicer_verification::local_slicer_service()
+                .observe_owned_model(&self.verification_owner_id, || {
+                    self.manager
+                        .export_project_model()
+                        .map_err(|error| error.to_string())
+                });
         }
-        if result.is_ok() && records_in_script(name) && !live_mutation && self.composite_depth == 0
-        {
-            self.tool_trace.push(json!({
-                "name": name,
-                "arguments": trace_args,
-            }));
+        if result.is_ok() {
+            if let Some(trace_args) = trace_args {
+                self.tool_trace.push(json!({
+                    "name": name,
+                    "arguments": trace_args,
+                }));
+            }
         }
         result
     }
 
     fn ensure_desktop_target(&mut self, name: &str, arguments: &Value) -> Result<(), String> {
+        if let Some(failure) = &self.failed_attachment {
+            let independent = if name == "cad_interface" {
+                arguments["action"].is_null()
+                    || arguments["action"].as_str().is_some_and(|action| {
+                        session::is_ui_action(action)
+                            || matches!(action, "catalog" | "recipes" | "launch")
+                    })
+                    || (arguments["action"] == "execute"
+                        && arguments["operation"].as_str().is_some_and(|operation| {
+                            matches!(operation, "cad_session_status" | "cad_await_apply")
+                                && arguments["group"] == interface::group_for(operation).unwrap()
+                        }))
+                    || (arguments["action"] == "execute"
+                        && stdio::independent_of_default_document(name, arguments))
+            } else {
+                matches!(
+                    name,
+                    "cad_refresh" | "cad_session_status" | "cad_await_apply"
+                ) || stdio::independent_of_default_document(name, arguments)
+            };
+            if !independent {
+                return Err(json!({
+                    "code":"attachment_unavailable",
+                    "session_id":failure.session_id,
+                    "snapshot_error":failure.error,
+                    "retained_snapshot_session_id":self.attached_document_id,
+                    "model_commands_blocked":true,
+                    "hint":"Recover the active snapshot with cad_attach or cad_refresh; cad_detach explicitly releases the live target."
+                }).to_string());
+            }
+            return Ok(());
+        }
         let Some(binding) = &self.desktop_binding else {
             return Ok(());
         };
@@ -319,6 +398,79 @@ impl CadServer {
         }
         let session_id = session::desktop_default_session(binding.process_id)?;
         self.attach_read_only_snapshot(&json!({"session_id":session_id}))?;
+        Ok(())
+    }
+
+    fn interface_session(&self) -> Option<&str> {
+        self.failed_attachment
+            .as_ref()
+            .map(|failure| failure.session_id.as_str())
+            .or(self.attached_document_id.as_deref())
+    }
+
+    fn report_attachment_failure(&self, result: &mut Value) {
+        let failure = self.failed_attachment.as_ref().unwrap();
+        result["attached"] = json!(false);
+        result["attached_session_id"] = Value::Null;
+        result["snapshot_error"] = json!(failure.error);
+        result["model_commands_blocked"] = json!(true);
+        result["retained_snapshot_session_id"] = json!(self.attached_document_id);
+    }
+
+    /// Preserve a completed native receipt even when the read manager cannot
+    /// load its active document. Never leave the previous snapshot callable.
+    fn follow_interface_attachment(
+        &mut self,
+        result: &mut Value,
+        active: String,
+        refresh: SnapshotRefresh,
+    ) -> Result<(), String> {
+        if self.script_running && self.attached_document_id.as_deref() != Some(active.as_str()) {
+            let error =
+                "Active document changed during script playback; no later commands were submitted";
+            self.failed_attachment = Some(AttachmentFailure {
+                session_id: active,
+                error: error.into(),
+            });
+            self.report_attachment_failure(result);
+            return Err(format!("{error}: {result}"));
+        }
+        if self
+            .failed_attachment
+            .as_ref()
+            .is_some_and(|failure| failure.session_id == active)
+        {
+            self.report_attachment_failure(result);
+            return Ok(());
+        }
+        let attached = if self.attached_document_id.as_deref() != Some(active.as_str()) {
+            self.attach_read_only_snapshot(&json!({"session_id":active}))
+                .map(|_| ())
+        } else if self.script_running && matches!(refresh, SnapshotRefresh::DeferDuringScript) {
+            self.live_snapshot_dirty = true;
+            Ok(())
+        } else {
+            self.load_snapshot_model(&active, true).map(|changed| {
+                if changed {
+                    self.apply_snapshot_focus(&active);
+                }
+            })
+        };
+        match attached {
+            Ok(()) => {
+                self.failed_attachment = None;
+                result["attached"] = json!(true);
+                result["attached_session_id"] = json!(active);
+                result["model_commands_blocked"] = json!(false);
+            }
+            Err(error) => {
+                self.failed_attachment = Some(AttachmentFailure {
+                    session_id: active,
+                    error,
+                });
+                self.report_attachment_failure(result);
+            }
+        }
         Ok(())
     }
 
@@ -337,7 +489,7 @@ impl CadServer {
             .attached_document_id
             .as_deref()
             .is_some_and(|session_id| {
-                nbcad_mcp_mutate::is_live_engine_query(engine_method)
+                limo_cad_mcp_mutate::is_live_engine_query(engine_method)
                     && (engine_method != "assembly_document"
                         || session::heartbeat_meta(session_id)["interface_version"] == 1)
             });
@@ -350,8 +502,6 @@ impl CadServer {
             self.refresh_read_only_snapshot()?;
         }
 
-        // The operation is identical with or without a renderer. A live
-        // document still owns its engine: hide its inbox protocol from callers.
         if self.attached_document_id.is_some() && is_modeling_mutate(name) {
             return self.execute_interface(
                 &json!({"operation":name,"group":interface::group_for(name),"arguments":arguments}),
@@ -373,7 +523,7 @@ impl CadServer {
             self.disclosure.re_promote(pack);
         }
 
-        let payload = nbcad_mcp_mutate::encode_payload(payload_kind, &arguments)?;
+        let payload = limo_cad_mcp_mutate::encode_payload(payload_kind, &arguments)?;
 
         let mut value = if let Some(session_id) =
             self.attached_document_id.as_deref().filter(|_| live_query)
@@ -381,36 +531,46 @@ impl CadServer {
             session::request_engine_query(session_id, engine_method, &payload)?
         } else if execution == Execution::Direct {
             if name == "drawing_export" {
-                let request: nbcad_occt::drawing_export::DrawingExportRequest =
+                let request: limo_cad_occt::drawing_export::DrawingExportRequest =
                     serde_json::from_value(arguments).map_err(|e| e.to_string())?;
-                let scene = self.manager.solid_scene();
-                let content = nbcad_occt::drawing_export::export_sheet(
-                    &self.manager.drawing_document(),
-                    &scene,
-                    &self.manager.assembly_document(),
+                let scene = self.manager.solid_scene_ref();
+                let content = limo_cad_occt::drawing_export::export_sheet(
+                    self.manager.drawing_document_ref(),
+                    scene,
+                    self.manager.assembly_document_ref(),
                     &request,
                     |r| {
-                        nbcad_occt::project_drawing(
+                        limo_cad_occt::project_drawing(
                             &self.kernel,
-                            &scene,
-                            &self.manager.assembly_document(),
+                            scene,
+                            self.manager.assembly_document_ref(),
                             r,
                         )
                         .map_err(|e| e.to_string())
                     },
                 )?;
                 json!({"format":request.format,"encoding":"utf8","content":content,"sheet_id":request.sheet_id})
-            } else if name == "drawing_projection" {
-                let request: nbcad_occt::DrawingProjectionRequest =
+            } else if name == "solid_section_review" {
+                let request: limo_cad_occt::section_review::SectionReviewRequest =
                     serde_json::from_value(arguments).map_err(|e| e.to_string())?;
-                let scene = self.manager.solid_scene();
+                let review = limo_cad_occt::section_review::inspect(
+                    &self.kernel,
+                    self.manager.solid_scene_ref(),
+                    &request,
+                )
+                .map_err(|error| error.to_string())?;
+                serde_json::to_value(review).map_err(|e| e.to_string())?
+            } else if name == "drawing_projection" {
+                let request: limo_cad_occt::DrawingProjectionRequest =
+                    serde_json::from_value(arguments).map_err(|e| e.to_string())?;
+                let scene = self.manager.solid_scene_ref();
                 if !scene.errors.is_empty() {
                     return Err("Resolve timeline errors before generating a drawing view.".into());
                 }
-                let projection = nbcad_occt::project_drawing(
+                let projection = limo_cad_occt::project_drawing(
                     &self.kernel,
-                    &scene,
-                    &self.manager.assembly_document(),
+                    scene,
+                    self.manager.assembly_document_ref(),
                     &request,
                 )
                 .map_err(|e| e.to_string())?;
@@ -423,7 +583,7 @@ impl CadServer {
                         .map_err(|error| format!("invalid STEP export request: {error}"))?
                 };
                 if request.expected_model_json.is_some() {
-                    nbcad_solid::check_export_model_snapshot(
+                    limo_cad_solid::check_export_model_snapshot(
                         request.expected_model_json.as_deref(),
                         &self
                             .manager
@@ -440,8 +600,39 @@ impl CadServer {
                     "encoding": "base64",
                     "bytes_base64": BASE64.encode(bytes),
                 })
+            } else if name == "bambu_template_inspect" {
+                manufacturing_tools::inspect(arguments)?
+            } else if name == "bambu_local_verification_start" {
+                self.start_local_verification(arguments)?
+            } else if name == "bambu_local_verification_poll"
+                || name == "bambu_local_verification_cancel"
+            {
+                self.local_verification_status(
+                    arguments,
+                    name == "bambu_local_verification_cancel",
+                )?
+            } else if name == "bambu_project_preview" || name == "solid_export_bambu_project" {
+                self.export_bambu_project(arguments, name == "bambu_project_preview")?
             } else if name == "solid_export_stl" || name == "solid_export_3mf" {
                 self.export_mesh(name, arguments)?
+            } else if name == "assembly_evaluate_motion_study" {
+                let request = serde_json::from_value(arguments)
+                    .map_err(|e| format!("motion evaluation request: {e}"))?;
+                serde_json::to_value(limo_cad_occt::evaluate_motion_study(
+                    &self.manager,
+                    &self.kernel,
+                    &request,
+                )?)
+                .map_err(|e| e.to_string())?
+            } else if name == "assembly_swept_collision_check" {
+                let request = serde_json::from_value(arguments)
+                    .map_err(|e| format!("swept collision request: {e}"))?;
+                serde_json::to_value(limo_cad_occt::exact_swept_collision_check(
+                    &self.manager,
+                    &self.kernel,
+                    &request,
+                )?)
+                .map_err(|e| e.to_string())?
             } else if name == "assembly_interference_check" {
                 let request = serde_json::from_value(arguments)
                     .map_err(|e| format!("interference request: {e}"))?;
@@ -449,9 +640,9 @@ impl CadServer {
                 if !solution.solved {
                     return Err("Cannot inspect interference in an unsolved assembly".into());
                 }
-                serde_json::to_value(nbcad_occt::exact_interference_report(
+                serde_json::to_value(limo_cad_occt::exact_interference_report(
                     &self.kernel,
-                    &self.manager.solid_scene(),
+                    self.manager.solid_scene_ref(),
                     &solution.instance_body_poses,
                     &request,
                 )?)
@@ -459,11 +650,14 @@ impl CadServer {
             } else if name == "solid_tessellate" {
                 self.tessellate_tool(arguments)?
             } else if name == "solid_export_preflight" {
-                self.export_preflight_tool()?
+                self.export_preflight_tool(arguments)?
             } else if name == "demo_export_pip_3mf" {
                 self.demo_pip_3mf_tool(arguments)?
+            } else if name == "printer_catalog" {
+                serde_json::to_value(limo_cad_core::embedded_printer_catalog())
+                    .map_err(|e| e.to_string())?
             } else if name == "material_catalog" {
-                serde_json::from_str(&nbcad_export::catalog_json())
+                serde_json::from_str(&limo_cad_export::catalog_json())
                     .map_err(|error| format!("catalog json: {error}"))?
             } else if name == "body_appearances" {
                 serde_json::to_value(self.manager.body_appearances())
@@ -485,7 +679,8 @@ impl CadServer {
                 .map_err(|error| format!("engine returned an invalid recompute plan: {error}"))?;
             let transaction_id = plan.transaction_id;
             self.pending_recompute_transaction = Some(transaction_id);
-            let scene = match self.kernel.recompute(&plan) {
+            let queries = self.manager.history_support_queries();
+            let (scene, verified) = match self.kernel.recompute_with_supports(&plan, &queries) {
                 Ok(scene) => scene,
                 Err(error) => {
                     self.manager.cancel_solid_recompute(transaction_id);
@@ -497,12 +692,12 @@ impl CadServer {
                 transaction_id,
                 scene,
             };
-            let committed = parse_engine_envelope(host::handle(
-                &mut self.manager,
-                "solid_commit",
-                &serde_json::to_string(&commit)
-                    .map_err(|error| format!("could not encode kernel result: {error}"))?,
-            ))?;
+            let committed = serde_json::to_value(
+                self.manager
+                    .commit_solid_with_verified_supports(commit, &verified)
+                    .map_err(|error| error.to_string())?,
+            )
+            .map_err(|error| error.to_string())?;
             self.pending_recompute_transaction = None;
             committed
         };
@@ -560,11 +755,24 @@ impl CadServer {
                 }
             }
             "cad_list_sessions" => session::sessions_list_json(),
+            "cad_computer_control" => {
+                let result = self
+                    .computer_control
+                    .call(&arguments, self.attached_document_id.as_deref())?;
+                if matches!(
+                    result["status"].as_str(),
+                    Some("input_sent" | "input_incomplete")
+                ) {
+                    self.live_snapshot_dirty = true;
+                }
+                result
+            }
+            "cad_route" => broker::call(arguments)?,
             "cad_interface" => {
                 if arguments["action"].is_null() || arguments["action"] == "catalog" {
                     json!({"groups":interface::groups(),"operations":full_tool_catalog()})
                 } else if arguments["action"] == "recipes" {
-                    nbcad_recipes::catalog(false)
+                    limo_cad_recipes::catalog(false)
                 } else if arguments["action"] == "execute" {
                     self.execute_interface(&arguments)?
                 } else if arguments["action"] == "script" {
@@ -576,39 +784,35 @@ impl CadServer {
                 } else if arguments["action"] == "export_script" {
                     self.export_script(&arguments)?
                 } else if arguments["action"] == "open_recipe" {
-                    // Source-editor delivery is independent of the CAD model.
-                    // The window receipt includes active_session_id, but this
-                    // action must never attach or hydrate that model snapshot.
-                    session::request_ui(&arguments, self.attached_document_id.as_deref())?
+                    session::request_ui(&arguments, self.interface_session())?
                 } else if arguments["action"] == "launch" {
                     let mut launched = desktop::launch(&arguments)?;
                     if launched["status"] == "ready" {
-                        self.attach_read_only_snapshot(
-                            &json!({"session_id":launched["session_id"]}),
+                        let active = launched["session_id"]
+                            .as_str()
+                            .ok_or("Ready desktop has no session ID")?
+                            .to_owned();
+                        self.follow_interface_attachment(
+                            &mut launched,
+                            active,
+                            SnapshotRefresh::DeferDuringScript,
                         )?;
-                        launched["attached"] = json!(true);
                     }
                     launched
                 } else {
-                    let mut result =
-                        session::request_ui(&arguments, self.attached_document_id.as_deref())?;
+                    let mut result = session::request_ui(&arguments, self.interface_session())?;
+                    if arguments["action"] == "inspect" {
+                        build_pair::decorate(&mut result);
+                    }
                     if result["status"] == "applied" {
                         if let Some(active) =
                             result["active_session_id"].as_str().map(str::to_owned)
                         {
-                            if self.attached_document_id.as_deref() != Some(active.as_str()) {
-                                if self.script_running {
-                                    return Err("Active document changed during script playback; no later commands were submitted".into());
-                                }
-                                self.attach_read_only_snapshot(&json!({"session_id":active}))?;
-                            } else if self.script_running {
-                                // Captions, controls and camera acknowledgements
-                                // do not require a second OCCT reconstruction.
-                                self.live_snapshot_dirty = true;
-                            } else if self.load_snapshot_model(&active, true)? {
-                                self.apply_snapshot_focus(&active);
-                            }
-                            result["attached_session_id"] = json!(active);
+                            self.follow_interface_attachment(
+                                &mut result,
+                                active,
+                                SnapshotRefresh::DeferDuringScript,
+                            )?;
                         }
                     }
                     result
@@ -618,7 +822,14 @@ impl CadServer {
             "cad_refresh" => self.refresh_read_only_snapshot()?,
             "cad_detach" => {
                 let previous = self.attached_document_id.take();
+                let previous = self
+                    .failed_attachment
+                    .take()
+                    .map(|failure| failure.session_id)
+                    .or(previous);
                 self.attached_generation = None;
+                self.loaded_snapshot_json = None;
+                self.live_snapshot_dirty = false;
                 if let Some(binding) = &mut self.desktop_binding {
                     binding.initial_selection_pending = false;
                 }
@@ -634,7 +845,31 @@ impl CadServer {
                 }
                 json!({ "calls": self.tool_trace.clone() })
             }
-            "cad_compare_solids" => compare_solids_summary(&self.manager.solid_scene()),
+            "cad_compare_solids" => {
+                if let Some(session_id) = self.attached_document_id.as_deref() {
+                    let mut receipt = broker::inspect_solid_scene(session_id)?;
+                    let scene = receipt
+                        .as_object_mut()
+                        .and_then(|receipt| receipt.remove("value"))
+                        .ok_or_else(|| {
+                            json!({"code":"missing_live_solid_scene",
+                                "message":"Live solid scene query omitted its scene",
+                                "source":receipt})
+                            .to_string()
+                        })?;
+                    let scene: limo_cad_solid::SolidSceneDto = serde_json::from_value(scene)
+                        .map_err(|error| {
+                            json!({"code":"invalid_live_solid_scene",
+                                "message":format!("Live solid scene query returned invalid scene: {error}"),
+                                "source":receipt}).to_string()
+                        })?;
+                    let mut summary = compare_solids_summary(&scene);
+                    summary["source"] = receipt;
+                    summary
+                } else {
+                    compare_solids_summary(self.manager.solid_scene_ref())
+                }
+            }
             "cad_submit" => self.submit_inbox_op(&arguments)?,
             "cad_await_apply" => self.await_inbox_apply(&arguments)?,
             "cad_session_status" => self.session_status()?,
@@ -648,7 +883,7 @@ impl CadServer {
             return Err("Scripts cannot recursively run another script".into());
         }
         let source = interface::script_source(arguments)?;
-        let script = nbcad_script::Script::parse(&source)?;
+        let script = limo_cad_script::Script::parse(&source)?;
         interface::validate_script(&script)?;
         if let Some(session_id) = arguments.get("session_id") {
             let session_id = session_id
@@ -687,17 +922,12 @@ impl CadServer {
             self.refresh_read_only_snapshot()?;
         }
         let active_sketch = self.call_tool("sketch_active", json!({}))?;
-        if !active_sketch.is_null()
-            || !self.manager.document_dto().features.is_empty()
-            || !self.manager.solid_scene().bodies.is_empty()
-            || !self.manager.drawing_document().sheets.is_empty()
-            || self.manager.assembly_document() != nbcad_sketch::AssemblyDocumentDto::default()
-        {
+        if !active_sketch.is_null() || !self.manager.is_blank_for_script() {
             return Err(
                 "Script requires a blank document; create a new file before running it".into(),
             );
         }
-        let options = nbcad_script::RunOptions {
+        let options = limo_cad_script::RunOptions {
             presentation,
             validate: arguments
                 .get("validate")
@@ -712,8 +942,7 @@ impl CadServer {
             if let Some(speed) = arguments.get("speed") {
                 configure["speed"] = speed.clone();
             }
-            // Pin the document before any live control acknowledgement can
-            // follow a newly active tab. Its blank precondition was checked above.
+
             self.script_running = true;
             let configured = self.call_tool("cad_interface", configure);
             match configured {
@@ -728,7 +957,7 @@ impl CadServer {
             }
         }
         self.script_running = true;
-        let mut result = nbcad_script::run_with_progress(
+        let mut result = limo_cad_script::run_with_progress(
             &script,
             |name, arguments, progress| {
                 self.script_progress = Some(progress);
@@ -752,8 +981,6 @@ impl CadServer {
         self.script_running = false;
         self.script_progress = None;
         if self.live_snapshot_dirty {
-            // Preserve the original step failure if rebuilding the read cache
-            // also fails. The live document remains the authoritative result.
             if let Err(error) = self.refresh_read_only_snapshot() {
                 if result.is_ok() {
                     result = Err(error);
@@ -762,14 +989,9 @@ impl CadServer {
         }
         if self.attached_document_id.is_some() {
             let presentation_result = match &result {
-                // Notes are sparse, and fast mode skips them entirely. The
-                // interpreter's completed count is authoritative after all
-                // final checks and the live snapshot refresh have succeeded.
                 Ok(report) => json!({"action":"presentation","command":"finish",
                     "step_index":report["steps_completed"],"step_count":step_count}),
                 Err(_) => {
-                    // Keep transport receipts in the MCP error, rather than
-                    // covering the design with raw JSON in the caption card.
                     json!({"action":"presentation","command":"stop","text":"Playback stopped. The partial design is preserved; see the script error for details."})
                 }
             };
@@ -788,12 +1010,11 @@ impl CadServer {
             self.last_script_mutations = self.modeling_mutations;
             self.last_script_source = Some(source);
         }
-        // Feedback the agent can act on: what was built, in feature terms, and
-        // the mistakes that do not raise errors. Compact unless detail is full.
+
         result.map(|mut report| {
-            let scene = self.manager.solid_scene();
+            let scene = self.manager.solid_scene_ref();
             let definitions = self.manager.hole_definitions();
-            let built = summary::summarize(&scene, &definitions);
+            let built = summary::summarize(scene, &definitions);
             report["summary"] = built.json(detail_full);
             report["warnings"] = Value::Array(summary::warnings(
                 &built,
@@ -816,9 +1037,9 @@ impl CadServer {
         if self.attached_document_id.is_some() {
             self.refresh_read_only_snapshot()?;
         }
-        let scene = self.manager.solid_scene();
+        let scene = self.manager.solid_scene_ref();
         let definitions = self.manager.hole_definitions();
-        let built = summary::summarize(&scene, &definitions);
+        let built = summary::summarize(scene, &definitions);
         let mut value = built.json(full);
         value["warnings"] = Value::Array(summary::warnings(&built, &definitions, &[]));
         Ok(value)
@@ -843,9 +1064,9 @@ impl CadServer {
         if self.attached_document_id.is_some() {
             self.refresh_read_only_snapshot()?;
         }
-        let scene = self.manager.solid_scene();
+        let scene = self.manager.solid_scene_ref();
         let definitions = self.manager.hole_definitions();
-        let built = summary::summarize(&scene, &definitions);
+        let built = summary::summarize(scene, &definitions);
         summary::check(&built, expected, tolerance)
     }
 
@@ -962,7 +1183,7 @@ impl CadServer {
             .filter(|body| feature_id.is_none() || body["feature_id"].as_u64() == feature_id)
             .filter_map(|body| body["id"].as_u64())
             .collect();
-        let scene = self.manager.solid_scene();
+        let scene = self.manager.solid_scene_ref();
         let definitions = self.manager.hole_definitions();
         Ok(json!({
             "feature_id": feature_id,
@@ -971,12 +1192,12 @@ impl CadServer {
             "origin": origin,
             "size": size,
             "operation": operation,
-            "summary": summary::summarize(&scene, &definitions).json(false),
+            "summary": summary::summarize(scene, &definitions).json(false),
         }))
     }
 
     /// The print and plate size named by a print tool call.
-    fn print_source(arguments: &Value) -> Result<(nbcad_print::Source, f64, f64), String> {
+    fn print_source(arguments: &Value) -> Result<(limo_cad_print::Source, f64, f64), String> {
         let path = arguments["path"]
             .as_str()
             .ok_or("print tools need path: an absolute PDF, PNG or PGM file of the print")?;
@@ -999,14 +1220,14 @@ impl CadServer {
             .as_f64()
             .filter(|v| *v > 0.0)
             .ok_or("width_mm must be a positive number: the plate's plan-view width along y")?;
-        let source = nbcad_print::Source::open(file, page)?;
+        let source = limo_cad_print::Source::open(file, page)?;
         match arguments.get("hint") {
-            None => nbcad_print::set_hint(None),
+            None => limo_cad_print::set_hint(None),
             Some(hint) => {
                 let text = hint
                     .as_str()
                     .ok_or("hint must be \"x0,y0,x1,y1\" page fractions around the plan view")?;
-                nbcad_print::set_hint(Some(nbcad_print::parse_region(text)?));
+                limo_cad_print::set_hint(Some(limo_cad_print::parse_region(text)?));
             }
         }
         Ok((source, length, width))
@@ -1015,7 +1236,7 @@ impl CadServer {
     /// Holes to draw or check on the print: the document's own holes (default),
     /// an explicit list, or none. `frame: "bbox_min"` shifts the document's
     /// holes so the bodies' lower-left corner is the print origin.
-    fn print_holes(&mut self, arguments: &Value) -> Result<Vec<nbcad_print::Hole>, String> {
+    fn print_holes(&mut self, arguments: &Value) -> Result<Vec<limo_cad_print::Hole>, String> {
         let explicit = match arguments.get("holes") {
             None => None,
             Some(Value::String(mode)) if mode == "document" => None,
@@ -1027,7 +1248,7 @@ impl CadServer {
             return list
                 .iter()
                 .map(|hole| {
-                    Ok(nbcad_print::Hole {
+                    Ok(limo_cad_print::Hole {
                         x: hole["x"].as_f64().ok_or("hole needs x")?,
                         y: hole["y"].as_f64().ok_or("hole needs y")?,
                         d: hole["diameter"].as_f64().unwrap_or(3.0),
@@ -1039,9 +1260,9 @@ impl CadServer {
         if self.attached_document_id.is_some() {
             self.refresh_read_only_snapshot()?;
         }
-        let scene = self.manager.solid_scene();
+        let scene = self.manager.solid_scene_ref();
         let definitions = self.manager.hole_definitions();
-        let built = summary::summarize(&scene, &definitions);
+        let built = summary::summarize(scene, &definitions);
         let (dx, dy) = match arguments.get("frame").and_then(Value::as_str) {
             None | Some("world") => (0.0, 0.0),
             Some("bbox_min") => built
@@ -1057,7 +1278,7 @@ impl CadServer {
             .holes
             .iter()
             .filter(|hole| hole.normal[2].abs() > 0.9)
-            .map(|hole| nbcad_print::Hole {
+            .map(|hole| limo_cad_print::Hole {
                 x: hole.position[0] - dx,
                 y: hole.position[1] - dy,
                 d: hole.diameter,
@@ -1068,7 +1289,7 @@ impl CadServer {
 
     fn print_tool(&mut self, name: &str, arguments: Value) -> Result<Value, String> {
         let (source, length, width) = Self::print_source(&arguments)?;
-        let cal = nbcad_print::calibrate(&source, length, width)?;
+        let cal = limo_cad_print::calibrate(&source, length, width)?;
         let dpi = |default: u32| -> Result<u32, String> {
             match arguments.get("dpi") {
                 None => Ok(default),
@@ -1104,7 +1325,7 @@ impl CadServer {
                 json!({"ok": true, "calibration": calibration, "length_mm": length, "width_mm": width}),
             ),
             "print_crop" => {
-                let region = nbcad_print::parse_region(
+                let region = limo_cad_print::parse_region(
                     arguments["region"]
                         .as_str()
                         .ok_or("print_crop needs region: \"x0,y0,x1,y1\" in plate millimetres")?,
@@ -1117,7 +1338,7 @@ impl CadServer {
                         .ok_or("grid_mm must be a non-negative number")?,
                 };
                 let holes = self.print_holes(&arguments)?;
-                let image = nbcad_print::crop(&source, &cal, region, dpi(400)?, &holes, grid)?;
+                let image = limo_cad_print::crop(&source, &cal, region, dpi(400)?, &holes, grid)?;
                 let png_path = write_png(&image.png)?;
                 Ok(json!({
                     "ok": true,
@@ -1137,13 +1358,13 @@ impl CadServer {
                         .filter(|s| *s > 0.0)
                         .ok_or("search_mm must be positive")?,
                 };
-                let report = nbcad_print::ring_score(&source, &cal, &holes, dpi(600)?, search)?;
+                let report = limo_cad_print::ring_score(&source, &cal, &holes, dpi(600)?, search)?;
                 serde_json::from_str(&report).map_err(|e| e.to_string())
             }
             "print_symbols" => {
                 let region = match arguments.get("region") {
                     None => None,
-                    Some(v) => Some(nbcad_print::parse_region(
+                    Some(v) => Some(limo_cad_print::parse_region(
                         v.as_str().ok_or("region must be \"x0,y0,x1,y1\"")?,
                     )?),
                 };
@@ -1152,7 +1373,8 @@ impl CadServer {
                     .get("draw")
                     .and_then(Value::as_bool)
                     .unwrap_or(out_png.is_some());
-                let report = nbcad_print::symbols(&source, &cal, region, dpi(400)?, &holes, draw)?;
+                let report =
+                    limo_cad_print::symbols(&source, &cal, region, dpi(400)?, &holes, draw)?;
                 let mut value: Value =
                     serde_json::from_str(&report.json).map_err(|e| e.to_string())?;
                 if let Some(png) = report.png {
@@ -1173,8 +1395,6 @@ impl CadServer {
                 return Err("Playback stopped".into());
             }
             if state["step_pending"] == true {
-                // Let the runner reach the next modeling operation; the
-                // native inbox consumes the permit after that operation.
                 return Ok(());
             }
             let wait_ms = state["wait_ms"].as_u64().unwrap_or(0);
@@ -1184,7 +1404,7 @@ impl CadServer {
             std::thread::sleep(Duration::from_millis(if state["paused"] == true {
                 250
             } else {
-                wait_ms.min(250).max(1)
+                wait_ms.clamp(1, 250)
             }));
             result = self.call_tool(
                 "cad_interface",
@@ -1215,6 +1435,7 @@ impl CadServer {
             return Err(json!({"code":"session_read_only","session_mode":"read_only_snapshot","session_id":session_id,"hint":"desktop does not support the grouped interface; rebuild/restart before executing (nothing submitted)","writeback":false}).to_string());
         }
         let generation = session::read_heartbeat_generation(&session_id)?;
+        let model_change = changes_model(name);
         let submitted = self.submit_inbox_op(
             &json!({"name":name,"arguments":payload,"base_generation":generation}),
         )?;
@@ -1223,7 +1444,7 @@ impl CadServer {
             .ok_or("submission omitted sequence")?;
         let applied = await_playback_receipt(
             || {
-                self.await_inbox_apply(&json!({"session_id":session_id,"seq":seq,"timeout_ms":30000,"refresh":!self.script_running,"poll_ms":10}))
+                self.await_inbox_apply(&json!({"session_id":session_id,"seq":seq,"timeout_ms":30000,"refresh":model_change && !self.script_running,"poll_ms":10}))
             },
             || {
                 session::request_ui(
@@ -1233,16 +1454,13 @@ impl CadServer {
             },
         )?;
         if applied["status"] != "applied" {
-            // Preserve the receipt and sequence: an uncertain operation must
-            // never be silently retried by the interface.
             return Err(applied.to_string());
         }
-        if self.script_running && applied["model_published"] == true {
+        if model_change && self.script_running && applied["model_published"] == true {
             self.live_snapshot_dirty = true;
         }
-        // A completed-model refresh already seeded a replay baseline containing
-        // this edit. Only active-sketch edits still need an individual entry.
-        if applied["refreshed"] != true && self.composite_depth == 0 {
+
+        if records_in_script(name) && applied["refreshed"] != true && self.composite_depth == 0 {
             self.tool_trace
                 .push(json!({"name":name,"arguments":payload}));
         }
@@ -1265,7 +1483,7 @@ impl CadServer {
     }
 
     /// Load `model.json` (+ optional `focus.json`) into this process.
-    /// Marks attached only after a successful model load (Jack §3).
+    /// Marks attached only after a successful model load (Jack Â§3).
     /// Target by `session_id` (UUID), `window_id`, and/or `document_id`.
     fn attach_read_only_snapshot(&mut self, arguments: &Value) -> Result<Value, String> {
         let session_arg = arguments.get("session_id").and_then(Value::as_str);
@@ -1280,6 +1498,7 @@ impl CadServer {
         self.load_snapshot_model(session_id, false)?;
         self.apply_snapshot_focus(session_id);
         self.attached_document_id = Some(session_id.to_string());
+        self.failed_attachment = None;
         if let Some(binding) = &mut self.desktop_binding {
             binding.initial_selection_pending = false;
         }
@@ -1299,10 +1518,25 @@ impl CadServer {
 
     /// Re-read the currently attached session from disk into this process.
     fn refresh_read_only_snapshot(&mut self) -> Result<Value, String> {
+        if let Some(session_id) = self
+            .failed_attachment
+            .as_ref()
+            .map(|failure| failure.session_id.clone())
+        {
+            let mut result = self.attach_read_only_snapshot(&json!({"session_id":session_id}))?;
+            result["refreshed"] = json!(true);
+            return Ok(result);
+        }
         let Some(session_id) = self.attached_document_id.clone() else {
             return Err("no session attached; call cad_attach first".to_string());
         };
-        self.load_snapshot_model(&session_id, false)?;
+        if let Err(error) = self.load_snapshot_model(&session_id, false) {
+            self.failed_attachment = Some(AttachmentFailure {
+                session_id,
+                error: error.clone(),
+            });
+            return Err(error);
+        }
         self.apply_snapshot_focus(&session_id);
         Ok(json!({
             "refreshed": true,
@@ -1332,7 +1566,7 @@ impl CadServer {
         if !tool_specs().iter().any(|spec| spec.name == name) {
             return Err(format!("unknown tool: {name}"));
         }
-        if nbcad_mcp_mutate::lookup_mutate(name).is_none() {
+        if limo_cad_mcp_mutate::lookup_mutate(name).is_none() {
             return Err(serde_json::to_string(&json!({
                 "code": "unsupported_inbox_mutate",
                 "writeback": false,
@@ -1378,7 +1612,7 @@ impl CadServer {
     /// model. Active-sketch-only snapshots are reported but not misrepresented
     /// as a model refresh.
     fn await_inbox_apply(&mut self, arguments: &Value) -> Result<Value, String> {
-        let Some(attached_session_id) = self.attached_document_id.clone() else {
+        let Some(attached_session_id) = self.interface_session().map(str::to_owned) else {
             return Err(session::not_attached_error());
         };
         let session_id = match arguments.get("session_id") {
@@ -1417,26 +1651,18 @@ impl CadServer {
             .unwrap_or(false);
         let status = result.get("status").and_then(Value::as_str).unwrap_or("");
         if refresh && owns_attachment && status == "applied" && published && model_published {
-            if let Some(replacement) = result["active_session_id"].as_str().map(str::to_owned) {
-                if self.script_running {
-                    return Err("Active document changed during script playback; no later commands were submitted".into());
-                }
-                self.attach_read_only_snapshot(&json!({"session_id": replacement}))?;
-                result["attached_session_id"] = json!(replacement);
+            let active = result["active_session_id"]
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| session_id.clone());
+            self.follow_interface_attachment(&mut result, active, SnapshotRefresh::Immediate)?;
+            let refreshed = result["attached"] == true;
+            result["refreshed"] = json!(refreshed);
+            result["hint"] = json!(if refreshed {
+                "UI applied and published; MCP in-memory snapshot refreshed from disk"
             } else {
-                self.load_snapshot_model(&session_id, false)?;
-                self.apply_snapshot_focus(&session_id);
-            }
-            if let Some(object) = result.as_object_mut() {
-                object.insert("refreshed".to_string(), Value::Bool(true));
-                object.insert(
-                    "hint".to_string(),
-                    Value::String(
-                        "UI applied and published; MCP in-memory snapshot refreshed from disk"
-                            .to_string(),
-                    ),
-                );
-            }
+                "UI already applied and published. Recover snapshot attachment with cad_attach/cad_refresh; do not resubmit this operation."
+            });
         }
         if self.script_running && owns_attachment && result["project_replaced"] == true {
             return Err(
@@ -1451,6 +1677,22 @@ impl CadServer {
     /// pending inbox, and last apply receipt. Headless returns a clear
     /// `not_attached` status object (not an error).
     fn session_status(&self) -> Result<Value, String> {
+        if let Some(failure) = &self.failed_attachment {
+            let generation = (self.attached_document_id.as_deref()
+                == Some(failure.session_id.as_str()))
+            .then_some(self.attached_generation)
+            .flatten();
+            let mut status = session::session_status_json(&failure.session_id, generation)?;
+            status["attached"] = json!(false);
+            status["code"] = json!("attachment_unavailable");
+            status["snapshot_error"] = json!(failure.error);
+            status["model_commands_blocked"] = json!(true);
+            status["retained_snapshot_session_id"] = json!(self.attached_document_id);
+            status["retained_snapshot_generation"] = json!(self.attached_generation);
+            status["stale"] = json!(true);
+            status["hint"] = json!("Recover the active document with cad_attach or cad_refresh before sending model commands.");
+            return Ok(status);
+        }
         let Some(session_id) = self.attached_document_id.as_deref() else {
             return Ok(session::not_attached_status_json());
         };
@@ -1481,7 +1723,8 @@ impl CadServer {
         let plan: RecomputePlanDto = serde_json::from_value(plan_value)
             .map_err(|error| format!("invalid model.json / recompute plan: {error}"))?;
         let transaction_id = plan.transaction_id;
-        let scene = match self.kernel.recompute(&plan) {
+        let queries = self.manager.history_support_queries();
+        let (scene, verified) = match self.kernel.recompute_with_supports(&plan, &queries) {
             Ok(scene) => scene,
             Err(error) => {
                 self.manager.cancel_solid_recompute(transaction_id);
@@ -1490,18 +1733,16 @@ impl CadServer {
                 ));
             }
         };
-        let _ = parse_engine_envelope(host::handle(
-            &mut self.manager,
-            "solid_commit",
-            &serde_json::to_string(&CommitKernelRequest {
-                transaction_id,
-                scene,
-            })
-            .map_err(|e| e.to_string())?,
-        ))?;
-        // Attach/refresh replace manager from disk; seed a portable script baseline so
-        // cad_script can replay on a fresh CadServer without session UUIDs or files.
-        // Refresh re-seeds/replaces the baseline the same way (drops post-attach mutates).
+        self.manager
+            .commit_solid_with_verified_supports(
+                CommitKernelRequest {
+                    transaction_id,
+                    scene,
+                },
+                &verified,
+            )
+            .map_err(|e| e.to_string())?;
+
         self.seed_script_baseline_from_model(&model_json);
         self.loaded_snapshot_json = Some(model_json);
         self.attached_generation = publication_generation;
@@ -1509,7 +1750,7 @@ impl CadServer {
         Ok(true)
     }
 
-    /// Emit a version-1 `.nbcad.jsonc` from the last successful script source
+    /// Emit a version-1 `.limo.jsonc` from the last successful script source
     /// or, failing that, from this process `tool_trace` (lossy).
     ///
     /// `auto` keeps the authored script only while no modeling tool has
@@ -1539,7 +1780,7 @@ impl CadServer {
             let mut notes = vec![
                 "Source is the expanded JSONC last successfully run via action script in this process.",
                 "Comments may be absent if includes were flattened; commands and refs match the replay.",
-                "cad_script remains the forward MCP call dump — not this JSONC export.",
+                "cad_script remains the forward MCP call dump â€” not this JSONC export.",
             ];
             if stale {
                 notes.push(
@@ -1560,7 +1801,7 @@ impl CadServer {
             "Built from this process tool_trace with literal arguments (no $select/$project, no notes).",
             "Prefer hand-authored JSONC for durable recipes; use this for scratch replay of a blank-session MCP build.",
             "cad_load_project_model attach baselines are omitted; UI-only history is not reverse-engineered.",
-            "cad_script remains the forward MCP call dump — not this JSONC export.",
+            "cad_script remains the forward MCP call dump â€” not this JSONC export.",
         ];
         if from == "auto" && stale {
             notes.insert(
@@ -1598,7 +1839,7 @@ impl CadServer {
     }
 
     fn export_mesh(&mut self, name: &str, arguments: Value) -> Result<Value, String> {
-        if !self.manager.solid_scene().errors.is_empty() {
+        if !self.manager.solid_scene_ref().errors.is_empty() {
             return Err("Resolve timeline errors before exporting mesh files.".to_string());
         }
         let request: MeshExportRequest = if arguments.is_null() {
@@ -1617,7 +1858,8 @@ impl CadServer {
                 )
                 .map_err(|e| e.to_string())?;
         }
-        let scene = self.manager.solid_scene();
+        let scene = self.manager.solid_scene_ref();
+        scene.require_complete_display_mesh(&request.body_ids)?;
         let appearances = self.manager.body_appearances();
         let mut meshes = self
             .kernel
@@ -1628,14 +1870,28 @@ impl CadServer {
                 mesh.name = body.name.clone();
             }
         }
-        let solution = self.manager.assembly_solution();
-        if request.scope == nbcad_export::MeshExportScope::Assembly && !solution.solved {
+        if request.scope == limo_cad_export::MeshExportScope::Definition
+            && request
+                .named_view
+                .as_deref()
+                .is_some_and(|name| !name.is_empty())
+        {
+            return Err("Named-view placement requires assembly scope.".into());
+        }
+        let solution = if request.scope == limo_cad_export::MeshExportScope::Definition {
+            self.manager.assembly_solution()
+        } else {
+            self.manager
+                .export_view_solution(request.named_view.as_deref())
+                .map_err(|e| e.to_string())?
+        };
+        if request.scope == limo_cad_export::MeshExportScope::Assembly && !solution.solved {
             return Err("Resolve assembly errors before mesh export.".into());
         }
         let instances: Vec<_> = solution
             .instance_body_poses
             .iter()
-            .map(|p| nbcad_export::MeshInstance {
+            .map(|p| limo_cad_export::MeshInstance {
                 body_id: p.body_id,
                 occurrence_id: p.occurrence_id.0,
                 translation: p.translation,
@@ -1643,13 +1899,26 @@ impl CadServer {
                 visible: p.visible,
             })
             .collect();
-        let meshes = nbcad_export::prepare_export_meshes(&meshes, &instances, request.scope)
-            .map_err(|e| e.to_string())?;
-        let bytes = if name == "solid_export_stl" {
-            nbcad_export::write_stl(&meshes).map_err(|error| error.to_string())?
+        let portable_scene = name == "solid_export_3mf"
+            && request.scope == limo_cad_export::MeshExportScope::Assembly;
+        let bytes = if portable_scene {
+            limo_cad_export::write_3mf_scene(
+                &meshes,
+                &appearances,
+                &request,
+                &self.manager.assembly_document_ref().component_structure,
+                &solution,
+            )
+            .map_err(|e| e.to_string())?
         } else {
-            nbcad_export::ExportFacade::export_3mf(&meshes, &appearances, &request)
-                .map_err(|error| error.to_string())?
+            let meshes = limo_cad_export::prepare_export_meshes(&meshes, &instances, request.scope)
+                .map_err(|e| e.to_string())?;
+            if name == "solid_export_stl" {
+                limo_cad_export::write_stl(&meshes).map_err(|error| error.to_string())?
+            } else {
+                limo_cad_export::ExportFacade::export_3mf(&meshes, &appearances, &request)
+                    .map_err(|error| error.to_string())?
+            }
         };
         Ok(json!({
             "format": if name == "solid_export_stl" { "stl" } else { "3mf" },
@@ -1661,7 +1930,7 @@ impl CadServer {
     }
 
     fn tessellate_tool(&mut self, arguments: Value) -> Result<Value, String> {
-        if !self.manager.solid_scene().errors.is_empty() {
+        if !self.manager.solid_scene_ref().errors.is_empty() {
             return Err("Resolve timeline errors before tessellating.".to_string());
         }
         let request: MeshExportRequest = if arguments.is_null() {
@@ -1670,7 +1939,8 @@ impl CadServer {
             serde_json::from_value(arguments)
                 .map_err(|error| format!("bad tessellate arguments: {error}"))?
         };
-        let scene = self.manager.solid_scene();
+        let scene = self.manager.solid_scene_ref();
+        scene.require_complete_display_mesh(&request.body_ids)?;
         let mut meshes = self
             .kernel
             .tessellate_bodies(&request)
@@ -1683,9 +1953,9 @@ impl CadServer {
         let bodies: Vec<Value> = meshes
             .iter()
             .map(|mesh| {
-                let mut min = [f32::MAX; 3];
-                let mut max = [f32::MIN; 3];
-                for p in mesh.positions.chunks_exact(3) {
+                let mut min = [f64::MAX; 3];
+                let mut max = [f64::MIN; 3];
+                for p in mesh.positions.as_chunks::<3>().0 {
                     for i in 0..3 {
                         min[i] = min[i].min(p[i]);
                         max[i] = max[i].max(p[i]);
@@ -1709,8 +1979,25 @@ impl CadServer {
         }))
     }
 
-    fn export_preflight_tool(&mut self) -> Result<Value, String> {
-        let scene = self.manager.solid_scene();
+    fn export_preflight_tool(&mut self, arguments: Value) -> Result<Value, String> {
+        let request: MeshExportRequest = serde_json::from_value(if arguments.is_null() {
+            json!({})
+        } else {
+            arguments
+        })
+        .map_err(|e| e.to_string())?;
+        if request.scope != limo_cad_export::MeshExportScope::Assembly {
+            return Err("Print layout checks require assembly scope.".into());
+        }
+        request
+            .check_model_snapshot(
+                &self
+                    .manager
+                    .export_project_model()
+                    .map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())?;
+        let scene = self.manager.solid_scene_ref();
         let errors: Vec<String> = scene
             .errors
             .iter()
@@ -1725,7 +2012,7 @@ impl CadServer {
             .filter(|id| !appearing.contains(id))
             .collect();
         let ok = errors.is_empty() && !body_ids.is_empty();
-        Ok(json!({
+        let mut result = json!({
             "ok": ok,
             "body_count": body_ids.len(),
             "body_ids": body_ids,
@@ -1743,7 +2030,68 @@ impl CadServer {
                     "Ready for solid_export_3mf (preferred) or solid_export_stl / solid_export_step."
                 ])
             },
-        }))
+        });
+        result["print_intent"] = serde_json::to_value(
+            self.manager
+                .effective_print_intent(
+                    request.body_ids.clone(),
+                    Some(limo_cad_core::PrintIntentTargetDto::Portable),
+                )
+                .map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
+        if ok {
+            self.manager
+                .solid_scene_ref()
+                .require_complete_display_mesh(&request.body_ids)?;
+            let meshes = self
+                .kernel
+                .tessellate_bodies(&request)
+                .map_err(|e| e.to_string())?;
+            let solution = self
+                .manager
+                .export_view_solution(request.named_view.as_deref())
+                .map_err(|e| e.to_string())?;
+            let bed = match request.print_bed {
+                Some(bed) => bed,
+                None => self
+                    .manager
+                    .export_print_bed(request.named_view.as_deref())
+                    .map_err(|e| e.to_string())?,
+            };
+            let layout = limo_cad_export::analyze_print_layout(
+                &meshes,
+                &self.manager.assembly_document_ref().component_structure,
+                &solution,
+                &bed,
+            )
+            .map_err(|e| e.to_string())?;
+            if layout.printable_instances == 0 {
+                result["ok"] = json!(false);
+                result["hints"] = json!(["No visible printable instances. Select another view or restore visibility before export."]);
+            }
+            let effective = self
+                .manager
+                .effective_print_intent(
+                    request.body_ids.clone(),
+                    Some(limo_cad_core::PrintIntentTargetDto::Portable),
+                )
+                .map_err(|e| e.to_string())?;
+            result["manufacturing"] = serde_json::to_value(
+                limo_cad_export::manufacturing_report::manufacturing_preflight_report(
+                    &meshes,
+                    &appearances,
+                    &self.manager.assembly_document_ref().component_structure,
+                    &solution,
+                    &self.manager.print_intent(),
+                    &effective,
+                )
+                .map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())?;
+            result["layout"] = serde_json::to_value(layout).map_err(|e| e.to_string())?;
+        }
+        Ok(result)
     }
 
     fn demo_pip_3mf_tool(&mut self, arguments: Value) -> Result<Value, String> {
@@ -1759,11 +2107,11 @@ impl CadServer {
             .unwrap_or("cam_bolt");
         let (meshes, appearances, demo) = match kind {
             "clip" | "latch" => {
-                let (m, a) = nbcad_export::print_in_place_clip();
+                let (m, a) = limo_cad_export::print_in_place_clip();
                 (m, a, "print_in_place_clip")
             }
             "cam_bolt" | "cam" => {
-                let (m, a) = nbcad_export::print_in_place_cam_bolt();
+                let (m, a) = limo_cad_export::print_in_place_cam_bolt();
                 (m, a, "print_in_place_cam_bolt")
             }
             other => {
@@ -1772,14 +2120,14 @@ impl CadServer {
                 ))
             }
         };
-        let bytes = nbcad_export::ExportFacade::export_3mf(&meshes, &appearances, &request)
+        let bytes = limo_cad_export::ExportFacade::export_3mf(&meshes, &appearances, &request)
             .map_err(|error| error.to_string())?;
         Ok(json!({
             "format": "3mf",
             "encoding": "base64",
             "demo": demo,
             "body_count": meshes.len(),
-            "clearance_mm": nbcad_export::CLEAR_MM,
+            "clearance_mm": limo_cad_export::CLEAR_MM,
             "slicer_target": request.slicer_target,
             "byte_length": bytes.len(),
             "bytes_base64": BASE64.encode(bytes),
@@ -1796,7 +2144,7 @@ fn parse_engine_envelope(raw: String) -> Result<Value, String> {
         Err(envelope
             .get("error")
             .and_then(Value::as_str)
-            .unwrap_or("unknown noBS CAD engine error")
+            .unwrap_or("unknown Limo CAD engine error")
             .to_string())
     }
 }
@@ -1808,8 +2156,7 @@ fn annotate_disclosure(
     spine: bool,
 ) -> Value {
     let note = disclosure.disclosure_note(pack, spine);
-    // Only annotate JSON objects so string/array engine payloads (e.g.
-    // cad_project_model) keep their historical shapes for goldens/clients.
+
     if let Value::Object(object) = &mut value {
         object.insert("_disclosure".to_string(), note);
     }
@@ -1842,7 +2189,7 @@ fn full_tool_catalog() -> Value {
                         Execution::SolidReplay => "solid_replay",
                         Execution::Control => "control",
                     },
-                    "mutates": is_modeling_mutate(tool.name),
+                    "mutates": changes_model(tool.name),
                     "spine": tool.spine,
                 })
             })
@@ -1865,12 +2212,35 @@ fn named_view_schema() -> Value {
             "name": {"type":"string","minLength":1,"maxLength":200},
             "camera": object_schema(json!({"position":vector,"target":vector,"up":vector}), &["position", "target", "up"]),
             "visible_body_ids": {"type":"array","items":{"type":"integer","minimum":1}},
+            "print_layout": {"type":"boolean","default":false},
+            "print_bed": print_bed_schema(),
+            "occurrence_offsets": {"type":"array","items":occurrence_offset_schema()},
             "part_offsets": {"type":"array","items":object_schema(json!({
                 "body_id":{"type":"integer","minimum":1},"translation":vector
             }), &["body_id", "translation"])}
         }),
         &["name", "camera", "visible_body_ids"],
     )
+}
+
+fn print_bed_schema() -> Value {
+    object_schema(
+        json!({"name":{"type":"string"},"size_mm":{"type":"array","items":{"type":"number","exclusiveMinimum":0},"minItems":3,"maxItems":3},"margin_mm":{"type":"number","minimum":0},"nozzle_mode":{"type":"string","enum":["main","dual"]}, "origin_mm":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}, "printable_regions":{"type":"array","items":print_region_schema()}, "excluded_regions":{"type":"array","items":print_region_schema()}, "source":print_profile_source_schema()}),
+        &["name", "size_mm"],
+    )
+}
+fn occurrence_offset_schema() -> Value {
+    object_schema(
+        json!({"occurrence_id":{"type":"integer","minimum":1},"translation":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"rotation":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4}}),
+        &["occurrence_id", "translation"],
+    )
+}
+
+fn print_region_schema() -> Value {
+    json!({"type":"array","minItems":3,"maxItems":1024,"items":{"type":"array","minItems":2,"maxItems":2,"items":{"type":"number"}}})
+}
+fn print_profile_source_schema() -> Value {
+    json!({"type":"object","additionalProperties":false,"required":["repository","revision","profile","files"],"properties":{"repository":{"type":"string"},"revision":{"type":"string"},"profile":{"type":"string"},"files":{"type":"object","additionalProperties":{"type":"string"}}}})
 }
 
 fn object_schema(properties: Value, required: &[&str]) -> Value {
@@ -1935,7 +2305,7 @@ fn entity_ids_schema() -> Value {
 fn is_read_safe_while_attached(name: &str) -> bool {
     if matches!(
         name,
-        "drawing_document" | "drawing_projection" | "drawing_export"
+        "drawing_document" | "drawing_projection" | "drawing_export" | "solid_section_review"
     ) {
         return true;
     }
@@ -1950,6 +2320,8 @@ fn is_read_safe_while_attached(name: &str) -> bool {
             | "cad_help"
             | "cad_cancel_recompute"
             | "cad_list_sessions"
+            | "cad_computer_control"
+            | "cad_route"
             | "cad_interface"
             | "cad_attach"
             | "cad_refresh"
@@ -1959,8 +2331,20 @@ fn is_read_safe_while_attached(name: &str) -> bool {
             | "cad_session_status"
             | "cad_document"
             | "cad_project_model"
+            | "cad_compare_solids"
             | "project_visibility"
             | "named_views"
+            | "named_view_solution"
+            | "print_intent_get"
+            | "print_intent_height_binding"
+            | "print_intent_effective"
+            | "print_modifier_effective"
+            | "bambu_template_inspect"
+            | "bambu_local_verification_start"
+            | "bambu_local_verification_poll"
+            | "bambu_local_verification_cancel"
+            | "bambu_project_preview"
+            | "solid_export_bambu_project"
             | "sketch_active"
             | "sketch_finished"
             | "sketch_profiles"
@@ -1975,6 +2359,12 @@ fn is_read_safe_while_attached(name: &str) -> bool {
             | "assembly_document"
             | "assembly_solution"
             | "assembly_interference_check"
+            | "assembly_swept_collision_check"
+            | "assembly_preview_joint_coordinates"
+            | "assembly_preview_mechanism_drag"
+            | "assembly_evaluate_motion_study"
+            | "assembly_sample_motion_study"
+            | "assembly_export_motion_path_csv"
             | "solid_tessellate"
             | "solid_extrude_definitions"
             | "solid_revolve_definitions"
@@ -1990,6 +2380,7 @@ fn is_read_safe_while_attached(name: &str) -> bool {
             | "solid_export_3mf"
             | "solid_export_preflight"
             | "demo_export_pip_3mf"
+            | "printer_catalog"
             | "material_catalog"
             | "body_appearances"
             | "cam_get_document"
@@ -1998,13 +2389,16 @@ fn is_read_safe_while_attached(name: &str) -> bool {
             | "print_crop"
             | "print_probe"
             | "print_symbols"
-            // A composite: each part routes through the live inbox itself.
             | "solid_box"
     )
 }
 
 fn is_modeling_mutate(name: &str) -> bool {
-    nbcad_mcp_mutate::is_inbox_mutate(name)
+    limo_cad_mcp_mutate::is_inbox_mutate(name)
+}
+
+fn changes_model(name: &str) -> bool {
+    limo_cad_mcp_mutate::lookup_mutate(name).is_some_and(|spec| !spec.is_read_only())
 }
 
 fn writeback_requested(arguments: &Value) -> bool {
@@ -2048,7 +2442,13 @@ fn gear_relation_schema(update: bool) -> Value {
     object_schema(properties, &required)
 }
 
-fn tool_specs() -> Vec<ToolSpec> {
+/// Calls borrow immutable tool schemas constructed once per process.
+fn tool_specs() -> &'static [ToolSpec] {
+    static SPECS: std::sync::OnceLock<Vec<ToolSpec>> = std::sync::OnceLock::new();
+    SPECS.get_or_init(build_tool_specs)
+}
+
+fn build_tool_specs() -> Vec<ToolSpec> {
     let point = point_schema();
     let entity_ids = entity_ids_schema();
     let plane = json!({
@@ -2636,9 +3036,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         }),
         &["id", "name", "kind", "connector_a", "connector_b"],
     );
-    // Host UpdateJointRequestDto is replace-all (not ComponentDefinitionPatchDto).
-    // Required connectors/kind make id+name-only schema-invalid so a client
-    // cannot treat this as a rename patch.
+
     joint_definition["description"] = json!(
         "Full replace-all JointDefinitionDto, not a patch. Required: id, name, kind, connector_a, connector_b. Omitted optional limits/frames deserialize as null and clear those values."
     );
@@ -2655,7 +3053,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "cad_set_document_name",
             "Set document name",
-            "Rename the selected noBS CAD document.",
+            "Rename the selected Limo CAD document.",
             "document_set_name",
             Payload::Field("name"),
             object_schema(json!({"name": {"type": "string", "minLength": 1}}), &["name"]),
@@ -2663,7 +3061,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "cad_project_model",
             "Export project model",
-            "Return the versioned model.json payload used inside a .nbcad project.",
+            "Return the versioned model.json payload used inside a .limo project.",
             "project_export_model",
             Payload::Empty,
             empty_schema(),
@@ -2671,7 +3069,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::solid(
             "cad_load_project_model",
             "Load project model",
-            "Transactionally load and recompute a noBS CAD model.json payload.",
+            "Transactionally load and recompute a Limo CAD model.json payload.",
             "project_prepare_load",
             Payload::Field("model_json"),
             object_schema(
@@ -2717,10 +3115,10 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "sketch_edit",
             "Edit sketch",
-            "Re-enter a finished sketch by name.",
+            "Re-enter a finished sketch by name. Optional occurrence_id edits its shared definition in that placed occurrence, with surrounding parts faded. Picking and dimensions use the displayed frame; saved sources remain in definition coordinates. Finish before changing assembly placement or structure; recompute updates all shared occurrences.",
             "edit_sketch",
-            Payload::Field("name"),
-            object_schema(json!({"name": {"type": "string", "minLength": 1}}), &["name"]),
+            Payload::Object,
+            object_schema(json!({"name": {"type": "string", "minLength": 1}, "occurrence_id":{"type":"integer","minimum":1}}), &["name"]),
         ),
         ToolSpec::direct(
             "sketch_active",
@@ -2836,7 +3234,19 @@ fn tool_specs() -> Vec<ToolSpec> {
             "Add a rectangle with optional driving width/height values or formulas.",
             "add_rectangle_locked",
             Payload::Object,
-            dto_schema("LockedRectangleRequest: mode, anchor, corner_hint, optional width/height values or text, ctrl_held."),
+            object_schema(
+                json!({
+                    "mode": {"type": "string", "enum": ["two_point", "center"]},
+                    "anchor": point.clone(),
+                    "corner_hint": point.clone(),
+                    "width_mm": {"type": ["number", "null"], "description": "Optional driving width in millimeters."},
+                    "height_mm": {"type": ["number", "null"], "description": "Optional driving height in millimeters."},
+                    "width_text": {"type": ["string", "null"], "description": "Optional driving width formula."},
+                    "height_text": {"type": ["string", "null"], "description": "Optional driving height formula."},
+                    "ctrl_held": {"type": "boolean"}
+                }),
+                &["mode", "anchor", "corner_hint"],
+            ),
         ),
         ToolSpec::direct(
             "sketch_add_circle",
@@ -2921,6 +3331,18 @@ fn tool_specs() -> Vec<ToolSpec> {
                 json!({"constraints": {"type": "array", "items": {"type": "object"}, "minItems": 1}}),
                 &["constraints"],
             ),
+        ),
+        ToolSpec::direct(
+            "sketch_delete_constraint", "Delete geometric constraint",
+            "Remove a geometric constraint by its stable constraint id.",
+            "delete_constraint", Payload::Object,
+            object_schema(json!({"constraint_id":{"type":"integer","minimum":1}}), &["constraint_id"]),
+        ),
+        ToolSpec::direct(
+            "sketch_set_dimension_mode", "Set dimension mode",
+            "Choose a driving dimension or a reference measurement without deleting its annotation.",
+            "set_dimension_mode", Payload::Object,
+            object_schema(json!({"constraint_id":{"type":"integer","minimum":1},"mode":{"type":"string","enum":["driving","reference"]}}), &["constraint_id","mode"]),
         ),
         ToolSpec::direct(
             "sketch_add_dimension",
@@ -3300,7 +3722,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "project_set_visibility",
             "Set saved model visibility",
-            "Replace the Browser's complete saved visibility snapshot. Read project_visibility first to preserve other choices. All three arrays are required; empty arrays show everything. Like the app, this normalizes duplicates and removes stale references. It does not remove geometry or exclude hidden bodies from exports; use export body selection for that.",
+            "Replace the Browser's complete saved visibility snapshot. Read project_visibility first to preserve other choices. All three arrays are required; empty arrays show everything. Like the app, this normalizes duplicates and removes stale references. Assembly mesh exports honor body visibility; definition exports retain selected body definitions regardless of visibility.",
             "project_set_visibility",
             Payload::Object,
             object_schema(json!({
@@ -3318,17 +3740,25 @@ fn tool_specs() -> Vec<ToolSpec> {
             empty_schema(),
         ),
         ToolSpec::direct(
+            "named_view_solution",
+            "Resolve named view placement",
+            "Return the same occurrence solution used by export: absent name uses current presentation and live visibility; empty name uses assembled placement and live visibility; nonempty name uses its saved snapshot. This read changes no geometry or layout.",
+            "named_view_solution",
+            Payload::Object,
+            object_schema(json!({"name":{"type":["string","null"],"maxLength":200}}), &[]),
+        ),
+        ToolSpec::direct(
             "set_named_views",
             "Replace named view configurations",
-            "Replace all saved review views. Prefer upsert_named_view to change one configuration without replacing others. Each view needs a name, camera position/target/up, and visible_body_ids. part_offsets are optional display translations in millimeters and do not edit solids. Unknown body ids reject the whole list. Metadata edits clear the active view.",
+            "Replace saved presentation and print views. Prefer upsert_named_view to change one view. occurrence_offsets move and rotate occurrences and descendants without editing mechanical placement. Optional print_layout and print_bed enable checks; legacy part_offsets remain readable. Unknown IDs or stale expected_model_json reject the whole list. Metadata edits clear the active view.",
             "set_named_views",
             Payload::Object,
-            object_schema(json!({"views":{"type":"array","items":named_view_schema()}}), &["views"]),
+            object_schema(json!({"expected_model_json":{"type":"string"},"views":{"type":"array","items":named_view_schema()}}), &["views"]),
         ),
         ToolSpec::direct(
             "upsert_named_view",
             "Save or update one named view",
-            "Save one review view without replacing other views. For live capture, use cad_interface inspect view_state.camera, visible_body_ids and part_offsets, plus a name. Supply explicit camera coordinates in headless mode. Offsets only affect display; metadata edits clear the active view.",
+            "Save one presentation or print view without replacing other views. In the live Bevy app, use the Named Views controls or cad_interface inspect view_state to capture the current camera, visible body IDs and display offsets. Supply explicit camera coordinates and visible body IDs in headless mode. Occurrence offsets retain intentional repeats and do not edit mechanical geometry; metadata edits clear the active view.",
             "upsert_named_view",
             Payload::Object,
             named_view_schema(),
@@ -3903,6 +4333,14 @@ fn tool_specs() -> Vec<ToolSpec> {
                 &["rollback_index"],
             ),
         ),
+        ToolSpec::direct(
+            "solid_rename_feature",
+            "Rename history operation",
+            "Set a descriptive name on a sketch or solid history feature without recomputing geometry. Sketch renames rebind persisted references while preserving operation IDs. Names persist through edits, undo/redo and save/reopen. Name construction planes when creating them.",
+            "solid_rename_feature",
+            Payload::Object,
+            object_schema(json!({"feature_id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":256}}), &["feature_id","name"]),
+        ),
         ToolSpec::solid(
             "solid_delete_feature",
             "Delete history feature",
@@ -4016,6 +4454,23 @@ fn tool_specs() -> Vec<ToolSpec> {
             ),
         ),
         ToolSpec::direct(
+            "assembly_duplicate_occurrence", "Duplicate component instance",
+            "Copy a component instance and its complete subtree, preserving reusable definitions and internal joints. Parent and local pose are optional.",
+            "assembly_duplicate_occurrence", Payload::Object,
+            object_schema(json!({"occurrence_id":{"type":"integer","minimum":1},"parent_occurrence_id":{"type":["integer","null"],"minimum":1},"local_pose":assembly_transform.clone()}), &["occurrence_id"]),
+        ),
+        ToolSpec::direct(
+            "assembly_remove_occurrence",
+            "Remove component instance",
+            "Remove one unreferenced leaf occurrence while retaining its reusable definition and source geometry. Release grounding first; children, joints, contact sets, saved-view offsets, drawing references and print bindings must be changed explicitly. The last instance of a definition must be retained or hidden.",
+            "assembly_remove_occurrence",
+            Payload::Object,
+            object_schema(
+                json!({"occurrence_id": {"type": "integer", "minimum": 1}}),
+                &["occurrence_id"],
+            ),
+        ),
+        ToolSpec::direct(
             "assembly_update_occurrence",
             "Update assembly occurrence",
             "Patch an occurrence record. Only id is required; omitted name/component_id/parent/pose/visibility/grounded keep their current values (ComponentOccurrencePatchDto).",
@@ -4095,7 +4550,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "assembly_update_joint",
             "Update assembly joint",
-            "Replace-all UpdateJointRequestDto — not a patch. Send the full queried joint (required: id, name, kind, connector_a, connector_b). Id+name-only is schema-invalid. Omitted or JSON-null optional fields (limits, angle_limits, linear_limits, source_surface_frame) both clear those values. Re-canonicalizes connectors against live topology.",
+            "Replace-all UpdateJointRequestDto â€” not a patch. Send the full queried joint (required: id, name, kind, connector_a, connector_b). Id+name-only is schema-invalid. Omitted or JSON-null optional fields (limits, angle_limits, linear_limits, source_surface_frame) both clear those values. Re-canonicalizes connectors against live topology.",
             "assembly_update_joint",
             Payload::Object,
             object_schema(
@@ -4187,6 +4642,8 @@ fn tool_specs() -> Vec<ToolSpec> {
                         "items": {"type": "integer", "minimum": 1},
                         "description": "Empty exports every active body."
                     },
+                    "named_view":{"type":"string","description":"Saved layout name; requires assembly scope. Includes every visible repetition."},
+                    "print_bed":print_bed_schema(),
                     "scope": {"type":"string","enum":["assembly","definition"],"default":"assembly","description":"Assembly exports visible solved occurrences. Definition exports each selected body once in its part coordinates."},
                     "expected_model_json": {"type":"string","description":"Optional exact cad_project_model string captured before an interactive choice. Export rejects if the current model differs; no geometry is written."},
                     "linear_deflection": {"type": "number", "exclusiveMinimum": 0, "default": 0.15},
@@ -4208,6 +4665,8 @@ fn tool_specs() -> Vec<ToolSpec> {
                         "items": {"type": "integer", "minimum": 1},
                         "description": "Empty exports every active body."
                     },
+                    "named_view":{"type":"string","description":"Saved layout name; requires assembly scope. Includes every visible repetition."},
+                    "print_bed":print_bed_schema(),
                     "scope": {"type":"string","enum":["assembly","definition"],"default":"assembly","description":"Assembly exports visible solved occurrences. Definition exports each selected body once in its part coordinates."},
                     "expected_model_json": {"type":"string","description":"Optional exact cad_project_model string captured before an interactive choice. Export rejects if the current model differs; no geometry is written."},
                     "linear_deflection": {"type": "number", "exclusiveMinimum": 0, "default": 0.15},
@@ -4224,9 +4683,17 @@ fn tool_specs() -> Vec<ToolSpec> {
             ),
         ),
         ToolSpec::direct(
+            "printer_catalog",
+            "Printer catalog",
+            "Return embedded pinned printer beds, nozzle modes and source provenance for presentation and print layouts.",
+            "printer_catalog",
+            Payload::Empty,
+            empty_schema(),
+        ),
+        ToolSpec::direct(
             "material_catalog",
             "Material catalog",
-            "Return built-in filament presets (Generic, Bambu Lab, Prusa, Polymaker, Hatchbox, Overture, Elegoo, Creality, Sunlu, eSun, Anycubic).",
+            "Return the unified embedded plastic, metal, and filament catalog with engineering properties, print profiles, units, source provenance, and data quality notes.",
             "material_catalog",
             Payload::Empty,
             empty_schema(),
@@ -4242,7 +4709,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "set_body_appearance",
             "Set body appearance",
-            "Assign filament/color to a body. Prefer body_id + preset_id from material_catalog; or pass a full BodyAppearance object.",
+            "Assign material/color to a body. Prefer body_id + preset_id from material_catalog; or pass a full BodyAppearance including its frozen material property snapshot.",
             "set_body_appearance",
             Payload::BodyAppearance,
             object_schema(
@@ -4254,7 +4721,7 @@ fn tool_specs() -> Vec<ToolSpec> {
                     },
                     "preset_id": {
                         "type": "string",
-                        "description": "Catalog preset id (e.g. bambu.pla.basic.red). When set, other fields are filled from the catalog."
+                        "description": "Catalog material id (e.g. material.aluminum-6061-t6 or bambu.pla.basic.red). Shorthand resolves the catalog; a full material snapshot preserves saved properties."
                     },
                     "color": {
                         "type": "object",
@@ -4271,7 +4738,20 @@ fn tool_specs() -> Vec<ToolSpec> {
                     "color_name": {"type": "string"},
                     "filament_id": {"type": ["string", "null"]},
                     "density_g_cm3": {"type": ["number", "null"]},
-                    "diameter_mm": {"type": "number", "exclusiveMinimum": 0}
+                    "diameter_mm": {"type": "number", "exclusiveMinimum": 0},
+                    "material": {
+                        "type": ["object", "null"],
+                        "description": "Frozen merged MaterialDetails from material_catalog or body_appearances. Pass the complete saved object to preserve its properties. Property source_id values must refer to sources in this snapshot.",
+                        "properties": {
+                            "kind": {"type":"string","enum":["plastic","metal"]},
+                            "catalog_id": {"type":"string"},
+                            "properties": {"type":"array","items":{"type":"object"}},
+                            "sources": {"type":"array","items":{"type":"object"}},
+                            "print_profiles": {"type":"array","items":{"type":"object"}},
+                            "warnings": {"type":"array","items":{"type":"string"}}
+                        },
+                        "required":["kind","catalog_id"]
+                    }
                 }),
                 &["body_id"],
             ),
@@ -4279,15 +4759,20 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "solid_export_preflight",
             "Export preflight",
-            "Check timeline errors, active bodies, and appearance coverage before mesh/STEP export.",
+            "Check timeline errors, appearance coverage and assembly print layout before export. Reports included/excluded quantities, conservative overlaps and envelope issues, plus additional whole-group translations to review. Warnings permit deliberate export. Defaults to the Bambu X2D main envelope.",
             "solid_export_preflight",
-            Payload::Empty,
-            empty_schema(),
+            Payload::Object,
+            object_schema(json!({
+                "named_view":{"type":"string","description":"Omit for the current displayed view; empty selects assembled placement; a name selects its saved snapshot."},
+                "body_ids":{"type":"array","items":{"type":"integer","minimum":1}},
+                "expected_model_json":{"type":"string"},
+                "print_bed":print_bed_schema()
+            }), &[]),
         ),
         ToolSpec::direct(
             "demo_export_pip_3mf",
             "Export PIP demo 3MF",
-            "Return a built-in print-in-place demo as base64 3MF (AABB clearance smoke ≥ 0.4 mm). Does not mutate the document. kind=cam_bolt (default, 4-body wedge+dial) or clip (3-body drawer).",
+            "Return a built-in print-in-place demo as base64 3MF (AABB clearance smoke â‰¥ 0.4 mm). Does not mutate the document. kind=cam_bolt (default, 4-body wedge+dial) or clip (3-body drawer).",
             "demo_export_pip_3mf",
             Payload::Object,
             object_schema(
@@ -4417,7 +4902,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::control(
             "cad_help",
             "Search and read local help",
-            "One help surface over the bundled knowledge corpus (machine-design + agent doctrine). Actions: search (snippet-first, default limit 5 max 10), get (id-only allowlist, 12KiB cap), topics (page size 50). Prefer cad_help before web search. Recipe chips on pages deep-link Scripts/presentation — no Bevy-in-Help.",
+            "One help surface over the bundled knowledge corpus (machine-design + agent doctrine). Actions: search (snippet-first, default limit 5 max 10), get (id-only allowlist, 12KiB cap), topics (page size 50). Prefer cad_help before web search. Recipe chips on pages deep-link Scripts/presentation â€” no Bevy-in-Help.",
             object_schema(
                 json!({
                     "action": {
@@ -4458,15 +4943,20 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::control(
             "cad_list_sessions",
             "List read-only session snapshots",
-            "List UUID v4 session directories under NBCAD_SESSION_DIR (skips _* control dirs and non-UUID names). Includes stable window_id / document_id when the UI publisher wrote them, heartbeat age/stale metadata, expiring desktop process leases, and a windows[] projection with authoritative active documents. Use with cad_attach. Snapshot bridge — not a live UI co-link. Stdio headless sessions without UI identity still list.",
+            "List UUID v4 session directories under LIMO_CAD_SESSION_DIR (skips _* control dirs and non-UUID names). Includes stable window_id / document_id when the UI publisher wrote them, heartbeat age/stale metadata, expiring desktop process leases, and a windows[] projection with authoritative active documents. Use with cad_attach. Snapshot bridge â€” not a live UI co-link. Stdio headless sessions without UI identity still list.",
             empty_schema(),
         ),
         ToolSpec::control(
+            "cad_computer_control", "Operate the native CAD window",
+            computer_control::description(),
+            computer_control::schema(),
+        ),
+        ToolSpec::control(
             "cad_interface", "Explore and drive the product interface",
-            "Catalog returns shared product groups and typed operations. Execute runs an operation by group and name with identical arguments/results headlessly or live. Recipes lists committed native examples without running them. Open_recipe queues a built-in recipe in the live Scripts source editor, preserving edited source with Save/Discard/Cancel; it never runs commands or replaces the model. Script runs one versioned JSONC command file selected by recipe ID, source or an absolute .nbcad.jsonc path in the current blank document; Rust sequences every operation, stops on failure, and runs final checks by default. Its result carries a feature summary (bodies with bounding boxes, holes tallied by class; detail full lists every hole with position, diameter, depth, face and thread) and warnings for mistakes that raise no error: a hole position left out of positions, overlapping holes, holes off the body, blind depths deeper than the body, unused bindings; a failing step names the step, the reason and, for selectors, the candidates or the values present. Summary returns that feature summary of the current document (detail compact or full). Check compares expected {bbox: [x, y, z], holes: [{x, y, z?, diameter?, counterbore_diameter?, through?, depth?}]} with the built model within tolerance_mm (default 0.6) and reports matched, missing and extra holes with offsets. Export_script emits a version-1 .nbcad.jsonc from the last successful script source (from last_script, fidelity lossless_authored) or from the session tool_trace (from session_trace, fidelity lossy_session_trace); it is distinct from cad_script's forward call dump. Mode fast has no presentation delays; present requires an attached desktop. Presentation provides configure/note/pause/resume/step/stop/status/finish/dismiss/show and speed controls shared with native playback. View supports timed orientation and focus on an active sketch, body, or component. Launch connects a new desktop. History with command undo or redo uses the desktop document history controller; inspect state.history reports availability. Inspect returns rendered controls with fresh opaque target IDs for click/set_value/key. Window close requests guarded application exit; the reply acknowledges the request, not process termination. No selectors or executable script evaluation.",
-            object_schema(json!({
+            "Catalog returns shared product groups and typed operations. Execute runs an operation by group and name with identical arguments/results headlessly or live. Recipes lists committed native examples without running them. Open_recipe queues a built-in recipe in the live Scripts source editor, preserving edited source with Save/Discard/Cancel; it never runs commands or replaces the model. Script runs one versioned JSONC command file selected by recipe ID, source or an absolute .limo.jsonc path in the current blank document; Rust sequences every operation, stops on failure, and runs final checks by default. Its result carries a feature summary (bodies with bounding boxes, holes tallied by class; detail full lists every hole with position, diameter, depth, face and thread) and warnings for mistakes that raise no error: a hole position left out of positions, overlapping holes, holes off the body, blind depths deeper than the body, unused bindings; a failing step names the step, the reason and, for selectors, the candidates or the values present. Summary returns that feature summary of the current document (detail compact or full). Check compares expected {bbox: [x, y, z], holes: [{x, y, z?, diameter?, counterbore_diameter?, through?, depth?}]} with the built model within tolerance_mm (default 0.6) and reports matched, missing and extra holes with offsets. Export_script emits a version-1 .limo.jsonc from the last successful script source (from last_script, fidelity lossless_authored) or from the session tool_trace (from session_trace, fidelity lossy_session_trace); it is distinct from cad_script's forward call dump. Mode fast has no presentation delays; present requires an attached desktop. Presentation provides configure/note/pause/resume/step/stop/status/finish/dismiss/show and speed controls shared with native playback. View supports timed orientation and focus on an active sketch, body, or component. Launch connects a new desktop. History with command undo or redo uses the desktop document history controller; inspect state.history reports availability. Inspect returns rendered controls with fresh opaque target IDs for click/set_value/key. Window close requests guarded application exit; the reply acknowledges the request, not process termination. No selectors or executable script evaluation.",
+            interface::with_file_options(object_schema(json!({
                 "session_id":{"type":"string"},
-                "action":{"type":"string","enum":["catalog","recipes","open_recipe","execute","script","summary","check","export_script","presentation","launch","view","inspect","click","double_click","context_menu","set_value","key","window","file","history","viewport"]},
+                "action":{"type":"string","enum":["catalog","recipes","open_recipe","execute","script","summary","check","export_script","presentation","launch","view","inspect","capture","click","double_click","context_menu","set_value","key","window","file","history","viewport"]},
                 "recipe":{"type":"string","description":"Bundled recipe ID for script or open_recipe; mutually exclusive with source and path. List IDs with action recipes."},
                 "group":{"type":"string"},"operation":{"type":"string"},"arguments":{"type":"object"},
                 "executable":{"type":"string"},
@@ -4482,7 +4972,8 @@ fn tool_specs() -> Vec<ToolSpec> {
                 "text":{"type":"string","maxLength":4000},"chapter":{"type":"string","maxLength":200},
                 "step_index":{"type":"integer","minimum":0},"step_count":{"type":"integer","minimum":0},
                 "gesture":{"type":"string","enum":["move","click","double_click","drag"]},
-                "canvas":{"type":"string","enum":["viewport","drawing"]},
+                "canvas":{"type":"string","enum":["viewport","drawing"],"description":"Defaults to the visible drawing paper when present, otherwise the model viewport. Drawing gestures use client point/to coordinates from inspect."},
+                "button":{"type":"string","enum":["left","middle"],"default":"left","description":"Middle-button drag pans drawing paper or the model camera through the native navigation handler."},
                 "to":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},
                 "point":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},
                 "world":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},
@@ -4492,15 +4983,15 @@ fn tool_specs() -> Vec<ToolSpec> {
                 "from":{"type":"string","enum":["auto","last_script","session_trace"],"description":"export_script source: last_script (authored, stale:true if tools ran after it), session_trace (lossy_session_trace), or auto (authored while no modeling tool has run since that script, live desktop edits included; otherwise the session trace)."},
                 "overwrite":{"type":"boolean"},"discard_changes":{"type":"boolean"},
                 "target":{"type":"string","description":"Fresh inspect control ID, or active_sketch for view"},"value":{"type":"string"},
-                "key":{"type":"string","enum":["Enter","Escape","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","Delete","Backspace"]},
+                "key":{"type":"string","enum":["Enter","Escape","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","Delete","Backspace"]},
                 "mode":{"type":"string","enum":["foreground","background","inspect","close","fast","present"]},
                 "pace_ms":{"type":"integer","minimum":0,"maximum":2000}
-            }), &[]),
+            }), &[])),
         ),
         ToolSpec::control(
             "cad_attach",
             "Attach read-only session snapshot",
-            "Load a published snapshot into this MCP process by session_id (UUID), window_id (Tauri label), and/or document_id (native project-session id; UUID still aliases session_id). Requires valid model.json; optional focus.json. Seeds cad_script baseline with cad_load_project_model (loaded model_json). Fails if the target/model is missing, invalid, or ambiguous. writeback must be omitted or false. While attached to a compatible desktop, the same operation calls submit and await live application internally. Older desktops reject before submission. Never writes back to the session dir. Headless goldens skip attach.",
+            "Load a published snapshot into this MCP process by session_id (UUID), window_id (stable desktop window id), and/or document_id (native project-session id; UUID still aliases session_id). Requires valid model.json; optional focus.json. Seeds cad_script baseline with cad_load_project_model (loaded model_json). Fails if the target/model is missing, invalid, or ambiguous. writeback must be omitted or false. While attached to a compatible desktop, the same operation calls submit and await live application internally. Older desktops reject before submission. Never writes back to the session dir. Headless goldens skip attach.",
             object_schema(
                 json!({
                     "session_id": {
@@ -4512,7 +5003,7 @@ fn tool_specs() -> Vec<ToolSpec> {
                     "window_id": {
                         "type": "string",
                         "minLength": 1,
-                        "description": "Stable Tauri window label published in heartbeat/focus"
+                        "description": "Stable desktop window id published in heartbeat/focus"
                     },
                     "document_id": {
                         "type": "string",
@@ -4530,7 +5021,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::control(
             "cad_refresh",
             "Refresh attached session snapshot",
-            "Re-read model.json (and optional focus.json) for the currently attached session; replaces cad_script baseline with cad_load_project_model for the reloaded model. Explicit refresh — MCP does not watch the filesystem.",
+            "Re-read model.json (and optional focus.json) for the currently attached session; replaces cad_script baseline with cad_load_project_model for the reloaded model. Explicit refresh â€” MCP does not watch the filesystem.",
             empty_schema(),
         ),
         ToolSpec::control(
@@ -4542,13 +5033,13 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::control(
             "cad_script",
             "Dump forward MCP script",
-            "Return this process's successful mutating tool-call sequence as JSON { calls: [{ name, arguments }] }. Portable modeling ops only — skips session-control reads (cad_attach/cad_refresh/cad_detach), inspect/export helpers, failed calls, and cad_script itself. After attach/refresh, the trace baseline is cad_load_project_model with the loaded model_json (refresh replaces that baseline). Does not reverse-engineer STEP feature history. For version-1 .nbcad.jsonc export see cad_interface action export_script.",
+            "Return this process's successful mutating tool-call sequence as JSON { calls: [{ name, arguments }] }. Portable modeling ops only â€” skips session-control reads (cad_attach/cad_refresh/cad_detach), inspect/export helpers, failed calls, and cad_script itself. After attach/refresh, the trace baseline is cad_load_project_model with the loaded model_json (refresh replaces that baseline). Does not reverse-engineer STEP feature history. For version-1 .limo.jsonc export see cad_interface action export_script.",
             empty_schema(),
         ),
         ToolSpec::control(
             "cad_compare_solids",
             "Compare solid scene metrics",
-            "Summarize active bodies from solid_scene: body count plus per-body bbox, vertex_count, and triangle_count from existing mesh fields. Use to check a rebuilt history against an imported reference solid. Does not invent volume.",
+            "Summarize active bodies from solid_scene: body count plus per-body bbox, vertex_count, and triangle_count from existing mesh fields. Attached calls inspect the owning desktop's live scene with owner/generation fences and retain its source receipt; headless calls read the existing local scene. No geometry replay or model mutation. Use to check a rebuilt history against an imported reference solid. Does not invent volume.",
             empty_schema(),
         ),
         ToolSpec::control(
@@ -4578,7 +5069,7 @@ fn tool_specs() -> Vec<ToolSpec> {
         ToolSpec::control(
             "cad_await_apply",
             "Await UI apply receipt for submitted inbox seq",
-            "While attached, poll until inbox/applied/<seq>.json or inbox/failed/<seq>.json appears. For applied ops, also wait until an explicit published_generation catches up to the engine. Completed-model publications optionally cad_refresh (refresh default true); active-sketch-only publications return model_published:false, active_sketch_published:true, refreshed:false because model.json intentionally remains the last completed model. timeout_ms 0 is a single status probe. Still snapshot/UI-owned apply — not in-process co-link. Does not write model.json.",
+            "While attached, poll until inbox/applied/<seq>.json or inbox/failed/<seq>.json appears. For applied ops, also wait until an explicit published_generation catches up to the engine. Completed-model publications optionally cad_refresh (refresh default true); active-sketch-only publications return model_published:false, active_sketch_published:true, refreshed:false because model.json intentionally remains the last completed model. timeout_ms 0 is a single status probe. Still snapshot/UI-owned apply â€” not in-process co-link. Does not write model.json.",
             object_schema(
                 json!({
                     "session_id": {
@@ -4616,7 +5107,21 @@ fn tool_specs() -> Vec<ToolSpec> {
         ),
     ];
     tools.extend(drawing_tools::specs());
+    tools.extend(broker::specs());
+    tools.extend(assembly_tools::specs());
     tools.extend(cam_tools::specs());
+    tools.extend(print_intent_tools::specs());
+    tools.extend(print_height_tools::specs());
+    tools.extend(print_modifier_tools::specs());
+    let manufacturing = manufacturing_tools::specs();
+    let project_schema = manufacturing
+        .iter()
+        .find(|tool| tool.name == "solid_export_bambu_project")
+        .expect("Bambu export specification")
+        .input_schema
+        .clone();
+    tools.extend(manufacturing);
+    tools.extend(local_slicer_tools::specs(project_schema));
     for tool in &mut tools {
         let (pack, spine) = tags_for_tool(tool.name);
         tool.pack = pack;
@@ -4626,6 +5131,26 @@ fn tool_specs() -> Vec<ToolSpec> {
 }
 
 fn records_in_script(name: &str) -> bool {
+    if matches!(name, "cad_route" | "cad_computer_control") {
+        return false;
+    }
+    if matches!(
+        name,
+        "bambu_template_inspect"
+            | "bambu_project_preview"
+            | "solid_export_bambu_project"
+            | "bambu_local_verification_start"
+            | "bambu_local_verification_poll"
+            | "bambu_local_verification_cancel"
+    ) {
+        return false;
+    }
+    if name.starts_with("print_intent_") || name.starts_with("print_modifier_") {
+        return false;
+    }
+    if limo_cad_mcp_mutate::lookup_mutate(name).is_some_and(|spec| spec.is_read_only()) {
+        return false;
+    }
     if matches!(
         name,
         "drawing_document"
@@ -4667,10 +5192,18 @@ fn records_in_script(name: &str) -> bool {
             | "solid_export_stl"
             | "solid_export_3mf"
             | "solid_export_preflight"
+            | "printer_catalog"
             | "material_catalog"
             | "body_appearances"
             | "project_visibility"
             | "named_views"
+            | "named_view_solution"
+            | "set_named_views"
+            | "upsert_named_view"
+            | "rename_named_view"
+            | "delete_named_view"
+            | "recall_named_view"
+            | "clear_named_view"
             | "demo_export_pip_3mf"
             | "print_calibrate"
             | "print_crop"
@@ -4685,7 +5218,7 @@ fn records_in_script(name: &str) -> bool {
     true
 }
 
-fn compare_solids_summary(scene: &nbcad_solid::SolidSceneDto) -> Value {
+fn compare_solids_summary(scene: &limo_cad_solid::SolidSceneDto) -> Value {
     let bodies: Vec<Value> = scene
         .bodies
         .iter()
@@ -4693,7 +5226,7 @@ fn compare_solids_summary(scene: &nbcad_solid::SolidSceneDto) -> Value {
             let positions = &body.mesh.positions;
             let mut min = [f32::INFINITY; 3];
             let mut max = [f32::NEG_INFINITY; 3];
-            for chunk in positions.chunks_exact(3) {
+            for chunk in positions.as_chunks::<3>().0 {
                 for (i, component) in chunk.iter().enumerate() {
                     min[i] = min[i].min(*component);
                     max[i] = max[i].max(*component);
@@ -4740,8 +5273,6 @@ fn tool_list_result(disclosure: &mut DisclosureState) -> Value {
 }
 
 fn success_result(value: Value) -> Value {
-    // A tool that produced a picture returns it as MCP image content next to
-    // its text, so a vision-capable agent sees it without a file round trip.
     let mut value = value;
     let image = value
         .pointer("/image/png_base64")
@@ -4813,10 +5344,10 @@ fn handle_message(server: &mut CadServer, message: Value) -> Vec<Value> {
                         "prompts": { "listChanged": false }
                     },
                     "serverInfo": {
-                        "name": "nbcad",
-                        "title": "noBS CAD",
-                        "version": nbcad_core::build_info().display_version(),
-                        "_meta": {"nbcad/build": nbcad_core::build_info()}
+                        "name": "limo-cad",
+                        "title": "Limo CAD",
+                        "version": limo_cad_build_info::build_info().display_version(),
+                        "_meta": {"limo-cad/build": limo_cad_build_info::build_info()}
                     },
                     "instructions": stdio::instructions(server.desktop_binding.is_some())
                 }),
@@ -4929,7 +5460,7 @@ fn handle_message(server: &mut CadServer, message: Value) -> Vec<Value> {
 }
 
 /// Emit due soft-TTL / list_changed notifications without waiting for another
-/// client RPC. Used by the stdin+timeout worker (Jack §2) and by unit tests.
+/// client RPC. Used by the stdin+timeout worker (Jack Â§2) and by unit tests.
 fn idle_due_messages(server: &mut CadServer) -> Vec<Value> {
     server.disclosure.tick_soft_expiry();
     let mut outgoing = Vec::new();
@@ -4939,10 +5470,10 @@ fn idle_due_messages(server: &mut CadServer) -> Vec<Value> {
     outgoing
 }
 
-fn help_store() -> &'static nbcad_help::HelpStore {
+fn help_store() -> &'static limo_cad_help::HelpStore {
     use std::sync::OnceLock;
-    static STORE: OnceLock<nbcad_help::HelpStore> = OnceLock::new();
-    STORE.get_or_init(nbcad_help::HelpStore::bundled)
+    static STORE: OnceLock<limo_cad_help::HelpStore> = OnceLock::new();
+    STORE.get_or_init(limo_cad_help::HelpStore::bundled)
 }
 
 fn cad_help_call(arguments: &Value) -> Result<Value, String> {
@@ -4965,7 +5496,7 @@ fn cad_help_call(arguments: &Value) -> Result<Value, String> {
             Ok(json!({
                 "action": "search",
                 "query": query,
-                "limit": limit.unwrap_or(nbcad_help::SEARCH_DEFAULT_LIMIT).clamp(1, nbcad_help::SEARCH_MAX_LIMIT),
+                "limit": limit.unwrap_or(limo_cad_help::SEARCH_DEFAULT_LIMIT).clamp(1, limo_cad_help::SEARCH_MAX_LIMIT),
                 "hits": hits.iter().map(|h| json!({
                     "id": h.id,
                     "title": h.title,
@@ -5015,7 +5546,382 @@ fn cad_help_call(arguments: &Value) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
+    mod print_intent;
     use super::*;
+    mod cam_query_effects;
+
+    #[test]
+    fn dimensioned_rectangle_rejects_misspelled_drivers_without_mutating_the_sketch() {
+        let mut server = CadServer::new().unwrap();
+        server
+            .call_tool(
+                "sketch_begin",
+                json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+            )
+            .unwrap();
+        let before = server.call_tool("sketch_active", json!({})).unwrap();
+        let schema = &tool_specs()
+            .iter()
+            .find(|tool| tool.name == "sketch_add_rectangle_locked")
+            .unwrap()
+            .input_schema;
+        let request = json!({
+            "mode":"two_point", "anchor":{"x":-30.,"y":-20.},
+            "corner_hint":{"x":30.,"y":20.}, "ctrl_held":true
+        });
+        for name in ["width", "height"] {
+            let mut invalid = request.clone();
+            invalid[name] = json!(60.);
+            assert!(schema_accepts(schema, &invalid).is_err());
+            let error = server
+                .call_tool("sketch_add_rectangle_locked", invalid)
+                .unwrap_err();
+            assert!(
+                error.to_string().contains(name),
+                "unknown rectangle driver must be identified"
+            );
+            assert_eq!(
+                server.call_tool("sketch_active", json!({})).unwrap(),
+                before
+            );
+        }
+        for drivers in [
+            json!({"width_mm":60.,"height_mm":40.}),
+            json!({"width_text":"60","height_text":"40"}),
+        ] {
+            let mut valid = request.clone();
+            valid
+                .as_object_mut()
+                .unwrap()
+                .extend(drivers.as_object().unwrap().clone());
+            schema_accepts(schema, &valid).unwrap();
+            let result = server
+                .call_tool("sketch_add_rectangle_locked", valid)
+                .unwrap();
+            assert_eq!(result["sketch"]["dimensions"].as_array().unwrap().len(), 2);
+            assert_eq!(result["sketch"]["dof"]["value"], 2);
+            server.call_tool("sketch_undo", json!({})).unwrap();
+            assert!(
+                server.call_tool("sketch_active", json!({})).unwrap()["entities"]
+                    .as_array()
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn sketch_transform_keeps_requested_moves_and_rejects_conflicting_scale_atomically() {
+        let mut server = CadServer::new().unwrap();
+        server
+            .call_tool(
+                "sketch_begin",
+                json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+            )
+            .unwrap();
+        let rectangle = server
+            .call_tool(
+                "sketch_add_rectangle_locked",
+                json!({
+                    "mode":"two_point", "anchor":{"x":5.,"y":0.}, "corner_hint":{"x":10.,"y":12.},
+                    "width_mm":5., "height_mm":12., "ctrl_held":true
+                }),
+            )
+            .unwrap();
+        assert!(rectangle["sketch"]["entities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entity| entity["fully_defined"] == false));
+        let point = rectangle["sketch"]["entities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entity| {
+                entity["kind"] == "point" && entity["position"] == json!({"x":5.,"y":0.})
+            })
+            .unwrap()["id"]
+            .clone();
+        let moved = server
+            .call_tool(
+                "sketch_move_copy",
+                json!({"entity_ids":[point],"dx":1.,"dy":2.,"copy":false}),
+            )
+            .unwrap();
+        let position = |sketch: &Value| {
+            sketch["entities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entity| entity["id"] == point)
+                .unwrap()["position"]
+                .clone()
+        };
+        let target = position(&moved["sketch"]);
+        assert!((target["x"].as_f64().unwrap() - 6.).abs() < 1e-8);
+        assert!((target["y"].as_f64().unwrap() - 2.).abs() < 1e-8);
+        assert_eq!(moved["sketch"]["dof"]["value"], 2);
+        assert!(moved["sketch"]["entities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entity| entity["fully_defined"] == false));
+        let undone = server.call_tool("sketch_undo", json!({})).unwrap();
+        assert_eq!(position(&undone["sketch"]), json!({"x":5.,"y":0.}));
+        let lines: Vec<_> = undone["sketch"]["entities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|entity| entity["kind"] == "line")
+            .map(|entity| entity["id"].clone())
+            .collect();
+        let before = server.call_tool("sketch_active", json!({})).unwrap();
+        assert_eq!(before["can_redo"], true);
+        server
+            .call_tool(
+                "sketch_move_copy",
+                json!({"entity_ids":[point],"dx":0.,"dy":0.,"copy":false}),
+            )
+            .unwrap();
+        server
+            .call_tool(
+                "sketch_scale",
+                json!({"entity_ids":lines,"origin":{"x":123.4,"y":-456.7},"factor_text":"1"}),
+            )
+            .unwrap();
+        assert_eq!(
+            server.call_tool("sketch_active", json!({})).unwrap(),
+            before
+        );
+        let rejected = server
+            .call_tool(
+                "sketch_scale",
+                json!({"entity_ids":lines,"origin":{"x":0.,"y":0.},"factor_text":"2"}),
+            )
+            .unwrap_err();
+        assert!(
+            rejected.contains("conflicts"),
+            "conflicting scale must report the constraint conflict"
+        );
+        assert_eq!(
+            server.call_tool("sketch_active", json!({})).unwrap(),
+            before
+        );
+        let redone = server.call_tool("sketch_redo", json!({})).unwrap();
+        assert_eq!(position(&redone["sketch"]), target);
+        server
+            .call_tool(
+                "sketch_add_constraint",
+                json!({"type":"fix","entity":point}),
+            )
+            .unwrap();
+        let fixed = server.call_tool("sketch_active", json!({})).unwrap();
+        assert_eq!(fixed["dof"]["value"], 0);
+        assert!(fixed["entities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entity| entity["fully_defined"] == true));
+        assert!(server
+            .call_tool(
+                "sketch_move_copy",
+                json!({"entity_ids":[point],"dx":1.,"dy":0.,"copy":false})
+            )
+            .unwrap_err()
+            .contains("conflicts"));
+        assert_eq!(server.call_tool("sketch_active", json!({})).unwrap(), fixed);
+        let undone = server.call_tool("sketch_undo", json!({})).unwrap();
+        assert_eq!(undone["sketch"]["dof"]["value"], 2);
+        assert_eq!(position(&undone["sketch"]), target);
+    }
+
+    #[test]
+    fn sketch_transform_preserves_curve_parameters_and_shared_handles() {
+        let mut server = CadServer::new().unwrap();
+        server
+            .call_tool(
+                "sketch_begin",
+                json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+            )
+            .unwrap();
+        server.call_tool("sketch_add_circle", json!({"mode":"center_diameter","p1":{"x":10.,"y":10.},"p2":{"x":15.,"y":10.},"ctrl_held":true})).unwrap();
+        server.call_tool("sketch_add_arc_3pt", json!({"p1":{"x":20.,"y":0.},"p2":{"x":25.,"y":5.},"p3":{"x":30.,"y":0.},"ctrl_held":true})).unwrap();
+        server
+            .call_tool(
+                "sketch_add_spline",
+                json!({"points":[{"x":40.,"y":0.},{"x":45.,"y":5.},{"x":50.,"y":0.}]}),
+            )
+            .unwrap();
+        let before = server.call_tool("sketch_active", json!({})).unwrap();
+        let curves: Vec<_> = before["entities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|entity| matches!(entity["kind"].as_str(), Some("circle" | "arc" | "spline")))
+            .map(|entity| entity["id"].clone())
+            .collect();
+        assert_eq!(curves.len(), 3);
+        let moved = server
+            .call_tool(
+                "sketch_move_copy",
+                json!({"entity_ids":curves,"dx":3.,"dy":-2.,"copy":false}),
+            )
+            .unwrap();
+        assert_eq!(moved["sketch"]["dof"], before["dof"]);
+        for entity in before["entities"].as_array().unwrap() {
+            let actual = moved["sketch"]["entities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|candidate| candidate["id"] == entity["id"])
+                .unwrap();
+            for field in ["position", "center"] {
+                if entity[field].is_object() {
+                    assert!(
+                        (actual[field]["x"].as_f64().unwrap()
+                            - entity[field]["x"].as_f64().unwrap()
+                            - 3.)
+                            .abs()
+                            < 1e-8
+                    );
+                    assert!(
+                        (actual[field]["y"].as_f64().unwrap()
+                            - entity[field]["y"].as_f64().unwrap()
+                            + 2.)
+                            .abs()
+                            < 1e-8
+                    );
+                }
+            }
+            for field in ["radius", "start_angle", "end_angle"] {
+                if entity[field].is_number() {
+                    assert_eq!(actual[field], entity[field]);
+                }
+            }
+            if entity["kind"] == "spline" {
+                for (actual, original) in actual["points"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .zip(entity["points"].as_array().unwrap())
+                {
+                    assert!(
+                        (actual["x"].as_f64().unwrap() - original["x"].as_f64().unwrap() - 3.)
+                            .abs()
+                            < 1e-8
+                    );
+                    assert!(
+                        (actual["y"].as_f64().unwrap() - original["y"].as_f64().unwrap() + 2.)
+                            .abs()
+                            < 1e-8
+                    );
+                }
+            }
+        }
+        let scaled = server
+            .call_tool(
+                "sketch_scale",
+                json!({"entity_ids":curves,"origin":{"x":0.,"y":0.},"factor_text":"2"}),
+            )
+            .unwrap();
+        assert_eq!(scaled["sketch"]["dof"], before["dof"]);
+        for id in curves {
+            let original = moved["sketch"]["entities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entity| entity["id"] == id)
+                .unwrap();
+            let actual = scaled["sketch"]["entities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entity| entity["id"] == id)
+                .unwrap();
+            if original["center"].is_object() {
+                for axis in ["x", "y"] {
+                    assert!(
+                        (actual["center"][axis].as_f64().unwrap()
+                            - original["center"][axis].as_f64().unwrap() * 2.)
+                            .abs()
+                            < 1e-8
+                    );
+                }
+                assert_eq!(
+                    actual["radius"].as_f64().unwrap(),
+                    original["radius"].as_f64().unwrap() * 2.
+                );
+            }
+            if original["kind"] == "spline" {
+                for (actual, original) in actual["points"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .zip(original["points"].as_array().unwrap())
+                {
+                    for axis in ["x", "y"] {
+                        assert!(
+                            (actual[axis].as_f64().unwrap()
+                                - original[axis].as_f64().unwrap() * 2.)
+                                .abs()
+                                < 1e-8
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn section_review_is_a_shared_read_with_registered_modeling_disclosure() {
+        let mut server = CadServer::new().unwrap();
+        extrude_offset_box(&mut server, "Sketch1", 10.0, 30.0);
+        let body = server.manager.solid_scene().bodies[0].id;
+        let before = server.manager.export_project_model().unwrap();
+        let review = server
+            .call_tool(
+                "solid_section_review",
+                json!({"body_id":body,"plane":"xy","offset_mm":5.0,"probe_mm":0.0}),
+            )
+            .unwrap();
+        assert!(review["svg"].as_str().unwrap().starts_with("<svg"));
+        assert_eq!(review["outcome"], "material_section");
+        assert!(review["cutaway"].is_null());
+        assert!((review["probe_spans"][0]["length_mm"].as_f64().unwrap() - 20.).abs() < 1e-6);
+        for offset in [0., 8.] {
+            for keep_positive in [false, true] {
+                let boundary = server
+                    .call_tool(
+                        "solid_section_review",
+                        json!({
+                            "body_id":body,"plane":"xy","offset_mm":offset,"probe_mm":0.,
+                            "include_cutaway":true,"keep_positive":keep_positive
+                        }),
+                    )
+                    .unwrap();
+                assert_eq!(boundary["outcome"], "boundary_contact");
+                assert!(boundary["probe_spans"].as_array().unwrap().is_empty());
+                assert!(boundary["cutaway"].is_null());
+            }
+        }
+        assert_eq!(server.manager.export_project_model().unwrap(), before);
+        assert!(is_read_safe_while_attached("solid_section_review"));
+        assert!(limo_cad_mcp_mutate::is_live_engine_query(
+            "solid_section_review"
+        ));
+        assert!(!changes_model("solid_section_review"));
+        assert!(!is_modeling_mutate("solid_section_review"));
+        assert_eq!(
+            interface::group_for("solid_section_review"),
+            Some("solid/check")
+        );
+        assert!(server
+            .call_tool(
+                "solid_section_review",
+                json!({"body_id":body,"plane":"xy","offset_mm":5.,"deflection_mm":1.})
+            )
+            .is_err());
+    }
 
     #[test]
     fn drawing_exports_current_associative_geometry_bom_and_rejects_stale_edits() {
@@ -5065,7 +5971,10 @@ mod tests {
         let svg = server
             .call_tool("drawing_export", json!({"sheet_id":1,"format":"svg"}))
             .unwrap();
-        assert!(svg["content"].as_str().unwrap().contains("20.00 ±0.20"));
+        assert!(svg["content"]
+            .as_str()
+            .unwrap()
+            .contains(">20.00 mm ±0.20</text>"));
         assert!(svg["content"]
             .as_str()
             .unwrap()
@@ -5134,7 +6043,11 @@ mod tests {
         let model = server.call_tool("cad_project_model", json!({})).unwrap();
         {
             let mut legacy: Value = serde_json::from_str(model.as_str().unwrap()).unwrap();
-            assert_eq!(legacy["schema_version"], 10);
+            assert_eq!(
+                legacy["schema_version"],
+                limo_cad_sketch::PROJECT_SCHEMA_VERSION
+            );
+            legacy.as_object_mut().unwrap().remove("print_intent");
             fn remove_guards(value: &mut Value) {
                 match value {
                     Value::Object(object) => {
@@ -5163,13 +6076,16 @@ mod tests {
                     .unwrap();
                 let resaved = migrated.call_tool("cad_project_model", json!({})).unwrap();
                 let resaved: Value = serde_json::from_str(resaved.as_str().unwrap()).unwrap();
-                assert_eq!(resaved["schema_version"], 10);
                 assert_eq!(
-                    serde_json::from_value::<nbcad_sketch::DrawingDocumentDto>(
+                    resaved["schema_version"],
+                    limo_cad_sketch::PROJECT_SCHEMA_VERSION
+                );
+                assert_eq!(
+                    serde_json::from_value::<limo_cad_sketch::DrawingDocumentDto>(
                         resaved["drawings"].clone()
                     )
                     .unwrap(),
-                    serde_json::from_value::<nbcad_sketch::DrawingDocumentDto>(
+                    serde_json::from_value::<limo_cad_sketch::DrawingDocumentDto>(
                         legacy["drawings"].clone()
                     )
                     .unwrap(),
@@ -5208,7 +6124,7 @@ mod tests {
 
     #[test]
     fn fillet_recipe_preview_retains_distinct_real_kernel_stages() {
-        let source = nbcad_recipes::find("fillet-basics").unwrap().source;
+        let source = limo_cad_recipes::find("fillet-basics").unwrap().source;
         let result = preview_script(source).unwrap();
         let frames = result["exports"]["preview_frames"].as_array().unwrap();
         assert_eq!(
@@ -5238,8 +6154,7 @@ mod tests {
                 },
                 || Ok(json!({"status":"applied","presentation":{"paused":states.next().unwrap_or(false)}})),
             ).unwrap();
-            // A pause which resumes just before a deadline still gets another
-            // complete wait on seq17 rather than a failing zero-time probe.
+
             assert_eq!(waits, complete_after);
             assert_eq!(result["status"], "applied");
             assert_eq!(result["seq"], 17);
@@ -5261,8 +6176,8 @@ mod tests {
     fn attached_assembly_reads_are_fresh_without_reconstructing_cached_geometry() {
         let _guard = session::env_lock();
         let id = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-live-assembly-query-{id}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-live-assembly-query-{id}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_box_session(&id);
         let mut server = CadServer::new().unwrap();
         server
@@ -5271,8 +6186,7 @@ mod tests {
         let cached = server.manager.assembly_document();
         let cached_model = server.loaded_snapshot_json.clone();
         server.live_snapshot_dirty = true;
-        // Querying the live document must not touch the stale reconstruction
-        // cache: a full reload would fail against this deliberately bad file.
+
         session::write_session(&id, "model.json", "not a model snapshot").unwrap();
         session::write_session(
             &id,
@@ -5349,7 +6263,7 @@ mod tests {
             assert!(server.live_snapshot_dirty);
         }
         worker.join().unwrap();
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -5367,8 +6281,7 @@ mod tests {
         original.call_tool("solid_extrude",json!({"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":38.7},"taper_angle_deg":0.,"flip":false,"target_body_ids":[]})).unwrap();
         let assembly = original.call_tool("assembly_document", json!({})).unwrap();
         let occurrence = assembly["component_structure"]["occurrences"][0]["id"].clone();
-        // These valid small coordinates drift by one ULP in serde_json's
-        // default fast float parser. The API and cached reload must keep bits.
+
         let translation = [-1.1728120758078999e-17_f64, 5.684341886080804e-14, 0.2];
         original.call_tool("assembly_set_occurrence_pose",json!({"occurrence_id":occurrence,"local_pose":{"translation":translation,"rotation":[0.,0.,0.,1.]}})).unwrap();
         let mut before_solution = original.call_tool("assembly_solution", json!({})).unwrap();
@@ -5436,6 +6349,23 @@ mod tests {
     }
 
     #[test]
+    fn command_script_preserves_a_cam_only_document() {
+        let mut server = CadServer::new().unwrap();
+        let mut cam = server.manager.cam_document();
+        cam.units = serde_json::from_value(json!("inches")).unwrap();
+        server.manager.set_cam_document(cam).unwrap();
+        let before = server.manager.export_project_model().unwrap();
+        let source = json!({"version":1,"name":"Blank only","steps":[
+            {"call":{"group":"document/files","operation":"cad_set_document_name","arguments":{"name":"Unexpected change"}}}
+        ]}).to_string();
+        let error = server
+            .call_tool("cad_interface", json!({"action":"script","source":source}))
+            .unwrap_err();
+        assert!(error.contains("blank"), "{error}");
+        assert_eq!(before, server.manager.export_project_model().unwrap());
+    }
+
+    #[test]
     fn command_script_stops_before_later_commands_after_operation_error() {
         let mut server = CadServer::new().unwrap();
         let source = json!({"version":1,"name":"Stop on error","steps":[
@@ -5456,8 +6386,8 @@ mod tests {
         let _guard = session::env_lock();
         let original = session::test_session_uuid();
         let replacement = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-replacement-receipt-{original}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-replacement-receipt-{original}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (_, original_model) = write_box_session(&original);
         let mut server = CadServer::new().unwrap();
         server
@@ -5488,14 +6418,14 @@ mod tests {
         let mut new_model: Value = serde_json::from_str(&original_model).unwrap();
         new_model["document"]["name"] = json!("Replacement only");
         let publisher = replacement.clone();
-        let delayed = std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(20));
+        std::thread::spawn(move || {
             session::publish_applied_snapshot(&publisher, &new_model.to_string()).unwrap();
-        });
+        })
+        .join()
+        .unwrap();
         let completed = server
-            .await_inbox_apply(&json!({"seq":1,"timeout_ms":2000,"poll_ms":5}))
+            .await_inbox_apply(&json!({"seq":1,"timeout_ms":0}))
             .unwrap();
-        delayed.join().unwrap();
         assert_eq!(completed["status"], "applied");
         assert_eq!(completed["refreshed"], true);
         assert_eq!(completed["attached_session_id"], replacement);
@@ -5537,8 +6467,6 @@ mod tests {
             Some(replacement.as_str())
         );
 
-        // An already-running interpreter cannot carry its remaining commands
-        // across a whole-document replacement, even when refresh is disabled.
         server.attached_document_id = Some(original.clone());
         server.script_running = true;
         let error = server
@@ -5568,7 +6496,7 @@ mod tests {
         assert!(session::await_inbox_apply(&original, 1, 0, 1)
             .unwrap_err()
             .contains("ownership"));
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -5576,8 +6504,8 @@ mod tests {
     fn deferred_live_snapshot_is_refreshed_before_a_query() {
         let _guard = session::env_lock();
         let id = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-deferred-script-{id}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-deferred-script-{id}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_box_session(&id);
         let mut server = CadServer::new().unwrap();
         server
@@ -5595,7 +6523,7 @@ mod tests {
         let result = server.call_tool("cad_document", json!({})).unwrap();
         assert_eq!(result["name"], "New authoritative document");
         assert!(!server.live_snapshot_dirty);
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -5603,8 +6531,8 @@ mod tests {
     fn session_status_observes_deferred_script_edits_without_advancing_loaded_fence() {
         let _guard = session::env_lock();
         let id = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-script-status-{id}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-script-status-{id}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (_, original_model) = write_box_session(&id);
         session::write_session(
             &id,
@@ -5620,8 +6548,6 @@ mod tests {
             .unwrap();
         server.script_running = true;
 
-        // Use the real live mutation receipt and snapshot publisher, followed
-        // by an ordinary caption acknowledgement while reconstruction is deferred.
         let peer = id.clone();
         let worker = std::thread::spawn(move || {
             let deadline = std::time::Instant::now() + Duration::from_secs(5);
@@ -5642,8 +6568,7 @@ mod tests {
                     }),
                 )?;
                 let value = owner.call_tool(name, arguments)?;
-                // The real desktop publishes the result before the applied
-                // receipt lets a waiting caller consume it.
+
                 session::write_session(
                     &peer,
                     &format!("inbox/results/{seq}.json"),
@@ -5709,8 +6634,6 @@ mod tests {
         let updated_model = session::require_model_json(&id).unwrap();
         assert_ne!(updated_model, original_model);
 
-        // A bad cache file makes any accidental refresh observable. Status must
-        // retain both the previously loaded generation and the pending trace.
         session::write_session(&id, "model.json", "invalid deferred snapshot").unwrap();
         let status = server
             .call_tool(
@@ -5737,9 +6660,11 @@ mod tests {
         assert_eq!(server.tool_trace, trace_after_edit);
         assert!(server.live_snapshot_dirty);
 
-        // The first successful completed-model read owns the new fence and
-        // replaces the pending operation trace with its portable model baseline.
         session::write_session(&id, "model.json", &updated_model).unwrap();
+        assert!(server.call_tool("cad_document", json!({})).is_err());
+        let recovered = server.call_tool("cad_refresh", json!({})).unwrap();
+        assert_eq!(recovered["refreshed"], true);
+        assert_eq!(recovered["attached_generation"], 2);
         assert_eq!(
             server.call_tool("cad_document", json!({})).unwrap()["name"],
             "Live script edit"
@@ -5760,7 +6685,7 @@ mod tests {
             "Reads do not release the active script guard"
         );
         server.script_running = false;
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -5834,12 +6759,10 @@ mod tests {
 
     #[test]
     fn tutor_quest_pip_cam_bolt() {
-        // Headless golden: 4-body print-in-place cam bolt. No cad_attach.
-        // Generator asserts pairwise AABB clearance ≥ CLEAR_MM (0.4).
-        let (meshes, apps) = nbcad_export::print_in_place_cam_bolt();
+        let (meshes, apps) = limo_cad_export::print_in_place_cam_bolt();
         assert_eq!(meshes.len(), 4);
         assert_eq!(apps.len(), 4);
-        assert_eq!(nbcad_export::CLEAR_MM, 0.4);
+        assert_eq!(limo_cad_export::CLEAR_MM, 0.4);
 
         let mut server = CadServer::new().unwrap();
         let exported = server
@@ -5869,8 +6792,7 @@ mod tests {
 
     #[test]
     fn tutor_quest_pip_clip() {
-        // Headless golden: 3-body captive drawer clip. No cad_attach.
-        let (meshes, apps) = nbcad_export::print_in_place_clip();
+        let (meshes, apps) = limo_cad_export::print_in_place_clip();
         assert_eq!(meshes.len(), 3);
         assert_eq!(apps.len(), 3);
 
@@ -5894,7 +6816,6 @@ mod tests {
 
     #[test]
     fn tutor_quest_pip_slicer_variants() {
-        // Headless golden: Bambu and Orca match the portable model. Prusa and Cura add their metadata.
         let mut server = CadServer::new().unwrap();
         let cases: &[(&str, Option<&str>)] = &[
             ("bambu_studio", None),
@@ -5930,7 +6851,7 @@ mod tests {
                 let mut xml = String::new();
                 std::io::Read::read_to_string(&mut model, &mut xml).unwrap();
                 assert!(
-                    xml.contains(r#"<metadata name="Application">noBS CAD</metadata>"#),
+                    xml.contains(r#"<metadata name="Application">Limo CAD</metadata>"#),
                     "{target} Application metadata must be exact: {xml}"
                 );
                 assert!(
@@ -6028,9 +6949,9 @@ mod tests {
         let resources = listed[0]["result"]["resources"].as_array().unwrap();
         assert!(resources
             .iter()
-            .any(|resource| resource["uri"] == "nbcad://knowledge/index.md"));
+            .any(|resource| resource["uri"] == "limo-cad://knowledge/index.md"));
         for name in ["gears", "additive-workholding"] {
-            let uri = format!("nbcad://knowledge/concepts/{name}.md");
+            let uri = format!("limo-cad://knowledge/concepts/{name}.md");
             let resource = resources
                 .iter()
                 .find(|resource| resource["uri"] == uri)
@@ -6068,12 +6989,12 @@ mod tests {
     fn knowledge_resources_reject_invalid_params_and_unlisted_uris() {
         let mut server = CadServer::new().unwrap();
         for uri in [
-            "nbcad://knowledge/missing.md",
-            "nbcad://knowledge/../README.md",
-            "nbcad://knowledge/concepts/%2e%2e/index.md",
+            "limo-cad://knowledge/missing.md",
+            "limo-cad://knowledge/../README.md",
+            "limo-cad://knowledge/concepts/%2e%2e/index.md",
             "file:///etc/passwd",
             "https://example.com/knowledge/index.md",
-            "nbcad://knowledge/INDEX.md",
+            "limo-cad://knowledge/INDEX.md",
         ] {
             let reply = handle_message(
                 &mut server,
@@ -6196,7 +7117,6 @@ mod tests {
             "{err}"
         );
 
-        // Same spine via cad_interface execute (grouped dispatch).
         let via_interface = server
             .call_tool(
                 "cad_interface",
@@ -6238,7 +7158,6 @@ mod tests {
     fn desktop_cad_help_works_before_selection_and_after_detach() {
         let mut server = CadServer::new().unwrap();
         server.desktop_binding = Some(DesktopBinding {
-            // No desktop owns this PID, so accidental document selection fails.
             process_id: u32::MAX,
             initial_selection_pending: true,
         });
@@ -6248,6 +7167,19 @@ mod tests {
         for detached in [false, true] {
             if detached {
                 server.call_tool("cad_detach", json!({})).unwrap();
+            }
+            for operation in ["material_catalog", "printer_catalog"] {
+                let direct = server.call_tool(operation, json!({})).unwrap();
+                let grouped = server
+                    .call_tool(
+                        "cad_interface",
+                        json!({
+                            "action":"execute", "group":interface::group_for(operation).unwrap(),
+                            "operation":operation, "arguments":{}
+                        }),
+                    )
+                    .unwrap();
+                assert_eq!(grouped, direct);
             }
             for arguments in [
                 json!({"action":"search", "query":"clearance fit"}),
@@ -6289,8 +7221,6 @@ mod tests {
                 assert_eq!(grouped, direct);
             }
 
-            // The help exception must not let document reads or mutations run
-            // against the independent headless manager inside a desktop server.
             for operation in ["cad_document", "sketch_begin"] {
                 let direct = server
                     .call_tool(operation, json!({}))
@@ -6345,7 +7275,7 @@ mod tests {
             .filter_map(|tool| tool["name"].as_str())
             .collect();
         assert!(names.iter().any(|name| name.starts_with("sketch_")));
-        assert!(!names.iter().any(|name| *name == "solid_extrude"));
+        assert!(!names.contains(&"solid_extrude"));
 
         server
             .call_tool("cad_set_focus", json!({"focus": "solid", "explicit": true}))
@@ -6357,7 +7287,7 @@ mod tests {
             .iter()
             .filter_map(|tool| tool["name"].as_str())
             .collect();
-        assert!(names.iter().any(|name| *name == "solid_extrude"));
+        assert!(names.contains(&"solid_extrude"));
     }
 
     #[test]
@@ -6381,14 +7311,14 @@ mod tests {
             .iter()
             .filter_map(|tool| tool["name"].as_str())
             .collect();
-        assert!(!names.iter().any(|name| *name == "sketch_begin"));
+        assert!(!names.contains(&"sketch_begin"));
         let result = server
             .call_tool(
                 "sketch_begin",
                 json!({"plane": {"type": "origin_plane", "plane": "xy"}}),
             )
             .unwrap();
-        // Hidden side-call re-promotes the pack (steerability); still no hard jail.
+
         assert_eq!(result["_disclosure"]["state"], "soft");
         let listed_after = tool_list_result(&mut server.disclosure);
         assert!(listed_after["tools"]
@@ -6445,7 +7375,7 @@ mod tests {
                 "focus '{focus}' should advertise '{tool_name}'"
             );
             assert!(
-                names.iter().any(|name| *name == "cad_get_focus"),
+                names.contains(&"cad_get_focus"),
                 "spine control tools must remain advertised under '{focus}'"
             );
         }
@@ -6517,13 +7447,13 @@ mod tests {
                 }
             }),
         );
-        // Clear the focus-change notify so only soft-TTL expiry remains under test.
+
         DisclosureState::advance_for_test(disclosure::FOCUS_THROTTLE_MS);
         let _ = idle_due_messages(&mut server);
 
         DisclosureState::advance_for_test(disclosure::SOFT_TTL_MS + 1);
         let after_expiry = idle_due_messages(&mut server);
-        // Expiry schedules a throttled notify; may or may not be due in the same tick.
+
         if after_expiry.iter().any(|message| {
             message.get("method").and_then(Value::as_str)
                 == Some("notifications/tools/list_changed")
@@ -6545,8 +7475,8 @@ mod tests {
     fn read_only_snapshot_attach_refresh_detach() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-attach-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-attach-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (mut donor, _) = mcp_box();
         let model = donor.call_tool("cad_project_model", json!({})).unwrap();
         let model_json = model
@@ -6566,11 +7496,11 @@ mod tests {
         .unwrap();
 
         let mut server = CadServer::new().unwrap();
-        // Document-name ids are rejected (UUID v4 required).
+
         assert!(server
             .call_tool("cad_attach", json!({"session_id": "My Document"}))
             .is_err());
-        // Missing model must refuse attach (and leave nothing attached).
+
         let missing = session::test_session_uuid();
         std::fs::create_dir_all(dir.join(&missing)).unwrap();
         assert!(server
@@ -6604,7 +7534,7 @@ mod tests {
         assert!(server.attached_document_id.is_none());
         assert!(server.call_tool("cad_refresh", json!({})).is_err());
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -6612,8 +7542,8 @@ mod tests {
     fn attach_targets_window_id_and_document_id() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-attach-mw-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-attach-mw-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (mut donor, _) = mcp_box();
         let model = donor.call_tool("cad_project_model", json!({})).unwrap();
         let model_json = model
@@ -6653,7 +7583,6 @@ mod tests {
         assert_eq!(by_document["session_id"], unique);
         server.call_tool("cad_detach", json!({})).unwrap();
 
-        // Headless path: UUID document_id alias still works without window identity.
         let headless = session::test_session_uuid();
         session::write_session(&headless, "model.json", &model_json).unwrap();
         session::write_session(
@@ -6671,7 +7600,7 @@ mod tests {
         assert_eq!(by_uuid_doc["attached"], true);
         assert_eq!(by_uuid_doc["session_id"], headless);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -6710,8 +7639,8 @@ mod tests {
     fn attach_cad_submit_writes_inbox_without_mutating_memory() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-submit-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-submit-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (update, _) = write_box_session(&unique);
         let body_id = update["scene"]["bodies"][0]["id"].clone();
 
@@ -6767,7 +7696,7 @@ mod tests {
             "MCP in-memory model must stay unchanged until cad_refresh: {project_text}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -6778,8 +7707,7 @@ mod tests {
         process_id: &str,
     ) -> (Value, String) {
         let (update, model_json) = write_box_session(unique);
-        // write_box_session already wrote heartbeat without window identity —
-        // overwrite with the published multi-window identity stamp.
+
         session::write_session(
             unique,
             "heartbeat.json",
@@ -6831,8 +7759,8 @@ mod tests {
             "00000000-0000-4000-8000-{:012x}",
             (session::now_ms().wrapping_add(41)) & 0xffffffffffff
         );
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-clobber-{session_a}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-clobber-{session_a}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (update_a, model_a) =
             write_box_session_with_identity(&session_a, "main", "tab-a", "proc-clobber");
         let (_update_b, model_b) =
@@ -6902,7 +7830,7 @@ mod tests {
         assert!(window_ids.contains(&"main".to_string()));
         assert!(window_ids.contains(&"secondary".to_string()));
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -6914,8 +7842,8 @@ mod tests {
             "00000000-0000-4000-8000-{:012x}",
             (session::now_ms().wrapping_add(43)) & 0xffffffffffff
         );
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-switch-{session_a}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-switch-{session_a}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (update_a, _) =
             write_box_session_with_identity(&session_a, "main", "tab-a", "proc-switch");
         let (update_b, _) =
@@ -6971,7 +7899,7 @@ mod tests {
         assert_eq!(parsed_b["session_id"], session_b);
         assert_eq!(parsed_b["window_id"], "secondary");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -6979,8 +7907,8 @@ mod tests {
     fn apply_inbox_helper_on_separate_manager_then_refresh_sees_body() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-apply-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-apply-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (update, _) = write_box_session(&unique);
         let body_id = update["scene"]["bodies"][0]["id"].clone();
 
@@ -7035,7 +7963,7 @@ mod tests {
             "cad_refresh must see the applied body (before {before_count}, after {after_count})"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -7043,8 +7971,8 @@ mod tests {
     fn stale_base_generation_is_generation_conflict_and_does_not_apply() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-stale-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-stale-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (update, _) = write_box_session(&unique);
         let body_id = update["scene"]["bodies"][0]["id"].clone();
 
@@ -7098,7 +8026,7 @@ mod tests {
             "expected inbox/failed/1.json"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -7150,8 +8078,8 @@ mod tests {
     fn cad_session_status_reports_stale_pending_and_receipt() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-status-tool-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-status-tool-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (update, _) = write_box_session(&unique);
         let body_id = update["scene"]["bodies"][0]["id"].clone();
 
@@ -7182,7 +8110,6 @@ mod tests {
             .unwrap();
         assert_eq!(submitted["seq"], 1);
 
-        // UI undo/edit advances live generation while MCP stays on attach base.
         session::write_session(
             &unique,
             "heartbeat.json",
@@ -7201,7 +8128,6 @@ mod tests {
         assert_eq!(stale["pending_inbox_count"], 1);
         assert_eq!(stale["heartbeat_kind"], "snapshot");
 
-        // Stale head dead-letters; status shows last failed receipt.
         let _ = session::apply_inbox_op(&unique, |_n, _a| Ok(json!({}))).expect_err("stale");
         let after = server.call_tool("cad_session_status", json!({})).unwrap();
         assert_eq!(after["pending_inbox_count"], 0);
@@ -7215,18 +8141,17 @@ mod tests {
         assert_eq!(headless["attached"], false);
         assert_eq!(headless["code"], "not_attached");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn cad_session_status_engine_revision_attach_reports_model_fence_stale() {
-        // Jack #84: generation=2, published_generation=1, model_generation=1 —
-        // cad_attach loads model gen 1; status must not claim stale:false.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-status-engine-rev-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir =
+            std::env::temp_dir().join(format!("limo-cad-sessions-status-engine-rev-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (_update, _) = write_box_session(&unique);
         session::write_session(
             &unique,
@@ -7264,7 +8189,7 @@ mod tests {
             "must not claim fresh match: {hint}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -7272,8 +8197,8 @@ mod tests {
     fn cad_await_apply_refreshes_after_separate_host_publish() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-await-tool-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-await-tool-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (update, _) = write_box_session(&unique);
         let body_id = update["scene"]["bodies"][0]["id"].clone();
 
@@ -7309,7 +8234,7 @@ mod tests {
                     .as_str()
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| serde_json::to_string(&exported).unwrap());
-                // Intermediate engine_revision marker (native bump before TS publish).
+
                 session::write_session(
                     &session_for_worker,
                     "heartbeat.json",
@@ -7319,8 +8244,8 @@ mod tests {
                     ),
                 )?;
                 std::thread::sleep(std::time::Duration::from_millis(30));
-                // The 10 s keepalive can land in this window. It changes kind
-                // but must preserve the still-pending publication fence.
+
+
                 session::write_session(
                     &session_for_worker,
                     "heartbeat.json",
@@ -7370,7 +8295,7 @@ mod tests {
             "await+refresh must load applied body (before {before_count}, after {after_count})"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -7378,8 +8303,8 @@ mod tests {
     fn cad_await_apply_does_not_refresh_active_sketch_only_snapshot() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-await-sketch-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-await-sketch-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_box_session(&unique);
 
         let mut server = CadServer::new().unwrap();
@@ -7440,7 +8365,7 @@ mod tests {
         assert_eq!(status["active_sketch_generation"], 2);
         assert_eq!(status["stale"], true);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -7448,8 +8373,8 @@ mod tests {
     fn cad_await_apply_timeout_probe_while_pending() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-await-probe-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-await-probe-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (update, _) = write_box_session(&unique);
         let body_id = update["scene"]["bodies"][0]["id"].clone();
 
@@ -7489,7 +8414,7 @@ mod tests {
         assert_eq!(timed["status"], "timeout");
         assert_eq!(timed["timed_out"], true);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -7518,21 +8443,21 @@ mod tests {
         assert!(b64.len() > 32);
         let bytes = BASE64.decode(b64).expect("valid base64");
         assert!(bytes.len() > 32);
-        // ZIP local file header
+
         assert_eq!(&bytes[0..2], b"PK");
     }
 
-    fn parse_3mf_model_mesh(xml: &str) -> nbcad_export::TriangleMesh {
-        use nbcad_core::BodyId;
+    fn parse_3mf_model_mesh(xml: &str) -> limo_cad_export::TriangleMesh {
+        use limo_cad_core::BodyId;
         let mut positions = Vec::new();
         for line in xml.lines() {
             let trimmed = line.trim();
             if let Some(rest) = trimmed.strip_prefix("<vertex x=\"") {
                 let parts: Vec<&str> = rest.split('"').collect();
                 if parts.len() >= 6 {
-                    let x: f32 = parts[0].parse().unwrap();
-                    let y: f32 = parts[2].parse().unwrap();
-                    let z: f32 = parts[4].parse().unwrap();
+                    let x: f64 = parts[0].parse().unwrap();
+                    let y: f64 = parts[2].parse().unwrap();
+                    let z: f64 = parts[4].parse().unwrap();
                     positions.extend_from_slice(&[x, y, z]);
                 }
             }
@@ -7549,7 +8474,7 @@ mod tests {
                 }
             }
         }
-        nbcad_export::TriangleMesh {
+        limo_cad_export::TriangleMesh {
             body_id: BodyId(1),
             name: "exported".into(),
             positions,
@@ -7577,7 +8502,13 @@ mod tests {
                 .decode(assemble["bytes_base64"].as_str().unwrap())
                 .unwrap(),
         );
-        assert_eq!(xml.matches("<mesh>").count(), 2);
+        assert_eq!(xml.matches("<mesh>").count(), 1);
+        assert_eq!(
+            limo_cad_export::test_reader::read_build(&xml)
+                .unwrap()
+                .len(),
+            2
+        );
         let definition = server
             .call_tool(
                 "solid_export_3mf",
@@ -7591,10 +8522,12 @@ mod tests {
         );
         assert_eq!(xml.matches("<mesh>").count(), 1);
         let mesh = parse_3mf_model_mesh(&xml);
-        nbcad_export::validate_3mf_model_mesh(&mesh).unwrap();
+        limo_cad_export::validate_3mf_model_mesh(&mesh).unwrap();
         assert!(mesh
             .positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .all(|point| (0.0..=10.0).contains(&point[2])));
         let stl = server
             .call_tool(
@@ -7647,8 +8580,7 @@ mod tests {
         let occurrence = &document["component_structure"]["occurrences"][0]["id"];
         replacement.call_tool("assembly_set_occurrence_pose", json!({"occurrence_id":occurrence,"local_pose":{"translation":[0.,0.,90.],"rotation":[0.,0.,0.,1.]}})).unwrap();
         let replacement_model = replacement.manager.export_project_model().unwrap();
-        // Same document body IDs and same geometry; a different placement is
-        // still a different manufacturing request. This is the live Open path.
+
         server
             .call_tool(
                 "cad_load_project_model",
@@ -7669,7 +8601,7 @@ mod tests {
             server.manager.export_project_model().unwrap(),
             replacement_model
         );
-        // Legacy requests keep their default behavior, without a snapshot tax.
+
         assert!(server
             .call_tool("solid_export_stl", json!({"body_ids":[body]}))
             .is_ok());
@@ -7727,8 +8659,13 @@ mod tests {
         let xml = pip_model_xml(&bytes);
         assert_eq!(xml.matches("<mesh>").count(), 1);
         let mesh = parse_3mf_model_mesh(&xml);
-        nbcad_export::validate_3mf_model_mesh(&mesh).unwrap();
-        assert!(mesh.positions.chunks_exact(3).all(|point| point[0] <= 10.));
+        limo_cad_export::validate_3mf_model_mesh(&mesh).unwrap();
+        assert!(mesh
+            .positions
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .all(|point| point[0] <= 10.));
         let exported = server.call_tool("solid_export_stl", json!({})).unwrap();
         let bytes = BASE64
             .decode(exported["bytes_base64"].as_str().unwrap())
@@ -7736,8 +8673,6 @@ mod tests {
         assert_eq!(u32::from_le_bytes(bytes[80..84].try_into().unwrap()), 12);
         assert_eq!(server.manager.export_project_model().unwrap(), before);
 
-        // An assembly containing only unused definitions is empty; it must
-        // not suddenly fall back to exporting all source geometry.
         model["assembly"]["component_structure"]["occurrences"] = json!([]);
         for definition in model["assembly"]["component_structure"]["definitions"]
             .as_array_mut()
@@ -7794,8 +8729,8 @@ mod tests {
             .iter()
             .find(|a| a["occurrence_id"] == added["id"])
             .unwrap();
-        let reference:nbcad_sketch::DrawingTopologyAnchorRefDto=serde_json::from_value(json!({"topology_signature":projection["topology_signatures"][placed["body_id"].to_string()],"occurrence_id":placed["occurrence_id"],"body_id":placed["body_id"],"edge_id":placed["edge_id"],"edge_key":placed["edge_key"],"endpoint":placed["endpoint"],"fallback_point":[999.,999.,999.]})).unwrap();
-        let resolved = nbcad_occt::resolve_drawing_anchor(
+        let reference:limo_cad_sketch::DrawingTopologyAnchorRefDto=serde_json::from_value(json!({"topology_signature":projection["topology_signatures"][placed["body_id"].to_string()],"occurrence_id":placed["occurrence_id"],"body_id":placed["body_id"],"edge_id":placed["edge_id"],"edge_key":placed["edge_key"],"endpoint":placed["endpoint"],"fallback_point":[999.,999.,999.]})).unwrap();
+        let resolved = limo_cad_occt::resolve_drawing_anchor(
             &server.manager.solid_scene(),
             &server.manager.assembly_document(),
             &reference,
@@ -7827,8 +8762,7 @@ mod tests {
             .iter()
             .all(|a| a["occurrence_id"] == added["id"]));
         assert!(server.call_tool("drawing_projection",json!({"scope":"assembly","occurrence_ids":[9999],"direction":[0.,0.,1.],"up":[0.,1.,0.]})).is_err());
-        // Place a front box over the right half of the rear box. The rear
-        // right-hand vertical edge must be hidden by the other occurrence.
+
         server.call_tool("assembly_set_occurrence_pose",json!({"occurrence_id":added["id"],"local_pose":{"translation":[5.,0.,30.],"rotation":[0.,0.,0.,1.]}})).unwrap();
         let occluded = server.call_tool("drawing_projection", request).unwrap();
         let has_mid_edge = |lines: &Value| {
@@ -7847,8 +8781,7 @@ mod tests {
         };
         assert!(!has_mid_edge(&occluded["visible"]));
         assert!(has_mid_edge(&occluded["hidden"]));
-        // Identical source endpoints on distinct occurrences are distinct
-        // associative anchors. Measure their placed separation, not zero.
+
         let anchors = occluded["anchors"].as_array().unwrap();
         let first = anchors
             .iter()
@@ -7883,7 +8816,7 @@ mod tests {
         assert!(exported["content"]
             .as_str()
             .unwrap()
-            .contains(">5.00</text>"));
+            .contains(">5.00 mm</text>"));
         let mut selected_view = view;
         selected_view["occurrence_ids"] = json!([original]);
         server
@@ -7942,24 +8875,16 @@ mod tests {
         let bytes = BASE64
             .decode(exported["bytes_base64"].as_str().unwrap())
             .unwrap();
-        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
-        let mut xml = String::new();
-        std::io::Read::read_to_string(&mut zip.by_name("3D/3dmodel.model").unwrap(), &mut xml)
-            .unwrap();
-        assert_eq!(xml.matches("<mesh>").count(), 2);
-        let meshes: Vec<_> = xml
-            .split("<mesh>")
-            .skip(1)
-            .map(|part| parse_3mf_model_mesh(part.split("</mesh>").next().unwrap()))
-            .collect();
-        for mesh in &meshes {
-            nbcad_export::validate_3mf_model_mesh(mesh).unwrap();
-        }
+        let meshes = limo_cad_export::test_reader::read_package(&bytes).unwrap();
+        assert_eq!(meshes.len(), 2);
+        let xml = pip_model_xml(&bytes);
+        assert_eq!(xml.matches("<mesh>").count(), 1);
+        limo_cad_export::validate_3mf_model_mesh(&parse_3mf_model_mesh(&xml)).unwrap();
         let max_x = meshes
             .iter()
-            .flat_map(|m| m.positions.chunks_exact(3).map(|p| p[0]))
-            .fold(f32::NEG_INFINITY, f32::max);
-        assert_eq!(max_x, 110.);
+            .flat_map(|m| m.vertices.iter().map(|p| p[0]))
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!((max_x - 110.0).abs() < 1e-5);
         assert_eq!(
             server.call_tool("cad_project_model", json!({})).unwrap(),
             before
@@ -8015,7 +8940,9 @@ mod tests {
     #[test]
     fn project_visibility_uses_browser_state_without_changing_geometry() {
         assert!(is_read_safe_while_attached("project_visibility"));
-        assert!(nbcad_mcp_mutate::is_live_engine_query("project_visibility"));
+        assert!(limo_cad_mcp_mutate::is_live_engine_query(
+            "project_visibility"
+        ));
         fn state(mut value: Value) -> Value {
             value.as_object_mut().unwrap().remove("_disclosure");
             value
@@ -8090,7 +9017,7 @@ mod tests {
     fn construction_visibility_matches_host_and_preserves_native_model() {
         fn visibility(value: Value) -> Value {
             serde_json::to_value(
-                serde_json::from_value::<nbcad_sketch::ProjectVisibilityDto>(value).unwrap(),
+                serde_json::from_value::<limo_cad_sketch::ProjectVisibilityDto>(value).unwrap(),
             )
             .unwrap()
         }
@@ -8115,7 +9042,7 @@ mod tests {
             )
             .unwrap();
         server.call_tool("sketch_finish", json!({})).unwrap();
-        let initial = nbcad_sketch::ProjectVisibilityDto {
+        let initial = limo_cad_sketch::ProjectVisibilityDto {
             hidden_body_ids: vec![body_id],
             ..Default::default()
         };
@@ -8126,8 +9053,7 @@ mod tests {
         let before = server.call_tool("cad_project_model", json!({})).unwrap();
         let mut before: Value = serde_json::from_str(before.as_str().unwrap()).unwrap();
         let scene = server.call_tool("solid_scene", json!({})).unwrap();
-        // Desktop and WASM adapters invoke this exact host command. The MCP
-        // entry point must produce the same saved visibility, not a UI overlay.
+
         let host_result = parse_engine_envelope(host::handle(
             &mut server.manager,
             "construction_set_visibility",
@@ -8283,7 +9209,7 @@ mod tests {
     }
 
     #[test]
-    fn occt_box_export_3mf_is_index_welded() {
+    fn occt_box_export_3mf_preserves_indexed_closed_mesh() {
         let (mut server, _) = mcp_box();
         let request = MeshExportRequest::default();
         let raw_meshes = server
@@ -8294,15 +9220,13 @@ mod tests {
         let raw = &raw_meshes[0];
         let raw_vertex_count = raw.positions.len() / 3;
         let tri_count = raw.triangle_count();
-        assert!(tri_count > 0);
-        assert!(
-            raw_vertex_count >= tri_count * 3 - 2,
-            "OCCT soup should emit ~3 positions per triangle (got {raw_vertex_count} verts, {tri_count} tris)"
+        assert_eq!(tri_count, 12, "a box should have two triangles per face");
+        assert_eq!(
+            raw_vertex_count, 8,
+            "native topology should share box corners"
         );
-        assert!(
-            nbcad_export::boundary_edge_count(raw) > 0,
-            "raw OCCT mesh should have boundary edges before export weld"
-        );
+        limo_cad_export::validate_3mf_model_mesh(raw)
+            .expect("native box mesh should already be closed, outward-facing and nondegenerate");
 
         let exported = server
             .call_tool("solid_export_3mf", json!({"slicer_target": "standard"}))
@@ -8319,33 +9243,45 @@ mod tests {
         let vertex_count = xml.matches("<vertex ").count();
         let triangle_count = xml.matches("<triangle ").count();
         assert_eq!(triangle_count, tri_count);
-        assert!(
-            vertex_count < tri_count * 3,
-            "exported 3MF should be welded ({vertex_count} verts vs {triangle_count} tris)"
-        );
-        assert!(
-            vertex_count <= raw_vertex_count / 2,
-            "welded vertex count should be far below raw soup"
-        );
-        // Planar OCCT box should weld to the 8 corners (not a hand-built fixture).
         assert_eq!(
-            vertex_count, 8,
-            "OCCT unit-box 3MF should weld to 8 corners (got {vertex_count})"
+            vertex_count, raw_vertex_count,
+            "3MF export should preserve the eight shared native corners"
         );
 
         let parsed = parse_3mf_model_mesh(&xml);
         assert_eq!(parsed.positions.len() / 3, vertex_count);
         assert_eq!(parsed.triangle_count(), triangle_count);
         assert_eq!(
-            nbcad_export::boundary_edge_count(&parsed),
+            limo_cad_export::boundary_edge_count(&parsed),
             0,
             "exported 3MF mesh should be manifold (no boundary edges)"
         );
         assert_eq!(
-            nbcad_export::invalid_model_edge_count(&parsed),
+            limo_cad_export::invalid_model_edge_count(&parsed),
             0,
             "every exported edge should have two oppositely oriented triangle uses"
         );
+        limo_cad_export::validate_3mf_model_mesh(&parsed)
+            .expect("exported box mesh should retain positive volume and nondegenerate triangles");
+        let corners = |mesh: &limo_cad_export::TriangleMesh| {
+            let mut points = mesh.positions.as_chunks::<3>().0.to_vec();
+            points.sort_by(|a, b| {
+                a[0].total_cmp(&b[0])
+                    .then(a[1].total_cmp(&b[1]))
+                    .then(a[2].total_cmp(&b[2]))
+            });
+            points
+        };
+        let expected_corners: Vec<_> = [-10., 10.]
+            .into_iter()
+            .flat_map(|x| {
+                [-10., 10.]
+                    .into_iter()
+                    .flat_map(move |y| [0., 10.].into_iter().map(move |z| [x, y, z]))
+            })
+            .collect();
+        assert_eq!(corners(raw), expected_corners, "native box dimensions");
+        assert_eq!(corners(&parsed), corners(raw), "3MF preserves box geometry");
     }
 
     #[test]
@@ -8384,8 +9320,8 @@ mod tests {
     fn material_presets_match_through_headless_and_queued_native_dispatch() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-material-parity-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-material-parity-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_one_box_session(&unique);
         let body = scene["bodies"][0]["id"].clone();
         let original = session::require_model_json(&unique).unwrap();
@@ -8412,12 +9348,8 @@ mod tests {
             let generation = session::read_heartbeat_generation(&unique).unwrap();
             attached.call_tool("cad_submit",json!({"name":"set_body_appearance","arguments":arguments,"base_generation":generation})).unwrap();
             session::apply_inbox_op(&unique, |name, arguments| {
-                // Exercise the actual desktop dispatcher contract: encode the
-                // shared mutation, then call the owning native host directly.
-                // Calling CadServer::call_tool here would hide headless-only
-                // normalization bugs such as the original preset regression.
-                let spec = nbcad_mcp_mutate::lookup_mutate(name).unwrap();
-                let encoded = nbcad_mcp_mutate::encode_payload(spec.payload, &arguments)?;
+                let spec = limo_cad_mcp_mutate::lookup_mutate(name).unwrap();
+                let encoded = limo_cad_mcp_mutate::encode_payload(spec.payload, &arguments)?;
                 let result = parse_engine_envelope(host::handle(
                     &mut owning_native_host.manager,
                     spec.engine_method,
@@ -8499,8 +9431,8 @@ mod tests {
             .is_err());
         attached.call_tool("cad_submit",json!({"name":"set_body_appearance","arguments":invalid,"base_generation":generation})).unwrap();
         let error = session::apply_inbox_op(&unique, |name, arguments| {
-            let spec = nbcad_mcp_mutate::lookup_mutate(name).unwrap();
-            let encoded = nbcad_mcp_mutate::encode_payload(spec.payload, &arguments)?;
+            let spec = limo_cad_mcp_mutate::lookup_mutate(name).unwrap();
+            let encoded = limo_cad_mcp_mutate::encode_payload(spec.payload, &arguments)?;
             parse_engine_envelope(host::handle(
                 &mut owning_native_host.manager,
                 spec.engine_method,
@@ -8518,7 +9450,7 @@ mod tests {
             session::read_heartbeat_generation(&unique).unwrap(),
             generation
         );
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -8587,8 +9519,8 @@ mod tests {
     fn cad_script_after_attach_refresh_replays_on_fresh_server() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-script-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-script-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (mut donor, _) = mcp_box();
         let model = donor.call_tool("cad_project_model", json!({})).unwrap();
         let model_json = model
@@ -8618,9 +9550,7 @@ mod tests {
             .call_tool("solid_scene", json!({}))
             .expect("attached snapshot has a solid scene");
         let body_id = scene["bodies"][0]["id"].clone();
-        // While attached, direct mutates are session_read_only (UI-owned apply).
-        // Detach to fork headless so cad_script can record a portable mutate
-        // on top of the attach/refresh cad_load_project_model baseline.
+
         server
             .call_tool("cad_detach", json!({}))
             .expect("detach before headless mutate for script regression");
@@ -8687,7 +9617,7 @@ mod tests {
             "replayed solid metrics should match attached session"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -8845,6 +9775,139 @@ mod tests {
         let model: Value = serde_json::from_str(project.as_str().unwrap()).unwrap();
         assert_eq!(model["revolves"].as_array().unwrap().len(), 1);
 
+        let summary = server.feature_summary(&json!({})).unwrap();
+        let native_body = &server.manager.solid_scene_ref().bodies[0];
+        let native_topology = json!({
+            "faces": native_body.faces.iter().map(|face| json!({
+                "id": face.id.0,
+                "outer_shell": face.outer_shell,
+                "plane": face.plane,
+                "cylinder": face.cylinder,
+                "edge_keys": face.edge_keys,
+                "linear_seam_edge_keys": face.linear_seam_edge_keys,
+            })).collect::<Vec<_>>(),
+            "edges": native_body.edges.iter().map(|edge| json!({
+                "key": edge.key,
+                "circle": edge.circle,
+                "refinable": edge.refinable,
+                "first": edge.points.first(),
+                "last": edge.points.last(),
+            })).collect::<Vec<_>>(),
+        });
+        assert!(
+            native_body
+                .faces
+                .iter()
+                .all(|face| face.outer_shell == Some(true)),
+            "Revolved tube lacks native exterior-shell evidence: {native_topology}"
+        );
+        assert_eq!(
+            summary["hole_count"], 1,
+            "revolved cavity must be counted as one hole"
+        );
+        assert_eq!(summary["holes"][0]["diameter"], 20.0);
+        assert_eq!(summary["holes"][0]["style"], "simple");
+        assert_eq!(
+            summary["holes"][0]["through"], true,
+            "Revolved tube extent was not recognized: {summary}; topology: {native_topology}"
+        );
+        assert_eq!(summary["holes"][0]["depth"], 15.0);
+        assert_eq!(
+            summary["hole_detection_scope"],
+            "closed_cylindrical_cavities"
+        );
+        let inferred = summary::summarize(server.manager.solid_scene_ref(), &[]);
+        let evidence = inferred.json(true);
+        assert_eq!(evidence["hole_candidate_count"], 1);
+        assert_eq!(evidence["authored_hole_count"], 0);
+        assert_eq!(evidence["holes"][0]["confidence"], "candidate");
+        assert_eq!(evidence["holes"][0]["source"], "geometry");
+        assert_eq!(
+            evidence["holes"][0]["through_evidence"],
+            "native_outer_shell_and_two_analytic_annular_openings"
+        );
+        assert!(evidence["holes"][0]["face_ids"]
+            .as_array()
+            .is_some_and(|ids| !ids.is_empty()));
+        assert_eq!(
+            evidence["holes"][0]["inference_method"],
+            "closed_analytic_circle_and_inward_display_normals"
+        );
+        let hole = &inferred.holes[0];
+        for through in [false, true] {
+            let checked = summary::check(
+                &inferred,
+                &json!({"holes": [{"x": hole.position[0], "y": hole.position[1], "through": through}]}),
+                0.1,
+            )
+            .unwrap();
+            assert_eq!(checked["ok"], through, "{checked}");
+        }
+        // The same local geometry from a legacy producer is not exterior
+        // passage evidence. Both expectations must reject unknown topology.
+        let mut legacy = server.manager.solid_scene_ref().clone();
+        for face in &mut legacy.bodies[0].faces {
+            face.outer_shell = None;
+        }
+        let unknown = summary::summarize(&legacy, &[]);
+        assert_eq!(unknown.holes[0].through, None);
+        let unknown_hole = &unknown.holes[0];
+        for through in [false, true] {
+            let checked = summary::check(
+                &unknown,
+                &json!({"holes": [{"x": unknown_hole.position[0], "y": unknown_hole.position[1], "through": through}]}),
+                0.1,
+            )
+            .unwrap();
+            assert_eq!(checked["ok"], false, "{checked}");
+        }
+        let mut split_wall = server.manager.solid_scene_ref().clone();
+        let body = &mut split_wall.bodies[0];
+        let inner = body
+            .faces
+            .iter()
+            .find(|face| {
+                face.cylinder
+                    .is_some_and(|cylinder| cylinder.radius == 10.0)
+            })
+            .unwrap()
+            .clone();
+        body.faces.push(inner);
+        let inferred = summary::holes_from_scene(&split_wall);
+        assert_eq!(inferred.len(), 1);
+        assert_eq!(inferred[0].style, "simple");
+        assert!(inferred[0].counterbore_diameter.is_none());
+        let mut incomplete = server.manager.solid_scene_ref().clone();
+        for body in &mut incomplete.bodies {
+            body.mesh.normals.clear();
+        }
+        assert!(summary::holes_from_scene(&incomplete).is_empty());
+        let mut partial = server.manager.solid_scene_ref().clone();
+        for body in &mut partial.bodies {
+            for edge in &mut body.edges {
+                if let Some(circle) = &mut edge.circle {
+                    circle.closed = false;
+                }
+            }
+        }
+        assert!(summary::holes_from_scene(&partial).is_empty());
+
+        let mut overlapping = summary::summarize(server.manager.solid_scene_ref(), &[]);
+        let mut candidate = overlapping.holes[0].clone();
+        candidate.position[0] += 1.0;
+        overlapping.holes.push(candidate);
+        let warnings = summary::warnings(&overlapping, &[], &[]);
+        let overlap = warnings
+            .iter()
+            .find(|warning| warning["code"] == "holes_overlap")
+            .unwrap();
+        assert_eq!(overlap["confirmed"], false);
+        assert_eq!(overlap["evidence"], "projected_axis_distance");
+        assert!(overlap["message"]
+            .as_str()
+            .unwrap()
+            .contains("verify axial extents"));
+
         let mut restored = CadServer::new().unwrap();
         let restored_update = restored
             .call_tool(
@@ -8890,6 +9953,11 @@ mod tests {
                 )
                 .unwrap();
             assert_eq!(definitions.as_array().unwrap().len(), 1);
+            let summary = server.feature_summary(&json!({})).unwrap();
+            assert_eq!(
+                summary["hole_count"], 0,
+                "{tool} must not create inferred holes"
+            );
         }
 
         let (mut server, base) = mcp_box();
@@ -9119,8 +10187,7 @@ mod tests {
             1
         );
         let saved = server.manager.export_project_model().unwrap();
-        // Old projects already contain these ghosts. A successful native load
-        // must clean them too, without altering the retained solid geometry.
+
         let mut legacy: Value = serde_json::from_str(&saved).unwrap();
         legacy["assembly"]["component_structure"] = before["component_structure"].clone();
         let mut loaded = CadServer::new().unwrap();
@@ -9349,8 +10416,6 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(arcs.len(), 2);
 
-        // The first arc starts along Y, within the XY profile plane. It used
-        // to report success despite producing an invalid zero-volume BRep.
         let invalid = server
             .call_tool(
                 "solid_sweep",
@@ -9375,7 +10440,6 @@ mod tests {
             )
             .unwrap();
 
-        // The second arc starts along Z, normal to the retained XY profile.
         let update = server
             .call_tool(
                 "solid_sweep",
@@ -9761,8 +10825,6 @@ mod tests {
 
     #[test]
     fn assembly_component_occurrence_grounded_roundtrip() {
-        // Headless: new project → box → create component (absorb) → ground → inspect.
-        // No cad_attach.
         let mut server = CadServer::new().unwrap();
         server.call_tool("cad_new_project", json!({})).unwrap();
         server
@@ -9916,8 +10978,8 @@ mod tests {
     fn attach_direct_mutate_rejected_submit_accepted_detach_restores() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-lock-submit-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-lock-submit-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (update, _) = write_box_session(&unique);
         let body_id = update["scene"]["bodies"][0]["id"].clone();
 
@@ -9973,14 +11035,14 @@ mod tests {
             .call_tool("solid_mirror", solid_mirror_args(&body_id))
             .expect("direct mutate must succeed after cad_detach");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn assembly_create_component_accepted_by_cad_submit_classifier() {
         assert!(
-            nbcad_mcp_mutate::lookup_mutate("assembly_create_component").is_some(),
+            limo_cad_mcp_mutate::lookup_mutate("assembly_create_component").is_some(),
             "assembly_create_component must be in shared mutate map"
         );
         assert!(is_modeling_mutate("assembly_create_component"));
@@ -9998,13 +11060,13 @@ mod tests {
         for spec in tool_specs() {
             if spec.execution == Execution::Control || is_read_safe_while_attached(spec.name) {
                 assert!(
-                    nbcad_mcp_mutate::lookup_mutate(spec.name).is_none(),
+                    limo_cad_mcp_mutate::lookup_mutate(spec.name).is_none(),
                     "read-safe/control {} must not be an inbox mutate",
                     spec.name
                 );
                 continue;
             }
-            let Some(shared) = nbcad_mcp_mutate::lookup_mutate(spec.name) else {
+            let Some(shared) = limo_cad_mcp_mutate::lookup_mutate(spec.name) else {
                 missing.push(spec.name);
                 continue;
             };
@@ -10015,8 +11077,8 @@ mod tests {
                 ));
             }
             let expected_exec = match spec.execution {
-                Execution::Direct => nbcad_mcp_mutate::ExecutionKind::Direct,
-                Execution::SolidReplay => nbcad_mcp_mutate::ExecutionKind::SolidReplay,
+                Execution::Direct => limo_cad_mcp_mutate::ExecutionKind::Direct,
+                Execution::SolidReplay => limo_cad_mcp_mutate::ExecutionKind::SolidReplay,
                 Execution::Control => unreachable!(),
             };
             if shared.execution != expected_exec {
@@ -10032,7 +11094,7 @@ mod tests {
             "ToolSpec/shared map mismatches: {mismatched:?}"
         );
         assert_eq!(
-            nbcad_mcp_mutate::mutate_specs().len(),
+            limo_cad_mcp_mutate::mutate_specs().len(),
             tool_specs()
                 .iter()
                 .filter(|spec| spec.execution != Execution::Control
@@ -10268,8 +11330,6 @@ mod tests {
 
     #[test]
     fn occurrence_rename_after_joint_create_keeps_occurrence_ids() {
-        // Joints name occurrence ids, not display names. A later occurrence
-        // rename must not retarget or drop the joint.
         let mut server = CadServer::new().unwrap();
         server.call_tool("cad_new_project", json!({})).unwrap();
         let first = extrude_offset_box(&mut server, "Sketch1", -12.0, -2.0);
@@ -10337,8 +11397,7 @@ mod tests {
             .filter_map(|occurrence| occurrence["name"].as_str())
             .collect();
         assert!(
-            names.iter().any(|name| *name == "RenamedA")
-                && names.iter().any(|name| *name == "RenamedB"),
+            names.contains(&"RenamedA") && names.contains(&"RenamedB"),
             "occurrence display names must change: {names:?}"
         );
         assert_ne!(
@@ -10351,8 +11410,8 @@ mod tests {
     fn attached_sketch_reads_use_the_live_engine_without_loading_a_stale_model() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-live-read-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-live-read-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_box_session(&unique);
         let mut server = CadServer::new().unwrap();
         server
@@ -10386,7 +11445,7 @@ mod tests {
                                 .unwrap();
                         let query = &request["sketch_query"];
                         let method = query["method"].as_str().unwrap();
-                        assert!(nbcad_mcp_mutate::is_live_engine_query(method));
+                        assert!(limo_cad_mcp_mutate::is_live_engine_query(method));
                         let value = parse_engine_envelope(host::handle(
                             &mut manager,
                             method,
@@ -10412,12 +11471,12 @@ mod tests {
         assert_eq!(result["value"], host.join().unwrap()["value"]);
         assert_eq!(result["value"], 240.0);
         assert!(server.manager.active_snapshot().is_none());
-        for mutate in nbcad_mcp_mutate::mutate_specs() {
-            assert!(!nbcad_mcp_mutate::is_live_engine_query(
+        for mutate in limo_cad_mcp_mutate::mutate_specs() {
+            assert!(!limo_cad_mcp_mutate::is_live_engine_query(
                 mutate.engine_method
             ));
         }
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -10443,8 +11502,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(actual, expected);
-        // The grouped transport must not add a second copy of the operation,
-        // or leak catalog/renderer controls into a portable modeling script.
+
         grouped
             .call_tool("cad_interface", json!({"action":"catalog"}))
             .unwrap();
@@ -10460,148 +11518,11 @@ mod tests {
     }
 
     #[test]
-    fn named_views_attached_execute_and_reads_use_the_owning_engine() {
-        let _guard = session::env_lock();
-        let id = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-named-views-{id}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
-        let (update, model) = write_box_session(&id);
-        let body_id = update["scene"]["bodies"][0]["id"].clone();
-        session::write_session(
-            &id,
-            "heartbeat.json",
-            &json!({
-                "updated_ms":session::now_ms(),"generation":1,"interface_version":1
-            })
-            .to_string(),
-        )
-        .unwrap();
-        let mut client = CadServer::new().unwrap();
-        client
-            .call_tool("cad_attach", json!({"session_id":id}))
-            .unwrap();
-        let peer = id.clone();
-        let (stop, stopped) = std::sync::mpsc::channel::<()>();
-        let owner = std::thread::spawn(move || {
-            let mut host = CadServer::new().unwrap();
-            host.call_tool("cad_load_project_model", json!({"model_json":model}))
-                .unwrap();
-            let deadline = std::time::Instant::now() + Duration::from_secs(15);
-            let mut seen = std::collections::HashSet::new();
-            loop {
-                if stopped.try_recv() != Err(std::sync::mpsc::TryRecvError::Empty) {
-                    break;
-                }
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "MCP workflow timed out"
-                );
-                if let Some(seq) = session::pending_inbox_seqs(&peer).unwrap().first().copied() {
-                    session::apply_inbox_op(&peer, |name, args| {
-                        let value = host.call_tool(name, args)?;
-                        session::write_session(
-                            &peer,
-                            &format!("inbox/results/{seq}.json"),
-                            &value.to_string(),
-                        )?;
-                        let model = host
-                            .manager
-                            .export_project_model()
-                            .map_err(|error| error.to_string())?;
-                        session::publish_applied_snapshot(&peer, &model)?;
-                        let mut heartbeat: Value = serde_json::from_str(
-                            &session::read_session_file(&peer, "heartbeat.json")?,
-                        )
-                        .unwrap();
-                        heartbeat["interface_version"] = json!(1);
-                        session::write_session(&peer, "heartbeat.json", &heartbeat.to_string())?;
-                        Ok(value)
-                    })
-                    .unwrap();
-                }
-                if let Ok(entries) =
-                    std::fs::read_dir(session::session_dir().join(&peer).join("controls"))
-                {
-                    for entry in entries.flatten() {
-                        if !entry
-                            .file_name()
-                            .to_string_lossy()
-                            .ends_with(".request.json")
-                            || !seen.insert(entry.path())
-                        {
-                            continue;
-                        }
-                        let request: Value =
-                            serde_json::from_str(&std::fs::read_to_string(entry.path()).unwrap())
-                                .unwrap();
-                        let query = &request["sketch_query"];
-                        assert_eq!(query["method"], "named_views");
-                        let value = parse_engine_envelope(host::handle(
-                            &mut host.manager,
-                            "named_views",
-                            query["payload"].as_str().unwrap(),
-                        ))
-                        .unwrap();
-                        session::write_session(
-                            &peer,
-                            &format!("controls/{}.result.json", request["id"].as_str().unwrap()),
-                            &json!({"status":"applied","value":value}).to_string(),
-                        )
-                        .unwrap();
-                    }
-                }
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            host.manager.named_views()
-        });
-        let view = json!({"name":"review","camera":{"position":[40.0,40.0,40.0],"target":[0.0,0.0,0.0],"up":[0.0,0.0,1.0]},
-            "visible_body_ids":[body_id],"part_offsets":[{"body_id":body_id,"translation":[0.0,20.0,0.0]}]});
-        let execute = |client: &mut CadServer, op: &str, args: Value| {
-            client.call_tool("cad_interface",
-            json!({"action":"execute","group":"document/appearance","operation":op,"arguments":args})).unwrap()
-        };
-        execute(&mut client, "upsert_named_view", view.clone());
-        execute(&mut client, "recall_named_view", json!({"name":"review"}));
-        assert_eq!(
-            client.call_tool("named_views", json!({})).unwrap()["active"],
-            "review"
-        );
-        assert_eq!(
-            client.manager.named_views().active,
-            None,
-            "The local file snapshot cannot supply the live active marker"
-        );
-        execute(&mut client, "clear_named_view", json!({}));
-        execute(
-            &mut client,
-            "rename_named_view",
-            json!({"name":"review","new_name":"detail"}),
-        );
-        let listed = client.call_tool("named_views", json!({})).unwrap();
-        assert_eq!(listed["views"][0]["name"], "detail");
-        assert_eq!(listed["views"][0]["camera"], view["camera"]);
-        assert!(listed["active"].is_null());
-        execute(&mut client, "delete_named_view", json!({"name":"detail"}));
-        execute(&mut client, "set_named_views", json!({"views":[view]}));
-        assert_eq!(
-            client.call_tool("named_views", json!({})).unwrap()["views"]
-                .as_array()
-                .unwrap()
-                .len(),
-            1
-        );
-        drop(stop);
-        assert_eq!(owner.join().unwrap().views.len(), 1);
-        std::env::remove_var("NBCAD_SESSION_DIR");
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
     fn acknowledged_file_open_replaces_same_session_read_model() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-open-replacement-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-open-replacement-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_box_session(&unique);
         let mut server = CadServer::new().unwrap();
         server
@@ -10663,7 +11584,7 @@ mod tests {
         let result = server
             .call_tool(
                 "cad_interface",
-                json!({"action":"file","command":"open","path":"replacement.nbcad"}),
+                json!({"action":"file","command":"open","path":"replacement.limo"}),
             )
             .unwrap();
         host.join().unwrap();
@@ -10687,7 +11608,7 @@ mod tests {
                 .call_tool("cad_project_model", json!({}))
                 .unwrap()
         );
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -10696,8 +11617,8 @@ mod tests {
         let _guard = session::env_lock();
         let original = session::test_session_uuid();
         let replacement = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-slow-open-{original}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-slow-open-{original}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_box_session(&original);
         let mut server = CadServer::new().unwrap();
         server
@@ -10732,12 +11653,9 @@ mod tests {
                             serde_json::from_str(&std::fs::read_to_string(entry.path()).unwrap())
                                 .unwrap();
                         assert_eq!(request["ui"]["command"], "open");
-                        // The native Open retires A before hydration and publication
-                        // finish. Its own delivered receipt must survive that change.
+
                         session::write_closed_tombstone(&source).unwrap();
-                        // Intentionally exceed the old 30s expiry AND its 1s MCP
-                        // grace. This real wait exercises request retention and the
-                        // production request loop, not a duplicate timeout formula.
+
                         std::thread::sleep(std::time::Duration::from_secs(32));
                         session::write_session(
                             &target,
@@ -10781,18 +11699,18 @@ mod tests {
             .call_tool(
                 "cad_interface",
                 json!({
-                    "action":"file","command":"open","path":"C:/fixtures/slow-replacement.nbcad"
+                    "action":"file","command":"open","path":"C:/fixtures/slow-replacement.limo"
                 }),
             )
             .unwrap();
         let retained = host.join().unwrap();
-        // Clean up before assertions so a red run leaves no stale test session.
+
         let controls_empty = std::fs::read_dir(dir.join(&original).join("controls"))
             .unwrap()
             .next()
             .is_none();
         let loaded_model = server.manager.export_project_model().unwrap();
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         std::fs::remove_dir_all(dir).unwrap();
         assert_eq!(
             reply["status"], "applied",
@@ -10814,12 +11732,302 @@ mod tests {
     }
 
     #[test]
+    fn applied_ui_receipt_survives_failed_attachment_and_blocks_stale_model_commands() {
+        fn acknowledge(source: String, result: Value) -> std::thread::JoinHandle<()> {
+            std::thread::spawn(move || {
+                let controls = session::session_dir().join(&source).join("controls");
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                loop {
+                    if let Ok(entries) = std::fs::read_dir(&controls) {
+                        for entry in entries.flatten() {
+                            if !entry
+                                .file_name()
+                                .to_string_lossy()
+                                .ends_with(".request.json")
+                            {
+                                continue;
+                            }
+                            let request: Value = serde_json::from_str(
+                                &std::fs::read_to_string(entry.path()).unwrap(),
+                            )
+                            .unwrap();
+                            session::write_session(
+                                &source,
+                                &format!(
+                                    "controls/{}.result.json",
+                                    request["id"].as_str().unwrap()
+                                ),
+                                &result.to_string(),
+                            )
+                            .unwrap();
+                            return;
+                        }
+                    }
+                    assert!(std::time::Instant::now() < deadline);
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            })
+        }
+        let _guard = session::env_lock();
+        let original = session::test_session_uuid();
+        let replacement = session::test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("limo-cad-attachment-failure-{original}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        let (_, original_model) = write_box_session(&original);
+        session::write_session(&replacement, "model.json", "invalid model").unwrap();
+        session::write_session(&replacement,"heartbeat.json",&json!({"updated_ms":session::now_ms(),"interface_version":1,"generation":2,"model_generation":2}).to_string()).unwrap();
+        let mut server = CadServer::new().unwrap();
+        server
+            .call_tool("cad_attach", json!({"session_id":original}))
+            .unwrap();
+        let worker = acknowledge(
+            original.clone(),
+            json!({"status":"applied","active_session_id":replacement,"value":{"opened":true}}),
+        );
+        let receipt = server
+            .call_tool(
+                "cad_interface",
+                json!({"action":"file","command":"open","path":"replacement.limo"}),
+            )
+            .unwrap();
+        worker.join().unwrap();
+        assert_eq!(receipt["status"], "applied");
+        assert_eq!(receipt["value"]["opened"], true);
+        assert_eq!(receipt["active_session_id"], replacement);
+        assert_eq!(receipt["attached"], false);
+        assert_eq!(receipt["model_commands_blocked"], true);
+        assert!(receipt["snapshot_error"].is_string());
+        assert_eq!(
+            server.attached_document_id.as_deref(),
+            Some(original.as_str())
+        );
+        for (name, args) in [
+            ("cad_document", json!({})),
+            ("solid_scene", json!({})),
+            ("cad_project_model", json!({})),
+            (
+                "cad_set_document_name",
+                json!({"name":"Must not change the previous document"}),
+            ),
+            (
+                "cad_submit",
+                json!({"name":"cad_set_document_name","arguments":{"name":"Must not submit"},"base_generation":2}),
+            ),
+            (
+                "cad_interface",
+                json!({"action":"execute","group":interface::group_for("cad_document").unwrap(),"operation":"cad_document","arguments":{}}),
+            ),
+            (
+                "cad_interface",
+                json!({"action":"script","session_id":replacement,"source":"Must not parse or run"}),
+            ),
+        ] {
+            let error: Value =
+                serde_json::from_str(&server.call_tool(name, args).unwrap_err()).unwrap();
+            assert_eq!(error["code"], "attachment_unavailable", "{name}");
+            assert_eq!(error["session_id"], replacement, "{name}");
+        }
+        assert_eq!(
+            server.manager.export_project_model().unwrap(),
+            original_model
+        );
+        assert!(session::pending_inbox_seqs(&original).unwrap().is_empty());
+        assert!(session::pending_inbox_seqs(&replacement)
+            .unwrap()
+            .is_empty());
+        let worker = acknowledge(
+            replacement.clone(),
+            json!({"status":"applied","active_session_id":replacement,"ui":{"surfaces":[]}}),
+        );
+        let inspected = server
+            .call_tool("cad_interface", json!({"action":"inspect"}))
+            .unwrap();
+        worker.join().unwrap();
+        assert_eq!(inspected["status"], "applied");
+        assert_eq!(inspected["attached"], false);
+        let status = server.call_tool("cad_session_status", json!({})).unwrap();
+        assert_eq!(status["session_id"], replacement);
+        assert_eq!(status["attached"], false);
+        assert_eq!(status["retained_snapshot_session_id"], original);
+        assert!(server.call_tool("cad_refresh", json!({})).is_err());
+        assert_eq!(
+            server.manager.export_project_model().unwrap(),
+            original_model
+        );
+        let mut recovered = CadServer::new().unwrap();
+        recovered
+            .call_tool(
+                "cad_set_document_name",
+                json!({"name":"Recovered active document"}),
+            )
+            .unwrap();
+        let model = recovered.manager.export_project_model().unwrap();
+        session::write_session(&replacement, "model.json", &model).unwrap();
+        let refreshed = server.call_tool("cad_refresh", json!({})).unwrap();
+        assert_eq!(refreshed["refreshed"], true);
+        assert_eq!(refreshed["session_id"], replacement);
+        assert!(server.failed_attachment.is_none());
+        assert_eq!(
+            server.call_tool("cad_document", json!({})).unwrap()["name"],
+            "Recovered active document"
+        );
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn ready_launch_receipt_keeps_identity_without_a_headless_fallback() {
+        let _guard = session::env_lock();
+        let target = session::test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("limo-cad-ready-attachment-{target}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        session::write_session(&target, "model.json", "invalid model").unwrap();
+        session::write_session(
+            &target,
+            "heartbeat.json",
+            &json!({"updated_ms":session::now_ms(),"interface_version":1,"generation":1})
+                .to_string(),
+        )
+        .unwrap();
+        let mut server = CadServer::new().unwrap();
+        server.desktop_binding = Some(DesktopBinding {
+            process_id: 1234,
+            initial_selection_pending: false,
+        });
+        let mut receipt =
+            json!({"status":"ready","pid":1234,"session_id":target,"window_id":"new-window"});
+        server
+            .follow_interface_attachment(
+                &mut receipt,
+                target.clone(),
+                SnapshotRefresh::DeferDuringScript,
+            )
+            .unwrap();
+        assert_eq!(receipt["status"], "ready");
+        assert_eq!(receipt["pid"], 1234);
+        assert_eq!(receipt["session_id"], target);
+        assert_eq!(receipt["window_id"], "new-window");
+        assert_eq!(receipt["attached"], false);
+        assert_eq!(receipt["model_commands_blocked"], true);
+        assert!(server.attached_document_id.is_none());
+        assert!(server
+            .call_tool("cad_document", json!({}))
+            .unwrap_err()
+            .contains("attachment_unavailable"));
+        let failure = server.call_tool("cad_refresh", json!({})).unwrap_err();
+        assert!(
+            !failure.contains("no selected document"),
+            "Refresh must retain the acknowledged target for recovery"
+        );
+        let recovered = CadServer::new()
+            .unwrap()
+            .manager
+            .export_project_model()
+            .unwrap();
+        session::write_session(&target, "model.json", &recovered).unwrap();
+        assert_eq!(
+            server.call_tool("cad_refresh", json!({})).unwrap()["session_id"],
+            target
+        );
+        assert_eq!(
+            server.attached_document_id.as_deref(),
+            Some(target.as_str())
+        );
+        assert!(server.failed_attachment.is_none());
+        assert!(server.call_tool("cad_document", json!({})).is_ok());
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn failed_snapshot_refresh_preserves_applied_receipts_and_requires_recovery() {
+        let _guard = session::env_lock();
+        for awaiting_receipt in [false, true] {
+            let target = session::test_session_uuid();
+            let dir = std::env::temp_dir().join(format!("limo-cad-refresh-failure-{target}"));
+            std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+            let (_, model) = write_box_session(&target);
+            let mut server = CadServer::new().unwrap();
+            server
+                .call_tool("cad_attach", json!({"session_id":target}))
+                .unwrap();
+            session::write_session(&target, "model.json", "invalid published model").unwrap();
+            session::write_session(&target,"heartbeat.json",&json!({"updated_ms":session::now_ms(),"generation":2,"published_generation":2,"model_generation":2}).to_string()).unwrap();
+            if awaiting_receipt {
+                let archived = json!({"name":"cad_set_document_name","base_generation":1});
+                session::write_session(&target, "inbox/applied/1.json", &archived.to_string())
+                    .unwrap();
+                for _ in 0..2 {
+                    let applied = server
+                        .call_tool("cad_await_apply", json!({"seq":1,"timeout_ms":0}))
+                        .unwrap();
+                    assert_eq!(applied["status"], "applied");
+                    assert_eq!(applied["published"], true);
+                    assert_eq!(applied["model_published"], true);
+                    assert_eq!(applied["refreshed"], false);
+                    assert_eq!(applied["model_commands_blocked"], true);
+                    assert!(applied["snapshot_error"].is_string());
+                }
+                assert_eq!(
+                    serde_json::from_str::<Value>(
+                        &session::read_session_file(&target, "inbox/applied/1.json").unwrap()
+                    )
+                    .unwrap(),
+                    archived
+                );
+            } else {
+                assert!(server.call_tool("cad_refresh", json!({})).is_err());
+            }
+            assert_eq!(server.manager.export_project_model().unwrap(), model);
+            assert!(server
+                .call_tool("cad_document", json!({}))
+                .unwrap_err()
+                .contains("attachment_unavailable"));
+            let status = server.call_tool("cad_session_status", json!({})).unwrap();
+            assert_eq!(status["attached_generation"], 1);
+            assert_eq!(status["stale"], true);
+            assert_eq!(status["model_commands_blocked"], true);
+            session::write_session(&target, "model.json", &model).unwrap();
+            assert_eq!(
+                server.call_tool("cad_refresh", json!({})).unwrap()["session_id"],
+                target
+            );
+            assert_eq!(
+                server.call_tool("cad_session_status", json!({})).unwrap()["attached_generation"],
+                2
+            );
+            assert!(server.call_tool("cad_document", json!({})).is_ok());
+            assert_eq!(server.manager.export_project_model().unwrap(), model);
+            assert!(session::pending_inbox_seqs(&target).unwrap().is_empty());
+            std::env::remove_var("LIMO_CAD_SESSION_DIR");
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn explicit_detach_clears_a_failed_target_and_pending_snapshot_refresh() {
+        let _guard = session::env_lock();
+        let target = session::test_session_uuid();
+        let mut server = CadServer::new().unwrap();
+        server.failed_attachment = Some(AttachmentFailure {
+            session_id: target.clone(),
+            error: "Unsupported snapshot".into(),
+        });
+        server.live_snapshot_dirty = true;
+        let detached = server.call_tool("cad_detach", json!({})).unwrap();
+        assert_eq!(detached["session_id"], target);
+        assert!(server.failed_attachment.is_none());
+        assert!(!server.live_snapshot_dirty);
+        assert!(server.call_tool("cad_document", json!({})).is_ok());
+    }
+
+    #[test]
     fn acknowledged_document_transitions_track_completed_model_fences() {
         let _guard = session::env_lock();
         let first = session::test_session_uuid();
         let second = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-status-transition-{first}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-status-transition-{first}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let (_, model) = write_box_session(&first);
         session::write_session(&second, "model.json", &model).unwrap();
         let mut server = CadServer::new().unwrap();
@@ -10828,8 +12036,6 @@ mod tests {
             .unwrap();
         let baseline = server.tool_trace.clone();
 
-        // Same completed model at a newer revision, then an active-sketch-only
-        // publication, then a different document containing identical geometry.
         for (active, generation, model_generation) in [
             (first.clone(), 2, 2),
             (first.clone(), 3, 2),
@@ -10914,7 +12120,7 @@ mod tests {
                 "observing status and UI controls must not add replay operations"
             );
         }
-        // A rejected refresh cannot stamp its generation on the retained model.
+
         session::write_session(&second, "model.json", "invalid model").unwrap();
         session::write_session(
             &second,
@@ -10931,7 +12137,7 @@ mod tests {
         assert_eq!(status["generation"], 8);
         assert_eq!(status["stale"], true);
         assert_eq!(server.manager.solid_scene().bodies.len(), 1);
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -10945,8 +12151,8 @@ mod tests {
             ("fast", false),
         ] {
             let target = session::test_session_uuid();
-            let dir = std::env::temp_dir().join(format!("nbcad-script-completion-{target}"));
-            std::env::set_var("NBCAD_SESSION_DIR", &dir);
+            let dir = std::env::temp_dir().join(format!("limo-cad-script-completion-{target}"));
+            std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
             let mut server = CadServer::new().unwrap();
             let blank = server.call_tool("cad_project_model", json!({})).unwrap();
             session::write_session(&target, "model.json", blank.as_str().unwrap()).unwrap();
@@ -10960,8 +12166,7 @@ mod tests {
             )
             .unwrap();
             let peer = target.clone();
-            // Exercise the production runner and real inbox/control transport;
-            // the desktop peer applies mutates and acknowledges presentation.
+
             let host = std::thread::spawn(move || {
                 let deadline = std::time::Instant::now() + Duration::from_secs(10);
                 let mut seen = std::collections::HashSet::new();
@@ -11071,7 +12276,7 @@ mod tests {
                 progress,
                 [2, 5]
                     .map(|steps_completed| {
-                        Some(nbcad_script::RunProgress {
+                        Some(limo_cad_script::RunProgress {
                             steps_completed,
                             step_count: 6,
                         })
@@ -11118,7 +12323,7 @@ mod tests {
                 assert_eq!(controls[1]["ui"]["step_index"], 1);
                 assert_eq!(controls[controls.len() - 2]["view"], "isometric");
             }
-            std::env::remove_var("NBCAD_SESSION_DIR");
+            std::env::remove_var("LIMO_CAD_SESSION_DIR");
             std::fs::remove_dir_all(dir).unwrap();
         }
     }
@@ -11128,8 +12333,8 @@ mod tests {
         let _guard = session::env_lock();
         let target = session::test_session_uuid();
         let other = "fdec1d2c-6dea-4e73-a20e-0ae5a9a90252";
-        let dir = std::env::temp_dir().join(format!("nbcad-script-tab-race-{target}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-script-tab-race-{target}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let mut donor = CadServer::new().unwrap();
         let blank = donor.call_tool("cad_project_model", json!({})).unwrap();
         session::write_session(&target, "model.json", blank.as_str().unwrap()).unwrap();
@@ -11211,7 +12416,7 @@ mod tests {
         assert!(session::pending_inbox_seqs(&target).unwrap().is_empty());
         assert!(session::pending_inbox_seqs(other).unwrap().is_empty());
         assert_eq!(session::require_model_json(other).unwrap(), preserved);
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -11219,8 +12424,8 @@ mod tests {
     fn grouped_interface_rejects_an_old_desktop_before_submitting() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-old-interface-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-old-interface-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_box_session(&unique);
         let mut server = CadServer::new().unwrap();
         server
@@ -11235,17 +12440,57 @@ mod tests {
             .unwrap_err();
         assert!(error.contains("nothing submitted"));
         assert!(session::pending_inbox_seqs(&unique).unwrap().is_empty());
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn unreplied_control_request(
+        entry: &std::fs::DirEntry,
+        replied: &std::collections::HashSet<String>,
+    ) -> Option<Value> {
+        let filename = entry.file_name();
+        let request_id = filename.to_str()?.strip_suffix(".request.json")?;
+        if replied.contains(request_id) {
+            return None;
+        }
+        let source = match std::fs::read_to_string(entry.path()) {
+            Ok(source) => source,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+            Err(error) => panic!("Read mock control request: {error}"),
+        };
+        let request: Value = serde_json::from_str(&source).unwrap();
+        assert_eq!(request["id"].as_str(), Some(request_id));
+        Some(request)
+    }
+
+    #[test]
+    fn mock_control_poll_retains_pending_requests_and_tolerates_acknowledgment_cleanup() {
+        let dir = std::env::temp_dir().join(format!(
+            "limo-cad-control-poll-{}",
+            session::test_session_uuid()
+        ));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("request-1.request.json");
+        let request = json!({"id":"request-1","ui":{"action":"open_recipe"}});
+        std::fs::write(&path, request.to_string()).unwrap();
+        let entry = std::fs::read_dir(&dir).unwrap().next().unwrap().unwrap();
+        let pending = std::collections::HashSet::new();
+        assert_eq!(unreplied_control_request(&entry, &pending), Some(request));
+        let replied = std::collections::HashSet::from(["request-1".to_owned()]);
+        assert!(unreplied_control_request(&entry, &replied).is_none());
+        std::fs::remove_file(&path).unwrap();
+        assert!(unreplied_control_request(&entry, &replied).is_none());
+        assert!(unreplied_control_request(&entry, &pending).is_none());
+        std::fs::remove_dir(dir).unwrap();
     }
 
     #[test]
     fn open_recipe_receipt_never_attaches_or_rehydrates_the_model() {
         let _guard = session::env_lock();
         let id = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-open-recipe-control-{id}"));
-        let previous = std::env::var_os("NBCAD_SESSION_DIR");
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-open-recipe-control-{id}"));
+        let previous = std::env::var_os("LIMO_CAD_SESSION_DIR");
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         session::write_session(
             &id,
             "heartbeat.json",
@@ -11265,15 +12510,10 @@ mod tests {
             let mut replied = std::collections::HashSet::new();
             while std::time::Instant::now() < deadline {
                 if let Ok(entries) = std::fs::read_dir(&controls) {
-                    for entry in entries.flatten().filter(|entry| {
-                        entry
-                            .file_name()
-                            .to_string_lossy()
-                            .ends_with(".request.json")
-                    }) {
-                        let request: Value =
-                            serde_json::from_str(&std::fs::read_to_string(entry.path()).unwrap())
-                                .unwrap();
+                    for entry in entries.flatten() {
+                        let Some(request) = unreplied_control_request(&entry, &replied) else {
+                            continue;
+                        };
                         let request_id = request["id"].as_str().unwrap();
                         if !replied.insert(request_id.to_owned()) {
                             continue;
@@ -11315,9 +12555,9 @@ mod tests {
         }
         receiver.join().unwrap();
         if let Some(value) = previous {
-            std::env::set_var("NBCAD_SESSION_DIR", value);
+            std::env::set_var("LIMO_CAD_SESSION_DIR", value);
         } else {
-            std::env::remove_var("NBCAD_SESSION_DIR");
+            std::env::remove_var("LIMO_CAD_SESSION_DIR");
         }
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -11364,7 +12604,11 @@ mod tests {
         let model = server.call_tool("cad_project_model", json!({})).unwrap();
         let model: Value = serde_json::from_str(model.as_str().unwrap()).unwrap();
         assert_eq!(model["cam"]["units"], "inches");
-        assert_eq!(model["schema_version"], 10);
+        assert_eq!(
+            model["schema_version"],
+            limo_cad_sketch::PROJECT_SCHEMA_VERSION
+        );
+        assert_eq!(model["views"], json!([]));
     }
 
     #[test]
@@ -11383,7 +12627,7 @@ mod tests {
         }
         for tool in catalog {
             let name = tool["name"].as_str().unwrap();
-            assert_eq!(tool["mutates"], is_modeling_mutate(name));
+            assert_eq!(tool["mutates"], changes_model(name));
             assert!(
                 interface::group_for(name).is_some(),
                 "ungrouped operation: {name}"
@@ -11404,7 +12648,7 @@ mod tests {
 
     #[test]
     fn every_shared_mutate_is_accepted_by_cad_submit_classifier() {
-        for spec in nbcad_mcp_mutate::mutate_specs() {
+        for spec in limo_cad_mcp_mutate::mutate_specs() {
             assert!(
                 is_modeling_mutate(spec.name),
                 "{} must classify as modeling mutate",
@@ -11420,10 +12664,8 @@ mod tests {
 
     #[test]
     fn leftover_and_native_apply_share_error_class_and_archive() {
-        // Hunt 2: helper vs native — same archive destination (failed vs applied)
-        // and same user-visible error class. Do not bikeshed wording.
         let leftover = include_str!("session.rs");
-        let native = include_str!("../../src-tauri/src/session_bridge.rs");
+        let native = include_str!("../../desktop/src/session_bridge.rs");
         for (label, source) in [("leftover", leftover), ("native", native)] {
             assert!(
                 source.contains("\"code\": \"generation_conflict\"")
@@ -11453,11 +12695,11 @@ mod tests {
             "leftover must dead-letter missing heartbeat, mismatch, unsupported, and host fail"
         );
         let native_apply = native
-            .find("fn apply_one_inbox_op(")
-            .expect("native apply_one_inbox_op");
+            .find("fn apply_or_reject_one_inbox_op_with_editor_guards(")
+            .expect("native inbox apply implementation");
         let native_apply_end = native[native_apply..]
-            .find("/// Reserve a monotonic generation")
-            .expect("end native apply");
+            .find("\n}")
+            .expect("closing brace of native apply");
         let native_fn = &native[native_apply..native_apply + native_apply_end];
         assert!(
             native_fn.contains("project.engine_revision")
@@ -11591,6 +12833,258 @@ mod tests {
     }
 
     #[test]
+    fn contact_tools_preserve_instances_validate_and_roundtrip() {
+        let mut server = CadServer::new().unwrap();
+        extrude_offset_box(&mut server, "Sketch1", -12., -2.);
+        extrude_offset_box(&mut server, "Sketch2", 2., 12.);
+        let source = server.call_tool("solid_scene", json!({})).unwrap();
+        let poses = server.call_tool("assembly_solution", json!({})).unwrap()
+            ["instance_body_poses"]
+            .clone();
+        let args = json!({"name":"Travel stop","occurrence_a":poses[0]["occurrence_id"],"body_a":poses[0]["body_id"],"occurrence_b":poses[1]["occurrence_id"],"body_b":poses[1]["body_id"],"clearance_mm":0.3,"stop_motion":true});
+        let mut invalid = args.clone();
+        invalid["clearance_mm"] = json!(-1.);
+        assert!(server
+            .call_tool("assembly_create_contact_set", invalid)
+            .is_err());
+        server
+            .call_tool("assembly_create_contact_set", args)
+            .unwrap();
+        let mut contact =
+            server.call_tool("assembly_document", json!({})).unwrap()["contact_sets"][0].clone();
+        contact["enabled"] = json!(false);
+        contact["name"] = json!("Edited stop");
+        server
+            .call_tool("assembly_update_contact_set", contact.clone())
+            .unwrap();
+        assert_eq!(
+            server.call_tool("assembly_document", json!({})).unwrap()["contact_sets"][0],
+            contact
+        );
+        assert_eq!(server.call_tool("solid_scene", json!({})).unwrap(), source);
+        let model = server.call_tool("cad_project_model", json!({})).unwrap();
+        let mut restored = CadServer::new().unwrap();
+        restored
+            .call_tool(
+                "cad_load_project_model",
+                json!({"model_json":model.as_str().unwrap()}),
+            )
+            .unwrap();
+        assert_eq!(
+            restored.call_tool("assembly_document", json!({})).unwrap()["contact_sets"][0],
+            contact
+        );
+        restored
+            .call_tool(
+                "assembly_delete_contact_set",
+                json!({"contact_id":contact["id"]}),
+            )
+            .unwrap();
+        assert_eq!(
+            restored.call_tool("assembly_document", json!({})).unwrap()["contact_sets"],
+            json!([])
+        );
+    }
+
+    #[test]
+    fn motion_studio_tools_roundtrip_typed_drivers_positions_and_read_only_paths() {
+        let mut server = CadServer::new().unwrap();
+        extrude_offset_box(&mut server, "Sketch1", -12., -2.);
+        let scene = extrude_offset_box(&mut server, "Sketch2", 2., 12.);
+        let bodies = scene["scene"]["bodies"].as_array().unwrap();
+        let joint=server.call_tool("assembly_create_joint",json!({"name":"Slide","kind":"slider","grounded_body_id":bodies[0]["id"],"connector_a":planar_connector_from_body(&bodies[0]),"connector_b":planar_connector_from_body(&bodies[1])})).unwrap();
+        let mut study = server
+            .call_tool(
+                "assembly_create_motion_study",
+                json!({"name":"Travel","duration_seconds":2.}),
+            )
+            .unwrap();
+        study["drivers"] = json!([{"id":1,"name":"Motor","joint_id":joint["id"],"coordinate":"primary_linear","enabled":true,"law":{"kind":"motor","initial_value":0.,"velocity_per_second":4.,"acceleration_per_second2":2.}}]);
+        study["next_driver_id"] = json!(2);
+        server
+            .call_tool("assembly_update_motion_study", study.clone())
+            .unwrap();
+        let before = server.call_tool("cad_project_model", json!({})).unwrap();
+        let evaluation = server
+            .call_tool(
+                "assembly_evaluate_motion_study",
+                json!({"study_id":study["id"],"time_seconds":1.}),
+            )
+            .unwrap();
+        assert_eq!(
+            evaluation["sample"]["joint_motions"][0]["linear_offset_mm"],
+            5.
+        );
+        let mut sample = server
+            .call_tool(
+                "assembly_sample_motion_study",
+                json!({"study_id":study["id"],"time_seconds":1.}),
+            )
+            .unwrap();
+        sample.as_object_mut().unwrap().remove("_disclosure");
+        assert_eq!(sample, evaluation["sample"]);
+        let csv = server
+            .call_tool(
+                "assembly_export_motion_path_csv",
+                json!({"study_id":study["id"],"sample_rate_hz":10,"occurrence_ids":[]}),
+            )
+            .unwrap();
+        assert!(csv.as_str().unwrap().lines().count() > 10);
+        assert_eq!(
+            server.call_tool("cad_project_model", json!({})).unwrap(),
+            before
+        );
+        let mut position = server
+            .call_tool(
+                "assembly_create_position",
+                json!({"name":"Middle","motions":evaluation["sample"]["joint_motions"]}),
+            )
+            .unwrap();
+        position["name"] = json!("Captured middle");
+        server
+            .call_tool("assembly_update_position", position.clone())
+            .unwrap();
+        server
+            .call_tool(
+                "assembly_apply_position",
+                json!({"position_id":position["id"]}),
+            )
+            .unwrap();
+        assert_eq!(
+            server.call_tool("assembly_document", json!({})).unwrap()["joints"][0]
+                ["linear_offset_mm"],
+            5.
+        );
+        let model = server.call_tool("cad_project_model", json!({})).unwrap();
+        let mut restored = CadServer::new().unwrap();
+        restored
+            .call_tool(
+                "cad_load_project_model",
+                json!({"model_json":model.as_str().unwrap()}),
+            )
+            .unwrap();
+        assert_eq!(
+            restored.call_tool("assembly_document", json!({})).unwrap(),
+            server.call_tool("assembly_document", json!({})).unwrap()
+        );
+        restored
+            .call_tool(
+                "assembly_delete_position",
+                json!({"position_id":position["id"]}),
+            )
+            .unwrap();
+        restored
+            .call_tool(
+                "assembly_delete_motion_study",
+                json!({"study_id":study["id"]}),
+            )
+            .unwrap();
+        let empty = restored.call_tool("assembly_document", json!({})).unwrap();
+        assert_eq!(empty["positions"], json!([]));
+        assert_eq!(empty["motion_studies"], json!([]));
+        for op in [
+            "assembly_evaluate_motion_study",
+            "assembly_sample_motion_study",
+            "assembly_export_motion_path_csv",
+        ] {
+            assert!(is_read_safe_while_attached(op));
+            assert!(limo_cad_mcp_mutate::is_live_engine_query(op));
+        }
+    }
+
+    #[test]
+    fn mechanism_tools_share_read_only_preview_and_atomic_coordinate_commit() {
+        let mut s = CadServer::new().unwrap();
+        extrude_offset_box(&mut s, "Sketch1", -12., -2.);
+        let scene = extrude_offset_box(&mut s, "Sketch2", 2., 12.);
+        let bodies = scene["scene"]["bodies"].as_array().unwrap();
+        let joint=s.call_tool("assembly_create_joint",json!({"name":"Slide","kind":"slider","grounded_body_id":bodies[0]["id"],"connector_a":planar_connector_from_body(&bodies[0]),"connector_b":planar_connector_from_body(&bodies[1])})).unwrap();
+        let before = s.call_tool("cad_project_model", json!({})).unwrap();
+        let reachable=s.call_tool("assembly_preview_joint_coordinates",json!({"motion":{"joint_id":joint["id"],"angle_offset_deg":0.,"linear_offset_mm":8.}})).unwrap();
+        let pose = reachable["body_poses"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|pose| pose["body_id"] == bodies[1]["id"])
+            .unwrap();
+        let result=s.call_tool("cad_interface",json!({"action":"execute","group":"assembly/joints","operation":"assembly_preview_mechanism_drag","arguments":{"body_id":bodies[1]["id"],"target_pose":pose,"maximum_iterations":12}})).unwrap();
+        assert_eq!(result["solution"]["solved"], true);
+        assert_eq!(result["converged"], true, "{result}");
+        assert!(
+            (result["joint_motions"][0]["linear_offset_mm"]
+                .as_f64()
+                .unwrap()
+                - 8.)
+                .abs()
+                < 0.02
+        );
+        assert_eq!(s.call_tool("cad_project_model", json!({})).unwrap(), before);
+        s.call_tool("cad_interface",json!({"action":"execute","group":"assembly/joints","operation":"assembly_apply_joint_motions","arguments":{"motions":result["joint_motions"]}})).unwrap();
+        assert_ne!(s.call_tool("cad_project_model", json!({})).unwrap(), before);
+        assert!(!limo_cad_mcp_mutate::is_inbox_mutate(
+            "assembly_preview_mechanism_drag"
+        ));
+        assert!(limo_cad_mcp_mutate::is_inbox_mutate(
+            "assembly_apply_joint_motions"
+        ));
+    }
+
+    #[test]
+    fn swept_inspection_is_exact_read_only_bounded_and_deterministic() {
+        let mut server = CadServer::new().unwrap();
+        extrude_offset_box(&mut server, "Sketch1", -12., -2.);
+        extrude_offset_box(&mut server, "Sketch2", 2., 12.);
+        parse_engine_envelope(host::handle(
+            &mut server.manager,
+            "assembly_create_motion_study",
+            r#"{"name":"Stationary pair","duration_seconds":0.1}"#,
+        ))
+        .unwrap();
+        let before = server.call_tool("cad_project_model", json!({})).unwrap();
+        let args = json!({"study_id":1,"sample_rate_hz":10,"clearance_threshold_mm":5.,"stop_at_first":true});
+        let report = server
+            .call_tool("assembly_swept_collision_check", args.clone())
+            .unwrap();
+        assert_eq!(report["exact"], true);
+        assert_eq!(report["sample_count"], 1);
+        assert_eq!(report["events"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            server
+                .call_tool("assembly_swept_collision_check", args)
+                .unwrap(),
+            report
+        );
+        assert_eq!(
+            server.call_tool("cad_project_model", json!({})).unwrap(),
+            before
+        );
+        assert!(is_read_safe_while_attached(
+            "assembly_swept_collision_check"
+        ));
+        assert!(limo_cad_mcp_mutate::is_live_engine_query(
+            "assembly_swept_collision_check"
+        ));
+        for args in [
+            json!({"study_id":1,"sample_rate_hz":0}),
+            json!({"study_id":1,"clearance_threshold_mm":-1}),
+        ] {
+            assert!(server
+                .call_tool("assembly_swept_collision_check", args)
+                .is_err());
+        }
+        parse_engine_envelope(host::handle(
+            &mut server.manager,
+            "assembly_create_motion_study",
+            r#"{"name":"Enormous duration","duration_seconds":1e30}"#,
+        ))
+        .unwrap();
+        let error = server
+            .call_tool("assembly_swept_collision_check", json!({"study_id":2}))
+            .unwrap_err();
+        assert!(error.contains("100,001"), "{error}");
+    }
+
+    #[test]
     fn joint_control_tools_preserve_definition_and_delete_by_id() {
         let mut server = CadServer::new().unwrap();
         extrude_offset_box(&mut server, "Sketch1", -12.0, -2.0);
@@ -11643,8 +13137,6 @@ mod tests {
 
     #[test]
     fn assembly_joint_create_update_query_roundtrip() {
-        // Headless: two boxes → create revolute joint → query → update name/limits.
-        // No cad_attach. Uses landed host CreateJointRequestDto / UpdateJointRequestDto.
         let mut server = CadServer::new().unwrap();
         server.call_tool("cad_new_project", json!({})).unwrap();
         let first = extrude_offset_box(&mut server, "Sketch1", -12.0, -2.0);
@@ -11839,8 +13331,6 @@ mod tests {
     /// fell through to loadDocument() (dirty:false). refreshAfterInboxApply
     /// keeps dirty:true for that path.
     fn assert_joint_dto_result(host_result: &Value, label: &str) {
-        // Assert the native wire shape here; actual frontend dirty/preview
-        // behavior is exercised by inboxCompletion.browser.test.ts.
         let is_solid_update =
             host_result.get("scene").is_some() && host_result.get("document").is_some();
         assert!(
@@ -11854,7 +13344,6 @@ mod tests {
     }
 
     fn joint_inspect_fields(document: &Value) -> Value {
-        // cad_refresh vs cad_load_project_model parity: ids, names, connectors, limits.
         let joints = document["joints"].as_array().expect("joints");
         let fields: Vec<Value> = joints
             .iter()
@@ -11894,12 +13383,10 @@ mod tests {
 
     #[test]
     fn attach_cad_submit_joint_create_update_visible_and_dirty() {
-        // Attached cad_submit: after create AND update, joint is visible and
-        // the inbox result is a joint DTO so applyInboxNow keeps dirty:true.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-submit-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-submit-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().expect("two bodies");
         assert_eq!(bodies.len(), 2, "expected two extruded bodies: {scene}");
@@ -11976,15 +13463,12 @@ mod tests {
             .expect("joints after update apply");
         assert_joint_visible(&after_update, joint_id, "Hinge1Renamed");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn assembly_joint_query_validates_against_advertised_update_schema() {
-        // Serialized JointDefinitionDto emits null for absent Option fields.
-        // A strict MCP client validates tools/call arguments against tools/list
-        // inputSchema, so query → update must accept those nulls.
         let mut server = CadServer::new().unwrap();
         server.call_tool("cad_new_project", json!({})).unwrap();
         let first = extrude_offset_box(&mut server, "Sketch1", -12.0, -2.0);
@@ -12119,8 +13603,6 @@ mod tests {
 
     #[test]
     fn assembly_update_joint_full_record_rename_preserves_limits() {
-        // Replace-all host: a queried full DTO with only the name changed
-        // must keep limits. Omitted optional fields would clear them.
         let mut server = CadServer::new().unwrap();
         server.call_tool("cad_new_project", json!({})).unwrap();
         let first = extrude_offset_box(&mut server, "Sketch1", -12.0, -2.0);
@@ -12183,8 +13665,6 @@ mod tests {
 
     #[test]
     fn assembly_update_joint_omitted_limits_clear_on_replace_all() {
-        // Host is replace-all, not a patch DTO. Schema-valid updates may omit
-        // optional limits; serde default None clears them.
         let mut server = CadServer::new().unwrap();
         server.call_tool("cad_new_project", json!({})).unwrap();
         let first = extrude_offset_box(&mut server, "Sketch1", -12.0, -2.0);
@@ -12246,8 +13726,8 @@ mod tests {
     fn attach_cad_submit_two_joint_ops_get_distinct_seqs() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-seq-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-seq-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -12301,19 +13781,16 @@ mod tests {
             2,
             "both joint ops must stay pending: {pending:?}"
         );
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_joint_null_fields_schema_and_script_baseline() {
-        // Attached create → update with explicit nulls; tools/list schema
-        // accepts the queried joint; cad_submit is not a portable script op;
-        // after apply+refresh, joints live in the cad_load_project_model baseline.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-adv-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-adv-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -12411,8 +13888,6 @@ mod tests {
         assert_joint_dto_result(&updated.host_result, "update-nulls");
         assert_eq!(updated.host_result["id"].as_u64(), Some(joint_id));
 
-        // cad_script is not read-safe while attached. Detach keeps the
-        // refresh-seeded baseline; joints live inside model_json.
         server.call_tool("cad_refresh", json!({})).unwrap();
         server.call_tool("cad_detach", json!({})).unwrap();
         let script = server.call_tool("cad_script", json!({})).unwrap();
@@ -12437,7 +13912,7 @@ mod tests {
             "replay is load-model, not inbox/session control: {script}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -12445,8 +13920,8 @@ mod tests {
     fn attach_malformed_joint_payload_is_dead_lettered() {
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-dead-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-dead-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_two_box_session(&unique);
         let mut server = CadServer::new().unwrap();
         server
@@ -12498,18 +13973,16 @@ mod tests {
         assert_eq!(renamed.op.name, "cad_set_document_name");
         assert_eq!(renamed.host_result["name"], "AfterDeadLetter");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn failed_joint_create_leaves_no_ghost_in_assembly_document() {
-        // Dead-lettered create must not mint a joint id on the attached
-        // snapshot or the published model.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-ghost-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-ghost-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_two_box_session(&unique);
         let mut server = CadServer::new().unwrap();
         server
@@ -12585,20 +14058,16 @@ mod tests {
             "no ghost joint name for failed create: {refreshed}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn cad_refresh_and_cad_load_project_model_see_same_joints() {
-        // After inbox create+update, attached cad_refresh and a fresh
-        // cad_load_project_model of the published model must report the same
-        // joint ids, names, connectors, and limits. While attached,
-        // cad_load_project_model stays session_read_only.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-parity-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-parity-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -12674,19 +14143,16 @@ mod tests {
             "cad_refresh and cad_load_project_model must see the same joints\nrefresh={via_refresh}\nload={via_load}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn joint_inbox_on_part_document_is_typed_reject_no_ghost() {
-        // cadStore/document is a part (one body, no sibling occurrence). A
-        // schema-valid joint inbox op must typed-reject, dead-letter, leave
-        // no ghost id, and not stay pending.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-part-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-part-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_one_box_session(&unique);
         let bodies = scene["bodies"].as_array().expect("one body");
         assert_eq!(bodies.len(), 1, "expected a part with one body: {scene}");
@@ -12767,19 +14233,16 @@ mod tests {
         );
         assert_eq!(refreshed["next_joint_id"].as_u64(), before_next);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn extra_unknown_joint_fields_do_not_change_create_or_update_contract() {
-        // Protocol inputSchema is additionalProperties:false. Inbox apply is
-        // host serde (no deny_unknown_fields). Extra keys must not become new
-        // semantics, a ghost field, or a different joint than the known DTO.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-unknown-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-unknown-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -12798,7 +14261,7 @@ mod tests {
             "limits": {"min": -20.0, "max": 20.0, "unknown_limit_field": true}
         });
         assert!(
-            schema_accepts(&advertised_create_joint_schema(), &create_args).is_err(),
+            schema_accepts(advertised_create_joint_schema(), &create_args).is_err(),
             "advertised create schema must reject unknown fields"
         );
         server
@@ -12865,29 +14328,27 @@ mod tests {
         assert!(found.get("unknown_contract_field").is_none());
         assert!(found.get("unknown_update_field").is_none());
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    fn advertised_update_joint_schema() -> Value {
+    fn advertised_update_joint_schema() -> &'static Value {
         tool_specs()
-            .into_iter()
+            .iter()
             .find(|spec| spec.name == "assembly_update_joint")
-            .map(|spec| spec.input_schema)
+            .map(|spec| &spec.input_schema)
             .expect("assembly_update_joint ToolSpec")
     }
 
-    fn advertised_create_joint_schema() -> Value {
+    fn advertised_create_joint_schema() -> &'static Value {
         tool_specs()
-            .into_iter()
+            .iter()
             .find(|spec| spec.name == "assembly_create_joint")
-            .map(|spec| spec.input_schema)
+            .map(|spec| &spec.input_schema)
             .expect("assembly_create_joint ToolSpec")
     }
 
     fn probe_connector_occurrence_ids(unique: &str, body_a: &Value, body_b: &Value) -> (u64, u64) {
-        // Auto-promote runs on the first joint create. Probe a separate host so
-        // the session snapshot stays unchanged while we learn occurrence ids.
         let mut probe = CadServer::new().unwrap();
         let model = session::require_model_json(unique).unwrap();
         probe
@@ -12916,11 +14377,8 @@ mod tests {
 
     #[test]
     fn assembly_update_joint_id_name_only_rejected_not_a_patch() {
-        // Wipe is the contract for omitted *optional* fields. Id+name-only is
-        // not a rename patch: schema required fields + host serde reject it,
-        // so the existing joint is unchanged.
         let spec = tool_specs()
-            .into_iter()
+            .iter()
             .find(|spec| spec.name == "assembly_update_joint")
             .expect("spec");
         assert!(
@@ -12983,7 +14441,7 @@ mod tests {
             .unwrap();
         let joint_id = created["id"].as_u64().unwrap();
         let partial = json!({ "joint": { "id": joint_id, "name": "HingePatched" } });
-        schema_accepts(&advertised_update_joint_schema(), &partial)
+        schema_accepts(advertised_update_joint_schema(), &partial)
             .expect_err("id+name-only must fail advertised schema (would look like a patch)");
         let err = server
             .call_tool("assembly_update_joint", partial)
@@ -13014,8 +14472,6 @@ mod tests {
 
     #[test]
     fn assembly_update_joint_explicit_null_and_omitted_keys_both_clear() {
-        // Both encodings must be specified: omitted key *and* JSON null.
-        // Host serde Option+default treats them the same (clear, not preserve).
         let mut server = CadServer::new().unwrap();
         server.call_tool("cad_new_project", json!({})).unwrap();
         let first = extrude_offset_box(&mut server, "Sketch1", -12.0, -2.0);
@@ -13086,7 +14542,7 @@ mod tests {
             object.insert("linear_limits".into(), Value::Null);
         }
         schema_accepts(
-            &advertised_update_joint_schema(),
+            advertised_update_joint_schema(),
             &json!({ "joint": nulled }),
         )
         .unwrap_or_else(|error| panic!("explicit nulls must be schema-valid: {error}\n{nulled}"));
@@ -13115,13 +14571,10 @@ mod tests {
 
     #[test]
     fn attach_cad_submit_create_then_update_before_refresh() {
-        // Apply create, then immediately apply update *before* cad_refresh.
-        // Attached snapshot stays stale until the one refresh; joint must
-        // not be lost, inbox results stay DTO (dirty:true), preview still cleared.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-norefresh-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-norefresh-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -13187,18 +14640,16 @@ mod tests {
         assert_joint_visible(&after, joint_id, "HingeFastRenamed");
         assert_eq!(after["joints"].as_array().map(Vec::len), Some(1));
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_detach_mid_inbox_apply_does_not_fork() {
-        // Detach while an inbox create is pending. Apply must run on a
-        // separate host (published model), never the detached manager.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-detach-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-detach-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -13261,18 +14712,16 @@ mod tests {
         let live = server.call_tool("assembly_document", json!({})).unwrap();
         assert_joint_visible(&live, joint_id, "HingeDetach");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_detach_reattach_same_then_apply_does_not_fork() {
-        // Pass 2 locked detach-then-apply. This is reattach-then-apply:
-        // pending must not run against the reattached manager (fork).
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-reattach-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-reattach-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -13330,13 +14779,12 @@ mod tests {
         let live = server.call_tool("assembly_document", json!({})).unwrap();
         assert_joint_visible(&live, joint_id, "HingeReattach");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_detach_reattach_other_then_apply_stays_identity_bound() {
-        // Pending on A must not apply against a later attach of B.
         let _guard = session::env_lock();
         let session_a = session::test_session_uuid();
         let session_b = loop {
@@ -13346,8 +14794,8 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(1));
         };
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-rebind-{session_a}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-rebind-{session_a}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene_a = write_two_box_session(&session_a);
         write_two_box_session(&session_b);
         let bodies = scene_a["bodies"].as_array().unwrap();
@@ -13430,18 +14878,16 @@ mod tests {
         let a_live = server.call_tool("assembly_document", json!({})).unwrap();
         assert_joint_visible(&a_live, joint_id, "HingeOnA");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_wrong_component_is_dead_lettered() {
-        // Schema-valid joint against a missing/wrong occurrence (component
-        // instance) must be a typed host error, dead-lettered, queue unblocked.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-comp-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-comp-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -13453,7 +14899,6 @@ mod tests {
         let (occ_a, occ_b) = probe_connector_occurrence_ids(&unique, &body_a, &body_b);
         assert_ne!(occ_a, occ_b, "expected two auto-promoted occurrences");
 
-        // Missing component/occurrence id.
         server
             .call_tool(
                 "cad_submit",
@@ -13474,7 +14919,7 @@ mod tests {
                 }),
             )
             .expect("schema-valid missing occurrence still queues");
-        // Wrong component: occurrence B does not contain body A.
+
         server
             .call_tool(
                 "cad_submit",
@@ -13560,24 +15005,22 @@ mod tests {
         assert_eq!(renamed.op.name, "cad_set_document_name");
         assert_eq!(renamed.host_result["name"], "AfterWrongComponent");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_whitespace_only_joint_name_is_typed_reject() {
-        // Schema minLength:1 accepts "   "; host validate_joint treats trim-empty
-        // as a typed reject. Do not invent a max-length or schema pattern.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-ws-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-ws-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
         let body_b = bodies[1].clone();
         let spec = tool_specs()
-            .into_iter()
+            .iter()
             .find(|spec| spec.name == "assembly_create_joint")
             .expect("create spec");
         assert_eq!(
@@ -13645,7 +15088,7 @@ mod tests {
         assert_eq!(renamed.op.name, "cad_set_document_name");
         assert_eq!(renamed.host_result["name"], "AfterWhitespaceName");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -13654,7 +15097,7 @@ mod tests {
         assert!(tool_specs()
             .iter()
             .any(|spec| spec.name == "assembly_delete_joint"));
-        assert!(nbcad_mcp_mutate::lookup_mutate("assembly_delete_joint").is_some());
+        assert!(limo_cad_mcp_mutate::lookup_mutate("assembly_delete_joint").is_some());
         assert_eq!(
             tags_for_tool("assembly_delete_joint").0,
             FocusPack::Assembly
@@ -13662,14 +15105,10 @@ mod tests {
     }
     #[test]
     fn attach_cad_submit_body_delete_of_jointed_feature_removes_joint() {
-        // Applied joint, then inbox solid_delete_feature of a connector
-        // body. Host cleanup removes the joint; leftover applySolidUpdate
-        // (scene+document) must not leave a ghost. Do not invent a
-        // delete-joint tool.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-body-del-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-body-del-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -13773,18 +15212,16 @@ mod tests {
             "cad_refresh must not resurrect the deleted joint: {refreshed}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_body_delete_unrelated_feature_keeps_joint() {
-        // Delete a body that is not part of the joint. Host cleanup must
-        // leave the joint (and its occurrence ids) unchanged.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-unrel-del-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-unrel-del-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_three_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         assert_eq!(bodies.len(), 3, "expected three bodies: {scene}");
@@ -13867,19 +15304,16 @@ mod tests {
         );
         assert_eq!(live_ids.len(), 2, "A and B must remain: {live_ids:?}");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_pending_joint_after_body_delete_is_dead_lettered() {
-        // Pending inbox create that names a live occ, then the named body's
-        // feature is deleted (same generation), then applyInboxNow. Typed
-        // reject, dead-letter, no ghost, seq 2 applies.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-pend-del-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-pend-del-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -13982,19 +15416,16 @@ mod tests {
             "failed create after body-delete must not ghost a joint: {published}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_update_after_joint_body_delete_is_dead_lettered() {
-        // Update after the joint's own occurrence/body was body-deleted.
-        // Host cleanup already dropped the joint; the pending replace-all
-        // must typed-reject, dead-letter, and not resurrect it.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-upd-del-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-upd-del-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -14107,25 +15538,22 @@ mod tests {
             "failed update must not resurrect the body-deleted joint: {published}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_inverted_limits_is_typed_reject() {
-        // Schema already defines limits as required min/max numbers with no
-        // value range. min>max is schema-valid and a typed host reject.
-        // Do not invent exclusiveMinimum / maximum.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-limits-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-limits-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
         let body_b = bodies[1].clone();
         let spec = tool_specs()
-            .into_iter()
+            .iter()
             .find(|spec| spec.name == "assembly_create_joint")
             .expect("create spec");
         let limits_schema = &spec.input_schema["properties"]["limits"];
@@ -14224,25 +15652,23 @@ mod tests {
             "inverted limits must not ghost a joint: {published}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_unicode_joint_name_round_trips() {
-        // Host accepts any trim-nonempty name. Unicode is schema-valid and
-        // must persist through inbox apply + inspect. Do not invent a pattern.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-unicode-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-unicode-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
         let body_b = bodies[1].clone();
-        let name = "ヒンジα-1";
+        let name = "ãƒ’ãƒ³ã‚¸Î±-1";
         let spec = tool_specs()
-            .into_iter()
+            .iter()
             .find(|spec| spec.name == "assembly_create_joint")
             .expect("create spec");
         assert!(
@@ -14280,19 +15706,16 @@ mod tests {
         let refreshed = server.call_tool("assembly_document", json!({})).unwrap();
         assert_joint_visible(&refreshed, joint_id, name);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn inbox_json_wrong_tool_name_is_dead_lettered() {
-        // Valid JSON whose name is a known inspect tool or the unknown
-        // body-delete cleanup is not an inbox mutate. cad_submit rejects
-        // those at submit; a raw inbox file must dead-letter on apply.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-wrong-tool-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-wrong-tool-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let _scene = write_two_box_session(&unique);
         let mut server = CadServer::new().unwrap();
         server
@@ -14367,19 +15790,16 @@ mod tests {
         assert_eq!(renamed.op.name, "cad_set_document_name");
         assert_eq!(renamed.host_result["name"], "AfterWrongTool");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_gone_occurrence_after_create_is_dead_lettered() {
-        // Create joint (applied), absorb one auto-promoted occurrence away,
-        // then inbox update and a second create that name the gone occ.
-        // Typed reject, dead-letter, no ghost, later seq still applies.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-gone-occ-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-gone-occ-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -14417,8 +15837,6 @@ mod tests {
             .expect("occ B");
         assert_ne!(occ_a, occ_b);
 
-        // Absorb body A: deletes the promoted occurrence and mints a new id.
-        // The live joint is rewritten to the new occ; the old id is gone.
         {
             let mut host = CadServer::new().unwrap();
             let model = session::require_model_json(&unique).unwrap();
@@ -14624,18 +16042,16 @@ mod tests {
         assert_joint_visible(&refreshed, joint_id, "HingeBeforeGone");
         assert_eq!(refreshed["joints"].as_array().map(Vec::len), Some(1));
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_unknown_joint_id_update_is_dead_lettered() {
-        // Replace-all update of a joint id that was never minted: typed host
-        // reject, dead-letter, existing joint unchanged, later seq applies.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-unknown-id-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-unknown-id-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -14753,15 +16169,12 @@ mod tests {
         let refreshed = server.call_tool("assembly_document", json!({})).unwrap();
         assert_joint_visible(&refreshed, joint_id, "HingeKnown");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn assembly_create_joint_headless_direct_attached_inbox_only() {
-        // Headless (not attached): the cad_submit-mapped op still works as a
-        // direct tool. cad_submit itself requires attach. While attached,
-        // direct call_tool is session_read_only and only inbox is accepted.
         let mut headless = CadServer::new().unwrap();
         headless.call_tool("cad_new_project", json!({})).unwrap();
         let first = extrude_offset_box(&mut headless, "Sketch1", -12.0, -2.0);
@@ -14803,8 +16216,8 @@ mod tests {
 
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-modes-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-modes-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -14847,7 +16260,7 @@ mod tests {
             "inbox submit must not mutate attached memory: {still_empty}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -14880,12 +16293,10 @@ mod tests {
 
     #[test]
     fn attach_cad_submit_create_joint_then_assembly_solution() {
-        // After inbox create + refresh, assembly_solution must include the
-        // jointed occurrences and must not crash if the graph is unsolved.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-sol-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-sol-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -14946,18 +16357,16 @@ mod tests {
             );
         }
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_two_joints_same_occurrence_pair() {
-        // Two different joints on the same occurrence pair: host either keeps
-        // both or rejects the second with a typed error. Queue must not wedge.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-pair-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-pair-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -15068,19 +16477,16 @@ mod tests {
         assert_eq!(renamed.op.name, "cad_set_document_name");
         assert_eq!(renamed.host_result["name"], "AfterPair");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_cad_submit_create_update_same_base_generation() {
-        // Rapid create + update sharing one base_generation: create applies,
-        // leftover same-base update dead-letters with a reason (never silent
-        // drop), and a rebased follow-up still applies.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-samebase-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-samebase-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let scene = write_two_box_session(&unique);
         let bodies = scene["bodies"].as_array().unwrap();
         let body_a = bodies[0].clone();
@@ -15194,18 +16600,16 @@ mod tests {
         assert_eq!(renamed.op.name, "cad_set_document_name");
         assert_eq!(renamed.host_result["name"], "AfterSameBase");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn attach_malformed_inbox_json_is_dead_lettered() {
-        // Raw invalid JSON (not just a bad joint DTO) must dead-letter so the
-        // next queued mutate can apply.
         let _guard = session::env_lock();
         let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-joint-badjson-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-joint-badjson-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_two_box_session(&unique);
         let inbox = std::path::Path::new(&dir).join(&unique).join("inbox");
         std::fs::create_dir_all(&inbox).unwrap();
@@ -15254,15 +16658,12 @@ mod tests {
         assert_eq!(renamed.op.name, "cad_set_document_name");
         assert_eq!(renamed.host_result["name"], "AfterMalformedJson");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn assembly_update_joint_swapped_connector_occurrence_ids() {
-        // Swap-only occurrence ids (bodies stay) is a typed reject. Swapping
-        // the whole connectors (bodies + occurrence ids) is legal and query
-        // must match.
         let mut server = CadServer::new().unwrap();
         server.call_tool("cad_new_project", json!({})).unwrap();
         let first = extrude_offset_box(&mut server, "Sketch1", -12.0, -2.0);
@@ -15378,7 +16779,7 @@ mod tests {
         assert_eq!(found["connector_b"]["body_id"], body_a["id"]);
     }
 
-    fn schema_accepts(schema: &Value, value: &Value) -> Result<(), String> {
+    pub(super) fn schema_accepts(schema: &Value, value: &Value) -> Result<(), String> {
         if let Some(one_of) = schema.get("oneOf").and_then(Value::as_array) {
             let mut errors = Vec::new();
             for (index, alternative) in one_of.iter().enumerate() {
@@ -15454,6 +16855,270 @@ mod tests {
         }
 
         Ok(())
+    }
+    #[test]
+    fn named_print_view_exports_repeats_without_mutating_mechanical_placement() {
+        let (mut server, initial) = mcp_box();
+        let body = initial["scene"]["bodies"][0]["id"].clone();
+        let assembly = server.call_tool("assembly_document", json!({})).unwrap();
+        let root = &assembly["component_structure"]["occurrences"][0];
+        let repeated = server
+            .call_tool(
+                "assembly_create_occurrence",
+                json!({"component_id":root["component_id"],"name":"Intentional repeat"}),
+            )
+            .unwrap();
+        server.call_tool("assembly_set_occurrence_pose", json!({"occurrence_id":repeated["id"],"local_pose":{"translation":[40.,0.,0.],"rotation":[0.,0.,0.,1.]}})).unwrap();
+        let mechanical = server.call_tool("assembly_solution", json!({})).unwrap();
+        let before = server.manager.export_project_model().unwrap();
+        let view = json!({"name":"Print","camera":{"position":[100.,-100.,100.],"target":[0.,0.,0.],"up":[0.,0.,1.]},
+            "visible_body_ids":[body],"print_layout":true,
+            "occurrence_offsets":[{"occurrence_id":root["id"],"translation":[10.,20.,-2.],"rotation":[0.,0.,0.,1.]}]});
+        server
+            .call_tool(
+                "set_named_views",
+                json!({"views":[view],"expected_model_json":before}),
+            )
+            .unwrap();
+        let saved = server.manager.export_project_model().unwrap();
+        assert!(server
+            .call_tool(
+                "set_named_views",
+                json!({"views":[],"expected_model_json":before})
+            )
+            .is_err());
+        assert_eq!(server.manager.export_project_model().unwrap(), saved);
+        let layout = server
+            .call_tool("named_view_solution", json!({"name":"Print"}))
+            .unwrap();
+        assert_eq!(layout["instance_body_poses"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            layout["instance_body_poses"][0]["translation"],
+            json!([10., 20., -2.])
+        );
+        let report = server
+            .call_tool(
+                "solid_export_preflight",
+                json!({"named_view":"Print","expected_model_json":saved}),
+            )
+            .unwrap();
+        assert_eq!(report["layout"]["printable_instances"], 2);
+        assert!(report["layout"]["issues"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|issue| issue["code"] == "below_bed"));
+        let exported = server.call_tool("solid_export_3mf", json!({"named_view":"Print","expected_model_json":saved,"slicer_target":"bambu_studio"})).unwrap();
+        let bytes = BASE64
+            .decode(exported["bytes_base64"].as_str().unwrap())
+            .unwrap();
+        let actual = limo_cad_export::test_reader::read_package(&bytes).unwrap();
+        assert_eq!(actual.len(), 2);
+        assert!(actual[0].vertices.iter().any(|p| (p[2] + 2.).abs() < 1e-5));
+        assert_eq!(
+            server.call_tool("assembly_solution", json!({})).unwrap(),
+            mechanical
+        );
+        assert_eq!(server.manager.export_project_model().unwrap(), saved);
+        assert!(server
+            .call_tool(
+                "solid_export_3mf",
+                json!({"scope":"definition","named_view":"Print"})
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn named_views_attached_execute_and_reads_use_the_owning_engine() {
+        let _guard = session::env_lock();
+        let id = session::test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("limo-cad-named-views-{id}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        let (update, model) = write_box_session(&id);
+        let body_id = update["scene"]["bodies"][0]["id"].clone();
+        session::write_session(
+            &id,
+            "heartbeat.json",
+            &json!({
+                "updated_ms":session::now_ms(),"generation":1,"interface_version":1
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut client = CadServer::new().unwrap();
+        client
+            .call_tool("cad_attach", json!({"session_id":id}))
+            .unwrap();
+        let peer = id.clone();
+        let (stop, stopped) = std::sync::mpsc::channel::<()>();
+        let owner = std::thread::spawn(move || {
+            let mut host = CadServer::new().unwrap();
+            host.call_tool("cad_load_project_model", json!({"model_json":model}))
+                .unwrap();
+            let deadline = std::time::Instant::now() + Duration::from_secs(15);
+            let mut seen = std::collections::HashSet::new();
+            loop {
+                if stopped.try_recv() != Err(std::sync::mpsc::TryRecvError::Empty) {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "MCP workflow timed out"
+                );
+                if let Some(seq) = session::pending_inbox_seqs(&peer).unwrap().first().copied() {
+                    session::apply_inbox_op(&peer, |name, args| {
+                        let value = host.call_tool(name, args)?;
+                        session::write_session(
+                            &peer,
+                            &format!("inbox/results/{seq}.json"),
+                            &value.to_string(),
+                        )?;
+                        let model = host
+                            .manager
+                            .export_project_model()
+                            .map_err(|error| error.to_string())?;
+                        session::publish_applied_snapshot(&peer, &model)?;
+                        let mut heartbeat: Value = serde_json::from_str(
+                            &session::read_session_file(&peer, "heartbeat.json")?,
+                        )
+                        .unwrap();
+                        heartbeat["interface_version"] = json!(1);
+                        session::write_session(&peer, "heartbeat.json", &heartbeat.to_string())?;
+                        Ok(value)
+                    })
+                    .unwrap();
+                }
+                if let Ok(entries) =
+                    std::fs::read_dir(session::session_dir().join(&peer).join("controls"))
+                {
+                    for entry in entries.flatten() {
+                        if !entry
+                            .file_name()
+                            .to_string_lossy()
+                            .ends_with(".request.json")
+                            || !seen.insert(entry.path())
+                        {
+                            continue;
+                        }
+                        let request: Value =
+                            serde_json::from_str(&std::fs::read_to_string(entry.path()).unwrap())
+                                .unwrap();
+                        let query = &request["sketch_query"];
+                        let method = query["method"].as_str().unwrap();
+                        let value = match method {
+                            "named_views" => parse_engine_envelope(host::handle(
+                                &mut host.manager,
+                                method,
+                                query["payload"].as_str().unwrap(),
+                            ))
+                            .unwrap(),
+                            "solid_export_3mf" | "solid_export_stl" | "solid_export_preflight" => {
+                                host.call_tool(
+                                    method,
+                                    serde_json::from_str(query["payload"].as_str().unwrap())
+                                        .unwrap(),
+                                )
+                                .unwrap()
+                            }
+                            other => panic!("unexpected owning-engine query {other}"),
+                        };
+                        session::write_session(
+                            &peer,
+                            &format!("controls/{}.result.json", request["id"].as_str().unwrap()),
+                            &json!({"status":"applied","value":value}).to_string(),
+                        )
+                        .unwrap();
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            host.manager.named_views()
+        });
+        let view = json!({"name":"review","camera":{"position":[40.0,40.0,40.0],"target":[0.0,0.0,0.0],"up":[0.0,0.0,1.0]},
+            "visible_body_ids":[body_id],"part_offsets":[{"body_id":body_id,"translation":[0.0,20.0,0.0]}]});
+        let execute = |client: &mut CadServer, op: &str, args: Value| {
+            client.call_tool("cad_interface",
+            json!({"action":"execute","group":"document/appearance","operation":op,"arguments":args})).unwrap()
+        };
+        execute(&mut client, "upsert_named_view", view.clone());
+        execute(&mut client, "recall_named_view", json!({"name":"review"}));
+        assert_eq!(
+            client.call_tool("named_views", json!({})).unwrap()["active"],
+            "review"
+        );
+        assert_eq!(
+            client.manager.named_views().active,
+            None,
+            "The local file snapshot cannot supply the live active marker"
+        );
+        let exported = client.call_tool("solid_export_3mf", json!({})).unwrap();
+        let meshes = limo_cad_export::test_reader::read_package(
+            &BASE64
+                .decode(exported["bytes_base64"].as_str().unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(meshes.len(), 1);
+        let baseline = client
+            .export_mesh("solid_export_3mf", json!({"named_view":""}))
+            .unwrap();
+        let baseline = limo_cad_export::test_reader::read_package(
+            &BASE64
+                .decode(baseline["bytes_base64"].as_str().unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        let points = |vertices: &[[f64; 3]], offset: f64| {
+            vertices
+                .iter()
+                .map(|p| {
+                    [
+                        (p[0] * 1000.0).round() as i64,
+                        ((p[1] + offset) * 1000.0).round() as i64,
+                        (p[2] * 1000.0).round() as i64,
+                    ]
+                })
+                .collect::<std::collections::BTreeSet<_>>()
+        };
+        assert_eq!(
+            points(&meshes[0].vertices, 0.0),
+            points(&baseline[0].vertices, 20.0)
+        );
+        assert_eq!(
+            client.call_tool("solid_export_stl", json!({})).unwrap()["format"],
+            "stl"
+        );
+        let report = client
+            .call_tool("solid_export_preflight", json!({}))
+            .unwrap();
+        assert_eq!(report["layout"]["printable_instances"], 1);
+        assert_eq!(
+            report["layout"]["bed"],
+            serde_json::to_value(limo_cad_core::PrintBedDto::default()).unwrap()
+        );
+        execute(&mut client, "clear_named_view", json!({}));
+        execute(
+            &mut client,
+            "rename_named_view",
+            json!({"name":"review","new_name":"detail"}),
+        );
+        let listed = client.call_tool("named_views", json!({})).unwrap();
+        assert_eq!(listed["views"][0]["name"], "detail");
+        assert_eq!(listed["views"][0]["camera"], view["camera"]);
+        assert!(listed["active"].is_null());
+        execute(&mut client, "delete_named_view", json!({"name":"detail"}));
+        execute(&mut client, "set_named_views", json!({"views":[view]}));
+        assert_eq!(
+            client.call_tool("named_views", json!({})).unwrap()["views"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        drop(stop);
+        assert_eq!(owner.join().unwrap().views.len(), 1);
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
 
@@ -15645,24 +17310,24 @@ mod agent_feedback_tests {
 
     #[test]
     fn print_tools_read_a_synthetic_sheet_and_check_the_document_holes() {
-        let dir = std::env::temp_dir().join(format!("nbcad-print-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("limo-cad-print-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let sheet = dir.join("sheet.png");
-        // a 200 x 80 plate with two hole symbols at (50, 30) and (100, 30)
-        let (mut image, ppm, (ox, oy)) = nbcad_print::synthetic::sheet();
-        nbcad_print::synthetic::symbol(
+
+        let (mut image, ppm, (ox, oy)) = limo_cad_print::synthetic::sheet();
+        limo_cad_print::synthetic::symbol(
             &mut image,
             ox as f64 + 50.0 * ppm,
             oy as f64 - 30.0 * ppm,
             12.0,
         );
-        nbcad_print::synthetic::symbol(
+        limo_cad_print::synthetic::symbol(
             &mut image,
             ox as f64 + 100.0 * ppm,
             oy as f64 - 30.0 * ppm,
             12.0,
         );
-        std::fs::write(&sheet, nbcad_print::synthetic::png(&image)).unwrap();
+        std::fs::write(&sheet, limo_cad_print::synthetic::png(&image)).unwrap();
         let path = sheet.to_string_lossy().to_string();
 
         let mut server = CadServer::new().unwrap();
@@ -15677,7 +17342,6 @@ mod agent_feedback_tests {
             "{calibration}"
         );
 
-        // model: the plate with one hole on a symbol and one on blank paper
         server
             .call_tool("cad_interface", json!({"action":"script","source":r#"{"version":1,"name":"two holes","steps":[
                 {"id":"stock","call":{"group":"solid/primitives","operation":"solid_box","arguments":{"size":[200,80,10]}}},
@@ -15771,8 +17435,6 @@ mod agent_feedback_tests {
             .unwrap()
             .contains("authored only"));
 
-        // A live (attached) mutation never grows tool_trace, but it still
-        // counts: the authored script must not read as current afterwards.
         server.last_script_source = Some(authored.into());
         server.last_script_mutations = server.modeling_mutations;
         let trace_len = server.tool_trace.len();

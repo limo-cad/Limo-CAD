@@ -1,0 +1,12 @@
+[package]
+name = "limo-cad-interface"
+version.workspace = true
+edition.workspace = true
+description = "Shared product catalog and live control semantics"
+license = "LGPL-2.1-or-later"
+repository.workspace = true
+publish = false
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

@@ -1,7 +1,7 @@
 # 2D technical drawings
 
 The Drawing workspace creates editable sheets from your parts and assemblies.
-Views, dimensions and annotations are saved with the model in its `.nbcad` file.
+Views, dimensions and annotations are saved with the model in its `.limo` file.
 
 Finish any active sketch, switch to **Drawing**, create a sheet, and place a base
 view. Add projected views and dimensions, then save the project. The
@@ -22,7 +22,7 @@ See the [drawing workstream](https://github.com/limo-cad/Limo-CAD/issues/93).
   linear, radial and angular dimensions, notes, title information and BOM.
   Other annotation kinds and dual-unit presentation currently reject export;
   interactive export supports a wider set of annotations.
-- **Editable source:** save `.nbcad` to retain views, associations and annotations.
+- **Editable source:** save `.limo` to retain views, associations and annotations.
   STEP/STL/3MF geometry exports do not replace that drawing document.
 
 See the [native export contract](native-drawing-export.md) for supported commands
@@ -36,9 +36,9 @@ sheet interface, and Bevy owns the native 3D viewport.
 
 | Layer | Responsibility |
 | --- | --- |
-| `nbcad-sketch` | Persists standards-aware sheets, title blocks, aligned view relationships, semantic annotations, body filters, scale, and display options inside `model.json`. |
-| `nbcad-occt` | Produces visible/hidden vector curves from exact B-reps with OCCT HLR and exposes stable endpoints and fitted circular topology for annotations. |
-| Tauri host | Serializes drawing commands and exact projection requests with the live kernel. |
+| `limo-cad-sketch` | Persists standards-aware sheets, title blocks, aligned view relationships, semantic annotations, body filters, scale, and display options inside `model.json`. |
+| `limo-cad-occt` | Produces visible/hidden vector curves from exact B-reps with OCCT HLR and exposes stable endpoints and fitted circular topology for annotations. |
+| Native host | Serializes drawing commands and exact projection requests with the live kernel. |
 | React/SVG | Lays out sheets, edits properties, and moves views. SVG remains an internal browser/debug surface. |
 | DXF writer | Emits editable true-size paper geometry, layers, semantic dimensions, leaders, notes, and title-block content for CAD interchange, plus separate 1:1 model profiles. |
 | Browser fallback | Projects tessellated topology for fast UI development when the native kernel is unavailable. It is not an exact manufacturing result. |
@@ -176,7 +176,7 @@ projected views. From there the user may:
   `NBS_HIDDEN`, `NBS_CENTER`, `NBS_CUTTING`, `NBS_PHANTOM`, and `NBS_BREAK`
   linetypes consistently with the on-screen and print renderers.
 - Face-on circles remain `CIRCLE`; associative measurements remain semantic
-  `DIMENSION` entities with anonymous graphics blocks and noBS CAD metadata;
+  `DIMENSION` entities with anonymous graphics blocks and Limo CAD metadata;
   callouts remain `LEADER` plus `MTEXT`; sections include `HATCH` entities.
 - A separate, explicitly selected manufacturing-profile DXF exports one sketch
   material region at true 1:1 model scale. Its even-depth outside wire goes to
@@ -272,7 +272,7 @@ carrier edge.
 
 ## Chamfer callouts
 
-noBS CAD uses the explicit distance-and-angle form as its interoperable
+Limo CAD uses the explicit distance-and-angle form as its interoperable
 default. ISO sheets render `3 × 45°`; ANSI/ASME sheets render `3 X 45°`. The
 screen, printable SVG/PDF path, and DXF `LEADER`/`MTEXT` output share the same
 formatter. A shorthand such as `C3` is deliberately not the cross-standard
@@ -292,7 +292,7 @@ References: [ISO 13715:2017](https://www.iso.org/standard/61328.html),
 ## Persistence and compatibility
 
 Drawing data is an additive, defaulted field in the existing project schema.
-Older `.nbcad` files open with an empty drawing document. Saving a project
+Older `.limo` files open with an empty drawing document. Saving a project
 round-trips drawing intent through the Rust model; generated lines never enter
 the archive. Drawing IDs are project-global and validated along with active
 sheet references, standards settings, view bases, parent/alignment
@@ -367,6 +367,6 @@ line, and circular references preserve this id, preventing a dimension from
 attaching to a different copy of the same part. Older definition references
 remain definition references. A scope change can require reassociating them.
 Derived assembly cutting planes and auxiliary directions resolve the placed
-source topology. Native desktop and MCP use `nbcad_occt::project_drawing`;
+source topology. Native desktop and MCP use `limo_cad_occt::project_drawing`;
 the development browser's tessellated fallback consumes the same Rust-solved
 instance poses. Exact hidden-line generation remains in the native OCCT bridge.

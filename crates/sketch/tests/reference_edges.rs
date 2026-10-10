@@ -1,5 +1,5 @@
-use nbcad_core::{EdgeId, FaceId, OriginPlane, PlaneRef};
-use nbcad_sketch::{
+use limo_cad_core::{EdgeId, FaceId, OriginPlane, PlaneRef};
+use limo_cad_sketch::{
     Constraint, DragPhase, MovePointRequest, ProjectedCircleDto, ProjectedEdgeDto, SketchSession,
     Vec2,
 };
@@ -66,7 +66,7 @@ fn projected_points_slide_follow_upstream_edges_and_keep_current_targets_after_u
     s.redo().unwrap();
     assert!((s.sketch().point_position(point).unwrap().y - 4.).abs() < 1e-8);
     let json = serde_json::to_string(&s.sketch().snapshot()).unwrap();
-    let mut reopened = nbcad_sketch::Sketch::new();
+    let mut reopened = limo_cad_sketch::Sketch::new();
     reopened.restore(serde_json::from_str(&json).unwrap());
     assert!(reopened.solve().is_ok());
     s.set_projected_edges(vec![]);

@@ -1,7 +1,7 @@
 # Release notes
 
 One file per release tag, named exactly after the tag: `v0.2.1.md` is the body of
-the `v0.2.1` release. `npm run version:check` (the Version guard on every pull
+the `v0.2.1` release. `cargo xtask version --check` (the Version guard on every pull
 request) fails while `docs/release-notes/v<VERSION>.md` is missing, and
 `desktop-packages.yml` refuses to publish a `v*` tag whose file is missing, so the
 notes are written and reviewed with the version bump instead of being improvised
@@ -33,7 +33,7 @@ entries may hold the literal hash instead; that is what was published.
 ## Two rules
 
 - **Release notes are history.** Do not add them to the version carriers in
-  `scripts/sync-version.mjs`: a later bump must never rewrite an older release's
+  `xtask/src/release_tooling/version.rs`: a later bump must never rewrite an older release's
   notes.
 - **Say what is missing.** An unshipped platform, a known gap or a dead link
   belongs in the notes, not only in the pull request.

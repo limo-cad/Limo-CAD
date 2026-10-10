@@ -1,5 +1,5 @@
 //! Review regressions: endpoint identity, point ownership and angle edit data.
-use nbcad_sketch::*;
+use limo_cad_sketch::*;
 use std::f64::consts::{FRAC_PI_2, TAU};
 
 const XY: PlaneRef = PlaneRef::OriginPlane {
@@ -30,9 +30,7 @@ fn clockwise_acquisitions_follow_stored_endpoints() {
                 }
                 let arc = s
                     .add_arc_center_locked(
-                        v(0.0, 0.0),
-                        v(5.0, 0.0),
-                        v(0.0, -5.0),
+                        (v(0.0, 0.0), v(5.0, 0.0), v(0.0, -5.0)),
                         false,
                         locked_radius,
                         None,
@@ -72,9 +70,7 @@ fn typed_sweep_does_not_acquire_an_off_angle_or_off_radius_cursor_point() {
         let point = s.add_point(hint).unwrap().entities[0];
         s.toggle_fix(point).unwrap();
         s.add_arc_center_locked(
-            Vec2::ZERO,
-            v(5.0, 0.0),
-            hint,
+            (Vec2::ZERO, v(5.0, 0.0), hint),
             false,
             Some(5.0),
             None,
@@ -97,9 +93,7 @@ fn driving_arc_angle_retains_formula_and_reference_mode_keeps_formatting() {
     ] {
         let mut s = session();
         s.add_arc_center_locked(
-            v(20.0, 20.0),
-            v(25.0, 20.0),
-            v(20.0, 25.0),
+            (v(20.0, 20.0), v(25.0, 20.0), v(20.0, 25.0)),
             true,
             None,
             None,
@@ -111,7 +105,7 @@ fn driving_arc_angle_retains_formula_and_reference_mode_keeps_formatting() {
         assert_eq!(d.param_expression.as_deref(), Some(&text[1..]));
         assert!(d.param_id.is_some() && d.param_name.is_some());
         assert!((d.value - sweep.to_degrees()).abs() < 1e-6);
-        // This is the editor's accept-unchanged path.
+
         s.edit_dimension(EditDimensionRequest {
             constraint_id: d.constraint_id,
             text: d.param_expression.clone().unwrap(),
@@ -193,9 +187,7 @@ fn deleting_arc_preserves_authored_shared_and_constrained_points() {
 fn negative_literal_angle_keeps_its_signed_editor_value() {
     let mut s = session();
     s.add_arc_center_locked(
-        v(20.0, 20.0),
-        v(25.0, 20.0),
-        v(20.0, 15.0),
+        (v(20.0, 20.0), v(25.0, 20.0), v(20.0, 15.0)),
         true,
         None,
         None,
@@ -372,7 +364,7 @@ fn rectangle_does_not_round_acquired_boundary_back_to_the_grid() {
             );
             s.set_projected_edges(vec![ProjectedEdgeDto {
                 id: 1 << 40,
-                edge_id: nbcad_core::EdgeId(1),
+                edge_id: limo_cad_core::EdgeId(1),
                 points: vec![v(0.0, 10.1), v(20.0, 10.1)],
                 circle: None,
             }]);

@@ -1,13 +1,23 @@
 # Native command scripts
 
-Recipes build editable parts and assemblies, explain their construction and
-present the result. Start with [your first part](INSTALL.md#make-your-first-part)
-or choose from the [recipe library](../examples/scripts/README.md).
+Scripts build editable parts and assemblies, explain their construction and
+present the result. Recipes are the bundled examples of those scripts, using the
+same source editor, interpreter and runner. Start with
+[your first part](INSTALL.md#make-your-first-part) or choose from the
+[script examples](../examples/scripts/README.md).
 
-A `.nbcad.jsonc` file is the reproducible construction source for a native design.
-A `.nbcad` file is the editable project produced by those commands. Keep both when
+A `.limo.jsonc` file is the reproducible construction source for a native design.
+A `.limo` file is the editable project produced by those commands. Keep both when
 publishing an example: one explains how it was made, the other opens directly for
 further parametric work.
+
+Select a part occurrence before re-entering its sketch to edit the shared
+definition in place. Other occurrences fade while the selected part remains
+opaque. Camera focus, picking and dimensions use that occurrence's placed frame;
+saved sketch coordinates stay local to the definition. Finish the sketch and
+recompute to update every occurrence and its joint references. MCP uses the same
+operation: `sketch_edit` accepts `name` and optional `occurrence_id`. Placement and
+assembly structure edits require finishing the active component edit first.
 
 JSONC is deliberate. Long command sequences need comments, predictable quoting and
 simple diffs. It uses the same JSON-shaped arguments as MCP without YAML’s implicit
@@ -19,49 +29,76 @@ runtime.
 
 ## Open and run scripts in CAD
 
-The **Scripts** button opens the script workspace beside the current design.
-Load a commented source file to inspect its chapter notes and grouped commands.
-The bundled examples appear in that same workspace.
+The **Scripts** button opens one workspace beside the current design. Choose
+**Browse examples** for bundled lessons, complete designs and manufacturing
+coupons, or **Open script...** for a `.limo.jsonc` file. **Path / Load script**
+uses that same file loader when entering a path directly. **File → Open Script…**
+also opens source in this workspace; the native macOS File menu uses the same
+action as the in-window File menu.
 
-The Source tab supports editing, validation through the Rust parser, and **Save
-script as…**. The file-path disclosure exposes the same loader to the semantic
-MCP controls without having to operate an operating-system file picker.
+Both an example and a file open the authored source editor without running
+modeling commands or changing the current design. Bundled source has no
+filesystem path until **Save script as...**. Lessons use this same select,
+inspect, edit and run workflow.
 
-Use **File → Open Script…** to load a `.nbcad.jsonc` file into that workspace. The
-native macOS File menu routes this through the same action as the in-window File
-menu. Opening a source file does not execute its modeling commands. Close the
-script dock when you want the space back; use **Scripts** to show it again.
+**Run in new design** is available in the source editor. It creates a new retained
+document tab before starting the shared live runner. The previous design stays
+available in its tab. Execution uses the inspected, expanded source snapshot,
+including its loaded includes; loading or validating again is required to pick
+up later included-file edits. **Chapters** lets you inspect the teaching notes
+before running, and the presentation and rate controls choose how the run is
+shown. Pause, Step, Resume, Stop and rate controls use the native playback bar.
+Save the result as an ordinary editable `.limo` project.
 
-**Run in new design** creates a blank design in the existing CAD window and replays
-the selected source there. The existing project remains separate. Presentation
-controls provide Pause, Step, Resume, speed and Maximum rate during the run. Save
-the resulting `.nbcad` project to retain its editable feature history.
 The playback bar docks below the viewport. **Close** hides it without changing
 execution; **Show playback** restores it from the top bar, including after a run
 has completed or stopped.
 
-Short lessons can also provide an isolated miniature preview by exporting
-captioned scene frames. Preview execution
-uses a separate headless engine, then displays its returned tessellation in the
-small preview surface; it does not borrow the active document, camera or native
-viewport’s feature-preview channel. Ribbon hover help can show the same lesson
-where an example is associated with that operation. Hovering does not run the
-lesson in the active design.
+**Inspect / edit source** opens the authored JSONC in the existing native
+multiline text field. Comments and `includes` remain intact. **Validate source**
+uses the shared parser and resolves includes beside the displayed source path;
+errors remain visible and Run stays unavailable until the current draft is
+valid. Validation does not save edits. **Save script as...** explicitly writes
+the authored text, including unfinished invalid drafts, through the existing
+atomic file writer. It never substitutes expanded source or copies included
+files. After saving to a new directory, Validate resolves includes there and
+reports missing fragments. Opening another source requires saving or explicitly
+discarding unsaved edits first. Closing the Scripts card retains its draft.
+Application exit waits for script file operations and requires Save As or
+Discard for an unsaved draft, including text still being edited in the field.
 
-Preview is intentionally bounded to short source files: at most 80 construction
-steps and checks combined, and 2 MiB of source. Use **Run in new design** for a
-larger assembly. Both paths execute the same native command interpreter; a preview is
-not a replacement for the editable `.nbcad` project or the final validation gate.
+Recipe command-line URLs and `cad_interface` action `open_recipe` enter that
+same source-only queue. Busy file/script work finishes first; unsaved source
+requires Save As, Discard, or Cancel opening. A queued receipt acknowledges
+delivery, not playback or replacement of the design. Native OS protocol
+registration delivers recipe URLs to the Bevy Scripts editor.
+
+For a preview-enabled example, **Preview lesson** renders its isolated captioned
+teaching frames without accessing the current CAD document. Previous,
+Next, explicit Replay/Stop, Fit, drag and arrow/Home keys use the preview camera.
+It does not autoplay. Editing the bundled source disables its preview; use Run
+in new design to inspect those edits. Closing the preview releases its retained
+document, view and image. DPI-scaled requests use the shared bounded renderer.
+
+Previews are bounded to short sources: at most 80 construction steps and checks
+combined, and 2 MiB of source. They use a separate headless engine and the same
+native interpreter. Ribbon hover help can show the same lesson for its associated
+operation. Use **Run in new design** to build and inspect the editable model,
+including larger assemblies.
+
+The Bevy desktop uses native source editing, file dialogs, IME and lesson preview
+rendering through this shared Rust workflow. Close the Scripts workspace to
+restore viewport space, then use **Scripts** to reopen the retained draft.
 
 ## One execution path
 
-The Rust `nbcad-script` crate resolves references and sequences the existing grouped
+The Rust `limo-cad-script` crate resolves references and sequences the existing grouped
 interface operations. The MCP entry point is one call:
 
 ```json
 {
   "action": "script",
-  "path": "/absolute/path/to/design.nbcad.jsonc",
+  "path": "/absolute/path/to/design.limo.jsonc",
   "mode": "present",
   "validate": true
 }
@@ -80,7 +117,7 @@ uses the same collection; titles, chapters and actual operations are derived fro
 the script. A selected recipe is not the legacy `cad_script` trace-export command.
 
 `cargo xtask run-script FILE --server CAD_EXECUTABLE --server-arg --headless` uses a Rust
-MCP client to invoke the packaged server. A standalone `nbcad-mcp` needs no
+MCP client to invoke the packaged server. A standalone `limo-cad-mcp` needs no
 `--server-arg`; AppImage launch flags are also passed as separate server arguments.
 See [developer replay setup](DEVELOPMENT.md#replay-a-recipe) for complete examples
 and initialization deadlines. With no desktop session, replay runs headlessly
@@ -127,7 +164,7 @@ display; it does not remove geometry or substitute for explicit export selection
 A script has `version: 1`, a human-readable `name`, ordered `steps`, optional final
 `checks`, optional named `views`, and `exports`. The optional `starting_state: "empty"` documents the required
 blank starting state; omitting it has the same effect in version 1. The
-[editor schema](../examples/scripts/nbcad-script.schema.json) describes these fields.
+[editor schema](../examples/scripts/limo-cad-script.schema.json) describes these fields.
 Each step has exactly one of these actions:
 
 - `call`: an existing `group`, `operation` and `arguments` object.
@@ -290,7 +327,7 @@ not normalized across different kernel versions or platforms.
 window and creates a blank design tab. Save or preserve the current document first.
 Do not pass `--desktop` when the intended window is already open.
 
-The regression harness commands below use the standalone `nbcad-mcp` developer
+The regression harness commands below use the standalone `limo-cad-mcp` developer
 server as `MCP`; see the [developer setup](DEVELOPMENT.md).
 
 `cargo xtask test-mcp playback --server MCP --session UUID --out DIRECTORY` checks
@@ -308,7 +345,7 @@ playback controls, checking viewport space, retained source and completion state
 It writes its temporary source, native result and proof report to the output
 directory. Finish active editing before running this check. It uses the named
 existing window and has no dependency on the bundled example catalog.
-Add `--script /absolute/path/source.nbcad.jsonc` to also check loading another
+Add `--script /absolute/path/source.limo.jsonc` to also check loading another
 source before the built-in fixture; the additional source is never executed.
 
 The recipe-library layer adds headless recipe and real-kernel preview checks
@@ -318,7 +355,7 @@ above or establish that the teaching interface has been validated on a new build
 ## Script collections
 
 Large designs can keep each part in its own JSONC fragment and compose them from
-a root `.nbcad.jsonc`:
+a root `.limo.jsonc`:
 
 ```jsonc
 {
@@ -335,7 +372,7 @@ a root `.nbcad.jsonc`:
 ```
 
 A collection file is not a full script. It supplies `steps` and optional
-`checks` (and may itself `includes` further fragments). A `.nbcad.jsonc` file
+`checks` (and may itself `includes` further fragments). A `.limo.jsonc` file
 may also be included: its `steps` and `checks` are composed in, and its
 `version`, `starting_state`, `verification`, `exports`, and `$schema` are
 ignored. The root script keeps those fields.
@@ -346,7 +383,7 @@ desktop editor uses that so an edited buffer still finds its fragments). Each
 include path is relative to the file that declares it, not always the root
 directory. Paths use forward slashes only, must not contain `.` or `..`, must
 stay under the root file’s directory after canonicalization, and must end with
-`.collection.jsonc` or `.nbcad.jsonc`.
+`.collection.jsonc` or `.limo.jsonc`.
 
 Included steps share the root’s binding and step-id namespace. Prefix ids per part
 (`base_…`, `lid_…`). After expansion, validation and execution are identical to a
@@ -358,7 +395,7 @@ editor and expands includes only when validating or running.
 
 ## Exporting version-1 JSONC
 
-`cad_interface` action `export_script` returns a version-1 `.nbcad.jsonc` `source`
+`cad_interface` action `export_script` returns a version-1 `.limo.jsonc` `source`
 string (and fidelity metadata). It is **not** `cad_script`.
 
 - `cad_script` — forward dump of successful mutating MCP calls in this process as

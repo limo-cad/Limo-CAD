@@ -14,7 +14,7 @@ struct Client {
 
 impl Client {
     fn new() -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_nbcad-mcp"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_limo-cad-mcp"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -140,8 +140,10 @@ fn named_views_complete_stdio_workflow_without_scripts() {
     assert_eq!(edited["scene"]["errors"], json!([]));
     let scene = cad.call("solid_scene", json!({}));
     let view = json!({"name":"exploded","camera":{"position":[40.0,40.0,40.0],"target":[5.0,5.0,4.0],"up":[0.0,0.0,1.0]},
-        "visible_body_ids":[first],"part_offsets":[{"body_id":first,"translation":[0.0,20.0,0.0]}]});
-    cad.appearance("upsert_named_view", view.clone());
+        "visible_body_ids":[first,first],"part_offsets":[{"body_id":first,"translation":[0.0,20.0,0.0]}]});
+    let stored = cad.appearance("upsert_named_view", view.clone());
+    let saved_view = stored["views"][0].clone();
+    assert_eq!(saved_view["visible_body_ids"], json!([first]));
     let mut other = view.clone();
     other["name"] = json!("detail");
     other["visible_body_ids"] = json!([second]);
@@ -154,7 +156,7 @@ fn named_views_complete_stdio_workflow_without_scripts() {
         2
     );
     let recalled = cad.appearance("recall_named_view", json!({"name":"exploded"}));
-    assert_eq!(recalled["view"], view);
+    assert_eq!(recalled["view"], saved_view);
     assert_eq!(recalled["visibility"]["hidden_body_ids"], json!([second]));
     assert_eq!(cad.call("named_views", json!({}))["active"], "exploded");
     assert_eq!(
@@ -202,7 +204,14 @@ fn named_views_complete_stdio_workflow_without_scripts() {
     );
     let mut updated = other.clone();
     updated["camera"]["position"] = json!([60.0, 40.0, 40.0]);
-    cad.appearance("upsert_named_view", updated.clone());
+    let stored = cad.appearance("upsert_named_view", updated);
+    let updated = stored["views"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|view| view["name"] == "detail")
+        .unwrap()
+        .clone();
     let saved = cad.call("cad_project_model", json!({}));
     cad.call("cad_new_project", json!({}));
     cad.call("cad_load_project_model", json!({"model_json":saved}));

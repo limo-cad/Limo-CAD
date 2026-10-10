@@ -1,7 +1,7 @@
 //! Read a saved model's JSON (or a CAM document) on stdin. This read-only
 //! diagnostic separates cold planning, cached planning and optional stock
 //! verification timings. It never changes the source project or posts NC.
-use nbcad_cam::{
+use limo_cad_cam::{
     plan_setup, simulate_setup, CamDocumentDto, CamOperationDto, CamSimulationRequestDto,
     CamSimulationTargetDto,
 };

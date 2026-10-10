@@ -1,0 +1,17 @@
+name: Required native interface contracts
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: required-interface-${{ github.ref }}
+  # Preserve main/manual receipts; cancel only superseded PR checks.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  frontend_regressions:
+    uses: ./.github/workflows/rust-interface-contracts.yml

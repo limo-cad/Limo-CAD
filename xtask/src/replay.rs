@@ -21,8 +21,13 @@ pub(crate) struct Client {
     initialization: Value,
 }
 impl Client {
-    pub(crate) fn start(executable: &str) -> Result<Self> {
-        Self::start_with_arguments(executable, &[], DEFAULT_INITIALIZATION_TIMEOUT)
+    pub(crate) fn worker_command(executable: impl AsRef<std::ffi::OsStr>) -> Command {
+        let mut command = Command::new(executable);
+        command.arg("--headless");
+        command
+    }
+    pub(crate) fn start_worker(executable: &str) -> Result<Self> {
+        Self::start_command(Self::worker_command(executable), None)
     }
     fn start_with_arguments(
         executable: &str,
@@ -46,14 +51,49 @@ impl Client {
         )
     }
     fn start_with_timeouts(
-        mut command: Command,
+        command: Command,
         initialization_timeout: Duration,
         request_timeout: Option<Duration>,
     ) -> Result<Self> {
+        Self::start_with_logs(command, initialization_timeout, request_timeout, None)
+    }
+    /// Retain only the explicitly owned fixture child's output. Stdout remains
+    /// the same parsed MCP transport; the copy must never replace that pipe.
+    pub(crate) fn start_command_logged(
+        command: Command,
+        request_timeout: Option<Duration>,
+        directory: &Path,
+    ) -> Result<Self> {
+        let stdout = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(directory.join("host-stdout.jsonl"))?;
+        let stderr = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(directory.join("host-stderr.log"))?;
+        Self::start_with_logs(
+            command,
+            request_timeout.unwrap_or(DEFAULT_INITIALIZATION_TIMEOUT),
+            request_timeout,
+            Some((stdout, stderr)),
+        )
+    }
+    fn start_with_logs(
+        mut command: Command,
+        initialization_timeout: Duration,
+        request_timeout: Option<Duration>,
+        logs: Option<(fs::File, fs::File)>,
+    ) -> Result<Self> {
+        crate::deploy_native::configure_runtime_environment(&mut command)?;
+        let (mut stdout_log, stderr) = match logs {
+            Some((stdout, stderr)) => (Some(stdout), Stdio::from(stderr)),
+            None => (None, Stdio::inherit()),
+        };
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit());
+            .stderr(stderr);
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -65,6 +105,12 @@ impl Client {
         let (sender, replies) = mpsc::channel();
         std::thread::spawn(move || {
             for line in BufReader::new(output).lines() {
+                if let (Ok(line), Some(log)) = (&line, stdout_log.as_mut()) {
+                    if let Err(error) = writeln!(log, "{line}").and_then(|_| log.flush()) {
+                        let _ = sender.send(Err(format!("Retain owned host stdout: {error}")));
+                        break;
+                    }
+                }
                 let result = line
                     .map_err(|e| e.to_string())
                     .and_then(|s| parse_reply_line(&s));
@@ -81,7 +127,7 @@ impl Client {
             request_timeout: Some(initialization_timeout),
             initialization: Value::Null,
         };
-        client.initialization = client.rpc("initialize",json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"nbcad-rust-replay","version":"1"}}))
+        client.initialization = client.rpc("initialize",json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"limo-cad-rust-replay","version":"1"}}))
             .with_context(|| format!(
                 "MCP initialization failed (deadline {initialization_timeout:?}). The executable must expose stdio MCP; use --server-arg --headless for packaged CAD workers without a window"
             ))?;
@@ -102,8 +148,7 @@ impl Client {
             json!({"jsonrpc":"2.0","method":"notifications/initialized"})
         )?;
         input.flush()?;
-        // Slow OCCT work and paused presentations must not inherit the short
-        // startup deadline. Package verification retains its requested bound.
+
         client.request_timeout = request_timeout;
         Ok(client)
     }
@@ -140,6 +185,17 @@ impl Client {
         }
     }
     pub(crate) fn rpc(&mut self, method: &str, params: Value) -> Result<Value> {
+        let response = self.rpc_response(method, params)?;
+        if let Some(error) = response.get("error") {
+            if self.request_timeout.is_some() {
+                self.terminate();
+            }
+            bail!("MCP error: {error}");
+        }
+        Ok(response["result"].clone())
+    }
+    /// Preserve a valid server error response without treating it as a broken pipe.
+    fn rpc_response(&mut self, method: &str, params: Value) -> Result<Value> {
         let deadline = self.request_timeout.map(|timeout| Instant::now() + timeout);
         self.id += 1;
         let id = self.id;
@@ -175,10 +231,17 @@ impl Client {
                     if reply["id"] != id {
                         continue;
                     }
+                    ensure!(
+                        reply.get("result").is_some() != reply.get("error").is_some(),
+                        "Invalid MCP reply: exactly one of result or error is required"
+                    );
                     if let Some(error) = reply.get("error") {
-                        bail!("MCP error: {error}");
+                        ensure!(
+                            error["code"].is_i64() && error["message"].is_string(),
+                            "Invalid MCP error response: {error}"
+                        );
                     }
-                    return Ok(reply["result"].clone());
+                    return Ok(reply);
                 }
                 Ok(Err(error)) => bail!("Invalid MCP reply: {error}"),
                 Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -202,8 +265,7 @@ impl Client {
                 if !status.success() {
                     bail!("MCP exited unsuccessfully after EOF: {status}");
                 }
-                // The pipe reader can still be processing the final stdout
-                // bytes. Drain until EOF so late logs cannot pass as valid MCP.
+
                 return self.require_stdout_eof(deadline.saturating_duration_since(Instant::now()));
             }
             if Instant::now() >= deadline {
@@ -299,8 +361,6 @@ fn options(args: impl Iterator<Item = String>) -> Result<Options> {
             arg = "--help".into();
         }
         if arg == "--server-arg" {
-            // Consume exactly one literal argument, including flag-shaped
-            // values such as --headless and --appimage-extract-and-run.
             server_arguments.push(
                 args.next()
                     .ok_or_else(|| anyhow!("Missing value for --server-arg"))?,
@@ -309,7 +369,10 @@ fn options(args: impl Iterator<Item = String>) -> Result<Options> {
             if values.contains_key(&arg) {
                 bail!("Duplicate option {arg}");
             }
-            if matches!(arg.as_str(), "--present" | "--new" | "--help") {
+            if matches!(
+                arg.as_str(),
+                "--present" | "--new" | "--help" | "--interactive"
+            ) {
                 values.insert(arg, "true".into());
             } else {
                 values.insert(
@@ -360,16 +423,29 @@ pub fn call(args: impl Iterator<Item = String>) -> Result<()> {
             "--args",
             "--args-file",
             "--out",
+            "--interactive",
         ],
     )?;
     if options.file.is_some() || args.contains_key("--args") && args.contains_key("--args-file") {
         bail!("Supply exactly one --args or --args-file");
+    }
+    let interactive = args.contains_key("--interactive");
+    if interactive {
+        ensure!(
+            !["--args", "--args-file", "--tool", "--session"]
+                .iter()
+                .any(|option| args.contains_key(*option)),
+            "Interactive calls specify their tool and arguments on stdin; do not attach implicitly"
+        );
     }
     let mut client = Client::start_with_arguments(
         required(args, "--server")?,
         &options.server_arguments,
         initialization_timeout,
     )?;
+    if interactive {
+        return interactive_calls(client, args.get("--out").map(Path::new));
+    }
     if let Some(session) = args.get("--session") {
         client.call("cad_attach", json!({"session_id":session}))?;
     }
@@ -390,6 +466,80 @@ pub fn call(args: impl Iterator<Item = String>) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&result)?);
     }
     Ok(())
+}
+
+/// Keep observations in one MCP connection while the operator chooses each next call.
+fn interactive_calls(mut client: Client, output: Option<&Path>) -> Result<()> {
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Call {
+        tool: String,
+        arguments: Value,
+    }
+
+    if let Some(output) = output {
+        fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(output)
+            .with_context(|| format!("Prepare interactive MCP output {}", output.display()))?;
+    }
+    let mut stdout = std::io::stdout().lock();
+    writeln!(
+        stdout,
+        "{}",
+        json!({"status":"ready","server":client.initialization(),"pid":client.process_id()})
+    )?;
+    stdout.flush()?;
+    for line in std::io::stdin().lock().lines() {
+        let line = line.context("Read interactive MCP request")?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let result = match serde_json::from_str::<Call>(&line) {
+            Ok(call) if !call.tool.trim().is_empty() && call.arguments.is_object() => {
+                let response = client.rpc_response(
+                    "tools/call",
+                    json!({"name":call.tool,"arguments":call.arguments}),
+                )?;
+                if response.get("error").is_some() {
+                    json!({"status":"tool_error","error":response["error"],"response":response})
+                } else {
+                    let result = &response["result"];
+                    json!({
+                        "status":if result["isError"] == true {"tool_error"} else {"received"},
+                        "result":result
+                    })
+                }
+            }
+            Ok(_) => {
+                json!({"status":"request_error","error":"tool must be nonempty and arguments must be an object"})
+            }
+            Err(error) => json!({"status":"request_error","error":error.to_string()}),
+        };
+        if let Some(output) = output {
+            if let Err(error) = fs::write(output, serde_json::to_vec_pretty(&result)?) {
+                writeln!(
+                    stdout,
+                    "{}",
+                    json!({"status":"output_error","error":error.to_string(),"response":result})
+                )?;
+                stdout.flush()?;
+                return Err(error)
+                    .context("MCP response was printed to stdout; the call was not retried");
+            }
+            writeln!(
+                stdout,
+                "{}",
+                json!({"status":result["status"],"output":output})
+            )?;
+        } else {
+            writeln!(stdout, "{result}")?;
+        }
+        stdout.flush()?;
+    }
+    client.finish(Duration::from_secs(10))
 }
 fn launched_session(launch: &Value) -> Result<String> {
     if launch["status"] != "ready" {
@@ -456,8 +606,6 @@ impl ReplayOutputs {
         report: &Value,
         save: impl FnOnce(&Path) -> Result<Value>,
     ) -> Result<()> {
-        // Retain the completed result before attempting any further operation
-        // on the live document. Save can still fail after a successful preflight.
         let report_path = if let Some(out) = &self.directory {
             let path = out.join(format!("run-{iteration}.json"));
             fs::write(&path, serde_json::to_vec_pretty(report)?)
@@ -500,13 +648,12 @@ fn prepare_directory(path: &Path, purpose: &str) -> Result<PathBuf> {
         .with_context(|| format!("Prepare {purpose} directory {}", path.display()))?;
     let path = fs::canonicalize(path)
         .with_context(|| format!("Resolve {purpose} directory {}", path.display()))?;
-    // Probe the actual directory permissions without touching a user's output
-    // file. A unique create-new file also detects failures beyond a read-only bit.
+
     use std::sync::atomic::{AtomicU64, Ordering};
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
     for _ in 0..100 {
         let probe = path.join(format!(
-            ".nbcad-replay-write-check-{}-{}",
+            ".limo-replay-write-check-{}-{}",
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
@@ -524,7 +671,7 @@ fn prepare_directory(path: &Path, purpose: &str) -> Result<PathBuf> {
             }
         };
         let written = file
-            .write_all(b"noBS CAD replay output preflight\n")
+            .write_all(b"Limo CAD replay output preflight\n")
             .and_then(|_| file.sync_all());
         drop(file);
         let removed = fs::remove_file(&probe);
@@ -548,7 +695,7 @@ fn validate_file_destination(path: &Path) -> Result<()> {
                     path.display()
                 );
             }
-            // Opening without create or truncate preserves all existing bytes.
+
             fs::OpenOptions::new()
                 .write(true)
                 .open(path)
@@ -654,8 +801,7 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
             &options.server_arguments,
             initialization_timeout,
         )?;
-        // A misspelled recipe must not launch a window or create an empty tab.
-        // Ask the selected binary's catalog, not a second list in this client.
+
         if let Some(recipe) = args.get("--recipe") {
             let catalog = client.call("cad_interface", json!({"action":"recipes"}))?;
             if !catalog
@@ -757,28 +903,39 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
 
 fn print_usage(script: bool) {
     if script {
-        println!("Usage: cargo xtask run-script [FILE.nbcad.jsonc | --recipe ID] --server PATH [OPTIONS]\n\
+        println!(
+            "Usage: cargo xtask run-script [FILE.limo.jsonc | --recipe ID] --server PATH [OPTIONS]\n\
   --session UUID --new --present  Replay visibly in a new design of an existing window.\n\
   --desktop PATH                 Launch a desktop instead of attaching to --session.\n\
   --speed N                      Presentation speed, 0.1–16 (default: 1).\n\
   --repeat N                     Compare independent headless runs (default: 1).\n\
   --compare REPORT.json          Compare the final model with a previous replay.\n\
   --out DIRECTORY                Retain replay reports and model snapshots.\n\
-  --save FILE.nbcad               Save after replay (headless or live).\n\
-                                 Headless exports are reopened in a fresh native engine before writing.");
+  --save FILE.limo               Save after replay (headless or live).\n\
+                                 Headless exports are reopened in a fresh native engine before writing."
+        );
     } else {
-        println!("Usage: cargo xtask cad-call --server PATH [--tool NAME] [--args JSON | --args-file FILE] [OPTIONS]\n\
+        println!(
+            "Usage: cargo xtask cad-call [--server PATH | --installed] [--tool NAME] [--args JSON | --args-file FILE] [OPTIONS]\n\
   --tool NAME                    MCP tool name (default: cad_interface).\n\
   --session UUID                 Attach to an explicitly selected live design.\n\
-  --out FILE.json                Write the tool result instead of stdout.");
+  --out FILE.json                Write the tool result instead of stdout.\n\
+  --interactive                  Keep one MCP connection; accept one {{\"tool\":NAME,\"arguments\":OBJECT}} per stdin line.\n\
+                                 With --out, replace that file with each response and print its receipt.\n\
+                                 Transport failure stops the connection; calls are never retried.\n\
+  --installed                    Verify and reconnect to the clean canonical native-control runtime.\n\
+                                 Never build, deploy or stop CAD; this does not qualify current source."
+        );
     }
-    println!("\nServer options:\n\
+    println!(
+        "\nServer options:\n\
   --server-arg ARG                Pass one literal argument to the server; repeat to preserve order.\n\
   --init-timeout-seconds N        Bound MCP initialization only (1–600, default: 30).\n\
                                  Modeling and presentation waits remain unbounded.\n\
 \nPackaged CAD worker (no extra window): --server PATH --server-arg --headless\n\
 AppImage without FUSE: --server PATH --server-arg --appimage-extract-and-run --server-arg --headless\n\
-Standalone nbcad-mcp: --server PATH (no server argument required)");
+Standalone limo-cad-mcp: --server PATH (no server argument required)"
+    );
 }
 
 fn save_headless(
@@ -788,15 +945,12 @@ fn save_headless(
     server_arguments: &[String],
     initialization_timeout: Duration,
 ) -> Result<()> {
-    // Export the current document, not an optional/stale final_model field
-    // supplied by the script. This includes sketches, history, assemblies,
-    // drawings, visibility, appearances and CAM intent, not flattened meshes.
     let exported = client.call("cad_project_model", json!({}))?;
     let model_json = exported
         .as_str()
         .context("Project export is not JSON text")?;
     let expected: Value = serde_json::from_str(model_json)?;
-    let version = client.initialization()["serverInfo"]["_meta"]["nbcad/build"]["version"]
+    let version = client.initialization()["serverInfo"]["_meta"]["limo-cad/build"]["version"]
         .as_str()
         .or_else(|| client.initialization()["serverInfo"]["version"].as_str())
         .context("MCP server did not identify its application version")?;
@@ -816,8 +970,7 @@ fn save_headless(
             .collect()
     };
     let expected_bodies = body_ids(&client.call("solid_scene", json!({}))?)?;
-    // Only independent stdio servers are used. No session discovery, attachment,
-    // desktop launch, display server or UI file command is involved.
+
     let mut restored =
         Client::start_with_arguments(server, server_arguments, initialization_timeout)?;
     restored
@@ -842,8 +995,7 @@ fn save_headless(
         "Reopening the generated project changed its solid bodies"
     );
     restored.finish(Duration::from_secs(10))?;
-    // Do not touch an existing destination if serialization or native reload
-    // fails. ReplayOutputs has already checked its parent and retained reports.
+
     fs::write(path, bytes).with_context(|| format!("Write headless project {}", path.display()))?;
     eprintln!("Saved and reopened headless project {}", path.display());
     Ok(())
@@ -862,17 +1014,17 @@ fn semantic_result(report: &Value) -> Result<Value> {
     ] {
         if let Some(value) = exports.get(key) {
             let mut value = value.clone();
-            // Tool-disclosure hints describe the client session, not the CAD.
+
             if let Some(object) = value.as_object_mut() {
                 object.remove("_disclosure");
+            }
+            if key == "final_model" {
+                normalize_saved_layout_ids(&mut value);
             }
             if key == "final_sketches" {
                 if let Some(sketches) = value.as_array_mut() {
                     for sketch in sketches {
                         if let Some(sketch) = sketch.as_object_mut() {
-                            // Restoring a project intentionally clears editing undo
-                            // and regenerates snap candidates on sketch entry. The
-                            // persisted sketch constraints/references remain intact.
                             for transient in ["can_undo", "can_redo", "reference_midpoints"] {
                                 sketch.remove(transient);
                             }
@@ -888,6 +1040,50 @@ fn semantic_result(report: &Value) -> Result<Value> {
     }
     Ok(Value::Object(selected))
 }
+
+/// Independent documents mint different layout UUIDs. Compare saved layouts and
+/// their print-height ownership links by order; keep every configuration field.
+fn normalize_saved_layout_ids(model: &mut Value) {
+    let ids: HashMap<_, _> = model
+        .get("views")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .filter_map(|(index, view)| {
+            view.get("id")
+                .and_then(Value::as_str)
+                .map(|id| (id.to_owned(), format!("saved-layout-{index}")))
+        })
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    fn remap(value: &mut Value, ids: &HashMap<String, String>) {
+        match value {
+            Value::Object(object) => {
+                if let Some(replacement) = object
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .and_then(|id| ids.get(id))
+                {
+                    object.insert("id".into(), Value::String(replacement.clone()));
+                }
+                for value in object.values_mut() {
+                    remap(value, ids);
+                }
+            }
+            Value::Array(array) => {
+                for value in array {
+                    remap(value, ids);
+                }
+            }
+            _ => {}
+        }
+    }
+    remap(model, &ids);
+}
+
 fn first_difference(a: &Value, b: &Value, path: &str) -> Option<String> {
     if a == b {
         return None;
@@ -925,12 +1121,12 @@ fn first_difference(a: &Value, b: &Value, path: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    // Reuse the Rust test executable as an owned child which consumes input but
-    // never replies. No shell, platform scripting runtime, or CAD window needed.
     #[test]
     #[ignore = "child-process fixture invoked only by transport tests"]
     fn transport_child_waits_for_eof() {
-        if std::env::var_os("NBCAD_TRANSPORT_TEST_CHILD").is_some() {
+        if std::env::var_os("LIMO_CAD_TRANSPORT_TEST_CHILD").is_some() {
+            println!("LIMO_CAD_TRANSPORT_READY");
+            std::io::stdout().flush().unwrap();
             for line in std::io::stdin().lock().lines() {
                 if line.is_err() {
                     break;
@@ -950,9 +1146,9 @@ mod tests {
                 "--ignored",
                 "--nocapture",
             ])
-            .env("NBCAD_TRANSPORT_TEST_CHILD", "1")
+            .env("LIMO_CAD_TRANSPORT_TEST_CHILD", "1")
             .stdin(Stdio::piped())
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(Stdio::null());
         #[cfg(windows)]
         {
@@ -960,6 +1156,29 @@ mod tests {
             command.creation_flags(0x08000000);
         }
         let mut child = command.spawn().unwrap();
+        let output = child.stdout.take().unwrap();
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            for line in BufReader::new(output).lines() {
+                match line {
+                    Ok(line) if line == "LIMO_CAD_TRANSPORT_READY" => {
+                        let _ = ready_tx.send(());
+                    }
+                    Ok(_) => {}
+                    Err(_) => return,
+                }
+            }
+        });
+        let ready = ready_rx.recv_timeout(Duration::from_secs(30));
+        if ready.is_err() {
+            let _ = child.kill();
+            let _ = child.wait();
+            reader.join().unwrap();
+        }
+        assert!(
+            ready.is_ok(),
+            "Transport fixture did not become ready: {ready:?}"
+        );
         let input = child.stdin.take();
         let (sender, replies) = mpsc::channel();
         (
@@ -1055,6 +1274,31 @@ mod tests {
         client.finish(Duration::from_secs(5)).unwrap();
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn owned_fixture_logs_preserve_protocol_and_stderr_without_overwriting_evidence() {
+        let root = TestDirectory::new();
+        let mut command = Command::new("sh");
+        command.args(["-c", r#"read request
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"owned-fixture","version":"1"}}}'
+printf '%s\n' 'owned renderer diagnostic' >&2
+cat >/dev/null"#]);
+        let client =
+            Client::start_command_logged(command, Some(Duration::from_secs(5)), &root.0).unwrap();
+        assert_eq!(
+            client.initialization()["serverInfo"]["name"],
+            "owned-fixture"
+        );
+        client.finish(Duration::from_secs(5)).unwrap();
+        let stdout = fs::read(root.0.join("host-stdout.jsonl")).unwrap();
+        assert_eq!(serde_json::from_slice::<Value>(&stdout).unwrap()["id"], 1);
+        assert!(fs::read_to_string(root.0.join("host-stderr.log"))
+            .unwrap()
+            .contains("owned renderer diagnostic"));
+        assert!(Client::start_command_logged(Command::new("sh"), None, &root.0).is_err());
+        assert_eq!(fs::read(root.0.join("host-stdout.jsonl")).unwrap(), stdout);
+    }
+
     struct TestDirectory(PathBuf);
     impl TestDirectory {
         fn new() -> Self {
@@ -1062,7 +1306,7 @@ mod tests {
             static SEQUENCE: AtomicU64 = AtomicU64::new(0);
             for _ in 0..100 {
                 let path = std::env::temp_dir().join(format!(
-                    "nbcad-replay-test-{}-{}",
+                    "limo-cad-replay-test-{}-{}",
                     std::process::id(),
                     SEQUENCE.fetch_add(1, Ordering::Relaxed)
                 ));
@@ -1077,7 +1321,6 @@ mod tests {
     }
     impl Drop for TestDirectory {
         fn drop(&mut self) {
-            // Only remove the exact directory exclusively created by new().
             let _ = fs::remove_dir_all(&self.0);
         }
     }
@@ -1086,11 +1329,11 @@ mod tests {
     fn creates_shared_output_and_save_parent_without_creating_the_save_file() {
         let temp = TestDirectory::new();
         let out = temp.0.join("new/nested/output");
-        let save = out.join("design.nbcad");
+        let save = out.join("design.limo");
         let prepared = ReplayOutputs::prepare(out.to_str(), save.to_str(), 2).unwrap();
         let absolute = fs::canonicalize(&out).unwrap();
         assert_eq!(prepared.directory, Some(absolute.clone()));
-        assert_eq!(prepared.save, Some(absolute.join("design.nbcad")));
+        assert_eq!(prepared.save, Some(absolute.join("design.limo")));
         assert_eq!(
             fs::read_dir(&out).unwrap().count(),
             0,
@@ -1102,7 +1345,7 @@ mod tests {
     fn output_preflight_runs_before_starting_the_server_or_desktop() {
         let temp = TestDirectory::new();
         let out = temp.0.join("reports");
-        let save = temp.0.join("separate/save/design.nbcad");
+        let save = temp.0.join("separate/save/design.limo");
         let args = || {
             vec![
                 "--server".into(),
@@ -1142,7 +1385,7 @@ mod tests {
     fn preflight_preserves_existing_files_and_rejects_bad_destinations() {
         let temp = TestDirectory::new();
         let report = temp.0.join("run-1.json");
-        let save = temp.0.join("design.nbcad");
+        let save = temp.0.join("design.limo");
         fs::write(&report, b"previous report").unwrap();
         fs::write(&save, b"existing CAD work").unwrap();
         ReplayOutputs::prepare(temp.0.to_str(), save.to_str(), 1).unwrap();
@@ -1173,7 +1416,7 @@ mod tests {
     #[test]
     fn relative_save_filename_is_resolved_for_the_desktop_process() {
         let temp = TestDirectory::new();
-        let filename = format!("{}.nbcad", temp.0.file_name().unwrap().to_string_lossy());
+        let filename = format!("{}.limo", temp.0.file_name().unwrap().to_string_lossy());
         let outputs = ReplayOutputs::prepare(None, Some(&filename), 1).unwrap();
         assert_eq!(
             outputs.save,
@@ -1184,7 +1427,7 @@ mod tests {
     #[test]
     fn completed_report_and_model_survive_a_later_save_failure() {
         let temp = TestDirectory::new();
-        let save = temp.0.join("saved/design.nbcad");
+        let save = temp.0.join("saved/design.limo");
         let outputs = ReplayOutputs::prepare(temp.0.to_str(), save.to_str(), 1).unwrap();
         let model = json!({"schema_version":6,"name":"completed work"});
         let report = json!({"session_id":"live-document","steps_completed":3,"checks_completed":2,"exports":{"final_model":model}});
@@ -1213,9 +1456,9 @@ mod tests {
     #[test]
     fn failure_to_retain_the_report_stops_before_save() {
         let temp = TestDirectory::new();
-        let save = temp.0.join("design.nbcad");
+        let save = temp.0.join("design.limo");
         let outputs = ReplayOutputs::prepare(temp.0.to_str(), save.to_str(), 1).unwrap();
-        // Simulate a destination changing after preflight but during replay.
+
         fs::create_dir(temp.0.join("run-1.json")).unwrap();
         let called = std::cell::Cell::new(false);
         let error = outputs
@@ -1278,7 +1521,7 @@ mod tests {
         let options = options(
             [
                 "--server",
-                "CAD folder/noBS-CAD.exe",
+                "CAD folder/Limo-CAD.exe",
                 "--server-arg",
                 "--headless",
                 "--server-arg",
@@ -1355,5 +1598,47 @@ mod tests {
             semantic_result(&a).unwrap(),
             semantic_result(&changed).unwrap()
         );
+    }
+
+    #[test]
+    fn comparison_retains_layout_configuration_and_binding_ownership_across_documents() {
+        let a = json!({"exports":{"final_model":{
+            "views":[
+                {"id":"ca2faff1-eded-48eb-b102-1ce13fe9b0bb","name":"Assembly","camera":{"position":[200,-200,200]},"visible_body_ids":[1]},
+                {"id":"6a9dfb7c-d618-494d-bf89-e7094d6b2632","name":"Print","print_layout":true,"occurrence_offsets":[{"occurrence_id":2,"translation":[0,180,0]}]}
+            ],
+            "print_intent":{"height_ranges":[{"binding":{"layout":{"kind":"named_layout","id":"6a9dfb7c-d618-494d-bf89-e7094d6b2632"}}}]},
+            "document":{"history":{"features":[{"id":1,"name":"Named stock"}]}}
+        }}});
+        let mut b = a.clone();
+        b["exports"]["final_model"]["views"][0]["id"] =
+            json!("13067e89-15c2-4fd8-819b-e20394ed6899");
+        b["exports"]["final_model"]["views"][1]["id"] =
+            json!("2e53b282-7656-425e-baa3-2c230126311d");
+        b["exports"]["final_model"]["print_intent"]["height_ranges"][0]["binding"]["layout"]
+            ["id"] = b["exports"]["final_model"]["views"][1]["id"].clone();
+        assert_eq!(semantic_result(&a).unwrap(), semantic_result(&b).unwrap());
+        for (pointer, changed) in [
+            ("/views/0/name", json!("Changed assembly")),
+            ("/views/0/camera/position/0", json!(201)),
+            ("/views/0/visible_body_ids/0", json!(2)),
+            ("/views/1/occurrence_offsets/0/translation/1", json!(181)),
+            ("/document/history/features/0/id", json!(2)),
+            (
+                "/print_intent/height_ranges/0/binding/layout/id",
+                b["exports"]["final_model"]["views"][0]["id"].clone(),
+            ),
+        ] {
+            let mut different = b.clone();
+            *different["exports"]["final_model"]
+                .pointer_mut(pointer)
+                .unwrap() = changed;
+            assert_ne!(
+                semantic_result(&a).unwrap(),
+                semantic_result(&different).unwrap(),
+                "The comparison hid {pointer}"
+            );
+        }
+        assert_ne!(a, b, "Persisted identities must stay distinct");
     }
 }

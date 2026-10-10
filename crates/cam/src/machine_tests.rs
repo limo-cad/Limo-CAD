@@ -111,7 +111,7 @@ fn controller_brands_and_iso_modes_are_not_post_aliases() {
         let controller = &mut doc.setups[0].machine.as_mut().unwrap().profile.controller;
         controller.family = family;
         controller.language = language;
-        assert!(plan_setup(&doc, 1).is_ok()); // Keep reusable programming intent.
+        assert!(plan_setup(&doc, 1).is_ok());
         let error = post_setup(&doc, &request(None)).unwrap_err().to_string();
         assert!(
             error.contains("No supported built-in post") || error.contains("does not match"),
@@ -265,7 +265,7 @@ fn comp_program(entry: CamCommandDto, exit_length: f64) -> CamProgramDto {
 
 #[test]
 fn controller_contract_checks_real_xy_motion_not_arcs_or_z_distance() {
-    let doc = fixture(PostDialect::Siemens828d); // 6 mm tool.
+    let doc = fixture(PostDialect::Siemens828d);
     let line = |x, y, z| CamCommandDto::Linear {
         to: Point3Dto::new(x, y, z),
         feed: 100.0,
@@ -308,8 +308,6 @@ fn controller_contract_checks_real_xy_motion_not_arcs_or_z_distance() {
 
 #[test]
 fn production_post_gate_applies_compensation_contract_to_generated_blocks() {
-    // A valid short-lead job remains plannable. An unrelated post override
-    // cannot make it eligible for a controller with longer-entry policy.
     let mut doc = crate::post::tests::contour_document(PostDialect::Siemens828d);
     doc.setups[0].machine = Some(CamMachineAssignmentDto::three_axis(
         doc.post_defaults.clone(),
@@ -353,7 +351,7 @@ fn production_post_gate_applies_compensation_contract_to_generated_blocks() {
 fn compensation_checks_post_rounding_in_inches_not_only_neutral_mm() {
     let mut doc = fixture(PostDialect::Fanuc);
     doc.units = crate::CamUnits::Inches;
-    // 3.000 mm entry rounds to 0.118 inch = 2.9972 mm in a line-only post.
+
     let program = comp_program(
         CamCommandDto::Linear {
             to: Point3Dto::new(3.0, 0.0, 5.0),

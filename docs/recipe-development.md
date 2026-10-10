@@ -1,6 +1,6 @@
 # Recipes are a product capability
 
-One native construction source should let noBS CAD do the work, teach the process
+One native construction source should let Limo CAD do the work, teach the process
 and show how a feature works. **Build** runs it at maximum rate. **Teach** exposes
 its chapters, native feature history and Pause/Step controls for inspection.
 **Show** renders the same commands with calm captions and purposeful camera views.
@@ -59,7 +59,7 @@ The migrated #89 tests independently check analytic bounds/volume, fresh replay,
 native restore, STEP round trip and STL/3MF output. Both assembly occurrences must
 retain their solved positions after editing and restoring the shared bracket.
 
-Future lessons add one readable `.nbcad.jsonc` and one entry to the Rust-owned
+Future lessons add one readable `.limo.jsonc` and one entry to the Rust-owned
 catalog in `crates/recipes`. Derive titles, chapters, counts and the executed
 operation list from source; declare only the intended teaching operation for
 feature discovery. Add a focused regression for geometric or editing behavior

@@ -9,29 +9,33 @@
 
 # Limo CAD
 
-> **Design with understanding.** *Limo CAD, formerly noBS CAD.*
+> **Design with understanding.**
 
 **Easy-to-use parametric CAD that is free and open source, and always will be.**
 Design mechanical parts, assemblies and drawings on your own machine, by hand
 or with your AI agent, and keep every sketch and feature editable.
 
-[![Latest release](https://img.shields.io/github/v/release/limo-cad/Limo-CAD?label=release)](https://github.com/limo-cad/Limo-CAD/releases/latest)
+[![Bevy preview](https://img.shields.io/badge/Bevy-0.20.0--rc.2-blue)](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)
 [![License: LGPL 2.1+](https://img.shields.io/badge/license-LGPL%202.1%2B-blue)](LICENSE)
 [![Discussions](https://img.shields.io/github/discussions/limo-cad/Limo-CAD?label=discussions)](https://github.com/limo-cad/Limo-CAD/discussions)
 
-**Pre-alpha · Release 0.2.2**
-· [Release notes and checks](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.2.2)
+**Pre-alpha · Bevy rc.2 preview · Application version 0.2.2**
+· [Preview notes, source and checks](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)
 · [Installation help](docs/INSTALL.md)
 
 | Platform | Download |
 |---|---|
-| Windows 11 | [x64 ZIP](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS-CAD-0.2.2-windows-x64.zip) · [ARM64 ZIP](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS-CAD-0.2.2-windows-arm64.zip) |
-| macOS (Apple silicon) | [DMG](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS.CAD_0.2.2_aarch64.dmg), signed and notarized |
-| Linux | [Ubuntu 26.04 DEB](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS.CAD_0.2.2_amd64.deb) · [AppImage](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS.CAD_0.2.2_amd64.AppImage) |
+| Windows 11 | [x64 ZIP](https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS-CAD-0.2.2-windows-x64.zip) |
+| Linux | [Ubuntu 26.04 x64 DEB](https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS.CAD_0.2.2_amd64.deb) |
 
-Windows code signing is in progress. Until it lands, SmartScreen may warn on
-first launch; choose **More info → Run anyway**. Keep backups of important
-projects while the application is pre-alpha.
+These rebuilt packages use clean source `9b082687`, including System appearance,
+the Windows window icon and finished-sketch history across memory eviction.
+Windows ARM64, macOS and AppImage remain withheld pending qualification. The Bevy
+browser UI is still under development. Published filenames retain the former
+product name. See [transition status](docs/native-transition-status.md).
+
+Windows packages are unsigned. SmartScreen may warn on first launch; choose
+**More info → Run anyway**. Keep backups of important pre-alpha projects.
 
 ## Why Limo CAD
 
@@ -41,7 +45,7 @@ projects while the application is pre-alpha.
   reliability and performance. The [first-part lesson](#make-your-first-part)
   takes a few minutes.
 - **Local and yours.** No account, subscription or cloud service. A whole
-  project (parts, assemblies and drawings) lives in one `.nbcad` file.
+  project (parts, assemblies and drawings) lives in one `.limo` file.
 - **Real parametric history.** Constrained sketches drive solid features;
   change a dimension and everything downstream rebuilds.
 - **Agent-ready.** A built-in MCP server lets any MCP-compatible agent build and
@@ -76,7 +80,7 @@ Two Savonius stages on a bearing-supported shaft, driving a generator through a 
 <td align="center">
 <a href="https://limo-cad.github.io/Limo-CAD/showcase.html#garden-bench"><b>Watch</b></a>
 · <a href="https://limo-cad.github.io/Limo-CAD/open.html#garden-bench">Open recipe</a><br>
-<a href="examples/scripts/garden-bench.nbcad.jsonc">Source</a>
+<a href="examples/scripts/garden-bench.limo.jsonc">Source</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/bench.nbcad">.nbcad</a>
 · <a href="docs/assets/showcase/bench-loop.gif">Build loop</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/bench-build-full.mp4">MP4</a>
@@ -84,7 +88,7 @@ Two Savonius stages on a bearing-supported shaft, driving a generator through a 
 <td align="center">
 <a href="https://limo-cad.github.io/Limo-CAD/showcase.html#d-screw-vise"><b>Watch</b></a>
 · <a href="https://limo-cad.github.io/Limo-CAD/open.html#d-screw-vise">Open recipe</a><br>
-<a href="examples/scripts/d-screw-vise.nbcad.jsonc">Source</a>
+<a href="examples/scripts/d-screw-vise.limo.jsonc">Source</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/vise.nbcad">.nbcad</a>
 · <a href="docs/assets/showcase/vise-loop.gif">Build loop</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/vise-build-full.mp4">MP4</a>
@@ -92,7 +96,7 @@ Two Savonius stages on a bearing-supported shaft, driving a generator through a 
 <td align="center">
 <a href="https://limo-cad.github.io/Limo-CAD/showcase.html#vertical-axis-turbine"><b>Watch</b></a>
 · <a href="https://limo-cad.github.io/Limo-CAD/open.html#vertical-axis-turbine">Open recipe</a><br>
-<a href="examples/scripts/vertical-axis-turbine.nbcad.jsonc">Source</a>
+<a href="examples/scripts/vertical-axis-turbine.limo.jsonc">Source</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/turbine.nbcad">.nbcad</a>
 · <a href="docs/assets/showcase/turbine-loop.gif">Build loop</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/turbine-build-full.mp4">MP4</a>
@@ -103,7 +107,7 @@ Two Savonius stages on a bearing-supported shaft, driving a generator through a 
 <!-- Print photos: add docs/assets/showcase/<design>-printed.jpg when supplied. -->
 
 Recipe links load source into **Scripts** for review before running. To inspect
-a completed design immediately, download its `.nbcad` and use **File → Open**.
+a completed design immediately, download its `.limo` and use **File → Open**.
 These are development examples; physical fit and load qualification remain open.
 [Designs, drawings and validation](docs/flagship-examples.md) · [All recipes](examples/scripts/README.md)
 
@@ -114,14 +118,14 @@ After [installing CAD](docs/INSTALL.md), open **Scripts**, choose
 The lesson builds a 60 × 30 × 12 mm block with rounded top edges.
 
 When it finishes, double-click the extrusion in the feature history and change
-its **Distance** from **12 to 18 mm**. Save the result as `first-part.nbcad`,
+its **Distance** from **12 to 18 mm**. Save the result as `first-part.limo`,
 then reopen it to continue editing. [Step-by-step instructions](docs/INSTALL.md#make-your-first-part)
 
 ## Design, assemble, draw
 
 Constrained sketches and reference geometry drive editable solid features.
 Reuse parts in assemblies, define joints and check their motion and interference.
-Keep the parts, assemblies and drawings together in one `.nbcad` project.
+Keep the parts, assemblies and drawings together in one `.limo` project.
 
 Assign per-body materials and colors, then export **3MF** for your slicer.
 Material labels and color metadata assist the handoff; choose the actual print
@@ -168,10 +172,8 @@ future capability. [Project direction](docs/goals.md)
 ## Open-source foundations
 
 - **[Open CASCADE Technology](https://github.com/Open-Cascade-SAS/OCCT)** — geometry and CAD interchange.
-- **[Bevy](https://bevy.org/) and [wgpu](https://wgpu.rs/)** — native rendering.
+- **[Bevy](https://bevy.org/) and [wgpu](https://wgpu.rs/)** — native desktop interface and rendering.
 - **[Rust](https://rust-lang.org/)** — modeling, assemblies and recipe execution.
-- **[Tauri](https://tauri.app/) and [React](https://react.dev/)** — desktop shell and interface.
-- **[OpenCascade.js](https://github.com/donalffons/opencascade.js)** — browser development builds.
 
 Thanks also to [FreeCAD](https://www.freecad.org/) and the wider open-source CAD community.
 
@@ -186,8 +188,7 @@ Dependency licenses and attribution live in [Third-party notices](THIRD_PARTY_NO
 Icon sources are recorded in [Icon provenance](docs/ICON_PROVENANCE.md).
 Peer CAD projects have their own licenses; see [contribution guidance](CONTRIBUTING.md#license--borrow).
 
-Limo CAD supports 3Dconnexion SpaceMouse devices. The optional browser-development
-driver bridge loads only after the user enables it.
+The Bevy desktop supports 3Dconnexion SpaceMouse devices through native HID input.
 Limo CAD is independent and is not affiliated with, endorsed by or certified by
 3Dconnexion. 3Dconnexion and SpaceMouse are trademarks or registered trademarks
 of 3Dconnexion. 3D input device development tools and related technology are

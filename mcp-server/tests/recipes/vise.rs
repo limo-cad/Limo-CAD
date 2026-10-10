@@ -33,12 +33,7 @@ fn interference(client: &mut Client, exports: &Value, parts: &[&str]) -> Value {
     )
 }
 
-// A path changes only its named moving occurrence. Check every installed pair
-// once before sampling, then retain the exact moving/installed query at each
-// pose. In particular, a seated screw/bridge does not need its costly native
-// minimum distance solved again whenever unrelated hardware advances.
 fn check_stationary_parts(client: &mut Client, exports: &Value, installed: &[&str]) {
-    // An empty occurrence filter means the entire assembly, not zero pairs.
     if installed.len() > 1 {
         client.stage(format!(
             "vise / stationary assembly clearance: {installed:?}"
@@ -145,7 +140,7 @@ fn check_edits(client: &mut Client, exports: &Value) {
             drawing["content"]
                 .as_str()
                 .unwrap()
-                .contains(&format!(">{changed:.2}</text>")),
+                .contains(&format!(">{changed:.2} mm</text>")),
             "{name}: drawing must measure edited geometry"
         );
         client.call("sketch_edit", json!({"name":name}));
@@ -162,8 +157,7 @@ fn check_edits(client: &mut Client, exports: &Value) {
         );
         assert!(residual.0 < 1e-6, "{name}: restore residual {residual:?}");
     }
-    // Verify that editing a persisted thread changes the actual solid and
-    // that restoring it reconstructs the native rounded profile downstream.
+
     let mut request = exports["male_thread_request"].clone();
     client.stage("vise / simplify and restore the modeled screw thread");
     request["thread"]["representation"] = json!("simplified");
@@ -197,8 +191,6 @@ fn check_capture_and_entry(exports: &Value) {
     client.stage("vise / physical guide capture and carriage entry");
     release_joints(&mut client, exports);
 
-    // An ideal slider joint must not be the source of hold-down. Test the
-    // physical rail/channel pair with all kinematic constraints disabled.
     for (offset, blocked) in [
         ([0., 0., 0.1], false),
         ([0., 0., 1.5], true),
@@ -213,9 +205,7 @@ fn check_capture_and_entry(exports: &Value) {
             "physical guide capture at {offset:?}"
         );
     }
-    // The rear bridge is not installed yet. Start entirely behind the frame
-    // and slide the carriage onto the open guide ends, without teleporting it
-    // through a closed dovetail or allowing an ideal mate to hide collisions.
+
     let frame_min = mesh_measurement(body(exports, "frame")).0[0];
     let jaw_max = mesh_measurement(body(exports, "jaw")).1[0];
     let start = frame_min - jaw_max - 5.;
@@ -237,8 +227,7 @@ fn check_capture_and_entry(exports: &Value) {
             &format!("bridge lift {lift} mm"),
         );
     }
-    // The bridge's axial restraint must be geometric, rather than supplied by
-    // a fixed mate or bolt friction. Its seated keys must encounter a shoulder.
+
     for x in [-1.5, 1.5] {
         client.stage(format!("vise / bridge axial restraint at {x} mm"));
         displaced(&mut client, exports, "nut", [x, 0., 0.]);
@@ -251,9 +240,6 @@ fn check_capture_and_entry(exports: &Value) {
     displaced(&mut client, exports, "nut", [0., 0., 0.]);
     displaced(&mut client, exports, "jaw", [85., 0., 0.]);
 
-    // The screw enters with the entire oversized thrust fitting absent. Its
-    // rotation follows the helix while translating, even before reaching the
-    // permitted operating range. Start outside the bridge with the bare tip.
     let screw_pose = exports["final_solution"]["instance_body_poses"]
         .as_array()
         .unwrap()
@@ -323,8 +309,6 @@ fn check_capture_and_entry(exports: &Value) {
         );
     }
 
-    // The diagonal shoulders must seat before the fixed cross-pin carries
-    // axial load. No mate or pin collision can stand in for the jaw witness.
     let seating = exports["design_inputs"]["keeper_axial_seating_mm"]
         .as_f64()
         .unwrap();
@@ -369,7 +353,7 @@ fn d_screw_vise_builds_editable_native_geometry() {
     )
     .unwrap();
     write_native_project(
-        &directory.join("d-screw-vise.nbcad"),
+        &directory.join("d-screw-vise.limo"),
         &exports["final_model"],
     );
     assert_eq!(exports["final_scene"]["errors"], json!([]));
@@ -389,12 +373,13 @@ fn d_screw_vise_builds_editable_native_geometry() {
         jaw_max[1] - jaw_min[1] >= 100.,
         "carriage supports the 100 mm gripping face"
     );
-    // Measure the gripping end, rather than mistaking the wider guide base
-    // for the usable jaw face. Edge relief may trim its flat contact area.
+
     let grip: Vec<_> = body(exports, "jaw")["mesh"]["positions"]
         .as_array()
         .unwrap()
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .filter(|p| {
             (p[0].as_f64().unwrap() - jaw_max[0]).abs() < 1e-4 && p[2].as_f64().unwrap() > 34.001
         })
@@ -403,20 +388,20 @@ fn d_screw_vise_builds_editable_native_geometry() {
     let grip_span = grip.iter().copied().fold(f64::NEG_INFINITY, f64::max)
         - grip.iter().copied().fold(f64::INFINITY, f64::min);
     assert!(
-        grip_span >= 94. && grip_span <= 100.001,
+        (94. ..=100.001).contains(&grip_span),
         "rounded 100 mm gripping face: {grip_span}"
     );
     for part in exports["parts"].as_array().unwrap() {
         assert!(mesh_measurement(body(exports, part["id"].as_str().unwrap())).2 > 0.);
     }
 
-    // The handle must clear a tabletop at every angle, not just in its
-    // authored flat-down pose. Its maximum radial extent is a swept cylinder.
     let screw = body(exports, "screw");
     let swept_radius = screw["mesh"]["positions"]
         .as_array()
         .unwrap()
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|p| p[1].as_f64().unwrap().hypot(p[2].as_f64().unwrap() - 50.))
         .fold(0_f64, f64::max);
     assert!(
@@ -427,7 +412,9 @@ fn d_screw_vise_builds_editable_native_geometry() {
     let front_of_grip = screw["mesh"]["positions"]
         .as_array()
         .unwrap()
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .filter(|p| p[1].as_f64().unwrap().hypot(p[2].as_f64().unwrap() - 50.) > 12.001)
         .map(|p| p[0].as_f64().unwrap())
         .fold(f64::NEG_INFINITY, f64::max);
@@ -479,7 +466,7 @@ fn d_screw_vise_builds_editable_native_geometry() {
             &directory.join(format!("d-screw-vise-{name}.3mf")),
         );
         write_native_project(
-            &directory.join(format!("d-screw-vise-{name}.nbcad")),
+            &directory.join(format!("d-screw-vise-{name}.limo")),
             &plate["model"],
         );
         plate_count += expected;
@@ -514,8 +501,7 @@ fn d_screw_vise_builds_editable_native_geometry() {
 
     let lead = 4.;
     let travel = 90.;
-    // All purchased hardware remains in this interference check. In
-    // particular, mounting bolts cannot disappear from the jaw's swept path.
+
     assert!(
         parts
             .iter()

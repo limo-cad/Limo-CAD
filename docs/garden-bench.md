@@ -5,14 +5,14 @@ It is a candidate for the flagship set, not a released or load-rated furniture p
 The smaller `bench` suite remains the rectangular-stock regression fixture.
 
 The construction source is
-[`examples/scripts/garden-bench.nbcad.jsonc`](../examples/scripts/garden-bench.nbcad.jsonc).
-It is a commented, versioned sequence of the shared interface commands, interpreted
+[`examples/scripts/garden-bench.limo.jsonc`](../examples/scripts/garden-bench.limo.jsonc).
+It is a versioned sequence of the shared interface commands, interpreted
 by Rust. It contains native modeling operations, named result references, camera
 instructions and authored chapter notes. No JavaScript or imported geometry builds
 this example.
 
 ```sh
-cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --server /absolute/path/to/nbcad-mcp --repeat 2 --out /absolute/path/to/results
+cargo xtask run-script examples/scripts/garden-bench.limo.jsonc --server /absolute/path/to/limo-cad-mcp --repeat 2 --out /absolute/path/to/results
 ```
 
 This runs at maximum rate in independent headless processes and compares the final
@@ -24,7 +24,7 @@ To replay in an existing window, preserve the current document and use its sessi
 `--new` creates the blank design tab in that same window:
 
 ```sh
-cargo xtask run-script examples/scripts/garden-bench.nbcad.jsonc --server /absolute/path/to/nbcad-mcp --session UUID --new --present --speed 2 --save /absolute/path/to/referenced-garden-bench.nbcad
+cargo xtask run-script examples/scripts/garden-bench.limo.jsonc --server /absolute/path/to/limo-cad-mcp --session UUID --new --present --speed 2 --save /absolute/path/to/referenced-garden-bench.limo
 ```
 
 Use matching desktop and MCP builds. The replay refuses a nonempty document. The
@@ -81,11 +81,11 @@ plane, slot and cut remain native history; the datum is used by the feature rath
 than added as decoration.
 
 Part sketches live in component-definition coordinates. Repeated assembly occurrences
-are transforms of those definitions. Sketches appearing back at the origin when edited
-in the assembled view expose the component-context editing gap in issue #94; they do
-not mean that their stock profiles should be scattered into assembly coordinates.
-This candidate must not be presented as a finished in-place editing reference until
-that workflow is resolved. The bench also is not one globally resizable master model:
+are transforms of those definitions. Select an occurrence and edit its definition
+in place; surrounding occurrences fade. The shared UI/MCP operation validates the
+occurrence frame and retains definition-local sketch coordinates. Recompute updates
+every shared occurrence. Focused regressions cover translated and rotated repeats,
+driving edits, joint preservation and save/reopen. The bench is not one globally resizable master model:
 recipe dimensions, feature parameters and assembly coordinates have distinct roles.
 
 ## Fit and fabrication sequence
@@ -145,10 +145,26 @@ without inserting inspection round trips throughout the construction. These chec
 establish selected geometric and editing properties; they do not certify comfort,
 loads, timber movement, or every possible parameter change.
 
-Manufacturing release still requires timber/hardware selection, a comfort and assembly
-mockup, the component-context editing workflow, and a comprehensive reviewed drawing
-package. See `parametric-design-principles.md` and `flagship-examples.md`.
+The recipe creates 22 editable review sheets: 20 part sheets, an assembly sheet and
+a cut list. Each part has two orthographic views, an isometric view, three associative
+overall dimensions, stock quantity and grain/datum notes. Machining notes retain bore
+coordinates, notch extents, the finished slot and modeled rounding from the authored
+inputs. Every sheet exports as SVG and DXF. Drawing data and current exact projections
+remain in the project; the notes document the recipe's machining inputs and do not
+automatically reinterpret arbitrary later changes to those inputs.
+
+Regenerate the drawing chapter after changing its authored inputs:
+
+```sh
+cargo run -p limo-cad-recipes --example author_bench_drawings
+```
+
+The focused native replay checks all 22 sheets and byte-identical SVG/DXF after
+reopen, then changes picket height and checks the current associative dimension.
+Manufacturing release still requires a review of the sheets, timber/hardware
+selection, and a comfort and assembly mockup. See `parametric-design-principles.md`
+and `flagship-examples.md`.
 
 Native 3MF/STL export contains the visible solved occurrences at their assembled
-positions, in millimetres. It is a secondary output. Keep `.nbcad` for parameter edits;
+positions, in millimetres. It is a secondary output. Keep `.limo` for parameter edits;
 printer scaling and bed arrangement are separate operations.

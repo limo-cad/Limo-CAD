@@ -1,6 +1,7 @@
 //! Playback consumes the already-compensated physical timeline. One bounded
 //! forward checkpoint avoids replaying an operation's earlier moves per frame.
 use super::*;
+mod gcode;
 
 /// One prepared playback session. The desktop host owns this on a background
 /// worker: no document cloning, cache-key serialization, target work or full
@@ -39,8 +40,7 @@ impl CamPlayback {
         let end = metadata.estimated_seconds;
         let start = start.min(end);
         let timeline = std::mem::take(&mut metadata.steps);
-        // Complete verification is already held by the UI. Frame responses are
-        // strictly stock metadata, not copies of the complete evidence/timeline.
+
         metadata.stock_mesh = None;
         metadata.comparison = None;
         metadata.collisions.clear();
@@ -303,8 +303,7 @@ pub(super) fn simulate(
             frames.pop_front();
         }
     }
-    // Never retain a half-cut as a block checkpoint: backward scrubbing must
-    // be able to restore material. Only the displayed copy receives this sweep.
+
     if let Some(step) = result.steps.get(completed) {
         let start_time = step.cumulative_seconds - step.duration_seconds;
         let fraction = if step.duration_seconds > EPSILON {
@@ -335,9 +334,7 @@ pub(super) fn simulate(
     result.steps.truncate(completed);
     result.estimated_seconds = time;
     result.completed_steps = Some(completed);
-    // Complete verification already ran before playback. Do not rebuild hidden
-    // comparison surfaces on the animation clock or present final counts as a
-    // partial-frame verdict. The UI retains the full timeline's safety findings.
+
     result.comparison = None;
     result.collisions.retain(|collision| {
         result

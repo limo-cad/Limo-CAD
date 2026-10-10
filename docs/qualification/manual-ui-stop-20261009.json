@@ -1,0 +1,84 @@
+{
+  "date_utc": "2026-10-09",
+  "status": "stopped_on_user_request",
+  "code_revision": "289aef988d9c33c1805ea2be5f1de187737b9089",
+  "integration_pr": "https://github.com/limo-cad/Limo-CAD/pull/124",
+  "runtime": {
+    "source_modified": false,
+    "build_pair": "matched",
+    "native_computer_control": true,
+    "verified_payload_hashes": 70,
+    "executable_sha256": "612190fd9d11d5ccb330a847184696eedfbe4119e4b9e860e15c016473b220d7",
+    "fresh_gui_pid": 38848,
+    "fresh_session_id": "0e0c3039-f4df-4ab7-aad8-74dfc093cf50",
+    "reopened_thread_live_matches_saved_model": true,
+    "repeat_thread_export": "cancelled_before_save_at_user_stop"
+  },
+  "ci_observation": {
+    "revision": "289aef988d9c33c1805ea2be5f1de187737b9089",
+    "passed": 17,
+    "in_progress": 8,
+    "skipped": 6,
+    "failed_at_observation": 0,
+    "native_host_run": "https://github.com/limo-cad/Limo-CAD/actions/runs/37867755375",
+    "final_success_claimed": false,
+    "previous_exact_thread_case": "failed_source_angle_after_boundary_separation_on_8e0a0bda",
+    "local_suites_or_recipe_replay_run": false
+  },
+  "thread_actual_ui": {
+    "qualified_export_runtime": "8e0a0bda674e2f53588904e278e45783872eb11c",
+    "saved_file": "D:/limo-cad-maintenance/ui-models/Threaded annulus - verified human UI.limo",
+    "saved_bytes": 3172,
+    "saved_sha256": "a11c39f43acef2a8172baa7b0b9b2ddf5285293935c1282f5a6ed1a209bc3f22",
+    "live_matches_saved_model": true,
+    "construction_features": 3,
+    "nominal_stock_mm": { "outer_diameter": 20, "inner_diameter": 10, "length": 20 },
+    "inner_radius_saved_mm": 4.999999999999999,
+    "thread": { "pitch_mm": 2.5, "length_mm": 8, "hand": "right", "representation": "modeled", "flip": true },
+    "three_mf": {
+      "file": "D:/limo-cad-maintenance/ui-models/Threaded annulus - native precision human UI.3mf",
+      "bytes": 28376,
+      "sha256": "a110e394b2f49b1d50722872dafce63896a95406d074e1ff3b6ffe5d96c1c658",
+      "vertices": 863,
+      "triangles": 1726,
+      "zero_area_triangles": 0,
+      "invalid_directed_edges": 0
+    },
+    "stl": {
+      "file": "D:/limo-cad-maintenance/ui-models/Threaded annulus - native precision human UI.stl",
+      "bytes": 521657,
+      "sha256": "b68c63ca58259f45f278f692af08a76f445a22892685285a2394d2d55c224010",
+      "format": "ascii",
+      "facets": 1726,
+      "nonfinite_facets": 0,
+      "degenerate_facets": 0,
+      "opposing_normals": 0,
+      "ordered_coordinate_mismatches_against_three_mf": 0
+    },
+    "native_dialog_full_filename_visibly_verified_before_enter": true,
+    "original_accidental_save_preserved": "D:/li.limo",
+    "exact_ci_topology_equivalence_claimed": false
+  },
+  "medix_regression": {
+    "runtime": "8e0a0bda674e2f53588904e278e45783872eb11c",
+    "saved_import_live_matches_archive": true,
+    "three_mf_file": "D:/limo-cad-maintenance/ui-models/Medix KW22 v4 - 8e native regression human UI.3mf",
+    "bytes": 6815148,
+    "sha256": "3196c28b2830e5bc0c31ac8e758805305b9181eed1ffab1adeecb6137756354a",
+    "byte_identical_to_qualified_export": true
+  },
+  "bench_checkpoint": {
+    "file": "D:/limo-cad-maintenance/ui-models/Crown garden bench - lower stock isolated human UI.limo",
+    "bytes": 7221,
+    "sha256": "0eedefb032735910414aec8738440bea7784231647993f6dc6557eb324377837",
+    "committed_checkpoint": "examples/checkpoints/garden-bench-front-support-stock-human-ui.limo",
+    "construction_features": 31,
+    "full_model_walkthrough_complete": false
+  },
+  "inspection_limits": {
+    "systematic_application_wide_usability_audit": false,
+    "full_three_model_human_walkthrough_complete": false,
+    "universal_foreground_or_gesture_timing_qualified": false,
+    "physical_print_or_load_qualification": false
+  }
+}

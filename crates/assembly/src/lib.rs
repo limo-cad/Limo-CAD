@@ -7,11 +7,13 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use nbcad_core::{BodyId, EdgeId, FaceId};
-use nbcad_solid::{EdgeDto, FaceDto, SolidSceneDto};
+use limo_cad_core::{BodyId, EdgeId, FaceId};
+use limo_cad_solid::{EdgeDto, FaceDto, SolidSceneDto};
 use serde::{Deserialize, Serialize};
 mod relations;
+mod view_layout;
 pub use relations::{CreateGearRelationRequestDto, GearRelationDto};
+pub use view_layout::{resolve_view_layout, ViewOccurrenceOffsetDto};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -40,6 +42,29 @@ impl Default for AssemblyTransformDto {
             translation: [0.0; 3],
             rotation: [0.0, 0.0, 0.0, 1.0],
         }
+    }
+}
+
+impl AssemblyTransformDto {
+    pub fn compose(self, rhs: Self) -> Self {
+        let pose = RigidPose::from_transform(self).compose(RigidPose::from_transform(rhs));
+        Self {
+            translation: pose.translation,
+            rotation: pose.rotation,
+        }
+    }
+    pub fn inverse(self) -> Self {
+        let pose = RigidPose::from_transform(self).inverse();
+        Self {
+            translation: pose.translation,
+            rotation: pose.rotation,
+        }
+    }
+    pub fn transform_point(self, point: [f64; 3]) -> [f64; 3] {
+        add(
+            self.translation,
+            rotate(normalize_quaternion(self.rotation), point),
+        )
     }
 }
 
@@ -155,7 +180,10 @@ impl ComponentStructureDto {
         let mut grounded_parents = HashSet::new();
         let mut max_occurrence_id = 0;
         for occurrence in &self.occurrences {
-            if occurrence.id.0 == 0 || !occurrence_ids.insert(occurrence.id) {
+            if occurrence.id.0 == 0
+                || occurrence.id.0 >= 9_007_199_254_740_991
+                || !occurrence_ids.insert(occurrence.id)
+            {
                 return Err(format!(
                     "duplicate or zero occurrence id {}",
                     occurrence.id.0
@@ -188,7 +216,10 @@ impl ComponentStructureDto {
             }
             max_occurrence_id = max_occurrence_id.max(occurrence.id.0);
         }
-        if self.next_occurrence_id == 0 || self.next_occurrence_id <= max_occurrence_id {
+        if self.next_occurrence_id == 0
+            || self.next_occurrence_id > 9_007_199_254_740_991
+            || self.next_occurrence_id <= max_occurrence_id
+        {
             return Err(format!(
                 "next occurrence id {} must be greater than every saved occurrence id",
                 self.next_occurrence_id
@@ -303,8 +334,7 @@ impl AssemblyDocumentDto {
         self.component_structure
             .definitions
             .retain(|definition| !discarded.contains(&definition.id));
-        // Keep monotonic allocation counters. A body reintroduced by an edit
-        // receives a fresh default; no referenced identity was discarded.
+
         self.validate()
     }
 
@@ -328,11 +358,8 @@ impl AssemblyDocumentDto {
                 .0
                 .checked_add(1)
                 .ok_or_else(|| "component id space is exhausted".to_string())?;
-            let occurrence_id = OccurrenceId(self.component_structure.next_occurrence_id.max(1));
-            self.component_structure.next_occurrence_id = occurrence_id
-                .0
-                .checked_add(1)
-                .ok_or_else(|| "occurrence id space is exhausted".to_string())?;
+            let occurrence_id =
+                allocate_occurrence_id(&mut self.component_structure.next_occurrence_id)?;
             self.component_structure
                 .definitions
                 .push(ComponentDefinitionDto {
@@ -355,8 +382,6 @@ impl AssemblyDocumentDto {
                 });
         }
 
-        // A definition loaded without any occurrence remains reusable but not
-        // visible. Promoted definitions always get their default root instance.
         let promoted_without_occurrences = self
             .component_structure
             .definitions
@@ -372,11 +397,8 @@ impl AssemblyDocumentDto {
             .cloned()
             .collect::<Vec<_>>();
         for definition in promoted_without_occurrences {
-            let occurrence_id = OccurrenceId(self.component_structure.next_occurrence_id.max(1));
-            self.component_structure.next_occurrence_id = occurrence_id
-                .0
-                .checked_add(1)
-                .ok_or_else(|| "occurrence id space is exhausted".to_string())?;
+            let occurrence_id =
+                allocate_occurrence_id(&mut self.component_structure.next_occurrence_id)?;
             self.component_structure
                 .occurrences
                 .push(ComponentOccurrenceDto {
@@ -556,15 +578,13 @@ impl AssemblyDocumentDto {
         }
 
         let component_id = ComponentId(self.component_structure.next_component_id.max(1));
-        let occurrence_id = OccurrenceId(self.component_structure.next_occurrence_id.max(1));
+        let occurrence_id =
+            allocate_occurrence_id(&mut self.component_structure.next_occurrence_id)?;
         self.component_structure.next_component_id = component_id
             .0
             .checked_add(1)
             .ok_or_else(|| "component id space is exhausted".to_string())?;
-        self.component_structure.next_occurrence_id = occurrence_id
-            .0
-            .checked_add(1)
-            .ok_or_else(|| "occurrence id space is exhausted".to_string())?;
+
         let definition = ComponentDefinitionDto {
             id: component_id,
             name: name.to_string(),
@@ -764,10 +784,7 @@ impl AssemblyDocumentDto {
         let name = self
             .component_structure
             .unique_occurrence_name(request.parent_occurrence_id, base_name);
-        let id = OccurrenceId(self.component_structure.next_occurrence_id.max(1));
-        self.component_structure.next_occurrence_id =
-            id.0.checked_add(1)
-                .ok_or_else(|| "occurrence id space is exhausted".to_string())?;
+        let id = allocate_occurrence_id(&mut self.component_structure.next_occurrence_id)?;
         let occurrence = ComponentOccurrenceDto {
             id,
             name,
@@ -832,6 +849,85 @@ impl AssemblyDocumentDto {
         Ok(updated)
     }
 
+    /// Remove one unreferenced leaf instance while retaining its reusable
+    /// definition, source geometry, other placements and allocation counters.
+    pub fn remove_occurrence(
+        &mut self,
+        request: RemoveOccurrenceRequestDto,
+    ) -> Result<ComponentOccurrenceDto, String> {
+        self.validate()?;
+        let index = self
+            .component_structure
+            .occurrences
+            .iter()
+            .position(|occurrence| occurrence.id == request.occurrence_id)
+            .ok_or_else(|| format!("Occurrence {} does not exist", request.occurrence_id.0))?;
+        let occurrence = &self.component_structure.occurrences[index];
+        if occurrence.grounded {
+            return Err(format!(
+                "Release grounded instance '{}' before removing it",
+                occurrence.name
+            ));
+        }
+        if let Some(child) = self
+            .component_structure
+            .occurrences
+            .iter()
+            .find(|child| child.parent_occurrence_id == Some(occurrence.id))
+        {
+            return Err(format!(
+                "Move or remove child instance '{}' before removing '{}'",
+                child.name, occurrence.name
+            ));
+        }
+        if !self
+            .component_structure
+            .occurrences
+            .iter()
+            .any(|other| other.id != occurrence.id && other.component_id == occurrence.component_id)
+        {
+            return Err(format!(
+                "'{}' is the last instance of its reusable definition; hide it instead or add another instance before removing it",
+                occurrence.name
+            ));
+        }
+        for joint in &self.joints {
+            let references = [
+                (
+                    joint.advanced.connector_a_occurrence_id,
+                    joint.connector_a.body_id,
+                ),
+                (
+                    joint.advanced.connector_b_occurrence_id,
+                    joint.connector_b.body_id,
+                ),
+            ];
+            if references.iter().any(|(bound, body)| {
+                bound.or_else(|| self.component_structure.occurrence_for_body(*body))
+                    == Some(occurrence.id)
+            }) {
+                return Err(format!(
+                    "Rebind or remove joint '{}' before removing instance '{}'",
+                    joint.name, occurrence.name
+                ));
+            }
+        }
+        if let Some(contact) = self.contact_sets.iter().find(|contact| {
+            contact.occurrence_a == occurrence.id || contact.occurrence_b == occurrence.id
+        }) {
+            return Err(format!(
+                "Rebind or remove contact set '{}' before removing instance '{}'",
+                contact.name, occurrence.name
+            ));
+        }
+        let removed = self.component_structure.occurrences.remove(index);
+        if let Err(error) = self.validate() {
+            self.component_structure.occurrences.insert(index, removed);
+            return Err(error);
+        }
+        Ok(removed)
+    }
+
     pub fn set_occurrence_grounded(
         &mut self,
         request: SetOccurrenceGroundedRequestDto,
@@ -855,9 +951,7 @@ impl AssemblyDocumentDto {
                 }
             }
         }
-        // Keep the legacy body field deterministic for older hosts, but only
-        // root grounding participates in that single-value compatibility
-        // projection. Nested subassemblies each own an independent ground.
+
         self.grounded_body_id = self
             .component_structure
             .occurrences
@@ -894,9 +988,7 @@ impl AssemblyDocumentDto {
         if let Some(local_pose) = request.local_pose {
             validate_transform(local_pose, "duplicate occurrence pose")?;
         }
-        // Allocate ids and clone the complete subtree on a candidate document.
-        // A late validation failure must not consume ids or append a partial
-        // occurrence/joint graph to the live assembly.
+
         let mut candidate = self.clone();
         let root = candidate.duplicate_occurrence_subtree_in_place(request)?;
         candidate.validate()?;
@@ -941,10 +1033,7 @@ impl AssemblyDocumentDto {
         let mut mapping = HashMap::<OccurrenceId, OccurrenceId>::new();
         let mut clones = Vec::new();
         for node in &source_nodes {
-            let id = OccurrenceId(self.component_structure.next_occurrence_id.max(1));
-            self.component_structure.next_occurrence_id =
-                id.0.checked_add(1)
-                    .ok_or_else(|| "occurrence id space is exhausted".to_string())?;
+            let id = allocate_occurrence_id(&mut self.component_structure.next_occurrence_id)?;
             mapping.insert(node.id, id);
             let parent_occurrence_id = if node.id == source.id {
                 request.parent_occurrence_id
@@ -994,8 +1083,7 @@ impl AssemblyDocumentDto {
             joint_mapping.insert(joint.id, clone.id);
             cloned_joints.push(clone);
         }
-        // Relations belong to the same occurrence subtree as their joints.
-        // Repeated subassemblies retain independent coordinate coupling.
+
         let mut cloned_relations = Vec::new();
         for relation in &self.gear_relations {
             let (Some(a), Some(b)) = (
@@ -1254,9 +1342,8 @@ pub struct CreateJointRequestDto {
     pub linear_limits: Option<JointLimitsDto>,
     #[serde(default)]
     pub advanced: JointAdvancedDto,
-    /// Explicit fixed component for this operation. Components are currently
-    /// one-to-one with bodies; keeping this decision in the request makes
-    /// joint creation deterministic instead of depending on pick order.
+    /// Legacy body-level grounding hint. Repeated components use the explicit
+    /// occurrence identity below to make joint grounding unambiguous.
     #[serde(default)]
     pub grounded_body_id: Option<BodyId>,
     /// Exact fixed instance for reusable components. `grounded_body_id` is
@@ -1416,6 +1503,14 @@ pub struct DuplicateOccurrenceRequestDto {
     pub local_pose: Option<AssemblyTransformDto>,
 }
 
+/// Remove exactly one instance. Dependents must be changed explicitly first;
+/// this request never deletes a definition, source body, child or joint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RemoveOccurrenceRequestDto {
+    pub occurrence_id: OccurrenceId,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct AssemblyPositionId(pub u64);
@@ -1455,9 +1550,11 @@ pub enum MotionCoordinateDto {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum MotionInterpolationDto {
     Step,
     Linear,
+    #[default]
     Smooth,
 }
 
@@ -1467,12 +1564,6 @@ pub struct MotionKeyframeDto {
     pub value: f64,
     #[serde(default)]
     pub interpolation: MotionInterpolationDto,
-}
-
-impl Default for MotionInterpolationDto {
-    fn default() -> Self {
-        Self::Smooth
-    }
 }
 
 /// A driver either follows authored keyframes or integrates a motor's initial
@@ -2368,6 +2459,49 @@ impl AssemblyDocumentDto {
     ) -> Result<MechanismPreviewDto, String> {
         solve_mechanism_drag(self, request, scene)
     }
+
+    /// Availability uses the same active scene and grounded joint graph as the
+    /// solver. A rigid-only or disconnected component stays a selection target.
+    pub fn can_drag_occurrence(
+        &self,
+        body: BodyId,
+        occurrence: OccurrenceId,
+        scene: &SolidSceneDto,
+    ) -> bool {
+        let mut active = self.clone();
+        if active.project_active_scene(scene).is_err()
+            || !active
+                .component_structure
+                .occurrence_contains_body(occurrence, body)
+        {
+            return false;
+        }
+        let Some(target) = active.component_structure.occurrence(occurrence) else {
+            return false;
+        };
+        let mut siblings = active
+            .component_structure
+            .occurrences
+            .iter()
+            .filter(|o| o.parent_occurrence_id == target.parent_occurrence_id)
+            .collect::<Vec<_>>();
+        siblings.sort_by_key(|o| o.id.0);
+        let Some(ground) = siblings
+            .iter()
+            .find(|o| o.grounded)
+            .or_else(|| siblings.first())
+            .map(|o| o.id)
+        else {
+            return false;
+        };
+        occurrence != ground
+            && joint_path(&active, ground, occurrence).is_some_and(|path| {
+                active
+                    .joints
+                    .iter()
+                    .any(|j| path.contains(&j.id) && !active_coordinates(j.kind).is_empty())
+            })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -3059,10 +3193,11 @@ fn export_motion_path_csv(
     if !request.sample_rate_hz.is_finite() || !(1.0..=240.0).contains(&request.sample_rate_hz) {
         return Err("motion path sample rate must be between 1 and 240 Hz".to_string());
     }
-    let sample_count = (study.duration_seconds * request.sample_rate_hz).ceil() as usize + 1;
-    if sample_count > 100_001 {
+    let steps = (study.duration_seconds * request.sample_rate_hz).ceil();
+    if !steps.is_finite() || !(0. ..=100_000.).contains(&steps) {
         return Err("motion path would exceed 100,001 samples".to_string());
     }
+    let sample_count = steps as usize + 1;
     let filter = request
         .occurrence_ids
         .iter()
@@ -3175,7 +3310,7 @@ fn placed_body_bounds(
     }
     let mut minimum = [f64::INFINITY; 3];
     let mut maximum = [f64::NEG_INFINITY; 3];
-    for point in body.mesh.positions.chunks_exact(3) {
+    for point in body.mesh.positions.as_chunks::<3>().0 {
         let transformed = add(
             rotate(
                 pose.rotation,
@@ -3598,8 +3733,7 @@ fn solve_edges(
                 joint.advanced.connector_b_twist_deg.to_radians(),
             ));
         let motion = joint_motion_pose(joint, diagnostics);
-        // Planar connector normals oppose one another by default. Flipped
-        // requests intentionally keep their normals aligned.
+
         let mate = if joint.flipped {
             RigidPose::IDENTITY
         } else {
@@ -3725,9 +3859,6 @@ fn solve_assembly(document: &AssemblyDocumentDto, scene: &SolidSceneDto) -> Asse
     }
     instance_body_poses.sort_by_key(|pose| (pose.occurrence_id.0, pose.body_id.0));
 
-    // Legacy callers still receive one deterministic pose per source body.
-    // New renderers and pickers consume `instance_body_poses` and can display
-    // every reusable occurrence simultaneously.
     let mut body_ids = scene.bodies.iter().map(|body| body.id).collect::<Vec<_>>();
     body_ids.sort_by_key(|body_id| body_id.0);
     let body_poses = body_ids
@@ -3982,10 +4113,7 @@ fn solve_mechanism_coordinates(
     joint_path(&candidate, ground, target_occurrence).ok_or_else(|| {
         "the dragged component is not connected to the grounded component".to_string()
     })?;
-    // A serial-chain-only variable set cannot close a redundant mechanism:
-    // one path reaches the target while the remaining edge is left as a
-    // CycleConflict. Optimise every free coordinate in the connected sibling
-    // mechanism and add explicit closure residuals for every saved edge.
+
     let mechanism_ids = connected_joint_ids(&candidate, ground);
     let mut variables = Vec::<(JointId, JointCoordinate)>::new();
     for joint in candidate
@@ -4095,13 +4223,11 @@ fn solve_mechanism_coordinates(
                     }
                 }
             }
-            for index in 0..variables.len() {
-                normal[index][index] += damping;
+            for (index, row) in normal.iter_mut().enumerate() {
+                row[index] += damping;
             }
             let delta = solve_linear_system(normal, rhs);
-            // Backtrack the locally linear Gauss-Newton step. Without this,
-            // long serial chains can overshoot the quaternion branch and
-            // monotonically drive every revolute coordinate into its limit.
+
             let objective = weighted_mechanism_residual(&residual, request.solve_orientation);
             let mut accepted = None;
             if delta
@@ -4159,14 +4285,6 @@ fn solve_mechanism_coordinates(
                 continue;
             }
 
-            // At a straight-link singularity the pointer error can be
-            // orthogonal to every first-order Jacobian column, producing a
-            // zero Gauss-Newton step even though bending either adjacent
-            // joint would move toward the target. Probe a small deterministic
-            // coordinate perturbation only on that stalled path. This is
-            // deliberately outside the normal fast path and gives continued
-            // dragging a way through a dead-center linkage without requiring
-            // the user to release and grab a different material point.
             let mut exploratory: Option<(f64, AssemblyDocumentDto)> = None;
             for (joint_id, coordinate) in variables.iter().copied() {
                 for direction in [-1.0, 1.0] {
@@ -4210,13 +4328,7 @@ fn solve_mechanism_coordinates(
                     }
                 }
             }
-            // A fully extended serial linkage needs two neighboring angular
-            // coordinates to leave dead center together: perturbing either
-            // joint alone initially moves the grabbed point sideways and can
-            // make the objective worse. Probe a small set of coordinated
-            // bends (including the 1:-2 relationship of equal-length links)
-            // before declaring the pointer target stuck. This remains a rare
-            // stalled-path fallback rather than work paid on every frame.
+
             let angular_variables = variables
                 .iter()
                 .copied()
@@ -4386,9 +4498,6 @@ fn mechanism_residual_weight(row: usize, solve_orientation: bool) -> f64 {
             0.0
         }
     } else if (row - 6) % 6 < 3 {
-        // Closure is a hard assembly constraint. A higher weight than the
-        // pointer target lets redundant coordinates move together instead of
-        // tearing the saved loop open.
         64.0
     } else {
         256.0
@@ -4590,8 +4699,8 @@ fn solve_linear_system(mut matrix: Vec<Vec<f64>>, mut rhs: Vec<f64>) -> Option<V
         matrix.swap(pivot, best);
         rhs.swap(pivot, best);
         let divisor = matrix[pivot][pivot];
-        for column in pivot..size {
-            matrix[pivot][column] /= divisor;
+        for value in &mut matrix[pivot][pivot..] {
+            *value /= divisor;
         }
         rhs[pivot] /= divisor;
         for row in 0..size {
@@ -4602,8 +4711,15 @@ fn solve_linear_system(mut matrix: Vec<Vec<f64>>, mut rhs: Vec<f64>) -> Option<V
             if factor.abs() <= 1.0e-16 {
                 continue;
             }
-            for column in pivot..size {
-                matrix[row][column] -= factor * matrix[pivot][column];
+            let (row_values, pivot_values) = if row < pivot {
+                let (before, after) = matrix.split_at_mut(pivot);
+                (&mut before[row], &after[0])
+            } else {
+                let (before, after) = matrix.split_at_mut(row);
+                (&mut after[0], &before[pivot])
+            };
+            for (value, pivot_value) in row_values[pivot..].iter_mut().zip(&pivot_values[pivot..]) {
+                *value -= factor * pivot_value;
             }
             rhs[row] -= factor * rhs[pivot];
         }
@@ -4962,9 +5078,7 @@ fn canonical_connector_against_scene(
                     primary_axis: plane.normal,
                     secondary_axis: plane.u,
                 };
-                // Preserve a picked attachment point relative to the exact
-                // surface frame, including after a feature edit. Legacy
-                // connectors without this frame retain centroid semantics.
+
                 let delta =
                     RigidPose::from_frame(live).compose(RigidPose::from_frame(source).inverse());
                 canonical.frame = JointFrameDto {
@@ -5004,11 +5118,6 @@ fn canonical_connector_against_scene(
                 secondary_axis: normalize(surface_reference),
             };
             let frame = if let Some(source_surface_frame) = connector.source_surface_frame {
-                // Map the originally picked connector through the exact rigid
-                // change of the analytic cylinder frame. Re-projecting the old
-                // point into the new cylinder loses axial translation and
-                // arbitrary 3D rotation, which can tear an otherwise valid
-                // multi-joint mechanism apart.
                 let delta = RigidPose::from_frame(live_surface_frame)
                     .compose(RigidPose::from_frame(source_surface_frame).inverse());
                 JointFrameDto {
@@ -5020,10 +5129,6 @@ fn canonical_connector_against_scene(
                     secondary_axis: rotate(delta.rotation, connector.frame.secondary_axis),
                 }
             } else {
-                // Legacy projects did not retain the analytic source frame.
-                // Canonicalize once using the former behavior, then rebase the
-                // returned connector onto today's live surface so all future
-                // rigid edits are exact.
                 let axial = dot(sub(connector.frame.origin, surface_origin), axis);
                 let origin = add(surface_origin, scale(axis, axial));
                 let mut secondary = sub(
@@ -5134,7 +5239,6 @@ fn rotate(rotation: [f64; 4], point: [f64; 3]) -> [f64; 3] {
 }
 
 fn quaternion_from_basis(x: [f64; 3], y: [f64; 3], z: [f64; 3]) -> [f64; 4] {
-    // Matrix columns are the connector's orthonormal x, y, z axes.
     let m00 = x[0];
     let m01 = y[0];
     let m02 = z[0];
@@ -5171,6 +5275,15 @@ const fn default_next_joint_id() -> u64 {
 
 const fn default_next_component_id() -> u64 {
     1
+}
+
+fn allocate_occurrence_id(next: &mut u64) -> Result<OccurrenceId, String> {
+    if *next == 0 || *next >= 9_007_199_254_740_991 {
+        return Err("occurrence id space is exhausted".into());
+    }
+    let id = OccurrenceId(*next);
+    *next += 1;
+    Ok(id)
 }
 
 const fn default_next_occurrence_id() -> u64 {
@@ -5216,8 +5329,55 @@ const fn default_kinematic_iterations() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nbcad_core::{FeatureId, PlaneBasis};
-    use nbcad_solid::{BodyDto, CircularCurveDto, EdgeDto, MeshDto, Point3Dto};
+    #[test]
+    fn occurrence_allocator_preserves_safe_counters_and_rejects_exhaustion_atomically() {
+        let mut document = AssemblyDocumentDto::default();
+        document.synchronize_components(&scene()).unwrap();
+        document.component_structure.next_occurrence_id = 9_007_199_254_740_990;
+        let component_id = document.component_structure.definitions[0].id;
+        let request = CreateOccurrenceRequestDto {
+            component_id,
+            name: "Last safe occurrence".into(),
+            parent_occurrence_id: None,
+            local_pose: Default::default(),
+        };
+        let occurrence = document.create_occurrence(request.clone()).unwrap();
+        assert_eq!(occurrence.id.0, 9_007_199_254_740_990);
+        assert_eq!(
+            document.component_structure.next_occurrence_id,
+            9_007_199_254_740_991
+        );
+        document.validate().unwrap();
+        let before = document.clone();
+        assert!(document.create_occurrence(request).is_err());
+        assert_eq!(document, before);
+        document.component_structure.next_occurrence_id = 9_007_199_254_740_992;
+        assert!(document.validate().is_err());
+    }
+
+    #[test]
+    fn motion_path_rejects_huge_durations_before_integer_conversion() {
+        let mut document = AssemblyDocumentDto::default();
+        let study = document
+            .create_motion_study(CreateMotionStudyRequestDto {
+                name: "Huge path".into(),
+                duration_seconds: 1e30,
+            })
+            .unwrap();
+        let error = document
+            .export_motion_path_csv(
+                MotionPathRequestDto {
+                    study_id: study.id,
+                    sample_rate_hz: 60.,
+                    occurrence_ids: vec![],
+                },
+                &scene(),
+            )
+            .unwrap_err();
+        assert!(error.contains("100,001"), "{error}");
+    }
+    use limo_cad_core::{FeatureId, PlaneBasis};
+    use limo_cad_solid::{BodyDto, CircularCurveDto, EdgeDto, MeshDto, Point3Dto};
 
     #[test]
     fn component_validation_rejects_rotation_norm_overflow_before_normalization() {
@@ -5244,6 +5404,7 @@ mod tests {
                 .into_iter()
                 .map(|id| BodyDto {
                     topology_signature: String::new(),
+                    display_warnings: Vec::new(),
                     id: BodyId(id),
                     name: format!("Body{id}"),
                     feature_id: FeatureId(id),
@@ -5253,6 +5414,8 @@ mod tests {
                         indices: Vec::new(),
                     },
                     faces: vec![FaceDto {
+                        linear_seam_edge_keys: Vec::new(),
+                        outer_shell: None,
                         id: FaceId(id * 10),
                         key: format!("face-{id}"),
                         first_index: 0,
@@ -5473,13 +5636,12 @@ mod tests {
 
     #[test]
     fn deleting_an_unrelated_body_leaves_the_joint_unchanged() {
-        // Host delete is body-delete cleanup of joints that reference the
-        // deleted body. A third body must not drop an unrelated joint.
         let scene = SolidSceneDto {
             bodies: [1_u64, 2, 3]
                 .into_iter()
                 .map(|id| BodyDto {
                     topology_signature: String::new(),
+                    display_warnings: Vec::new(),
                     id: BodyId(id),
                     name: format!("Body{id}"),
                     feature_id: FeatureId(id),
@@ -5489,6 +5651,8 @@ mod tests {
                         indices: Vec::new(),
                     },
                     faces: vec![FaceDto {
+                        linear_seam_edge_keys: Vec::new(),
+                        outer_shell: None,
                         id: FaceId(id * 10),
                         key: format!("face-{id}"),
                         first_index: 0,
@@ -5709,18 +5873,18 @@ mod tests {
         let mut scene = scene();
         for (index, body) in scene.bodies.iter_mut().enumerate() {
             body.faces[0].plane = None;
-            body.faces[0].cylinder = Some(nbcad_solid::CylindricalSurfaceDto {
-                origin: nbcad_solid::Point3Dto {
+            body.faces[0].cylinder = Some(limo_cad_solid::CylindricalSurfaceDto {
+                origin: limo_cad_solid::Point3Dto {
                     x: index as f64 * 20.0,
                     y: 0.0,
                     z: 0.0,
                 },
-                axis: nbcad_solid::Point3Dto {
+                axis: limo_cad_solid::Point3Dto {
                     x: 0.0,
                     y: 0.0,
                     z: 1.0,
                 },
-                reference: nbcad_solid::Point3Dto {
+                reference: limo_cad_solid::Point3Dto {
                     x: 1.0,
                     y: 0.0,
                     z: 0.0,
@@ -5784,7 +5948,7 @@ mod tests {
         let mut scene = scene();
         for (index, body) in scene.bodies.iter_mut().enumerate() {
             body.faces[0].plane = None;
-            body.faces[0].cylinder = Some(nbcad_solid::CylindricalSurfaceDto {
+            body.faces[0].cylinder = Some(limo_cad_solid::CylindricalSurfaceDto {
                 origin: Point3Dto {
                     x: index as f64 * 20.0,
                     y: 0.0,
@@ -6722,10 +6886,6 @@ mod tests {
                 < 0.35
         );
 
-        // A viewport drag does not prescribe the component origin or its
-        // orientation: it prescribes the exact material point beneath the
-        // pointer. Keep a deliberately stale origin target here so this test
-        // fails if the solver ever regresses to origin chasing.
         let initial_pose = document
             .solve(&scene)
             .body_poses
@@ -6763,10 +6923,6 @@ mod tests {
         );
         assert!(length(sub(solved_grab_point, target_point_world)) < 0.05);
 
-        // Consecutive viewport drags must continue from the pose already on
-        // screen. Starting this exact same target from its displayed joint
-        // coordinates should therefore converge without taking a branch-changing
-        // Newton step back through the saved document pose.
         let seeded_preview = document
             .preview_mechanism_drag(
                 MechanismDragRequestDto {
@@ -6863,10 +7019,7 @@ mod tests {
             initial_pose.translation,
             rotate(initial_pose.rotation, grab_point_local),
         );
-        // Pull straight back along the fully extended linkage. At this pose
-        // every revolute joint's first-order motion is perpendicular to the
-        // cursor residual, so a pure Gauss-Newton solver can report a zero
-        // step and remain frozen until the user grabs again.
+
         let target_point_world = [
             initial_grab_world[0] - 2.0,
             initial_grab_world[1],
@@ -6920,8 +7073,7 @@ mod tests {
             kind: JointKindDto::Slider,
             connector_a: connector(a),
             connector_b: connector(b),
-            // Aligned directions make positive coordinates additive around
-            // this deliberately redundant one-axis loop.
+
             flipped: true,
             angle_offset_deg: 0.0,
             linear_offset_mm: 0.0,
@@ -7184,8 +7336,8 @@ mod tests {
         let mut document = AssemblyDocumentDto::default();
         document.synchronize_components(&scene).unwrap();
         let before = document.clone();
-        current.errors.push(nbcad_solid::KernelFeatureErrorDto {
-            feature_id: nbcad_core::FeatureId(2),
+        current.errors.push(limo_cad_solid::KernelFeatureErrorDto {
+            feature_id: limo_cad_core::FeatureId(2),
             message: "Native recompute failed".into(),
         });
         document
@@ -7497,9 +7649,6 @@ mod tests {
             "failed duplication must consume no ids or nodes"
         );
 
-        // Exercise a failure that occurs only after the candidate subtree has
-        // allocated ids and appended its cloned graph. The live document must
-        // still remain byte-for-byte at its pre-command state.
         document.next_joint_id = 0;
         let before_late_failure = document.clone();
         let error = document
@@ -7764,7 +7913,6 @@ mod tests {
         assert!(renamed_occurrence.visible);
         assert!(renamed_occurrence.grounded);
 
-        // Explicit null parent stays null; pose/flags still preserved when omitted.
         let json = serde_json::json!({
             "occurrence": {
                 "id": occurrence_id.0,

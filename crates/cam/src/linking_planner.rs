@@ -50,8 +50,6 @@ pub(super) fn predrilled_holes(
             .map(|&p| (p, *top_z, *bottom_z))
             .chain(holes.iter().map(|h| (h.point, h.top_z, h.bottom_z)))
         {
-            // No claim that a model hole or a drilled point clears the full
-            // cutter diameter. Only the cylindrical portion is certified.
             if top + 1e-6 < setup.stock.max.z {
                 continue;
             }
@@ -192,7 +190,7 @@ pub(super) fn approach_policy(
     depth: f64,
     plunge: f64,
 ) -> bool {
-    let Some(bounds) = builder.link_obstacles.clone() else {
+    let Some(bounds) = builder.link_obstacles else {
         return false;
     };
     let Some(link) = builder
@@ -211,7 +209,7 @@ pub(super) fn approach_policy(
         return false;
     }
     let mut checker = ProgramBuilder::new();
-    checker.incoming_bounds = Some(bounds.clone());
+    checker.incoming_bounds = Some(bounds);
     let straight_clear = from.z.min(to.z) > bounds.max.z + link.safe_distance
         || outside_stock(
             &checker,
@@ -322,8 +320,7 @@ pub(super) fn plan_face(
                 bounds.max.x + r
             };
             let end = Point2Dto::new(end_x, y);
-            // A partial selected region never authorizes retraction inside
-            // uncut billet. Extend is an operator choice, not an implicit fix.
+
             if !outside_stock(builder, end, shifted(end, t, rout), r) {
                 return Err(CamPlanError(format!("Face '{name}' exit is not clear of incoming stock. Enable Extend before retract or use a full-stock boundary.")));
             }
@@ -360,8 +357,6 @@ pub(super) fn plan_face(
                     && outside_stock(builder, end, next, r + link.minimum_clearance)
                 {
                     if link.transition == CamFaceTransition::Smooth {
-                        // A semicircle bulges into air and reverses tangent
-                        // continuously; both endpoints sit beyond the stock.
                         let end = Point2Dto::new(next.x, y);
                         builder
                             .linear(Point3Dto::new(end.x, end.y, depth), link.no_engagement_feed);
@@ -623,10 +618,7 @@ pub(super) fn plan_chamfer(
             profile_end,
         )?
     };
-    // A vertical quarter projects onto a straight extension in XY. Certify
-    // the entire projection at the deepest tool position: a conservative
-    // bound, since a 90-degree cutter's flank gets narrower as the tip rises.
-    // Thus rounding cannot bypass a wall that the horizontal leads avoid.
+
     let mut checked = leads.clone();
     checked.start = shifted(leads.start, tin, -rin);
     checked.end = shifted(leads.end, tout, rout);
@@ -680,8 +672,7 @@ pub(super) fn plan_chamfer(
         link.lead_out_feed,
     );
     exit(builder, leads.end, tout, depth, rout, link.lead_out_feed)?;
-    // Disconnected rims may have different Z/material sides. Always retract
-    // before planning another chain; never invent an at-depth linking cut.
+
     builder.retract_to_clearance();
     Ok(())
 }
@@ -792,7 +783,7 @@ pub(super) fn fit_air_lead_distance(
             lo = mid;
         }
     }
-    // Keep the accepted side; no reliance on monotonicity for safety.
+
     fits(hi)?;
     Ok(hi)
 }

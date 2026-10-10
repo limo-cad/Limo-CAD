@@ -5,12 +5,12 @@
 //! against it, while a face bounded only by projections never becomes a
 //! selectable profile (and never turns drawn geometry nested inside it into a
 //! hole).
-use nbcad_core::{BodyId, EdgeId, PlaneBasis};
-use nbcad_sketch::{
+use limo_cad_core::{BodyId, EdgeId, PlaneBasis};
+use limo_cad_sketch::{
     ArcCenterRequest, OriginPlane, PlaneRef, ProjectedEdgeDto, RectangleMode, RectangleRequest,
     SegmentRequest, SketchManager, SketchSession, SnapTarget, Vec2,
 };
-use nbcad_solid::{
+use limo_cad_solid::{
     CommitKernelRequest, ExtrudeExtent, ExtrudeOperation, ExtrudeRequest, KernelBodyDto,
     KernelEdgeDto, KernelFaceDto, KernelJobDto, KernelSceneDto, Point3Dto,
 };
@@ -53,6 +53,7 @@ fn face_body(body_id: BodyId) -> KernelBodyDto {
         .collect();
     KernelBodyDto {
         topology_signature: String::new(),
+        display_warnings: Vec::new(),
         body_id,
         positions: vec![
             0.0,
@@ -68,6 +69,8 @@ fn face_body(body_id: BodyId) -> KernelBodyDto {
         normals: vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0],
         indices: vec![0, 1, 2],
         faces: vec![KernelFaceDto {
+            linear_seam_edge_keys: Vec::new(),
+            outer_shell: None,
             key: "support".to_string(),
             first_index: 0,
             index_count: 3,
@@ -95,7 +98,7 @@ fn result_body_id(job: &KernelJobDto) -> BodyId {
 
 /// Extrude a base rectangle into the synthetic support body, then host a sketch
 /// on its top face — the fixture the whole feature exists for.
-fn manager_with_face_sketch() -> (SketchManager, nbcad_core::FaceId) {
+fn manager_with_face_sketch() -> (SketchManager, limo_cad_core::FaceId) {
     let mut manager = SketchManager::new();
     manager
         .begin_sketch(PlaneRef::OriginPlane {
@@ -180,7 +183,7 @@ fn a_face_sketch_projects_the_support_boundary() {
             point if point.x >= 0.0 && point.x <= FACE_WIDTH
         ));
     }
-    // The y = FACE_HEIGHT boundary edge projects onto the sketch plane.
+
     assert!(sketch.projected_edges.iter().any(|edge| {
         edge.points
             .iter()
@@ -214,8 +217,7 @@ fn a_semicircle_drawn_against_the_boundary_becomes_a_profile() {
             .map(|profile| (profile.area, profile.nesting_depth))
             .collect::<Vec<_>>()
     );
-    // The bare face outline is projected-only geometry: it must never be
-    // offered as a profile of its own.
+
     assert!(
         entry
             .profiles
@@ -223,8 +225,7 @@ fn a_semicircle_drawn_against_the_boundary_becomes_a_profile() {
             .all(|profile| profile.area < FACE_WIDTH * FACE_HEIGHT - 1.0),
         "the support face outline leaked into the profile catalog"
     );
-    // The remainder of the face is bounded by the authored line, so it is a
-    // real profile too. Nothing nests inside anything else.
+
     assert!(entry
         .profiles
         .iter()
@@ -233,9 +234,6 @@ fn a_semicircle_drawn_against_the_boundary_becomes_a_profile() {
 
 #[test]
 fn a_shape_drawn_inside_a_face_stays_the_only_profile() {
-    // Regression guard for the naive "add the face outline as sketch entities"
-    // implementation: the projected outline must not become a depth-zero
-    // profile that swallows the drawn rectangle as a hole.
     let (mut manager, _) = manager_with_face_sketch();
     manager
         .add_rectangle(RectangleRequest {
@@ -264,7 +262,7 @@ fn projections_survive_a_save_and_reload_through_the_recompute() {
     draw_semicircle_against_boundary(&mut manager);
     manager.end_sketch().unwrap();
     let json = manager.export_project_model().unwrap();
-    // Replay must have the history-stage boundary before any kernel job runs.
+
     assert!(json.contains("support_boundary"));
 
     let body_id = manager.solid_scene().bodies[0].id;
@@ -305,8 +303,6 @@ fn projections_survive_a_save_and_reload_through_the_recompute() {
 
 #[test]
 fn geometry_snaps_exactly_onto_the_projected_boundary() {
-    // The boundary is reference geometry, so the snap is geometric: the point
-    // lands on the edge without adding a durable relation.
     let basis = PlaneRef::OriginPlane {
         plane: OriginPlane::Xy,
     }
@@ -315,7 +311,7 @@ fn geometry_snaps_exactly_onto_the_projected_boundary() {
     let mut session = SketchSession::new(
         "Sketch1",
         PlaneRef::PlanarFace {
-            face_id: nbcad_core::FaceId(1),
+            face_id: limo_cad_core::FaceId(1),
         },
         basis,
         false,
@@ -327,7 +323,6 @@ fn geometry_snaps_exactly_onto_the_projected_boundary() {
         circle: None,
     }]);
 
-    // A click 0.2 mm above the middle of the projected edge.
     let preview = session.preview_segment(Vec2::new(0.0, 0.0), Vec2::new(8.0, 10.2), false);
     match preview.snap {
         SnapTarget::ProjectedEdge { edge, position } => {
@@ -338,8 +333,6 @@ fn geometry_snaps_exactly_onto_the_projected_boundary() {
         other => panic!("expected a projected-edge acquisition, got {other:?}"),
     }
 
-    // Committing keeps that exact coordinate, so the drawn curve meets the
-    // projected boundary and closes a region with it.
     session
         .add_line(Vec2::new(0.0, 0.0), Vec2::new(8.0, 10.2), false)
         .unwrap();
@@ -348,7 +341,7 @@ fn geometry_snaps_exactly_onto_the_projected_boundary() {
         .entities
         .iter()
         .find_map(|entity| match entity {
-            nbcad_sketch::EntityDto::Line { end, .. } => Some(*end),
+            limo_cad_sketch::EntityDto::Line { end, .. } => Some(*end),
             _ => None,
         })
         .expect("the committed line is in the snapshot");

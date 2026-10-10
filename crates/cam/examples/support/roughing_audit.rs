@@ -4,7 +4,7 @@
 //! This deliberately overestimates sweeps: an unproven move is not necessarily
 //! a collision. No planner raster, stock voxels or tessellation smoothing is
 //! used. This certifies only the supplied mesh, not the exact B-rep or machine.
-use nbcad_cam::{
+use limo_cad_cam::{
     CamArcPlane, CamCommandDto, CamDocumentDto, CamOperationDto, CamProgramDto, CamToolKind,
     Point3Dto,
 };
@@ -31,7 +31,6 @@ fn point_segment(p: P, a: P, b: P) -> f64 {
     (p[0] - a[0] - t * d[0]).hypot(p[1] - a[1] - t * d[1])
 }
 fn segment_distance(a: P, b: P, c: P, d: P) -> f64 {
-    // Strict crossing; touching/collinear cases are handled by endpoint distances.
     if cross(a, b, c) * cross(a, b, d) < 0.0 && cross(c, d, a) * cross(c, d, b) < 0.0 {
         return 0.0;
     }
@@ -78,6 +77,8 @@ fn clip_above(tri: &[Point3Dto; 3], z: f64) -> Vec<P> {
     out
 }
 
+type ArcCapsule = (P, P, f64);
+
 /// Cover the complete finite arc by chord capsules enlarged by the exact
 /// maximum sagitta. This is a continuous bound, not a point-sample verdict.
 /// It remains independent of both the planner's hull and its arc-distance
@@ -87,7 +88,7 @@ fn arc_capsules(
     to: Point3Dto,
     center: Point3Dto,
     clockwise: bool,
-) -> Result<Vec<(P, P, f64)>, Box<dyn std::error::Error>> {
+) -> Result<Vec<ArcCapsule>, Box<dyn std::error::Error>> {
     use std::f64::consts::TAU;
     let q = (from.x - center.x).hypot(from.y - center.y);
     if q <= EPS {
@@ -162,7 +163,9 @@ pub fn audit(
         for mesh in &geometry.targets {
             let points = mesh
                 .positions
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .map(|p| {
                     let d = [
                         p[0] - setup.wcs.origin.x,
@@ -177,7 +180,7 @@ pub fn audit(
                     )
                 })
                 .collect::<Vec<_>>();
-            for tri in mesh.indices.chunks_exact(3) {
+            for tri in mesh.indices.as_chunks::<3>().0 {
                 triangles.push([
                     points[tri[0] as usize],
                     points[tri[1] as usize],

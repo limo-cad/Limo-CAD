@@ -1,0 +1,30 @@
+name: Ubuntu desktop prerequisites
+description: Shared Ubuntu 26.04 desktop and packaging dependencies
+inputs:
+  desktop-input:
+    description: Install disposable-desktop keyboard, clipboard, font, and IME tools
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Install Ubuntu 26.04 desktop prerequisites
+      shell: bash
+      env:
+        DESKTOP_INPUT: ${{ inputs.desktop-input }}
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends \
+          build-essential ca-certificates clang cmake dbus-x11 desktop-file-utils file libdbus-1-3 \
+          fonts-noto-core fonts-noto-cjk \
+          libfuse2t64 \
+          libfreetype6-dev \
+          libudev-dev libvulkan-dev libwayland-dev \
+          libx11-dev libx11-xcb1 libxcursor1 libxi6 libxkbcommon-dev libxkbcommon-x11-dev \
+          mesa-vulkan-drivers ninja-build patchelf pkg-config vulkan-tools weston \
+          xauth xdg-utils xdg-desktop-portal xdg-desktop-portal-gtk xwayland xvfb zenity
+        if [[ "$DESKTOP_INPUT" == true ]]; then
+          sudo apt-get install --yes --no-install-recommends \
+            fonts-noto-color-emoji \
+            ibus ibus-libpinyin imagemagick xclip xdotool
+        fi

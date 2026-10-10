@@ -132,18 +132,9 @@ pub fn fillet_lines(l1: &LineSeg, l2: &LineSeg, radius: f64) -> Result<FilletRes
         return Err(FilletError::Parallel);
     }
 
-    // Intersection of infinite lines
-    // l1: A + t*d1
-    // l2: C + u*d2
-    // A + t*d1 = C + u*d2
-    // t*d1 - u*d2 = C - A
     let rhs = sub(l2.a, l1.a);
     let t = cross2d(rhs, d2) / cross;
     let v = add(l1.a, scale(d1, t));
-
-    // Determine direction from V along each line segment
-    // Direction is toward the endpoint FARTHER from V
-    // Tie-break: toward b
 
     let va1 = sub(l1.a, v);
     let vb1 = sub(l1.b, v);
@@ -171,7 +162,6 @@ pub fn fillet_lines(l1: &LineSeg, l2: &LineSeg, radius: f64) -> Result<FilletRes
         normalize(vb2)
     };
 
-    // Angle between directions
     let cos_theta = dot2d(dir1, dir2).clamp(-1.0, 1.0);
     let theta = cos_theta.acos();
 
@@ -187,9 +177,6 @@ pub fn fillet_lines(l1: &LineSeg, l2: &LineSeg, radius: f64) -> Result<FilletRes
 
     let t_dist = radius / tan_half;
 
-    // Check if tangent points lie within the segments
-    // The tangent point is at distance t_dist from V along the direction
-    // We need t_dist <= distance to the farther endpoint
     if t_dist > dist_b1.max(dist_a1) + EPS {
         return Err(FilletError::RadiusTooLarge);
     }
@@ -200,7 +187,6 @@ pub fn fillet_lines(l1: &LineSeg, l2: &LineSeg, radius: f64) -> Result<FilletRes
     let tangent_on_l1 = add(v, scale(dir1, t_dist));
     let tangent_on_l2 = add(v, scale(dir2, t_dist));
 
-    // Arc center
     let sin_half = half_theta.sin();
     if sin_half.abs() < EPS {
         return Err(FilletError::Parallel);
@@ -213,8 +199,6 @@ pub fn fillet_lines(l1: &LineSeg, l2: &LineSeg, radius: f64) -> Result<FilletRes
     let start_angle = (tangent_on_l1.y - center.y).atan2(tangent_on_l1.x - center.x);
     let end_angle = (tangent_on_l2.y - center.y).atan2(tangent_on_l2.x - center.x);
 
-    // Determine ccw
-    // Minor arc sweep is PI - theta
     let minor_sweep = PI - theta;
 
     let mut diff_ccw = end_angle - start_angle;
@@ -233,7 +217,6 @@ pub fn fillet_lines(l1: &LineSeg, l2: &LineSeg, radius: f64) -> Result<FilletRes
         diff_cw -= TWO_PI;
     }
 
-    // The minor arc should have sweep close to minor_sweep
     let ccw = (diff_ccw - minor_sweep).abs() < (diff_cw - minor_sweep).abs();
 
     Ok(FilletResult {

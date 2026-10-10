@@ -2,7 +2,7 @@
 //! all three modes, structural constraints, typed-width Ø dimension (D9),
 //! cursor-derived width, degenerate rejection, and single-record undo.
 
-use nbcad_sketch::{
+use limo_cad_sketch::{
     Constraint, EntityDto, OriginPlane, PlaneRef, SketchSession, SlotMode, SlotRequest, Vec2,
 };
 
@@ -31,14 +31,14 @@ fn req(mode: SlotMode, p1: Vec2, p2: Vec2, cursor: Vec2, width_text: Option<&str
     }
 }
 
-fn lines(dto: &nbcad_sketch::SketchDto) -> Vec<&EntityDto> {
+fn lines(dto: &limo_cad_sketch::SketchDto) -> Vec<&EntityDto> {
     dto.entities
         .iter()
         .filter(|e| matches!(e, EntityDto::Line { .. }))
         .collect()
 }
 
-fn arcs(dto: &nbcad_sketch::SketchDto) -> Vec<&EntityDto> {
+fn arcs(dto: &limo_cad_sketch::SketchDto) -> Vec<&EntityDto> {
     dto.entities
         .iter()
         .filter(|e| matches!(e, EntityDto::Arc { .. }))
@@ -68,7 +68,6 @@ fn center_to_center_slot_geometry_constraints_and_dim() {
     assert_eq!(ls.len(), 2, "two side lines");
     assert_eq!(as_.len(), 2, "two end-cap arcs");
 
-    // Horizontal slot, width 10: side lines at y=±5, arc centers on the axis.
     let (l1, l2) = match (ls[0], ls[1]) {
         (
             EntityDto::Line {
@@ -106,7 +105,6 @@ fn center_to_center_slot_geometry_constraints_and_dim() {
         }
     }
 
-    // Structural constraints: 4 tangents, 1 parallel, 1 equal.
     let count = |pred: fn(&Constraint) -> bool| {
         dto.constraints
             .iter()
@@ -117,7 +115,6 @@ fn center_to_center_slot_geometry_constraints_and_dim() {
     assert_eq!(count(|c| matches!(c, Constraint::Parallel { .. })), 1);
     assert_eq!(count(|c| matches!(c, Constraint::Equal { .. })), 1);
 
-    // Typed width → Ø10.00 driving dimension (D9).
     assert_eq!(dto.dimensions.len(), 1);
     assert_eq!(dto.dimensions[0].text, "Ø10.00");
     assert_eq!(dto.dimensions[0].kind, "diameter");
@@ -147,7 +144,7 @@ fn overall_mode_insets_centers_by_radius() {
             _ => unreachable!(),
         }
     }
-    // Overall length 50 with width 10 → straight section 40.
+
     match lines(&dto)[0] {
         EntityDto::Line { start, end, .. } => {
             assert!((start.distance(*end) - 40.0).abs() < 1e-9);
@@ -185,7 +182,7 @@ fn center_point_mode_mirrors_the_far_center() {
 #[test]
 fn cursor_driven_width_without_typing() {
     let mut s = session();
-    // Cursor 6 mm off the axis → width 12, no dimension (nothing typed, D9).
+
     let r = s
         .add_slot(&req(
             SlotMode::CenterToCenter,
@@ -227,7 +224,7 @@ fn formula_width_keeps_expression() {
 #[test]
 fn degenerate_cases_rejected() {
     let mut s = session();
-    // Identical centers.
+
     assert!(s
         .add_slot(&req(
             SlotMode::CenterToCenter,
@@ -237,7 +234,7 @@ fn degenerate_cases_rejected() {
             Some("10")
         ))
         .is_err());
-    // Overall shorter than the width.
+
     assert!(s
         .add_slot(&req(
             SlotMode::Overall,
@@ -247,7 +244,7 @@ fn degenerate_cases_rejected() {
             Some("10")
         ))
         .is_err());
-    // Zero cursor width.
+
     assert!(s
         .add_slot(&req(
             SlotMode::CenterToCenter,
@@ -257,7 +254,7 @@ fn degenerate_cases_rejected() {
             None
         ))
         .is_err());
-    // Nothing committed on failures.
+
     assert!(s.dto().entities.is_empty());
 }
 

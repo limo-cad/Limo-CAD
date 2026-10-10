@@ -66,7 +66,7 @@ fn adaptive_exterior_stays_down_with_equal_verified_removal() {
     assert_eq!(before_stock.remaining_voxels, after_stock.remaining_voxels);
     assert!(after_stock.collisions.is_empty());
     assert_adaptive_nc_roundtrip(doc.clone());
-    // Explicit preferred entries must continue to select the requested seam.
+
     doc.linking[0].entry_positions.push(Point2Dto::new(8.0, -5.0));
     assert_adaptive_nc_roundtrip(doc);
     }

@@ -2,23 +2,23 @@
 
 ## Cheap checks before packages
 
-Every Desktop packages platform job depends on path classification, the reusable
-Frontend workflow and the reusable Version guard. A failed or cancelled preflight
-prevents Windows, Ubuntu and macOS package builds from starting. The same gate
-applies to PR, tag and manual package runs. It does not remove any packaged
-viewport, stdio, signing or portability checks.
+Desktop packages classifies paths and runs the reusable Version guard before
+starting platform jobs. Each platform job qualifies its checked OCCT SDK before
+compiling and staging packages. These gates apply to PR, tag and manual runs.
+Packaged viewport, stdio, signing and portability checks remain in place.
 
 Version guard includes the caller workflow in its concurrency key, so its
 standalone required PR check and Desktop packages' preflight cannot cancel each
 other. The required check names in [branch protection](branch-protection.md) stay
-unchanged. CI helper/contract tests run in this dependency-free preflight too.
+unchanged. The independent Rust interface workflow runs CI helper/contract tests.
 
 ## Shared Windows ARM OpenCASCADE cache
 
 `.github/actions/setup-windows-occt` is used by Windows packaging, Windows MCP
 acceptance and the SDK cache warmer. It retains the existing installed-tree and
-binary-cache paths and key formats. Each key includes the runner/target ABI,
-detected MSVC toolset, exact vcpkg revision and `vcpkg.json` hash. There is no
+binary-cache paths. Each key includes the runner/target ABI,
+detected MSVC toolset, exact vcpkg revision, manifest and configuration hashes,
+and the checked OCCT overlay sources. There is no
 partial-key fallback across compiler or SDK versions.
 
 The **Warm Windows ARM SDK cache** workflow runs only on the default branch:
@@ -75,7 +75,7 @@ Windows runner starved two pollers past production's five-second wait while
 the other fourteen kept publishing. It now shares one 120-second budget across
 its threads through `write_inbox_op_within`, joins every worker before
 reporting, and still requires 128 distinct, durable, pending entries. The test
-fixture that serializes `NBCAD_SESSION_DIR` also recovers its lock after a
+fixture that serializes `LIMO_CAD_SESSION_DIR` also recovers its lock after a
 holder panics, so one failing test reports as one failure instead of a
 `PoisonError` in every later test of the same binary.
 
@@ -83,7 +83,7 @@ The stable `mcp-tests` and `MCP tests (Ubuntu)` checks aggregate all three shard
 for their respective platform. They fail if any shard fails, cancels or skips;
 Ubuntu does not wait for Windows. Only then are that platform's three project
 inputs downloaded from the same workflow run and assembled into the existing
-`noBS-CAD-demo-projects-{platform}-{sha}` artifact with version, source commit,
+`Limo-CAD-demo-projects-{platform}-{sha}` artifact with version, source commit,
 sizes and SHA-256 hashes. Partial/empty inputs never produce a final demo bundle.
 Rerunning failed jobs can reuse successful shard inputs from the same run; input
 artifacts are kept for seven days, after which all shards must be rerun together.
@@ -102,7 +102,8 @@ flagship tests more useful than adding Rust caches alone. In
 the cold Windows ARM SDK installation took 71 minutes. These are baselines, not
 a guaranteed runtime for every runner.
 
-Run `node --test scripts/ci/*.test.mjs scripts/sync-version.test.mjs` for fast
+Run `cargo test --locked -p xtask release_tooling::` and
+`cargo test --locked -p xtask workflow_contracts::` for fast
 contract and negative-path tests. Also validate workflow YAML/expressions with
 actionlint when editing it; its runner-label catalog may lag the existing
 `ubuntu-26.04` and `windows-11-vs2026-arm` labels used by this repository. Compare

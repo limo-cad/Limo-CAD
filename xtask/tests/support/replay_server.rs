@@ -8,12 +8,12 @@ use std::{
 };
 
 fn main() {
-    // A broken client must fail this test rather than leave a process behind.
+
     thread::spawn(|| {
         thread::sleep(Duration::from_secs(15));
         std::process::exit(98);
     });
-    if let Some(path) = std::env::var_os("NBCAD_FIXTURE_ARGUMENTS") {
+    if let Some(path) = std::env::var_os("LIMO_CAD_FIXTURE_ARGUMENTS") {
         let mut file = fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -26,7 +26,7 @@ fn main() {
         )
         .unwrap();
     }
-    if let Some(path) = std::env::var_os("NBCAD_FIXTURE_HEARTBEAT") {
+    if let Some(path) = std::env::var_os("LIMO_CAD_FIXTURE_HEARTBEAT") {
         let mut file = fs::OpenOptions::new()
             .create_new(true)
             .write(true)
@@ -40,7 +40,7 @@ fn main() {
             thread::sleep(Duration::from_millis(20));
         });
     }
-    let mode = std::env::var("NBCAD_FIXTURE_MODE").unwrap_or_default();
+    let mode = std::env::var("LIMO_CAD_FIXTURE_MODE").unwrap_or_default();
     if mode == "silent" || mode == "sentinel" {
         loop {
             thread::park();
@@ -56,7 +56,7 @@ fn main() {
     let mut loaded = false;
     for line in std::io::stdin().lock().lines() {
         let line = line.unwrap();
-        if let Some(path) = std::env::var_os("NBCAD_FIXTURE_REQUESTS") {
+        if let Some(path) = std::env::var_os("LIMO_CAD_FIXTURE_REQUESTS") {
             let mut file = fs::OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -85,9 +85,9 @@ fn main() {
                 let model = if mode == "invalid-model" {
                     "{}"
                 } else if mode == "changed-model" && loaded {
-                    r#"{"format":"nbcad-project","schema_version":7,"document":{"name":"changed"},"sketches":[1],"drawings":{"sheets":[1]},"assembly":{"joints":[1]}}"#
+                    r#"{"format":"limo-cad-project","schema_version":7,"document":{"name":"changed"},"sketches":[1],"drawings":{"sheets":[1]},"assembly":{"joints":[1]}}"#
                 } else {
-                    r#"{"format":"nbcad-project","schema_version":7,"document":{"name":"headless fixture"},"sketches":[1],"drawings":{"sheets":[1]},"assembly":{"joints":[1]}}"#
+                    r#"{"format":"limo-cad-project","schema_version":7,"document":{"name":"headless fixture"},"sketches":[1],"drawings":{"sheets":[1]},"assembly":{"joints":[1]}}"#
                 };
                 exported_model = format!("{model:?}");
                 &exported_model
@@ -116,8 +116,8 @@ fn main() {
             } else {
                 r#"{"ok":true}"#
             };
-            // The fixture payloads above are ASCII JSON. Rust's debug string
-            // quoting produces the required JSON string for the text content.
+
+
             let is_error = mode == "failed-reload"
                 && line.contains("\"name\":\"cad_load_project_model\"")
                 || mode == "failed-script" && line.contains("\"action\":\"script\"");
@@ -126,8 +126,8 @@ fn main() {
         println!("{{\"jsonrpc\":\"2.0\",\"id\":{id},\"result\":{result}}}");
         std::io::stdout().flush().unwrap();
     }
-    // Prove Drop kills the owned server even if that server ignores EOF after
-    // successful initialization and a subsequent recipe-catalog failure.
+
+
     if mode == "unknown-recipe" {
         loop {
             thread::park();

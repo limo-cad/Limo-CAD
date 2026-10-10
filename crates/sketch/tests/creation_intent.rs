@@ -1,5 +1,5 @@
 //! Typed locks, snap acquisition, preview and mutation share one geometry intent.
-use nbcad_sketch::*;
+use limo_cad_sketch::*;
 fn v(x: f64, y: f64) -> Vec2 {
     Vec2::new(x, y)
 }
@@ -280,14 +280,10 @@ fn locked_line_only_acquires_points_that_satisfy_the_locks() {
             };
             let preview = s.preview_segment_locked(
                 request.from,
-                request.length_mm,
-                request.angle_deg,
+                (request.length_mm, request.angle_deg),
                 request.to_hint,
                 ctrl,
-                None,
-                None,
-                None,
-                None,
+                (None, None, None, None),
             );
             assert!(!matches!(preview.snap, SnapTarget::Point { .. }));
             let result = s.add_line_locked(&request).unwrap();
@@ -313,7 +309,7 @@ fn locked_line_only_acquires_points_that_satisfy_the_locks() {
 
 #[test]
 fn arcs_and_chamfers_share_formula_validation_and_resolved_geometry() {
-    use nbcad_sketch::{ArcCenterRequest, ChamferRequest};
+    use limo_cad_sketch::{ArcCenterRequest, ChamferRequest};
     for sweep in [-360., -270., -180., -90., 90., 180., 270., 360.] {
         let mut s = session(false, 1.);
         let request = ArcCenterRequest {
@@ -331,9 +327,7 @@ fn arcs_and_chamfers_share_formula_validation_and_resolved_geometry() {
             .unwrap();
         let result = s
             .add_arc_center_locked(
-                request.center,
-                request.start,
-                request.sweep,
+                (request.center, request.start, request.sweep),
                 true,
                 None,
                 request.radius_text.as_deref(),
@@ -349,9 +343,7 @@ fn arcs_and_chamfers_share_formula_validation_and_resolved_geometry() {
         let before = snapshot(&s);
         assert!(s
             .add_arc_center_locked(
-                v(30., 30.),
-                v(40., 30.),
-                v(30., 40.),
+                (v(30., 30.), v(40., 30.), v(30., 40.)),
                 true,
                 None,
                 None,
@@ -379,7 +371,7 @@ fn arcs_and_chamfers_share_formula_validation_and_resolved_geometry() {
         .preview_creation(&CreationPreviewRequest::Chamfer(request.clone()))
         .unwrap();
     let result = s.chamfer_lines(&request).unwrap();
-    // A chamfer also edits its two carriers; the preview is its new connector.
+
     assert!(result
         .sketch
         .entities

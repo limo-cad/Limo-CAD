@@ -1,248 +1,70 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 if [[ $# -ne 3 ]]; then
-  echo "usage: $0 <appimage-or-deb> <x11|xwayland> <diagnostics-directory>" >&2
+  echo "usage: $0 <AppImage|deb> <x11|wayland> <new-evidence-directory>" >&2
   exit 2
 fi
-
 artifact="$(realpath "$1")"
 backend="$2"
-diagnostics="$(realpath -m "$3")"
-if [[ "$backend" != "x11" && "$backend" != "xwayland" ]]; then
-  echo "display backend must be x11 or xwayland" >&2
-  exit 2
-fi
-if [[ ! -f "$artifact" ]]; then
-  echo "Linux application artifact was not found: $artifact" >&2
-  exit 2
-fi
-
-mkdir -p "$diagnostics"
-work="$(mktemp -d)"
-runtime="$work/runtime"
-uri_data="$work/uri-data"
-uri_config="$work/uri-config"
-mkdir -p "$uri_data" "$uri_config"
-probe="$diagnostics/native-viewport-$backend.json"
-app_log="$diagnostics/application-$backend.log"
-weston_log="$diagnostics/weston-$backend.log"
-app_pid=""
-weston_pid=""
-
+destination="$(realpath -m "$3")"
+[[ "$backend" == x11 || "$backend" == wayland ]]
+[[ -f "$artifact" && ! -e "$destination" ]]
+mkdir -p "$destination"
+work="$(mktemp -d /tmp/limo-cad-package-display.XXXXXX)"
+evidence="$work/evidence"
+mkdir "$evidence"
+weston_pid=''
 cleanup() {
-  if [[ -n "$app_pid" ]]; then
-    kill "$app_pid" 2>/dev/null || true
-    wait "$app_pid" 2>/dev/null || true
-  fi
   if [[ -n "$weston_pid" ]]; then
     kill "$weston_pid" 2>/dev/null || true
     wait "$weston_pid" 2>/dev/null || true
   fi
-  rm -rf "$work"
+  cp -a "$evidence/." "$destination/"
+  [[ "$work" == /tmp/limo-cad-package-display.* ]]
+  rm -rf -- "$work"
 }
 trap cleanup EXIT
-
 case "$artifact" in
+  *.deb)
+    dpkg-deb --extract "$artifact" "$work/deb"
+    server="$work/deb/usr/bin/limo-cad"
+    desktop="$work/deb/usr/share/applications/limo-cad.desktop"
+    ;;
   *.AppImage)
     chmod +x "$artifact"
-    (
-      cd "$work"
-      "$artifact" --appimage-extract >/dev/null
-    )
-    app="$work/squashfs-root/AppRun"
-    desktop_directory="$work/squashfs-root"
-    uri_executable="$artifact"
-    if [[ ! -x "$app" ]]; then
-      echo "AppImage did not contain an executable AppRun" >&2
-      exit 1
-    fi
+    (cd "$work" && "$artifact" --appimage-extract >"$evidence/extract.log")
+    server="$work/squashfs-root/AppRun"
+    desktop="$work/squashfs-root/limo-cad.desktop"
+    export APPIMAGE="$artifact" APPDIR="$work/squashfs-root"
     ;;
-  *.deb)
-    package_root="$work/deb-root"
-    dpkg-deb --extract "$artifact" "$package_root"
-    app="$package_root/usr/bin/nbcad"
-    desktop_directory="$package_root/usr/share/applications"
-    uri_executable="$app"
-    if [[ ! -x "$app" ]]; then
-      echo "Debian package did not contain usr/bin/nbcad" >&2
-      exit 1
-    fi
-    ;;
-  *)
-    echo "expected an AppImage or Debian package, got: $artifact" >&2
-    exit 2
-    ;;
+  *) exit 2 ;;
 esac
-
-for helper in xdg-mime update-desktop-database desktop-file-validate; do
-  command -v "$helper" >/dev/null || {
-    echo "$helper is required; install xdg-utils and desktop-file-utils" >&2
-    exit 1
-  }
-done
-desktop_entry="$(find "$desktop_directory" -maxdepth 1 -name '*.desktop' -print -quit)"
-if [[ -z "$desktop_entry" ]]; then
-  echo "Package is missing its desktop entry" >&2
-  exit 1
-fi
-desktop-file-validate "$desktop_entry"
-if ! grep -Eq '^MimeType=([^[:space:]]*;)?x-scheme-handler/nbcad(;|$)' "$desktop_entry" ||
-   ! grep -Eq '^Exec="?(/usr/bin/)?(nbcad|AppRun)"? %[uU]$' "$desktop_entry"; then
-  cat "$desktop_entry" >&2
-  echo "Package must associate nbcad URLs and pass the URL as its only argument" >&2
-  exit 1
-fi
-cp "$desktop_entry" "$diagnostics/packaged-$backend.desktop"
-
-vulkan_icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
-if [[ -z "$vulkan_icd" ]]; then
-  echo "Mesa lavapipe Vulkan ICD was not found" >&2
-  exit 1
-fi
-
-common_env=(
-  "XDG_DATA_HOME=$uri_data"
-  "XDG_CONFIG_HOME=$uri_config"
-  "NBCAD_VIEWPORT_PROBE_FILE=$probe"
-  "WGPU_BACKEND=vulkan"
-  "VK_ICD_FILENAMES=$vulkan_icd"
-  "LIBGL_ALWAYS_SOFTWARE=1"
-  "WEBKIT_DISABLE_DMABUF_RENDERER=1"
-)
-# Extraction avoids CI's FUSE requirement while preserving the outer AppImage
-# path that its normal runtime supplies for portable URI registration.
-if [[ "$artifact" == *.AppImage ]]; then
-  common_env+=("APPIMAGE=$artifact" "APPDIR=$work/squashfs-root")
-fi
-
-if [[ "$backend" == "x11" ]]; then
-  xvfb-run -a -s "-screen 0 1440x900x24" \
-    dbus-run-session -- \
-    env "${common_env[@]}" GDK_BACKEND=x11 "$app" >"$app_log" 2>&1 &
-  app_pid=$!
+desktop-file-validate "$desktop"
+grep -Eq '^MimeType=([^[:space:]]*;)?x-scheme-handler/limo-cad(;|$)' "$desktop"
+cp "$desktop" "$evidence/packaged.desktop"
+mkdir -p "$work/runtime" "$work/config" "$work/data"
+chmod 700 "$work/runtime"
+export XDG_RUNTIME_DIR="$work/runtime" XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data"
+export LIMO_CAD_CONFIG_DIR="$work/config" WGPU_BACKEND=vulkan LIBGL_ALWAYS_SOFTWARE=1
+export VK_ICD_FILENAMES="$(find /usr/share/vulkan/icd.d -maxdepth 1 -name 'lvp_icd*.json' -print -quit)"
+[[ -n "$VK_ICD_FILENAMES" ]]
+if [[ "$backend" == x11 ]]; then
+  env -u WAYLAND_DISPLAY dbus-run-session -- xvfb-run -a -s '-screen 0 2560x1600x24' \
+    cargo xtask test-mcp native-platform --desktop-input --server "$server" --out "$evidence/native-platform" \
+    >"$evidence/fixture.log" 2>&1
 else
-  if ! command -v Xwayland >/dev/null 2>&1; then
-    echo "Xwayland is required for the Wayland-desktop compatibility probe" >&2
-    exit 1
-  fi
-  mkdir -p "$runtime"
-  chmod 700 "$runtime"
-  XDG_RUNTIME_DIR="$runtime" \
-    weston \
-      --backend=headless \
-      --renderer=pixman \
-      --width=1440 \
-      --height=900 \
-      --socket=nbcad-ci \
-      --xwayland \
-      --idle-time=0 \
-      --no-config >"$weston_log" 2>&1 &
+  weston --backend=headless --renderer=pixman --width=1440 --height=900 \
+    --socket=limo-cad-package --idle-time=0 >"$evidence/weston.log" 2>&1 &
   weston_pid=$!
   for _ in $(seq 1 100); do
-    [[ -S "$runtime/nbcad-ci" ]] && break
-    kill -0 "$weston_pid" 2>/dev/null || {
-      cat "$weston_log" >&2
-      echo "Weston exited before publishing its Wayland socket" >&2
-      exit 1
-    }
+    [[ -S "$XDG_RUNTIME_DIR/limo-cad-package" ]] && break
+    kill -0 "$weston_pid"
     sleep 0.1
   done
-  if [[ ! -S "$runtime/nbcad-ci" ]]; then
-    cat "$weston_log" >&2
-    echo "Weston did not publish its Wayland socket" >&2
-    exit 1
-  fi
-  xwayland_display=""
-  for _ in $(seq 1 100); do
-    xwayland_display="$(sed -n 's/.*xserver listening on display \(:[0-9][0-9]*\).*/\1/p' "$weston_log" | tail -n 1)"
-    [[ -n "$xwayland_display" ]] && break
-    kill -0 "$weston_pid" 2>/dev/null || {
-      cat "$weston_log" >&2
-      echo "Weston exited before starting XWayland" >&2
-      exit 1
-    }
-    sleep 0.1
-  done
-  if [[ -z "$xwayland_display" ]]; then
-    cat "$weston_log" >&2
-    echo "Weston did not publish an XWayland display" >&2
-    exit 1
-  fi
-  dbus-run-session -- \
-    env \
-      "${common_env[@]}" \
-      "XDG_RUNTIME_DIR=$runtime" \
-      WAYLAND_DISPLAY=nbcad-ci \
-      "DISPLAY=$xwayland_display" \
-      GDK_BACKEND=x11 \
-      "$app" >"$app_log" 2>&1 &
-  app_pid=$!
+  [[ -S "$XDG_RUNTIME_DIR/limo-cad-package" ]]
+  env -u DISPLAY WAYLAND_DISPLAY=limo-cad-package dbus-run-session -- \
+    cargo xtask verify-package-mcp --server "$server" --server-arg --headless --desktop \
+      --out "$evidence/native-wayland.json" >"$evidence/fixture.log" 2>&1
 fi
-
-for _ in $(seq 1 180); do
-  [[ -f "$probe" ]] && break
-  kill -0 "$app_pid" 2>/dev/null || {
-    cat "$app_log" >&2
-    echo "Application exited before reporting native viewport readiness" >&2
-    exit 1
-  }
-  sleep 0.5
-done
-if [[ ! -f "$probe" ]]; then
-  cat "$app_log" >&2
-  echo "Native viewport did not report ready or failed within 90 seconds" >&2
-  exit 1
-fi
-
-# A render-task panic can race the asynchronous readiness probe. Give the
-# renderer a moment to flush its diagnostics, then require both a live process
-# and a panic-free application log before trusting the probe payload.
-sleep 1
-if ! kill -0 "$app_pid" 2>/dev/null; then
-  cat "$app_log" >&2
-  echo "Application exited immediately after reporting native viewport readiness" >&2
-  exit 1
-fi
-if grep -Eiq 'panicked at|thread .* panicked|Encountered a panic in system' "$app_log"; then
-  cat "$app_log" >&2
-  echo "Native viewport reported ready but the renderer subsequently panicked" >&2
-  exit 1
-fi
-
-# Inspect the registration written by this real packaged launch in an isolated
-# user-data/config directory. Never leave a temporary handler in the user's home.
-handler_name="$(env "XDG_DATA_HOME=$uri_data" "XDG_CONFIG_HOME=$uri_config" \
-  xdg-mime query default x-scheme-handler/nbcad)"
-if [[ -z "$handler_name" || "$handler_name" != "$(basename "$handler_name")" ]]; then
-  echo "Packaged application did not register its recipe URI handler" >&2
-  exit 1
-fi
-handler="$uri_data/applications/$handler_name"
-if [[ ! -f "$handler" ]] || ! grep -Fxq "Exec=\"$uri_executable\" %u" "$handler"; then
-  [[ ! -f "$handler" ]] || cat "$handler" >&2
-  echo "Recipe URI handler does not point to the launched package with one URL argument" >&2
-  exit 1
-fi
-cp "$handler" "$diagnostics/registered-$backend.desktop"
-
-cat "$probe"
-node - "$probe" x11 <<'NODE'
-const [probePath, expectedDisplay] = process.argv.slice(2);
-const probe = JSON.parse(require('node:fs').readFileSync(probePath, 'utf8'));
-if (probe.status !== 'ready') {
-  throw new Error(`native viewport startup failed: ${probe.error ?? 'unknown error'}`);
-}
-if (probe.displayBackend !== expectedDisplay) {
-  throw new Error(`expected ${expectedDisplay}, got ${probe.displayBackend}`);
-}
-if (!String(probe.backend).includes('Vulkan')) {
-  throw new Error(`expected Vulkan renderer, got ${probe.backend}`);
-}
-if (probe.physicalWidth < 100 || probe.physicalHeight < 100) {
-  throw new Error(`invalid surface size ${probe.physicalWidth}x${probe.physicalHeight}`);
-}
-if (probe.renderedFrames < 2) {
-  throw new Error(`renderer reported only ${probe.renderedFrames} frames`);
-}
-NODE
+cargo xtask verify-linux-recipe-handler \
+  --evidence "$evidence" --server "$server" --artifact "$artifact" --backend "$backend"

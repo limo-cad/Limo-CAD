@@ -1,0 +1,25 @@
+---
+description: Cover the complete native UI before MCP, with finite repair cycles and evidence-based completion.
+alwaysApply: true
+---
+
+# Surface qualification
+
+- The user directs UI-first, MCP-second coverage. Do not substitute flagship modeling or one difficult export for a surface survey.
+- Before qualification work, read `docs/qualification/surface-coverage.json` and the retained evidence it references. Keep its run state paused until the user resumes testing; planning does not resume GUI operation.
+- Phase 1 is the entire native UI. Phase 2 is the entire registered MCP surface, including unadvertised tools and meaningful action/argument variants. MCP inspection is permitted during Phase 1; MCP success does not qualify a human UI flow.
+- Finish the inventory first: derive UI entries from the shared catalog and fresh rendered controls, including file/context menus, dynamic dialogs, settings, history, navigation, drawings, CAM and print. Mark the inventory incomplete until every additional area has explicit leaf cases.
+- Use one small reproducible fixture per behavior. Separate geometry correctness, interaction correctness and visual polish. A workspace does not pass because one command works.
+- Give each enabled command/dialog a representative success case plus applicable validation/cancel, edit, Undo/Redo and save/reopen checks. Inspect labels, clipping/overlap, selection/hover, keyboard focus and feedback. Record irregularities instead of overlooking them when geometry succeeds.
+- Inventory distinct modes and documented options; cover each meaningful behavior once. Do not try an unbounded Cartesian product of all inputs.
+- Choose the next not-run UI item in catalog/area order. After one repair cycle passes, record the evidence and move on. Never repeat a passed case without a specific affected change, new concrete report or missing acceptance evidence.
+- Limit one item's initial repair investigation to two repair/rebuild cycles or 30 minutes, whichever comes first. If still unresolved, record a blocker with its reproduction, last result and next hypothesis; continue unaffected coverage. Return to the repair queue after the broad sweep, rather than silently extending the same loop.
+- A blocker is not a pass. Do not enter Phase 2 until all in-scope UI cases pass; any exclusion requires the user's explicit scope decision and stays visible in the ledger.
+- For every exercised item, record revision/build identity, fixture, expected versus actual behavior, functional and polish results, evidence paths and issue/fix commit. Input insertion, screenshots alone and CI green are not equivalent to verified UI effects.
+- When a change affects passed cases, mark only those cases and their actual dependent flows `needs_recheck`, explaining the dependency. Preserve other passes; do not reset the entire ledger after every commit.
+- For MCP, refresh `cad_list_all_tools`, expand schema/action variants and compare against the complete ledger before testing. Use isolated scratch documents and individual supported requests; verify return values and actual state/artifacts, including ownership and asynchronous completion.
+- Preserve the current session's no-replay/no-modeling-script/no-raw-model-session-inbox-write restrictions. During UI qualification, all CAD input uses guarded Rust computer control with observation before every input; read-only MCP verifies effects. Never test MCP mutations against the user's GUI documents. Restricted operations remain visibly untested unless the user changes their scope.
+- Keep one GUI operator, preserve documents/recovery and follow the fresh active session after Undo/Redo or document replacement. Require a matched clean GUI/MCP build before live qualification; respect native foreground guards and verify complete text visibly before submitting dialogs.
+- Batch fixes by affected area into reviewable commits/PRs. Keep the current Bevy transition in PR124 unless the user directs a split; do not merge main without Jack's approval. Commit/push completed fixes and checkpoints promptly, and let existing CI cover regressions.
+- Report UI and MCP separately: passed/not-run/blocked/recheck counts, newly discovered issues, repaired issues, current CI and the next item. Do not describe the program as fully tested while inventory, blockers or phase gates remain incomplete.
+- The final gate is zero unresolved in-scope functional or polish issues, complete evidence for UI then MCP, and relevant CI passing. Report exact limits and exclusions; never promise coverage of every possible input combination or physical qualification.

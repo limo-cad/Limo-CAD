@@ -1,13 +1,13 @@
 //! Real-kernel regressions: dependent profiles must exist before replay, and
 //! introducing implicit boundaries must not reinterpret legacy profile indices.
 #![cfg(feature = "native-occt")]
-use nbcad_core::{BodyId, OriginPlane, PlaneRef};
-use nbcad_occt::OcctKernel;
-use nbcad_sketch::{
+use limo_cad_core::{BodyId, OriginPlane, PlaneRef};
+use limo_cad_occt::OcctKernel;
+use limo_cad_sketch::{
     ArcCenterRequest, RectangleMode, RectangleRequest, SegmentRequest, SetGridSnapRequest,
     SketchManager, Vec2,
 };
-use nbcad_solid::{
+use limo_cad_solid::{
     CommitKernelRequest, DatumPlaneRequest, DatumPlaneSourceDto, EditExtrudeRequest, ExtrudeExtent,
     ExtrudeOperation, ExtrudeRequest, LoftRequest, Point2Dto, ProfileRefDto, RecomputePlanDto,
     RevolveRequest, RibRequest, SetRollbackRequest, SweepRequest,
@@ -103,14 +103,16 @@ fn profile_areas(m: &SketchManager) -> Vec<(u32, f64)> {
         .collect()
 }
 
-fn mesh_volume(body: &nbcad_solid::BodyDto) -> f64 {
+fn mesh_volume(body: &limo_cad_solid::BodyDto) -> f64 {
     let point = |index: u32| {
         let p = &body.mesh.positions[index as usize * 3..index as usize * 3 + 3];
         [p[0] as f64, p[1] as f64, p[2] as f64]
     };
     body.mesh
         .indices
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|triangle| {
             let [a, b, c] = [point(triangle[0]), point(triangle[1]), point(triangle[2])];
             a[0] * (b[1] * c[2] - b[2] * c[1])
@@ -122,10 +124,8 @@ fn mesh_volume(body: &nbcad_solid::BodyDto) -> f64 {
         / 6.0
 }
 
-// A display mesh is intentionally coarse for tiny circular segments. Query
-// the solid intersected with itself to measure the exact kernel volume.
 fn exact_volume(kernel: &OcctKernel, id: BodyId) -> f64 {
-    let pose = || nbcad_occt::PlacedBodyQueryDto {
+    let pose = || limo_cad_occt::PlacedBodyQueryDto {
         body_id: id,
         translation: [0.; 3],
         rotation: [0., 0., 0., 1.],
@@ -366,8 +366,7 @@ fn completed_boundary_pocket_reopens_and_recomputes_without_retargeting() {
         );
         apply(&mut loaded, &mut fresh_kernel, plan);
         assert_eq!(profile_areas(&loaded), areas);
-        // Opening an earlier sketch against the final cut body must not replace
-        // its input boundary with the cut result (a circular dependency).
+
         let edited = loaded.edit_sketch("Sketch2").unwrap();
         assert_eq!(edited.projected_edges, boundary);
         assert_eq!(edited.reference_midpoints.len(), boundary.len());
@@ -376,8 +375,6 @@ fn completed_boundary_pocket_reopens_and_recomputes_without_retargeting() {
         apply(&mut loaded, &mut fresh_kernel, plan);
         assert_eq!(profile_areas(&loaded), areas);
         if bottom {
-            // A real upstream depth change leaves the bottom support plane at
-            // z=0. Replaying the dependent pocket must retain its input region.
             let base = loaded.extrude_definitions()[0].feature_id;
             let plan = loaded
                 .prepare_edit_extrude(EditExtrudeRequest {
@@ -399,6 +396,12 @@ fn legacy_json(m: &SketchManager) -> String {
     let mut model: serde_json::Value =
         serde_json::from_str(&m.export_project_model().unwrap()).unwrap();
     model["schema_version"] = 7.into();
+    model.as_object_mut().unwrap().remove("print_intent");
+    if let Some(views) = model["views"].as_array_mut() {
+        for view in views {
+            view.as_object_mut().unwrap().remove("id");
+        }
+    }
     for sketch in model["sketches"].as_array_mut().unwrap() {
         sketch.as_object_mut().unwrap().remove("support_boundary");
         sketch.as_object_mut().unwrap().remove("profile_identities");
@@ -426,8 +429,8 @@ fn analytic_circle_contacts_between_render_samples_close_minor_regions_on_both_n
             m.begin_sketch(XY).unwrap();
             m.set_grid_snap(SetGridSnapRequest { enabled: false })
                 .unwrap();
-            m.add_circle(nbcad_sketch::CircleRequest {
-                mode: nbcad_sketch::CircleMode::CenterDiameter,
+            m.add_circle(limo_cad_sketch::CircleRequest {
+                mode: limo_cad_sketch::CircleMode::CenterDiameter,
                 p1: Vec2::ZERO,
                 p2: v(10., 0.),
                 ctrl_held: true,
@@ -460,8 +463,7 @@ fn analytic_circle_contacts_between_render_samples_close_minor_regions_on_both_n
             let at = |angle: f64| {
                 circle.center + v(circle.radius * angle.cos(), circle.radius * angle.sin())
             };
-            // Deliberately not a sample vertex. These exact contacts used to
-            // sit outside the tessellated chord and leave the region open.
+
             m.add_line(SegmentRequest {
                 from: at(0.373),
                 to_raw: at(0.373 + sweep),
@@ -543,7 +545,7 @@ fn splitting_consumed_profile_reports_missing_reference_and_undo_restores_it() {
         "{:?}",
         plan.errors
     );
-    // Complete the failed-history transaction, then repair through normal Undo.
+
     let scene = k.recompute(&plan).unwrap();
     m.commit_solid(CommitKernelRequest {
         transaction_id: plan.transaction_id,
@@ -713,8 +715,7 @@ fn crossing_rectangle_notch_cuts_only_its_in_stock_region_and_replays() {
                     1
                 );
             }
-            // Like the garden-bench recipe, choose the in-stock rectangle by
-            // geometry. Profile zero can be the remainder or the outside strip.
+
             let index = areas
                 .iter()
                 .find(|(_, area)| (area - 35.0).abs() < 1e-6)
@@ -810,7 +811,7 @@ fn partial_circular_boundary_samples_keep_direction_on_both_face_normals() {
             sweep_rad: Some(sweep),
         })
         .unwrap();
-        m.add_line(nbcad_sketch::SegmentRequest {
+        m.add_line(limo_cad_sketch::SegmentRequest {
             from: end,
             to_raw: v(5.0, 0.0),
             ctrl_held: true,
@@ -844,8 +845,7 @@ fn partial_circular_boundary_samples_keep_direction_on_both_face_normals() {
                     .sum();
                 assert!((travel.abs() - sweep).abs() < 1e-6);
                 directions.push(travel.signum());
-                // Native and browser now draw these samples verbatim; verify
-                // their world positions really are the original kernel edge.
+
                 let body_edge = m.solid_scene().bodies[0]
                     .edges
                     .iter()

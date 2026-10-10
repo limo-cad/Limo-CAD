@@ -1,4 +1,4 @@
-# Contributing to noBS CAD
+# Contributing to Limo CAD
 
 Thanks for helping. This guide is meant to be practical and welcoming — not
 heavy bureaucracy.
@@ -16,6 +16,26 @@ other’s work; a PR author should not approve their own PR.
 
 Useful labels include: `bug`, `enhancement`, `mcp`, `geometry`, `packaging`,
 `documentation`.
+
+### Contributing without writing code
+
+Model a small real part you already understand, then report one concrete
+difference between the expected and actual behavior. Include the smallest
+editable project that reproduces it, numbered steps, a screenshot, and the
+OS/architecture and build revision from Settings → About. Say whether you used
+the UI or MCP and whether several CAD windows were open. A STEP backup is useful
+for import/export failures, but keep the editable project when history matters.
+See [the edge-case guide](docs/EDGE_CASE_HUNT.md) for examples.
+
+Linux installation feedback, clearer instructions, translation corrections,
+and a first-use review of a short lesson are also useful contributions. Describe
+the exact screen or instruction that caused difficulty; coding experience is
+not required. Avoid sharing confidential designs or personal machine data.
+
+If Git is new to you, a GitHub issue with those details is enough to start.
+Maintainers can help turn a documentation correction into a small pull request.
+Financial support arrangements should be confirmed with a maintainer; this
+repository does not currently configure a funding link.
 
 ## 2. Branches
 
@@ -55,14 +75,14 @@ Pick what fits:
 For desktop viewport rendering, browser output is not visual validation. Bevy
 owns the pixels inside the packaged desktop viewport, and it can fail or clip
 while browser state and browser tests remain correct. Reproduce the scenario
-in a packaged Tauri app and inspect the actual Bevy surface before describing
+in a packaged native app and inspect the actual Bevy surface before describing
 a desktop visual issue as fixed. Record the tested appearance mode and the
 visible result in the PR test plan.
 
 ### Version numbers
 
 The product version lives in `VERSION`. Change it there, run
-`npm run version:sync`, and run `npm run version:check` before you push — do not
+`cargo xtask version --sync`, and run `cargo xtask version --check` before you push — do not
 edit the derived manifests by hand. See [docs/RELEASING.md](docs/RELEASING.md).
 
 ## 5. Follow through until merge-ready

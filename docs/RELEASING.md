@@ -7,39 +7,36 @@ the only file a version bump edits by hand.
 
 ```sh
 printf '0.3.0\n' > VERSION
-npm run version:sync    # node scripts/sync-version.mjs
-npm run version:check   # node scripts/sync-version.mjs --check
+cargo xtask version --sync
+cargo xtask version --check
 ```
 
-`scripts/sync-version.mjs` propagates the value to every carrier that has to
+`xtask/src/release_tooling/version.rs` propagates the value to every carrier that has to
 agree with it:
 
 | Carrier | Why it exists |
 | --- | --- |
 | `Cargo.toml` (`[workspace.package]`) | the one Rust version; all eleven engine crates and `xtask` inherit it with `version.workspace = true` |
-| `src-tauri/Cargo.toml`, `mcp-server/Cargo.toml` | separate workspaces, so they declare the version themselves |
-| `Cargo.lock`, `src-tauri/Cargo.lock`, `mcp-server/Cargo.lock` | lockfiles record the version of every local package |
-| `package.json`, `package-lock.json` | npm identity and the version the packaging workflow reads |
-| `src-tauri/tauri.conf.json` | bundle version: DMG, DEB and AppImage names |
+| `desktop/Cargo.toml`, `mcp-server/Cargo.toml` | separate workspaces, so they declare the version themselves |
+| `Cargo.lock`, `desktop/Cargo.lock`, `mcp-server/Cargo.lock` | lockfiles record the version of every local package |
 | `vcpkg.json` | native dependency manifest identity |
-| `src/files/nbcad.ts` | `application_version` written into `.nbcad` manifests |
 | `docs/DEVELOPMENT.md`, `docs/INSTALL.md`, `docs/OCCT_PACKAGING.md`, `docs/WINDOWS_PACKAGING.md` | packaged-file examples that quote a version |
 
 The `Version guard` workflow runs the check and
-`node --test scripts/sync-version.test.mjs` on every pull request and every push
+`cargo test --locked -p xtask release_tooling::` on every pull request and every push
 to `main`, so a carrier that drifts from `VERSION` fails fast.
 
 Two places derive the version instead of storing it:
 
-- Desktop artifact names come from `package.json` inside
+- Desktop artifact names come from `VERSION` inside
   `desktop-packages.yml`, so the workflow needs no literal version.
 - The binary records `CARGO_PKG_VERSION`, the commit SHA and the build channel
   from `crates/core/build.rs`. A `v*` tag becomes the channel; anything else
-  builds as `preview`. **File → Settings → About noBS CAD** shows
+  builds as `preview`. **File → Settings → About Limo CAD** shows
   `version+revision`.
 
-Adding a new carrier means adding it to `versionCarriers()` in
-`scripts/sync-version.mjs` and, when it is a file, to the table above. The notes
+Adding a new carrier means adding it to `inventory()` in
+`xtask/src/release_tooling/version.rs` and, when it is a file, to the table above. The notes
 in [`release-notes/`](release-notes/README.md) are deliberately **not** carriers:
 they record what one release contained, so a later bump must never rewrite them.
 
@@ -63,12 +60,12 @@ carriers disagree with `VERSION`.
 1. **Bump, sync and write the notes** on a branch from `main` — `VERSION`, the
    synced carriers and `docs/release-notes/v0.3.0.md` in one PR. The body of that
    file becomes the release description, so it is reviewed like any other change.
-   `npm run version:check` (the Version guard on every pull request) fails while
+   `cargo xtask version --check` (the Version guard on every pull request) fails while
    that file is missing, so the tag build never has to discover it. Confirm
    locally:
 
    ```sh
-   npm run version:check
+   cargo xtask version --check
    cargo metadata --offline --locked --format-version 1 > /dev/null
    ```
 
@@ -79,7 +76,7 @@ carriers disagree with `VERSION`.
 
    ```sh
    git checkout main && git pull --ff-only
-   git tag -a v0.3.0 -m "noBS CAD 0.3.0"
+   git tag -a v0.3.0 -m "Limo CAD 0.3.0"
    git push origin v0.3.0
    ```
 
@@ -91,7 +88,7 @@ carriers disagree with `VERSION`.
 
 4. **The tag publishes itself.** A `v*` tag makes `desktop-packages.yml` build the
    Windows x64 and ARM64 portable ZIPs, the signed and notarized macOS DMG and the
-   Ubuntu DEB and AppImage with `NBCAD_BUILD_CHANNEL` set to the tag name. When all
+   Ubuntu DEB and AppImage with `LIMO_CAD_BUILD_CHANNEL` set to the tag name. When all
    four succeed, its `publish_release` job then:
 
    - checks every package against its `.sha256` and fails if any of the five is

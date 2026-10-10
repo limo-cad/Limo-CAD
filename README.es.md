@@ -9,29 +9,33 @@
 
 # Limo CAD
 
-> **Diseñar con comprensión.** *Limo CAD, antes noBS CAD.*
+> **Diseñar con comprensión.**
 
 **CAD paramétrico fácil de usar, gratuito y de código abierto, hoy y siempre.**
 Diseña piezas mecánicas, ensamblajes y planos en tu propio equipo, a mano o con
 tu agente de IA, y mantén editable cada croquis y cada operación.
 
-[![Última versión](https://img.shields.io/github/v/release/limo-cad/Limo-CAD?label=release)](https://github.com/limo-cad/Limo-CAD/releases/latest)
+[![Vista previa de Bevy](https://img.shields.io/badge/Bevy-0.20.0--rc.2-blue)](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)
 [![Licencia: LGPL 2.1+](https://img.shields.io/badge/license-LGPL%202.1%2B-blue)](LICENSE)
 [![Discussions](https://img.shields.io/github/discussions/limo-cad/Limo-CAD?label=discussions)](https://github.com/limo-cad/Limo-CAD/discussions)
 
-**Pre-alfa · Versión 0.2.2**
-· [Notas de la versión y comprobaciones](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.2.2)
+**Pre-alfa · Vista previa de Bevy rc.2 · Versión de la aplicación 0.2.2**
+· [Notas, revisión de origen y comprobaciones](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)
 · [Ayuda de instalación (en inglés)](docs/INSTALL.md)
 
 | Plataforma | Descarga |
 |---|---|
-| Windows 11 | [ZIP x64](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS-CAD-0.2.2-windows-x64.zip) · [ZIP ARM64](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS-CAD-0.2.2-windows-arm64.zip) |
-| macOS (Apple silicon) | [DMG](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS.CAD_0.2.2_aarch64.dmg), firmado y notarizado |
-| Linux | [DEB para Ubuntu 26.04](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS.CAD_0.2.2_amd64.deb) · [AppImage](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS.CAD_0.2.2_amd64.AppImage) |
+| Windows 11 | [ZIP x64](https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS-CAD-0.2.2-windows-x64.zip) |
+| Linux | [DEB para Ubuntu 26.04 x64](https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS.CAD_0.2.2_amd64.deb) |
 
-La firma de código para Windows está en curso. Hasta que llegue, SmartScreen puede
-mostrar una advertencia en el primer inicio; elige **Más información → Ejecutar de todas formas**.
-Haz copias de seguridad de los proyectos importantes mientras la aplicación esté en pre-alfa.
+Estos paquetes usan la revisión `9b082687`; todavía no incluyen las correcciones
+de integración posteriores. Windows ARM64, macOS y AppImage siguen pendientes de
+calificación. La interfaz Bevy para el navegador está en desarrollo. Los nombres
+publicados conservan el nombre anterior del producto. Consulta el
+[estado de la transición (en inglés)](docs/native-transition-status.md).
+
+Los paquetes de Windows no están firmados. SmartScreen puede advertir en el primer
+inicio; elige **Más información → Ejecutar de todas formas**. Guarda copias de tus proyectos pre-alfa.
 
 > **Nota sobre el idioma:** esta página está en español. Los documentos, ejemplos y
 > recursos de conocimiento enlazados están por ahora solo en inglés y se indican
@@ -46,7 +50,7 @@ Haz copias de seguridad de los proyectos importantes mientras la aplicación est
   proyecto, junto con la fiabilidad y el rendimiento. La
   [lección de la primera pieza](#crea-tu-primera-pieza) lleva unos minutos.
 - **Local y tuyo.** Sin cuenta, suscripción ni servicio en la nube. Un proyecto
-  completo (piezas, ensamblajes y planos) vive en un único archivo `.nbcad`.
+  completo (piezas, ensamblajes y planos) vive en un único archivo `.limo`.
 - **Historial paramétrico real.** Los croquis con restricciones gobiernan las
   operaciones sólidas; cambia una cota y todo lo posterior se reconstruye.
 - **Preparado para agentes.** Un servidor MCP integrado permite que cualquier
@@ -82,7 +86,7 @@ Dos etapas Savonius sobre un eje con rodamientos, que mueven un generador median
 <td align="center">
 <a href="https://limo-cad.github.io/Limo-CAD/showcase.html#garden-bench"><b>Ver</b></a>
 · <a href="https://limo-cad.github.io/Limo-CAD/open.html#garden-bench">Abrir receta</a><br>
-<a href="examples/scripts/garden-bench.nbcad.jsonc">Código</a>
+<a href="examples/scripts/garden-bench.limo.jsonc">Código</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/bench.nbcad">.nbcad</a>
 · <a href="docs/assets/showcase/bench-loop.gif">Bucle de construcción</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/bench-build-full.mp4">MP4</a>
@@ -90,7 +94,7 @@ Dos etapas Savonius sobre un eje con rodamientos, que mueven un generador median
 <td align="center">
 <a href="https://limo-cad.github.io/Limo-CAD/showcase.html#d-screw-vise"><b>Ver</b></a>
 · <a href="https://limo-cad.github.io/Limo-CAD/open.html#d-screw-vise">Abrir receta</a><br>
-<a href="examples/scripts/d-screw-vise.nbcad.jsonc">Código</a>
+<a href="examples/scripts/d-screw-vise.limo.jsonc">Código</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/vise.nbcad">.nbcad</a>
 · <a href="docs/assets/showcase/vise-loop.gif">Bucle de construcción</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/vise-build-full.mp4">MP4</a>
@@ -98,7 +102,7 @@ Dos etapas Savonius sobre un eje con rodamientos, que mueven un generador median
 <td align="center">
 <a href="https://limo-cad.github.io/Limo-CAD/showcase.html#vertical-axis-turbine"><b>Ver</b></a>
 · <a href="https://limo-cad.github.io/Limo-CAD/open.html#vertical-axis-turbine">Abrir receta</a><br>
-<a href="examples/scripts/vertical-axis-turbine.nbcad.jsonc">Código</a>
+<a href="examples/scripts/vertical-axis-turbine.limo.jsonc">Código</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/turbine.nbcad">.nbcad</a>
 · <a href="docs/assets/showcase/turbine-loop.gif">Bucle de construcción</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/turbine-build-full.mp4">MP4</a>
@@ -109,7 +113,7 @@ Dos etapas Savonius sobre un eje con rodamientos, que mueven un generador median
 <!-- Print photos: add docs/assets/showcase/<design>-printed.jpg when supplied. -->
 
 Los enlaces de receta cargan el código en **Scripts** para que lo revises antes de
-ejecutarlo. Para inspeccionar enseguida un diseño terminado, descarga su `.nbcad`
+ejecutarlo. Para inspeccionar enseguida un diseño terminado, descarga su `.limo`
 y usa **Archivo → Abrir**. Son ejemplos de desarrollo; el ajuste físico y la
 capacidad de carga siguen sin cualificarse.
 [Diseños, planos y validación (en inglés)](docs/flagship-examples.md) · [Todas las recetas (en inglés)](examples/scripts/README.md)
@@ -121,7 +125,7 @@ Tras [instalar el CAD](docs/INSTALL.md), abre **Scripts**, elige
 La lección construye un bloque de 60 × 30 × 12 mm con los bordes superiores redondeados.
 
 Cuando termine, haz doble clic en la extrusión del historial de operaciones y cambia
-su **Distancia** de **12 a 18 mm**. Guarda el resultado como `first-part.nbcad` y
+su **Distancia** de **12 a 18 mm**. Guarda el resultado como `first-part.limo` y
 vuelve a abrirlo para seguir editando.
 [Instrucciones paso a paso (en inglés)](docs/INSTALL.md#make-your-first-part)
 
@@ -130,7 +134,7 @@ vuelve a abrirlo para seguir editando.
 Los croquis con restricciones y la geometría de referencia gobiernan operaciones
 sólidas editables. Reutiliza piezas en ensamblajes, define uniones y comprueba su
 movimiento e interferencias. Mantén las piezas, los ensamblajes y los planos juntos
-en un único proyecto `.nbcad`.
+en un único proyecto `.limo`.
 
 Asigna materiales y colores por cuerpo y exporta **3MF** para tu programa de laminado.
 Las etiquetas de material y los metadatos de color ayudan en el traspaso; el perfil
@@ -183,10 +187,8 @@ de resistencia sigue siendo una capacidad futura.
 ## Fundamentos de código abierto
 
 - **[Open CASCADE Technology](https://github.com/Open-Cascade-SAS/OCCT)** — geometría e intercambio CAD.
-- **[Bevy](https://bevy.org/) y [wgpu](https://wgpu.rs/)** — renderizado nativo.
+- **[Bevy](https://bevy.org/) y [wgpu](https://wgpu.rs/)** — interfaz y renderizado nativos.
 - **[Rust](https://rust-lang.org/)** — modelado, ensamblajes y ejecución de recetas.
-- **[Tauri](https://tauri.app/) y [React](https://react.dev/)** — contenedor de escritorio e interfaz.
-- **[OpenCascade.js](https://github.com/donalffons/opencascade.js)** — compilaciones de desarrollo para navegador.
 
 Gracias también a [FreeCAD](https://www.freecad.org/) y a la comunidad CAD de código abierto en general.
 
@@ -201,8 +203,7 @@ Las licencias y atribuciones de las dependencias están en los [Avisos de tercer
 Las fuentes de los iconos constan en la [Procedencia de los iconos](docs/ICON_PROVENANCE.md).
 Otros proyectos CAD tienen sus propias licencias; consulta la [guía de contribución](CONTRIBUTING.md#license--borrow).
 
-Limo CAD es compatible con los dispositivos 3Dconnexion SpaceMouse. El puente de controlador
-opcional para desarrollo en navegador solo se carga después de que el usuario lo active.
+El escritorio Bevy admite dispositivos 3Dconnexion SpaceMouse mediante entrada HID nativa.
 Limo CAD es independiente y no está afiliado, respaldado ni certificado por 3Dconnexion.
 3Dconnexion y SpaceMouse son marcas comerciales o registradas de 3Dconnexion.
 Las herramientas de desarrollo de dispositivos de entrada 3D y la tecnología relacionada se

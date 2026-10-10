@@ -1,0 +1,25 @@
+
+
+
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Compose box from collection",
+  "starting_state": "empty",
+  "includes": [
+    "collections/box-stock.collection.jsonc"
+  ],
+  "steps": [
+    {
+      "id": "title",
+      "call": {
+        "group": "document/files",
+        "operation": "cad_set_document_name",
+        "arguments": { "name": "Compose box" }
+      }
+    }
+  ],
+  "exports": {
+    "extrude": { "$ref": "box_extrude" }
+  }
+}

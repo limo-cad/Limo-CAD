@@ -30,7 +30,7 @@
 |------|------|
 | [src/](../src/INDEX.md) | Desktop UI entrypoints |
 | [crates/](../crates/INDEX.md) | Host-neutral Rust crates |
-| [src-tauri/](../src-tauri/INDEX.md) | Native shell (Tauri + OCCT) |
+| [desktop/](../desktop/INDEX.md) | Native desktop (Bevy + OCCT) |
 | [mcp-server/](../mcp-server/INDEX.md) | MCP server surface and disclosure |
 | [examples/scripts/](../examples/scripts/README.md) | Bundled recipes and lessons |
 | [knowledge/](../knowledge/index.md) | Engineering knowledge served through MCP |
@@ -48,7 +48,7 @@
 - [Project direction](goals.md) — reliability, performance and ease of use.
 - [Limo naming proposal](limo-naming-proposal.md) — accepted name, roots, four-language
   presentation, and learning direction.
-- [Limo rename checklist](limo-rename-checklist.md) — sequenced cutover from noBS CAD,
+- [Limo rename checklist](limo-rename-checklist.md) — sequenced cutover from Limo CAD,
   with what must stay stable.
 - [Architecture proposals](proposed-architecture.md) — future approaches and rationale.
 - [Agent and maintainer guidance](agentic/INDEX.md) — disclosure, source installation

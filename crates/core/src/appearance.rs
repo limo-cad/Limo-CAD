@@ -1,6 +1,6 @@
 //! Per-body appearance for viewport tint and manufacturing export (3MF).
 //!
-//! Source of truth for part color/material lives here and in `.nbcad`
+//! Source of truth for part color/material lives here and in `.limo`
 //! (`body_appearances`). Viewport engines consume it; they do not author it.
 //! STEP export does not invent colors from this store.
 //!
@@ -74,9 +74,11 @@ pub struct BodyAppearance {
     #[serde(default = "default_material_name")]
     pub material_name: String,
     /// Filament chemistry family: PLA, PETG, ABS, ASA, TPU, PA, PC, …
+    /// An explicit empty value denotes no filament family; omitted legacy fields use PLA.
     #[serde(default = "default_filament_type")]
     pub filament_type: String,
     /// Vendor / ecosystem: Generic, Bambu Lab, Prusa, Polymaker, …
+    /// An explicit empty value denotes an unspecified vendor.
     #[serde(default = "default_brand")]
     pub brand: String,
     /// Official or marketing color name (e.g. "Jade White").
@@ -96,6 +98,9 @@ pub struct BodyAppearance {
     /// Filament diameter in millimetres (default 1.75).
     #[serde(default = "default_filament_diameter")]
     pub diameter_mm: f64,
+    /// Frozen merged engineering and printing properties; absent in old files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material: Option<crate::MaterialDetails>,
 }
 
 fn default_material_name() -> String {
@@ -126,6 +131,7 @@ impl BodyAppearance {
             filament_id: None,
             preset_id: None,
             density_g_cm3: None,
+            material: None,
             diameter_mm: DEFAULT_FILAMENT_DIAMETER_MM,
         }
     }
@@ -155,6 +161,7 @@ impl PartialEq for BodyAppearance {
             && self.filament_id == other.filament_id
             && self.preset_id == other.preset_id
             && float_eq(self.density_g_cm3, other.density_g_cm3)
+            && self.material == other.material
             && (self.diameter_mm - other.diameter_mm).abs() < 1e-9
     }
 }
@@ -167,7 +174,6 @@ fn float_eq(a: Option<f64>, b: Option<f64>) -> bool {
     }
 }
 
-// Manual Eq because f64 fields are compared with epsilon in PartialEq.
 impl Eq for BodyAppearance {}
 
 #[cfg(test)]
@@ -186,6 +192,7 @@ mod tests {
             filament_id: Some("GFA00".into()),
             preset_id: Some("bambu.pla.basic.red".into()),
             density_g_cm3: Some(1.24),
+            material: None,
             diameter_mm: 1.75,
         };
         let json = serde_json::to_string(&appearance).unwrap();

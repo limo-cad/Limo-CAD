@@ -19,11 +19,11 @@
   "source_hash_encoding": "UTF-8 with LF line endings",
   "sources": [
     {
-      "path": "examples/scripts/vertical-axis-turbine.nbcad.jsonc",
+      "path": "examples/scripts/vertical-axis-turbine.limo.jsonc",
       "sha256_utf8_lf": "5c56da320a5512846db02f75f366416e3ce5bfa13ba4e6c57d821388ccd2aacd"
     },
     {
-      "path": "examples/scripts/turbine-fit-coupons.nbcad.jsonc",
+      "path": "examples/scripts/turbine-fit-coupons.limo.jsonc",
       "sha256_utf8_lf": "cd865dd24baf39f95a7ea5dc2184646ab4844e47e17e8a6d5f0608860ddca5e1"
     },
     {
@@ -72,11 +72,11 @@
       "acceptance_test_revision": "80942b4cb5f611a5ce16820d5d24821a93dc4755",
       "sources": [
         {
-          "path": "examples/scripts/vertical-axis-turbine.nbcad.jsonc",
+          "path": "examples/scripts/vertical-axis-turbine.limo.jsonc",
           "sha256_utf8_lf": "47008f739af8cc2a441d29ddd257df26ae96bc56adbae349ba2c6824e92f27c6"
         },
         {
-          "path": "examples/scripts/turbine-fit-coupons.nbcad.jsonc",
+          "path": "examples/scripts/turbine-fit-coupons.limo.jsonc",
           "sha256_utf8_lf": "00282b6ec0975036cec74e90814b3a0646a964bd2acec180d8f5b8155e55616c"
         },
         {
@@ -239,62 +239,62 @@
         },
         "native_projects": [
           {
-            "path": "final-drawing-source/main/vertical-axis-turbine.nbcad",
+            "path": "final-drawing-source/main/vertical-axis-turbine.limo",
             "bytes": 59128,
             "sha256": "08b3229b08796097836601119ba00f7e4ec9c6e72d595e140e2b362cb0744ecd"
           },
           {
-            "path": "final-drawing-source/main/stage.nbcad",
+            "path": "final-drawing-source/main/stage.limo",
             "bytes": 49699,
             "sha256": "f8ce71cf0d7e34517854a2205442e027387686dfe67017de3b2bd3a7a8e409e8"
           },
           {
-            "path": "final-drawing-source/main/cap.nbcad",
+            "path": "final-drawing-source/main/cap.limo",
             "bytes": 49685,
             "sha256": "df4a68c7e4985ae936d0034399c197c72ef97c464f41a782f68c53bcdd42dace"
           },
           {
-            "path": "final-drawing-source/main/base.nbcad",
+            "path": "final-drawing-source/main/base.limo",
             "bytes": 49688,
             "sha256": "21feb874e48d014b69590faa834fc405bef57119034306dd9100217948695161"
           },
           {
-            "path": "final-drawing-source/main/tower.nbcad",
+            "path": "final-drawing-source/main/tower.limo",
             "bytes": 49701,
             "sha256": "ce21d6a958f1e046154da27ac77be280d9f0a1c9c9df4d90bc92ed4319811f34"
           },
           {
-            "path": "final-drawing-source/main/rotor_support_sleeve.nbcad",
+            "path": "final-drawing-source/main/rotor_support_sleeve.limo",
             "bytes": 49685,
             "sha256": "3aae2ba768fd400c0eb33b24e0e9985a4656fdce80b9714e4892dfe2c2169338"
           },
           {
-            "path": "final-drawing-source/main/motor_bracket.nbcad",
+            "path": "final-drawing-source/main/motor_bracket.limo",
             "bytes": 49684,
             "sha256": "40d2c4ea9b521e434fd6635851720d5357931e3d02280dfc7de4dcc91d127ab3"
           },
           {
-            "path": "final-drawing-source/main/motor_mount.nbcad",
+            "path": "final-drawing-source/main/motor_mount.limo",
             "bytes": 49685,
             "sha256": "73294eff398f42a4dc35df190c2a7f7925760aa3647404459d051552c9e8578a"
           },
           {
-            "path": "final-drawing-source/main/guard.nbcad",
+            "path": "final-drawing-source/main/guard.limo",
             "bytes": 49688,
             "sha256": "6f18082fa2cede09a0bf2633efe00d9ab206a813b6a2d5144ab8d05d4df94192"
           },
           {
-            "path": "final-drawing-source/main/guard_lid.nbcad",
+            "path": "final-drawing-source/main/guard_lid.limo",
             "bytes": 49682,
             "sha256": "2c883503b17cf23a7559fada2b5610ef337c7d41c688cfce09c96c9c65a55e6f"
           },
           {
-            "path": "final-drawing-source/main/rotor_gear.nbcad",
+            "path": "final-drawing-source/main/rotor_gear.limo",
             "bytes": 49685,
             "sha256": "02b5c329714da2d7362f42c586448eb0b37f32258b26e72a16fb219b4afe5c51"
           },
           {
-            "path": "final-drawing-source/main/pinion.nbcad",
+            "path": "final-drawing-source/main/pinion.limo",
             "bytes": 49684,
             "sha256": "74bca504c3d7926d36f093040d93e4bda8cd101fd8cdce0e44f761f4d0534f06"
           }
@@ -569,7 +569,7 @@
         },
         "native_projects": [
           {
-            "path": "final-drawing-source/coupon/turbine-fit-coupons.nbcad",
+            "path": "final-drawing-source/coupon/turbine-fit-coupons.limo",
             "bytes": 19004,
             "sha256": "d2a2cf4e3952fd3111bae684a96afac485cdca7482d6509b8a4bd3f005077016"
           }
@@ -937,7 +937,7 @@
       "sha256": "3fbb96c076176fcb38009303e928d75fb61a776a58dc2403cc229e355b2501da"
     },
     {
-      "path": "final-drawing-source/coupon/turbine-fit-coupons.nbcad",
+      "path": "final-drawing-source/coupon/turbine-fit-coupons.limo",
       "bytes": 19004,
       "sha256": "d2a2cf4e3952fd3111bae684a96afac485cdca7482d6509b8a4bd3f005077016"
     },
@@ -967,7 +967,7 @@
       "sha256": "b1d61d97f57f9c7673fde24143df36f855fd0ad42be5cff3ba39ef075f748682"
     },
     {
-      "path": "final-drawing-source/main/base.nbcad",
+      "path": "final-drawing-source/main/base.limo",
       "bytes": 49688,
       "sha256": "21feb874e48d014b69590faa834fc405bef57119034306dd9100217948695161"
     },
@@ -997,7 +997,7 @@
       "sha256": "8d664b567a607af806dad1bb22c6260c891d9627efba269424f068f9ae5bde5f"
     },
     {
-      "path": "final-drawing-source/main/cap.nbcad",
+      "path": "final-drawing-source/main/cap.limo",
       "bytes": 49685,
       "sha256": "df4a68c7e4985ae936d0034399c197c72ef97c464f41a782f68c53bcdd42dace"
     },
@@ -1017,7 +1017,7 @@
       "sha256": "9d24cdf1532745f2ef090512276fb01c477995cba2ada7f9232d395bd692b590"
     },
     {
-      "path": "final-drawing-source/main/guard.nbcad",
+      "path": "final-drawing-source/main/guard.limo",
       "bytes": 49688,
       "sha256": "6f18082fa2cede09a0bf2633efe00d9ab206a813b6a2d5144ab8d05d4df94192"
     },
@@ -1037,7 +1037,7 @@
       "sha256": "fa393a5980000f9f0c7ace7debc250a4295f2327549eace059352deac72c2738"
     },
     {
-      "path": "final-drawing-source/main/guard_lid.nbcad",
+      "path": "final-drawing-source/main/guard_lid.limo",
       "bytes": 49682,
       "sha256": "2c883503b17cf23a7559fada2b5610ef337c7d41c688cfce09c96c9c65a55e6f"
     },
@@ -1067,7 +1067,7 @@
       "sha256": "b3b64419d2d6099973c206ed5c253337757027ddfb41533243e72efb6e99c094"
     },
     {
-      "path": "final-drawing-source/main/motor_bracket.nbcad",
+      "path": "final-drawing-source/main/motor_bracket.limo",
       "bytes": 49684,
       "sha256": "40d2c4ea9b521e434fd6635851720d5357931e3d02280dfc7de4dcc91d127ab3"
     },
@@ -1087,7 +1087,7 @@
       "sha256": "e99582e5f078422c93c9d0f036e78e3aea16ed0fafafc3624cc176d2873f6b8e"
     },
     {
-      "path": "final-drawing-source/main/motor_mount.nbcad",
+      "path": "final-drawing-source/main/motor_mount.limo",
       "bytes": 49685,
       "sha256": "73294eff398f42a4dc35df190c2a7f7925760aa3647404459d051552c9e8578a"
     },
@@ -1107,7 +1107,7 @@
       "sha256": "d841d998d2343ced6ff006532d74a059ad2722de35f7215679b0c9963304d59f"
     },
     {
-      "path": "final-drawing-source/main/pinion.nbcad",
+      "path": "final-drawing-source/main/pinion.limo",
       "bytes": 49684,
       "sha256": "74bca504c3d7926d36f093040d93e4bda8cd101fd8cdce0e44f761f4d0534f06"
     },
@@ -1127,7 +1127,7 @@
       "sha256": "17a529e1499ec6e2674b40461e57b6840a219499c802182c02f70369ef150979"
     },
     {
-      "path": "final-drawing-source/main/rotor_gear.nbcad",
+      "path": "final-drawing-source/main/rotor_gear.limo",
       "bytes": 49685,
       "sha256": "02b5c329714da2d7362f42c586448eb0b37f32258b26e72a16fb219b4afe5c51"
     },
@@ -1147,7 +1147,7 @@
       "sha256": "cf0e2b1aa46040eb6b2fba55ada9735dc4564053aef79d99a564f965ff3f2b93"
     },
     {
-      "path": "final-drawing-source/main/rotor_support_sleeve.nbcad",
+      "path": "final-drawing-source/main/rotor_support_sleeve.limo",
       "bytes": 49685,
       "sha256": "3aae2ba768fd400c0eb33b24e0e9985a4656fdce80b9714e4892dfe2c2169338"
     },
@@ -1187,7 +1187,7 @@
       "sha256": "aa52b8c71b5cdb12717ce501aa02878fe72e55a66c175aca23c4b8fa80c15c9f"
     },
     {
-      "path": "final-drawing-source/main/stage.nbcad",
+      "path": "final-drawing-source/main/stage.limo",
       "bytes": 49699,
       "sha256": "f8ce71cf0d7e34517854a2205442e027387686dfe67017de3b2bd3a7a8e409e8"
     },
@@ -1207,7 +1207,7 @@
       "sha256": "bed457a8da41ebca1c5a829562cd999d620af188ebc78d71dedd9e3796b92ded"
     },
     {
-      "path": "final-drawing-source/main/tower.nbcad",
+      "path": "final-drawing-source/main/tower.limo",
       "bytes": 49701,
       "sha256": "ce21d6a958f1e046154da27ac77be280d9f0a1c9c9df4d90bc92ed4319811f34"
     },
@@ -1217,7 +1217,7 @@
       "sha256": "709574bbd30f3b2e31b1f0146e2735689b48c97bf39d1e61cf7b8f0355c7729a"
     },
     {
-      "path": "final-drawing-source/main/vertical-axis-turbine.nbcad",
+      "path": "final-drawing-source/main/vertical-axis-turbine.limo",
       "bytes": 59128,
       "sha256": "08b3229b08796097836601119ba00f7e4ec9c6e72d595e140e2b362cb0744ecd"
     },

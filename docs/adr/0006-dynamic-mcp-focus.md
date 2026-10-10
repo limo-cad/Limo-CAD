@@ -13,7 +13,7 @@
 
 ## Context
 
-Today `nbcad-mcp` speaks MCP over **stdio** (good: local, offline). Early
+Today `limo-cad-mcp` speaks MCP over **stdio** (good: local, offline). Early
 drafts assumed a large static tool list with `tools.listChanged: false`. Live
 server now advertises dynamic tools and soft focus packs.
 

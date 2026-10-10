@@ -1,8 +1,8 @@
 //! Read-only, offline MCP access to the repository's existing OKF Markdown bundle.
 //!
-//! The inventory is the `nbcad-help` embed of every `knowledge/**/*.md` file, so
+//! The inventory is the `limo-cad-help` embed of every `knowledge/**/*.md` file, so
 //! `cad_help` search and these resources always describe the same revision.
-use nbcad_help::{knowledge_file_by_uri, knowledge_files};
+use limo_cad_help::{knowledge_file_by_uri, knowledge_files};
 use serde_json::{json, Value};
 
 fn frontmatter<'a>(text: &'a str, key: &str) -> Option<&'a str> {
@@ -40,7 +40,6 @@ pub(crate) fn list() -> Value {
 }
 
 pub(crate) fn read(uri: &str) -> Option<Value> {
-    // Exact inventory lookup; never turn a client URI into a filesystem path.
     let file = knowledge_file_by_uri(uri)?;
     Some(json!({"contents": [{"uri": uri, "mimeType": "text/markdown", "text": file.text}]}))
 }
@@ -61,7 +60,7 @@ mod tests {
             }
             for id in references.split(',').map(str::trim) {
                 assert!(
-                    nbcad_recipes::find(id).is_ok(),
+                    limo_cad_recipes::find(id).is_ok(),
                     "knowledge article {} refers to an unpublished recipe: {id}",
                     file.path
                 );

@@ -1,0 +1,89 @@
+{
+  "qualification": "Actual human UI import, reopen and native export inspection",
+  "date_utc": "2026-10-08",
+  "platform": "Windows",
+  "source_revision": "51cb7479266dc410d3edea108c0b7e6e8b557d6c",
+  "runtime": {
+    "source_modified": false,
+    "build_pair": "matched",
+    "native_computer_control": true,
+    "verified_payload_hashes": 70,
+    "executable_sha256": "5a1de956d1ae1031b7de1e3bf6f78ebe98a0ee6d064d526644167c288403bb82"
+  },
+  "input": {
+    "file": "Medix_KW22_v4.STEP",
+    "sha256": "17d7473c73db7bdf302aa118fe377bae10578f1c72fe03238f8448545d26d8d2",
+    "unchanged": true
+  },
+  "cad_document": {
+    "file": "Medix KW22 v4 - complete human UI.limo",
+    "live_matches_saved_model": true,
+    "compound_bodies": 1,
+    "scene_faces": 8908,
+    "scene_errors": 0,
+    "display_warnings": 0,
+    "scene_size_mm": [536, 327.47, 48]
+  },
+  "native_export": {
+    "source_precision_and_oriented_closure_accepted": true,
+    "native_shells": 33,
+    "assembled_placement_preserved": true,
+    "bbox_min_mm": [-268, -163.73499999999999, -47.80021300286156],
+    "bbox_max_mm": [268, 163.73499999999999, 0.2]
+  },
+  "three_mf": {
+    "file": "Medix KW22 v4 - native precision human UI.3mf",
+    "bytes": 6815148,
+    "sha256": "3196c28b2830e5bc0c31ac8e758805305b9181eed1ffab1adeecb6137756354a",
+    "mode": "portable_model",
+    "unit": "millimeter",
+    "mesh_objects": 1,
+    "build_items": 1,
+    "vertices": 227034,
+    "triangles": 454572,
+    "zero_area_triangles": 0,
+    "invalid_directed_edge_links": 0,
+    "signed_volume_mm3": 1954119.0553390614
+  },
+  "stl": {
+    "file": "Medix KW22 v4 - native precision human UI.stl",
+    "bytes": 139395604,
+    "sha256": "5fcf5af6ce32f64cae40c5c89e92cef19bf5f51fa31a60e2fdc906deda8a8d53",
+    "format": "ascii",
+    "facets": 454572,
+    "nonfinite_facets": 0,
+    "degenerate_facets": 0,
+    "zero_normals": 0,
+    "opposing_normals": 0
+  },
+  "cross_format_comparison": {
+    "ordered_vertex_coordinate_mismatches": 0,
+    "opposing_stl_normals": 0
+  },
+  "fresh_original_import": {
+    "source_revision": "d8b29c3f058726dfdea8cee859e58290b27e25e3",
+    "source_modified": false,
+    "build_pair": "matched",
+    "verified_payload_hashes": 70,
+    "executable_sha256": "d9294a2f687ffbd18f5bde6d28ebfdbff20e2db700218a9d1568a227be4d9f9f",
+    "cad_file": "Medix KW22 v4 - fresh native precision human UI.limo",
+    "live_matches_saved_model": true,
+    "saved_model_matches_prior_import": true,
+    "scene_errors": 0,
+    "display_warnings": 0,
+    "native_export_accepted": true,
+    "three_mf_file": "Medix KW22 v4 - fresh native precision human UI.3mf",
+    "three_mf_matches_prior_package_bytes": true,
+    "three_mf_sha256": "3196c28b2830e5bc0c31ac8e758805305b9181eed1ffab1adeecb6137756354a",
+    "ordered_stl_coordinate_mismatches": 0,
+    "session_storage_override": "LIMO_CAD_SESSION_DIR",
+    "print_cache_override": "LIMO_CAD_PRINT_CACHE",
+    "prior_session_and_recovery_data_preserved": true
+  },
+  "limits": {
+    "default_bed_layout_issues": ["below_bed", "outside_bed", "arrangement_does_not_fit"],
+    "physical_printing_qualified": false,
+    "three_model_walkthrough_complete": false,
+    "test_suites_run_locally": false
+  }
+}

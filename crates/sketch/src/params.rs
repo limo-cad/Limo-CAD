@@ -155,8 +155,6 @@ impl ParamTable {
             param.expression = None;
             param.value = v;
         } else {
-            // Parse now for early syntax errors (deps/cycles caught by
-            // reevaluate below, with a restore on failure).
             let old = param.expression.clone();
             param.expression = Some(trimmed.to_string());
             if let Err(e) = self.reevaluate() {
@@ -212,7 +210,6 @@ impl ParamTable {
 
     /// Recompute every parameter's value in dependency order.
     pub fn reevaluate(&mut self) -> Result<(), ExprError> {
-        // Parse all expressions up front (syntax errors surface here).
         let mut asts: Vec<Option<Ast>> = Vec::with_capacity(self.params.len());
         for p in &self.params {
             asts.push(match &p.expression {
@@ -223,7 +220,7 @@ impl ParamTable {
 
         let n = self.params.len();
         let mut values = vec![0.0; n];
-        let mut state = vec![0u8; n]; // 0 = unvisited, 1 = visiting, 2 = done
+        let mut state = vec![0u8; n];
 
         fn visit(
             i: usize,
@@ -236,7 +233,6 @@ impl ParamTable {
             match state[i] {
                 2 => return Ok(()),
                 1 => {
-                    // Cycle: report from the first occurrence of this param.
                     let start = stack.iter().position(|n| n == &params[i].name).unwrap_or(0);
                     let mut cycle = stack[start..].to_vec();
                     cycle.push(params[i].name.clone());
@@ -247,7 +243,7 @@ impl ParamTable {
             state[i] = 1;
             stack.push(params[i].name.clone());
             let value = match &asts[i] {
-                None => params[i].value, // literal
+                None => params[i].value,
                 Some(ast) => {
                     let mut resolver = |name: &str| -> Result<f64, ExprError> {
                         let Some(j) = params.iter().position(|p| p.name == name) else {

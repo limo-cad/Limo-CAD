@@ -11,9 +11,6 @@ inputs:
   msvc-component:
     description: Visual Studio component required by this architecture
     required: true
-  vcpkg-commit:
-    description: Pinned vcpkg revision
-    default: 716b42043743cdceabed9c8e2e6cf80ddae1e0c1
 
 outputs:
   root:
@@ -27,9 +24,8 @@ runs:
       uses: actions/checkout@v4
       with:
         repository: microsoft/vcpkg
-        ref: ${{ inputs.vcpkg-commit }}
+        ref: 716b42043743cdceabed9c8e2e6cf80ddae1e0c1
         path: .vcpkg
-        # Versioned port trees need history, not a shallow checkout.
         fetch-depth: 0
 
     - name: Detect MSVC toolset
@@ -46,6 +42,7 @@ runs:
         $toolset = (Get-Content -LiteralPath $versionFile -Raw).Trim()
         if ([string]::IsNullOrWhiteSpace($toolset)) { throw "MSVC toolset version is empty" }
         "toolset=$toolset" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        "vs-root=$installationRoot" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
         $root = Join-Path $env:GITHUB_WORKSPACE "vcpkg_installed\$env:VCPKG_TRIPLET"
         "root=$root" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
@@ -54,7 +51,7 @@ runs:
       uses: actions/cache/restore@v4
       with:
         path: ${{ github.workspace }}\vcpkg_installed
-        key: vcpkg-installed-v1-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-${{ inputs.vcpkg-commit }}-${{ hashFiles('vcpkg.json') }}
+        key: vcpkg-installed-v2-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-716b42043743cdceabed9c8e2e6cf80ddae1e0c1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'native/occt-overlay/**') }}
 
     - name: Restore vcpkg binary cache
       if: steps.installed.outputs.cache-hit != 'true'
@@ -62,7 +59,7 @@ runs:
       uses: actions/cache/restore@v4
       with:
         path: ${{ github.workspace }}\.cache\vcpkg\archives
-        key: vcpkg-binary-v2-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-${{ inputs.vcpkg-commit }}-${{ hashFiles('vcpkg.json') }}
+        key: vcpkg-binary-v3-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-716b42043743cdceabed9c8e2e6cf80ddae1e0c1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'native/occt-overlay/**') }}
 
     - name: Install pinned OpenCASCADE
       if: steps.installed.outputs.cache-hit != 'true'
@@ -80,21 +77,32 @@ runs:
           --x-install-root="$env:GITHUB_WORKSPACE\vcpkg_installed"
         if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed" }
 
-    # Save before application/tests can fail or time out. Never weaken the
-    # compiler/SDK key to reuse an ABI-incompatible cache.
+    - name: Qualify checked header and actual runtime
+      shell: pwsh
+      env:
+        VS_ROOT: ${{ steps.msvc.outputs.vs-root }}
+        OCCT_SDK: ${{ steps.msvc.outputs.root }}
+        VCPKG_TRIPLET: ${{ inputs.triplet }}
+      run: |
+        $architecture = if ($env:VCPKG_TRIPLET.StartsWith('arm64-')) { 'arm64' } else { 'amd64' }
+        $hostArchitecture = if ($env:RUNNER_ARCH -eq 'ARM64') { 'arm64' } else { 'amd64' }
+        & (Join-Path $env:VS_ROOT 'Common7\Tools\Launch-VsDevShell.ps1') -Arch $architecture -HostArch $hostArchitecture -SkipAutomaticLocation
+        cargo xtask verify-occt-storage --prefix $env:OCCT_SDK
+        if ($LASTEXITCODE -ne 0) { throw 'Checked OCCT runtime qualification failed' }
+
     - name: Save vcpkg binary cache
       if: steps.installed.outputs.cache-hit != 'true' && steps.binary.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ${{ github.workspace }}\.cache\vcpkg\archives
-        key: vcpkg-binary-v2-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-${{ inputs.vcpkg-commit }}-${{ hashFiles('vcpkg.json') }}
+        key: vcpkg-binary-v3-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-716b42043743cdceabed9c8e2e6cf80ddae1e0c1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'native/occt-overlay/**') }}
 
     - name: Save installed OpenCASCADE tree
       if: steps.installed.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ${{ github.workspace }}\vcpkg_installed
-        key: vcpkg-installed-v1-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-${{ inputs.vcpkg-commit }}-${{ hashFiles('vcpkg.json') }}
+        key: vcpkg-installed-v2-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-716b42043743cdceabed9c8e2e6cf80ddae1e0c1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'native/occt-overlay/**') }}
 
     - name: Report OpenCASCADE cache source
       shell: pwsh

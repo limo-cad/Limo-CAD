@@ -1,10 +1,9 @@
-//! Serializable DTOs for the sketch-session API, exchanged as JSON over both
-//! hosts. The frontend TypeScript types in `src/engine/types.ts` mirror these
-//! 1:1.
+//! Serializable DTOs for the sketch-session API, shared by native and
+//! WebAssembly hosts and the MCP JSON interface.
 
 use serde::{Deserialize, Serialize};
 
-use nbcad_core::{DimensionStyle, DocumentDto, EdgeId};
+use limo_cad_core::{DimensionStyle, DocumentDto, EdgeId};
 
 use crate::constraint::{Constraint, ConstraintId};
 use crate::entity::EntityId;
@@ -34,12 +33,21 @@ pub struct ViewPartOffsetDto {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NamedViewConfigurationDto {
+    /// Stable saved-layout identity, assigned on its first successful owned edit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     pub name: String,
     pub camera: ViewCameraDto,
     pub visible_body_ids: Vec<u64>,
     /// Empty means the assembled pose.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub part_offsets: Vec<ViewPartOffsetDto>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub occurrence_offsets: Vec<limo_cad_assembly::ViewOccurrenceOffsetDto>,
+    #[serde(default)]
+    pub print_layout: bool,
+    #[serde(default)]
+    pub print_bed: limo_cad_core::PrintBedDto,
 }
 
 /// Saved views. `active` is this session only and is not stored in the project.
@@ -55,6 +63,7 @@ pub struct NamedViewsDto {
 pub struct RecallNamedViewDto {
     pub view: NamedViewConfigurationDto,
     pub visibility: ProjectVisibilityDto,
+    pub solution: limo_cad_assembly::AssemblySolutionDto,
 }
 
 /// One kilometer is far past any part this modeler builds, and still exact in f32.
@@ -121,7 +130,15 @@ fn validate_camera(camera: &ViewCameraDto, name: &str) -> Result<(), String> {
 /// Body existence is checked by the manager against the live model.
 pub(crate) fn validate_named_views(views: &[NamedViewConfigurationDto]) -> Result<(), String> {
     let mut names = std::collections::BTreeSet::new();
+    let mut ids = std::collections::BTreeSet::new();
     for view in views {
+        if let Some(id) = &view.id {
+            let parsed =
+                uuid::Uuid::parse_str(id).map_err(|_| "Named layout identity must be a UUID")?;
+            if parsed.to_string() != *id || !ids.insert(parsed) {
+                return Err("Named layout identities must be unique canonical UUIDs".into());
+            }
+        }
         let name = view.name.trim();
         if name.is_empty()
             || name.chars().count() > 200
@@ -138,6 +155,22 @@ pub(crate) fn validate_named_views(views: &[NamedViewConfigurationDto]) -> Resul
             ));
         }
         validate_camera(&view.camera, name)?;
+        view.print_bed.validate()?;
+        let mut occurrences = std::collections::BTreeSet::new();
+        for offset in &view.occurrence_offsets {
+            finite_vector(offset.translation, "occurrence offset")?;
+            let norm = offset.rotation.iter().map(|v| v * v).sum::<f64>();
+            if offset.occurrence_id.0 == 0
+                || !occurrences.insert(offset.occurrence_id.0)
+                || offset.rotation.iter().any(|v| !v.is_finite())
+                || !norm.is_finite()
+                || norm < 1e-12
+            {
+                return Err(format!(
+                    "named view '{name}' has an invalid or duplicate occurrence offset"
+                ));
+            }
+        }
         let mut visible = std::collections::BTreeSet::new();
         for id in &view.visible_body_ids {
             if *id == 0 {
@@ -188,7 +221,7 @@ pub struct ConstructionVisibilityRequest {
 
 /// One entity in a sketch snapshot. Lines carry both their endpoint point
 /// ids (structural coincident) and the resolved endpoint coordinates so the
-/// frontend can render without resolving references itself.
+/// UI can render without resolving references itself.
 /// `fully_defined` comes from the solver's per-entity free-variable
 /// analysis and drives constraint-state coloring (blue vs. defined).
 /// NOT Copy: the spline variant owns its point lists.
@@ -227,7 +260,7 @@ pub enum EntityDto {
         fully_defined: bool,
     },
     /// Fit-point spline: fit points plus the engine-tessellated polyline
-    /// (centripetal Catmull-Rom), so the frontend renders exactly what the
+    /// (centripetal Catmull-Rom), so the UI renders exactly what the
     /// engine computed — single source of truth for the curve shape.
     Spline {
         id: EntityId,
@@ -288,6 +321,10 @@ pub struct SketchDto {
     pub name: String,
     pub plane: PlaneRef,
     pub basis: PlaneBasis,
+    /// Occurrence whose display frame is used during an in-place edit.
+    /// Authored coordinates and persisted sketch planes remain definition-local.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edit_occurrence_id: Option<limo_cad_assembly::OccurrenceId>,
     pub entities: Vec<EntityDto>,
     pub constraints: Vec<ConstraintDto>,
     /// Midpoints of coplanar support-face edges that are available as
@@ -305,9 +342,24 @@ pub struct SketchDto {
     /// Driving dimensions with presentation data (D9).
     pub dimensions: Vec<DimensionDto>,
     pub dimension_style: DimensionStyle,
+    /// Current snap preference, including changes made through another host.
+    #[serde(default = "snap_enabled_by_default")]
+    pub grid_snap: bool,
     pub dof: DofDto,
     pub can_undo: bool,
     pub can_redo: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EditSketchRequest {
+    pub name: String,
+    #[serde(default)]
+    pub occurrence_id: Option<limo_cad_assembly::OccurrenceId>,
+}
+
+fn snap_enabled_by_default() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -596,8 +648,6 @@ pub struct TrackingGuideDto {
     pub snapped_to: Vec2,
 }
 
-// --- Requests ---
-
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SegmentRequest {
     pub from: Vec2,
@@ -756,6 +806,27 @@ pub struct CreationPreviewDto {
     pub values: std::collections::BTreeMap<String, f64>,
 }
 
+/// Runtime acquisition distances supplied by a graphical viewport. The host
+/// scopes these settings to one preview or creation, including queued commits.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ViewportSnapContext {
+    pub grid_step_mm: f64,
+    pub point_tolerance_mm: f64,
+    pub grid_capture_mm: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CreationPointPreviewRequest {
+    pub raw: Vec2,
+    #[serde(default)]
+    pub ctrl_held: bool,
+    #[serde(default)]
+    pub allow_midpoint: bool,
+    #[serde(default)]
+    pub exclude_position: Option<Vec2>,
+}
+
 /// Fit-point spline creation (M1 follow-up): ordered fit points.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SplineRequest {
@@ -773,6 +844,7 @@ pub struct RectangleRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LockedRectangleRequest {
     pub mode: RectangleMode,
     pub anchor: Vec2,
@@ -810,8 +882,6 @@ pub struct LockedCircleRequest {
     #[serde(default)]
     pub ctrl_held: bool,
 }
-
-// --- Dimension ops (D9) ---
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DimensionRequest {
@@ -868,8 +938,6 @@ pub struct EvalExpressionRequest {
 pub struct EvalExpressionResult {
     pub value: f64,
 }
-
-// --- Modify tools (M1c-ii) ---
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FilletRequest {
@@ -1072,8 +1140,6 @@ pub struct PointRequest {
     pub ctrl_held: bool,
 }
 
-// --- Results ---
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PreviewDto {
     /// Cursor position after snapping and H/V inference projection.
@@ -1134,8 +1200,8 @@ pub struct EndSketchResult {
 
 /// Uniform result envelope for the JSON host boundary: every host function
 /// returns either `{"ok": true, "value": ...}` or `{"ok": false, "error":
-/// "..."}`. Both hosts (Tauri commands, wasm-bindgen exports) emit exactly
-/// this shape so the frontend adapters are interchangeable.
+/// "..."}`. Both hosts (native commands, wasm-bindgen exports) emit exactly
+/// this shape so the UI adapters are interchangeable.
 pub fn ok_json<T: Serialize>(value: T) -> String {
     serde_json::json!({ "ok": true, "value": value }).to_string()
 }

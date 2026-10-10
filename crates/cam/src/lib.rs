@@ -37,14 +37,17 @@ mod stabilization_tests;
 #[cfg(test)]
 mod lead_regression_tests;
 
-pub use gcode::{simulate_gcode, CamGcodeDialectDto, CamGcodeSimulationRequestDto};
+pub use gcode::{
+    simulate_gcode, simulate_gcode_with_cancellation, CamGcodeDialectDto,
+    CamGcodeSimulationRequestDto, MAX_GCODE_BYTES,
+};
 pub use model::{
     BoxAnchor, CamAdaptiveGeometryDto, CamAdaptiveParametersDto, CamChainRefDto, CamChainSource,
-    CamChamferChainDto, CamDocumentDto, CamFlatParametersDto, CamHeightExpressionDto,
-    CamHeightGeometryDto, CamHeightReferenceDto, CamHoleDto, CamLoadWarningDto,
-    CamModeledChamferDto, CamOperationDto, CamOperationHeightExpressionsDto, CamPostConfigDto,
-    CamResolvedStockDto, CamSetupDto, CamStockFace, CamStockOffsetsDto, CamStockPlacementDto,
-    CamStockShape, CamStockSpecDto, CamToolCallMode, CamToolDto, CamToolKind,
+    CamChamferChainDto, CamCuttingPresetDto, CamDocumentDto, CamFlatParametersDto,
+    CamHeightExpressionDto, CamHeightGeometryDto, CamHeightReferenceDto, CamHoleDto,
+    CamLoadWarningDto, CamModeledChamferDto, CamOperationDto, CamOperationHeightExpressionsDto,
+    CamPostConfigDto, CamResolvedStockDto, CamSetupDto, CamStockFace, CamStockOffsetsDto,
+    CamStockPlacementDto, CamStockShape, CamStockSpecDto, CamToolCallMode, CamToolDto, CamToolKind,
     CamToolpathGenerationDto, CamToolpathOrderDependenciesDto, CamToolpathStateDto,
     CamToolpathStatusDto, CamUnits, CompensationMode, ContourCompensation, CoolantMode,
     CuttingParametersDto, DrillCycle, FaceDirection, MillingDirection, Point2Dto, Point3Dto,

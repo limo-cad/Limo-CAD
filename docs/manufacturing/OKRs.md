@@ -20,7 +20,7 @@ without weakening STEP or inventing cloud lock-in.
 ## Objective 3 — Direct slicer brand integration
 
 **KR3.1** Export target enum: `standard` \| `bambu_studio` \| `orca_slicer` \| `prusa_slicer` \| `cura`.
-**KR3.2** Bambu/Orca: same portable 3MF as `standard` (no slicer project profile, Application `noBS CAD`).
+**KR3.2** Bambu/Orca: same portable 3MF as `standard` (no slicer project profile, Application `Limo CAD`).
 **KR3.3** PrusaSlicer: embed `Metadata/Slic3r_PE.config` + `Slic3r_PE_model.config` hints.
 **KR3.4** Cura: consortium basematerials + `Metadata/cura_materials.json` hints (not a full Cura project).
 **KR3.5** Default export target is `standard`. Users can still select Prusa or Cura metadata.

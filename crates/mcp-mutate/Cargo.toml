@@ -1,11 +1,11 @@
 [package]
-name = "nbcad-mcp-mutate"
+name = "limo-cad-mcp-mutate"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 description = "Shared MCP modeling-mutate name → engine method + payload map"
 license = "LGPL-2.1-or-later"
-repository = "https://github.com/limo-cad/Limo-CAD"
+repository.workspace = true
 
 [dependencies]
-nbcad-export = { path = "../export" }
-serde_json = "1"
+limo-cad-export = { path = "../export" }
+serde_json.workspace = true

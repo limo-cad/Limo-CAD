@@ -1,0 +1,56 @@
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Edit a shared part in place and recover a wrong dimension",
+  "starting_state": "empty",
+  "steps": [
+    {"chapter":"Locate the definition","note":"A 20 by 10 mm footprint and a fixed origin define the reusable part. Sketch coordinates belong to the definition, independently of its occurrences.","duration_ms":1300},
+    {"id":"begin","call":{"group":"sketch/draw","operation":"sketch_begin","arguments":{"name":"Shared footprint","plane":{"type":"origin_plane","plane":"xy"}}}},
+    {"id":"rectangle","call":{"group":"sketch/draw","operation":"sketch_add_rectangle_locked","arguments":{"mode":"two_point","anchor":{"x":0,"y":0},"corner_hint":{"x":20,"y":10},"width_mm":20,"height_mm":10,"ctrl_held":true}}},
+    {"id":"locate","call":{"group":"sketch/constrain","operation":"sketch_add_constraint","arguments":{"type":"fix","entity":{"$select":{"from":{"$ref":"rectangle","pointer":"/sketch"},"path":"/entities","where":{"/kind":"point","/position/x":0,"/position/y":0},"take":"one","pointer":"/id"}}}}},
+    {"view":"current","fit":true,"target":"active_sketch","duration_ms":400},
+    {"call":{"group":"sketch/draw","operation":"sketch_finish","arguments":{}}},
+    {"id":"stock","call":{"group":"solid/build","operation":"solid_extrude","arguments":{"sketch_name":"Shared footprint","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":3},"taper_angle_deg":0,"flip":false,"target_body_ids":[]}}},
+    {"let":{"body":{"$ref":"stock","pointer":"/scene/bodies/0/id"}}},
+    {"id":"component","call":{"group":"assembly/joints","operation":"assembly_create_component","arguments":{"name":"Repeated plate","body_ids":[{"$ref":"body"}],"absorb_promoted_bodies":true}}},
+    {"chapter":"Place a shared occurrence","note":"Translate and rotate the repeat 90 degrees, then ground it. Grounding selects one root occurrence; the original remains free at its authored placement and produces a free-component warning. This lesson teaches editing; use the repeated bracket assembly for constrained mating references.","duration_ms":1700},
+    {"id":"repeat","call":{"group":"assembly/joints","operation":"assembly_create_occurrence","arguments":{"component_id":{"$ref":"component","pointer":"/id"},"name":"Rotated repeat","local_pose":{"translation":[50,25,10],"rotation":[0,0,0.7071067811865476,0.7071067811865476]}}}},
+    {"call":{"group":"assembly/joints","operation":"assembly_set_occurrence_grounded","arguments":{"occurrence_id":{"$ref":"repeat","pointer":"/id"},"grounded":true}}},
+    {"view":"isometric","fit":true,"duration_ms":500},
+    {"chapter":"Edit the selected occurrence","note":"Open the shared sketch in the repeat's frame. Surrounding parts fade. Picking and dimensions follow the placed part, while the solver keeps the original local coordinates.","duration_ms":1300},
+    {"id":"edit","call":{"group":"sketch/draw","operation":"sketch_edit","arguments":{"name":"Shared footprint","occurrence_id":{"$ref":"repeat","pointer":"/id"}}},"expect":{"/edit_occurrence_id":{"$ref":"repeat","pointer":"/id"}}},
+    {"let":{"width_constraint":{"$select":{"from":{"$ref":"edit"},"path":"/dimensions","where":{"/mode":"driving","/value":20},"take":"one","pointer":"/constraint_id"}}}},
+    {"view":"current","fit":true,"target":"active_sketch","duration_ms":500},
+    {"id":"wrong_width","call":{"group":"sketch/dimension","operation":"sketch_edit_dimension","arguments":{"constraint_id":{"$ref":"width_constraint"},"text":"45"}}},
+    {"chapter":"Recover and make the intended edit","note":"45 mm was a valid entry, but the intended width is 30 mm. Undo restores the previous solved sketch and dimensions. Enter the correct driving value, then finish and recompute both occurrences.","duration_ms":1700},
+    {"id":"recovered","call":{"group":"sketch/edit","operation":"sketch_undo","arguments":{}}},
+    {"assert":{"$select":{"from":{"$ref":"recovered","pointer":"/sketch"},"path":"/dimensions","where":{"/constraint_id":{"$ref":"width_constraint"}},"take":"one","pointer":"/value"}},"equals":20},
+    {"id":"correct_width","call":{"group":"sketch/dimension","operation":"sketch_edit_dimension","arguments":{"constraint_id":{"$ref":"width_constraint"},"text":"30"}}},
+    {"call":{"group":"sketch/draw","operation":"sketch_finish","arguments":{}}},
+    {"call":{"group":"solid/check","operation":"solid_recompute","arguments":{}}},
+    {"view":"isometric","fit":true,"duration_ms":500},
+    {"chapter":"Inspect and save the editable result","note":"Both occurrences now display the same 30 by 10 by 3 mm part. Save the project to retain its local sketch, driving dimensions and two placements. Reopen either occurrence for another edit; an occurrence change is not an independent copy.","duration_ms":1500}
+  ],
+  "checks": [
+    {"id":"final_scene","call":{"group":"solid/check","operation":"solid_scene","arguments":{}},"expect":{"/errors":[]}},
+    {"assert":{"$count":{"$ref":"final_scene","pointer":"/bodies"}},"equals":1},
+    {"id":"final_sketches","call":{"group":"sketch/draw","operation":"sketch_finished","arguments":{}}},
+    {"assert":{"$ref":"final_sketches","pointer":"/0/dof/value"},"equals":0},
+    {"assert":{"$select":{"from":{"$ref":"final_sketches","pointer":"/0"},"path":"/dimensions","where":{"/constraint_id":{"$ref":"width_constraint"}},"take":"one","pointer":"/value"}},"equals":30},
+    {"id":"final_solution","call":{"group":"assembly/joints","operation":"assembly_solution","arguments":{}},"expect":{"/solved":true,"/diagnostics/0/kind":"free_component"}},
+    {"assert":{"$count":{"$ref":"final_solution","pointer":"/diagnostics"}},"equals":1},
+    {"assert":{"$count":{"$ref":"final_solution","pointer":"/instance_body_poses"}},"equals":2},
+    {"id":"final_model","call":{"group":"document/files","operation":"cad_project_model","arguments":{}}}
+  ],
+  "exports": {
+    "final_model":{"$ref":"final_model"},
+    "final_scene":{"$ref":"final_scene"},
+    "final_sketches":{"$ref":"final_sketches"},
+    "final_solution":{"$ref":"final_solution"},
+    "edited_occurrence":{"$ref":"repeat","pointer":"/id"},
+    "preview_frames":[
+      {"caption":"The original shared definition is 20 by 10 by 3 mm.","scene":{"$ref":"stock","pointer":"/scene"}},
+      {"caption":"Undo the wrong entry and set 30 mm. Both occurrences reuse this edited definition.","scene":{"$ref":"final_scene"}}
+    ]
+  }
+}

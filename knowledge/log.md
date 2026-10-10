@@ -1,4 +1,4 @@
-# noBS CAD knowledge update log
+# Limo CAD knowledge update log
 
 ## 2026-10-07
 
@@ -147,12 +147,12 @@
 ### Design VERSION / JSONC script golden path (correction)
 
 - Rewrote `concepts.design-version-scripts`: authoritative artifact is
-  versioned / VERSION-embedded `.nbcad.jsonc` — **not** a Python `gen_v*.py`
+  versioned / VERSION-embedded `.limo.jsonc` — **not** a Python `gen_v*.py`
   generator. Prefer hand-authored JSONC chunks.
 - Working designs (INJS): **version in filename AND inside JSONC**
-  (`design_vM_N.nbcad.jsonc`). Catalog demos may keep stable unversioned ids
+  (`design_vM_N.limo.jsonc`). Catalog demos may keep stable unversioned ids
   with VERSION only in metadata.
-- Cut/prune prior `design_v*.nbcad.jsonc` (+ leftover `gen_v*.py`). Chunking /
+- Cut/prune prior `design_v*.limo.jsonc` (+ leftover `gen_v*.py`). Chunking /
   section headers for edit-tool-sized hunks; chaptered includes preferred
   when/if supported.
 - Soft pointers: agent-mcp-workflow, index, taxonomy, docs/agentic INDEX;
@@ -269,7 +269,7 @@
 ### Layout stage + decruft pass
 
 - Decided **not** to move `knowledge/` under `docs/` on this draft PR (stable
-  `nbcad://knowledge/` + embeds).
+  `limo-cad://knowledge/` + embeds).
 - Taxonomy: dropped duplicate power-screws rows (section H + stale “Still thin”);
   softened door wording; prompts row notes `help_search` shipped.
 - Rebuilt `machine-design/search-index.json` (31 Concepts, includes power-screws).

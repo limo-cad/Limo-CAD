@@ -181,8 +181,6 @@ impl CamLinkingDto {
             );
         }
         if matches!(operation, CamOperationDto::Chamfer2d { .. }) {
-            // Chamfer shares explicit lead geometry, not contour ramp or
-            // rest-stock link permissions. Never silently ignore such intent.
             if self.keep_tool_down || self.retraction_policy != CamRetractionPolicy::Full {
                 return Err("2D Chamfer retracts to clearance between chains; keep-down and reduced retraction are not supported.".into());
             }

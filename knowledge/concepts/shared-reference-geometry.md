@@ -44,7 +44,7 @@ stack height).
 
 ### JSONC / history — reference first, children cite
 
-In **`.nbcad.jsonc` / feature history**:
+In **`.limo.jsonc` / feature history**:
 
 1. Create and **name** the reference entity first (plane, axis, sketch, face)
 2. Children cite that **named entity** (or a stable id after inspect)

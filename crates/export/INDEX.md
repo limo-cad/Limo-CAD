@@ -1,4 +1,4 @@
-# nbcad-export
+# limo-cad-export
 
 Manufacturing mesh writers + filament catalog + slicer Metadata.
 
@@ -18,5 +18,5 @@ Manufacturing mesh writers + filament catalog + slicer Metadata.
 | [fixtures/INDEX.md](fixtures/INDEX.md) | Manual slicer smoke `.3mf` samples |
 
 ```sh
-cargo test -p nbcad-export --lib
+cargo test -p limo-cad-export --lib
 ```

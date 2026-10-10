@@ -86,7 +86,7 @@ fn stock_footprint(setup: &CamSetupDto) -> Vec<Point2Dto> {
 
 #[derive(Clone)]
 pub(super) struct ConvexStock {
-    hull: Vec<Point2Dto>, // CCW; collinear interior points removed.
+    hull: Vec<Point2Dto>,
     normals: Vec<Point2Dto>,
     pub(super) offset: f64,
     circular: Option<(Point2Dto, f64)>,
@@ -111,8 +111,6 @@ impl ConvexStock {
         }
         let mut hull = Vec::new();
         for &p in &points {
-            // Do not use a positive simplification epsilon: that could
-            // replace a slightly convex corner by an inward chord.
             while hull.len() >= 2 && cross(hull[hull.len() - 2], hull[hull.len() - 1], p) <= 0.0 {
                 hull.pop();
             }
@@ -163,14 +161,12 @@ impl ConvexStock {
                 continue;
             };
             let last = (first..e.nx).rev().find(|&x| active(x)).unwrap();
-            // Hull orientation is computed on integer grid indices so
-            // floating point noise cannot create near-zero corner arcs.
+
             let x0 = first as f64;
             let x1 = (last + 1) as f64;
             let y0 = y as f64;
             let y1 = (y + 1) as f64;
-            // Row extrema enclose every protected *whole cell*, not just
-            // its center. Taking their hull preserves that containment.
+
             points.extend([
                 Point2Dto::new(x0, y0),
                 Point2Dto::new(x1, y0),
@@ -182,10 +178,6 @@ impl ConvexStock {
             }
         }
         if points.is_empty() {
-            // Candidate stock cap. Direct triangle projection below must
-            // confirm there is no protected target above this floor. Keep
-            // a tiny fallback bound for tools whose minimum radius prevents
-            // completing the center with their flat land.
             let c = Point2Dto::new(
                 e.min.x + e.nx as f64 * e.h * 0.5,
                 e.min.y + e.ny as f64 * e.h * 0.5,
@@ -214,9 +206,7 @@ impl ConvexStock {
             p.x = e.min.x + p.x * e.h;
             p.y = e.min.y + p.y * e.h;
         }
-        // The index-space normals are invariant under this uniform scale.
-        // Reject numerically ambiguous corners rather than emit a full
-        // circle when a tiny intended turn rounds to coincident angles.
+
         for i in 0..hull.normals.len() {
             let a = hull.normals[i];
             let b = hull.normals[(i + 1) % hull.normals.len()];
@@ -245,7 +235,7 @@ impl ConvexStock {
         let level = depth - axial;
         for mesh in meshes {
             work.spend(mesh.indices.len() * 4, 0)?;
-            for tri in mesh.indices.chunks_exact(3) {
+            for tri in mesh.indices.as_chunks::<3>().0 {
                 let v = [tri[0], tri[1], tri[2]].map(|i| {
                     let p = &mesh.positions[i as usize * 3..];
                     let d = [
@@ -534,28 +524,18 @@ impl ConvexStock {
         &self,
         builder: &mut ProgramBuilder,
         setup: &CamSetupDto,
-        r: f64,
-        floor_r: f64,
-        depth: f64,
+        (r, floor_r, depth): (f64, f64, f64),
         p: &CamAdaptiveParametersDto,
-        feed: f64,
-        plunge: f64,
-        work: &mut Work,
-        envelope: &Envelope,
-        prior_bounds: &[&Self],
+        (feed, plunge): (f64, f64),
+        (work, envelope, prior_bounds): (&mut Work, &Envelope, &[&Self]),
     ) -> Result<usize, CamPlanError> {
         if depth >= setup.stock.max.z - EPS {
             return Ok(0);
         }
         if prior_bounds.iter().any(|prior| self.contains_bound(prior)) {
-            // No stock remains outside this section. Avoid a numerical
-            // allowance sliver becoming another nominal cutting pass.
             return Ok(0);
         }
         let mut footprint = if let Some(heights) = &envelope.stock {
-            // Whole-cell row bounds contain all incoming material above this
-            // layer, including upper sections of a bull/face mill. Convexity
-            // may retain air in holes but never assumes an unsafe entry.
             let mut points = Vec::new();
             for y in 0..envelope.ny {
                 let row = &heights[y * envelope.nx..(y + 1) * envelope.nx];
@@ -592,25 +572,22 @@ impl ConvexStock {
             return super::spiral::clear(
                 builder,
                 &footprint,
-                center,
-                if cap {
-                    floor_r - r
-                } else {
-                    radius + self.offset
-                },
-                cap,
-                r,
-                floor_r,
-                depth,
+                (
+                    center,
+                    if cap {
+                        floor_r - r
+                    } else {
+                        radius + self.offset
+                    },
+                    cap,
+                ),
+                (r, floor_r, depth),
                 p,
-                feed,
-                plunge,
+                (feed, plunge),
                 work,
             );
         }
-        // Distance to a convex set is convex, so the maximum over a
-        // containing polygon occurs at a vertex. The cylinder polygon is
-        // circumscribed, never inscribed: no real stock escapes this bound.
+
         let mut bound = footprint
             .iter()
             .map(|&c| self.distance(c))
@@ -619,8 +596,7 @@ impl ConvexStock {
         if bound <= self.offset + EPS {
             return Ok(0);
         }
-        // All axial sections advance by e between equal-offset loops. The
-        // smallest radius sees the largest angle: e <= f*(1-cos(phi_R)).
+
         let advance = p.optimal_load * (floor_r / r);
         let passes = ((bound - self.offset) / advance).ceil() as usize;
         if passes > MAX_PASSES {
@@ -660,8 +636,7 @@ impl ConvexStock {
             .as_ref()
             .map_or(1.0, |l| l.safe_distance)
             .max(CLEARANCE_GUARD);
-        // Enclose each user-configured lead in a disk at its tangent anchor.
-        // This includes vertical leads' XY projection as well as the arc.
+
         let lead_reach = builder.linking.as_ref().map_or(0.0, |l| {
             [&l.lead_in, &l.exit()]
                 .into_iter()
@@ -691,7 +666,7 @@ impl ConvexStock {
                 let a = self.hull[edge];
                 let b = self.hull[(edge + 1) % self.hull.len()];
                 let n = self.normals[edge];
-                let tangent = Point2Dto::new(n.y, -n.x); // clockwise external climb (M3)
+                let tangent = Point2Dto::new(n.y, -n.x);
                 let start = offset(Point2Dto::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5), n, d);
                 let move_along = |amount: f64| {
                     Point2Dto::new(start.x + tangent.x * amount, start.y + tangent.y * amount)
@@ -726,9 +701,7 @@ impl ConvexStock {
                 };
                 (start, anchor(-1.0), anchor(1.0))
             };
-            // Move the seam toward the current tool instead of crossing the
-            // part to the same fixed entry on every loop. User entry hints
-            // remain authoritative; clearance is checked on the actual link.
+
             let choose_nearby = builder
                 .linking
                 .as_ref()
@@ -752,8 +725,7 @@ impl ConvexStock {
                 preferred_edge
             };
             let (start, entry, exit) = anchors(edge);
-            // Axial entry/retraction and complete lead envelopes clear
-            // the conservative remaining stock by a full cutter radius.
+
             let advanced = if builder.linking.is_some() {
                 Some(super::super::linking_planner::air_leads_against_stock(
                     builder, entry, exit, r, &footprint,
@@ -821,8 +793,7 @@ impl ConvexStock {
                 let from = offset(v, self.normals[i], d);
                 let to = offset(v, self.normals[prev], d);
                 builder.linear(Point3Dto::new(from.x, from.y, depth), feed);
-                // Each convex turn is < pi. Very nearly collinear hull
-                // edges still retain their tiny outward arc, not a shortcut.
+
                 builder.circular(Point3Dto::new(to.x, to.y, depth), v, true, feed);
             }
             builder.linear(Point3Dto::new(start.x, start.y, depth), feed);
@@ -864,10 +835,7 @@ impl ConvexStock {
             }) {
                 builder.retract_to_clearance();
             }
-            // Every completed loop cleared the whole axial section outside
-            // this certificate. Include the bull-nose floor residue, then
-            // intersect its supporting half-planes with the incoming stock.
-            // Subsequent descents/leads may use that proved empty space.
+
             let trimmed = self.remaining_footprint(&footprint, next + r - floor_r);
             if Self::from_points(trimmed.clone(), 0.0).is_some() {
                 footprint = trimmed;
@@ -956,7 +924,7 @@ mod tests {
             .commands
             .iter()
             .all(|c| matches!(c, crate::CamCommandDto::Linear { .. })));
-        // Endpoints alone are insufficient: this segment crosses the stock.
+
         let mut b = builder();
         assert!(!target.link_through_cleared_stock(
             &mut b,
@@ -978,7 +946,7 @@ mod tests {
             ));
             assert!(b.commands.is_empty());
         }
-        // A bull-nose floor residue is still material, even if target clears.
+
         let mut residue = square();
         residue.offset = 0.8;
         assert!(!target.link_through_cleared_stock(&mut builder(), &residue, to, -1.0, 1.0));
@@ -1014,7 +982,7 @@ mod tests {
             Point2Dto::new(14.0, 14.0),
             Point2Dto::new(-10.0, 14.0),
         ];
-        // Include a 1 mm corner-tool floor residue outside the 0.2 allowance.
+
         let offset = 1.2;
         let remaining =
             ConvexStock::from_points(target.remaining_footprint(&incoming, offset), 0.0).unwrap();
@@ -1035,8 +1003,7 @@ mod tests {
             for fraction in [0.01_f64, 0.2, 0.8, 1.5, 2.0] {
                 let e = r * fraction;
                 let phi = (1.0 - fraction).acos();
-                // At every C1 offset station, n=(1,0), t=(0,1) after rotation.
-                // Possible material lies x <= -(R-e); backward y<0 was swept.
+
                 let mut engaged = 0;
                 const N: usize = 100_000;
                 for i in 0..N {
@@ -1053,7 +1020,7 @@ mod tests {
     #[test]
     fn corner_exterior_contact_and_advance_bound_every_cutter_section() {
         let mut floor = square();
-        floor.offset = 2.2; // nominal allowance .2 plus R-f = 2
+        floor.offset = 2.2;
         for x in [-2., 2., 6., 9.] {
             for y in [-2., 2., 6., 9.] {
                 let c = Point2Dto::new(x, y);

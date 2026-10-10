@@ -1,9 +1,17 @@
 # Main branch protection and validation
 
+The React frontend was retired on the Bevy integration branch on 2026-10-02.
+The required check identity `frontend_regressions / Frontend regression tests`
+is preserved by `required-interface.yml` calling `rust-interface-contracts.yml`.
+It now runs Rust shared-interface tests and compiles the WASM engine boundary;
+it does not run React or npm. The Bevy merge therefore needs no ruleset change
+to satisfy this existing context. `Rust WASM engine facade` and
+`Repository Rust contracts` are additional checks. The repository is now
+`limo-cad/Limo-CAD`; required check identities survive the rename.
+
 ## Verified repository policy
 
-As of 2026-09-20, this repository (`limo-cad/Limo-CAD`, named
-`noBS-CAD` until 2026-10-03) uses the active **[Protect main](https://github.com/limo-cad/Limo-CAD/rules/19790895)**
+Read back on 2026-10-03, `limo-cad/Limo-CAD` uses the active **[Protect main](https://github.com/limo-cad/Limo-CAD/rules/19790895)**
 ruleset (id `19790895`). Main requires one approving review, dismissal of stale
 approvals, and resolution of review threads. Force pushes and branch deletion are
 blocked. The PR author cannot supply their own approval.
@@ -14,10 +22,12 @@ Two status checks are **required** for normal PR merges:
 Actions integration (app id `15368`). Requiring an up-to-date branch is disabled;
 the new checks do not introduce a mandatory rebase/rebuild after every main push.
 
-The existing owner bypass is preserved: `jackControls` (user id `31257982`) can
-bypass the ruleset **through a pull request**, including these required checks.
-This does not enable a direct-push, force-push, or branch-deletion bypass. The
-review requirements and all other rules are unchanged.
+The current API readback did not expose an owner bypass; do not assume one is
+available. The September 20 audit, when the repository was named
+`jackControls/noBS-CAD`, recorded an owner-only PR bypass for `jackControls`
+(user id `31257982`). That dated observation remains historical evidence,
+not current merge authorization; it did not authorize direct pushes, force
+pushes or branch deletion.
 
 Updating the ruleset requires repository administration; collaborator push and
 triage access is insufficient. Inspect all applicable results on the exact PR
@@ -53,7 +63,7 @@ Prefer this lean set over requiring the full desktop package matrix.
 | Check Run name | Workflow | Status and purpose |
 | --- | --- | --- |
 | `VERSION matches every carrier` | Version guard | **Required.** Always runs on every PR and main push; cheapest always-reporting gate. |
-| `frontend_regressions / Frontend regression tests` | Desktop packages → Frontend | **Required.** Always runs on every PR via the reusable Frontend workflow. Copy this prefixed name from the PR; the bare `Frontend regression tests` name is what appears on direct Frontend workflow runs (for example main pushes), not the PR check name. |
+| `frontend_regressions / Frontend regression tests` | Required native interface → Rust interface contracts | **Required.** Always runs on every PR via the reusable Rust workflow. Copy this prefixed Check Run name from the PR; the bare job title is not the required context. |
 | `MCP tests (Ubuntu)` | MCP server | **Not yet required.** Lean OCCT/MCP gate on Ubuntu; needs always-reporting behavior first. |
 | `Ubuntu host-neutral crates` | Linux engine tests | **Not yet required.** Workspace `cargo test --locked` without packaging cost; needs always-reporting behavior first. |
 
@@ -79,10 +89,10 @@ require them.
 
 ## Validation responsibilities
 
-- **Frontend regression tests** runs all seven frontend suites and the desktop
-  production build. Desktop packages reuses this workflow for every main PR,
-  release tag, and manual package build. The same workflow runs on main pushes.
-  For a pushed `v*` tag it also **publishes the release**: `version_preflight`
+- **Frontend regression tests** now runs shared Rust interface tests and compiles
+  the WASM engine boundary. It does not run React/npm or qualify a completed
+  Bevy browser UI. Native desktop compilation and package checks remain separate.
+- **Desktop release publication** handles pushed `v*` tags: `version_preflight`
   first refuses a tag that does not name the `VERSION` on its commit or whose
   commit is not on `main`, so a tag cannot publish unreviewed code; once the four
   package builds succeed, `publish_release` repeats that check, verifies each
@@ -110,37 +120,31 @@ require them.
 - **pages-knowledge** validates and publishes the active knowledge site. It is
   scoped to knowledge changes and is not a CAD runtime gate.
 - **Version guard** checks `VERSION` against every carrier and unit-tests those
-  carriers on every pull request and main push. It installs no dependencies, so
-  it is the cheapest always-reporting gate available.
+  carriers on every pull request and main push through Rust Cargo tooling.
 
 The default-branch ARM SDK warmer, acceptance sharding, artifact gates and their
 performance tradeoffs are documented in [CI performance](ci-performance.md).
 
-Local checks:
+Start local development with scoped compilation/linting and relevant guards:
 
 ```sh
-npm ci --ignore-scripts
-npm run test:frontend
-npm run build:desktop
-npm run check:knowledge
-npm run version:check
-npm run test:version
-cargo test --locked --workspace
-cargo fmt --all -- --check
-cargo fmt --manifest-path mcp-server/Cargo.toml -- --check
-# Requires the platform OpenCASCADE SDK:
-cargo test --locked --manifest-path mcp-server/Cargo.toml
-# Browser host checks require rebuilding generated WASM first:
-npm run build:wasm
-npm run smoke:wasm
-npm run e2e
+cargo xtask check --scope engine --fmt --clippy
+cargo xtask knowledge check
+cargo xtask knowledge index --check
+cargo xtask audit-icons
+cargo xtask version --check
 ```
+
+Use `--scope desktop` or `--scope mcp` with the platform OCCT SDK for native work.
+Run a targeted test or an owned native fixture when the change requires it;
+the broad suite is not the default local loop. WASM build/smoke checks exercise
+the current engine facade, not a complete browser app. See [Development](DEVELOPMENT.md).
 
 ## Adding further required checks
 
 After the remaining jobs always report and have passed on a PR, an administrator
 (Jack) can add their exact Check Run names to **[Protect main](https://github.com/limo-cad/Limo-CAD/rules/19790895)**,
-preserving its existing checks, owner PR bypass, review rules, and deletion rules.
+preserving its existing checks, review rules, and deletion rules.
 Reusable-workflow check names may include the caller job prefix; copy the name
 from the actual PR.
 
@@ -152,7 +156,7 @@ permit a merge.
 The live ruleset and `gh pr checks --required` were verified after enabling the
 two checks. No merge was attempted to test enforcement. The broader #14 rollout
 still needs always-reporting engine/MCP gates and verification of the complete
-required set, including docs-only PRs and the owner-only PR bypass.
+required set, including docs-only PRs.
 
 ## Repository ownership
 

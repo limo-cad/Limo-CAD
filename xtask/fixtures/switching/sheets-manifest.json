@@ -1,0 +1,97 @@
+{
+  "purpose": "Matched drawing-sheet switching input; not a reproduction of reported latency",
+  "generator": {
+    "source_sha": "8341b8505149b7ac00eeffd2a63c29f6caa39490",
+    "bytes": 37192704,
+    "sha256": "b667aa0355030e5f10c5e044a97ee2f705d47be8de8076579e06e1fdd0b650d5",
+    "initialize": {
+      "capabilities": {
+        "prompts": {
+          "listChanged": false
+        },
+        "resources": {
+          "listChanged": false,
+          "subscribe": false
+        },
+        "tools": {
+          "listChanged": true
+        }
+      },
+      "instructions": "This is one persistent headless CAD document. Attach explicitly to control a running desktop. Begin and finish sketches before creating solid features. Use returned stable entity/body/face/edge ids in later calls. Dynamic tool disclosure is enabled; out-of-focus tools remain callable. Prefer cad_help (search/get/topics) before web search for design guidance; use resources/list and resources/read on nbcad://knowledge/... when the full page is needed (start at nbcad://knowledge/index.md). Be tenacious: use cad_list_all_tools or soft focus when the list looks thin; inspect (solid_scene/cad_document) between mutates; run recipe scripts on a blank document.",
+      "protocolVersion": "2025-06-18",
+      "serverInfo": {
+        "_meta": {
+          "nbcad/build": {
+            "channel": "development",
+            "modified": false,
+            "revision": "8341b8505149b7ac00eeffd2a63c29f6caa39490",
+            "version": "0.2.1"
+          }
+        },
+        "name": "nbcad",
+        "title": "noBS CAD",
+        "version": "0.2.1+8341b8505149b7ac00eeffd2a63c29f6caa39490"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "file": "sheets.nbcad.jsonc",
+      "bytes": 23200,
+      "sha256": "1097b66d74c8b95e1cd9fa0ab13dcefea0347c5f70d6b0f146f4239660bfa37a"
+    },
+    {
+      "file": "sheets.nbcad",
+      "bytes": 3901,
+      "sha256": "39e2ed2c8d93dce4baf9243ccee20f92dc04770e0dbaa35f19546ba04ef01773"
+    }
+  ],
+  "verification": {
+    "independent_replays": 2,
+    "steps_per_replay": 47,
+    "end_checks_per_replay": 17,
+    "exact_semantic_model_and_geometry_match": true,
+    "each_archive_reopened_in_fresh_engine": true,
+    "sheet_selection_expected_model_checks": [
+      {
+        "selected": 2,
+        "exact_expected_model": true
+      },
+      {
+        "selected": 1,
+        "exact_expected_model": true
+      },
+      {
+        "selected": 2,
+        "exact_expected_model": true
+      },
+      {
+        "selected": 1,
+        "exact_expected_model": true
+      }
+    ],
+    "front_projection_visible_segments": 12,
+    "front_projection_hidden_segments": 0
+  },
+  "expected": {
+    "bodies": 6,
+    "sketches": 6,
+    "history_features": 12,
+    "sheets": [
+      {
+        "id": 1,
+        "name": "Sparse sheet",
+        "format": "a4",
+        "views": 1
+      },
+      {
+        "id": 2,
+        "name": "Dense sheet",
+        "format": "a3",
+        "views": 12
+      }
+    ],
+    "active_sheet_id": 1
+  },
+  "live_measurement": "not run; no latency or pixel claim"
+}

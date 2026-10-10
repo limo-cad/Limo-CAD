@@ -1,4 +1,4 @@
-// Included in planner::tests to share its small, explicit synthetic jobs.
+
 #[test]
 fn roughing_leads_fit_near_the_cut_without_changing_requested_sweeps() {
     let stock = [
@@ -45,8 +45,8 @@ fn roughing_leads_fit_near_the_cut_without_changing_requested_sweeps() {
             assert!((v.x.hypot(v.y) - 1.).abs() < 1e-8);
             assert!((v.x * w.x + v.y * w.y - sweep.to_radians().cos()).abs() < 1e-8);
 
-            // A thin cutting band starts inside the billet's cutter envelope.
-            // The lead must stay in air, even though the following cut enters it.
+
+
             let cut = Point2Dto::new(6., 0.);
             let d = linking_planner::fit_air_lead_distance(
                 &builder, cut, tangent, 2., &stock, entry, 20.,

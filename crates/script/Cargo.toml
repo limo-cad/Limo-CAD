@@ -1,9 +1,10 @@
 [package]
-name = "nbcad-script"
+name = "limo-cad-script"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 license = "LGPL-2.1-or-later"
+repository.workspace = true
 description = "Declarative CAD command replay shared by MCP and repository examples"
 
 [dependencies]
-serde_json = { version = "1", features = ["float_roundtrip"] }
+serde_json = { workspace = true, features = ["float_roundtrip"] }

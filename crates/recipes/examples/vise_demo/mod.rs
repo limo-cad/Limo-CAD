@@ -50,8 +50,7 @@ pub(super) fn show_part(a: &mut Author, id: &str, part: &str, caption: &str) {
         json!({"id":format!("{id}_presentation_fit"),"view":"isometric","fit":true,
         "body_id":a.body_id(part),"duration_ms":600}),
     );
-    // A note owns the playback hold. A current-view read with fit:false has
-    // no camera motion and does not itself wait for duration_ms.
+
     a.steps
         .push(json!({"id":format!("{id}_presentation_read"),"note":caption,"duration_ms":1200}));
     a.call(
@@ -60,8 +59,7 @@ pub(super) fn show_part(a: &mut Author, id: &str, part: &str, caption: &str) {
         "project_set_visibility",
         reference(&saved, ""),
     );
-    // Restoring visibility also restores the context of the explanation.
-    // Do not leave the complete assembly behind the isolated-part close-up.
+
     a.steps
         .push(json!({"id":format!("{id}_presentation_restore_fit"),
         "view":"isometric","fit":true,"duration_ms":600}));
@@ -95,7 +93,7 @@ pub(super) fn run(a: &mut Author) {
                     "angle_offset_deg":sample as f64 * 90., "linear_offset_mm":0.
                 }),
             );
-            // No camera fit during travel: the fixed framing makes displacement readable.
+
             a.steps
                 .push(json!({"view":"current","fit":false,"duration_ms":120}));
         }

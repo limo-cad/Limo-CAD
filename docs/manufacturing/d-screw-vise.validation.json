@@ -15,11 +15,11 @@
   "source_revision_note": "The sources array and final_source_revision below identify the historical mechanical/drawing acceptance baseline. Current presentation recipe/author hashes, replay build and exact equivalence evidence are recorded separately in current_presentation; later presentation changes do not relabel the older physical-design tests as newly run.",
   "sources": [
     {
-      "path": "examples/scripts/d-screw-vise.nbcad.jsonc",
+      "path": "examples/scripts/d-screw-vise.limo.jsonc",
       "sha256_utf8_lf": "ba58ccab36d20bde481cea50c9f045dbced743a023175290107e3e052be7e713"
     },
     {
-      "path": "examples/scripts/d-screw-vise-fit.nbcad.jsonc",
+      "path": "examples/scripts/d-screw-vise-fit.limo.jsonc",
       "sha256_utf8_lf": "431624c3f109e8d5ee3fc16111f3dbf153a20d8917c8bdbe6489155b31c47ef8"
     },
     {
@@ -125,7 +125,7 @@
     ],
     "artifacts": [
       {
-        "path": "gusset-drawing-proof/diagnostic.nbcad.jsonc",
+        "path": "gusset-drawing-proof/diagnostic.limo.jsonc",
         "sha256": "8ff8bc69ad8fdd355a4395b75e0683a150652268f0e5fe82ed39c139ceeff130",
         "bytes": 373036
       },
@@ -334,7 +334,7 @@
   "full_native_acceptance": {
     "status": "passed",
     "command": "cargo test --locked --manifest-path mcp-server/Cargo.toml --test recipes d_screw_vise -- --nocapture --test-threads=1",
-    "artifact_option": "Set NBCAD_RECIPE_ARTIFACT_DIR to retain native projects, meshes and drawings.",
+    "artifact_option": "Set LIMO_CAD_RECIPE_ARTIFACT_DIR to retain native projects, meshes and drawings.",
     "tests_passed": 1,
     "tests_failed": 0,
     "elapsed_seconds": 1902.17,
@@ -447,7 +447,7 @@
         "bytes": 68220408
       },
       {
-        "path": "acceptance-final/d-screw-vise.nbcad",
+        "path": "acceptance-final/d-screw-vise.limo",
         "sha256": "0b1de1562529f2a66d8bf8e8e1a4d49a15bcc5ce012b2d95075c0138d5681c37",
         "bytes": 39524
       }
@@ -604,13 +604,13 @@
     "source_hash_note": "sha256 identifies exact copied bytes; sha256_utf8_lf normalizes CRLF to LF. The live runner recipe hash uses LF.",
     "sources": [
       {
-        "path": "examples/scripts/d-screw-vise.nbcad.jsonc",
+        "path": "examples/scripts/d-screw-vise.limo.jsonc",
         "bytes": 1095136,
         "sha256": "6f52a5178d7dbd2d7e3db966e5b1c59ac0dc080c25c648daff9afadcfbee4c9b",
         "sha256_utf8_lf": "56dac4446e6297687a2f7c1072b3f581bf69cb7205d02717c6f64a3de2fde047"
       },
       {
-        "path": "examples/scripts/d-screw-vise-fit.nbcad.jsonc",
+        "path": "examples/scripts/d-screw-vise-fit.limo.jsonc",
         "bytes": 72465,
         "sha256": "22a290c83c36d5a95a3f89a8e4c24e4bafc1d37c5effe6e8615a6a3a3bc45715",
         "sha256_utf8_lf": "49bcaa57ff89119e4004ffd9444b80f8d0e8cd6406c5f6b47e619622b9bcaa79"
@@ -628,7 +628,7 @@
         "sha256_utf8_lf": "fbc7086302947d9b60345b7b2a6d75289e999da0a6ba4521583c6d46947f10a3"
       },
       {
-        "path": "examples/scripts/nbcad-script.schema.json",
+        "path": "examples/scripts/limo-cad-script.schema.json",
         "bytes": 10329,
         "sha256": "aadd4bc4346f722bc979201cd3574dfe6d1dd5918546c2d1d40dd5ef4b14d158",
         "sha256_utf8_lf": "755e1d94f36761d74a48f47d147a9f513931b61b8f39dcffab15ecf262b2fd47"

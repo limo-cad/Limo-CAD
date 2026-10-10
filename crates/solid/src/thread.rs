@@ -64,7 +64,7 @@ pub fn rounded_thread_diameters(
     let tangent_run = r * (1.0 - beta.sin());
     let corner_width = r * (1.0 / beta.cos() - beta.tan());
     let root_half_width = p * 0.25 - h * 0.5 * beta.tan() - corner_width;
-    // Preserve nonzero root/crest flats and a straight flank between its arcs.
+
     if tangent_run * 2.0 >= h || root_half_width <= a * 0.5 + p * 1e-4 {
         return Err(
             "rounded thread radius/depth leaves overlapping rounds or no thread crest".into(),
@@ -162,9 +162,7 @@ pub fn iso_metric_grade6_envelope(
             Ok(IsoMetricThreadEnvelope {
                 basic_major_diameter: major,
                 major_min: major,
-                // The internal major diameter is not a NO-GO controlling
-                // element. Keep the modeled/basic limit explicit instead of
-                // inventing a product tolerance.
+
                 major_max: major,
                 pitch_min,
                 pitch_max,
@@ -186,9 +184,7 @@ pub fn iso_metric_grade6_envelope(
             let pitch_min =
                 round_limit_mm(basic_pitch + deviation - pitch_tolerance_external_um / 1_000.0);
             let minor_max = round_limit_mm(basic_external_minor + deviation);
-            // ISO 965-6 defines the design-profile root minimum from d1,max,
-            // Td2, H/2 and the 0.25 P minimum root truncation. It is not the
-            // maximum root diameter minus the pitch-diameter tolerance.
+
             let basic_profile_minor_max = nominal_diameter - 5.0 * SQRT_3 * pitch / 8.0 + deviation;
             let minor_min = round_limit_mm(
                 basic_profile_minor_max
@@ -213,12 +209,10 @@ pub fn iso_metric_grade6_envelope(
 }
 
 fn round_limit_mm(value: f64) -> f64 {
-    // ISO 965-6 limit dimensions are published to the third decimal place.
     (value * 1_000.0).round() / 1_000.0
 }
 
 fn representative_diameter(diameter: f64) -> f64 {
-    // ISO 965 diameter steps. The geometric mean is used by the grade formula.
     const STEPS: &[(f64, f64)] = &[
         (0.99, 1.4),
         (1.4, 2.8),
@@ -238,9 +232,6 @@ fn representative_diameter(diameter: f64) -> f64 {
 }
 
 fn preferred_tolerance_um(value: f64) -> f64 {
-    // Preferred ISO table values in micrometres. Formula results select the
-    // nearest tabulated value; always rounding upward is incorrect for sizes
-    // such as M8 x 1.25, whose grade-6 pitch tolerance is 118 um.
     const VALUES: &[f64] = &[
         16.0, 18.0, 20.0, 22.0, 25.0, 28.0, 30.0, 32.0, 36.0, 40.0, 45.0, 48.0, 50.0, 53.0, 56.0,
         60.0, 63.0, 67.0, 71.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0, 106.0, 112.0, 118.0, 125.0,
@@ -261,9 +252,6 @@ fn preferred_tolerance_um(value: f64) -> f64 {
 }
 
 fn external_g_fundamental_deviation_um(pitch: f64) -> f64 {
-    // ISO 965-1 fundamental deviations for external position g. The value is
-    // diametral and negative. Standard pitches must use the table rather than
-    // the unrounded interpolation (for example P=1.25 is -28 um, not -28.75).
     const TABLE: &[(f64, f64)] = &[
         (0.20, -17.0),
         (0.25, -18.0),

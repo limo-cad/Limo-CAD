@@ -8,7 +8,7 @@ pub struct Document {
     name: String,
     settings: DocumentSettings,
     /// Top-level nodes of the browser tree. The tree root itself is the
-    /// document (rendered from `name` by the frontend) and is not a node.
+    /// document (rendered from `name` by the UI) and is not a node.
     browser: Vec<BrowserNode>,
     features: FeatureTree,
     /// Next browser node id. `Document::new` assigns ids 1..=10; nodes added
@@ -22,8 +22,7 @@ impl Document {
     /// Create a document with the standard browser tree:
     /// Document Settings, Named Views, Origin (XY/XZ/YZ plane + center
     /// point), Bodies, Sketches, Construction. Node ids are deterministic
-    /// (1..=10 in
-    /// creation order) so tests and the frontend mock can rely on them.
+    /// (1..=10 in creation order), shared by UI and MCP snapshots.
     pub fn new(name: impl Into<String>) -> Self {
         let mut next = 1u64;
         let mut id = || {
@@ -103,7 +102,7 @@ impl Document {
     /// Restore the persistent, browser-independent portion of a document.
     ///
     /// Browser rows are deliberately rebuilt by the owning manager from the
-    /// restored sketches/bodies. This keeps `.nbcad` files independent from
+    /// restored sketches/bodies. This keeps `.limo` files independent from
     /// transient UI node ids while preserving stable feature ids.
     pub fn restore_history(&mut self, settings: DocumentSettings, features: FeatureTree) {
         self.settings = settings;
@@ -152,7 +151,6 @@ impl Document {
             None
         }
 
-        // Allocate first so the `find_mut` borrow is the only one live.
         let id = self.alloc_node_id();
         let parent = find_mut(&mut self.browser, parent_kind)?;
         parent
@@ -184,8 +182,7 @@ impl Document {
         Some(id)
     }
 
-    /// Replace Named Views children, keeping the node id of a view whose name
-    /// is unchanged. Names are the stable identity of a saved view.
+    /// Synchronize saved named views while retaining unchanged browser identities.
     pub fn set_named_view_children(&mut self, names: &[String]) {
         fn find_folder(nodes: &mut [BrowserNode]) -> Option<&mut BrowserNode> {
             for node in nodes {
@@ -281,6 +278,19 @@ impl Document {
     /// Remove the browser row owned by a deleted sketch feature.
     pub fn remove_sketch_node(&mut self, name: &str) -> bool {
         remove_browser_nodes(&mut self.browser, BrowserNodeKind::Sketch, Some(name), None) > 0
+    }
+
+    /// Rename the existing sketch row without replacing its browser identity.
+    pub fn rename_sketch_node(&mut self, old: &str, new: &str) {
+        fn rename(nodes: &mut [BrowserNode], old: &str, new: &str) {
+            for node in nodes {
+                if node.kind == BrowserNodeKind::Sketch && node.name.as_deref() == Some(old) {
+                    node.name = Some(new.to_owned());
+                }
+                rename(&mut node.children, old, new);
+            }
+        }
+        rename(&mut self.browser, old, new);
     }
 
     /// Remove the browser row owned by a deleted construction plane.
@@ -401,7 +411,7 @@ mod tests {
         let id = doc
             .add_browser_child(K::SketchesFolder, K::Sketch, "Sketch1")
             .expect("sketches folder exists");
-        assert_eq!(id, NodeId(11)); // 1..=10 are the standard nodes
+        assert_eq!(id, NodeId(11));
 
         let sketches = doc
             .browser()
@@ -412,7 +422,6 @@ mod tests {
         assert_eq!(sketches.children[0].kind, K::Sketch);
         assert_eq!(sketches.children[0].name.as_deref(), Some("Sketch1"));
 
-        // Ids keep allocating monotonically.
         let id2 = doc
             .add_browser_child(K::SketchesFolder, K::Sketch, "Sketch2")
             .unwrap();

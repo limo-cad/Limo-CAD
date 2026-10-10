@@ -81,12 +81,12 @@ fn line_intersection(l1: &LineSeg, l2: &LineSeg) -> Option<Pt> {
 
     let rxs = cross2d(r, s);
     if rxs.abs() < 1e-15 {
-        return None; // Parallel or collinear
+        return None;
     }
 
     let q = pt_sub(p2, p1);
     let t = cross2d(q, s) / rxs;
-    // Intersection point = p1 + t * r
+
     Some(pt_add(p1, pt_mul(r, t)))
 }
 
@@ -96,51 +96,39 @@ pub fn chamfer_lines(
     d1: f64,
     d2: f64,
 ) -> Result<ChamferResult, ChamferError> {
-    // Check positive distances
     if d1 <= 0.0 || d2 <= 0.0 {
         return Err(ChamferError::NotPositive);
     }
 
-    // Check degenerate segments
     let len1 = pt_len(pt_sub(l1.b, l1.a));
     let len2 = pt_len(pt_sub(l2.b, l2.a));
     if len1 < 1e-15 || len2 < 1e-15 {
         return Err(ChamferError::Degenerate);
     }
 
-    // Find intersection
     let v = match line_intersection(l1, l2) {
         Some(v) => v,
         None => return Err(ChamferError::Parallel),
     };
 
-    // Determine direction for l1: from V toward the endpoint farther from V
-    // Endpoints of l1 are l1.a and l1.b
     let dist_va = pt_len(pt_sub(l1.a, v));
     let dist_vb = pt_len(pt_sub(l1.b, v));
 
-    // Tie-break: toward b if distances are equal (or very close)
-    // "tie-break: toward b" means if dist_va == dist_vb, choose b.
-    // So we choose b if dist_vb >= dist_va (within epsilon)
     let dir1 = if dist_vb >= dist_va - 1e-15 {
         pt_norm(pt_sub(l1.b, v))
     } else {
         pt_norm(pt_sub(l1.a, v))
     };
 
-    // Determine direction for l2: from V toward the endpoint farther from V
     let dist_va2 = pt_len(pt_sub(l2.a, v));
     let dist_vb2 = pt_len(pt_sub(l2.b, v));
 
-    // Tie-break: toward b if distances are equal (or very close)
     let dir2 = if dist_vb2 >= dist_va2 - 1e-15 {
         pt_norm(pt_sub(l2.b, v))
     } else {
         pt_norm(pt_sub(l2.a, v))
     };
 
-    // Check if distance exceeds segment length from V to the chosen endpoint
-    // For l1: the chosen endpoint is the one farther from V (or b on tie)
     let max_dist1 = if dist_vb >= dist_va - 1e-15 {
         dist_vb
     } else {
@@ -159,9 +147,6 @@ pub fn chamfer_lines(
         return Err(ChamferError::DistanceTooLarge);
     }
 
-    // A preceding constrained operation can leave an intended 20 mm edge as
-    // 19.999999999999996 mm. Clamp only that numerical sliver so equality
-    // consumes the carrier without creating a microscopically reversed line.
     let p1 = pt_add(v, pt_mul(dir1, d1.min(max_dist1)));
     let p2 = pt_add(v, pt_mul(dir2, d2.min(max_dist2)));
 
@@ -196,12 +181,6 @@ mod tests {
 
     #[test]
     fn test_chamfer_tiebreak() {
-        // l1=(-5,0)-(5,0), l2=(0,-5)-(0,5), d1=1, d2=1
-        // Intersection is (0,0)
-        // For l1: dist to a(-5,0) is 5, dist to b(5,0) is 5. Tie-break toward b.
-        // So dir1 is toward (5,0), i.e., (1,0). point_on_l1 = (0,0) + 1*(1,0) = (1,0)
-        // For l2: dist to a(0,-5) is 5, dist to b(0,5) is 5. Tie-break toward b.
-        // So dir2 is toward (0,5), i.e., (0,1). point_on_l2 = (0,0) + 1*(0,1) = (0,1)
         let l1 = LineSeg {
             a: Pt { x: -5.0, y: 0.0 },
             b: Pt { x: 5.0, y: 0.0 },

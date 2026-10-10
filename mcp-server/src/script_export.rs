@@ -1,4 +1,4 @@
-//! Version-1 `.nbcad.jsonc` export helpers.
+//! Version-1 `.limo.jsonc` export helpers.
 //!
 //! Distinct from `cad_script`, which dumps the forward MCP tool trace as
 //! `{ calls: [{ name, arguments }] }`.
@@ -60,10 +60,10 @@ pub fn export_script_result(
     notes: Vec<&str>,
 ) -> Result<Value, String> {
     let source = pretty_json(source);
-    let script = nbcad_script::Script::parse(&source)?;
+    let script = limo_cad_script::Script::parse(&source)?;
     let meta = script.metadata();
     Ok(json!({
-        "format": "nbcad.jsonc",
+        "format": "limo.jsonc",
         "version": 1,
         "fidelity": fidelity,
         "stale": stale,

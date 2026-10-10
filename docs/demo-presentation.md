@@ -1,6 +1,6 @@
 # Presentation guide and validation notes
 
-Use the [README showcase](../README.md#made-in-nobs-cad) to watch the bench, vise
+Use the [README showcase](../README.md#made-in-limo-cad) to watch the bench, vise
 and turbine, inspect an editable model, or open its construction recipe. Start
 with [the fillet lesson](INSTALL.md#make-your-first-part) for a short first run.
 
@@ -46,7 +46,7 @@ payoff and audience attention cost. It is not a fabrication or safety rating.
 The review uses the dated sources and recorded validation; it does not claim a
 new visual acceptance run of every recipe.
 
-1. **[Crown garden bench](../examples/scripts/garden-bench.nbcad.jsonc)** —
+1. **[Crown garden bench](../examples/scripts/garden-bench.limo.jsonc)** —
    595 steps, 47 final checks. The best current README hero: a recognizable,
    attractive object with contrasting timber and frame, crowned pickets,
    rounded arms, referenced joinery and repeated components. Its script already
@@ -54,7 +54,7 @@ new visual acceptance run of every recipe.
    component-context editing remain incomplete; timber, fasteners, comfort and
    structural performance need qualification. Preserve its accepted design
    milestone while improving camera framing and the explanation of its joinery.
-2. **[Vertical-axis turbine](../examples/scripts/vertical-axis-turbine.nbcad.jsonc)** —
+2. **[Vertical-axis turbine](../examples/scripts/vertical-axis-turbine.limo.jsonc)** —
    3,179 steps, 11 final checks. The strongest technical finale: staggered
    reused rotor stages, an explicit shaft/bearing stack, an adjustable generator
    cradle, involute gears, a 4:1 relation and fourteen drawing sheets. Eleven
@@ -64,7 +64,7 @@ new visual acceptance run of every recipe.
    then restore the guard and home state. Generator fit, startup and loaded
    electrical output remain unmeasured. Give it a concise introduction before
    offering the full construction replay.
-3. **[Captured-slide D-screw vise](../examples/scripts/d-screw-vise.nbcad.jsonc)** —
+3. **[Captured-slide D-screw vise](../examples/scripts/d-screw-vise.limo.jsonc)** —
    **Validated development candidate.** The September 11 review found blocked
    screw installation, mounting hardware in the jaw path, poor grip clearance
    and unqualified guide capture in the preceding design. The replacement has
@@ -104,23 +104,23 @@ remain dated records. No example has measured physical performance qualification
 
 ## Short lessons for a first learning session
 
-1. **[Sketch, extrude, ease the edges](../examples/scripts/fillet-basics.nbcad.jsonc)** —
+1. **[Sketch, extrude, ease the edges](../examples/scripts/fillet-basics.limo.jsonc)** —
    Start here: a located sketch becomes stock, then its top rim is rounded.
    The lesson changes the extrusion from 12 to 18 mm while preserving the fillet,
    then restores the 12 mm reference. Captions and preview frames explain both
    states. Current step/check counts come from the bundled catalog.
-2. **[Revolved annular spacer](../examples/scripts/revolved-spacer.nbcad.jsonc)** —
+2. **[Revolved annular spacer](../examples/scripts/revolved-spacer.limo.jsonc)** —
    14 steps, 7 checks. Shortest construction; the radial section makes the bore
    and outer diameter understandable. Add a section-to-solid preview and a
    demonstrated bore edit.
-3. **[Four-hole mounting plate](../examples/scripts/mounting-plate.nbcad.jsonc)** —
+3. **[Four-hole mounting plate](../examples/scripts/mounting-plate.limo.jsonc)** —
    22 steps, 7 checks. A practical part with located stock and four through
    bores. Explain hole location in design language before exposing face-basis
    details; show a hole-size change and its resulting geometry.
-4. **[Dimensioned angle bracket](../examples/scripts/angle-bracket.nbcad.jsonc)** —
+4. **[Dimensioned angle bracket](../examples/scripts/angle-bracket.limo.jsonc)** —
    30 steps, 7 checks. Strong constraint lesson, with more setup than visual
    change. Focus attention on the driving dimensions and show their effect.
-5. **[Repeated bracket assembly](../examples/scripts/repeated-bracket-assembly.nbcad.jsonc)** —
+5. **[Repeated bracket assembly](../examples/scripts/repeated-bracket-assembly.limo.jsonc)** —
    84 steps, 13 checks. Best follow-up for explaining parametric reuse: one
    definition edit updates both bracket occurrences while preserving placement.
    It first constructs three part definitions, so it is a longer introduction.
@@ -129,7 +129,7 @@ remain dated records. No example has measured physical performance qualification
 
 ## Fit-coupon demonstrations
 
-1. **[D-screw fit coupon](../examples/scripts/d-screw-vise-fit.nbcad.jsonc)** —
+1. **[D-screw fit coupon](../examples/scripts/d-screw-vise-fit.limo.jsonc)** —
    Four specimens: a 40 mm shallow-flat male screw, matching female thread with
    the full 28 mm engagement, and male/female captured guides. They retain the
    redesigned vise's actual custom rounded thread and guide profiles. Print in
@@ -138,7 +138,7 @@ remain dated records. No example has measured physical performance qualification
    check for the coupon is separate from a successful physical print and from
    qualification of the six full-size parts. Helical construction remains more
    expensive than the small part count suggests.
-2. **[Turbine fit coupons](../examples/scripts/turbine-fit-coupons.nbcad.jsonc)** —
+2. **[Turbine fit coupons](../examples/scripts/turbine-fit-coupons.limo.jsonc)** —
    647 steps, 8 checks; four specimens. Useful manufacturing material for shaft,
    bearing, motor-case and pinion fits. It is a substantial construction
    sequence, not a quick first demo. Show each fit and the measurement it needs.
@@ -155,7 +155,7 @@ remain dated records. No example has measured physical performance qualification
   bench driver and two embedded playback/workspace fixtures also exist. These
   are regression tools, not a second user-facing lesson library. Sweep, loft,
   rib and shell have test scenarios but no dedicated short catalog lessons.
-- `testPiece.nbcad` and its STEP copy are one static sample in two formats, not
+- `testPiece.limo` and its STEP copy are one static sample in two formats, not
   a replay script.
 
 ## Presentation guidance
@@ -171,7 +171,7 @@ remain dated records. No example has measured physical performance qualification
    lessons. Reuse the existing Rust interpreter, source format and operation
    groups; no parallel demo runtime or all-features coverage quota.
 4. Keep flagship images, clips and editable models together in the
-   [README showcase](../README.md#made-in-nobs-cad). Label accelerated edits and
+   [README showcase](../README.md#made-in-limo-cad). Label accelerated edits and
    link their full player view separately from file downloads. Historical
    captures can show obsolete progress counters; retain their date and source
    instead of using them as evidence for a newer interface. Lead with the bench,

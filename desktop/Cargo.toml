@@ -1,0 +1,115 @@
+[package]
+name = "limo-cad"
+default-run = "limo-cad"
+version = "0.2.2"
+edition = "2021"
+description = "Limo CAD native Bevy desktop"
+license = "LGPL-2.1-or-later"
+repository = "https://github.com/limo-cad/Limo-CAD"
+
+[workspace]
+
+[lib]
+name = "limo_cad"
+crate-type = ["rlib"]
+
+[features]
+default = []
+native-computer-control = ["limo-cad-mcp/native-computer-control"]
+dev-ui-lab = ["bevy/bevy_log"]
+dev-native-ime-trace = ["bevy/bevy_log"]
+
+[[bin]]
+name = "bevy-ui-lab"
+path = "src/bin/bevy_ui_lab.rs"
+required-features = ["dev-ui-lab"]
+
+[build-dependencies]
+winresource = "=0.1.31"
+
+[dependencies]
+limo-cad-session-storage = { path = "../crates/session-storage" }
+limo-cad-build-info = { path = "../crates/build-info" }
+time = { version = "=0.3.55", features = ["formatting"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
+dirs = "7.0.0"
+sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
+base64 = "0.23.1"
+resvg = { version = "=0.45.1", default-features = false, features = ["text", "system-fonts"] }
+uuid = { version = "1.26.1", features = ["v4"] }
+limo-cad-core = { path = "../crates/core" }
+limo-cad-interface = { path = "../crates/interface" }
+limo-cad-project-file = { path = "../crates/project-file" }
+limo-cad-cam = { path = "../crates/cam" }
+limo-cad-sketch = { path = "../crates/sketch" }
+limo-cad-solid = { path = "../crates/solid" }
+limo-cad-export = { path = "../crates/export" }
+limo-cad-occt = { path = "../crates/occt", features = ["native-occt"] }
+limo-cad-native-engine = { path = "../crates/native-engine", features = ["native-occt"] }
+limo-cad-mcp-mutate = { path = "../crates/mcp-mutate" }
+limo-cad-mcp = { package = "limo-cad-mcp", path = "../mcp-server" }
+earcutr = "=0.5.0"
+
+[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
+bevy = { version = "=0.20.0-rc.2", default-features = false, features = [
+  "bevy_winit",
+  "bevy_input_focus",
+  "bevy_ui_widgets",
+  "ui_picking",
+  "custom_cursor",
+  "system_clipboard",
+  "complex_script_segmentation",
+  "x11",
+  "wayland",
+  "accesskit_unix",
+  "async_executor",
+  "bevy_asset",
+  "bevy_camera",
+  "bevy_color",
+  "bevy_core_pipeline",
+  "bevy_gizmos",
+  "bevy_gizmos_render",
+  "bevy_image",
+  "bevy_light",
+  "bevy_material",
+  "bevy_mesh",
+  "bevy_pbr",
+  "bevy_render",
+  "bevy_shader",
+  "bevy_text",
+  "bevy_ui",
+  "bevy_ui_render",
+  "bevy_window",
+  "default_font",
+  "hdr",
+  "multi_threaded",
+  "png",
+  "std",
+  "tonemapping_luts",
+  "zstd_rust",
+] }
+bevy_ecs = "=0.20.0-rc.2"
+bevy_gizmos = "=0.20.0-rc.2"
+bevy_reflect = "=0.20.0-rc.2"
+raw-window-handle = "0.6.2"
+accesskit = { version = "=0.24.1" }
+svg2pdf = { version = "=0.13.0", default-features = false, features = ["text"] }
+winit = { version = "=0.30.13", default-features = false }
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tokio = { version = "1.53.1", features = ["time", "rt"] }
+ashpd = { version = "=0.13.13", default-features = false, features = ["tokio", "print", "raw_handle", "wayland"] }
+hidapi = { version = "2.6.7", default-features = false, features = ["linux-static-hidraw"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-pdf-kit = { version = "=0.3.2", default-features = false, features = ["std", "PDFDocument", "objc2-app-kit"] }
+hidapi = { version = "2.6.7", default-features = false, features = ["macos-shared-device"] }
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSResponder", "NSView", "NSWindow", "NSGraphics", "NSApplication", "NSPrintOperation", "NSPrintInfo", "NSPrinter", "objc2-core-foundation"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSAppleEventManager", "NSAppleEventDescriptor", "objc2-core-services", "NSString", "NSGeometry", "NSData"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+hidapi = { version = "2.6.7", default-features = false, features = ["windows-native"] }
+windows = { version = "=0.62.2", default-features = false, features = ["Win32_System_Registry", "Win32_Security", "Win32_UI_Controls_Dialogs", "Win32_Graphics_Gdi", "Win32_Graphics_Printing", "Win32_Storage_Xps", "Win32_System_Memory", "Win32_System_Com", "Win32_System_Threading", "Win32_UI_Input_Ime", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_TextServices", "Win32_UI_WindowsAndMessaging"] }

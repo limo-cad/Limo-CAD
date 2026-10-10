@@ -23,8 +23,6 @@ pub(super) fn restore(
             cleared.add(c);
         }
         if let Some(bound) = &cut.exterior {
-            // Either certificate is valid. Prefer the tighter one when
-            // nested; never turn disjoint cavity disks into a convex void.
             if cleared
                 .exterior
                 .as_ref()
@@ -46,9 +44,6 @@ pub(super) fn depth_order(
     p: &CamAdaptiveParametersDto,
     corner_height: f64,
 ) -> Result<Vec<f64>, CamPlanError> {
-    // The first band may use full Ap. Subsequent bands overlap the corner's
-    // height, so the preceding full-diameter sweep is available at the new
-    // cut's Ap ceiling. The planner must still prove actual cleared stock.
     if corner_height + EPS >= p.maximum_stepdown && top - bottom > p.maximum_stepdown + EPS {
         return roughing_depth_levels(setup, meshes, top, bottom, ceiling, p);
     }
@@ -61,13 +56,10 @@ pub(super) fn depth_order(
         } else {
             p.maximum_stepdown - corner_height
         };
-        // Major cuts follow Ap, independently of shoulder/pocket-floor
-        // locations. Target clearance determines which XY regions can be
-        // reached here; terraces are upward cleanup inside this depth band.
+
         let lower = (upper - step).max(bottom);
         ordered.push(lower);
-        // The major cut removes stock above it. Step upward through only
-        // the intervening terraces, using that updated stock at each level.
+
         ordered.extend(
             terraces
                 .iter()

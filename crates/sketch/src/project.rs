@@ -1,17 +1,17 @@
-//! Versioned, host-neutral noBS CAD project model.
+//! Versioned, host-neutral Limo CAD project model.
 //!
-//! The outer `.nbcad` ZIP container is owned by the frontend file layer.
+//! The outer `.limo` ZIP container is owned by `limo-cad-project-file`.
 //! This module owns `model.json`, its validation, and the migration entry
 //! point so native and browser hosts cannot disagree about project meaning.
 
 use std::collections::{BTreeSet, HashSet};
 
-use nbcad_cam::CamDocumentDto;
-use nbcad_core::{
+use limo_cad_cam::CamDocumentDto;
+use limo_cad_core::{
     BodyAppearance, DimensionStyle, DocumentSettings, FeatureId, FeatureKind, FeatureTree,
     PlaneBasis, PlaneRef,
 };
-use nbcad_solid::{
+use limo_cad_solid::{
     BodyFeatureDefinitionDto, DatumPlaneDefinitionDto, ExtrudeDefinitionDto, HoleDefinitionDto,
     LoftDefinitionDto, RevolveDefinitionDto, RibDefinitionDto, SolidChamferDefinitionDto,
     SolidFilletDefinitionDto, SweepDefinitionDto,
@@ -24,9 +24,13 @@ use crate::{
     ProjectedEdgeDto,
 };
 
-pub const PROJECT_FORMAT: &str = "nbcad-project";
+pub const PROJECT_FORMAT: &str = "limo-cad-project";
 pub const LEGACY_PROJECT_FORMAT: &str = "tfcad-project";
-pub const PROJECT_SCHEMA_VERSION: u32 = 10;
+pub const PREVIOUS_PROJECT_FORMAT: &str = "nbcad-project";
+
+/// Schema 14 preserves height intent and stable saved-layout identities. Readers reject
+/// newer schemas so saving cannot silently discard model intent.
+pub const PROJECT_SCHEMA_VERSION: u32 = 14;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ProjectModelV9 {
@@ -68,9 +72,12 @@ pub(crate) struct ProjectModelV9 {
     /// Browser eye-toggle choices. Additive so older projects remain valid.
     #[serde(default)]
     pub visibility: ProjectVisibilityDto,
-    /// Named review views. Schema 10. Missing on older projects.
+    /// Saved presentation and print layouts. Missing on older projects.
     #[serde(default)]
     pub views: Vec<NamedViewConfigurationDto>,
+    /// Requested print settings, never generated toolpaths or strength ratings.
+    #[serde(default)]
+    pub print_intent: limo_cad_core::PrintIntentDocumentDto,
     /// Subtractive-manufacturing intent. Toolpaths and posted NC are derived
     /// from this model and are deliberately not persisted.
     #[serde(default)]
@@ -143,7 +150,10 @@ pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV9, String> {
         .get("schema_version")
         .and_then(serde_json::Value::as_u64)
         .ok_or_else(|| "model.json is missing its schema version".to_string())?;
-    if format == LEGACY_PROJECT_FORMAT {
+    if matches!(
+        format.as_str(),
+        LEGACY_PROJECT_FORMAT | PREVIOUS_PROJECT_FORMAT
+    ) {
         header["format"] = serde_json::Value::String(PROJECT_FORMAT.to_string());
     } else if format != PROJECT_FORMAT {
         return Err(format!("unsupported project format '{format}'"));
@@ -154,7 +164,7 @@ pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV9, String> {
             migrate_v2_to_v3(&mut header);
         }
         2 => migrate_v2_to_v3(&mut header),
-        3 | 4 | 5 | 6 | 7 | 8 | 9 => {}
+        3..=13 => {}
         version if version == u64::from(PROJECT_SCHEMA_VERSION) => {}
         _ => {
             return Err(format!(
@@ -163,17 +173,83 @@ pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV9, String> {
         }
     }
 
-    // New relation fields default to empty for schema 1-3 projects; drawing
-    // occurrence selection defaults to definition space for schema 1-4.
-    // Schema 1-5 drawing guards remain absent: loading cannot establish historical
-    // association. Users must explicitly reassociate unverified references.
-    // Raising the version prevents old readers from saving away model intent.
+    if schema_version < 12 {
+        if let Some(intent) = header.get_mut("print_intent") {
+            if intent.get("version").and_then(serde_json::Value::as_u64) != Some(1) {
+                return Err("Older project schema requires print-intent version 1".into());
+            }
+            if intent.get("target_handoffs").is_some() {
+                return Err("Older project schema cannot contain target handoffs".into());
+            }
+            intent["version"] = 2.into();
+        }
+    }
+    if schema_version < 13 {
+        if let Some(intent) = header.get_mut("print_intent") {
+            if intent.get("version").and_then(serde_json::Value::as_u64) != Some(2) {
+                return Err(
+                    "Older project schema requires print-intent version 2 after migration".into(),
+                );
+            }
+            if intent.get("modifiers").is_some()
+                || intent
+                    .get("target_handoffs")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|handoffs| {
+                        handoffs.iter().any(|handoff| {
+                            handoff
+                                .get("reference")
+                                .and_then(|reference| reference.get("modifiers"))
+                                .is_some()
+                        })
+                    })
+            {
+                return Err("Older project schema cannot contain print modifier metadata".into());
+            }
+            intent["version"] = 3.into();
+        }
+    }
+    if schema_version < 14 {
+        if header
+            .get("views")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|views| {
+                views
+                    .iter()
+                    .any(|view| view.get("id").is_some_and(|id| !id.is_null()))
+            })
+        {
+            return Err("Older project schema cannot contain saved-layout identities".into());
+        }
+        if let Some(intent) = header.get_mut("print_intent") {
+            if intent.get("version").and_then(serde_json::Value::as_u64) != Some(3) {
+                return Err(
+                    "Older project schema requires print-intent version 3 after migration".into(),
+                );
+            }
+            if intent.get("height_ranges").is_some()
+                || intent.get("layer_height_profiles").is_some()
+                || intent
+                    .get("target_handoffs")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|handoffs| {
+                        handoffs.iter().any(|handoff| {
+                            handoff
+                                .get("reference")
+                                .and_then(|reference| reference.get("height_objects"))
+                                .is_some()
+                        })
+                    })
+            {
+                return Err("Older project schema cannot contain print height metadata".into());
+            }
+            intent["version"] = 4.into();
+        }
+    }
     header["schema_version"] = serde_json::Value::from(PROJECT_SCHEMA_VERSION);
     let mut model: ProjectModelV9 = serde_json::from_value(header)
         .map_err(|error| format!("invalid project model: {error}"))?;
-    // A project file must always open: CAM content migrates what it can and
-    // parks what it cannot as disabled operations with load warnings,
-    // instead of rejecting the whole file.
+
     model.cam.soften_for_load();
     validate_project(&model)?;
     Ok(model)
@@ -217,12 +293,15 @@ fn migrate_v1_to_v2(model: &mut serde_json::Value) -> Result<(), String> {
 }
 
 fn migrate_v2_to_v3(model: &mut serde_json::Value) {
-    // SketchSnapshot defaults missing dim_modes entries to Driving. Preserve
-    // any explicit modes written by pre-release schema-2 reference builds.
     model["schema_version"] = serde_json::Value::from(3);
 }
 
 pub(crate) fn validate_project(model: &ProjectModelV9) -> Result<(), String> {
+    for appearance in &model.body_appearances {
+        if let Some(material) = &appearance.material {
+            material.validate()?;
+        }
+    }
     if model.format != PROJECT_FORMAT || model.schema_version != PROJECT_SCHEMA_VERSION {
         return Err("project header does not match the supported schema".to_string());
     }
@@ -235,9 +314,7 @@ pub(crate) fn validate_project(model: &ProjectModelV9) -> Result<(), String> {
     model.drawings.validate()?;
     model.assembly.validate()?;
     crate::dto::validate_named_views(&model.views)?;
-    // CAM content never blocks the open: decode_project already ran
-    // soften_for_load, which migrates what's migratable and parks the rest
-    // as disabled operations with load warnings.
+    model.print_intent.validate()?;
 
     let mut feature_ids = HashSet::new();
     for feature in &model.document.history.features {
@@ -291,8 +368,6 @@ pub(crate) fn validate_project(model: &ProjectModelV9) -> Result<(), String> {
             let mut ids = HashSet::new();
             let mut edges = HashSet::new();
             for edge in boundary {
-                // Keep synthetic segment ids out of the authored entity range
-                // and exactly representable by the browser (id * 1000 + piece).
                 if !(1_u64 << 40..1_u64 << 41).contains(&edge.id)
                     || !ids.insert(edge.id)
                     || !edges.insert(edge.edge_id)
@@ -539,7 +614,7 @@ pub(crate) fn validate_project(model: &ProjectModelV9) -> Result<(), String> {
             BodyFeatureDefinitionDto::ImportStep { .. } => (FeatureKind::ImportStep, "STEP Import"),
         };
         validate_feature_entry(model, feature_id, definition.name(), kind, label)?;
-        let reserved: &[nbcad_core::BodyId] = match definition {
+        let reserved: &[limo_cad_core::BodyId] = match definition {
             BodyFeatureDefinitionDto::MoveCopy {
                 copy: true,
                 result_body_ids,
@@ -641,4 +716,60 @@ fn validate_feature_entry(
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod identity_migration_tests {
+    use super::*;
+
+    #[test]
+    fn old_model_names_migrate_without_changing_document_data() {
+        let current = crate::SketchManager::new().export_project_model().unwrap();
+        let expected: serde_json::Value = serde_json::from_str(&current).unwrap();
+        for format in [
+            PREVIOUS_PROJECT_FORMAT,
+            LEGACY_PROJECT_FORMAT,
+            PROJECT_FORMAT,
+        ] {
+            let mut saved = expected.clone();
+            saved["format"] = format.into();
+            let migrated = decode_project(&saved.to_string()).unwrap();
+            validate_project(&migrated).unwrap();
+            assert_eq!(serde_json::to_value(migrated).unwrap(), expected);
+        }
+        let mut unsupported = expected;
+        unsupported["format"] = "unknown-project".into();
+        assert!(decode_project(&unsupported.to_string()).is_err());
+    }
+
+    #[test]
+    fn schema_thirteen_migrates_empty_height_intent_and_rejects_disguised_future_fields() {
+        let current = crate::SketchManager::new().export_project_model().unwrap();
+        let mut old: serde_json::Value = serde_json::from_str(&current).unwrap();
+        old["schema_version"] = 13.into();
+        old["print_intent"]["version"] = 3.into();
+        old["print_intent"]
+            .as_object_mut()
+            .unwrap()
+            .remove("height_ranges");
+        old["print_intent"]
+            .as_object_mut()
+            .unwrap()
+            .remove("layer_height_profiles");
+        let migrated = decode_project(&old.to_string()).unwrap();
+        assert_eq!(migrated.print_intent.version, 4);
+        assert!(migrated.print_intent.height_ranges.is_empty());
+        assert!(migrated.print_intent.layer_height_profiles.is_empty());
+        assert_eq!(migrated.print_intent.source_document_id, None);
+        for field in ["height_ranges", "layer_height_profiles"] {
+            let mut disguised = old.clone();
+            disguised["print_intent"][field] = serde_json::json!([]);
+            assert!(decode_project(&disguised.to_string())
+                .unwrap_err()
+                .contains("Older project schema cannot contain print height"));
+        }
+        let mut future = old;
+        future["schema_version"] = 15.into();
+        assert!(decode_project(&future.to_string()).is_err());
+    }
 }

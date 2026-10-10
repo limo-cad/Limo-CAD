@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark light">
-    <title>Open an editable recipe · noBS CAD</title>
+    <title>Open an editable recipe · Limo CAD</title>
     <style>
       :root {
         font-family: system-ui, sans-serif;
@@ -89,16 +89,17 @@
     </style>
   </head>
   <body>
-    <p class="eyebrow">noBS CAD</p>
-    <h1>Open a recipe in noBS CAD</h1>
-    <p class="note">Recipe-link installation needs a build with recipe-link support, which the <a href="https://github.com/limo-cad/Limo-CAD/releases/tag/v0.2.1">0.2.1 packages</a> include. The source links below point at the tagged revision.</p>
+    <p class="eyebrow">Limo CAD</p>
+    <h1>Open a recipe in Limo CAD</h1>
+    <p class="note">Use the <a href="https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1">Bevy rc.2 desktop preview</a> for Windows x64 or Ubuntu 26.04 x64. Recipe links select the examples bundled with your installed build; the source links below preserve the earlier showcase revision.</p>
     <p>Open the installed recipe in Scripts, review its source and chapter overview, then choose <strong>Run in new design</strong> when you are ready.</p>
-    <p class="note">Opening a link does not run commands, download a model, or replace your CAD design. Edited script source gets a Save / Discard / Cancel choice.</p>
+    <p class="note">Opening a link does not run commands, download a model, or replace your CAD design. Edited script source gets a Save / Discard / Cancel choice. Use the October 4 preview button with that published build; the main button uses the new Limo registration.</p>
     <main>
       <section id="fillet-basics">
         <h2>Your first editable part</h2>
         <p>Build a dimensioned block, round its top edges and watch an extrusion edit from 12 to 18 mm and back. Then try your own edit and save and reopen the result using the first-part guide.</p>
-        <a class="open" href="nbcad://recipe/fillet-basics">Open the lesson in noBS CAD</a>
+        <a class="open" href="limo-cad://recipe/fillet-basics">Open the lesson in Limo CAD</a>
+        <a href="nbcad://recipe/fillet-basics">October 4 preview</a>
         <a
           href="https://github.com/limo-cad/Limo-CAD/blob/v0.2.0/examples/scripts/fillet-basics.nbcad.jsonc"
         >Read the lesson on GitHub</a>
@@ -106,7 +107,8 @@
       <section id="garden-bench">
         <h2>The garden bench</h2>
         <p>From dimensioned timber parts to a connected assembly. Explore the relationships, construction sequence and manufacturing checks.</p>
-        <a class="open" href="nbcad://recipe/garden-bench">Open in noBS CAD</a>
+        <a class="open" href="limo-cad://recipe/garden-bench">Open in Limo CAD</a>
+        <a href="nbcad://recipe/garden-bench">October 4 preview</a>
         <a
           href="https://github.com/limo-cad/Limo-CAD/blob/v0.2.0/examples/scripts/garden-bench.nbcad.jsonc"
         >Read the recipe on GitHub</a>
@@ -114,7 +116,8 @@
       <section id="d-screw-vise">
         <h2>The printed vise</h2>
         <p>A captured slide, coarse printed screw and compact handle, with editable assembly relationships and seven drawing sheets.</p>
-        <a class="open" href="nbcad://recipe/d-screw-vise">Open in noBS CAD</a>
+        <a class="open" href="limo-cad://recipe/d-screw-vise">Open in Limo CAD</a>
+        <a href="nbcad://recipe/d-screw-vise">October 4 preview</a>
         <a
           href="https://github.com/limo-cad/Limo-CAD/blob/v0.2.0/examples/scripts/d-screw-vise.nbcad.jsonc"
         >Read the recipe on GitHub</a>
@@ -122,13 +125,14 @@
       <section id="vertical-axis-turbine">
         <h2>The wind turbine</h2>
         <p>A two-stage Savonius rotor, 4:1 spur drive and generator fit, connected through native geometry, motion relationships and associative drawings.</p>
-        <a class="open" href="nbcad://recipe/vertical-axis-turbine">Open in noBS CAD</a>
+        <a class="open" href="limo-cad://recipe/vertical-axis-turbine">Open in Limo CAD</a>
+        <a href="nbcad://recipe/vertical-axis-turbine">October 4 preview</a>
         <a
           href="https://github.com/limo-cad/Limo-CAD/blob/v0.2.0/examples/scripts/vertical-axis-turbine.nbcad.jsonc"
         >Read the recipe on GitHub</a>
       </section>
     </main>
-    <p><strong>First visit?</strong> <a href="https://github.com/limo-cad/Limo-CAD/blob/main/docs/INSTALL.md">Install the matching 0.2.0 packages</a> and open it once before using these buttons. Your browser may ask permission to open the application. On macOS, put the app in Applications first. If you move a portable Windows folder or AppImage, open it again to update its link registration.</p>
+    <p><strong>First visit?</strong> <a href="https://github.com/limo-cad/Limo-CAD/blob/feat/bevy-interface/docs/INSTALL.md">Install the Bevy preview</a> and open it once before using these buttons. Your browser may ask permission to open the application. If you move the portable Windows folder, open it again to update its link registration.</p>
     <p class="note">If nothing opens, use Scripts → Examples inside the app or read the source above. On a phone, the recipes remain readable on GitHub; building them requires the desktop application. Installed examples match your application version. These designs remain candidates for physical print and fit qualification.</p>
     <footer><a href="https://github.com/limo-cad/Limo-CAD">Project &amp; source</a> · <a href="./home.html">Download and first steps</a> &middot; <a href="./showcase.html">Watch the examples</a></footer>
   </body>

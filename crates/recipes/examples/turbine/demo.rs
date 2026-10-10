@@ -28,8 +28,7 @@ pub(super) fn show_body(a: &mut Author, id: &str, body: Value, caption: &str) {
         "project_visibility",
         json!({}),
     );
-    // Registered components are the previously placed assembly. The temporary
-    // bucket is the one pre-registration part that overlaps another body.
+
     let mut hidden: Vec<_> = a.parts.iter().map(|part| part["body_id"].clone()).collect();
     if id == "bucket_half" {
         hidden.push(body_ref("stage"));
@@ -56,8 +55,7 @@ pub(super) fn show_body(a: &mut Author, id: &str, body: Value, caption: &str) {
         "project_set_visibility",
         r(&saved),
     );
-    // Restore framing with visibility so later modeling does not inherit an
-    // isolated hub, gear or bracket camera for the full assembly.
+
     a.steps
         .push(json!({"id":format!("{id}_presentation_restore_fit"),
         "view":"isometric","fit":true,"duration_ms":600}));
@@ -118,7 +116,7 @@ pub(super) fn run(a: &mut Author) {
             a.call(&id, "assembly/joints", "assembly_set_joint_motion", json!({
                 "joint_id":at("rotor_rotation","/id"),"angle_offset_deg":angle,"linear_offset_mm":0.
             }));
-            // Three-degree samples avoid whole-tooth visual aliasing of the 72-tooth gear.
+
             a.steps
                 .push(json!({"view":"current","fit":false,"duration_ms":160}));
         }

@@ -44,7 +44,7 @@ seat or split plane.
 
 ### JSONC scripts
 
-In **`.nbcad.jsonc` scripts**:
+In **`.limo.jsonc` scripts**:
 
 - Put the **same names** in command arguments, comments, and `set_name` (or
   equivalent) ops the product supports

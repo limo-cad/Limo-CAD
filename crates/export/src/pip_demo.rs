@@ -4,7 +4,7 @@
 //! latch bar. Every inter-body **box pair** keeps ≥ [`CLEAR_MM`] AABB
 //! separation (no fused solids, no intentional interference). Printed flat.
 
-use nbcad_core::{BodyAppearance, BodyId, Rgba8};
+use limo_cad_core::{BodyAppearance, BodyId, Rgba8};
 
 use crate::{find_preset, TriangleMesh};
 
@@ -70,7 +70,7 @@ fn mesh_from_boxes(body_id: BodyId, name: &str, boxes: &[[f32; 6]]) -> TriangleM
     for &[xmin, xmax, ymin, ymax, zmin, zmax] in boxes {
         let (p, i) = box_solid(xmin, xmax, ymin, ymax, zmin, zmax);
         let base = (positions.len() / 3) as u32;
-        positions.extend(p);
+        positions.extend(p.into_iter().map(f64::from));
         indices.extend(i.into_iter().map(|v| v + base));
     }
     TriangleMesh {
@@ -125,20 +125,20 @@ pub fn assert_box_clearances(bodies: &[(&str, &[[f32; 6]])], min_clear_mm: f32) 
 /// Clearance rule: every inter-body box pair is ≥ [`CLEAR_MM`] apart.
 pub fn print_in_place_clip() -> (Vec<TriangleMesh>, Vec<BodyAppearance>) {
     let housing_boxes: &[[f32; 6]] = &[
-        [0.0, 50.0, 0.0, 42.0, 0.0, 2.5],    // floor
-        [0.0, 4.0, 0.0, 42.0, 2.5, 7.5],     // left rail
-        [28.0, 32.0, 0.0, 42.0, 2.5, 7.5],   // right rail
-        [0.0, 11.0, 0.0, 42.0, 7.5, 10.0],   // left lip
-        [21.0, 32.0, 0.0, 42.0, 7.5, 10.0],  // right lip
-        [0.0, 32.0, 38.5, 42.0, 2.5, 10.0],  // back
-        [0.0, 11.0, 0.0, 3.5, 2.5, 10.0],    // front L
-        [21.0, 32.0, 0.0, 3.5, 2.5, 10.0],   // front R
-        [11.0, 21.0, 0.0, 3.5, 7.5, 10.0],   // front top
-        [32.0, 50.0, 10.0, 32.0, 0.0, 2.5],  // pocket floor
-        [32.0, 50.0, 30.4, 32.0, 2.5, 8.5],  // pocket back
-        [32.0, 50.0, 10.0, 11.6, 2.5, 8.5],  // pocket front
-        [48.6, 50.0, 11.6, 30.4, 2.5, 8.5],  // pocket outer
-        [32.0, 50.0, 10.0, 32.0, 8.5, 10.0], // pocket lid
+        [0.0, 50.0, 0.0, 42.0, 0.0, 2.5],
+        [0.0, 4.0, 0.0, 42.0, 2.5, 7.5],
+        [28.0, 32.0, 0.0, 42.0, 2.5, 7.5],
+        [0.0, 11.0, 0.0, 42.0, 7.5, 10.0],
+        [21.0, 32.0, 0.0, 42.0, 7.5, 10.0],
+        [0.0, 32.0, 38.5, 42.0, 2.5, 10.0],
+        [0.0, 11.0, 0.0, 3.5, 2.5, 10.0],
+        [21.0, 32.0, 0.0, 3.5, 2.5, 10.0],
+        [11.0, 21.0, 0.0, 3.5, 7.5, 10.0],
+        [32.0, 50.0, 10.0, 32.0, 0.0, 2.5],
+        [32.0, 50.0, 30.4, 32.0, 2.5, 8.5],
+        [32.0, 50.0, 10.0, 11.6, 2.5, 8.5],
+        [48.6, 50.0, 11.6, 30.4, 2.5, 8.5],
+        [32.0, 50.0, 10.0, 32.0, 8.5, 10.0],
     ];
 
     let x0 = 4.0 + CLEAR_MM;
@@ -152,12 +152,12 @@ pub fn print_in_place_clip() -> (Vec<TriangleMesh>, Vec<BodyAppearance>) {
     let y1 = 34.0;
 
     let drawer_boxes: &[[f32; 6]] = &[
-        [x0, x1, y0, 18.0, z0, z1],         // flange front
-        [x0, x1, 22.0, y1, z0, z1],         // flange back
-        [x0, x1 - 3.0, 18.0, 22.0, z0, z1], // flange inner (notch recess)
-        [neck0, neck1, y0, y1, z1, z_stem], // stem
-        [8.0, 24.0, y0, y1, z_stem, 13.5],  // handle
-        [neck0, neck1, 5.5, y0, z0, z1],    // tip
+        [x0, x1, y0, 18.0, z0, z1],
+        [x0, x1, 22.0, y1, z0, z1],
+        [x0, x1 - 3.0, 18.0, 22.0, z0, z1],
+        [neck0, neck1, y0, y1, z1, z_stem],
+        [8.0, 24.0, y0, y1, z_stem, 13.5],
+        [neck0, neck1, 5.5, y0, z0, z1],
     ];
 
     let latch_boxes: &[[f32; 6]] = &[[
@@ -224,34 +224,28 @@ pub fn print_in_place_latch() -> (Vec<TriangleMesh>, Vec<BodyAppearance>) {
 /// - No intentional interference / fused solids
 pub fn print_in_place_cam_bolt() -> (Vec<TriangleMesh>, Vec<BodyAppearance>) {
     let housing_boxes: &[[f32; 6]] = &[
-        // Main floor
         [0.0, 70.0, 0.0, 58.0, 0.0, 2.5],
-        // --- Bolt T-channel (left) ---
-        [0.0, 3.5, 0.0, 42.0, 2.5, 8.0],    // outer rail
-        [0.0, 8.5, 0.0, 42.0, 8.0, 10.0],   // lip outer
-        [13.5, 18.0, 0.0, 42.0, 8.0, 10.0], // lip inner
-        [0.0, 18.0, 0.0, 3.5, 2.5, 10.0],   // front cheek
-        [8.5, 13.5, 0.0, 3.5, 8.0, 10.0],   // front top
-        [0.0, 20.0, 40.0, 42.0, 2.5, 10.0], // bolt rear stop
-        // Inner rail split — open y16..28 for wedge → follower
+        [0.0, 3.5, 0.0, 42.0, 2.5, 8.0],
+        [0.0, 8.5, 0.0, 42.0, 8.0, 10.0],
+        [13.5, 18.0, 0.0, 42.0, 8.0, 10.0],
+        [0.0, 18.0, 0.0, 3.5, 2.5, 10.0],
+        [8.5, 13.5, 0.0, 3.5, 8.0, 10.0],
+        [0.0, 20.0, 40.0, 42.0, 2.5, 10.0],
         [18.0, 20.0, 0.0, 16.0, 2.5, 8.0],
         [18.0, 20.0, 28.0, 42.0, 2.5, 8.0],
-        // --- Follower pocket (center) x20..44, y12..32 ---
-        [20.0, 44.0, 12.0, 14.0, 2.5, 8.0], // pocket front
-        // Pocket back split — slot x26..36 for lock tab
+        [20.0, 44.0, 12.0, 14.0, 2.5, 8.0],
         [20.0, 26.0, 30.0, 32.0, 2.5, 8.0],
         [36.0, 44.0, 30.0, 32.0, 2.5, 8.0],
-        [42.0, 44.0, 14.0, 30.0, 2.5, 8.0],  // pocket outer
-        [20.0, 44.0, 12.0, 32.0, 8.0, 10.0], // pocket lid
-        // --- Dial well (rear-right) interior x46..66, y36..54 ---
-        [44.0, 46.0, 36.0, 56.0, 2.5, 8.5],  // well left
-        [66.0, 68.0, 36.0, 56.0, 2.5, 8.5],  // well right
-        [46.0, 66.0, 36.0, 38.0, 2.5, 8.5],  // well front
-        [46.0, 66.0, 54.0, 56.0, 2.5, 8.5],  // well back
-        [46.0, 52.0, 38.0, 54.0, 8.5, 10.0], // dial lip L
-        [60.0, 66.0, 38.0, 54.0, 8.5, 10.0], // dial lip R
-        [52.0, 60.0, 38.0, 44.0, 8.5, 10.0], // dial lip F
-        [52.0, 60.0, 50.0, 54.0, 8.5, 10.0], // dial lip B
+        [42.0, 44.0, 14.0, 30.0, 2.5, 8.0],
+        [20.0, 44.0, 12.0, 32.0, 8.0, 10.0],
+        [44.0, 46.0, 36.0, 56.0, 2.5, 8.5],
+        [66.0, 68.0, 36.0, 56.0, 2.5, 8.5],
+        [46.0, 66.0, 36.0, 38.0, 2.5, 8.5],
+        [46.0, 66.0, 54.0, 56.0, 2.5, 8.5],
+        [46.0, 52.0, 38.0, 54.0, 8.5, 10.0],
+        [60.0, 66.0, 38.0, 54.0, 8.5, 10.0],
+        [52.0, 60.0, 38.0, 44.0, 8.5, 10.0],
+        [52.0, 60.0, 50.0, 54.0, 8.5, 10.0],
     ];
 
     let bx0 = 3.5 + CLEAR_MM;
@@ -262,13 +256,12 @@ pub fn print_in_place_cam_bolt() -> (Vec<TriangleMesh>, Vec<BodyAppearance>) {
     let bz1 = 8.0 - CLEAR_MM;
     let by0 = 6.0;
     let by1 = 34.0;
-    // Wedge Z must stay ≤ pocket-lid clearance (lid at z=8).
+
     let w1 = (bz0 + 1.0).min(bz1);
     let w2 = (bz0 + 2.0).min(bz1);
     let w3 = (bz0 + 3.0).min(bz1);
     let w4 = (bz0 + 4.0).min(bz1);
 
-    // Bolt + ≈45° stepped wedge facing +X through window y16..28.
     let bolt_boxes: &[[f32; 6]] = &[
         [bx0, bx1, by0, by1, bz0, bz1],
         [neck0, neck1, by0, by1, bz1, 10.0 + CLEAR_MM],
@@ -280,7 +273,6 @@ pub fn print_in_place_cam_bolt() -> (Vec<TriangleMesh>, Vec<BodyAppearance>) {
         [bx1, 28.0 - CLEAR_MM, 19.0, 21.0, bz0, w4],
     ];
 
-    // Follower: body stays east of wedge tip; nose reaches west with CLEAR.
     let follower_boxes: &[[f32; 6]] = &[
         [
             30.0 + CLEAR_MM,
@@ -290,7 +282,6 @@ pub fn print_in_place_cam_bolt() -> (Vec<TriangleMesh>, Vec<BodyAppearance>) {
             2.5 + CLEAR_MM,
             8.0 - CLEAR_MM,
         ],
-        // Nose toward bolt wedge (CLEAR at rest)
         [
             28.0 + CLEAR_MM,
             30.0 + CLEAR_MM,
@@ -299,11 +290,9 @@ pub fn print_in_place_cam_bolt() -> (Vec<TriangleMesh>, Vec<BodyAppearance>) {
             2.5 + CLEAR_MM,
             7.0,
         ],
-        // Lock tab through pocket-back slot (x26..36) toward dial lobe
         [27.0, 35.0, 32.0 + CLEAR_MM, 35.0, 2.5 + CLEAR_MM, 7.5],
     ];
 
-    // Dial in rear-right well; lobe toward follower lock tab.
     let dial_boxes: &[[f32; 6]] = &[
         [
             46.0 + CLEAR_MM,
@@ -329,7 +318,6 @@ pub fn print_in_place_cam_bolt() -> (Vec<TriangleMesh>, Vec<BodyAppearance>) {
             2.5 + CLEAR_MM,
             8.5 - CLEAR_MM,
         ],
-        // Lock lobe toward follower tab (stays west of well left wall)
         [
             30.0,
             44.0 - CLEAR_MM,
@@ -410,10 +398,12 @@ mod tests {
         let drawer = &meshes[1];
         let min_z = drawer
             .positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|p| p[2])
-            .fold(f32::MAX, f32::min);
-        assert!(min_z >= 2.5 + CLEAR_MM - 1e-3);
+            .fold(f64::MAX, f64::min);
+        assert!(min_z >= 2.5 + f64::from(CLEAR_MM) - 1e-3);
     }
 
     #[test]
@@ -427,9 +417,11 @@ mod tests {
         }
         assert!(meshes.iter().all(|m| {
             m.positions
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .map(|p| p[2])
-                .fold(f32::MAX, f32::min)
+                .fold(f64::MAX, f64::min)
                 >= -1e-3
         }));
     }

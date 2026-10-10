@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use nbcad_core::BodyId;
+use limo_cad_core::BodyId;
 use serde::{Deserialize, Serialize};
 
 const MAX_SETUPS: usize = 64;
@@ -477,8 +477,6 @@ impl Siemens828dPostConfigDto {
             return Err("Siemens 828D tool length offset must be between D1 and D999".to_string());
         }
         if let Some(name) = &self.spindle_stop_subprogram {
-            // A deliberately narrow subset of named subprogram syntax. The
-            // underscore separates it from address words and NC keywords.
             if !(3..=31).contains(&name.len())
                 || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
                 || !name.as_bytes()[0].is_ascii_alphabetic()
@@ -702,7 +700,7 @@ impl CamToolDto {
                 ));
             }
         }
-        // A bull-nose end mill is defined by its corner radius.
+
         if self.kind == CamToolKind::BullNoseEndMill && self.corner_radius.is_none() {
             return Err(format!(
                 "bull-nose end mill '{}' must declare a corner radius",
@@ -1449,7 +1447,7 @@ impl CamOperationDto {
             clearance_z: *clearance_z,
             retract_z: *retract_z,
             feed_height_z: *feed_height_z,
-            cutting: cutting.clone(),
+            cutting: *cutting,
         }
     }
 
@@ -1646,9 +1644,6 @@ impl CamOperationDto {
         self.validate_with_tool_checks(setup, tools, true)
     }
 
-    // Editing may preserve an operation whose assigned tool no longer fits.
-    // Numeric/geometry/identity validation stays strict; execution does not
-    // use this mode and never silently suppresses an incompatible operation.
     fn validate_with_tool_checks(
         &self,
         setup: &CamSetupDto,
@@ -1706,9 +1701,6 @@ impl CamOperationDto {
             .ok_or_else(|| format!("operation '{label}' references a missing tool"))?;
         self.cutting().validate(label)?;
 
-        // Safe heights are defined per operation: the clearance plane must
-        // clear the stock top, and the retract plane sits between the
-        // operation's cut top and its clearance plane.
         let clearance_z = self.clearance_z();
         if !clearance_z.is_finite() || clearance_z <= setup.stock.max.z {
             return Err(format!(
@@ -1732,8 +1724,7 @@ impl CamOperationDto {
                 "operation '{label}' retract Z must be above every effective cut/hole top ({cut_top:.3} mm) and no higher than its clearance Z"
             ));
         }
-        // The feed-engagement plane sits between the cut top and the retract
-        // plane: rapids may reach it freely, everything below is feed rate.
+
         let feed_height_z = self.feed_height_z();
         if !feed_height_z.is_finite()
             || feed_height_z < cut_top - EPSILON
@@ -1759,7 +1750,6 @@ impl CamOperationDto {
 
         if check_tool {
             let step = match self {
-                // Roughing schedules shallower bands from the supplied tool limits.
                 Self::Adaptive3d { .. } => None,
                 Self::Face { step_down, .. }
                 | Self::Contour2d { step_down, .. }
@@ -1789,7 +1779,6 @@ impl CamOperationDto {
                 {
                     return Err(format!("flat finishing operation '{label}' requires a face mill or a center-cutting flat or bull-nose end mill"));
                 }
-                // Offset passes cover the floor with the flat land only.
                 let land = tool.diameter * 0.5 - tool.corner_radius.unwrap_or(0.0);
                 if check_tool && land <= EPSILON {
                     return Err(format!(
@@ -1846,9 +1835,7 @@ impl CamOperationDto {
                 {
                     return Err(format!("high-speed roughing operation '{label}' needs a nonzero flat land; a full ball nose does not provide the required floor-clearance proof"));
                 }
-                // Top is an editable depth-range reference, including an
-                // air offset above stock. It never certifies removed stock;
-                // incoming-stock reach/entry checks belong to the planner.
+
                 if !top_z.is_finite() || !within_z(*bottom_z) || *bottom_z >= *top_z - EPSILON {
                     return Err(format!("high-speed roughing operation '{label}' top must be above bottom, with bottom inside the setup stock"));
                 }
@@ -1918,12 +1905,6 @@ impl CamOperationDto {
                 safe_distance,
                 ..
             } => {
-                // Facing enters from outside the stock boundary (the plunge
-                // point sits clear of the material), so plunge capability is
-                // not required. But the cutter still needs a flat-ish bottom
-                // edge: flat and bull-nose end mills and face mills only —
-                // ball noses leave scallops, chamfer mills cut on an angled
-                // edge, thread mills cannot side-mill at all.
                 if check_tool
                     && !matches!(
                         tool.kind,
@@ -1977,8 +1958,6 @@ impl CamOperationDto {
                 finish_allowance,
                 finish_feed,
                 spring_pass,
-                // compensation_mode: no validation rules of its own — lead
-                // lengths carry no tool-diameter floor in either mode.
                 ..
             } => {
                 if check_tool
@@ -2038,12 +2017,7 @@ impl CamOperationDto {
                         "contour operation '{label}' needs a positive lead-in and lead-out — the tool must reach and leave the profile on a straight tangential move"
                     ));
                 }
-                // Leads carry no tool-diameter rule: how much tangential run
-                // a control needs to activate or cancel compensation is the
-                // control's business, and leads into an inside profile just
-                // need to be positive. (Very short in-control leads may alarm
-                // a real control; that is accepted operator intent, not a
-                // geometry error.)
+
                 if let Some(arc_radius) = lead_arc_radius {
                     if !arc_radius.is_finite() || *arc_radius <= 0.0 {
                         return Err(format!(
@@ -2156,7 +2130,6 @@ impl CamOperationDto {
                     ));
                 }
                 for hole in holes {
-                    // Like the operation top, a hole's top may start in air.
                     validate_depth_span(label, hole.top_z, hole.bottom_z, within_z, true)?;
                     let axis_len = hole.axis.iter().map(|a| a * a).sum::<f64>().sqrt();
                     if !hole.axis.iter().all(|a| a.is_finite())
@@ -2445,15 +2418,13 @@ impl CamOperationDto {
                         "thread operation '{label}' needs a positive minor diameter smaller than the major diameter"
                     ));
                 }
-                // The tool orbits out from the hole center, so its body must
-                // fit the pre-machined (minor) diameter.
+
                 if check_tool && tool.diameter >= *minor_diameter - EPSILON {
                     return Err(format!(
                         "thread operation '{label}' tool diameter must be smaller than the {minor_diameter:.3} mm minor diameter"
                     ));
                 }
-                // The spiral overtravels half a pitch past each end; the
-                // threaded portion of the tool must cover the travel.
+
                 if check_tool && *top_z - *bottom_z + *pitch > tool.flute_length + EPSILON {
                     return Err(format!(
                         "thread operation '{label}' thread depth plus one pitch of overtravel exceeds the tool's flute length"
@@ -2770,9 +2741,6 @@ impl CamSetupDto {
     fn validate(&self, tools: &[CamToolDto], check_tool: bool) -> Result<(), String> {
         self.validate_structure()?;
         for operation in &self.operations {
-            // Disabled operations are inert — the planner and the post skip
-            // them, so strict validation does too. A disabled operation only
-            // comes back through an explicit resume, which re-validates.
             if operation.enabled() {
                 operation.validate_with_tool_checks(self, tools, check_tool)?;
             }
@@ -2947,7 +2915,7 @@ impl CamSetupDto {
                 self.name
             ));
         }
-        // The resolved profile must fit inside the persisted stock envelope.
+
         match &self.resolved_stock {
             CamResolvedStockDto::Cylinder { center, radius } => {
                 if !center.is_finite() || !radius.is_finite() || *radius <= 0.0 {
@@ -2977,7 +2945,7 @@ impl CamSetupDto {
                         self.name
                     ));
                 }
-                // Flats perpendicular to X; vertices reach across_flats / sqrt(3) in Y.
+
                 let half = across_flats / 2.0;
                 let vertex = across_flats / 3.0_f64.sqrt();
                 if center.x - half < self.stock.min.x - EPSILON
@@ -3287,8 +3255,16 @@ impl CamDocumentDto {
             for operation in &mut setup.operations {
                 if has_legacy_heights {
                     match operation {
-                        CamOperationDto::Adaptive3d { clearance_z, retract_z, .. }
-                        | CamOperationDto::Flat3d { clearance_z, retract_z, .. }
+                        CamOperationDto::Adaptive3d {
+                            clearance_z,
+                            retract_z,
+                            ..
+                        }
+                        | CamOperationDto::Flat3d {
+                            clearance_z,
+                            retract_z,
+                            ..
+                        }
                         | CamOperationDto::Face {
                             clearance_z,
                             retract_z,
@@ -3309,8 +3285,6 @@ impl CamDocumentDto {
                             retract_z,
                             ..
                         }
-                        // Thread operations postdate legacy heights; listed here
-                        // only to keep the match exhaustive.
                         | CamOperationDto::Thread {
                             clearance_z,
                             retract_z,
@@ -3327,8 +3301,7 @@ impl CamDocumentDto {
                                 }
                             }
                         }
-                        // Drill operations always carried their own retract
-                        // plane; only the clearance plane is new to them.
+
                         CamOperationDto::Drill { clearance_z, .. } => {
                             if *clearance_z == 0.0 {
                                 if let Some(value) = legacy_clearance {
@@ -3338,12 +3311,7 @@ impl CamDocumentDto {
                         }
                     }
                 }
-                // Documents saved before the feed-engagement plane existed
-                // deserialize it as zero, which fails the [cut top, retract]
-                // range check; clamp any out-of-range (or non-finite) plane
-                // into the range so the operation opens clean. Feeding from
-                // the cut top is the safe bound — the old planner approached
-                // at retract, which only adds air travel.
+
                 let (top_z, retract_z, feed_height_z) = operation.feed_plane_parts_mut();
                 if top_z.is_finite() && retract_z.is_finite() && *top_z <= *retract_z {
                     let clamped = feed_height_z.clamp(*top_z, *retract_z);
@@ -3351,9 +3319,7 @@ impl CamDocumentDto {
                 }
             }
         }
-        // Operation ids are globally unique. Drop orphaned or duplicate
-        // stamps during every load/write migration so deleting an operation
-        // cannot leave trusted-looking safety metadata behind.
+
         let operation_ids = self
             .setups
             .iter()
@@ -3375,11 +3341,6 @@ impl CamDocumentDto {
                         && valid_toolpath_fingerprint(&order.predrill_fingerprint)
                 })
         });
-        // Height expressions are manufacturing intent, not disposable cache
-        // metadata. Never migrate a malformed association into an apparently
-        // valid absolute-Z operation by silently dropping it. Strict writes
-        // reject it; load softening preserves and reports it so the operator
-        // can repair the reference explicitly.
     }
 
     /// Load-time leniency: a project file must ALWAYS open. Migrations and
@@ -3407,9 +3368,7 @@ impl CamDocumentDto {
             .max()
             .unwrap_or(0);
         let max_tool_id = self.tools.iter().map(|tool| tool.id).max().unwrap_or(0);
-        // Exhausted ids must stay inspectable on load, without a panic or
-        // wraparound that could alias another entity. Strict validation still
-        // rejects counters that cannot advance past the preserved saved ids.
+
         self.next_setup_id = self
             .next_setup_id
             .max(max_setup_id.saturating_add(1))
@@ -3421,7 +3380,6 @@ impl CamDocumentDto {
         self.next_tool_id = self.next_tool_id.max(max_tool_id.saturating_add(1)).max(1);
         let tools = self.tools.clone();
         for setup in &mut self.setups {
-            // Validate with an immutable borrow, then park the failures.
             let failing: Vec<usize> = setup
                 .operations
                 .iter()
@@ -3437,9 +3395,7 @@ impl CamDocumentDto {
                 setup.operations[index].set_enabled(false);
             }
         }
-        // A malformed height expression must never retain a trusted-looking
-        // generation stamp from a damaged or hand-edited project. Preserve
-        // the expression for repair, but force regeneration to fail closed.
+
         let mut seen_heights = HashSet::new();
         let invalid_height_operations = self
             .height_expressions
@@ -3795,7 +3751,7 @@ impl CamDocumentDto {
             {
                 return Err(format!("setup '{}' rest-stock envelope must contain the source stock transformed from setup '{}'", setup.name, source.name));
             }
-            // Walk the chain; revisiting a node means a cycle.
+
             let mut seen = HashSet::from([setup.id]);
             let mut cursor = source;
             while let CamResolvedStockDto::Rest { source_setup_id } = &cursor.resolved_stock {
@@ -3931,8 +3887,6 @@ mod tests {
 
     #[test]
     fn legacy_setup_heights_migrate_into_operations() {
-        // A pre-per-operation document: heights live on the setup, operations
-        // carry none, and the removed rapid/post fields are ignored.
         let legacy = r#"{
             "setups": [{
                 "id": 1,
@@ -3987,7 +3941,7 @@ mod tests {
         assert_eq!(operation.clearance_z(), 8.0);
         assert_eq!(operation.retract_z(), 2.0);
         assert_eq!(document.setups[0].legacy_clearance_z, None);
-        // Migrated documents never serialize the legacy setup planes back out.
+
         let serialized = serde_json::to_string(&document).unwrap();
         let setup_json: serde_json::Value = serde_json::from_str(&serialized).unwrap();
         let setup_json = setup_json["setups"][0].clone();
@@ -3998,7 +3952,6 @@ mod tests {
 
     #[test]
     fn cutting_data_profiles_validate_and_default_to_empty() {
-        // Documents written before profiles existed load with none.
         let base = tool();
         assert!(base.cutting_presets.is_empty());
         document_with(vec![setup(
@@ -4009,7 +3962,6 @@ mod tests {
         .validate()
         .unwrap();
 
-        // A valid named profile passes.
         let mut profiled = tool();
         profiled.cutting_presets = vec![CamCuttingPresetDto {
             name: "Aluminum".into(),
@@ -4023,7 +3975,6 @@ mod tests {
         document.tools = vec![profiled];
         document.validate().unwrap();
 
-        // Duplicate or empty names fail closed.
         let mut duplicated = tool();
         duplicated.cutting_presets = vec![
             CamCuttingPresetDto {
@@ -4052,25 +4003,25 @@ mod tests {
     #[test]
     fn corner_radius_is_checked_against_kind_and_diameter() {
         let setup = || setup(1, CamStockSpecDto::LegacyBox, CamResolvedStockDto::Box);
-        // A bull-nose end mill without a corner radius is not a bull nose.
+
         let mut bull = tool();
         bull.kind = CamToolKind::BullNoseEndMill;
         let mut document = document_with(vec![setup()]);
         document.tools = vec![bull.clone()];
         let error = document.validate().unwrap_err();
         assert!(error.contains("corner radius"));
-        // A valid corner radius passes...
+
         let mut valid = bull.clone();
         valid.corner_radius = Some(1.5);
         document.tools = vec![valid];
         document.validate().unwrap();
-        // ...bounded by half the diameter.
+
         let mut oversized = bull.clone();
         oversized.corner_radius = Some(4.0);
         document.tools = vec![oversized];
         let error = document.validate().unwrap_err();
         assert!(error.contains("half the diameter"));
-        // Hole-making and turning kinds carry no corner radius.
+
         let mut tap_tool = tool();
         tap_tool.kind = CamToolKind::Tap;
         tap_tool.corner_radius = Some(0.5);
@@ -4091,14 +4042,12 @@ mod tests {
             .validate()
             .unwrap();
 
-        // Moving the WCS without resolving the envelope would clip material.
         second.wcs.origin = Point3Dto::new(1.0, 0.0, 0.0);
         let error = document_with(vec![first.clone(), second.clone()])
             .validate()
             .unwrap_err();
         assert!(error.contains("must contain"));
 
-        // A smaller destination is also rejected before any transfer.
         second.wcs.origin = Point3Dto::new(0.0, 0.0, 0.0);
         second.stock.min.x = first.stock.min.x + 1.0;
         second.operations.clear();
@@ -4107,7 +4056,6 @@ mod tests {
             .unwrap_err();
         assert!(error.contains("must contain"));
 
-        // An independently tilted frame is valid with a containing envelope.
         let angle = 37.0_f64.to_radians();
         second.wcs = WorkCoordinateSystemDto {
             origin: Point3Dto::new(7., -3., 9.),
@@ -4120,7 +4068,6 @@ mod tests {
             .validate()
             .unwrap();
 
-        // Cycles fail closed.
         let mut looping_a = setup(
             1,
             CamStockSpecDto::RestFromSetup { setup_id: 2 },
@@ -4169,7 +4116,6 @@ mod tests {
         let error = document_with(vec![setup.clone()]).validate().unwrap_err();
         assert!(error.contains("box/cylinder/hex"));
 
-        // The resolved profile must fit inside the persisted envelope.
         setup.resolved_stock = CamResolvedStockDto::Cylinder {
             center: Point2Dto::new(10.0, 10.0),
             radius: 12.0,
@@ -4184,11 +4130,6 @@ mod tests {
 
     #[test]
     fn legacy_document_without_feed_height_opens_clean() {
-        // Round-15 documents predate the feed-engagement plane: it
-        // deserializes as zero, which falls out of [cut top, retract]
-        // whenever the cut top sits above the WCS origin. soften_for_load
-        // clamps it to the cut top, so the file opens with no warnings and
-        // no parked operations.
         let legacy = r#"{
             "setups": [{
                 "id": 1,
@@ -4237,8 +4178,7 @@ mod tests {
             "next_tool_id": 2
         }"#;
         let mut document: CamDocumentDto = serde_json::from_str(legacy).unwrap();
-        // Strict validation rejects the document as saved — this is the
-        // failure that used to block the open.
+
         assert!(document.validate().is_err());
         document.soften_for_load();
         document.validate().unwrap();
@@ -4272,8 +4212,7 @@ mod tests {
                 reference: CamHeightReferenceDto::Top,
                 offset: 1.0,
             },
-            // A field cannot depend on itself. This is deliberately damaged
-            // associative intent, not a request to trust the baked top_z.
+
             top: CamHeightExpressionDto {
                 geometry: None,
                 reference: CamHeightReferenceDto::Top,
@@ -4315,8 +4254,6 @@ mod tests {
 
     #[test]
     fn invalid_operations_are_parked_with_warnings_not_rejected() {
-        // Malformed operation parameters still park the operation on load.
-        // Tool-dependent mismatches remain enabled and explicitly invalid.
         let mut document = document_with(vec![setup(
             1,
             CamStockSpecDto::LegacyBox,
@@ -4335,7 +4272,6 @@ mod tests {
         assert_eq!(document.load_warnings[0].setup_id, Some(1));
         assert!(document.load_warnings[0].message.contains("stepover"));
 
-        // Fixing the operation and re-validating clears the warning.
         if let CamOperationDto::Face {
             step_over, enabled, ..
         } = &mut document.setups[0].operations[0]
@@ -4356,7 +4292,7 @@ mod tests {
             CamResolvedStockDto::Box,
         )]);
         document.active_setup_id = Some(99);
-        document.next_setup_id = 1; // collides with the existing setup
+        document.next_setup_id = 1;
         document.soften_for_load();
         assert_eq!(document.active_setup_id, Some(1));
         assert!(document.next_setup_id > 1);

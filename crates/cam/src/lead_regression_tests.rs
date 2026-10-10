@@ -133,9 +133,7 @@ fn inside_entry_and_exit_are_tangent_in_both_directions_and_compensation_modes()
                     *lead_arc_radius = arc;
                 }
                 let program = plan_setup(&document, 1).unwrap();
-                // Nominal G41 activation deliberately differs from physical
-                // motion; compare physical software leads here and require
-                // accepted in-control candidates to simulate without errors.
+
                 if mode == CompensationMode::InControl {
                     let request: CamSimulationRequestDto =
                         serde_json::from_value(serde_json::json!({"setup_id":1,"voxel_size":1.0}))

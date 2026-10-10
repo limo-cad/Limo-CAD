@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::sync::Arc;
 
-use nbcad_core::{BodyId, EdgeId, FaceId, FeatureId, PlaneBasis};
+use limo_cad_core::{BodyId, EdgeId, FaceId, FeatureId, PlaneBasis};
 
 use crate::dto::*;
 use crate::stable;
@@ -10,6 +11,32 @@ use crate::thread::{iso_metric_thread_envelope, rounded_thread_diameters, Thread
 const MAX_EXTENT_MM: f64 = 1_000_000.0;
 const MAX_STEP_BASE64_LENGTH: usize = 128 * 1024 * 1024;
 const EPS: f64 = 1e-7;
+
+/// Persistent solid feature definitions. Evaluated geometry is rebuilt separately.
+#[derive(Default)]
+pub struct SolidFeatureDefinitions {
+    pub extrudes: Vec<ExtrudeDefinitionDto>,
+    pub revolves: Vec<RevolveDefinitionDto>,
+    pub sweeps: Vec<SweepDefinitionDto>,
+    pub lofts: Vec<LoftDefinitionDto>,
+    pub ribs: Vec<RibDefinitionDto>,
+    pub fillets: Vec<SolidFilletDefinitionDto>,
+    pub chamfers: Vec<SolidChamferDefinitionDto>,
+    pub holes: Vec<HoleDefinitionDto>,
+    pub body_features: Vec<BodyFeatureDefinitionDto>,
+}
+
+struct SolidFeatureSlices<'a> {
+    extrudes: &'a [ExtrudeDefinitionDto],
+    revolves: &'a [RevolveDefinitionDto],
+    sweeps: &'a [SweepDefinitionDto],
+    lofts: &'a [LoftDefinitionDto],
+    ribs: &'a [RibDefinitionDto],
+    fillets: &'a [SolidFilletDefinitionDto],
+    chamfers: &'a [SolidChamferDefinitionDto],
+    holes: &'a [HoleDefinitionDto],
+    body_features: &'a [BodyFeatureDefinitionDto],
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SolidError {
@@ -96,7 +123,7 @@ pub struct SolidDocument {
     /// definitions; their numeric allocation order is not their build order
     /// after a dependency-safe drag reorder.
     feature_order: BTreeMap<FeatureId, usize>,
-    scene: SolidSceneDto,
+    scene: Arc<SolidSceneDto>,
     next_body_id: u64,
     next_transaction_id: u64,
     pending: Option<Pending>,
@@ -121,7 +148,7 @@ impl SolidDocument {
             holes: Vec::new(),
             body_features: Vec::new(),
             feature_order: BTreeMap::new(),
-            scene: SolidSceneDto::default(),
+            scene: Arc::default(),
             next_body_id: 1,
             next_transaction_id: 1,
             pending: None,
@@ -130,6 +157,113 @@ impl SolidDocument {
 
     pub fn definitions(&self) -> &[ExtrudeDefinitionDto] {
         &self.extrudes
+    }
+
+    /// Rename persisted operation metadata while retaining its evaluated scene.
+    pub fn rename_feature(&mut self, id: FeatureId, name: &str) -> Result<(), SolidError> {
+        self.ensure_idle()?;
+        let mut names = self
+            .extrudes
+            .iter_mut()
+            .map(|definition| (definition.feature_id, &mut definition.name))
+            .chain(
+                self.revolves
+                    .iter_mut()
+                    .map(|definition| (definition.feature_id, &mut definition.name)),
+            )
+            .chain(
+                self.sweeps
+                    .iter_mut()
+                    .map(|definition| (definition.feature_id, &mut definition.name)),
+            )
+            .chain(
+                self.lofts
+                    .iter_mut()
+                    .map(|definition| (definition.feature_id, &mut definition.name)),
+            )
+            .chain(
+                self.ribs
+                    .iter_mut()
+                    .map(|definition| (definition.feature_id, &mut definition.name)),
+            )
+            .chain(
+                self.fillets
+                    .iter_mut()
+                    .map(|definition| (definition.feature_id, &mut definition.name)),
+            )
+            .chain(
+                self.chamfers
+                    .iter_mut()
+                    .map(|definition| (definition.feature_id, &mut definition.name)),
+            )
+            .chain(
+                self.holes
+                    .iter_mut()
+                    .map(|definition| (definition.feature_id, &mut definition.name)),
+            )
+            .chain(
+                self.body_features
+                    .iter_mut()
+                    .map(|definition| (definition.feature_id(), definition.name_mut())),
+            );
+        let (_, label) = names
+            .find(|(feature_id, _)| *feature_id == id)
+            .ok_or(SolidError::FeatureNotFound(id))?;
+        label.clear();
+        label.push_str(name);
+        Ok(())
+    }
+
+    /// Rebind authored sketch references while retaining all evaluated geometry.
+    pub fn rename_sketch_references(&mut self, old: &str, new: &str) -> Result<(), SolidError> {
+        self.ensure_idle()?;
+        let rename = |name: &mut String| {
+            if name == old {
+                name.clear();
+                name.push_str(new);
+            }
+        };
+        for definition in &mut self.extrudes {
+            rename(&mut definition.sketch_name);
+        }
+        for definition in &mut self.revolves {
+            rename(&mut definition.sketch_name);
+            if let Some(name) = &mut definition.axis_line_sketch_name {
+                rename(name);
+            }
+        }
+        for definition in &mut self.sweeps {
+            rename(&mut definition.profile.sketch_name);
+            rename(&mut definition.path_sketch_name);
+            if let Some(guide) = &mut definition.guide_rail {
+                rename(&mut guide.sketch_name);
+            }
+        }
+        for definition in &mut self.lofts {
+            for section in &mut definition.sections {
+                rename(&mut section.sketch_name);
+            }
+            for path in [&mut definition.centerline, &mut definition.guide_rail]
+                .into_iter()
+                .flatten()
+            {
+                rename(&mut path.sketch_name);
+            }
+        }
+        for definition in &mut self.ribs {
+            rename(&mut definition.sketch_name);
+        }
+        for definition in &mut self.holes {
+            if let Some(reference) = &mut definition.position_reference {
+                rename(&mut reference.sketch_name);
+            }
+            for position in &mut definition.positions {
+                if let Some(reference) = &mut position.position_reference {
+                    rename(&mut reference.sketch_name);
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn set_feature_order(&mut self, order: &[FeatureId]) -> Result<(), SolidError> {
@@ -174,20 +308,38 @@ impl SolidDocument {
         &self.body_features
     }
 
+    /// Reserve identities retained by orphaned manufacturing records after project reload.
+    /// New geometry must never acquire a deleted part's manufacturing settings by ID reuse.
+    pub fn reserve_body_ids_through(&mut self, body_id: BodyId) -> Result<(), SolidError> {
+        self.ensure_idle()?;
+        if body_id.0 == 0 || body_id.0 >= 9_007_199_254_740_991 {
+            return Err(SolidError::KernelContract(
+                "Reserved body ID exhausts the safe allocator".into(),
+            ));
+        }
+        let floor = body_id.0.checked_add(1).ok_or_else(|| {
+            SolidError::KernelContract("Reserved body ID exhausts the allocator".into())
+        })?;
+        self.next_body_id = self.next_body_id.max(floor);
+        Ok(())
+    }
+
     /// Stable bodies owned by one history feature, including identities that
     /// are currently rolled back. Assembly cleanup calls this only for an
     /// explicit deletion; moving the build cursor must preserve references.
     pub fn owned_body_ids_for_feature(&self, feature_id: FeatureId) -> Vec<BodyId> {
         body_owners(
-            &self.extrudes,
-            &self.revolves,
-            &self.sweeps,
-            &self.lofts,
-            &self.ribs,
-            &self.fillets,
-            &self.chamfers,
-            &self.holes,
-            &self.body_features,
+            SolidFeatureSlices {
+                extrudes: &self.extrudes,
+                revolves: &self.revolves,
+                sweeps: &self.sweeps,
+                lofts: &self.lofts,
+                ribs: &self.ribs,
+                fillets: &self.fillets,
+                chamfers: &self.chamfers,
+                holes: &self.holes,
+                body_features: &self.body_features,
+            },
             &self.feature_order,
         )
         .into_iter()
@@ -286,32 +438,40 @@ impl SolidDocument {
         &self.scene
     }
 
+    /// Retain evaluated geometry without copying its topology or triangle buffers.
+    /// Recompute publishes a new scene; readers keep an immutable previous scene.
+    pub fn scene_snapshot(&self) -> Arc<SolidSceneDto> {
+        Arc::clone(&self.scene)
+    }
+
     /// Restore persistent feature definitions without restoring tessellation
     /// or B-reps. The caller immediately requests a full kernel recompute.
     pub fn restore_definitions(definitions: Vec<ExtrudeDefinitionDto>) -> Result<Self, SolidError> {
-        Self::restore_feature_definitions(
-            definitions,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        )
+        Self::restore_feature_definitions(crate::SolidFeatureDefinitions {
+            extrudes: definitions,
+            revolves: Vec::new(),
+            sweeps: Vec::new(),
+            lofts: Vec::new(),
+            ribs: Vec::new(),
+            fillets: Vec::new(),
+            chamfers: Vec::new(),
+            holes: Vec::new(),
+            body_features: Vec::new(),
+        })
     }
 
     pub fn restore_feature_definitions(
-        extrudes: Vec<ExtrudeDefinitionDto>,
-        revolves: Vec<RevolveDefinitionDto>,
-        sweeps: Vec<SweepDefinitionDto>,
-        lofts: Vec<LoftDefinitionDto>,
-        ribs: Vec<RibDefinitionDto>,
-        fillets: Vec<SolidFilletDefinitionDto>,
-        chamfers: Vec<SolidChamferDefinitionDto>,
-        holes: Vec<HoleDefinitionDto>,
-        body_features: Vec<BodyFeatureDefinitionDto>,
+        SolidFeatureDefinitions {
+            extrudes,
+            revolves,
+            sweeps,
+            lofts,
+            ribs,
+            fillets,
+            chamfers,
+            holes,
+            body_features,
+        }: SolidFeatureDefinitions,
     ) -> Result<Self, SolidError> {
         let mut feature_ids = BTreeSet::new();
         let mut body_ids = BTreeSet::new();
@@ -443,6 +603,11 @@ impl SolidDocument {
                 max_body_id = max_body_id.max(body_id.0);
             }
         }
+        if max_body_id >= 9_007_199_254_740_991 {
+            return Err(SolidError::KernelContract(
+                "Saved body identity exhausts the safe allocator".into(),
+            ));
+        }
         Ok(Self {
             extrudes,
             revolves,
@@ -454,7 +619,7 @@ impl SolidDocument {
             holes,
             body_features,
             feature_order: BTreeMap::new(),
-            scene: SolidSceneDto::default(),
+            scene: Arc::default(),
             next_body_id: max_body_id.saturating_add(1).max(1),
             next_transaction_id: 1,
             pending: None,
@@ -492,14 +657,14 @@ impl SolidDocument {
             }
             let mut points = [[0.0; 3]; 3];
             let mut valid = true;
-            for corner in 0..3 {
+            for (corner, point) in points.iter_mut().enumerate() {
                 let vertex = body.mesh.indices[offset + corner] as usize;
                 let base = vertex.saturating_mul(3);
                 if base + 2 >= body.mesh.positions.len() {
                     valid = false;
                     break;
                 }
-                points[corner] = [
+                *point = [
                     body.mesh.positions[base] as f64,
                     body.mesh.positions[base + 1] as f64,
                     body.mesh.positions[base + 2] as f64,
@@ -518,7 +683,7 @@ impl SolidDocument {
                 points[2][1] - points[0][1],
                 points[2][2] - points[0][2],
             ];
-            // Twice the triangle area is a sufficient positive weight.
+
             let cross = [
                 ab[1] * ac[2] - ab[2] * ac[1],
                 ab[2] * ac[0] - ab[0] * ac[2],
@@ -561,11 +726,11 @@ impl SolidDocument {
             .map(|edge| edge.points.clone())
     }
 
-    pub fn resolve_plane_ref(&self, reference: nbcad_core::PlaneRef) -> Option<PlaneBasis> {
+    pub fn resolve_plane_ref(&self, reference: limo_cad_core::PlaneRef) -> Option<PlaneBasis> {
         match reference {
-            nbcad_core::PlaneRef::OriginPlane { .. } => reference.origin_basis().ok(),
-            nbcad_core::PlaneRef::PlanarFace { face_id } => self.face_basis(face_id),
-            nbcad_core::PlaneRef::DatumPlane { .. } => None,
+            limo_cad_core::PlaneRef::OriginPlane { .. } => reference.origin_basis().ok(),
+            limo_cad_core::PlaneRef::PlanarFace { face_id } => self.face_basis(face_id),
+            limo_cad_core::PlaneRef::DatumPlane { .. } => None,
         }
     }
 
@@ -576,7 +741,7 @@ impl SolidDocument {
             match definition {
                 BodyFeatureDefinitionDto::Mirror {
                     plane:
-                        nbcad_core::PlaneRef::DatumPlane {
+                        limo_cad_core::PlaneRef::DatumPlane {
                             datum_id: referenced,
                         },
                     plane_basis,
@@ -584,7 +749,7 @@ impl SolidDocument {
                 }
                 | BodyFeatureDefinitionDto::SplitBody {
                     plane:
-                        nbcad_core::PlaneRef::DatumPlane {
+                        limo_cad_core::PlaneRef::DatumPlane {
                             datum_id: referenced,
                         },
                     plane_basis,
@@ -628,7 +793,7 @@ impl SolidDocument {
         }
         let mut new_body_ids = Vec::with_capacity(count);
         for _ in 0..count {
-            new_body_ids.push(self.alloc_body_id());
+            new_body_ids.push(self.alloc_body_id()?);
         }
         definitions.push(ExtrudeDefinitionDto {
             feature_id,
@@ -656,14 +821,17 @@ impl SolidDocument {
             new_body_ids,
         });
         self.prepare(
-            definitions,
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: definitions,
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -726,7 +894,7 @@ impl SolidDocument {
             .find(|definition| definition.feature_id == feature_id)
             .ok_or(SolidError::FeatureNotFound(feature_id))?;
         while definition.new_body_ids.len() < source_count {
-            definition.new_body_ids.push(self.alloc_body_id());
+            definition.new_body_ids.push(self.alloc_body_id()?);
         }
         definition.source_face = request.source_face;
         definition.source_face_key = source_face_key;
@@ -749,14 +917,17 @@ impl SolidDocument {
         definition.target_body_ids = request.target_body_ids;
         definition.to_face_basis = to_face_basis;
         self.prepare(
-            definitions,
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: definitions,
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -776,7 +947,7 @@ impl SolidDocument {
         }
         let mut new_body_ids = Vec::with_capacity(request.profile_indices.len());
         for _ in &request.profile_indices {
-            new_body_ids.push(self.alloc_body_id());
+            new_body_ids.push(self.alloc_body_id()?);
         }
         let mut revolves = self.revolves.clone();
         revolves.push(RevolveDefinitionDto {
@@ -795,14 +966,17 @@ impl SolidDocument {
             new_body_ids,
         });
         self.prepare(
-            self.extrudes.clone(),
-            revolves,
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves,
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -822,7 +996,7 @@ impl SolidDocument {
             .find(|definition| definition.feature_id == feature_id)
             .ok_or(SolidError::FeatureNotFound(feature_id))?;
         while definition.new_body_ids.len() < request.profile_indices.len() {
-            definition.new_body_ids.push(self.alloc_body_id());
+            definition.new_body_ids.push(self.alloc_body_id()?);
         }
         definition.sketch_name = request.sketch_name;
         definition.profile_indices = request.profile_indices;
@@ -835,14 +1009,17 @@ impl SolidDocument {
         definition.operation = request.operation;
         definition.target_body_ids = request.target_body_ids;
         self.prepare(
-            self.extrudes.clone(),
-            revolves,
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves,
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -866,21 +1043,24 @@ impl SolidDocument {
             path_entity_ids: request.path_entity_ids,
             operation: request.operation,
             target_body_ids: request.target_body_ids,
-            new_body_id: self.alloc_body_id(),
+            new_body_id: self.alloc_body_id()?,
             guide_rail: request.guide_rail,
             orientation: request.orientation,
             transition: request.transition,
             force_c1: request.force_c1,
         });
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            sweeps,
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps,
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -909,14 +1089,17 @@ impl SolidDocument {
         definition.transition = request.transition;
         definition.force_c1 = request.force_c1;
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            sweeps,
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps,
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -939,20 +1122,23 @@ impl SolidDocument {
             ruled: request.ruled,
             operation: request.operation,
             target_body_ids: request.target_body_ids,
-            new_body_id: self.alloc_body_id(),
+            new_body_id: self.alloc_body_id()?,
             continuity: request.continuity,
             centerline: request.centerline,
             guide_rail: request.guide_rail,
         });
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            lofts,
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts,
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -979,14 +1165,17 @@ impl SolidDocument {
         definition.centerline = request.centerline;
         definition.guide_rail = request.guide_rail;
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            lofts,
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts,
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -1004,9 +1193,10 @@ impl SolidDocument {
         if request.line_entity_ids.is_empty() {
             return Err(SolidError::EmptySelection);
         }
+        validate_rib_extent(request.operation, request.extent)?;
         let mut new_body_ids = Vec::with_capacity(request.line_entity_ids.len());
         for _ in &request.line_entity_ids {
-            new_body_ids.push(self.alloc_body_id());
+            new_body_ids.push(self.alloc_body_id()?);
         }
         let mut ribs = self.ribs.clone();
         ribs.push(RibDefinitionDto {
@@ -1025,14 +1215,17 @@ impl SolidDocument {
             to_face_basis: rib_extent_face_basis(request.extent, &self.scene),
         });
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            ribs,
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs,
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -1051,8 +1244,9 @@ impl SolidDocument {
             .iter()
             .position(|definition| definition.feature_id == feature_id)
             .ok_or(SolidError::FeatureNotFound(feature_id))?;
+        validate_rib_extent(request.operation, request.extent)?;
         while ribs[index].new_body_ids.len() < request.line_entity_ids.len() {
-            let body_id = self.alloc_body_id();
+            let body_id = self.alloc_body_id()?;
             ribs[index].new_body_ids.push(body_id);
         }
         let definition = &mut ribs[index];
@@ -1067,14 +1261,17 @@ impl SolidDocument {
         definition.extent = request.extent;
         definition.to_face_basis = rib_extent_face_basis(request.extent, &self.scene);
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            ribs,
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs,
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -1084,12 +1281,22 @@ impl SolidDocument {
         &mut self,
         feature_id: FeatureId,
         name: impl Into<String>,
-        request: SolidFilletRequest,
+        mut request: SolidFilletRequest,
         catalog: &[ProfileCatalogItemDto],
         active_features: &BTreeSet<FeatureId>,
     ) -> Result<RecomputePlanDto, SolidError> {
         self.ensure_idle()?;
         validate_positive(request.radius, "fillet radius")?;
+        if request.tangent_chain {
+            edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
+            let body = self
+                .scene
+                .bodies
+                .iter()
+                .find(|b| b.id == request.body_id)
+                .ok_or(SolidError::MissingTarget(request.body_id))?;
+            request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
+        }
         let edge_keys = edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
         let mut fillets = self.fillets.clone();
         fillets.push(SolidFilletDefinitionDto {
@@ -1102,14 +1309,17 @@ impl SolidDocument {
             tangent_chain: request.tangent_chain,
         });
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            fillets,
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets,
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -1118,12 +1328,22 @@ impl SolidDocument {
     pub fn prepare_edit_fillet(
         &mut self,
         feature_id: FeatureId,
-        request: SolidFilletRequest,
+        mut request: SolidFilletRequest,
         catalog: &[ProfileCatalogItemDto],
         active_features: &BTreeSet<FeatureId>,
     ) -> Result<RecomputePlanDto, SolidError> {
         self.ensure_idle()?;
         validate_positive(request.radius, "fillet radius")?;
+        if request.tangent_chain {
+            edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
+            let body = self
+                .scene
+                .bodies
+                .iter()
+                .find(|b| b.id == request.body_id)
+                .ok_or(SolidError::MissingTarget(request.body_id))?;
+            request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
+        }
         let edge_keys = edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
         let mut fillets = self.fillets.clone();
         let definition = fillets
@@ -1136,14 +1356,17 @@ impl SolidDocument {
         definition.radius = request.radius;
         definition.tangent_chain = request.tangent_chain;
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            fillets,
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets,
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -1153,12 +1376,22 @@ impl SolidDocument {
         &mut self,
         feature_id: FeatureId,
         name: impl Into<String>,
-        request: SolidChamferRequest,
+        mut request: SolidChamferRequest,
         catalog: &[ProfileCatalogItemDto],
         active_features: &BTreeSet<FeatureId>,
     ) -> Result<RecomputePlanDto, SolidError> {
         self.ensure_idle()?;
         validate_positive(request.distance, "chamfer distance")?;
+        if request.tangent_chain {
+            edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
+            let body = self
+                .scene
+                .bodies
+                .iter()
+                .find(|b| b.id == request.body_id)
+                .ok_or(SolidError::MissingTarget(request.body_id))?;
+            request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
+        }
         let edge_keys = edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
         let mut chamfers = self.chamfers.clone();
         chamfers.push(SolidChamferDefinitionDto {
@@ -1171,14 +1404,17 @@ impl SolidDocument {
             tangent_chain: request.tangent_chain,
         });
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            chamfers,
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers,
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -1187,12 +1423,22 @@ impl SolidDocument {
     pub fn prepare_edit_chamfer(
         &mut self,
         feature_id: FeatureId,
-        request: SolidChamferRequest,
+        mut request: SolidChamferRequest,
         catalog: &[ProfileCatalogItemDto],
         active_features: &BTreeSet<FeatureId>,
     ) -> Result<RecomputePlanDto, SolidError> {
         self.ensure_idle()?;
         validate_positive(request.distance, "chamfer distance")?;
+        if request.tangent_chain {
+            edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
+            let body = self
+                .scene
+                .bodies
+                .iter()
+                .find(|b| b.id == request.body_id)
+                .ok_or(SolidError::MissingTarget(request.body_id))?;
+            request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
+        }
         let edge_keys = edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
         let mut chamfers = self.chamfers.clone();
         let definition = chamfers
@@ -1205,14 +1451,17 @@ impl SolidDocument {
         definition.distance = request.distance;
         definition.tangent_chain = request.tangent_chain;
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            chamfers,
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers,
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -1232,14 +1481,17 @@ impl SolidDocument {
         let mut holes = self.holes.clone();
         holes.push(hole_definition(feature_id, name.into(), request, basis));
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            holes,
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes,
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -1263,14 +1515,17 @@ impl SolidDocument {
         let name = holes[index].name.clone();
         holes[index] = hole_definition(feature_id, name, request, basis);
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            holes,
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes,
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -1347,7 +1602,7 @@ impl SolidDocument {
         request: BodyFeatureRequestDto,
         existing: Option<&BodyFeatureDefinitionDto>,
     ) -> Result<BodyFeatureDefinitionDto, SolidError> {
-        let mut reuse_or_allocate = |count: usize| {
+        let mut reuse_or_allocate = |count: usize| -> Result<Vec<BodyId>, SolidError> {
             let mut ids = match existing {
                 Some(BodyFeatureDefinitionDto::MoveCopy {
                     result_body_ids, ..
@@ -1366,10 +1621,10 @@ impl SolidDocument {
                 _ => Vec::new(),
             };
             while ids.len() < count {
-                ids.push(self.alloc_body_id());
+                ids.push(self.alloc_body_id()?);
             }
             ids.truncate(count);
-            ids
+            Ok(ids)
         };
 
         Ok(match request {
@@ -1425,10 +1680,7 @@ impl SolidDocument {
                 validate_vector_finite(request.translation, "move translation")?;
                 validate_vector_finite(request.pivot, "move pivot")?;
                 let rotation = normalized_quaternion(request.rotation)?;
-                // A move is a placement feature on the selected body's stable
-                // identity. Only Copy creates new body identities. Keeping the
-                // IDs stable is essential for components, joints, visibility,
-                // and downstream feature references.
+
                 let result_body_ids = if request.copy {
                     match existing {
                         Some(BodyFeatureDefinitionDto::MoveCopy {
@@ -1444,7 +1696,7 @@ impl SolidDocument {
                         }
                         _ => (0..request.body_ids.len())
                             .map(|_| self.alloc_body_id())
-                            .collect(),
+                            .collect::<Result<Vec<_>, _>>()?,
                     }
                 } else {
                     request.body_ids.clone()
@@ -1467,7 +1719,7 @@ impl SolidDocument {
                 let plane_basis = request.plane_basis.ok_or_else(|| {
                     SolidError::InvalidAxis("mirror plane could not be resolved".to_string())
                 })?;
-                let new_body_ids = reuse_or_allocate(request.body_ids.len());
+                let new_body_ids = reuse_or_allocate(request.body_ids.len())?;
                 BodyFeatureDefinitionDto::Mirror {
                     feature_id,
                     name,
@@ -1496,10 +1748,9 @@ impl SolidDocument {
                         "second pattern direction",
                     )?;
                 }
-                let copies = (request.count as usize * second_count as usize)
-                    .saturating_sub(1)
-                    .saturating_mul(request.body_ids.len());
-                let new_body_ids = reuse_or_allocate(copies);
+                let copies =
+                    pattern_copy_count(request.count, second_count, request.body_ids.len())?;
+                let new_body_ids = reuse_or_allocate(copies)?;
                 BodyFeatureDefinitionDto::RectangularPattern {
                     feature_id,
                     name,
@@ -1525,8 +1776,8 @@ impl SolidDocument {
                 {
                     return Err(SolidError::InvalidAngle);
                 }
-                let copies = (request.count as usize - 1) * request.body_ids.len();
-                let new_body_ids = reuse_or_allocate(copies);
+                let copies = pattern_copy_count(request.count, 1, request.body_ids.len())?;
+                let new_body_ids = reuse_or_allocate(copies)?;
                 BodyFeatureDefinitionDto::CircularPattern {
                     feature_id,
                     name,
@@ -1542,11 +1793,7 @@ impl SolidDocument {
                 if request.tool_body_ids.is_empty() {
                     return Err(SolidError::EmptySelection);
                 }
-                if request
-                    .tool_body_ids
-                    .iter()
-                    .any(|body_id| *body_id == request.target_body_id)
-                {
+                if request.tool_body_ids.contains(&request.target_body_id) {
                     return Err(SolidError::InvalidHistory(
                         "Combine target cannot also be a tool body".to_string(),
                     ));
@@ -1564,7 +1811,7 @@ impl SolidDocument {
                 let plane_basis = request.plane_basis.ok_or_else(|| {
                     SolidError::InvalidAxis("split plane could not be resolved".to_string())
                 })?;
-                let new_body_id = reuse_or_allocate(1)[0];
+                let new_body_id = reuse_or_allocate(1)?[0];
                 BodyFeatureDefinitionDto::SplitBody {
                     feature_id,
                     name,
@@ -1595,7 +1842,7 @@ impl SolidDocument {
                         "STEP import data is empty, too large, or not valid base64".to_string(),
                     ));
                 }
-                let body_id = reuse_or_allocate(1)[0];
+                let body_id = reuse_or_allocate(1)?[0];
                 BodyFeatureDefinitionDto::ImportStep {
                     feature_id,
                     name,
@@ -1614,14 +1861,17 @@ impl SolidDocument {
     ) -> Result<RecomputePlanDto, SolidError> {
         self.ensure_idle()?;
         self.prepare(
-            self.extrudes.clone(),
-            self.revolves.clone(),
-            self.sweeps.clone(),
-            self.lofts.clone(),
-            self.ribs.clone(),
-            self.fillets.clone(),
-            self.chamfers.clone(),
-            self.holes.clone(),
+            crate::SolidFeatureDefinitions {
+                extrudes: self.extrudes.clone(),
+                revolves: self.revolves.clone(),
+                sweeps: self.sweeps.clone(),
+                lofts: self.lofts.clone(),
+                ribs: self.ribs.clone(),
+                fillets: self.fillets.clone(),
+                chamfers: self.chamfers.clone(),
+                holes: self.holes.clone(),
+                ..Default::default()
+            },
             catalog,
             active_features,
         )
@@ -1720,15 +1970,17 @@ impl SolidDocument {
         }
 
         let owners = body_owners(
-            &pending.extrudes,
-            &pending.revolves,
-            &pending.sweeps,
-            &pending.lofts,
-            &pending.ribs,
-            &pending.fillets,
-            &pending.chamfers,
-            &pending.holes,
-            &pending.body_features,
+            SolidFeatureSlices {
+                extrudes: &pending.extrudes,
+                revolves: &pending.revolves,
+                sweeps: &pending.sweeps,
+                lofts: &pending.lofts,
+                ribs: &pending.ribs,
+                fillets: &pending.fillets,
+                chamfers: &pending.chamfers,
+                holes: &pending.holes,
+                body_features: &pending.body_features,
+            },
             &pending.feature_order,
         );
         let mut seen = BTreeSet::new();
@@ -1764,6 +2016,8 @@ impl SolidDocument {
                 .faces
                 .into_iter()
                 .map(|face| FaceDto {
+                    outer_shell: face.outer_shell,
+                    linear_seam_edge_keys: face.linear_seam_edge_keys,
                     id: stable::face_id(raw.body_id, &face.key),
                     key: face.key,
                     first_index: face.first_index,
@@ -1771,7 +2025,7 @@ impl SolidDocument {
                     plane: face.plane,
                     signature: face.signature,
                     cylinder: face.cylinder,
-                    edge_keys: face.edge_keys.clone(),
+                    edge_keys: face.edge_keys,
                     cone: face.cone,
                 })
                 .collect();
@@ -1789,6 +2043,7 @@ impl SolidDocument {
             bodies.push(BodyDto {
                 id: raw.body_id,
                 topology_signature: raw.topology_signature,
+                display_warnings: raw.display_warnings,
                 name,
                 feature_id,
                 mesh: MeshDto {
@@ -1811,11 +2066,16 @@ impl SolidDocument {
         self.holes = pending.holes;
         self.body_features = pending.body_features;
         self.feature_order = pending.feature_order;
-        self.scene = SolidSceneDto {
+        self.scene = Arc::new(SolidSceneDto {
             bodies,
             errors: kernel.errors,
-        };
+        });
         Ok(&self.scene)
+    }
+
+    /// Metadata must not be accepted while a geometry candidate is awaiting commit.
+    pub fn ensure_metadata_editable(&self) -> Result<(), SolidError> {
+        self.ensure_idle()
     }
 
     fn ensure_idle(&self) -> Result<(), SolidError> {
@@ -1826,22 +2086,32 @@ impl SolidDocument {
         }
     }
 
-    fn alloc_body_id(&mut self) -> BodyId {
+    fn alloc_body_id(&mut self) -> Result<BodyId, SolidError> {
+        if self.next_body_id == 0 || self.next_body_id >= 9_007_199_254_740_991 {
+            return Err(SolidError::KernelContract(
+                "Body identity allocator is exhausted".into(),
+            ));
+        }
         let id = BodyId(self.next_body_id);
-        self.next_body_id += 1;
-        id
+        self.next_body_id = self.next_body_id.checked_add(1).ok_or_else(|| {
+            SolidError::KernelContract("Body identity allocator is exhausted".into())
+        })?;
+        Ok(id)
     }
 
     fn prepare(
         &mut self,
-        extrudes: Vec<ExtrudeDefinitionDto>,
-        revolves: Vec<RevolveDefinitionDto>,
-        sweeps: Vec<SweepDefinitionDto>,
-        lofts: Vec<LoftDefinitionDto>,
-        ribs: Vec<RibDefinitionDto>,
-        fillets: Vec<SolidFilletDefinitionDto>,
-        chamfers: Vec<SolidChamferDefinitionDto>,
-        holes: Vec<HoleDefinitionDto>,
+        SolidFeatureDefinitions {
+            extrudes,
+            revolves,
+            sweeps,
+            lofts,
+            ribs,
+            fillets,
+            chamfers,
+            holes,
+            ..
+        }: SolidFeatureDefinitions,
         catalog: &[ProfileCatalogItemDto],
         active_features: &BTreeSet<FeatureId>,
     ) -> Result<RecomputePlanDto, SolidError> {
@@ -1903,9 +2173,6 @@ impl SolidDocument {
             .sort_by_key(|feature_id| feature_order_key(&self.feature_order, *feature_id));
         solid_feature_ids.dedup();
 
-        // Sketches and datum planes remain active inputs. Solid features are
-        // admitted one at a time in timeline order; a feature that cannot be
-        // planned is skipped and reported without blocking independent work.
         let solid_feature_set = solid_feature_ids.iter().copied().collect::<BTreeSet<_>>();
         let mut viable_active = active_features
             .difference(&solid_feature_set)
@@ -1919,15 +2186,17 @@ impl SolidDocument {
             }
             viable_active.insert(feature_id);
             match make_jobs(
-                &extrudes,
-                &revolves,
-                &sweeps,
-                &lofts,
-                &ribs,
-                &fillets,
-                &chamfers,
-                &holes,
-                &body_features,
+                SolidFeatureSlices {
+                    extrudes: &extrudes,
+                    revolves: &revolves,
+                    sweeps: &sweeps,
+                    lofts: &lofts,
+                    ribs: &ribs,
+                    fillets: &fillets,
+                    chamfers: &chamfers,
+                    holes: &holes,
+                    body_features: &body_features,
+                },
                 catalog,
                 &viable_active,
                 &self.scene,
@@ -1986,15 +2255,17 @@ impl SolidDocument {
         refresh_refinement_references(&mut fillets, &mut chamfers, &self.scene);
         refresh_body_feature_references(&mut body_features, &self.scene);
         let jobs = make_jobs(
-            &extrudes,
-            &revolves,
-            &sweeps,
-            &lofts,
-            &ribs,
-            &fillets,
-            &chamfers,
-            &holes,
-            &body_features,
+            SolidFeatureSlices {
+                extrudes: &extrudes,
+                revolves: &revolves,
+                sweeps: &sweeps,
+                lofts: &lofts,
+                ribs: &ribs,
+                fillets: &fillets,
+                chamfers: &chamfers,
+                holes: &holes,
+                body_features: &body_features,
+            },
             catalog,
             active_features,
             &self.scene,
@@ -2022,15 +2293,17 @@ impl SolidDocument {
 }
 
 fn body_owners(
-    extrudes: &[ExtrudeDefinitionDto],
-    revolves: &[RevolveDefinitionDto],
-    sweeps: &[SweepDefinitionDto],
-    lofts: &[LoftDefinitionDto],
-    ribs: &[RibDefinitionDto],
-    fillets: &[SolidFilletDefinitionDto],
-    chamfers: &[SolidChamferDefinitionDto],
-    holes: &[HoleDefinitionDto],
-    body_features: &[BodyFeatureDefinitionDto],
+    SolidFeatureSlices {
+        extrudes,
+        revolves,
+        sweeps,
+        lofts,
+        ribs,
+        fillets,
+        chamfers,
+        holes,
+        body_features,
+    }: SolidFeatureSlices,
     feature_order: &BTreeMap<FeatureId, usize>,
 ) -> BTreeMap<BodyId, FeatureId> {
     let mut owners = BTreeMap::new();
@@ -2253,15 +2526,17 @@ fn feature_order_key(
 }
 
 fn make_jobs(
-    extrudes: &[ExtrudeDefinitionDto],
-    revolves: &[RevolveDefinitionDto],
-    sweeps: &[SweepDefinitionDto],
-    lofts: &[LoftDefinitionDto],
-    ribs: &[RibDefinitionDto],
-    fillets: &[SolidFilletDefinitionDto],
-    chamfers: &[SolidChamferDefinitionDto],
-    holes: &[HoleDefinitionDto],
-    body_features: &[BodyFeatureDefinitionDto],
+    SolidFeatureSlices {
+        extrudes,
+        revolves,
+        sweeps,
+        lofts,
+        ribs,
+        fillets,
+        chamfers,
+        holes,
+        body_features,
+    }: SolidFeatureSlices,
     catalog: &[ProfileCatalogItemDto],
     active_features: &BTreeSet<FeatureId>,
     previous_scene: &SolidSceneDto,
@@ -2362,7 +2637,9 @@ fn make_jobs(
                     previous_scene,
                     definition.to_face_basis,
                 )?;
-                if definition.flip {
+                // The selected stop plane already determines a signed direction.
+                // Reflecting it would end at the opposite plane instead.
+                if definition.flip && !matches!(definition.extent, ExtrudeExtent::ToFace { .. }) {
                     (start_offset, end_offset) = (-end_offset, -start_offset);
                 }
                 if (end_offset - start_offset).abs() <= EPS {
@@ -2728,10 +3005,13 @@ fn make_jobs(
                             sketch.basis,
                             &definition.target_body_ids,
                             previous_scene,
+                            definition.flip,
                         )?,
                     ),
                 };
-                if definition.flip {
+                // To Face already resolves the signed distance to the chosen
+                // plane; reflecting it would move the rib away from that plane.
+                if definition.flip && !matches!(definition.extent, Some(RibExtent::ToFace { .. })) {
                     (start_offset, end_offset) = (-end_offset, -start_offset);
                 }
                 let result_body_ids = resolve_outputs(
@@ -2789,10 +3069,7 @@ fn make_jobs(
             FeatureDefinitionRef::Hole(definition) => {
                 ensure_refinement_target(&available_bodies, definition.body_id)?;
                 validate_hole_definition(definition)?;
-                // The selected solid face governs the cut direction even
-                // when a center comes from a sketch on a parallel base or
-                // offset plane. The cached basis also avoids retargeting a
-                // pre-hole face id after the boolean changes topology.
+
                 let mut basis = if let Some(cached) = definition.face_basis {
                     cached
                 } else if previous_scene.bodies.is_empty() {
@@ -2800,11 +3077,7 @@ fn make_jobs(
                 } else {
                     support_face_basis(previous_scene, definition.body_id, definition.face_id)?
                 };
-                // Recover legacy definitions whose cached face slot was
-                // poisoned by post-boolean face-id reuse. Associative hole
-                // sketches are expected to be coplanar or parallel to the
-                // intended support; a perpendicular cached normal is not a
-                // credible support and the sketch plane is the safer basis.
+
                 if let Some(reference) = hole_positions(definition)
                     .iter()
                     .find_map(|position| position.position_reference.as_ref())
@@ -2925,7 +3198,7 @@ fn make_jobs(
                         }],
                         result_body_ids: result_body_ids.clone(),
                     }));
-                    // Move overwrites each stable source id; Copy writes new ids.
+
                     available_bodies.extend(result_body_ids.iter().copied());
                 }
                 BodyFeatureDefinitionDto::Mirror {
@@ -3168,7 +3441,9 @@ fn near(a: Point2Dto, b: Point2Dto) -> bool {
     (a.x - b.x).hypot(a.y - b.y) <= 1e-5
 }
 
-fn ordered_path(
+/// Resolve an ordered selection to the same connected path used for replay.
+/// Editors can reject missing or disconnected curves before invoking the kernel.
+pub fn ordered_path(
     sketch: &ProfileCatalogItemDto,
     entity_ids: &[u64],
 ) -> Result<Vec<KernelCurveDto>, SolidError> {
@@ -3856,6 +4131,25 @@ fn extent_face_basis(extent: ExtrudeExtent, scene: &SolidSceneDto) -> Option<Pla
     }
 }
 
+/// Reject unbounded additive Rib requests without rewriting saved definitions.
+pub fn validate_rib_extent(
+    operation: ExtrudeOperation,
+    extent: Option<RibExtent>,
+) -> Result<(), SolidError> {
+    if matches!(extent, Some(RibExtent::ThroughAll))
+        && matches!(
+            operation,
+            ExtrudeOperation::NewBody | ExtrudeOperation::Join
+        )
+    {
+        return Err(SolidError::InvalidExtent(
+            "Through All requires Subtract or Common. Choose Distance, To Next, or To Face for additive ribs."
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
 fn rib_extent_face_basis(extent: Option<RibExtent>, scene: &SolidSceneDto) -> Option<PlaneBasis> {
     match extent {
         Some(RibExtent::ToFace { face_id }) => face_basis(scene, face_id),
@@ -3894,6 +4188,30 @@ fn validate_positive(value: f64, label: &str) -> Result<(), SolidError> {
         Err(SolidError::InvalidExtent(format!(
             "{label} must be greater than zero"
         )))
+    }
+}
+
+/// Bound expansion before allocating topology IDs or entering a kernel loop.
+/// The same check is used by native forms and every engine entry point.
+pub fn pattern_copy_count(
+    count: u32,
+    second_count: u32,
+    sources: usize,
+) -> Result<usize, SolidError> {
+    validate_pattern_count(count, "first direction")?;
+    let second_count = second_count.max(1);
+    if second_count > 1 {
+        validate_pattern_count(second_count, "second direction")?;
+    }
+    let copies = (count as usize)
+        .checked_mul(second_count as usize)
+        .and_then(|n| n.checked_sub(1))
+        .and_then(|n| n.checked_mul(sources));
+    match copies {
+        Some(copies) if sources > 0 && copies <= 10_000 => Ok(copies),
+        _ => Err(SolidError::InvalidExtent(
+            "A pattern can create at most 10000 bodies; reduce the counts or selection".into(),
+        )),
     }
 }
 
@@ -4080,7 +4398,7 @@ fn support_face_basis(
         .ok_or_else(|| SolidError::InvalidExtent("Hole support face must be planar".to_string()))
 }
 
-fn validate_hole(request: &HoleRequest) -> Result<(), SolidError> {
+pub fn validate_hole(request: &HoleRequest) -> Result<(), SolidError> {
     validate_positive(request.diameter, "hole diameter")?;
     let legacy_position;
     let positions = if request.positions.is_empty() {
@@ -4097,12 +4415,9 @@ fn validate_hole(request: &HoleRequest) -> Result<(), SolidError> {
         request.extent,
         request.style,
         request.diameter,
-        request.counterbore_diameter,
-        request.counterbore_depth,
-        request.countersink_diameter,
-        request.countersink_angle_deg,
-        request.bottom_style,
-        request.drill_point_angle_deg,
+        (request.counterbore_diameter, request.counterbore_depth),
+        (request.countersink_diameter, request.countersink_angle_deg),
+        (request.bottom_style, request.drill_point_angle_deg),
         request.thread.as_ref(),
     )
 }
@@ -4115,12 +4430,15 @@ fn validate_hole_definition(definition: &HoleDefinitionDto) -> Result<(), SolidE
         definition.extent,
         definition.style,
         definition.diameter,
-        definition.counterbore_diameter,
-        definition.counterbore_depth,
-        definition.countersink_diameter,
-        definition.countersink_angle_deg,
-        definition.bottom_style,
-        definition.drill_point_angle_deg,
+        (
+            definition.counterbore_diameter,
+            definition.counterbore_depth,
+        ),
+        (
+            definition.countersink_diameter,
+            definition.countersink_angle_deg,
+        ),
+        (definition.bottom_style, definition.drill_point_angle_deg),
         definition.thread.as_ref(),
     )
 }
@@ -4144,12 +4462,9 @@ fn validate_hole_values(
     extent: HoleExtent,
     style: HoleStyle,
     diameter: f64,
-    counterbore_diameter: f64,
-    counterbore_depth: f64,
-    countersink_diameter: f64,
-    countersink_angle_deg: f64,
-    bottom_style: HoleBottomStyle,
-    drill_point_angle_deg: f64,
+    (counterbore_diameter, counterbore_depth): (f64, f64),
+    (countersink_diameter, countersink_angle_deg): (f64, f64),
+    (bottom_style, drill_point_angle_deg): (HoleBottomStyle, f64),
     thread: Option<&HoleThreadDto>,
 ) -> Result<(), SolidError> {
     if let HoleExtent::Distance { depth } = extent {
@@ -4242,9 +4557,6 @@ fn validate_hole_thread(
         && iso_limits.is_none()
         && rounded.is_none()
     {
-        // Start with the P/8 basic root flat at the major diameter, then
-        // widen toward the actual predrill along 60° flanks. An excessively
-        // small custom predrill would make adjacent turns overlap.
         let radial_depth = (thread.nominal_diameter - predrill_diameter) * 0.5;
         let inner_half_width = thread.pitch * 0.0625 + radial_depth * (30.0_f64.to_radians().tan());
         if inner_half_width >= thread.pitch * 0.499 {
@@ -4257,7 +4569,7 @@ fn validate_hole_thread(
     Ok(())
 }
 
-fn validate_external_thread(
+pub fn validate_external_thread(
     thread: &HoleThreadDto,
     surface_diameter: f64,
 ) -> Result<(), SolidError> {
@@ -4380,7 +4692,7 @@ fn hole_positions(definition: &HoleDefinitionDto) -> Vec<HolePositionDto> {
     }
 }
 
-fn hole_reference_center(
+pub fn hole_reference_center(
     reference: &SketchPointRefDto,
     catalog: &[ProfileCatalogItemDto],
     active_features: &BTreeSet<FeatureId>,
@@ -4440,10 +4752,6 @@ fn refresh_refinement_references(
             definition.edge_keys = keys;
         }
     }
-    // Hole support planes are intentionally not refreshed from the current
-    // result scene. Their selected face has already been consumed by the hole
-    // boolean, and its stable-id slot may now describe an unrelated face.
-    // Creation and explicit edit capture the authoritative support basis.
 }
 
 fn refresh_body_feature_references(
@@ -4468,17 +4776,17 @@ fn refresh_body_feature_references(
             | BodyFeatureDefinitionDto::SplitBody {
                 plane, plane_basis, ..
             } => match *plane {
-                nbcad_core::PlaneRef::OriginPlane { .. } => {
+                limo_cad_core::PlaneRef::OriginPlane { .. } => {
                     if let Ok(basis) = plane.origin_basis() {
                         *plane_basis = basis;
                     }
                 }
-                nbcad_core::PlaneRef::PlanarFace { face_id } => {
+                limo_cad_core::PlaneRef::PlanarFace { face_id } => {
                     if let Some(basis) = face_basis(scene, face_id) {
                         *plane_basis = basis;
                     }
                 }
-                nbcad_core::PlaneRef::DatumPlane { .. } => {}
+                limo_cad_core::PlaneRef::DatumPlane { .. } => {}
             },
             _ => {}
         }
@@ -4489,6 +4797,7 @@ fn nearest_target_offset(
     sketch_basis: PlaneBasis,
     target_body_ids: &[BodyId],
     scene: &SolidSceneDto,
+    flip: bool,
 ) -> Result<f64, SolidError> {
     if target_body_ids.is_empty() {
         return Err(SolidError::InvalidExtent(
@@ -4504,6 +4813,8 @@ fn nearest_target_offset(
         .filter_map(|face| face.plane)
         .filter(|plane| dot(plane.normal, sketch_basis.normal).abs() >= 1.0 - 1e-6)
         .map(|plane| {
+            // Search in the requested direction. The caller reflects the
+            // resulting positive extent into signed sketch-normal offsets.
             dot(
                 [
                     plane.origin[0] - sketch_basis.origin[0],
@@ -4511,7 +4822,7 @@ fn nearest_target_offset(
                     plane.origin[2] - sketch_basis.origin[2],
                 ],
                 sketch_basis.normal,
-            )
+            ) * if flip { -1.0 } else { 1.0 }
         })
         .filter(|distance| *distance > EPS)
         .min_by(|a, b| a.total_cmp(b));
@@ -4524,9 +4835,21 @@ fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-fn plane_bases_coplanar(first: PlaneBasis, second: PlaneBasis) -> bool {
+/// Whether two sketch bases describe the same infinite plane, using the
+/// feature replay tolerances. Editors use this same predicate for references.
+pub fn plane_bases_coplanar(first: PlaneBasis, second: PlaneBasis) -> bool {
     const NORMAL_TOLERANCE: f64 = 1e-6;
     const PLANE_DISTANCE_TOLERANCE_MM: f64 = 1e-5;
+    if !first
+        .normal
+        .iter()
+        .chain(&second.normal)
+        .chain(&first.origin)
+        .chain(&second.origin)
+        .all(|v| v.is_finite())
+    {
+        return false;
+    }
     let first_normal_length = dot(first.normal, first.normal).sqrt();
     let second_normal_length = dot(second.normal, second.normal).sqrt();
     if first_normal_length <= EPS || second_normal_length <= EPS {
@@ -4547,14 +4870,86 @@ fn plane_bases_coplanar(first: PlaneBasis, second: PlaneBasis) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn body_identity_allocator_rejects_unsafe_floors_and_exhaustion_without_reusing_ids() {
+        let mut document = super::SolidDocument::new();
+        for id in [0, 9_007_199_254_740_991, u64::MAX] {
+            assert!(document
+                .reserve_body_ids_through(super::BodyId(id))
+                .is_err());
+            assert_eq!(document.next_body_id, 1);
+        }
+        document
+            .reserve_body_ids_through(super::BodyId(9_007_199_254_740_989))
+            .unwrap();
+        assert_eq!(document.alloc_body_id().unwrap().0, 9_007_199_254_740_990);
+        let before = document.next_body_id;
+        assert!(matches!(
+            document.alloc_body_id(),
+            Err(super::SolidError::KernelContract(_))
+        ));
+        assert_eq!(document.next_body_id, before);
+        assert!(document.scene.bodies.is_empty());
+        assert!(document.pending.is_none());
+        let scene = document.scene.clone();
+        let definitions = document.body_features.clone();
+        let result = document.prepare_add_body_feature(
+            FeatureId(1),
+            "Exhausted import",
+            BodyFeatureRequestDto::ImportStep(ImportStepRequest {
+                file_name: "part.step".into(),
+                data_base64: "U1RFUA==".into(),
+            }),
+            &[],
+            &BTreeSet::new(),
+        );
+        assert!(matches!(result, Err(SolidError::KernelContract(_))));
+        assert_eq!(document.scene, scene);
+        assert_eq!(document.body_features, definitions);
+        assert!(document.pending.is_none());
+    }
+
+    #[test]
+    fn pattern_expansion_is_bounded_before_allocation() {
+        assert_eq!(super::pattern_copy_count(3, 2, 2).unwrap(), 10);
+        assert_eq!(super::pattern_copy_count(10_000, 1, 1).unwrap(), 9999);
+        for (first, second, sources) in [
+            (3, 10_000, 1),
+            (u32::MAX, u32::MAX, usize::MAX),
+            (2, 1, usize::MAX),
+            (2, 1, 0),
+        ] {
+            assert!(super::pattern_copy_count(first, second, sources).is_err());
+        }
+    }
     use super::*;
-    use nbcad_core::OriginPlane;
+    use limo_cad_core::OriginPlane;
+
+    #[test]
+    fn coplanar_axis_references_reject_nonfinite_planes() {
+        let basis = limo_cad_core::PlaneRef::OriginPlane {
+            plane: OriginPlane::Xy,
+        }
+        .origin_basis()
+        .unwrap();
+        assert!(plane_bases_coplanar(basis, basis));
+        for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut other = basis;
+            other.normal[0] = invalid;
+            assert!(!plane_bases_coplanar(basis, other));
+            assert!(!plane_bases_coplanar(other, basis));
+            other = basis;
+            other.origin[2] = invalid;
+            assert!(!plane_bases_coplanar(basis, other));
+            assert!(!plane_bases_coplanar(other, basis));
+        }
+    }
 
     fn catalog() -> Vec<ProfileCatalogItemDto> {
         vec![ProfileCatalogItemDto {
             sketch_name: "Sketch1".to_string(),
             feature_id: FeatureId(1),
-            basis: nbcad_core::PlaneRef::OriginPlane {
+            basis: limo_cad_core::PlaneRef::OriginPlane {
                 plane: OriginPlane::Xy,
             }
             .origin_basis()
@@ -4629,8 +5024,7 @@ mod tests {
         axis.sketch_name = "AxisSketch".to_string();
         axis.feature_id = FeatureId(2);
         axis.profiles.clear();
-        // Same XY plane, but with a translated and quarter-turned local basis.
-        // The local line below maps to the world-space X=0 profile boundary.
+
         axis.basis.origin = [5.0, 5.0, 0.0];
         axis.basis.u = [0.0, 1.0, 0.0];
         axis.basis.v = [-1.0, 0.0, 0.0];
@@ -4683,7 +5077,7 @@ mod tests {
     fn associative_hole_point_projects_from_a_parallel_base_sketch() {
         let mut catalog = catalog();
         catalog[0].basis.origin[2] = -10.0;
-        let support = nbcad_core::PlaneRef::OriginPlane {
+        let support = limo_cad_core::PlaneRef::OriginPlane {
             plane: OriginPlane::Xy,
         }
         .origin_basis()
@@ -4771,9 +5165,6 @@ mod tests {
                 if message.contains("cannot exceed")
         ));
 
-        // The tap drill is manufacturing guidance, not the finished 6H minor
-        // diameter. A smaller custom drill must not distort or reject the
-        // standards-derived finished B-rep.
         validate_hole_thread(&metric, 4.0, HoleExtent::Distance { depth: 8.0 }).unwrap();
 
         let mut unsupported_class = metric.clone();
@@ -4942,9 +5333,7 @@ mod tests {
             )
             .unwrap();
 
-        // Model the common post-boolean topology case: the face key/id slot
-        // still exists but now describes an unrelated, perpendicular face.
-        let reused_face_basis = nbcad_core::PlaneRef::OriginPlane {
+        let reused_face_basis = limo_cad_core::PlaneRef::OriginPlane {
             plane: OriginPlane::Xz,
         }
         .origin_basis()
@@ -4960,9 +5349,7 @@ mod tests {
                 },
             )
             .unwrap();
-        // Older saves may already contain a poisoned cached support basis
-        // from the pre-fix replay path. The sketch association must recover
-        // without requiring users to recreate the feature.
+
         document.holes[0].face_basis = Some(reused_face_basis);
 
         let replay = document
@@ -5031,7 +5418,7 @@ mod tests {
             )
             .unwrap();
 
-        let reused_face_basis = nbcad_core::PlaneRef::OriginPlane {
+        let reused_face_basis = limo_cad_core::PlaneRef::OriginPlane {
             plane: OriginPlane::Xz,
         }
         .origin_basis()
@@ -5114,11 +5501,14 @@ mod tests {
     fn raw_body(id: BodyId) -> KernelBodyDto {
         KernelBodyDto {
             topology_signature: String::new(),
+            display_warnings: Vec::new(),
             body_id: id,
             positions: vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
             normals: vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0],
             indices: vec![0, 1, 2],
             faces: vec![KernelFaceDto {
+                linear_seam_edge_keys: Vec::new(),
+                outer_shell: None,
                 key: "face:0".to_string(),
                 first_index: 0,
                 index_count: 3,
@@ -5883,18 +6273,19 @@ mod tests {
         let saved_move = serde_json::to_string(move_document.body_feature_definitions()).unwrap();
         let restored_move_features: Vec<BodyFeatureDefinitionDto> =
             serde_json::from_str(&saved_move).unwrap();
-        let mut restored_move = SolidDocument::restore_feature_definitions(
-            move_document.definitions().to_vec(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            restored_move_features,
-        )
-        .unwrap();
+        let mut restored_move =
+            SolidDocument::restore_feature_definitions(crate::SolidFeatureDefinitions {
+                extrudes: move_document.definitions().to_vec(),
+                revolves: Vec::new(),
+                sweeps: Vec::new(),
+                lofts: Vec::new(),
+                ribs: Vec::new(),
+                fillets: Vec::new(),
+                chamfers: Vec::new(),
+                holes: Vec::new(),
+                body_features: restored_move_features,
+            })
+            .unwrap();
         let replayed_move = restored_move
             .prepare_recompute(&catalog(), &active_features)
             .unwrap();
@@ -5942,11 +6333,11 @@ mod tests {
                 "Mirror1",
                 BodyFeatureRequestDto::Mirror(SolidMirrorRequest {
                     body_ids: vec![mirror_bodies[0]],
-                    plane: nbcad_core::PlaneRef::OriginPlane {
+                    plane: limo_cad_core::PlaneRef::OriginPlane {
                         plane: OriginPlane::Yz,
                     },
                     plane_basis: Some(
-                        nbcad_core::PlaneRef::OriginPlane {
+                        limo_cad_core::PlaneRef::OriginPlane {
                             plane: OriginPlane::Yz,
                         }
                         .origin_basis()
@@ -6053,7 +6444,7 @@ mod tests {
                 "SplitBody1",
                 BodyFeatureRequestDto::SplitBody(SplitBodyRequest {
                     body_id: split_bodies[0],
-                    plane: nbcad_core::PlaneRef::OriginPlane {
+                    plane: limo_cad_core::PlaneRef::OriginPlane {
                         plane: OriginPlane::Xy,
                     },
                     plane_basis: Some(basis),

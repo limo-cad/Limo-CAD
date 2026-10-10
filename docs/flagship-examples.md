@@ -7,16 +7,16 @@ motor used as a generator, a timber garden bench, and a functional screw vise.
 The vise adds screw-driven linear motion, load calculations and replaceable wear
 surfaces to the rotating turbine and static timber assembly.
 
-The bench is accepted at its current development milestone; full drafting and
-fabrication qualification remain open. The original 10 September design
+The bench is accepted at its current development milestone; its drawing package
+is a review candidate and fabrication qualification remains open. The original 10 September design
 decisions, material implications and calculation assumptions are retained in
 [the engineering brief](flagship-engineering.md). The individual design pages
 below describe the later implementations and source-specific evidence.
 
 For immediate inspection, the [showcase media release](https://github.com/limo-cad/Limo-CAD/releases/tag/showcase-v0.2.0)
-includes editable `bench.nbcad`, `vise.nbcad` and `turbine.nbcad` projects. Use
+includes editable `bench.limo`, `vise.limo` and `turbine.limo` projects. Use
 **File → Open** in CAD. To watch construction or open a recipe for replay, use
-the [README showcase](../README.md#made-in-nobs-cad).
+the [README showcase](../README.md#made-in-limo-cad).
 
 All three now have executable native construction sources in the
 [recipe library](../examples/scripts/README.md). The [turbine](vertical-axis-turbine.md)
@@ -38,15 +38,14 @@ not sidecar demos maintained in a different language.
 
 ## Open engineering scope
 
-1. Resolve component-context editing with Jack in issue #94, then validate a
-   translated and rotated occurrence and its repeated sibling through MCP.
-2. Complete associative drafting and manufacturing exports (#93), using the
-   same product commands as the editor.
-3. Complete multi-document MCP control (#12). Keep explicit document ownership,
-   concurrency checks and ordered execution.
-
-All three areas remain in scope. Independent example development can proceed
-while the editing decision is pending; do not silently choose its product behavior.
+1. Qualify the implemented in-place shared occurrence editor (#94) in the packaged
+   app. Source checks cover translated/rotated repeats, driving edits and save/reopen.
+   Linked external files and making an occurrence independent remain separate scope.
+2. Review the associative drawing packages and manufacturing exports (#93), using
+   the shared product commands and physical fabrication evidence where applicable.
+3. Qualify the implemented multi-document MCP router (#12) with matching packaged
+   desktop/MCP builds. Explicit owners, generation fences and retained receipts
+   preserve the default attachment across routed operations.
 
 ## Release evidence for each example
 
@@ -105,8 +104,8 @@ purchase recommendation.
 ## Bench and functional vise
 
 The existing garden bench provides native editable stock, repeated parts and
-construction checks (see garden-bench.md). Its full drawing package and
-component-context editing remain incomplete. Keep construction simple and
+construction checks (see garden-bench.md), 22 review sheets, and in-place shared
+component editing. Keep construction simple and
 accessible; retain material/fastener qualification as explicit open inputs.
 
 The vise should work as a tool and explain force, pressure, motion and durability.

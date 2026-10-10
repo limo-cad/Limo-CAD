@@ -16,8 +16,9 @@ pub const DEFAULT_WELD_EPSILON: f32 = 1e-5;
 /// Merge duplicate vertices without masking malformed source buffers.
 ///
 /// Already-valid indexed meshes are preserved exactly. Triangle-soup meshes
-/// are spatially welded using neighboring hash cells, so points within
-/// `epsilon` still match when they lie on opposite sides of a cell boundary.
+/// first merge only identical coordinates, preserving thin native geometry.
+/// If that does not form a valid solid, spatial welding uses neighboring hash
+/// cells, so points within `epsilon` match across cell boundaries.
 pub fn weld_triangle_mesh(mesh: &TriangleMesh, epsilon: f32) -> Result<TriangleMesh, ExportError> {
     validate_mesh_buffers(mesh)?;
     if !epsilon.is_finite() || epsilon <= 0.0 {
@@ -25,8 +26,13 @@ pub fn weld_triangle_mesh(mesh: &TriangleMesh, epsilon: f32) -> Result<TriangleM
             "mesh weld epsilon must be finite and greater than zero".into(),
         ));
     }
-    if invalid_model_edge_count(mesh) == 0 {
+    if validate_3mf_model_mesh(mesh).is_ok() {
         return Ok(mesh.clone());
+    }
+
+    let exact = weld_exact_coordinates(mesh);
+    if validate_3mf_model_mesh(&exact).is_ok() {
+        return Ok(exact);
     }
 
     let vertex_count = mesh.positions.len() / 3;
@@ -61,8 +67,7 @@ pub fn weld_triangle_mesh(mesh: &TriangleMesh, epsilon: f32) -> Result<TriangleM
                         let candidate_base = candidate as usize * 3;
                         let squared_distance = (0..3)
                             .map(|axis| {
-                                let delta = f64::from(point[axis])
-                                    - f64::from(welded_positions[candidate_base + axis]);
+                                let delta = point[axis] - welded_positions[candidate_base + axis];
                                 delta * delta
                             })
                             .sum::<f64>();
@@ -97,6 +102,40 @@ pub fn weld_triangle_mesh(mesh: &TriangleMesh, epsilon: f32) -> Result<TriangleM
         positions: welded_positions,
         indices: welded_indices,
     })
+}
+
+/// Preserve every triangle and coordinate while indexing exact coincidences.
+/// Buffer finiteness and index validity have already been checked by the caller.
+fn weld_exact_coordinates(mesh: &TriangleMesh) -> TriangleMesh {
+    let mut coordinates: HashMap<[u64; 3], u32> = HashMap::new();
+    let mut positions = Vec::with_capacity(mesh.positions.len());
+    let mut remap = Vec::with_capacity(mesh.positions.len() / 3);
+    for point in mesh.positions.as_chunks::<3>().0 {
+        // Signed zero has one geometric position, although its IEEE bits differ.
+        let key = point.map(|coordinate| {
+            if coordinate == 0.0 {
+                0
+            } else {
+                coordinate.to_bits()
+            }
+        });
+        let index = *coordinates.entry(key).or_insert_with(|| {
+            let index = (positions.len() / 3) as u32;
+            positions.extend_from_slice(point);
+            index
+        });
+        remap.push(index);
+    }
+    TriangleMesh {
+        body_id: mesh.body_id,
+        name: mesh.name.clone(),
+        positions,
+        indices: mesh
+            .indices
+            .iter()
+            .map(|&index| remap[index as usize])
+            .collect(),
+    }
 }
 
 /// Reject buffers that cannot be represented safely in STL or 3MF.
@@ -146,13 +185,37 @@ pub fn validate_3mf_model_mesh(mesh: &TriangleMesh) -> Result<(), ExportError> {
             mesh.body_id.0
         )));
     }
-    if mesh.indices.chunks_exact(3).any(|triangle| {
+    if mesh.indices.as_chunks::<3>().0.iter().any(|triangle| {
         triangle[0] == triangle[1] || triangle[1] == triangle[2] || triangle[2] == triangle[0]
     }) {
         return Err(ExportError(format!(
             "body {} contains a degenerate triangle after welding",
             mesh.body_id.0
         )));
+    }
+    for (triangle_index, triangle) in mesh.indices.as_chunks::<3>().0.iter().enumerate() {
+        let points = triangle.map(|index| {
+            let base = index as usize * 3;
+            [
+                mesh.positions[base],
+                mesh.positions[base + 1],
+                mesh.positions[base + 2],
+            ]
+        });
+        let u: [f64; 3] = std::array::from_fn(|axis| points[1][axis] - points[0][axis]);
+        let v: [f64; 3] = std::array::from_fn(|axis| points[2][axis] - points[0][axis]);
+        let cross = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        let area_squared = cross.iter().map(|value| value * value).sum::<f64>();
+        if !area_squared.is_finite() || area_squared == 0.0 {
+            return Err(ExportError(format!(
+                "body {} triangle {triangle_index} has zero-area or non-finite geometry after welding",
+                mesh.body_id.0
+            )));
+        }
     }
     let invalid_edges = invalid_model_edge_count(mesh);
     if invalid_edges != 0 {
@@ -195,7 +258,7 @@ struct EdgeUse {
 
 fn edge_uses(mesh: &TriangleMesh) -> HashMap<(u32, u32), EdgeUse> {
     let mut uses = HashMap::new();
-    for triangle in mesh.indices.chunks_exact(3) {
+    for triangle in mesh.indices.as_chunks::<3>().0 {
         for (from, to) in [
             (triangle[0], triangle[1]),
             (triangle[1], triangle[2]),
@@ -216,10 +279,10 @@ fn edge_uses(mesh: &TriangleMesh) -> HashMap<(u32, u32), EdgeUse> {
     uses
 }
 
-fn point_cell(point: [f32; 3], epsilon: f64) -> Result<Cell, ExportError> {
+fn point_cell(point: [f64; 3], epsilon: f64) -> Result<Cell, ExportError> {
     let mut coordinates = [0_i64; 3];
     for axis in 0..3 {
-        let scaled = (f64::from(point[axis]) / epsilon).floor();
+        let scaled = (point[axis] / epsilon).floor();
         if scaled < i64::MIN as f64 || scaled > i64::MAX as f64 {
             return Err(ExportError(
                 "mesh coordinate is too large for the weld tolerance".into(),
@@ -231,20 +294,18 @@ fn point_cell(point: [f32; 3], epsilon: f64) -> Result<Cell, ExportError> {
 }
 
 fn signed_volume_six(mesh: &TriangleMesh) -> f64 {
-    let origin = [
-        f64::from(mesh.positions[0]),
-        f64::from(mesh.positions[1]),
-        f64::from(mesh.positions[2]),
-    ];
+    let origin = [mesh.positions[0], mesh.positions[1], mesh.positions[2]];
     mesh.indices
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|triangle| {
             let point = |index: u32| {
                 let base = index as usize * 3;
                 [
-                    f64::from(mesh.positions[base]) - origin[0],
-                    f64::from(mesh.positions[base + 1]) - origin[1],
-                    f64::from(mesh.positions[base + 2]) - origin[2],
+                    mesh.positions[base] - origin[0],
+                    mesh.positions[base + 1] - origin[1],
+                    mesh.positions[base + 2] - origin[2],
                 ]
             };
             let a = point(triangle[0]);
@@ -263,7 +324,7 @@ fn signed_volume_six(mesh: &TriangleMesh) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nbcad_core::BodyId;
+    use limo_cad_core::BodyId;
 
     #[test]
     fn weld_rejects_out_of_range_triangle_indices() {

@@ -1,10 +1,10 @@
 //! Exact occurrence interference shared by the native UI and MCP.
 use crate::{OcctKernel, PlacedBodyQueryDto};
-use nbcad_assembly::{
+use limo_cad_assembly::{
     broad_phase_interference_pairs, InstanceBodyPoseDto, InterferenceCheckRequestDto,
     InterferencePairResultDto, InterferenceReportDto,
 };
-use nbcad_solid::SolidSceneDto;
+use limo_cad_solid::SolidSceneDto;
 
 pub fn exact_interference_report(
     kernel: &OcctKernel,

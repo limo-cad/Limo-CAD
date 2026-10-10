@@ -86,16 +86,9 @@ pub(super) fn plan(
     }
     let heights = grid.rasterize(&triangles);
     let curvatures = convex_curvatures(&triangles);
-    // Thinning may shift a pass by SIMPLIFY, and a straight iso-line chord
-    // between samples of a convex distance field (around a corner) by up to
-    // h^2 / 8r; both stay on the air side of the requested stock.
     let keep = p.radial_stock_to_leave + SIMPLIFY + grid.h * grid.h / (4.0 * r) + 1.0e-4;
-    // A move between passes may stay at depth only where the cutter stays
-    // inside the machined region; otherwise it lifts to Retract when that
-    // plane clears the whole target, or to Clearance.
     let retract_clears =
         builder.retract_z >= part_top + 1.0 && builder.retract_z >= builder.incoming_top + EPSILON;
-    // Floor under the cutter's flat land is swept by a pass.
     let land = r - tool.corner_radius.unwrap_or(0.0);
     let mut passes = 0usize;
     for &level in &levels {
@@ -121,7 +114,6 @@ pub(super) fn plan(
             if matches!(p.direction, MillingDirection::Conventional) {
                 ring.reverse();
             }
-            // Entered at its vertex closest to the tool.
             if let Some(q) = builder.position {
                 let start = nearest_vertex(&ring, Point2Dto::new(q.x, q.y));
                 ring.rotate_left(start);
@@ -190,7 +182,6 @@ fn passes_for(
     land: f64,
     step: f64,
 ) -> Vec<Vec<Point2Dto>> {
-    // Coverage is trusted to within a few cells of raster and thinning error.
     let reach = land - 3.0 * grid.h - SIMPLIFY;
     let needed = if reach > 0.0 {
         ((maximum - reach) / step).ceil().max(0.0) as usize
@@ -250,7 +241,6 @@ fn passes_for(
                 polyline(&rings[a].points, probe).total_cmp(&polyline(&rings[b].points, probe))
             });
     }
-    // Drop passes whose swept floor others already cover.
     if reach > 0.0 && rings.len() > 1 {
         let c = (reach / 8.0).max(grid.h);
         let (cx, cy) = (
@@ -324,7 +314,6 @@ fn passes_for(
             }
         }
     }
-    // Post-order over the kept passes: deeper passes before their parents.
     let kept_parent = |mut i: usize| loop {
         match rings[i].parent {
             Some(p) if rings[p].kept => return Some(p),
@@ -384,7 +373,9 @@ fn setup_triangles(
         }
         let vertices = mesh
             .positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|v| {
                 let d = [
                     v[0] - setup.wcs.origin.x,
@@ -399,7 +390,7 @@ fn setup_triangles(
                 )
             })
             .collect::<Vec<_>>();
-        for tri in mesh.indices.chunks_exact(3) {
+        for tri in mesh.indices.as_chunks::<3>().0 {
             triangles.push([
                 vertices[tri[0] as usize],
                 vertices[tri[1] as usize],
@@ -563,9 +554,6 @@ impl Grid {
         let blocked = |i: usize| heights[i] > level + FLAT_EPS;
         let floor = self.floor_mask(heights, level, 4.0 * r);
         let flat = |i: usize| floor[i];
-        // Raster distances undercount by at most half a cell diagonal (a
-        // marked cell's material may sit anywhere in it) plus the largest
-        // chord sag (the true surface may bulge past the raster).
         let half = self.h * std::f64::consts::FRAC_1_SQRT_2;
         let walls = self.distance(blocked);
         let to_flat = self.distance(flat);
@@ -680,7 +668,6 @@ impl Grid {
             let p = Point2Dto::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
             let x = ((p.x - self.min.x) / self.h - 0.5).floor() as isize;
             let y = ((p.y - self.min.y) / self.h - 0.5).floor() as isize;
-            // Every sample around the point must be inside.
             [(0, 0), (1, 0), (0, 1), (1, 1)]
                 .into_iter()
                 .all(|(dx, dy)| self.sample(field, x + dx, y + dy) >= -SIMPLIFY)
@@ -691,8 +678,6 @@ impl Grid {
     /// with the side above the level on its left. Out-of-grid samples are
     /// below every level, so every loop closes.
     fn iso_loops(&self, field: &[f64], level: f64) -> Vec<Vec<Point2Dto>> {
-        // Edge keys: (x, y, 0) joins samples (x,y)-(x+1,y); (x, y, 1) joins
-        // (x,y)-(x,y+1).
         type Key = (isize, isize, u8);
         let mut next: HashMap<Key, (Key, Point2Dto)> = HashMap::new();
         let crossing = |a: (isize, isize), b: (isize, isize)| {
@@ -703,15 +688,12 @@ impl Grid {
         };
         for y in -1..self.ny as isize {
             for x in -1..self.nx as isize {
-                // Corners and edges counter-clockwise from the lower left.
                 let corners = [(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)];
                 let keys: [Key; 4] = [(x, y, 0), (x + 1, y, 1), (x, y + 1, 0), (x, y, 1)];
                 let inside = corners.map(|(cx, cy)| self.sample(field, cx, cy) >= level);
                 if inside.iter().all(|&v| v) || inside.iter().all(|&v| !v) {
                     continue;
                 }
-                // Crossings in counter-clockwise order: leaving the region
-                // (in -> out) or entering it (out -> in).
                 let mut events = Vec::new();
                 for e in 0..4 {
                     let (a, b) = (e, (e + 1) % 4);
@@ -730,9 +712,6 @@ impl Grid {
                     if !leaving {
                         continue;
                     }
-                    // A segment runs from a leaving crossing to an entering
-                    // one: the next counter-clockwise, or for a saddle whose
-                    // center is outside, the previous one.
                     let partner = if saddle && !center_inside {
                         events[(k + events.len() - 1) % events.len()].0
                     } else {
@@ -864,7 +843,6 @@ impl WallIndex {
             if outline.is_empty() {
                 continue;
             }
-            // Outward plan normal (meshes wind counter-clockwise outside).
             let u = [t[1].x - t[0].x, t[1].y - t[0].y, t[1].z - t[0].z];
             let v = [t[2].x - t[0].x, t[2].y - t[0].y, t[2].z - t[0].z];
             let n = Point2Dto::new(u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2]);
@@ -876,7 +854,6 @@ impl WallIndex {
                     }
                 }
             }
-            // A facet thinner than a micron in plan is a vertical wall chord.
             let thin = far > EPSILON
                 && outline.iter().all(|&q| segment_distance(q, a, b) <= 1.0e-3)
                 && n.x.hypot(n.y) > EPSILON;
@@ -989,14 +966,12 @@ fn convex_curvatures(triangles: &[[Point3Dto; 3]]) -> Vec<f64> {
         };
         let (ci, cj) = (centroid(&triangles[i]), centroid(&triangles[j]));
         let toward = [cj.x - ci.x, cj.y - ci.y, cj.z - ci.z];
-        // Convex: the neighbour falls behind this facet's outward plane.
         if toward[0] * ni[0] + toward[1] * ni[1] + toward[2] * ni[2] >= 0.0 {
             continue;
         }
         for (k, e) in [(i, ei), (j, ej)] {
             let t = &triangles[k];
             let (a, b, c) = (t[e], t[(e + 1) % 3], t[(e + 2) % 3]);
-            // Facet width across the bending edge.
             let ab = [b.x - a.x, b.y - a.y, b.z - a.z];
             let ac = [c.x - a.x, c.y - a.y, c.z - a.z];
             let cross = [
@@ -1104,7 +1079,6 @@ fn simplify_closed(ring: &[Point2Dto], tolerance: f64) -> Vec<Point2Dto> {
     if ring.len() < 4 {
         return ring.to_vec();
     }
-    // Split at the vertex farthest from the first so both halves are open.
     let far = nearest_vertex_far(ring);
     let mut out = simplify_open(&ring[..=far], tolerance);
     out.pop();

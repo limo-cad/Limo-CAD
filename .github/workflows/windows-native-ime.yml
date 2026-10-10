@@ -1,0 +1,67 @@
+name: Disposable Windows Bevy Japanese IME
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-native-ime-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  japanese-ime:
+    name: Real Japanese preedit, commit, and cancellation in Bevy
+    runs-on: windows-2025
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Provision and prove stock IME feasibility on this same runner
+        timeout-minutes: 35
+        shell: powershell
+        run: |
+          & .\xtask\platform\windows-ime-probe.ps1 `
+            -Out (Join-Path $env:RUNNER_TEMP 'windows-ime-stock') `
+            -ProvisionJapanese -ExerciseIme
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: desktop -> target
+          key: native-host-windows
+      - name: Install native geometry kernel
+        id: occt
+        uses: ./.github/actions/setup-windows-occt
+        with:
+          triplet: x64-windows
+          runner-cache-key: windows-2025-x64-windows-msvc
+          msvc-component: Microsoft.VisualStudio.Component.VC.Tools.x86.x64
+      - name: Use the native geometry kernel
+        shell: pwsh
+        env:
+          OCCT_SDK: ${{ steps.occt.outputs.root }}
+        run: |
+          "OCCT_ROOT=$env:OCCT_SDK" >> $env:GITHUB_ENV
+          "$env:OCCT_SDK\bin" >> $env:GITHUB_PATH
+      - name: Build the actual feature-enabled native host
+        run: cargo build --locked --manifest-path desktop/Cargo.toml --features native-computer-control --bin limo-cad
+      - name: Exercise the owned Winit field through Windows SendInput
+        shell: pwsh
+        env:
+          LIMO_CAD_NATIVE_IME_TEST: windows-japanese
+        run: |
+          cargo run --quiet --locked -p xtask --features native-control-harness -- test-mcp native-platform --desktop-input --ime-japanese `
+            --ime-stock-report "$env:RUNNER_TEMP\windows-ime-stock\report.json" `
+            --server "$env:GITHUB_WORKSPACE\desktop\target\debug\limo-cad.exe" `
+            --out "$env:RUNNER_TEMP\native-ime-windows"
+      - name: Retain stock prerequisites, actual Bevy events, and window captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-ime-windows
+          path: |
+            ${{ runner.temp }}/windows-ime-stock/
+            ${{ runner.temp }}/native-ime-windows/
+          if-no-files-found: error
+          retention-days: 14

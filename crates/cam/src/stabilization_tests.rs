@@ -188,7 +188,6 @@ fn golden_job_stays_aligned_across_save_plan_post_and_simulation() {
     crate::post::tests::bind_test_names(&mut document, &[(1, "EM6"), (2, "DRILL5_5")]);
     document.validate().expect("golden document validates");
 
-    // Project persistence must not change generated motion.
     let encoded = serde_json::to_vec(&document).expect("serialize CAM document");
     let mut reopened: CamDocumentDto = serde_json::from_slice(&encoded).expect("reopen document");
     reopened.soften_for_load();

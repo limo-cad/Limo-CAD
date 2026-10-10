@@ -73,7 +73,7 @@ Prefer purchased ISO/ASME charts for official fits; treat in-app help lists as t
 - Press-fit plastic onto metal is a different system than metal-on-metal —
   measure both after cool-down ([AM thin walls](am-thin-walls.md)).
 
-## In noBS CAD
+## In Limo CAD
 
 Recipes `turbine-fit-coupons` and `d-screw-vise-fit` print dimensioned
 specimens of the **actual** mating geometry before committing the flagship.

@@ -46,8 +46,6 @@ impl CamMachineToolCallDto {
     pub fn validate(&self) -> Result<(), String> {
         match self {
             Self::Name { name } => {
-                // Conservative supported subset of SINUMERIK identifiers.
-                // Do not trim, case-fold, truncate or replace any character.
                 if name.is_empty()
                     || name.len() > 31
                     || !name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')

@@ -2,7 +2,7 @@
 okf_version: "0.2"
 ---
 
-# noBS CAD — Open Knowledge Format (OKF) index
+# Limo CAD — Open Knowledge Format (OKF) index
 
 Portable knowledge bundle for **humans and agents**. Specification:
 [Open Knowledge Format v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md).
@@ -21,7 +21,7 @@ Keep concepts **thin**. Longer material lives in the repository’s
    alpha label door (not a curated browse map — use taxonomy/index for that);
    or full-text in your editor over `knowledge/**`.
 4. **Full page** — open the Markdown file, or MCP `resources/read` on
-   `nbcad://knowledge/...` (same text).
+   `limo-cad://knowledge/...` (same text).
 5. **Demos** — recipe chips / `related_recipes` deep-link **Scripts** (unchanged);
    no Bevy viewport inside Help yet.
 
@@ -96,7 +96,7 @@ Full seeded/planned table: **[taxonomy](machine-design/taxonomy.md)**.
 - [Architecture](concepts/architecture.md) - Kernel, shell, and project-file boundaries.
 - [MCP harness](concepts/mcp-harness.md) - Headless/live routing and engineering resources.
 - [MCP workflow](concepts/agent-mcp-workflow.md) - Help-first, soft focus, inspect, edit, sessions, units.
-- [Design VERSION / JSONC scripts](concepts/design-version-scripts.md) - One VERSION → design_vM_N.nbcad.jsonc (filename + embed); prune prior; prefer JSONC chunks over gen_*.py.
+- [Design VERSION / JSONC scripts](concepts/design-version-scripts.md) - One VERSION → design_vM_N.limo.jsonc (filename + embed); prune prior; prefer JSONC chunks over gen_*.py.
 - [Geometry naming](concepts/geometry-naming.md) - Role-noun bodies/features/faces; align script ↔ browser ↔ STEP; VERIFY names after mutate.
 - [Shared reference geometry](concepts/shared-reference-geometry.md) - Named shared planes/axes/faces so related surfaces follow param changes; VERIFY after edits.
 - [Research before commit](concepts/research-before-commit.md) - VERIFY table and local help before freezing geometry.
@@ -116,13 +116,13 @@ The native MCP server embeds this Markdown corpus at build time. Prefer **`cad_h
 (`search` → `get` / `topics`) for discovery — snippet-first with locked caps (search
 default 5 / max 10, snippet ~280 chars, get 12 KiB, topics page 50). Use standard
 `resources/list` then `resources/read` with a returned URI (for example
-`nbcad://knowledge/index.md`) when the full page is needed. Resources are read-only
+`limo-cad://knowledge/index.md`) when the full page is needed. Resources are read-only
 and available without a checkout or network connection. They describe the bundled
 source revision; rebuild to pick up later knowledge changes.
 
 Resolve links between knowledge pages relative to the current resource URI:
-from `nbcad://knowledge/concepts/gears.md`, `additive-workholding.md` means
-`nbcad://knowledge/concepts/additive-workholding.md`. Links starting `../../docs/`
+from `limo-cad://knowledge/concepts/gears.md`, `additive-workholding.md` means
+`limo-cad://knowledge/concepts/additive-workholding.md`. Links starting `../../docs/`
 or `../../mcp-server/` identify supporting paths in a checkout of the same source
 revision; they are not additional MCP resources. External HTTPS sources can be
 opened separately when network access is available.

@@ -1,6 +1,6 @@
 use super::*;
-use nbcad_core::{BodyId, FeatureId};
-use nbcad_solid::{
+use limo_cad_core::{BodyId, FeatureId};
+use limo_cad_solid::{
     HoleThreadDto, HoleThreadSeries, HoleThreadStandard, KernelExternalThreadJobDto,
     KernelExtrudeJobDto, KernelHoleJobDto, RoundedThreadProfile,
 };
@@ -103,7 +103,7 @@ fn rounded_partial_long_shaft_and_flat_export_closed_meshes() {
             feature_id: FeatureId(2),
             target_body_id: BodyId(1),
             face_key: face.key.clone(),
-            cylinder: face.cylinder.clone().unwrap(),
+            cylinder: face.cylinder.unwrap(),
             thread,
             flip: false,
         }));
@@ -196,7 +196,7 @@ fn assert_rounded_mates(hand: HoleThreadHand) {
         feature_id: FeatureId(2),
         target_body_id: BodyId(1),
         face_key: face.key.clone(),
-        cylinder: face.cylinder.clone().unwrap(),
+        cylinder: face.cylinder.unwrap(),
         thread: spec(),
         flip: false,
     });
@@ -221,8 +221,7 @@ fn assert_rounded_mates(hand: HoleThreadHand) {
         errors: vec![],
         jobs: vec![male_blank, male, female_blank, female],
     };
-    // The same feature DTO survives persistence; recompute exercises the normal
-    // retained-BRep jobs instead of a demonstration-only geometry path.
+
     let saved = serde_json::to_vec(&plan).unwrap();
     let scene = kernel
         .recompute(&serde_json::from_slice(&saved).unwrap())
@@ -258,9 +257,7 @@ fn assert_rounded_mates(hand: HoleThreadHand) {
             "body{body_id} radii {min}..{max}, expected {lo}..{hi}"
         );
     }
-    // Unwrap actual native boundary samples into an axial profile. The root
-    // must follow a radius-0.3 circle, not the straight chord or a sharp Tr
-    // corner. This checks geometry beyond the requested DTO or STEP labels.
+
     let z0 = 1.0
         - 15_f64.to_radians().tan()
         - 0.3 * (1.0 / 15_f64.to_radians().cos() - 15_f64.to_radians().tan());
@@ -270,7 +267,7 @@ fn assert_rounded_mates(hand: HoleThreadHand) {
         .find(|b| b.body_id == BodyId(1))
         .unwrap();
     let mut curved_samples = 0;
-    for point in body.positions.chunks_exact(3) {
+    for point in body.positions.as_chunks::<3>().0 {
         let x = f64::from(point[0]);
         let y = f64::from(point[1]);
         let z = f64::from(point[2]);
@@ -296,8 +293,7 @@ fn assert_rounded_mates(hand: HoleThreadHand) {
         translation: [0.0; 3],
         rotation: [0.0, 0.0, 0.0, 1.0],
     };
-    // The groove is at phase zero; the retained male ridge is half a pitch
-    // away. Every quarter turn must advance one quarter of the 4 mm lead.
+
     for quarter in 0..4 {
         let angle = handedness * std::f64::consts::FRAC_PI_2 * quarter as f64;
         let moving = PlacedBodyQueryDto {
@@ -406,7 +402,7 @@ fn legacy_thread_partial_depth_does_not_cut_the_unthreaded_shank_or_bore() {
                     feature_id: FeatureId(2),
                     target_body_id: BodyId(1),
                     face_key: face.key.clone(),
-                    cylinder: face.cylinder.clone().unwrap(),
+                    cylinder: face.cylinder.unwrap(),
                     thread: spec("6g"),
                     flip: face.cylinder.as_ref().unwrap().axis.z < 0.0,
                 }),
@@ -431,7 +427,7 @@ fn legacy_thread_partial_depth_does_not_cut_the_unthreaded_shank_or_bore() {
         })
         .unwrap();
     assert!(scene.errors.is_empty(), "{:?}", scene.errors);
-    let minor = nbcad_solid::iso_metric_grade6_envelope(6.0, 1.0, ThreadFit::Internal)
+    let minor = limo_cad_solid::iso_metric_grade6_envelope(6.0, 1.0, ThreadFit::Internal)
         .unwrap()
         .modeled_minor
         / 2.0;
@@ -453,8 +449,10 @@ fn legacy_thread_partial_depth_does_not_cut_the_unthreaded_shank_or_bore() {
         assert!(!radii.is_empty());
         let min = radii.iter().copied().fold(f64::INFINITY, f64::min);
         let max = radii.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        assert!((min-expected_radius).abs()<0.01 && (max-expected_radius).abs()<0.01,
-            "body{body_id}: requested2mmthread altered unthreaded radius {min}..{max}, expected{expected_radius}");
+        assert!(
+            (min - expected_radius).abs() < 0.01 && (max - expected_radius).abs() < 0.01,
+            "body{body_id}: requested2mmthread altered unthreaded radius {min}..{max}, expected{expected_radius}"
+        );
     }
 }
 
@@ -490,8 +488,7 @@ fn assert_blind_thread_depth(mut thread: HoleThreadDto, predrill: f64) {
                 .modeled_minor
         })
         * 0.5;
-    // Both ways of asking for a full thread must stop at a blind floor.
-    // A shorter thread must additionally preserve the remaining plain bore.
+
     for depth in [None, Some(hole_depth), Some(2.0)] {
         thread.depth = depth;
         let mut stock = cylinder(1, 1, stock_radius);
@@ -534,7 +531,9 @@ fn assert_blind_thread_depth(mut thread: HoleThreadDto, predrill: f64) {
         assert_eq!(scene.bodies.len(), 1);
         let cavity: Vec<_> = scene.bodies[0]
             .positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|p| (f64::from(p[0]).hypot(f64::from(p[1])), f64::from(p[2])))
             .filter(|(radius, z)| *radius < stock_radius - 0.01 && *z < stock_depth - 0.01)
             .collect();
@@ -614,7 +613,7 @@ fn assert_threaded_shoulder(mut thread: HoleThreadDto) {
                         .is_some_and(|c| (c.radius - shaft_radius).abs() < 1e-6)
                 })
                 .unwrap();
-            let cylinder = face.cylinder.clone().unwrap();
+            let cylinder = face.cylinder.unwrap();
             plan.jobs
                 .push(KernelJobDto::ExternalThread(KernelExternalThreadJobDto {
                     feature_id: FeatureId(3),
@@ -633,16 +632,20 @@ fn assert_threaded_shoulder(mut thread: HoleThreadDto) {
             let body = &scene.bodies[0];
             let points: Vec<_> = body
                 .positions
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .map(|p| (f64::from(p[0]).hypot(f64::from(p[1])), f64::from(p[2])))
                 .collect();
             let shoulder_cuts: Vec<_> = points
                 .iter()
                 .filter(|(r, z)| *z > 4.001 && *z < 7.999 && *r < shaft_radius + 1.9)
                 .collect();
-            assert!(shoulder_cuts.is_empty(),
+            assert!(
+                shoulder_cuts.is_empty(),
                 "toward_shoulder={toward_shoulder}, depth={depth:?}: thread cut into adjacent shoulder at {:?}",
-                &shoulder_cuts[..shoulder_cuts.len().min(4)]);
+                &shoulder_cuts[..shoulder_cuts.len().min(4)]
+            );
             let end = depth.unwrap_or(4.0);
             assert!(
                 points.iter().any(|(r, z)| *r < shaft_radius - 0.05
@@ -654,12 +657,11 @@ fn assert_threaded_shoulder(mut thread: HoleThreadDto) {
                 "requested shaft thread must actually remove material"
             );
             if end < 4.0 {
-                // Cylinder meshing may put vertices only on its end rings.
-                // Select triangles by their interior centroid, then inspect
-                // the vertices' true radii rather than a chord midpoint.
                 let plain: Vec<_> = body
                     .indices
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .map(|triangle| {
                         triangle
                             .iter()

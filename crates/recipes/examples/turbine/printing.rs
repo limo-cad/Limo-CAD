@@ -31,8 +31,7 @@ impl Author {
                 json!({"joint_id":at(name,"/id"),"enabled":false}),
             );
         }
-        // Hiding by occurrence also isolates stage from its shared-definition
-        // copy. Each plate selects one ground through the normal assembly API.
+
         let occurrences = self.occurrences.clone();
         for (name, id) in &occurrences {
             self.call(
@@ -133,8 +132,7 @@ impl Author {
             "project_set_visibility",
             r("plate_home_visibility"),
         );
-        // All occurrences are back in their assembly poses. Discard the last
-        // print-plate close-up before re-enabling joints and opening drawings.
+
         self.steps.push(json!({"id":"plate_restore_assembly_fit",
             "view":"isometric","fit":true,"duration_ms":650}));
         for name in &joint_names {

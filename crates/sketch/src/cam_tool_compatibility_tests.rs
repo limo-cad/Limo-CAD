@@ -1,6 +1,6 @@
 use super::*;
-use nbcad_cam::CamToolKind;
-use nbcad_solid::KernelSceneDto;
+use limo_cad_cam::CamToolKind;
+use limo_cad_solid::KernelSceneDto;
 
 fn job() -> CamDocumentDto {
     let mut doc = super::project_tests::cam_roundtrip_fixture();
@@ -70,8 +70,6 @@ fn unsupported_library_edit_is_invalid_not_suppressed_or_silently_regenerated() 
             .contains("Invalid toolpath"));
         assert_eq!(manager.cam_document().toolpath_generations, stamps);
 
-        // Save/open keeps the unsupported assignment repairable and blocks
-        // execution. It must not silently suppress a machining step.
         let saved = manager.export_project_model().unwrap();
         let mut loaded = SketchManager::new();
         let transaction = loaded.prepare_load_project(saved).unwrap();
@@ -124,8 +122,7 @@ fn editing_stays_strict_for_bad_tool_geometry_and_malformed_operation_numbers() 
     }
     assert!(manager.set_cam_document(bad).is_err());
     assert_eq!(manager.cam_document(), original);
-    // A smaller, valid tool is an operation/tool mismatch, not a malformed
-    // library record. It is retained with a concrete stepover error.
+
     let mut smaller = original;
     smaller.tools[0].diameter = 2.;
     manager.set_cam_document(smaller).unwrap();

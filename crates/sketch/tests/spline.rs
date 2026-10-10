@@ -2,7 +2,7 @@
 //! tessellation in the DTO, duplicate cleanup, degenerate rejection,
 //! single-record undo, delete, and self-contained move/scale.
 
-use nbcad_sketch::{
+use limo_cad_sketch::{
     EntityDto, MoveCopyRequest, OriginPlane, PlaneRef, ScaleRequest, SketchSession, SplineRequest,
     Vec2,
 };
@@ -26,7 +26,7 @@ fn req(points: &[(f64, f64)]) -> SplineRequest {
     }
 }
 
-fn spline(dto: &nbcad_sketch::SketchDto) -> &EntityDto {
+fn spline(dto: &limo_cad_sketch::SketchDto) -> &EntityDto {
     dto.entities
         .iter()
         .find(|e| matches!(e, EntityDto::Spline { .. }))
@@ -47,9 +47,9 @@ fn create_interpolating_spline_with_tessellation() {
             ..
         } => {
             assert_eq!(points.len(), 4);
-            // 3 spans × 16 segments + 1.
+
             assert_eq!(tessellation.len(), 3 * 16 + 1);
-            // Interpolation: every fit point appears in the tessellation.
+
             for p in points {
                 assert!(
                     tessellation.iter().any(|q| q.distance(*p) < 1e-7),
@@ -98,7 +98,7 @@ fn fewer_than_two_points_rejected() {
     let mut s = session();
     assert!(s.add_spline(&req(&[(5.0, 5.0)])).is_err());
     assert!(s.add_spline(&req(&[])).is_err());
-    // All duplicates collapse to one point.
+
     assert!(s.add_spline(&req(&[(5.0, 5.0), (5.0, 5.0)])).is_err());
     assert!(s.dto().entities.is_empty());
 }
@@ -181,9 +181,34 @@ fn fix_unfix_controls_spline_fit_points_and_definition_state() {
         _ => unreachable!(),
     }
 
-    // A transform command against fixed fit points solves back to the
-    // captured targets instead of silently changing a "fully defined"
-    // spline.
+    let rejected = s
+        .move_copy_entities(&MoveCopyRequest {
+            entity_ids: vec![id],
+            dx: 10.0,
+            dy: 5.0,
+            copy: false,
+        })
+        .unwrap_err();
+    assert!(rejected.to_string().contains("conflicts"), "{rejected}");
+    assert_eq!(s.dto(), fixed);
+
+    let rejected = s
+        .scale_entities(&ScaleRequest {
+            entity_ids: vec![id],
+            origin: v(0.0, 0.0),
+            factor_text: "2".into(),
+        })
+        .unwrap_err();
+    assert!(rejected.to_string().contains("conflicts"), "{rejected}");
+    assert_eq!(s.dto(), fixed);
+
+    let unfixed = s.toggle_fix(id).unwrap().sketch;
+    assert_eq!(unfixed.dof.value, 6);
+    match spline(&unfixed) {
+        EntityDto::Spline { fully_defined, .. } => assert!(!fully_defined),
+        _ => unreachable!(),
+    }
+
     let moved = s
         .move_copy_entities(&MoveCopyRequest {
             entity_ids: vec![id],
@@ -194,17 +219,10 @@ fn fix_unfix_controls_spline_fit_points_and_definition_state() {
         .unwrap();
     match spline(&moved.sketch) {
         EntityDto::Spline { points, .. } => {
-            assert_eq!(points[0], v(0.0, 0.0));
-            assert_eq!(points[1], v(20.0, 20.0));
-            assert_eq!(points[2], v(40.0, 0.0));
+            assert_eq!(points[0], v(10.0, 5.0));
+            assert_eq!(points[1], v(30.0, 25.0));
+            assert_eq!(points[2], v(50.0, 5.0));
         }
-        _ => unreachable!(),
-    }
-
-    let unfixed = s.toggle_fix(id).unwrap().sketch;
-    assert_eq!(unfixed.dof.value, 6);
-    match spline(&unfixed) {
-        EntityDto::Spline { fully_defined, .. } => assert!(!fully_defined),
         _ => unreachable!(),
     }
 }

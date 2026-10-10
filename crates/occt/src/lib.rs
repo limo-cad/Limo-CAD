@@ -1,21 +1,27 @@
 //! Native OCCT adapter.
 //!
-//! The C++ bridge is enabled by the `native-occt` feature in the Tauri
-//! shell. Keeping the feature off lets the host-neutral workspace and WASM
+//! The C++ bridge is enabled by the `native-occt` feature in the native
+//! desktop. Keeping the feature off lets the host-neutral workspace and WASM
 //! target build on machines that do not have the OCCT SDK installed.
 
 pub mod drawing_export;
 mod drawing_instances;
+pub mod drawing_presentation;
+pub mod section_review;
 pub use drawing_instances::{project_drawing, resolve_drawing_anchor, resolve_drawing_line};
 mod interference;
 pub use interference::{exact_interference_report, exact_pair_result};
+mod motion_evaluation;
+pub use motion_evaluation::evaluate_motion_study;
+mod motion_inspection;
+pub use motion_inspection::exact_swept_collision_check;
 
 use std::collections::HashSet;
 
-use nbcad_core::{BodyId, EdgeId};
-use nbcad_solid::SolidSceneDto;
+use limo_cad_core::{BodyId, EdgeId};
+use limo_cad_solid::SolidSceneDto;
 #[cfg(not(feature = "native-occt"))]
-use nbcad_solid::{KernelSceneDto, RecomputePlanDto};
+use limo_cad_solid::{KernelSceneDto, RecomputePlanDto};
 use serde::{Deserialize, Serialize};
 
 /// Orthographic hidden-line projection request. `direction` points from the
@@ -23,12 +29,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrawingProjectionRequest {
     #[serde(default)]
-    pub scope: nbcad_sketch::DrawingViewScope,
+    pub scope: limo_cad_sketch::DrawingViewScope,
     #[serde(default)]
-    pub occurrence_ids: Vec<nbcad_assembly::OccurrenceId>,
+    pub occurrence_ids: Vec<limo_cad_assembly::OccurrenceId>,
     /// Host-resolved poses never come from an MCP or desktop request payload.
     #[serde(skip)]
-    pub resolved_occurrences: Option<Vec<nbcad_assembly::InstanceBodyPoseDto>>,
+    pub resolved_occurrences: Option<Vec<limo_cad_assembly::InstanceBodyPoseDto>>,
     #[serde(default)]
     pub body_ids: Vec<BodyId>,
     pub direction: [f64; 3],
@@ -74,7 +80,9 @@ pub struct DrawingProjectionDto {
     pub anchors: Vec<DrawingProjectionAnchorDto>,
     #[serde(default)]
     pub circles: Vec<DrawingProjectedCircleDto>,
-    /// Exact OCCT intersection curves when a cutting plane was requested.
+    /// Exact planar cut-material boundaries when a cutting plane was requested.
+    /// Coplanar exterior termination faces contribute no hatch area; pure
+    /// boundary-contact outlines remain in visible geometry.
     #[serde(default)]
     pub section: Vec<DrawingPolylineDto>,
     /// min x, min y, max x, max y in model millimetres.
@@ -87,7 +95,7 @@ pub struct DrawingProjectionDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingProjectedCircleDto {
     #[serde(default)]
-    pub occurrence_id: Option<nbcad_assembly::OccurrenceId>,
+    pub occurrence_id: Option<limo_cad_assembly::OccurrenceId>,
     pub body_id: BodyId,
     pub edge_id: EdgeId,
     pub edge_key: String,
@@ -112,7 +120,7 @@ pub enum DrawingProjectionAnchorEndpoint {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingProjectionAnchorDto {
     #[serde(default)]
-    pub occurrence_id: Option<nbcad_assembly::OccurrenceId>,
+    pub occurrence_id: Option<limo_cad_assembly::OccurrenceId>,
     pub body_id: BodyId,
     pub edge_id: EdgeId,
     pub edge_key: String,
@@ -120,6 +128,29 @@ pub struct DrawingProjectionAnchorDto {
     pub model_point: [f64; 3],
     pub point: [f64; 2],
     pub hidden: bool,
+}
+
+/// Transient orthonormal axes used by drawing projection and depth ranking.
+/// This is derived display metadata, not persisted camera intent.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DrawingProjectionBasis {
+    pub direction: [f64; 3],
+    pub right: [f64; 3],
+    pub up: [f64; 3],
+}
+
+pub fn drawing_projection_basis(
+    direction: [f64; 3],
+    up: [f64; 3],
+) -> Result<DrawingProjectionBasis, OcctError> {
+    let direction = normalize(direction)?;
+    let right = normalize(cross(up, direction))?;
+    let up = normalize(cross(direction, right))?;
+    Ok(DrawingProjectionBasis {
+        direction,
+        right,
+        up,
+    })
 }
 
 /// Project stable topology endpoints with the same orthographic basis used by
@@ -130,9 +161,9 @@ pub fn drawing_projection_anchors(
     request: &DrawingProjectionRequest,
     projection: &DrawingProjectionDto,
 ) -> Result<Vec<DrawingProjectionAnchorDto>, OcctError> {
-    let direction = normalize(request.direction)?;
-    let right = normalize(cross(request.up, direction))?;
-    let page_up = normalize(cross(direction, right))?;
+    let DrawingProjectionBasis {
+        right, up: page_up, ..
+    } = drawing_projection_basis(request.direction, request.up)?;
 
     let mut anchors = Vec::new();
     for (body, occurrence) in drawing_instances::drawing_bodies(scene, request)? {
@@ -188,9 +219,11 @@ pub fn drawing_projection_circles(
     request: &DrawingProjectionRequest,
     projection: &DrawingProjectionDto,
 ) -> Result<Vec<DrawingProjectedCircleDto>, OcctError> {
-    let direction = normalize(request.direction)?;
-    let right = normalize(cross(request.up, direction))?;
-    let page_up = normalize(cross(direction, right))?;
+    let DrawingProjectionBasis {
+        direction,
+        right,
+        up: page_up,
+    } = drawing_projection_basis(request.direction, request.up)?;
 
     let mut candidates = Vec::new();
     for (body, occurrence) in drawing_instances::drawing_bodies(scene, request)? {
@@ -208,8 +241,7 @@ pub fn drawing_projection_circles(
             let Some((center_model, normal_model, radius, closed)) = fit_circle(&points) else {
                 continue;
             };
-            // A circle viewed obliquely is an ellipse. Keep radial tools on
-            // true circular projections, matching conventional drafting.
+
             if dot(normal_model, direction).abs() < 0.995 {
                 continue;
             }
@@ -417,7 +449,7 @@ pub struct OcctError(pub String);
 /// uses translation plus an x/y/z/w unit quaternion.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PlacedBodyQueryDto {
-    pub body_id: nbcad_core::BodyId,
+    pub body_id: limo_cad_core::BodyId,
     pub translation: [f64; 3],
     pub rotation: [f64; 4],
 }
@@ -446,6 +478,14 @@ pub struct OcctKernel;
 
 #[cfg(not(feature = "native-occt"))]
 impl OcctKernel {
+    pub(crate) fn section_geometry(
+        &self,
+        _request: &section_review::SectionReviewRequest,
+    ) -> Result<section_review::SectionGeometry, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
     pub fn new() -> Result<Self, OcctError> {
         Err(OcctError(
             "native OCCT support was not enabled at compile time".to_string(),
@@ -456,6 +496,21 @@ impl OcctKernel {
         Err(OcctError(
             "native OCCT support was not enabled at compile time".to_string(),
         ))
+    }
+
+    pub fn recompute_with_supports(
+        &mut self,
+        plan: &RecomputePlanDto,
+        _queries: &[limo_cad_solid::HistorySupportQuery],
+    ) -> Result<
+        (
+            KernelSceneDto,
+            std::collections::BTreeSet<limo_cad_core::FeatureId>,
+        ),
+        OcctError,
+    > {
+        self.recompute(plan)
+            .map(|scene| (scene, Default::default()))
     }
 
     pub fn drawing_projection(
@@ -486,14 +541,15 @@ pub use native::OcctKernel;
 #[cfg(test)]
 mod drawing_anchor_tests {
     use super::*;
-    use nbcad_core::FeatureId;
-    use nbcad_solid::{BodyDto, EdgeDto, MeshDto, Point3Dto};
+    use limo_cad_core::FeatureId;
+    use limo_cad_solid::{BodyDto, EdgeDto, MeshDto, Point3Dto};
 
     #[test]
     fn projects_stable_topology_endpoints_into_hlr_coordinates() {
         let scene = SolidSceneDto {
             bodies: vec![BodyDto {
                 topology_signature: String::new(),
+                display_warnings: Vec::new(),
                 id: BodyId(3),
                 name: "Body1".to_string(),
                 feature_id: FeatureId(1),
@@ -554,6 +610,27 @@ mod drawing_anchor_tests {
         assert_eq!(anchors[0].point, [-10.0, -5.0]);
         assert_eq!(anchors[1].point, [10.0, -5.0]);
         assert!(anchors.iter().all(|anchor| !anchor.hidden));
+        for (direction, up) in [
+            ([0., 0., 1e-6], [0., 7., 3.]),
+            ([0., 0., 40.], [0., 0.01, 29.]),
+        ] {
+            let scaled = DrawingProjectionRequest {
+                direction,
+                up,
+                ..request.clone()
+            };
+            assert_eq!(
+                drawing_projection_basis(direction, up).unwrap(),
+                drawing_projection_basis(request.direction, request.up).unwrap()
+            );
+            assert_eq!(
+                serde_json::to_value(
+                    drawing_projection_anchors(&scene, &scaled, &projection).unwrap()
+                )
+                .unwrap(),
+                serde_json::to_value(&anchors).unwrap()
+            );
+        }
     }
 
     #[test]
@@ -579,6 +656,7 @@ mod drawing_anchor_tests {
         let scene = SolidSceneDto {
             bodies: vec![BodyDto {
                 topology_signature: String::new(),
+                display_warnings: Vec::new(),
                 id: BodyId(3),
                 name: "Body1".to_string(),
                 feature_id: FeatureId(1),
@@ -644,6 +722,7 @@ mod drawing_anchor_tests {
         let scene = SolidSceneDto {
             bodies: vec![BodyDto {
                 topology_signature: String::new(),
+                display_warnings: Vec::new(),
                 id: BodyId(9),
                 name: "Cylinder".to_string(),
                 feature_id: FeatureId(2),
@@ -684,8 +763,7 @@ mod drawing_anchor_tests {
             deflection: 0.05,
             section_plane: None,
         };
-        // Empty visible HLR simulates the coplanar-boundary ambiguity that the
-        // front-rim fallback is designed to resolve.
+
         let projection = DrawingProjectionDto {
             topology_signatures: Default::default(),
             visible: vec![],
@@ -698,6 +776,16 @@ mod drawing_anchor_tests {
 
         let circles = drawing_projection_circles(&scene, &request, &projection).unwrap();
         assert_eq!(circles.len(), 2);
+        let scaled = DrawingProjectionRequest {
+            direction: [0., 0., 1e-6],
+            up: [0., 7., 3.],
+            ..request.clone()
+        };
+        assert_eq!(
+            serde_json::to_value(drawing_projection_circles(&scene, &scaled, &projection).unwrap())
+                .unwrap(),
+            serde_json::to_value(&circles).unwrap()
+        );
         assert!(circles.iter().all(|circle| circle.closed));
         assert!(circles
             .iter()

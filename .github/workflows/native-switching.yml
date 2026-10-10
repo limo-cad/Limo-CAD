@@ -1,0 +1,67 @@
+name: Disposable matched Bevy switching measurement
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 240
+    env:
+      BASELINE_SHA: 82cd981eb9d835faf481a021c416e7733cfb9f91
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: never
+      LIMO_CAD_SWITCHING_CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASELINE_SHA }}
+          path: baseline
+      - uses: ./candidate/.github/actions/setup-rust
+        id: rust
+        with:
+          directory: candidate
+      - name: Use the candidate compiler for both builds
+        run: echo "RUSTUP_TOOLCHAIN=${{ steps.rust.outputs.toolchain }}" >> "$GITHUB_ENV"
+      - uses: ./candidate/.github/actions/setup-linux-desktop
+        with:
+          desktop-input: 'true'
+      - uses: ./candidate/.github/actions/setup-unix-occt
+        with:
+          directory: candidate
+      - name: Install isolated baseline SDK and window manager
+        run: |
+          sudo apt-get install --yes --no-install-recommends openbox x11-utils
+          command -v xprop
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: switching-registry-${{ runner.os }}-${{ hashFiles('candidate/desktop/Cargo.lock', 'baseline/desktop/Cargo.lock') }}
+          restore-keys: switching-registry-${{ runner.os }}-
+      - name: Build the Rust measurement driver and retain early compiler failures
+        working-directory: candidate
+        run: cargo build --locked -p xtask > "$RUNNER_TEMP/switching-driver.log" 2>&1
+      - name: Build pinned Bevy preview baseline and candidate before measuring
+        working-directory: candidate
+        run: cargo xtask switching-comparison --build
+      - name: Measure sequentially with identical archives and reversed repeat order
+        working-directory: candidate
+        run: cargo xtask switching-comparison
+      - name: Retain exact inputs, source/build provenance, and partial or complete samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matched-switching-evidence
+          path: |
+            ${{ runner.temp }}/native-switching/
+            ${{ runner.temp }}/switching-driver.log
+          if-no-files-found: error
+          retention-days: 14

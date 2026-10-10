@@ -1,16 +1,16 @@
 #![cfg(feature = "native-occt")]
 
-use nbcad_assembly::AssemblyDocumentDto;
-use nbcad_core::{BodyId, EdgeId, FeatureId};
-use nbcad_occt::{
+use limo_cad_assembly::AssemblyDocumentDto;
+use limo_cad_core::{BodyId, EdgeId, FeatureId};
+use limo_cad_occt::{
     drawing_export::{export_sheet, DrawingExportFormat, DrawingExportRequest},
     project_drawing, OcctKernel,
 };
-use nbcad_sketch::{
+use limo_cad_sketch::{
     drawing_topology::{capture_drawing_topology, validate_drawing_topology},
     DrawingDocumentDto, SketchManager,
 };
-use nbcad_solid::{
+use limo_cad_solid::{
     BodyDto, EdgeDto, ExtrudeOperation, KernelBodyDto, KernelCurveDto, KernelExtrudeJobDto,
     KernelJobDto, KernelProfileDto, MeshDto, Point3Dto, RecomputePlanDto, SolidSceneDto,
 };
@@ -21,6 +21,7 @@ fn scene(raw: &KernelBodyDto, owner: u64) -> SolidSceneDto {
         bodies: vec![BodyDto {
             id: raw.body_id,
             topology_signature: raw.topology_signature.clone(),
+            display_warnings: Vec::new(),
             name: "Native box".into(),
             feature_id: FeatureId(owner),
             mesh: MeshDto {

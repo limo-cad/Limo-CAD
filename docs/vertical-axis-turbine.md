@@ -22,8 +22,8 @@ not separate execution modes. The equivalent command uses `--session <id>` and
 `--present --speed 1`; independent `--repeat` checks run headlessly.
 Do not replay into an unrelated working document.
 
-The reviewed JSONC lives in `examples/scripts/vertical-axis-turbine.nbcad.jsonc`.
-`cargo run -p nbcad-recipes --example author_turbine` regenerates it from the Rust
+The reviewed JSONC lives in `examples/scripts/vertical-axis-turbine.limo.jsonc`.
+`cargo run -p limo-cad-recipes --example author_turbine` regenerates it from the Rust
 authoring helper. That helper performs geometry calculations and emits ordinary
 MCP commands; the existing native interpreter performs all CAD operations.
 Commit the helper and generated source together. Returned topology references,
@@ -137,7 +137,7 @@ PETG is the baseline. Start with a 0.4 mm nozzle and 0.2 mm layers as a
 provisional process; qualify the actual filament and profile. The recipe's
 `print_plates` export contains eleven native one-part plates. Each selects one
 real occurrence, upright at [110, 110, 0], with the other occurrences hidden.
-The acceptance output writes these as `<part-id>.nbcad` and `<part-id>.3mf`.
+The acceptance output writes these as `<part-id>.limo` and `<part-id>.3mf`.
 Print the stage plate twice; the other ten plates each supply one part.
 Open a supplied plate model and export its visible assembly, or use its supplied
 3MF directly. Keep the native placement when slicing. A raw **Part coordinates**

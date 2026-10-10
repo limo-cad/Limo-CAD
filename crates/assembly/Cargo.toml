@@ -1,15 +1,15 @@
 [package]
-name = "nbcad-assembly"
+name = "limo-cad-assembly"
 version.workspace = true
-edition = "2021"
-description = "noBS CAD host-neutral assembly and joint intent model"
+edition.workspace = true
+description = "Limo CAD host-neutral assembly and joint intent model"
 license = "LGPL-2.1-or-later"
-repository = "https://github.com/limo-cad/Limo-CAD"
+repository.workspace = true
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-nbcad-core = { path = "../core" }
-nbcad-solid = { path = "../solid" }
+serde = { workspace = true, features = ["derive"] }
+limo-cad-core = { path = "../core" }
+limo-cad-solid = { path = "../solid" }
 
 [dev-dependencies]
-serde_json = { version = "1", features = ["float_roundtrip"] }
+serde_json = { workspace = true, features = ["float_roundtrip"] }

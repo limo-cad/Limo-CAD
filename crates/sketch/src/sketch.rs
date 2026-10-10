@@ -1,9 +1,9 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use nbcad_core::EdgeId;
+use limo_cad_core::EdgeId;
 
 use crate::constraint::{Constraint, ConstraintId, ConstraintKind};
 use crate::entity::{Entity, EntityId};
@@ -63,7 +63,7 @@ impl std::error::Error for SolveError {}
 /// for undo/redo. Cheap at sketch scale and exact by construction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SketchSnapshot {
-    #[serde(default)]
+    #[serde(default, serialize_with = "serialize_constraint_map")]
     offset_sides: HashMap<ConstraintId, f64>,
     #[serde(default)]
     reference_edges: Vec<crate::dto::ProjectedEdgeDto>,
@@ -72,16 +72,29 @@ pub struct SketchSnapshot {
     #[serde(default)]
     generated_points: BTreeSet<EntityId>,
     constraints: Vec<(ConstraintId, Constraint)>,
+    #[serde(serialize_with = "serialize_constraint_map")]
     fix_targets: HashMap<ConstraintId, Vec<f64>>,
     params: ParamTable,
+    #[serde(serialize_with = "serialize_constraint_map")]
     dim_params: HashMap<ConstraintId, ParamId>,
+    #[serde(serialize_with = "serialize_constraint_map")]
     dim_placements: HashMap<ConstraintId, Vec2>,
     /// Added after the original driving-only snapshot format. Missing entries
     /// deserialize as driving dimensions for backwards compatibility.
-    #[serde(default)]
+    #[serde(default, serialize_with = "serialize_constraint_map")]
     dim_modes: HashMap<ConstraintId, DimensionMode>,
     next_entity: u64,
     next_constraint: u64,
+}
+
+/// Hash seeds change when saved sketches are loaded into another document or
+/// MCP reader. Keep model exports byte-stable without changing solver lookup
+/// storage or the schema used by existing archives.
+fn serialize_constraint_map<S: serde::Serializer, V: Serialize>(
+    map: &HashMap<ConstraintId, V>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    map.iter().collect::<BTreeMap<_, _>>().serialize(serializer)
 }
 
 impl SketchSnapshot {
@@ -122,8 +135,7 @@ pub struct Sketch {
     /// dimensions without an entry remain driving by default.
     dim_modes: HashMap<ConstraintId, DimensionMode>,
     next_entity: u64,
-    // Kept outside undo snapshots: branching after Undo must not recycle an
-    // identity still referenced by a saved region or a downstream feature.
+
     entity_id_high_water: u64,
     next_constraint: u64,
 }
@@ -145,8 +157,6 @@ impl Sketch {
     pub(crate) fn refresh_reference_midpoints(&mut self, targets: &HashMap<EdgeId, Vec2>) -> bool {
         refresh_reference_midpoint_constraints(&mut self.constraints, targets)
     }
-
-    // --- Entities ---
 
     pub fn add_entity(&mut self, entity: Entity) -> EntityId {
         self.next_entity = self.next_entity.max(self.entity_id_high_water) + 1;
@@ -301,7 +311,7 @@ impl Sketch {
             return Vec::new();
         }
         let mut removed = vec![id];
-        // Transitively collect entities referencing already-removed ones.
+
         loop {
             let before = removed.len();
             for (eid, entity) in &self.entities {
@@ -372,8 +382,6 @@ impl Sketch {
         self.entities.len()
     }
 
-    // --- Geometry lookups (resolve shared point references) ---
-
     /// Position of a `Point` entity.
     pub fn point_position(&self, id: EntityId) -> Option<Vec2> {
         match self.entity(id) {
@@ -413,7 +421,7 @@ impl Sketch {
         for (eid, e) in self.entities() {
             if let Entity::Point { position } = e {
                 let d = position.distance(p);
-                if d <= tolerance && best.map_or(true, |(_, bd)| d < bd) {
+                if d <= tolerance && best.is_none_or(|(_, bd)| d < bd) {
                     best = Some((eid, d));
                 }
             }
@@ -433,15 +441,13 @@ impl Sketch {
                 };
                 let mid = (a + b) * 0.5;
                 let d = mid.distance(p);
-                if d <= tolerance && best.as_ref().map_or(true, |(_, _, bd)| d < *bd) {
+                if d <= tolerance && best.as_ref().is_none_or(|(_, _, bd)| d < *bd) {
                     best = Some((eid, mid, d));
                 }
             }
         }
         best.map(|(id, mid, _)| (id, mid))
     }
-
-    // --- Constraints ---
 
     pub fn add_constraint(&mut self, constraint: Constraint) -> ConstraintId {
         self.next_constraint += 1;
@@ -631,8 +637,6 @@ impl Sketch {
     pub fn fix_targets(&self, id: &ConstraintId) -> Option<&Vec<f64>> {
         self.fix_targets.get(id)
     }
-
-    // --- Parameters & dimension bindings (D9) ---
 
     pub fn params(&self) -> &ParamTable {
         &self.params
@@ -825,8 +829,6 @@ impl Sketch {
                 _ => None,
             },
             Constraint::ArcAngle { entity, .. } => match self.entity(entity) {
-                // The stored arc sweeps counter-clockwise, so its included
-                // angle is the positive remainder of start to end.
                 Some(Entity::Arc {
                     start_angle,
                     end_angle,
@@ -890,8 +892,6 @@ impl Sketch {
         })
     }
 
-    // --- Snapshot / restore (undo stack) ---
-
     pub fn snapshot(&self) -> SketchSnapshot {
         SketchSnapshot {
             offset_sides: self.offset_sides.clone(),
@@ -924,8 +924,7 @@ impl Sketch {
         self.dim_params = snapshot.dim_params;
         self.dim_placements = snapshot.dim_placements;
         self.dim_modes = snapshot.dim_modes;
-        // Normalize legacy snapshots into the explicit mode map. A dimension
-        // created by older versions is always a driving dimension.
+
         for cid in self.dim_placements.keys() {
             self.dim_modes.entry(*cid).or_default();
         }
@@ -935,7 +934,6 @@ impl Sketch {
         self.sync_dimension_constraint_values();
     }
 
-    // --- Solver API ---
     pub(crate) fn entity_id_high_water(&self) -> u64 {
         self.entity_id_high_water
     }
@@ -978,8 +976,6 @@ fn refresh_reference_midpoint_constraints(
             continue;
         };
         let Some(target) = targets.get(edge).copied() else {
-            // Preserve the last exact target when an edge is temporarily
-            // unavailable (for example while history is rolled back).
             continue;
         };
         if *position != target {
@@ -1071,8 +1067,6 @@ impl SketchSnapshot {
                 return Err(format!("duplicate or zero constraint id {}", id.0));
             }
             for reference in constraint.referenced_entities() {
-                // Entity zero is the intentional +u-axis sentinel used by
-                // angle dimensions.
                 if reference.0 != 0 && !entity_ids.contains(&reference) {
                     return Err(format!(
                         "constraint {} references missing entity {}",
@@ -1184,6 +1178,50 @@ impl SketchSnapshot {
 mod tests {
     use super::*;
 
+    #[test]
+    fn saved_dimension_and_fix_maps_keep_exact_json_after_restore() {
+        let mut sketch = Sketch::new();
+        for row in 0..8 {
+            let y = row as f64 * 10.;
+            let a = sketch.add_entity(Entity::point(0., y));
+            let b = sketch.add_entity(Entity::point(10., y));
+            let c = sketch.add_entity(Entity::point(0., y + 3.));
+            let d = sketch.add_entity(Entity::point(10., y + 3.));
+            let from = sketch.add_entity(Entity::line(a, b));
+            let to = sketch.add_entity(Entity::line(c, d));
+            let dimension = sketch.add_constraint(Constraint::Distance {
+                from,
+                to: Some(to),
+                value: 3.,
+            });
+            let parameter = sketch
+                .params_mut()
+                .add(crate::params::ParamKind::Length, None, 3.)
+                .unwrap();
+            sketch.bind_dimension(dimension, parameter, Vec2::new(12., y + 1.5));
+            sketch.set_offset_side(dimension, 1.);
+            let fixed = sketch.add_constraint(Constraint::Fix { entity: a });
+            sketch.set_fix_targets(fixed, vec![0., y]);
+        }
+        let snapshot = sketch.snapshot();
+        snapshot.validate().unwrap();
+        let expected = serde_json::to_string_pretty(&snapshot).unwrap();
+        let expected_value: serde_json::Value = serde_json::from_str(&expected).unwrap();
+        for _ in 0..16 {
+            let decoded: SketchSnapshot = serde_json::from_str(&expected).unwrap();
+            decoded.validate().unwrap();
+            let mut reopened = Sketch::new();
+            reopened.restore(decoded);
+            let actual = serde_json::to_string_pretty(&reopened.snapshot()).unwrap();
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&actual).unwrap(),
+                expected_value,
+                "Restore must preserve every authored value"
+            );
+            assert_eq!(actual, expected, "Restore must preserve exact model JSON");
+        }
+    }
+
     /// Line (0,0)-(50,0) built from shared points, plus a circle.
     fn sample_sketch() -> (Sketch, EntityId, EntityId, EntityId, EntityId) {
         let mut s = Sketch::new();
@@ -1282,10 +1320,10 @@ mod tests {
         assert_eq!(s.constraint_count(), 3);
 
         let removed = s.remove_entity(p1);
-        // Point + the line referencing it are gone; the circle survives.
+
         assert!(removed.contains(&p1) && removed.contains(&line));
-        assert_eq!(s.entity_count(), 2); // other endpoint point + circle
-                                         // Only the radius constraint (circle-only) survives.
+        assert_eq!(s.entity_count(), 2);
+
         assert_eq!(s.constraint_count(), 1);
         assert!(matches!(
             s.constraints().next().map(|(_, c)| c),
@@ -1336,7 +1374,7 @@ mod tests {
         assert_eq!(s.entity_count(), 4);
         assert!(s.entity(line).is_some());
         assert_eq!(s.constraint_count(), 1);
-        // Ids continue monotonically after a restore.
+
         let p3 = s.add_entity(Entity::point(1.0, 1.0));
         assert!(p3.0 > line.0);
     }
@@ -1390,8 +1428,6 @@ mod tests {
 
     #[test]
     fn degrees_of_freedom_uses_solver_rank() {
-        // Two shared endpoint points have four unknowns; horizontal removes
-        // one degree of freedom.
         let (mut s, _, _, line, circle) = sample_sketch();
         s.remove_entity(circle);
         s.add_constraint(Constraint::Horizontal { entity: line });

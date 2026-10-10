@@ -1,8 +1,8 @@
 //! One authoritative drawing path for definition geometry and placed assemblies.
 use super::*;
-use nbcad_assembly::{AssemblyDocumentDto, InstanceBodyPoseDto, OccurrenceId};
-use nbcad_sketch::{DrawingLineRefDto, DrawingTopologyAnchorRefDto, DrawingViewScope};
-use nbcad_solid::BodyDto;
+use limo_cad_assembly::{AssemblyDocumentDto, InstanceBodyPoseDto, OccurrenceId};
+use limo_cad_sketch::{DrawingLineRefDto, DrawingTopologyAnchorRefDto, DrawingViewScope};
+use limo_cad_solid::BodyDto;
 
 /// Resolve instance selection and project all selected exact shapes together,
 /// so one occurrence can hide another. Used by desktop and MCP hosts alike.
@@ -22,7 +22,7 @@ pub fn project_drawing(
     projection.anchors = drawing_projection_anchors(scene, &request, &projection)?;
     projection.circles = drawing_projection_circles(scene, &request, &projection)?;
     projection.topology_signatures =
-        nbcad_sketch::drawing_topology::drawing_topology_signatures(scene);
+        limo_cad_sketch::drawing_topology::drawing_topology_signatures(scene);
     Ok(projection)
 }
 
@@ -70,8 +70,7 @@ fn resolve_request(
             ));
         }
     }
-    // A subassembly selection contains every descendant instance, at its
-    // current world placement, without copying any retained part geometry.
+
     loop {
         let before = selected.len();
         for node in &assembly.component_structure.occurrences {
@@ -201,7 +200,7 @@ pub fn resolve_drawing_anchor(
     assembly: &AssemblyDocumentDto,
     reference: &DrawingTopologyAnchorRefDto,
 ) -> Result<[f64; 3], OcctError> {
-    nbcad_sketch::drawing_topology::validate_drawing_reference_topology(
+    limo_cad_sketch::drawing_topology::validate_drawing_reference_topology(
         scene,
         reference.body_id,
         reference.topology_signature.as_deref(),
@@ -214,8 +213,6 @@ pub fn resolve_drawing_anchor(
         &reference.edge_key,
     )?;
     let point = if reference.circle_center {
-        // Native circles/arcs retain an exact center, including short thread
-        // rim arcs whose display polyline has too few points for circle fitting.
         if let Some(circle) = edge.circle {
             [circle.center.x, circle.center.y, circle.center.z]
         } else {
@@ -230,14 +227,64 @@ pub fn resolve_drawing_anchor(
         }
     } else {
         let point = match reference.endpoint {
-            nbcad_sketch::DrawingEdgeEndpoint::Start => edge.points.first(),
-            nbcad_sketch::DrawingEdgeEndpoint::End => edge.points.last(),
+            limo_cad_sketch::DrawingEdgeEndpoint::Start => edge.points.first(),
+            limo_cad_sketch::DrawingEdgeEndpoint::End => edge.points.last(),
         }
         .ok_or_else(|| OcctError("Drawing edge reference has no endpoints".into()))?;
         [point.x, point.y, point.z]
     };
     let pose = reference_pose(assembly, scene, reference.occurrence_id, reference.body_id)?;
     placed_point(point, pose.as_ref())
+}
+
+pub fn resolve_drawing_line(
+    scene: &SolidSceneDto,
+    assembly: &AssemblyDocumentDto,
+    reference: &DrawingLineRefDto,
+) -> Result<[[f64; 3]; 2], OcctError> {
+    limo_cad_sketch::drawing_topology::validate_drawing_reference_topology(
+        scene,
+        reference.body_id,
+        reference.topology_signature.as_deref(),
+    )
+    .map_err(OcctError)?;
+    let edge = reference_edge(
+        scene,
+        reference.body_id,
+        reference.edge_id,
+        &reference.edge_key,
+    )?;
+    let first = edge
+        .points
+        .first()
+        .ok_or_else(|| OcctError("Drawing edge reference has no endpoints".into()))?;
+    let last = edge
+        .points
+        .last()
+        .ok_or_else(|| OcctError("Drawing edge reference has no endpoints".into()))?;
+    let pose = reference_pose(assembly, scene, reference.occurrence_id, reference.body_id)?;
+    Ok([
+        placed_point([first.x, first.y, first.z], pose.as_ref())?,
+        placed_point([last.x, last.y, last.z], pose.as_ref())?,
+    ])
+}
+
+fn reference_edge<'a>(
+    scene: &'a SolidSceneDto,
+    body: BodyId,
+    edge: EdgeId,
+    key: &str,
+) -> Result<&'a limo_cad_solid::EdgeDto, OcctError> {
+    let body = scene
+        .bodies
+        .iter()
+        .find(|value| value.id == body)
+        .ok_or_else(|| OcctError("Drawing reference body is missing".into()))?;
+    body.edges
+        .iter()
+        .find(|value| value.id == edge && value.key == key)
+        .or_else(|| body.edges.iter().find(|value| value.key == key))
+        .ok_or_else(|| OcctError("Drawing reference topology is stale".into()))
 }
 
 #[cfg(test)]
@@ -272,54 +319,4 @@ mod tests {
             "insufficient samples and stale fallback must not invent a circle center"
         );
     }
-}
-
-pub fn resolve_drawing_line(
-    scene: &SolidSceneDto,
-    assembly: &AssemblyDocumentDto,
-    reference: &DrawingLineRefDto,
-) -> Result<[[f64; 3]; 2], OcctError> {
-    nbcad_sketch::drawing_topology::validate_drawing_reference_topology(
-        scene,
-        reference.body_id,
-        reference.topology_signature.as_deref(),
-    )
-    .map_err(OcctError)?;
-    let edge = reference_edge(
-        scene,
-        reference.body_id,
-        reference.edge_id,
-        &reference.edge_key,
-    )?;
-    let first = edge
-        .points
-        .first()
-        .ok_or_else(|| OcctError("Drawing edge reference has no endpoints".into()))?;
-    let last = edge
-        .points
-        .last()
-        .ok_or_else(|| OcctError("Drawing edge reference has no endpoints".into()))?;
-    let pose = reference_pose(assembly, scene, reference.occurrence_id, reference.body_id)?;
-    Ok([
-        placed_point([first.x, first.y, first.z], pose.as_ref())?,
-        placed_point([last.x, last.y, last.z], pose.as_ref())?,
-    ])
-}
-
-fn reference_edge<'a>(
-    scene: &'a SolidSceneDto,
-    body: BodyId,
-    edge: EdgeId,
-    key: &str,
-) -> Result<&'a nbcad_solid::EdgeDto, OcctError> {
-    let body = scene
-        .bodies
-        .iter()
-        .find(|value| value.id == body)
-        .ok_or_else(|| OcctError("Drawing reference body is missing".into()))?;
-    body.edges
-        .iter()
-        .find(|value| value.id == edge && value.key == key)
-        .or_else(|| body.edges.iter().find(|value| value.key == key))
-        .ok_or_else(|| OcctError("Drawing reference topology is stale".into()))
 }

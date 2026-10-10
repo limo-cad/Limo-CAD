@@ -5,7 +5,7 @@ base and a 24 × 4 mm printed lead screw**. It replaces the earlier 60 mm design
 whose screw could not be assembled as prescribed and whose moving jaw could hit
 mounting hardware. Earlier replay records do not qualify the replacement.
 
-The source is [d-screw-vise.nbcad.jsonc](../examples/scripts/d-screw-vise.nbcad.jsonc).
+The source is [d-screw-vise.limo.jsonc](../examples/scripts/d-screw-vise.limo.jsonc).
 Choose it in **Scripts → Run in new design**. For headless replay and comparison,
 use the [developer replay guide](DEVELOPMENT.md#replay-a-recipe) with recipe ID
 `d-screw-vise`.
@@ -101,7 +101,7 @@ The same native feature can be created and edited in the normal thread dialogs
 or through MCP. The browser fallback explicitly rejects this custom form rather
 than replacing it with a different thread shape.
 
-Start with [d-screw-vise-fit](../examples/scripts/d-screw-vise-fit.nbcad.jsonc): a
+Start with [d-screw-vise-fit](../examples/scripts/d-screw-vise-fit.limo.jsonc): a
 40 mm male screw, 28 mm female engagement, and male/female specimens of the actual
 captured guide. Use the intended nozzle, layer height, wall settings and material.
 Measure fit, rocking and turning effort before scaling up to the full parts.
@@ -169,7 +169,7 @@ subsequent label-placement correction passed focused native/MCP checks and
 visual review of all seven sheets; all 14 corrected SVG/DXF exports repeated
 exactly without changing the saved model. Results and source/artifact hashes are in the
 [validation record](manufacturing/d-screw-vise.validation.json). Retain artifacts
-by setting `NBCAD_RECIPE_ARTIFACT_DIR` before running
+by setting `LIMO_CAD_RECIPE_ARTIFACT_DIR` before running
 `cargo test --manifest-path mcp-server/Cargo.toml --test recipes d_screw_vise`.
 
 Physical qualification must measure turning effort, backlash, off-centre jaw

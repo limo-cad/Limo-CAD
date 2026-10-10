@@ -75,7 +75,7 @@ fn contour_and_pocket_support_corner_end_mills_but_not_drills_or_chamfer_mills()
                 "{kind:?} must not side-mill with center_cutting checked"
             );
             assert!(plan_setup(&doc, 1).is_err());
-            // The valid library tool can be saved, but its consumer cannot run.
+
             doc.validate_for_editing().unwrap();
         }
     }

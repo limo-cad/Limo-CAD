@@ -2,13 +2,51 @@
 //! primitives and current exact projection; saved fallback coordinates never
 //! substitute for lost topology. Files remain exports of editable drawing DTOs.
 use crate::{DrawingProjectionDto, DrawingProjectionRequest, DrawingSectionPlaneDto};
-use nbcad_sketch::*;
-use nbcad_solid::SolidSceneDto;
+use limo_cad_sketch::*;
+use limo_cad_solid::SolidSceneDto;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
+#[cfg(test)]
+use crate as occt;
+#[cfg(test)]
+#[path = "../tests/support/center_export.rs"]
+mod center_fixture;
+#[cfg(test)]
+#[path = "../tests/support/straight_export.rs"]
+mod straight_fixture;
+
+mod advanced;
+#[cfg(test)]
+mod advanced_tests;
+mod centers;
+#[cfg(test)]
+mod centers_tests;
+mod cloud;
+#[cfg(test)]
+mod cloud_tests;
+mod font;
+mod graphics;
+mod hole;
+#[cfg(test)]
+mod hole_tests;
+mod section_graphics;
+mod series;
+#[cfg(test)]
+mod series_tests;
+mod source_graphics;
+mod straight;
+#[cfg(test)]
+mod straight_tests;
+mod text_outlines;
+pub use text_outlines::{load_outline_fonts, resolve_svg_text};
 mod title_block;
+pub use graphics::{HatchPattern, PaperGraphicsBudget, PaperGraphicsLimits, PaperGraphicsUsage};
+pub use section_graphics::{section_hatch, section_hatch_tiled};
+pub use source_graphics::derived_source_graphics;
+#[cfg(test)]
+mod graphics_tests;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -24,8 +62,10 @@ pub struct DrawingExportRequest {
 }
 
 type P = [f64; 2];
-#[derive(Debug)]
-enum Primitive {
+/// Borrowable paper-millimetre presentation shared with the native sheet.
+/// This is deliberately not a serialized document or a second drawing model.
+#[derive(Debug, PartialEq)]
+pub enum PaperPrimitive {
     Line {
         points: Vec<P>,
         layer: &'static str,
@@ -33,6 +73,7 @@ enum Primitive {
         dash: Vec<f64>,
     },
     Text {
+        layer: &'static str,
         point: P,
         value: String,
         height: f64,
@@ -45,6 +86,8 @@ enum Primitive {
         layer: &'static str,
     },
 }
+type Primitive = PaperPrimitive;
+const TEXT_MASK: &str = "TEXT_MASK";
 struct Paper {
     size: P,
     items: Vec<Primitive>,
@@ -73,6 +116,7 @@ impl Paper {
         for (i, line) in value.into().lines().enumerate() {
             let down = i as f64 * height * 1.4;
             self.items.push(Primitive::Text {
+                layer: "ANNOTATION",
                 point: [point[0] - down * angle.sin(), point[1] + down * angle.cos()],
                 value: line.into(),
                 height,
@@ -82,16 +126,6 @@ impl Paper {
             });
         }
     }
-    fn source_label(&mut self, point: P, value: &str, height: f64) {
-        self.items.push(Primitive::Text {
-            point,
-            value: value.into(),
-            height,
-            centered: true,
-            rotation_deg: 0.,
-            fitted_width: None,
-        });
-    }
     fn fitted_text(&mut self, point: P, value: impl Into<String>, height: f64, width: f64) {
         let value = value.into();
         let count = value
@@ -100,7 +134,7 @@ impl Paper {
             .max()
             .unwrap_or(1)
             .max(1);
-        // Conservative font advance avoids adjacent title fields running together.
+
         self.text(point, value, height.min(width / (count as f64 * 0.65)));
     }
 
@@ -120,6 +154,7 @@ impl Paper {
             }
             let width = title_block::text_width(&line, fitted.height);
             self.items.push(Primitive::Text {
+                layer: "ANNOTATION",
                 point: [
                     origin[0] + 1.5,
                     origin[1]
@@ -137,6 +172,213 @@ impl Paper {
     }
 }
 
+struct Marks {
+    entries: Vec<(usize, crate::drawing_presentation::layout::Motion, u32)>,
+    next: u32,
+}
+impl Marks {
+    fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            next: 1,
+        }
+    }
+    fn cover(
+        &mut self,
+        start: usize,
+        end: usize,
+        motion: crate::drawing_presentation::layout::Motion,
+    ) {
+        if start >= end {
+            return;
+        }
+        let group = self.next;
+        self.next += 1;
+        for index in start..end {
+            self.entries.push((index, motion, group));
+        }
+    }
+    fn weld_labels(&mut self, start: usize, items: &[Primitive]) {
+        let group = self.next;
+        let mut boxes = Vec::new();
+        for (index, item) in items.iter().enumerate().skip(start) {
+            if let Primitive::Text {
+                point,
+                value,
+                height,
+                centered,
+                fitted_width,
+                ..
+            } = item
+            {
+                boxes.push(text_bounds(
+                    *point,
+                    value,
+                    *height,
+                    *centered,
+                    *fitted_width,
+                ));
+                self.entries.push((
+                    index,
+                    crate::drawing_presentation::layout::Motion::Weld,
+                    group,
+                ));
+            }
+        }
+        if boxes.is_empty() {
+            return;
+        }
+        self.next += 1;
+        for (index, item) in items.iter().enumerate().skip(start) {
+            let Primitive::Triangle { points, layer } = item else {
+                continue;
+            };
+            if *layer != TEXT_MASK {
+                continue;
+            }
+            let center = [
+                (points[0][0] + points[1][0] + points[2][0]) / 3.,
+                (points[0][1] + points[1][1] + points[2][1]) / 3.,
+            ];
+            if boxes.iter().any(|bounds| {
+                center[0] >= bounds[0]
+                    && center[0] <= bounds[2]
+                    && center[1] >= bounds[1]
+                    && center[1] <= bounds[3]
+            }) {
+                self.entries.push((
+                    index,
+                    crate::drawing_presentation::layout::Motion::Weld,
+                    group,
+                ));
+            }
+        }
+    }
+    fn motion(&self, index: usize) -> Option<(crate::drawing_presentation::layout::Motion, u32)> {
+        self.entries
+            .iter()
+            .rev()
+            .find(|entry| entry.0 == index)
+            .map(|entry| (entry.1, entry.2))
+    }
+}
+
+fn text_bounds(
+    point: P,
+    value: &str,
+    height: f64,
+    centered: bool,
+    fitted_width: Option<f64>,
+) -> [f64; 4] {
+    let align = if centered { 0. } else { 1. };
+    let mut bounds = crate::drawing_presentation::text::label_bounds(point, value, height, align);
+    if let Some(width) = fitted_width.filter(|width| width.is_finite() && *width >= 0.) {
+        if centered {
+            bounds[0] = point[0] - width * 0.5;
+            bounds[2] = point[0] + width * 0.5;
+        } else {
+            bounds[0] = point[0];
+            bounds[2] = point[0] + width;
+        }
+    }
+    bounds
+}
+
+fn primitive_bounds(item: &Primitive) -> Option<[f64; 4]> {
+    match item {
+        Primitive::Text {
+            point,
+            value,
+            height,
+            centered,
+            fitted_width,
+            ..
+        } => Some(text_bounds(
+            *point,
+            value,
+            *height,
+            *centered,
+            *fitted_width,
+        )),
+        Primitive::Line { points, .. } => point_bounds(points),
+        Primitive::Triangle { points, .. } => point_bounds(points),
+    }
+}
+
+fn point_bounds(points: &[P]) -> Option<[f64; 4]> {
+    let mut bounds = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    if points.is_empty() {
+        return None;
+    }
+    for point in points {
+        if !point[0].is_finite() || !point[1].is_finite() {
+            return None;
+        }
+        bounds[0] = bounds[0].min(point[0]);
+        bounds[1] = bounds[1].min(point[1]);
+        bounds[2] = bounds[2].max(point[0]);
+        bounds[3] = bounds[3].max(point[1]);
+    }
+    Some(bounds)
+}
+
+fn shift_item(item: &mut Primitive, delta: [f64; 2]) {
+    if delta[0].abs() < 1e-9 && delta[1].abs() < 1e-9 {
+        return;
+    }
+    match item {
+        Primitive::Line { points, .. } => {
+            for point in points {
+                point[0] += delta[0];
+                point[1] += delta[1];
+            }
+        }
+        Primitive::Text { point, .. } => {
+            point[0] += delta[0];
+            point[1] += delta[1];
+        }
+        Primitive::Triangle { points, .. } => {
+            for point in points.iter_mut() {
+                point[0] += delta[0];
+                point[1] += delta[1];
+            }
+        }
+    }
+}
+
+fn separate_collisions(items: &mut [Primitive], marks: &Marks) {
+    use crate::drawing_presentation::layout::{Motion, Obstacle};
+    let mut obstacles = Vec::new();
+    let mut owners = Vec::new();
+    for (index, item) in items.iter().enumerate() {
+        let Some(bounds) = primitive_bounds(item) else {
+            continue;
+        };
+        if bounds.iter().any(|value| !value.is_finite()) {
+            continue;
+        }
+        let (motion, group) = marks.motion(index).unwrap_or((Motion::Fixed, 0));
+        if motion == Motion::Fixed && !matches!(item, Primitive::Text { .. }) {
+            continue;
+        }
+        obstacles.push(Obstacle {
+            bounds,
+            motion,
+            group,
+        });
+        owners.push(index);
+    }
+    let deltas = crate::drawing_presentation::layout::clearance_deltas(&obstacles);
+    for (slot, index) in owners.into_iter().enumerate() {
+        shift_item(&mut items[index], deltas[slot]);
+    }
+}
+
 /// The caller owns the kernel/session. Supplying its projection closure avoids
 /// another model load, filesystem side effects, or separate rendering process.
 pub fn export_sheet(
@@ -144,6 +386,27 @@ pub fn export_sheet(
     scene: &SolidSceneDto,
     assembly: &AssemblyDocumentDto,
     request: &DrawingExportRequest,
+    project: impl FnMut(&DrawingProjectionRequest) -> Result<DrawingProjectionDto, String>,
+) -> Result<String, String> {
+    export_sheet_with_units(
+        document,
+        scene,
+        assembly,
+        request,
+        limo_cad_core::UnitSystem::Mm,
+        project,
+    )
+}
+
+/// Export using the existing document display units; geometry stays in millimetres.
+/// The legacy host-neutral helper above defaults to millimetres. Hosts must pass
+/// their document settings here rather than inventing a sheet-level unit system.
+pub fn export_sheet_with_units(
+    document: &DrawingDocumentDto,
+    scene: &SolidSceneDto,
+    assembly: &AssemblyDocumentDto,
+    request: &DrawingExportRequest,
+    units: limo_cad_core::UnitSystem,
     mut project: impl FnMut(&DrawingProjectionRequest) -> Result<DrawingProjectionDto, String>,
 ) -> Result<String, String> {
     document.validate()?;
@@ -155,11 +418,12 @@ pub fn export_sheet(
         .iter()
         .find(|s| s.id == request.sheet_id)
         .ok_or("Drawing sheet does not exist")?;
-    nbcad_sketch::drawing_topology::validate_drawing_sheet_topology(sheet, scene)?;
+    limo_cad_sketch::drawing_topology::validate_drawing_sheet_topology(sheet, scene)?;
     let mut paper = Paper {
         size: sheet_size(sheet),
         items: Vec::new(),
     };
+    let mut marks = Marks::new();
     let [w, h] = paper.size;
     paper.line(
         vec![
@@ -172,8 +436,9 @@ pub fn export_sheet(
         "BORDER",
         &sheet.style.visible,
     );
-    draw_title_and_revisions(&mut paper, sheet)?;
+    draw_title_and_revisions(&mut paper, sheet, units, &mut marks)?;
     let mut projections = BTreeMap::new();
+    let mut graphics_budget = PaperGraphicsBudget::default();
     for view in &sheet.views {
         let req = projection_request(view, &sheet.views, scene, assembly)?;
         let projection = project(&req)?;
@@ -222,14 +487,16 @@ pub fn export_sheet(
             },
         ) = &view.derivation
         {
-            hatch_section(
-                &mut paper,
+            paper.items.extend(section_hatch(
                 view,
                 &projection,
-                *hatch_angle_deg,
-                *hatch_spacing_mm,
                 &sheet.style.hatch,
-            )?;
+                HatchPattern {
+                    angle_deg: *hatch_angle_deg,
+                    spacing_mm: *hatch_spacing_mm,
+                },
+                &mut graphics_budget,
+            )?);
         }
         if let Some(DrawingViewDerivationDto::Detail { center, radius, .. }) = &view.derivation {
             let c = paper_point(view, anchor_point(center, &projection)?, &projection);
@@ -267,9 +534,14 @@ pub fn export_sheet(
                 );
             }
         }
-        let label_y = view.position[1]
-            + (projection.bounds[3] - projection.bounds[1]) * 0.5 * view.scale
-            + 6.;
+        let paper_height = (projection.bounds[3] - projection.bounds[1]).abs() * view.scale;
+        let label_y = crate::drawing_presentation::layout::view_caption_baseline(
+            view.position[1],
+            paper_height,
+            sheet.style.small_text_height_mm,
+            dimension_caption_ink(sheet, view, &projection),
+        );
+        let label_y = centers::caption_baseline(label_y, sheet, view, &projection)?;
         paper.text(
             [
                 view.position[0] - (projection.bounds[2] - projection.bounds[0]) * 0.5 * view.scale,
@@ -280,11 +552,48 @@ pub fn export_sheet(
         );
         projections.insert(view.id, projection);
     }
-    draw_derived_sources(&mut paper, sheet, &projections, scene, assembly)?;
+    draw_derived_sources(
+        &mut paper,
+        sheet,
+        &projections,
+        scene,
+        assembly,
+        &mut graphics_budget,
+    )?;
     for annotation in &sheet.annotations {
-        draw_annotation(&mut paper, sheet, &projections, annotation)?;
+        let start = paper.items.len();
+        if let DrawingAnnotationDto::RevisionCloud {
+            revision, points, ..
+        } = annotation
+        {
+            let batch = cloud::draw(paper.size, revision, points, &mut graphics_budget)?;
+            graphics_budget.append(&mut paper.items, batch)?;
+            marks.cover(
+                start,
+                paper.items.len(),
+                crate::drawing_presentation::layout::Motion::Cloud,
+            );
+        } else if matches!(
+            annotation,
+            DrawingAnnotationDto::ChainDimension { .. }
+                | DrawingAnnotationDto::OrdinateDimension { .. }
+        ) {
+            let batch = series::draw(sheet, &projections, annotation, units, &mut graphics_budget)?;
+            graphics_budget.append(&mut paper.items, batch)?;
+        } else if advanced::supports(annotation) {
+            let weld = matches!(annotation, DrawingAnnotationDto::WeldSymbol { .. });
+            let batch =
+                advanced::draw(sheet, &projections, annotation, units, &mut graphics_budget)?;
+            graphics_budget.append(&mut paper.items, batch)?;
+            if weld {
+                marks.weld_labels(start, &paper.items);
+            }
+        } else {
+            draw_annotation(&mut paper, sheet, &projections, annotation, units)?;
+        }
     }
     if !sheet.bom.is_empty() {
+        let start = paper.items.len();
         let origin = sheet.bom_table_position.unwrap_or([14., 18.]);
         paper.text(
             origin,
@@ -306,10 +615,16 @@ pub fn export_sheet(
                 sheet.style.small_text_height_mm,
             );
         }
+        marks.cover(
+            start,
+            paper.items.len(),
+            crate::drawing_presentation::layout::Motion::Table,
+        );
     }
+    separate_collisions(&mut paper.items, &marks);
     match request.format {
         DrawingExportFormat::Svg => Ok(svg(&paper, &sheet.style.font_family)),
-        DrawingExportFormat::Dxf => Ok(dxf(&paper)),
+        DrawingExportFormat::Dxf => dxf(&paper, &sheet.style.font_family),
     }
 }
 
@@ -322,167 +637,17 @@ fn draw_derived_sources(
     projections: &BTreeMap<u64, DrawingProjectionDto>,
     scene: &SolidSceneDto,
     assembly: &AssemblyDocumentDto,
+    budget: &mut PaperGraphicsBudget,
 ) -> Result<(), String> {
     for child in &sheet.views {
-        let Some(derivation) = &child.derivation else {
-            continue;
-        };
-        let parent_id = match derivation {
-            DrawingViewDerivationDto::Section { parent_view_id, .. }
-            | DrawingViewDerivationDto::RemovedSection { parent_view_id, .. }
-            | DrawingViewDerivationDto::Detail { parent_view_id, .. }
-            | DrawingViewDerivationDto::Auxiliary { parent_view_id, .. }
-            | DrawingViewDerivationDto::Broken { parent_view_id, .. } => *parent_view_id,
-        };
-        let (parent, projection) = view_projection(parent_id, sheet, projections)?;
-        let request = projection_request(parent, &sheet.views, scene, assembly)?;
-        let direction = norm(request.direction)?;
-        let right = norm(cross(request.up, direction))?;
-        let up = norm(cross(direction, right))?;
-        let source = |reference: &DrawingTopologyAnchorRefDto| -> Result<P, String> {
-            if !projection.anchors.iter().any(|anchor| {
-                anchor.occurrence_id == reference.occurrence_id
-                    && anchor.body_id == reference.body_id
-                    && anchor.edge_id == reference.edge_id
-                    && anchor.edge_key == reference.edge_key
-            }) {
-                return Err(
-                    "Derived source reference is missing from its parent projection".into(),
-                );
-            }
-            let point = model_anchor(reference, scene, assembly)?;
-            Ok(paper_point(
-                parent,
-                [dot(point, right), dot(point, up)],
-                projection,
-            ))
-        };
-        match derivation {
-            DrawingViewDerivationDto::Section {
-                first,
-                second,
-                label,
-                ..
-            }
-            | DrawingViewDerivationDto::RemovedSection {
-                first,
-                second,
-                label,
-                ..
-            } => {
-                let [a, b] =
-                    section_source_extent(source(first)?, source(second)?, parent, projection)?;
-                let u = source_direction(a, b)?;
-                let normal = [-u[1], u[0]];
-                paper.line(vec![a, b], "CUTTING_PLANE", &sheet.style.cutting_plane);
-                for point in [a, b] {
-                    source_arrow(
-                        paper,
-                        point,
-                        [point[0] + normal[0] * 5., point[1] + normal[1] * 5.],
-                        2.4,
-                        "CUTTING_PLANE",
-                    );
-                }
-                let short_label = label.split_whitespace().last().unwrap_or(label);
-                for (point, sign) in [(a, -1.), (b, 1.)] {
-                    paper.source_label(
-                        [point[0] + u[0] * sign * 4., point[1] + u[1] * sign * 4.],
-                        short_label,
-                        sheet.style.text_height_mm,
-                    );
-                }
-            }
-            DrawingViewDerivationDto::Detail {
-                center,
-                radius,
-                label,
-                ..
-            } => {
-                let center = source(center)?;
-                let radius = radius * parent.scale;
-                paper.line(
-                    circle_polyline(center, radius),
-                    "PHANTOM",
-                    &sheet.style.phantom,
-                );
-                paper.text(
-                    [center[0] + radius + 3., center[1] - radius - 1.],
-                    label,
-                    sheet.style.text_height_mm,
-                );
-            }
-            DrawingViewDerivationDto::Auxiliary {
-                reference,
-                flipped,
-                label,
-                ..
-            } => {
-                let anchor = |endpoint| DrawingTopologyAnchorRefDto {
-                    topology_signature: reference.topology_signature.clone(),
-                    occurrence_id: reference.occurrence_id,
-                    body_id: reference.body_id,
-                    edge_id: reference.edge_id,
-                    edge_key: reference.edge_key.clone(),
-                    endpoint,
-                    fallback_point: [0.; 3],
-                    circle_center: false,
-                };
-                let a = source(&anchor(DrawingEdgeEndpoint::Start))?;
-                let b = source(&anchor(DrawingEdgeEndpoint::End))?;
-                let u = source_direction(a, b)?;
-                let normal = [-u[1], u[0]];
-                let center = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
-                let sign = if *flipped { -1. } else { 1. };
-                let tip = [
-                    center[0] + normal[0] * sign * 8.,
-                    center[1] + normal[1] * sign * 8.,
-                ];
-                paper.line(vec![a, b], "PHANTOM", &sheet.style.phantom);
-                paper.line(
-                    vec![center, tip],
-                    "AUXILIARY",
-                    &DrawingLineStyleDto {
-                        width_mm: 0.48,
-                        dash_mm: vec![],
-                    },
-                );
-                source_arrow(paper, tip, center, 2.2, "AUXILIARY");
-                paper.source_label(
-                    [tip[0] + normal[0] * 3., tip[1] + normal[1] * 3.],
-                    label,
-                    sheet.style.text_height_mm,
-                );
-            }
-            DrawingViewDerivationDto::Broken { axis, .. } => {
-                let k = if *axis == DrawingBreakAxis::Horizontal {
-                    0
-                } else {
-                    1
-                };
-                let extent =
-                    (projection.bounds[3 - k] - projection.bounds[1 - k]) * parent.scale * 0.5;
-                let along = parent.position[k];
-                let across = parent.position[1 - k];
-                let points = vec![
-                    [along, across - extent],
-                    [along, across - 4.],
-                    [along - 2., across - 2.],
-                    [along + 2., across],
-                    [along - 2., across + 2.],
-                    [along, across + 4.],
-                    [along, across + extent],
-                ];
-                paper.line(
-                    points
-                        .into_iter()
-                        .map(|p| if k == 0 { p } else { [p[1], p[0]] })
-                        .collect(),
-                    "BREAK",
-                    &sheet.style.break_line,
-                );
-            }
-        }
+        paper.items.extend(derived_source_graphics(
+            child,
+            sheet,
+            |id| projections.get(&id),
+            scene,
+            assembly,
+            budget,
+        )?);
     }
     Ok(())
 }
@@ -495,8 +660,6 @@ fn source_direction(a: P, b: P) -> Result<P, String> {
     Ok([(b[0] - a[0]) / length, (b[1] - a[1]) / length])
 }
 
-// The reference pair defines the plane, not the paper line's length. Carry the
-// indicator across the entire parent view, with arrows outside its silhouette.
 fn section_source_extent(
     a: P,
     b: P,
@@ -528,22 +691,12 @@ fn section_source_extent(
     Ok([low, high].map(|t| [a[0] + u[0] * t, a[1] + u[1] * t]))
 }
 
-fn source_arrow(paper: &mut Paper, tip: P, toward: P, size: f64, layer: &'static str) {
-    if let Ok(u) = source_direction(tip, toward) {
-        let base = [tip[0] + u[0] * size, tip[1] + u[1] * size];
-        let width = size * 0.38;
-        paper.items.push(Primitive::Triangle {
-            points: [
-                tip,
-                [base[0] - u[1] * width, base[1] + u[0] * width],
-                [base[0] + u[1] * width, base[1] - u[0] * width],
-            ],
-            layer,
-        });
-    }
-}
-
-fn draw_title_and_revisions(paper: &mut Paper, sheet: &DrawingSheetDto) -> Result<(), String> {
+fn draw_title_and_revisions(
+    paper: &mut Paper,
+    sheet: &DrawingSheetDto,
+    units: limo_cad_core::UnitSystem,
+    marks: &mut Marks,
+) -> Result<(), String> {
     let [w, h] = paper.size;
     let width = 180_f64.min(w - 20.);
     let x = w - 10. - width;
@@ -587,8 +740,10 @@ fn draw_title_and_revisions(paper: &mut Paper, sheet: &DrawingSheetDto) -> Resul
     paper.title_cell(
         "standard / projection / release status",
         &format!(
-            "DIMENSIONS: mm   {:?}   {method}   RELEASE: {:?}",
-            sheet.standard, sheet.release.status
+            "DIMENSIONS: {}   {:?}   {method}   RELEASE: {:?}",
+            crate::drawing_presentation::text::unit_label(units),
+            sheet.standard,
+            sheet.release.status
         ),
         [x, y + 12.],
         [width, 4.],
@@ -642,6 +797,7 @@ fn draw_title_and_revisions(paper: &mut Paper, sheet: &DrawingSheetDto) -> Resul
     )?;
 
     if let Some([rx, ry]) = sheet.revision_table_position {
+        let table_start = paper.items.len();
         let rw = 220_f64.min(w - 10. - rx);
         let bottom = ry + 6. + sheet.revisions.len() as f64 * 15.;
         if rw < 40. || rx < 10. || ry < 10. || bottom > h - 10. {
@@ -685,6 +841,11 @@ fn draw_title_and_revisions(paper: &mut Paper, sheet: &DrawingSheetDto) -> Resul
                 rw - 4.,
             );
         }
+        marks.cover(
+            table_start,
+            paper.items.len(),
+            crate::drawing_presentation::layout::Motion::Table,
+        );
     }
     Ok(())
 }
@@ -753,13 +914,14 @@ pub fn projection_request(
     scene: &SolidSceneDto,
     assembly: &AssemblyDocumentDto,
 ) -> Result<DrawingProjectionRequest, String> {
+    type ProjectionBasis = ([f64; 3], [f64; 3], Option<DrawingSectionPlaneDto>);
     fn resolve(
         v: &DrawingViewDto,
         views: &[DrawingViewDto],
         scene: &SolidSceneDto,
         assembly: &AssemblyDocumentDto,
         path: &mut Vec<u64>,
-    ) -> Result<([f64; 3], [f64; 3], Option<DrawingSectionPlaneDto>), String> {
+    ) -> Result<ProjectionBasis, String> {
         if path.contains(&v.id) {
             return Err("Drawing view dependency cycle".into());
         }
@@ -785,8 +947,13 @@ pub fn projection_request(
                 let (pd, _, _) = resolve(parent, views, scene, assembly, path)?;
                 let a = model_anchor(first, scene, assembly)?;
                 let b = model_anchor(second, scene, assembly)?;
-                let edge = norm(std::array::from_fn(|i| b[i] - a[i]))?;
-                let mut direction = norm(cross(edge, norm(pd)?))?;
+                // The cut line is drawn in the parent projection. Anchor
+                // depths may differ; they must not tilt the child page basis.
+                let pd = norm(pd)?;
+                let delta = std::array::from_fn(|i| b[i] - a[i]);
+                let depth = dot(delta, pd);
+                let edge = norm(std::array::from_fn(|i| delta[i] - depth * pd[i]))?;
+                let mut direction = norm(cross(edge, pd))?;
                 if dot(direction, v.direction) < 0. {
                     direction = direction.map(|x| -x);
                 }
@@ -862,7 +1029,7 @@ pub fn projection_request(
         up,
         include_hidden: view.show_hidden_lines,
         include_tangent_edges: view.show_tangent_edges,
-        deflection: (0.08 / view.scale).max(0.01),
+        deflection: (0.01 / view.scale).max(0.0001),
         section_plane,
     })
 }
@@ -873,6 +1040,62 @@ fn paper_point(v: &DrawingViewDto, p: P, projection: &DrawingProjectionDto) -> P
         v.position[1] - (p[1] - (b[1] + b[3]) * 0.5) * v.scale,
     ]
 }
+
+fn dimension_caption_ink(
+    sheet: &DrawingSheetDto,
+    view: &DrawingViewDto,
+    projection: &DrawingProjectionDto,
+) -> Option<f64> {
+    let paper_height = (projection.bounds[3] - projection.bounds[1]).abs() * view.scale;
+    let view_bottom = view.position[1] + paper_height * 0.5;
+    let half = (projection.bounds[2] - projection.bounds[0]).abs() * view.scale * 0.5;
+    let left = view.position[0] - half;
+    let right = view.position[0] + half;
+    let mut ink = None;
+    for annotation in &sheet.annotations {
+        let DrawingAnnotationDto::LinearDimension {
+            view_id,
+            first,
+            second,
+            offset,
+            mode,
+            ..
+        } = annotation
+        else {
+            continue;
+        };
+        if *view_id != view.id {
+            continue;
+        }
+        let Ok(start) = anchor_point(first, projection) else {
+            continue;
+        };
+        let Ok(end) = anchor_point(second, projection) else {
+            continue;
+        };
+        let start = paper_point(view, start, projection);
+        let end = paper_point(view, end, projection);
+        let Some(span) = crate::drawing_presentation::geometry::dimension_span(
+            *mode, start, end, *offset, view.scale,
+        ) else {
+            continue;
+        };
+        let x0 = span.start[0].min(span.end[0]);
+        let x1 = span.start[0].max(span.end[0]);
+        let y1 = span.start[1].max(span.end[1]);
+        if y1 < view_bottom - 0.5 || x1 < left - 8. || x0 > right + 8. {
+            continue;
+        }
+        let y = crate::drawing_presentation::layout::dimension_ink_y(
+            span.start[1],
+            span.end[1],
+            sheet.style.dimension.width_mm,
+            y1 + 1e-6 >= start[1].max(end[1]),
+        );
+        ink = Some(ink.unwrap_or(y).max(y));
+    }
+    ink
+}
 fn circle_polyline(c: P, r: f64) -> Vec<P> {
     (0..=128)
         .map(|i| {
@@ -881,18 +1104,52 @@ fn circle_polyline(c: P, r: f64) -> Vec<P> {
         })
         .collect()
 }
+/// Paper-space circular boundary of a detail view, resolved from the current
+/// projection rather than the reference's diagnostic fallback coordinates.
+/// Source graphics additionally validate against current model topology before
+/// a whole sheet is published; this helper checks the projection signature too.
+pub fn detail_clip_circle(
+    view: &DrawingViewDto,
+    projection: &DrawingProjectionDto,
+) -> Result<Option<([f64; 2], f64)>, String> {
+    let Some(DrawingViewDerivationDto::Detail { center, radius, .. }) = &view.derivation else {
+        return Ok(None);
+    };
+    if projection
+        .topology_signatures
+        .get(&center.body_id.0.to_string())
+        != center.topology_signature.as_ref()
+    {
+        return Err("Detail view reference has a stale topology signature".into());
+    }
+    let center = paper_point(view, anchor_point(center, projection)?, projection);
+    let radius = radius * view.scale;
+    if center.iter().any(|value| !value.is_finite()) || !radius.is_finite() || radius <= 0. {
+        return Err("Detail view boundary lies outside finite paper coordinates".into());
+    }
+    Ok(Some((center, radius)))
+}
 fn clip_view_polyline(
     v: &DrawingViewDto,
     projection: &DrawingProjectionDto,
     points: &[P],
 ) -> Result<Vec<Vec<P>>, String> {
+    clip_view_polyline_with_detail(v, points, detail_clip_circle(v, projection)?)
+}
+/// Clip artwork and pick strokes using the same saved view mask. Resolve the
+/// detail circle once per view so repeated edges do not rescan all anchors.
+/// Associative reference endpoints remain unchanged.
+pub fn clip_view_polyline_with_detail(
+    v: &DrawingViewDto,
+    points: &[P],
+    detail_circle: Option<(P, f64)>,
+) -> Result<Vec<Vec<P>>, String> {
     let Some(derivation) = &v.derivation else {
         return Ok(vec![points.to_vec()]);
     };
     match derivation {
-        DrawingViewDerivationDto::Detail { center, radius, .. } => {
-            let c = paper_point(v, anchor_point(center, projection)?, projection);
-            let r = radius * v.scale;
+        DrawingViewDerivationDto::Detail { .. } => {
+            let (c, r) = detail_circle.ok_or("Detail boundary missing")?;
             let mut lines = Vec::new();
             for pair in points.windows(2) {
                 let a = pair[0];
@@ -958,80 +1215,28 @@ fn clip_view_polyline(
         _ => Ok(vec![points.to_vec()]),
     }
 }
+#[cfg(test)]
 fn hatch_section(
-    p: &mut Paper,
-    v: &DrawingViewDto,
+    paper: &mut Paper,
+    view: &DrawingViewDto,
     projection: &DrawingProjectionDto,
     angle: f64,
     spacing: f64,
     style: &DrawingLineStyleDto,
 ) -> Result<(), String> {
-    // Even/odd intersections with all section boundaries retain hollow regions.
-    // Half-open edges prevent counting a shared vertex twice.
-    let a = angle.to_radians();
-    let u = [a.cos(), a.sin()];
-    let n = [-a.sin(), a.cos()];
-    let edges = projection
-        .section
-        .iter()
-        .flat_map(|line| {
-            line.points.windows(2).map(|pair| {
-                [
-                    paper_point(v, pair[0], projection),
-                    paper_point(v, pair[1], projection),
-                ]
-            })
-        })
-        .collect::<Vec<_>>();
-    if edges.is_empty() {
-        return Ok(());
-    }
-    let dot2 = |p: P, b: P| p[0] * b[0] + p[1] * b[1];
-    let min = edges
-        .iter()
-        .flatten()
-        .map(|p| dot2(*p, n))
-        .fold(f64::INFINITY, f64::min);
-    let max = edges
-        .iter()
-        .flatten()
-        .map(|p| dot2(*p, n))
-        .fold(f64::NEG_INFINITY, f64::max);
-    let start = (min / spacing).floor() as i64;
-    let end = (max / spacing).ceil() as i64;
-    if end - start > 20000 {
-        return Err("Section hatch is too dense for the sheet scale".into());
-    }
-    for i in start..=end {
-        let y = i as f64 * spacing;
-        let mut xs = Vec::new();
-        for [a, b] in &edges {
-            let ay = dot2(*a, n);
-            let by = dot2(*b, n);
-            if (ay <= y && by > y) || (by <= y && ay > y) {
-                let t = (y - ay) / (by - ay);
-                xs.push(dot2(
-                    [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])],
-                    u,
-                ));
-            }
-        }
-        xs.sort_by(f64::total_cmp);
-        if xs.len() % 2 != 0 {
-            return Err("Section boundary is open; cannot hatch a manufacturing drawing".into());
-        }
-        for pair in xs.chunks_exact(2) {
-            p.line(
-                pair.iter()
-                    .map(|x| [x * u[0] + y * n[0], x * u[1] + y * n[1]])
-                    .collect(),
-                "HATCH",
-                style,
-            );
-        }
-    }
+    paper.items.extend(section_hatch(
+        view,
+        projection,
+        style,
+        HatchPattern {
+            angle_deg: angle,
+            spacing_mm: spacing,
+        },
+        &mut PaperGraphicsBudget::default(),
+    )?);
     Ok(())
 }
+
 fn anchor_point(a: &DrawingTopologyAnchorRefDto, p: &DrawingProjectionDto) -> Result<P, String> {
     if a.circle_center {
         return p
@@ -1085,43 +1290,66 @@ fn dimension_text(
     precision: u8,
     prefix: &str,
     suffix: &str,
-    p: &DrawingDimensionPresentationDto,
-) -> Result<String, String> {
-    if p.dual_units.is_some() {
-        return Err("Native export does not yet support dual-unit dimension presentation".into());
+    presentation: &DrawingDimensionPresentationDto,
+    units: limo_cad_core::UnitSystem,
+) -> String {
+    let mut format = presentation.clone();
+    format.basic = false;
+    crate::drawing_presentation::text::dimension(value, precision, prefix, suffix, units, &format)
+}
+fn basic_label_rect(value: &str, height: f64, centered: bool) -> [f64; 4] {
+    let width = value.chars().count() as f64 * height * 0.65;
+    let left = if centered { -width / 2. } else { 0. };
+    [left - 1., -height - 1., left + width + 1., 1.]
+}
+
+fn basic_label_corners(point: P, value: &str, height: f64, centered_angle: Option<f64>) -> [P; 4] {
+    let [left, top, right, bottom] = basic_label_rect(value, height, centered_angle.is_some());
+    let angle = centered_angle.unwrap_or(0.).to_radians();
+    [[left, top], [right, top], [right, bottom], [left, bottom]].map(|[x, y]| {
+        [
+            point[0] + x * angle.cos() - y * angle.sin(),
+            point[1] + x * angle.sin() + y * angle.cos(),
+        ]
+    })
+}
+
+fn paper_label_mask(paper: &mut Paper, corners: [P; 4]) {
+    for points in [
+        [corners[0], corners[1], corners[2]],
+        [corners[0], corners[2], corners[3]],
+    ] {
+        paper.items.push(Primitive::Triangle {
+            points,
+            layer: TEXT_MASK,
+        });
     }
-    let n = |x: f64| format!("{:.*}", precision as usize, x);
-    let value = match p.tolerance.mode {
-        DrawingDimensionToleranceMode::None => n(value),
-        DrawingDimensionToleranceMode::Symmetric => {
-            format!("{} ±{}", n(value), n(p.tolerance.upper.abs()))
-        }
-        DrawingDimensionToleranceMode::Deviation => format!(
-            "{} {:+.*}/{:+.*}",
-            n(value),
-            precision as usize,
-            p.tolerance.upper,
-            precision as usize,
-            p.tolerance.lower
-        ),
-        DrawingDimensionToleranceMode::Limits => format!(
-            "{} / {}",
-            n(value + p.tolerance.upper),
-            n(value + p.tolerance.lower)
-        ),
-    };
-    let mut text = format!(
-        "{prefix}{value}{suffix}{}",
-        if p.fit_class.is_empty() {
-            String::new()
-        } else {
-            format!(" {}", p.fit_class)
-        }
+}
+
+/// Paint the native angular label's paper mask before its basic frame/text.
+/// Two existing triangle primitives preserve order in both SVG and DXF; they
+/// have explicit white color intent rather than relying on the current theme.
+fn angular_label_mask(
+    paper: &mut Paper,
+    point: P,
+    value: &str,
+    presentation: &DrawingDimensionPresentationDto,
+    style: &DrawingSheetStyleDto,
+) {
+    let mut bounds =
+        crate::drawing_presentation::text::label_bounds(point, value, style.text_height_mm, 0.);
+    if presentation.basic {
+        let basic = basic_label_rect(value, style.text_height_mm, true);
+        bounds[0] = bounds[0].min(point[0] + basic[0]);
+        bounds[1] = bounds[1].min(point[1] + basic[1]);
+        bounds[2] = bounds[2].max(point[0] + basic[2]);
+        bounds[3] = bounds[3].max(point[1] + basic[3]);
+    }
+    let [left, top, right, bottom] = bounds;
+    paper_label_mask(
+        paper,
+        [[left, top], [right, top], [right, bottom], [left, bottom]],
     );
-    if p.reference {
-        text = format!("({text})");
-    }
-    Ok(text)
 }
 fn dimension_label(
     p: &mut Paper,
@@ -1132,31 +1360,10 @@ fn dimension_label(
     centered_angle: Option<f64>,
 ) {
     let height = style.text_height_mm;
-    let angle = centered_angle.unwrap_or(0.).to_radians();
     if presentation.basic {
-        let width = value.chars().count() as f64 * height * 0.65;
-        let left = if centered_angle.is_some() {
-            -width / 2.
-        } else {
-            0.
-        };
-        let on_paper = |[x, y]: P| {
-            [
-                point[0] + x * angle.cos() - y * angle.sin(),
-                point[1] + x * angle.sin() + y * angle.cos(),
-            ]
-        };
+        let corners = basic_label_corners(point, &value, height, centered_angle);
         p.line(
-            vec![
-                [left - 1., -height - 1.],
-                [left + width + 1., -height - 1.],
-                [left + width + 1., 1.],
-                [left - 1., 1.],
-                [left - 1., -height - 1.],
-            ]
-            .into_iter()
-            .map(on_paper)
-            .collect(),
+            vec![corners[0], corners[1], corners[2], corners[3], corners[0]],
             "DIMENSION",
             &style.dimension,
         );
@@ -1196,9 +1403,17 @@ fn draw_annotation(
     sheet: &DrawingSheetDto,
     projections: &BTreeMap<u64, DrawingProjectionDto>,
     annotation: &DrawingAnnotationDto,
+    units: limo_cad_core::UnitSystem,
 ) -> Result<(), String> {
     let style = &sheet.style;
     match annotation {
+        DrawingAnnotationDto::HoleNote { .. } => hole::draw(paper, sheet, projections, annotation, units)?,
+        DrawingAnnotationDto::CenterMark { .. } | DrawingAnnotationDto::CenterLine { .. } => {
+            centers::draw(paper, sheet, projections, annotation)?;
+        }
+        DrawingAnnotationDto::LineDimension { .. } | DrawingAnnotationDto::PointLineDimension { .. } => {
+            straight::draw(paper, sheet, projections, annotation, units)?;
+        }
         DrawingAnnotationDto::Note { text, position, .. } => {
             paper.text(*position, text, style.text_height_mm);
         }
@@ -1232,16 +1447,16 @@ fn draw_annotation(
             paper.line(vec![b, d], "EXTENSION", &style.extension);
             paper.line(vec![c, d], "DIMENSION", &style.dimension);
             arrows(paper, c, d, style);
-            // Use the same centered, readable orientation as the editor.
-            // Offset the baseline perpendicular to the dimension, so vertical
-            // and oblique text cannot lie on top of the dimension line.
+
+
+
             let mut angle = (d[1] - c[1]).atan2(d[0] - c[0]).to_degrees();
             if angle > 90. { angle -= 180.; }
             if angle < -90. { angle += 180.; }
             let radians = angle.to_radians();
             dimension_label(
                 paper, [(c[0] + d[0]) * 0.5 + 1.5 * radians.sin(), (c[1] + d[1]) * 0.5 - 1.5 * radians.cos()],
-                dimension_text(value, *precision, prefix, suffix, presentation)?, presentation, style,
+                dimension_text(value, *precision, prefix, suffix, presentation, units), presentation, style,
                 Some(angle),
             );
         }
@@ -1269,7 +1484,7 @@ fn draw_annotation(
             };
             dimension_label(
                 paper, [label[0] + 1., label[1] - 1.],
-                dimension_text(value, *precision, &format!("{prefix}{symbol}"), suffix, presentation)?,
+                dimension_text(value, *precision, &format!("{prefix}{symbol}"), suffix, presentation, units),
                 presentation, style, None,
             );
         }
@@ -1302,7 +1517,11 @@ fn draw_annotation(
             paper.line(points, "DIMENSION", &style.dimension);
             dimension_label(
                 paper, [middle[0] + 1., middle[1] - 1.],
-                dimension_text(sweep.abs().to_degrees(), *precision, prefix, &format!("°{suffix}"), presentation)?,
+                {
+                    let mut format = presentation.clone();
+                    format.basic = false;
+                    crate::drawing_presentation::text::angular(sweep.abs().to_degrees(), *precision, prefix, suffix, &format)
+                },
                 presentation, style, None,
             );
         }
@@ -1342,9 +1561,17 @@ fn svg(p: &Paper, font: &str) -> String {
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(",");
-                writeln!(s,"<polyline data-layer=\"{layer}\" points=\"{points}\" fill=\"none\" stroke=\"#111\" stroke-width=\"{width}\" stroke-dasharray=\"{d}\"/>").unwrap();
+                let ink = if layer.starts_with("CENTER") {
+                    "#356170"
+                } else if *layer == "REVISION" {
+                    crate::drawing_presentation::cloud::COLOR
+                } else {
+                    "#111"
+                };
+                writeln!(s,"<polyline data-layer=\"{layer}\" points=\"{points}\" fill=\"none\" stroke=\"{ink}\" stroke-width=\"{width}\" stroke-dasharray=\"{d}\"/>").unwrap();
             }
             Primitive::Text {
+                layer,
                 point,
                 value,
                 height,
@@ -1368,7 +1595,12 @@ fn svg(p: &Paper, font: &str) -> String {
                 let fit = fitted_width.map_or_else(String::new, |width| {
                     format!(" textLength=\"{width:.5}\" lengthAdjust=\"spacingAndGlyphs\"")
                 });
-                writeln!(s,"<text x=\"{:.5}\" y=\"{:.5}\" font-family=\"{}\" font-size=\"{height}\" fill=\"#111\"{anchor}{rotation}{fit}>{}</text>",point[0],point[1],xml(font),xml(value)).unwrap();
+                let ink = if *layer == "REVISION" {
+                    crate::drawing_presentation::cloud::COLOR
+                } else {
+                    "#111"
+                };
+                writeln!(s,"<text xml:space=\"preserve\" x=\"{:.5}\" y=\"{:.5}\" font-family=\"{}\" font-size=\"{height}\" fill=\"{ink}\"{anchor}{rotation}{fit}>{}</text>",point[0],point[1],xml(font),xml(value)).unwrap();
             }
             Primitive::Triangle { points, layer } => {
                 let points = points
@@ -1378,7 +1610,8 @@ fn svg(p: &Paper, font: &str) -> String {
                     .join(" ");
                 writeln!(
                     s,
-                    "<polygon data-layer=\"{layer}\" points=\"{points}\" fill=\"#111\"/>"
+                    "<polygon data-layer=\"{layer}\" points=\"{points}\" fill=\"{}\"/>",
+                    if *layer == TEXT_MASK { "white" } else { "#111" },
                 )
                 .unwrap();
             }
@@ -1394,31 +1627,61 @@ fn dxf_text(s: &str) -> String {
                 " ".into()
             } else if c == '\\' {
                 "\\U+005C".into()
-            } else if c.is_ascii() {
-                c.to_string()
             } else {
-                c.encode_utf16(&mut [0; 2])
-                    .iter()
-                    .map(|v| format!("\\U+{v:04X}"))
-                    .collect()
+                c.to_string()
             }
         })
         .collect()
 }
-fn dxf(p: &Paper) -> String {
-    let mut s=String::from("0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLTYPE\n70\n0\n");
+fn dxf_lineweight(width_mm: f64) -> i32 {
+    const WEIGHTS: [i32; 24] = [
+        0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158,
+        200, 211,
+    ];
+    let requested = width_mm * 100.;
+    WEIGHTS
+        .into_iter()
+        .min_by(|a, b| {
+            (f64::from(*a) - requested)
+                .abs()
+                .total_cmp(&(f64::from(*b) - requested).abs())
+        })
+        .unwrap()
+}
+
+fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
+    let font_family = font::family(font_family)?;
     let mut styles = BTreeMap::new();
+    let mut layers = std::collections::BTreeSet::from(["0"]);
     for item in &p.items {
-        if let Primitive::Line { layer, dash, .. } = item {
-            if !dash.is_empty() {
-                styles.insert(*layer, dash);
+        match item {
+            Primitive::Line { layer, dash, .. } => {
+                layers.insert(*layer);
+                if !dash.is_empty() {
+                    styles.insert(*layer, dash);
+                }
+            }
+            Primitive::Triangle { layer, .. } => {
+                layers.insert(*layer);
+            }
+            Primitive::Text { layer, .. } => {
+                layers.insert(*layer);
             }
         }
     }
-    for (layer, dash) in styles {
+    let layer_table_handle = styles.len() + 4;
+    let style_table_handle = layer_table_handle + layers.len() + 1;
+    let mut s = format!(
+        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n9\n$INSUNITS\n70\n4\n9\n$HANDSEED\n5\n{:X}\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLTYPE\n5\n2\n330\n0\n100\nAcDbSymbolTable\n70\n{}\n",
+        style_table_handle + 4,
+        styles.len() + 1,
+    );
+    s.push_str("0\nLTYPE\n5\n3\n330\n2\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n2\nCONTINUOUS\n70\n0\n3\nSolid line\n72\n65\n73\n0\n40\n0\n");
+    for (index, (layer, dash)) in styles.iter().enumerate() {
         writeln!(
             s,
-            "0\nLTYPE\n2\nNBS_{layer}\n70\n0\n3\n{layer}\n72\n65\n73\n{}\n40\n{}",
+            "0\nLTYPE\n5\n{:X}\n330\n2\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n2\nNBS_{layer}\n70\n0\n3\n{layer}\n72\n65\n73\n{}\n40\n{}",
+            index + 4,
             dash.len(),
             dash.iter().sum::<f64>()
         )
@@ -1427,7 +1690,24 @@ fn dxf(p: &Paper) -> String {
             writeln!(s, "49\n{}\n74\n0", if i % 2 == 0 { *d } else { -d }).unwrap();
         }
     }
-    s.push_str("0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n");
+    writeln!(s, "0\nENDTAB\n0\nTABLE\n2\nLAYER\n5\n{layer_table_handle:X}\n330\n0\n100\nAcDbSymbolTable\n70\n{}", layers.len()).unwrap();
+    for (index, layer) in layers.iter().enumerate() {
+        writeln!(s,
+            "0\nLAYER\n5\n{:X}\n330\n{layer_table_handle:X}\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n2\n{layer}\n70\n0\n62\n7\n6\n{}",
+            layer_table_handle + index + 1,
+            if styles.contains_key(*layer) { format!("NBS_{layer}") } else { "CONTINUOUS".into() },
+        ).unwrap();
+        if *layer == TEXT_MASK {
+            s.push_str("420\n16777215\n");
+        } else if layer.starts_with("CENTER") {
+            s.push_str("420\n3498352\n");
+        } else if *layer == "REVISION" {
+            s.push_str("420\n12860237\n");
+        }
+    }
+    s.push_str("0\nENDTAB\n");
+    font::tables(&mut s, style_table_handle, &font_family);
+    s.push_str("0\nENDSEC\n0\nSECTION\n2\nENTITIES\n");
     for item in &p.items {
         match item {
             Primitive::Line {
@@ -1436,11 +1716,24 @@ fn dxf(p: &Paper) -> String {
                 dash,
                 width,
             } => {
+                if points.len() > 2 && !dash.is_empty() {
+                    writeln!(
+                        s,
+                        "0\nLWPOLYLINE\n100\nAcDbEntity\n8\n{layer}\n6\nNBS_{layer}\n370\n{}\n100\nAcDbPolyline\n90\n{}\n70\n128",
+                        dxf_lineweight(*width), points.len()
+                    ).unwrap();
+                    for point in points {
+                        writeln!(s, "10\n{:.5}\n20\n{:.5}", point[0], p.size[1] - point[1])
+                            .unwrap();
+                    }
+                    continue;
+                }
                 for pair in points.windows(2) {
-                    writeln!(s,"0\nLINE\n8\n{layer}\n6\n{}\n370\n{}\n10\n{:.5}\n20\n{:.5}\n11\n{:.5}\n21\n{:.5}",if dash.is_empty(){"CONTINUOUS".into()}else{format!("NBS_{layer}")},(width*100.).round() as i32,pair[0][0],p.size[1]-pair[0][1],pair[1][0],p.size[1]-pair[1][1]).unwrap();
+                    writeln!(s,"0\nLINE\n8\n{layer}\n6\n{}\n370\n{}\n10\n{:.5}\n20\n{:.5}\n11\n{:.5}\n21\n{:.5}",if dash.is_empty(){"CONTINUOUS".into()}else{format!("NBS_{layer}")},dxf_lineweight(*width),pair[0][0],p.size[1]-pair[0][1],pair[1][0],p.size[1]-pair[1][1]).unwrap();
                 }
             }
             Primitive::Text {
+                layer,
                 point,
                 value,
                 height,
@@ -1448,39 +1741,24 @@ fn dxf(p: &Paper) -> String {
                 rotation_deg,
                 fitted_width,
             } => {
-                writeln!(
-                    s,
-                    "0\nTEXT\n8\nANNOTATION\n10\n{:.5}\n20\n{:.5}\n40\n{height}\n1\n{}",
-                    point[0],
-                    p.size[1] - point[1],
-                    dxf_text(value)
-                )
-                .unwrap();
-                if let Some(width) = fitted_width {
-                    // DXF TEXT Fit preserves its height while fitting the two
-                    // baseline endpoints. Only bounded title-block lines opt in.
-                    writeln!(
-                        s,
-                        "72\n5\n73\n0\n11\n{:.5}\n21\n{:.5}",
-                        point[0] + width,
-                        p.size[1] - point[1]
-                    )
-                    .unwrap();
-                } else if *centered {
-                    writeln!(
-                        s,
-                        "72\n1\n11\n{:.5}\n21\n{:.5}",
-                        point[0],
-                        p.size[1] - point[1]
-                    )
-                    .unwrap();
-                }
-                if *rotation_deg != 0. {
-                    writeln!(s, "50\n{:.5}", -rotation_deg).unwrap();
-                }
+                text_outlines::write_text(
+                    &mut s,
+                    p.size[1],
+                    *point,
+                    value,
+                    *height,
+                    *centered,
+                    *rotation_deg,
+                    *fitted_width,
+                    layer,
+                    &font_family,
+                )?;
             }
             Primitive::Triangle { points, layer } => {
                 writeln!(s, "0\nSOLID\n8\n{layer}").unwrap();
+                if *layer == TEXT_MASK {
+                    s.push_str("420\n16777215\n");
+                }
                 for (index, point) in [points[0], points[1], points[2], points[2]]
                     .iter()
                     .enumerate()
@@ -1498,15 +1776,158 @@ fn dxf(p: &Paper) -> String {
             }
         }
     }
-    s.push_str("0\nENDSEC\n0\nEOF\n");
-    s
+    s.push_str("0\nENDSEC\n");
+    s.push_str("0\nEOF\n");
+    Ok(s)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
-    fn fixture(length: f64) -> (DrawingDocumentDto, SolidSceneDto, DrawingProjectionDto) {
+    #[test]
+    fn dxf_tables_have_owned_unique_handles_actual_counts_and_all_referenced_layers() {
+        let tags = |content: &str| -> Vec<(String, String)> {
+            content
+                .lines()
+                .collect::<Vec<_>>()
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| (pair[0].into(), pair[1].into()))
+                .collect()
+        };
+        for dashed in [false, true] {
+            let mut paper = Paper {
+                size: [297., 210.],
+                items: vec![],
+            };
+            if dashed {
+                for layer in ["HIDDEN", "CENTER", "HIDDEN"] {
+                    paper.line(
+                        vec![[1., 2.], [3., 4.]],
+                        layer,
+                        &DrawingLineStyleDto {
+                            width_mm: 0.25,
+                            dash_mm: vec![4., 2.],
+                        },
+                    );
+                }
+                paper.text([10., 20.], "Visible label", 3.5);
+                paper.items.push(Primitive::Triangle {
+                    points: [[1., 1.], [2., 1.], [2., 2.]],
+                    layer: TEXT_MASK,
+                });
+            }
+            let output = dxf(&paper, "Arial, Helvetica, sans-serif").unwrap();
+            assert_eq!(
+                output,
+                dxf(&paper, "Arial, Helvetica, sans-serif").unwrap(),
+                "Handle allocation must remain deterministic"
+            );
+            let tags = tags(&output);
+            let seed = tags
+                .windows(2)
+                .find(|pair| pair[0] == ("9".into(), "$HANDSEED".into()))
+                .unwrap();
+            assert_eq!(seed[1].0, "5");
+            let seed = usize::from_str_radix(&seed[1].1, 16).unwrap();
+            let mut records: Vec<Vec<&(String, String)>> = vec![];
+            for pair in &tags {
+                if pair.0 == "0" {
+                    records.push(vec![]);
+                }
+                records.last_mut().unwrap().push(pair);
+            }
+            let field = |record: &Vec<&(String, String)>, code: &str| {
+                record
+                    .iter()
+                    .find(|pair| pair.0 == code)
+                    .map(|pair| pair.1.clone())
+                    .unwrap()
+            };
+            let mut handles = std::collections::BTreeSet::new();
+            let mut layer_names = std::collections::BTreeSet::new();
+            for (table, record_type) in [
+                ("LTYPE", "AcDbLinetypeTableRecord"),
+                ("LAYER", "AcDbLayerTableRecord"),
+                ("STYLE", "AcDbTextStyleTableRecord"),
+                ("APPID", "AcDbRegAppTableRecord"),
+            ] {
+                let head = records
+                    .iter()
+                    .find(|r| field(r, "0") == "TABLE" && field(r, "2") == table)
+                    .unwrap();
+                let owner = field(head, "5");
+                assert_eq!(field(head, "330"), "0");
+                assert_eq!(field(head, "100"), "AcDbSymbolTable");
+                assert!(handles.insert(owner.clone()));
+                let rows: Vec<_> = records.iter().filter(|r| field(r, "0") == table).collect();
+                assert_eq!(field(head, "70").parse::<usize>().unwrap(), rows.len());
+                assert!(!rows.is_empty(), "Both tables need their default record");
+                for row in &rows {
+                    assert_eq!(field(row, "330"), owner);
+                    assert!(row
+                        .iter()
+                        .any(|pair| pair.0 == "100" && pair.1 == "AcDbSymbolTableRecord"));
+                    assert!(row
+                        .iter()
+                        .any(|pair| pair.0 == "100" && pair.1 == record_type));
+                    assert!(handles.insert(field(row, "5")), "Duplicate DXF handle");
+                    if table == "LAYER" {
+                        layer_names.insert(field(row, "2"));
+                    }
+                }
+                if table == "LTYPE" {
+                    assert_eq!(rows.len(), if dashed { 3 } else { 1 });
+                    assert!(rows.iter().any(|r| field(r, "2") == "CONTINUOUS"));
+                }
+            }
+            assert!(handles
+                .iter()
+                .all(|h| usize::from_str_radix(h, 16).unwrap() < seed));
+            for record in records
+                .iter()
+                .filter(|r| matches!(field(r, "0").as_str(), "LINE" | "TEXT" | "SOLID"))
+            {
+                assert!(
+                    layer_names.contains(&field(record, "8")),
+                    "Undeclared graphics layer"
+                );
+            }
+        }
+    }
+    #[test]
+    fn projection_quality_follows_saved_paper_scale_without_changing_view_intent() {
+        let (doc, scene, _) = fixture(12.8);
+        let assembly = AssemblyDocumentDto::default();
+        for (scale, deflection) in [
+            (0.01, 1.),
+            (0.25, 0.04),
+            (1., 0.01),
+            (4., 0.0025),
+            (100., 0.0001),
+            (10_000., 0.0001),
+        ] {
+            let mut view = doc.sheets[0].views[0].clone();
+            view.scale = scale;
+            let saved = view.clone();
+            let request = projection_request(&view, &[view.clone()], &scene, &assembly).unwrap();
+            assert_eq!(request.deflection, deflection);
+            assert_eq!(view, saved);
+            let mut moved = view.clone();
+            moved.position = [180., 120.];
+            moved.name = "Same geometry elsewhere on paper".into();
+            assert_eq!(
+                projection_request(&moved, &[moved.clone()], &scene, &assembly).unwrap(),
+                request,
+                "Placement and labels must not invalidate the exact projection cache"
+            );
+        }
+    }
+    pub(super) fn fixture(
+        length: f64,
+    ) -> (DrawingDocumentDto, SolidSceneDto, DrawingProjectionDto) {
         let scene:SolidSceneDto=serde_json::from_value(json!({"bodies":[{"id":1,"name":"Rail","feature_id":1,"mesh":{"positions":[],"normals":[],"indices":[]},"faces":[],"edges":[{"id":1,"key":"bottom","points":[{"x":10.,"y":0.,"z":0.},{"x":10.+length,"y":0.,"z":0.}],"circle":null,"refinable":true}]}],"errors":[]})).unwrap();
         let mut manager = SketchManager::new();
         let mut doc=manager.drawing_command(serde_json::from_value(json!({"type":"create_sheet","arguments":{"name":"Rail drawing","format":"a4","orientation":"landscape"}})).unwrap()).unwrap();
@@ -1534,22 +1955,20 @@ mod tests {
     }
     #[test]
     fn linear_labels_center_and_rotate_in_both_native_formats() {
-        // Known paper-space expectations are independent of the renderer's
-        // midpoint/normal calculation. The oblique case is a 3-4-5 triangle.
         for (mode, end, value, point, angle) in [
-            ("horizontal", [12.8, 0.], "12.80", [100., 78.5], 0.),
-            ("vertical", [0., 12.8], "12.80", [108.5, 70.], -90.),
+            ("horizontal", [12.8, 0.], "12.80 mm", [100., 78.5], 0.),
+            ("vertical", [0., 12.8], "12.80 mm", [108.5, 70.], -90.),
             (
                 "aligned",
                 [8., 6.],
-                "10.00",
+                "10.00 mm",
                 [105.1, 76.8],
                 -36.86989764584402,
             ),
             (
                 "aligned",
                 [-8., -6.],
-                "10.00",
+                "10.00 mm",
                 [93.1, 60.8],
                 -36.86989764584402,
             ),
@@ -1622,7 +2041,9 @@ mod tests {
                 .map(|entity| {
                     let lines: Vec<_> = entity.split("\n0\n").next().unwrap().lines().collect();
                     lines
-                        .chunks_exact(2)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|pair| (pair[0], pair[1]))
                         .collect()
                 })
@@ -1676,8 +2097,7 @@ mod tests {
         let Primitive::Line { points, .. } = &paper.items[0] else {
             panic!("missing basic frame")
         };
-        // The vertical label's longitudinal center stays at y70. Its frame
-        // extends symmetrically along that axis and rotates with the baseline.
+
         assert_eq!(points.len(), 5);
         assert_eq!(points.first(), points.last());
         assert!((points[0][1] + points[1][1] - 140.).abs() < 1e-9);
@@ -1713,7 +2133,7 @@ mod tests {
         let text = export();
         assert_eq!(text, export());
         assert!(text.contains("80.00000,70.00000 120.00000,70.00000"));
-        assert!(text.contains(">20.00</text>"));
+        assert!(text.contains(">20.00 mm</text>"));
         assert!(text.contains("&lt;check &amp; fit&gt; Ø"));
         let (doc, scene, projection) = fixture(25.);
         let edited = export_sheet(
@@ -1724,7 +2144,7 @@ mod tests {
             |_| Ok(projection.clone()),
         )
         .unwrap();
-        assert!(edited.contains(">25.00</text>"));
+        assert!(edited.contains(">25.00 mm</text>"));
         assert!(!edited.contains("999.00000"));
         let dxf = export_sheet(
             &doc,
@@ -1738,7 +2158,7 @@ mod tests {
         )
         .unwrap();
         assert!(dxf.contains("$INSUNITS\n70\n4"));
-        assert!(dxf.contains("\\U+00D8"));
+        assert!(dxf.contains('Ø'));
         assert!(dxf.ends_with("0\nEOF\n"));
     }
     #[test]
@@ -1788,8 +2208,8 @@ mod tests {
         ] {
             assert!(content.contains(text), "Missing drawing field: {text}");
         }
-        assert!(content.contains(">20.00</text>"));
-        assert!(!content.contains("[20.00]"));
+        assert!(content.contains(">20.00 mm</text>"));
+        assert!(!content.contains("[20.00 mm]"));
         let mut paper = Paper {
             size: [297., 210.],
             items: Vec::new(),
@@ -1846,29 +2266,25 @@ mod tests {
 
     #[test]
     fn title_block_preserves_actual_flagship_metadata_with_bounded_svg_and_dxf() {
-        // Read the authored inputs rather than maintaining a second, stale
-        // copy of their longest titles, finishes and tolerance qualifications.
         let recipes = [
             (
-                include_str!("../../../examples/scripts/garden-bench.nbcad.jsonc"),
-                0,
+                include_str!("../../../examples/scripts/garden-bench.limo.jsonc"),
+                22,
             ),
             (
-                include_str!("../../../examples/scripts/d-screw-vise.nbcad.jsonc"),
+                include_str!("../../../examples/scripts/d-screw-vise.limo.jsonc"),
                 7,
             ),
             (
-                include_str!("../../../examples/scripts/vertical-axis-turbine.nbcad.jsonc"),
+                include_str!("../../../examples/scripts/vertical-axis-turbine.limo.jsonc"),
                 14,
             ),
             (
-                include_str!("../../../examples/scripts/turbine-fit-coupons.nbcad.jsonc"),
+                include_str!("../../../examples/scripts/turbine-fit-coupons.limo.jsonc"),
                 4,
             ),
         ];
         for (source, expected_sheets) in recipes {
-            // These fixtures use whole-line comments. Keep quoted URLs and
-            // every other comment-like character inside text values intact.
             let json = source
                 .lines()
                 .filter(|line| !line.trim_start().starts_with("//"))
@@ -1894,8 +2310,13 @@ mod tests {
                     size: [420., 297.],
                     items: Vec::new(),
                 };
-                draw_title_and_revisions(&mut paper, sheet)
-                    .unwrap_or_else(|error| panic!("{}: {error}", sheet.name));
+                draw_title_and_revisions(
+                    &mut paper,
+                    sheet,
+                    limo_cad_core::UnitSystem::Mm,
+                    &mut Marks::new(),
+                )
+                .unwrap_or_else(|error| panic!("{}: {error}", sheet.name));
                 let text = paper
                     .items
                     .iter()
@@ -2040,7 +2461,7 @@ mod tests {
             "position":[200.,140.],"scale":0.5,
             "derivation":{"type":"section","parent_view_id":1,"first":anchor("start"),"second":anchor("end"),"label":"Section A-A","hatch_angle_deg":45.,"hatch_spacing_mm":2.}
         })).unwrap();
-        // Drawing storage order must not alter source lookup or use child scale.
+
         doc.sheets[0].views.insert(0, child);
         doc.next_view_id = 3;
         let export = |format, document: &DrawingDocumentDto, projected: &DrawingProjectionDto| {
@@ -2108,10 +2529,11 @@ mod tests {
             &BTreeMap::from([(1, projection.clone())]),
             &scene,
             &AssemblyDocumentDto::default(),
+            &mut PaperGraphicsBudget::default(),
         )
         .unwrap();
         let svg = svg(&paper, "Arial");
-        assert!(svg.contains("points=\"86.00000,70.00000")); // radius uses parent's 2:1 scale.
+        assert!(svg.contains("points=\"86.00000,70.00000"));
         assert!(svg.contains("D &amp; fit"));
         assert!(svg
             .contains("data-layer=\"AUXILIARY\" points=\"100.00000,70.00000 100.00000,62.00000\""));
@@ -2123,7 +2545,7 @@ mod tests {
             &projection,
         )
         .unwrap();
-        assert_eq!(ends, [[96., 66.], [104., 74.]]); // oblique line clips to both axes.
+        assert_eq!(ends, [[96., 66.], [104., 74.]]);
         assert!(section_source_extent(
             [100., 90.],
             [110., 90.],
@@ -2132,4 +2554,6 @@ mod tests {
         )
         .is_err());
     }
+
+    include!("drawing_export/layout_tests.rs");
 }

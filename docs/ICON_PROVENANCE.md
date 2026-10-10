@@ -1,31 +1,28 @@
-# noBS CAD Icon Provenance
+# Limo CAD Icon Provenance
 
-Last reviewed: 2026-09-10
+Last reviewed: 2026-10-06
 
 This file records the source and design rationale for the NB product mark and
-every icon rendered by `src/components/icons.tsx`. It is an engineering
+the Bevy vectors in `assets/ribbon-icons`. It is an engineering
 provenance record, not a legal opinion.
 
 ## NB product mark
 
 `public/app-icon.svg` is the canonical editable source. It was authored directly
-for the 2026-07-26 noBS CAD rename as a geometric N/B monogram on the
+for the 2026-07-26 Limo CAD rename as a geometric N/B monogram on the
 application's dark rounded tile:
 
 - N: sketch/entity blue (`#5da9ff`);
 - B: iris/action purple (`#8b7ce8`);
-- tile and border: existing noBS CAD panel/edge colors;
+- tile and border: existing Limo CAD panel/edge colors;
 - construction: SVG paths and rectangles only, with no embedded font, bitmap,
   external reference, or third-party asset.
 
 The compact header renders the letters `NB` with the same blue/iris design
-language. Desktop PNG, ICNS, ICO, and Windows Store outputs under
-`src-tauri/icons/` are generated derivatives. Mobile-only output from the icon
-generator is removed because mobile is not a current product target:
-
-```sh
-npx tauri icon public/app-icon.svg -o src-tauri/icons
-```
+language. The generated derivatives under `desktop/icons/` are the
+256-pixel PNG used by Linux packaging, the macOS ICNS, and the Windows ICO.
+Unused mobile and Windows Store outputs are removed. Keep those three desktop
+formats in sync with the canonical SVG when changing the product mark.
 
 The browser favicon loads the canonical SVG directly. This provenance record
 documents authorship; it does not make a trademark-availability claim.
@@ -33,7 +30,7 @@ documents authorship; it does not make a trademark-availability claim.
 ## Product-owned CAD glyphs
 
 On 2026-07-20 the previous custom glyph table was replaced wholesale. The
-current paths were authored directly as noBS CAD source from operation
+current paths were authored directly as Limo CAD source from operation
 semantics and the shared rules below. They do not import or embed external SVG,
 bitmap, font, screenshot, or vendor asset files.
 
@@ -67,12 +64,14 @@ The complete custom inventory is:
 | Manufacture workspace | `camManufacture` | Milling head and cutter over stock on a machine table, replacing the generic wrench in both workspace entry points. |
 <!-- custom-icon-inventory:end -->
 
-`CUSTOM_ICON_IDS` is exported from the source file so automated checks can
-compare the live registry with this inventory. Run `npm run audit:icons` to
-perform that comparison and reject embedded or imported image assets in the
-custom registry.
+The table records the original custom art family. The React glyph registry and
+machining component below were retired with the browser app on 2026-10-02;
+their authored source remains available in Git history. The active Bevy registry
+is `desktop/src/native_viewport/interface_shell/ribbon.rs`. Run
+`cargo xtask audit-icons` to check every embedded vector exists and reject
+external image references and executable content in the shared SVG assets.
 
-### Machining pictograms
+### Historical React machining pictograms
 
 `src/components/cam/CamToolIcon.tsx` owns the machining family approved on
 2026-09-10. It uses a 64×64 coordinate grid, steel-grey stock and tools, and
@@ -111,6 +110,12 @@ and duplication use the general-purpose plus/copy icons.
 The Manufacture workspace switcher and menu share an original mill-over-stock
 pictogram. Its machine-column, spindle and stock primitives live in the canonical source.
 
+The native `workspace-model-{dark,light}.svg` and
+`workspace-manufacture-{dark,light}.svg` port those same 64×64 cube and machine
+paths from the main-branch machining component. Each appearance keeps its
+steel-grey and muted-blue paints; the complete texture dims when disabled.
+Both the workspace switcher and menu use these assets.
+
 ## Licensed general-purpose icons
 
 The following registry IDs use `lucide-react` rather than product-owned paths:
@@ -121,8 +126,28 @@ The following registry IDs use `lucide-react` rather than product-owned paths:
 
 Lucide is distributed under the ISC license. Its copyright and permission
 notice is preserved in [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
-The package copy is also available at `node_modules/lucide-react/LICENSE`
-after dependency installation.
+The vector notice is also retained in `assets/ribbon-icons/LICENSE.lucide`.
+
+The native ribbon in `desktop/src/native_viewport/interface_shell/ribbon.rs`
+renders `assets/ribbon-icons/*.svg` through Rust/resvg into cached Bevy
+textures. The browser replacement uses this same Rust registry. The sketch, point, spline, finish,
+cancel and chevron assets retain Lucide 0.474.0 PenLine, Crosshair, Spline,
+Check, X and ChevronDown geometry. The native tabs, file menu, history and
+navigation toolbar also use Lucide 0.474.0 BookOpen, FileDown, FileUp,
+FolderOpen, Grid3x3, Hand, History, Maximize, Monitor, Move3d, Redo2, Ruler,
+SquareDashed, Undo2 and ZoomIn. Their source SVGs carry attribution, and
+`assets/ribbon-icons/LICENSE.lucide` retains the ISC notice. These are
+renderer ports, not new command identities. The icon audit also checks these
+sources for external references and executable content. Visual parity remains
+part of the native-interface draft review.
+
+The workspace Drawing entry and sketch Return to Flat View action also port
+Lucide 0.474.0 FileText and Focus, with the same ISC notice.
+
+Native solid-feature panel headers use the reference's Lucide 0.474.0 Box,
+RefreshCw, MoveRight, Layers3, PanelTop, CircleDot, Blend, Triangle, RotateCw,
+Shell, Move3d, Combine, Copy, Scissors and Boxes geometry. The additional
+header vectors carry the same ISC attribution and retained license notice.
 
 ## Contribution requirements
 
@@ -140,7 +165,7 @@ For every new icon:
 
 - Commit canonical editable icon sources, the inventory, and required license
   notices. Generated platform icons derive from `public/app-icon.svg`.
-- `npm run audit:icons` checks the live registry and reports source digests.
+- `cargo xtask audit-icons` checks the live registry and reports source digests.
 - Keep construction drafts, reference artwork, review conversations and local
   captures outside the repository. They are not release assets.
 - Include this provenance document and `THIRD_PARTY_NOTICES.md` with source

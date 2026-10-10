@@ -5,6 +5,9 @@ use super::*;
 #[path = "turbine_assembly.rs"]
 mod assembly_paths;
 
+#[path = "turbine_export_reader.rs"]
+mod export_reader_tests;
+
 pub(super) fn check_assembly(exports: &Value) {
     assembly_paths::check(exports);
 }
@@ -38,7 +41,7 @@ fn exported_meshes(export: &Value) -> Vec<Value> {
     let bytes = BASE64
         .decode(export["bytes_base64"].as_str().unwrap())
         .unwrap();
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
     let mut xml = String::new();
     archive
         .by_name("3D/3dmodel.model")
@@ -46,29 +49,20 @@ fn exported_meshes(export: &Value) -> Vec<Value> {
         .read_to_string(&mut xml)
         .unwrap();
     assert!(xml.contains("unit=\"millimeter\""));
-    // The canonical exporter bakes solved transforms into each object's mesh.
-    // Reject an unexpected transform rather than silently measuring local data.
-    assert!(!xml.contains(" transform="));
-    fn attribute<'a>(tag: &'a str, name: &str) -> &'a str {
-        tag.split(&format!("{name}=\""))
-            .nth(1)
-            .unwrap()
-            .split('"')
-            .next()
-            .unwrap()
-    }
-    xml.split("<object ").skip(1).map(|object| {
-        let object = object.split("</object>").next().unwrap();
-        let vertices: Vec<[f64; 3]> = object.split("<vertex ").skip(1)
-            .map(|tag| ["x", "y", "z"].map(|axis| attribute(tag, axis).parse().unwrap()))
-            .collect();
+    let meshes = limo_cad_export::test_reader::read_package(&bytes)
+        .expect("read the exported 3MF build in world coordinates");
+    assert!(
+        !meshes.is_empty(),
+        "the 3MF build must contain printable meshes"
+    );
+    meshes.into_iter().map(|mesh| {
+        let vertices = mesh.vertices;
         assert!(!vertices.is_empty());
+        assert!(vertices.iter().flatten().all(|value| value.is_finite()));
         let mut edges = std::collections::BTreeMap::<(usize, usize), (usize, i32)>::new();
         let mut indices = Vec::new();
         let mut volume = 0.;
-        for triangle in object.split("<triangle ").skip(1) {
-            let triangle = ["v1", "v2", "v3"]
-                .map(|name| attribute(triangle, name).parse::<usize>().unwrap());
+        for triangle in mesh.triangles {
             assert!(triangle.iter().all(|index| *index < vertices.len()));
             let [a, b, c] = triangle.map(|index| vertices[index]);
             volume += (a[0] * (b[1] * c[2] - b[2] * c[1])
@@ -97,7 +91,9 @@ fn same_placed_surface(mesh: &Value, source: &Value, pose: &Value) -> bool {
     let triangles = |body: &Value, placement: Option<&Value>| -> Vec<Triangle> {
         let positions = body["mesh"]["positions"].as_array().unwrap();
         let points: Vec<[f64; 3]> = positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|point| {
                 let point = std::array::from_fn(|i| point[i].as_f64().unwrap());
                 if let Some(pose) = placement {
@@ -114,7 +110,9 @@ fn same_placed_surface(mesh: &Value, source: &Value, pose: &Value) -> bool {
         body["mesh"]["indices"]
             .as_array()
             .unwrap()
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|indices| std::array::from_fn(|i| points[indices[i].as_u64().unwrap() as usize]))
             .collect()
     };
@@ -186,14 +184,16 @@ fn surface_comparison_rejects_a_closed_mirror_with_the_same_bounds_and_volume() 
     for p in mirror["mesh"]["positions"]
         .as_array_mut()
         .unwrap()
-        .chunks_exact_mut(3)
+        .as_chunks_mut::<3>()
+        .0
     {
         p[1] = json!(2. - p[1].as_f64().unwrap());
     }
     for triangle in mirror["mesh"]["indices"]
         .as_array_mut()
         .unwrap()
-        .chunks_exact_mut(3)
+        .as_chunks_mut::<3>()
+        .0
     {
         triangle.swap(1, 2);
     }
@@ -238,7 +238,7 @@ pub(super) fn check_print_plates(exports: &Value, directory: Option<&std::path::
         assert_eq!(part["printable"], true);
         assert_eq!(plate["body_id"], part["body_id"]);
         assert_eq!(plate["occurrence_id"], part["occurrence_id"]);
-        assert_eq!(plate["model"]["format"], "nbcad-project");
+        assert_eq!(plate["model"]["format"], "limo-cad-project");
         assert_eq!(plate["solution"]["solved"], true);
         let selected = plate["model"]["assembly"]["component_structure"]["occurrences"]
             .as_array()
@@ -298,11 +298,9 @@ pub(super) fn check_print_plates(exports: &Value, directory: Option<&std::path::
                     .unwrap(),
             )
             .unwrap();
-            write_native_project(&directory.join(format!("{id}.nbcad")), &plate["model"]);
+            write_native_project(&directory.join(format!("{id}.limo")), &plate["model"]);
         }
         if id == "stage" {
-            // The repeated definition is the demanding isolation case: a cold
-            // native load must not restore the hidden second stage into export.
             let mut cold = Client::restore(&plate["model"]);
             assert_eq!(
                 cold.call("assembly_solution", json!({}))["instance_body_poses"],
@@ -390,7 +388,7 @@ fn world_bounds(source: &Value, pose: &Value) -> ([f64; 3], [f64; 3]) {
     let positions = source["mesh"]["positions"].as_array().unwrap();
     let mut min = [f64::INFINITY; 3];
     let mut max = [f64::NEG_INFINITY; 3];
-    for point in positions.chunks_exact(3) {
+    for point in positions.as_chunks::<3>().0 {
         let transformed = rotate(
             rotation,
             std::array::from_fn(|i| point[i].as_f64().unwrap()),
@@ -511,7 +509,7 @@ fn stage_drawing(client: &mut Client, exports: &Value, diameter: f64) {
         drawing["content"]
             .as_str()
             .unwrap()
-            .contains(&format!("Ø{diameter:.2}</text>")),
+            .contains(&format!(">Ø{diameter:.2} mm</text>")),
         "the associative stage drawing must measure its actual edited shaft bore"
     );
 }
@@ -609,7 +607,7 @@ fn check_edits(client: &mut Client, exports: &Value) {
 /// then ask that API for exact geometry. Rigidly connected pairs have an
 /// invariant relative placement and need checking only once for the sweep.
 struct MotionChecks {
-    scene: nbcad_solid::SolidSceneDto,
+    scene: limo_cad_solid::SolidSceneDto,
     rigid_groups: std::collections::BTreeMap<u64, u64>,
     checked_rigid_pairs: std::collections::BTreeSet<(u64, u64)>,
 }
@@ -678,12 +676,12 @@ impl MotionChecks {
     }
 
     fn check(&mut self, client: &mut Client, solution: &Value, sample: &str) {
-        let poses: Vec<nbcad_sketch::InstanceBodyPoseDto> =
+        let poses: Vec<limo_cad_sketch::InstanceBodyPoseDto> =
             serde_json::from_value(solution["instance_body_poses"].clone()).unwrap();
-        let candidates = nbcad_sketch::broad_phase_interference_pairs(
+        let candidates = limo_cad_sketch::broad_phase_interference_pairs(
             &self.scene,
             &poses,
-            &nbcad_sketch::InterferenceCheckRequestDto {
+            &limo_cad_sketch::InterferenceCheckRequestDto {
                 occurrence_ids: vec![],
                 clearance_threshold_mm: 0.,
             },
@@ -773,8 +771,7 @@ impl MotionChecks {
                 assert!((now["translation"][i].as_f64().unwrap() - pivot[i] - expected_position[i]).abs() < 1e-6,
                     "all driven parts, including both stages and clamp hardware, must follow the shaft");
             }
-            // Compare basis vectors instead of quaternion signs; q and -q
-            // represent the same orientation after a full revolution.
+
             for basis in [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]] {
                 let expected = rotate(rotation, rotate(vector(&old["rotation"]), basis));
                 let actual = rotate(vector(&now["rotation"]), basis);
@@ -806,9 +803,7 @@ fn check_motion(client: &mut Client, exports: &Value) {
     let scene = client.call("solid_scene", json!({}));
     let mut collisions = MotionChecks::new(&scene, &home_document, &home);
     collisions.check(client, &home, "home");
-    // A complete sampled turn includes the asymmetric hubs and all installed
-    // hardware. Additional sub-tooth samples retain the original gear check.
-    // These are sampled native collision checks, not a continuous-contact proof.
+
     let phases = (1..=20)
         .map(|step| step as f64 * 0.25)
         .chain((1..=24).map(|step| step as f64 * 15.))

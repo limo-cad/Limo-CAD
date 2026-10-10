@@ -28,7 +28,7 @@ fn circular_roughing_is_continuous_with_full_retract_and_keep_down_off() {
             unreachable!()
         };
         for mesh in &mut geometry.targets {
-            for v in mesh.positions.chunks_exact_mut(3) {
+            for v in mesh.positions.as_chunks_mut::<3>().0 {
                 let [x, y, z] = [v[0], v[1], v[2]];
                 v.copy_from_slice(&[
                     origin.x + x,
@@ -199,9 +199,9 @@ impl AuditedSpiralArc {
 
 #[test]
 fn spiral_sweeps_preserve_target_cover_stock_and_bound_section_engagement() {
-    // Independent contact audit: original billet minus completed swept arcs,
-    // not the planner's remaining-stock certificate. Sample the advancing
-    // half of each cutter section at stations throughout every half-circle.
+
+
+
     let doc = fixture(vec![]);
     let CamOperationDto::Adaptive3d { parameters, .. } = &doc.setups[0].operations[0] else {
         unreachable!()
@@ -225,26 +225,17 @@ fn spiral_sweeps_preserve_target_cover_stock_and_bound_section_engagement() {
             entry_positions: vec![polar(Point2Dto::new(0.0, 0.0), 20.0, angle)],
             ..Default::default()
         });
-        // A target-free cap is passed as protected = floor - r; anything
-        // larger protects a target that the path must clear.
         let cap = protected <= floor - 2.0 + 1e-9;
         let footprint: Vec<_> = (0..128)
             .map(|i| polar(Point2Dto::new(0.0, 0.0), 7.0, TAU * i as f64 / 128.0))
             .collect();
-        spiral::clear(
-            &mut b,
-            &footprint,
-            Point2Dto::new(0.0, 0.0),
-            protected,
-            cap,
-            2.0,
-            floor,
-            -1.0,
-            &p,
-            600.0,
-            100.0,
-            &mut Work::default(),
-        )
+        spiral::clear(&mut b,
+        &footprint,
+        (Point2Dto::new(0.0, 0.0), protected, cap),
+        (2.0, floor, -1.0),
+        &p,
+        (600.0, 100.0),
+        &mut Work::default())
         .unwrap();
         let mut arcs = vec![];
         let mut position = None;
@@ -268,7 +259,6 @@ fn spiral_sweeps_preserve_target_cover_stock_and_bound_section_engagement() {
                     position = Some(Point2Dto::new(to.x, to.y));
                 }
                 CamCommandDto::Linear { to, feed } => {
-                    // Crossovers between loops, not the entry from air.
                     if (*feed - 600.0).abs() < EPS && !arcs.is_empty() {
                         arcs.push(AuditedSpiralArc {
                             from: position.unwrap(),
@@ -282,8 +272,6 @@ fn spiral_sweeps_preserve_target_cover_stock_and_bound_section_engagement() {
                 _ => {}
             }
         }
-        // The exit line after the last cutting move is not part of the pass
-        // (a center cut-over before it is).
         if arcs.last().is_some_and(|m| m.center.is_none()) {
             arcs.pop();
         }
@@ -340,8 +328,6 @@ fn spiral_sweeps_preserve_target_cover_stock_and_bound_section_engagement() {
 
 #[test]
 fn radial_lead_enters_perpendicular_from_air_within_the_engagement_limit() {
-    // Fusion-style entry: plunge clear of the stock, feed in along the
-    // radius, quarter lead arc onto the ring tangent, then the ring.
     let doc = fixture(vec![]);
     let CamOperationDto::Adaptive3d { parameters, .. } = &doc.setups[0].operations[0] else {
         unreachable!()
@@ -365,10 +351,13 @@ fn radial_lead_enters_perpendicular_from_air_within_the_engagement_limit() {
         let footprint: Vec<_> = (0..128)
             .map(|i| polar(Point2Dto::new(0.0, 0.0), billet, TAU * i as f64 / 128.0))
             .collect();
-        spiral::clear(
-            &mut b, &footprint, Point2Dto::new(0.0, 0.0), protected, false, r, floor, -1.0, &p, 600.0, 100.0,
-            &mut Work::default(),
-        )
+        spiral::clear(&mut b,
+        &footprint,
+        (Point2Dto::new(0.0, 0.0), protected, false),
+        (r, floor, -1.0),
+        &p,
+        (600.0, 100.0),
+        &mut Work::default())
         .unwrap();
         let u = Point2Dto::new(angle.cos(), angle.sin());
         let t = Point2Dto::new(u.y, -u.x);
@@ -392,7 +381,6 @@ fn radial_lead_enters_perpendicular_from_air_within_the_engagement_limit() {
                 _ => None,
             })
             .unwrap();
-        // The tool reaches depth (no vertical radius) at the plunge column.
         let bottom = b.commands[..lead - 1]
             .iter()
             .rev()
@@ -416,10 +404,8 @@ fn radial_lead_enters_perpendicular_from_air_within_the_engagement_limit() {
             CamCommandDto::Circular { clockwise: true, .. } => xy(join),
             other => panic!("unexpected {other:?}"),
         };
-        // Arc ends heading along the ring tangent (C1 join).
         let v = Point2Dto::new(join.x - arc_center.x, join.y - arc_center.y);
         assert!(((-v.y) * t.x + v.x * t.y) / v.x.hypot(v.y) > 1.0 - 1e-9);
-        // Independent contact audit against the untouched billet.
         let mut samples = vec![];
         for j in 0..=64 {
             let f = j as f64 / 64.0;

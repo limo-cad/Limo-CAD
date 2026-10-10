@@ -1,8 +1,8 @@
 //! Resolve modeled 45-degree chamfers from exact face/edge membership.
 //! Never infer a bevel from a display-mesh silhouette or an unrelated face.
-use nbcad_cam::{CamChainRefDto, CamChainSource, CamSetupDto, ContourCompensation, Point2Dto};
-use nbcad_core::edge_chain::{self, JOIN_TOLERANCE as TOL};
-use nbcad_solid::{Point3Dto, SolidSceneDto};
+use limo_cad_cam::{CamChainRefDto, CamChainSource, CamSetupDto, ContourCompensation, Point2Dto};
+use limo_cad_core::edge_chain::{self, JOIN_TOLERANCE as TOL};
+use limo_cad_solid::{Point3Dto, SolidSceneDto};
 use serde::{Deserialize, Serialize};
 #[cfg(test)]
 #[path = "cam_chamfer_tests.rs"]
@@ -122,9 +122,7 @@ pub fn resolve(
                 if upper.is_empty() || lower.is_empty() {
                     continue;
                 }
-                // Surface parametrization can be reversed/indirect. Establish
-                // accessibility from the adjoining upper horizontal face, not
-                // the sign of a bevel's parameter-space normal.
+
                 if !upper.iter().all(|edge| {
                     body.faces.iter().any(|adjacent| {
                         adjacent.key != face.key
@@ -139,7 +137,7 @@ pub fn resolve(
                 let hi = z(array(upper[0].points[0]));
                 let lo = z(array(lower[0].points[0]));
                 let plane_normal = plane_normal.map(|n| {
-                    let middle = |e: &&nbcad_solid::EdgeDto| {
+                    let middle = |e: &&limo_cad_solid::EdgeDto| {
                         let a = e.points[0];
                         let b = *e.points.last().unwrap();
                         [(a.x + b.x) * 0.5, (a.y + b.y) * 0.5, (a.z + b.z) * 0.5]
@@ -156,8 +154,7 @@ pub fn resolve(
                         n
                     }
                 });
-                // A cone must open toward +setup Z. Its exact circular rims
-                // establish that direction independently of its parametrization.
+
                 if conical {
                     let Some(u) = upper.iter().find_map(|e| e.circle) else {
                         continue;

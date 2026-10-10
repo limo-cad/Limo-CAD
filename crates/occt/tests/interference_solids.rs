@@ -1,7 +1,7 @@
 #![cfg(feature = "native-occt")]
-use nbcad_core::{BodyId, FeatureId};
-use nbcad_occt::{OcctKernel, PlacedBodyQueryDto};
-use nbcad_solid::{
+use limo_cad_core::{BodyId, FeatureId};
+use limo_cad_occt::{OcctKernel, PlacedBodyQueryDto};
+use limo_cad_solid::{
     ExtrudeOperation, KernelExtrudeJobDto, KernelJobDto, KernelProfileDto, Point3Dto,
     RecomputePlanDto,
 };

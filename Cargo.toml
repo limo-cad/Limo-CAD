@@ -1,17 +1,18 @@
-# noBS CAD engine workspace. The host-neutral crates own document and
-# history semantics; `crates/occt` is the native B-rep adapter (D1/D8).
-# The Tauri shell in src-tauri/ is intentionally its own workspace so that
-# `cargo test` at the repo root only builds/tests the engine crates.
 
 [workspace]
 resolver = "2"
 members = [
+    "crates/build-info",
+    "crates/interface",
+    "crates/project-file",
     "crates/core",
     "crates/assembly",
     "crates/cam",
     "crates/sketch",
+    "crates/session-storage",
     "crates/solid",
     "crates/occt",
+    "crates/native-engine",
     "crates/export",
     "crates/mcp-mutate",
     "crates/script",
@@ -22,7 +23,36 @@ members = [
     "xtask",
 ]
 
-# The repository version lives in VERSION and is propagated here by
-# `node scripts/sync-version.mjs`; every member inherits it.
 [workspace.package]
+repository = "https://github.com/limo-cad/Limo-CAD"
 version = "0.2.2"
+edition = "2021"
+
+[workspace.dependencies]
+anyhow = "1.0.104"
+base64 = "0.23.1"
+cxx = "1.0.202"
+cxx-build = "1.0.202"
+earcutr = "0.5.0"
+flate2 = { version = "1.1.10", default-features = false }
+js-sys = "0.3.106"
+png = "0.18.1"
+regex = "1.13.1"
+roxmltree = "0.20.0"
+semver = "1.0.28"
+serde = "1.0.229"
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+sysinfo = { version = "0.39.6", default-features = false }
+tar = "0.4.46"
+tempfile = "3.27.0"
+time = "0.3.55"
+toml_edit = "0.25.15"
+ttf-parser = "=0.25.1"
+unicode-segmentation = "=1.13.3"
+ureq = "3.4.2"
+usvg = { version = "=0.45.1", default-features = false }
+wasm-bindgen = "0.2.129"
+wasm-bindgen-test = "0.3.79"
+windows = { version = "=0.62.2", default-features = false }
+zip = { version = "8.6.0", default-features = false }

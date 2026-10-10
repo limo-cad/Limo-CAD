@@ -1,0 +1,258 @@
+{
+  "sketch_name": "Offset tilted machining profiles",
+  "feature_id": 14,
+  "basis": {
+    "origin": [
+      500,
+      600,
+      700
+    ],
+    "u": [
+      0,
+      1,
+      0
+    ],
+    "v": [
+      0,
+      0,
+      1
+    ],
+    "normal": [
+      1,
+      0,
+      0
+    ]
+  },
+  "profiles": [
+    {
+      "index": 0,
+      "parent_index": null,
+      "nesting_depth": 0,
+      "area": 314.1592653589793,
+      "points": [
+        {
+          "x": 5,
+          "y": 20
+        },
+        {
+          "x": -5,
+          "y": 30
+        },
+        {
+          "x": -15,
+          "y": 20
+        },
+        {
+          "x": -5,
+          "y": 10
+        }
+      ],
+      "curves": [
+        {
+          "kind": "circle",
+          "entity_id": 1,
+          "center": {
+            "x": -5,
+            "y": 20
+          },
+          "radius": 10
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "parent_index": 0,
+      "nesting_depth": 1,
+      "area": 50.26548245743669,
+      "points": [
+        {
+          "x": -1,
+          "y": 20
+        },
+        {
+          "x": -5,
+          "y": 24
+        },
+        {
+          "x": -9,
+          "y": 20
+        },
+        {
+          "x": -5,
+          "y": 16
+        }
+      ],
+      "curves": [
+        {
+          "kind": "circle",
+          "entity_id": 2,
+          "center": {
+            "x": -5,
+            "y": 20
+          },
+          "radius": 4
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "parent_index": 1,
+      "nesting_depth": 2,
+      "area": 12.566370614359172,
+      "points": [
+        {
+          "x": -3,
+          "y": 20
+        },
+        {
+          "x": -5,
+          "y": 22
+        },
+        {
+          "x": -7,
+          "y": 20
+        },
+        {
+          "x": -5,
+          "y": 18
+        }
+      ],
+      "curves": [
+        {
+          "kind": "circle",
+          "entity_id": 3,
+          "center": {
+            "x": -5,
+            "y": 20
+          },
+          "radius": 2
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "parent_index": null,
+      "nesting_depth": 0,
+      "area": 39.269908169872416,
+      "points": [
+        {
+          "x": 45,
+          "y": 0
+        },
+        {
+          "x": 40,
+          "y": 5
+        },
+        {
+          "x": 35,
+          "y": 0
+        }
+      ],
+      "curves": [
+        {
+          "kind": "arc",
+          "entity_id": 23,
+          "start": {
+            "x": 45,
+            "y": 0
+          },
+          "mid": {
+            "x": 40,
+            "y": 5
+          },
+          "end": {
+            "x": 35,
+            "y": 0
+          }
+        },
+        {
+          "kind": "line",
+          "entity_id": 33,
+          "start": {
+            "x": 35,
+            "y": 0
+          },
+          "end": {
+            "x": 45,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "parent_index": null,
+      "nesting_depth": 0,
+      "area": 39.269908169872416,
+      "points": [
+        {
+          "x": 45,
+          "y": 0
+        },
+        {
+          "x": 40,
+          "y": -5
+        },
+        {
+          "x": 35,
+          "y": 0
+        }
+      ],
+      "curves": [
+        {
+          "kind": "arc",
+          "entity_id": 24,
+          "start": {
+            "x": 45,
+            "y": 0
+          },
+          "mid": {
+            "x": 40,
+            "y": -5
+          },
+          "end": {
+            "x": 35,
+            "y": 0
+          }
+        },
+        {
+          "kind": "line",
+          "entity_id": 34,
+          "start": {
+            "x": 35,
+            "y": 0
+          },
+          "end": {
+            "x": 45,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "parent_index": null,
+      "nesting_depth": 0,
+      "area": 8,
+      "points": [
+        {
+          "x": -12,
+          "y": -4
+        },
+        {
+          "x": -8,
+          "y": -4
+        },
+        {
+          "x": -12,
+          "y": 0
+        },
+        {
+          "x": -12,
+          "y": -4
+        }
+      ],
+      "curves": []
+    }
+  ]
+}

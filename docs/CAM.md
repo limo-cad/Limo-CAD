@@ -52,7 +52,7 @@ operation. The operator programs the job explicitly, in this order:
    Library header links to that panel. See [storage behavior and safeguards](CAM_TOOL_LIBRARY.md).
    Each central collection owns its tool-id allocation; separate collections
    are not automatically merged. The
-   PROJECT library lives inside the machining document (and the .nbcad
+   PROJECT library lives inside the machining document (and the .limo
    file): full-data snapshots of exactly the tools this project uses, which
    is what operations reference — a project file is self-contained and
    portable, and editing the central library never silently rewrites an
@@ -201,7 +201,7 @@ rewrites stored geometry.
 
 ## As-built scope
 
-- Persistent manufacturing intent in `.nbcad`: setups, WCS (with origin
+- Persistent manufacturing intent in `.limo`: setups, WCS (with origin
   provenance), G54-G59 work offset plus duplicate-part count, stock
   definitions (box/cylinder/hex/modeled body; fixed size, model-grown
   allowances, or rest from an earlier setup), tool library with cutting data
@@ -591,7 +591,7 @@ than being guessed.
 
 ## Post-processor ecosystem decision
 
-### We still need a small noBS CAD post boundary
+### We still need a small Limo CAD post boundary
 
 There is no broadly adopted open plug-in ABI that lets a CAM system hand the
 same rich job object to proprietary CAM posts, LinuxCNC, Mach, Fanuc, and
@@ -602,7 +602,7 @@ controller language and interpreter contract rather than a portable CAM post
 plug-in API. ISO 14649 / STEP-NC defines a higher-level CNC data model, but it
 is not the post ecosystem deployed on the machines targeted here.
 
-noBS CAD therefore owns a deliberately small internal boundary:
+Limo CAD therefore owns a deliberately small internal boundary:
 
 `persistent CAM intent -> neutral motion IR -> simulator + post adapters`
 
@@ -619,7 +619,7 @@ Public references:
 ### `.nbpost`: the noBS file association for user-supplied posts
 
 The noBS extension is `.nbpost`. A user may deliberately rename a compatible
-post they are entitled to use to `.nbpost`; noBS CAD itself does not copy,
+post they are entitled to use to `.nbpost`; Limo CAD itself does not copy,
 convert, redistribute, or silently import third-party post files. Renaming
 changes only the local file association. It does not change copyright, license
 terms, source syntax, or the script's dependence on its original host runtime.
@@ -627,7 +627,7 @@ terms, source syntax, or the script's dependence on its original host runtime.
 A callback post is not necessarily standalone JavaScript. It may expect a
 host-provided API with section, tool, machine, cycle, property, formatting,
 and file-system objects. Renaming a file therefore does not imply that it can
-run in noBS CAD.
+run in Limo CAD.
 
 The implemented v1 `.nbpost` slice is deliberately non-executing:
 
@@ -636,14 +636,14 @@ The implemented v1 `.nbpost` slice is deliberately non-executing:
 - detects lifecycle and motion callbacks in the supported shape;
 - reports callbacks outside the planned fixed 3-axis v1 surface;
 - detects the presence of rights/license notices; and
-- keeps the source in memory only—it is not persisted in `.nbcad`.
+- keeps the source in memory only—it is not persisted in `.limo`.
 
 The UI says **analysis only** and the engine always returns `runnable: false`.
 Actual execution must wait for a resource-bounded sandbox, a versioned host
 object API, deterministic output capture, and fail-closed handling for every
 unsupported callback and controller feature.
 
-The existing adapter also exports a versioned `nbcad-post-events` JSON stream
+The existing adapter also exports a versioned `limo-cad-post-events` JSON stream
 using the callback names recognized by the analyzer. It is an integration seam,
 not a third-party intermediate file and not a `.nbpost` runner.
 
@@ -656,7 +656,7 @@ controller programming documentation, not by copying a third-party post
 implementation. This is an engineering policy, not legal advice:
 
 - Do not copy a third-party runtime, intermediate format, or post
-  implementation into noBS CAD without a compatible license.
+  implementation into Limo CAD without a compatible license.
 - Treat every supplied post as third-party source until its header, author,
   and license are reviewed. Keep ambiguous files outside the repository.
 - Known-good NC output and user-authored behavioral requirements may be stored

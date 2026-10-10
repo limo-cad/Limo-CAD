@@ -1,17 +1,18 @@
 [package]
-name = "nbcad-sketch"
+name = "limo-cad-sketch"
 version.workspace = true
-edition = "2021"
-description = "noBS CAD 2D sketch model: entities, constraints, solver API (pure Rust, no OCCT)"
+edition.workspace = true
+description = "Limo CAD 2D sketch model: entities, constraints, solver API (pure Rust, no OCCT)"
 license = "LGPL-2.1-or-later"
-repository = "https://github.com/limo-cad/Limo-CAD"
+repository.workspace = true
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-nbcad-cam = { path = "../cam" }
-nbcad-core = { path = "../core" }
-nbcad-assembly = { path = "../assembly" }
-nbcad-solid = { path = "../solid" }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+uuid = { version = "1.26.1", features = ["v4", "js"] }
+limo-cad-cam = { path = "../cam" }
+limo-cad-core = { path = "../core" }
+limo-cad-assembly = { path = "../assembly" }
+limo-cad-solid = { path = "../solid" }
 
 [dev-dependencies]

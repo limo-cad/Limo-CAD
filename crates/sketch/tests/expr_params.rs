@@ -2,7 +2,7 @@
 //! functions, d-references, chained dependencies, cycles, unknown names,
 //! renames, division by zero.
 
-use nbcad_sketch::{
+use limo_cad_sketch::{
     eval_expression, parse_expression, referenced_idents, ExprError, ParamKind, ParamTable,
 };
 
@@ -22,20 +22,18 @@ fn eval_err(expr: &str) -> ExprError {
 
 const EPS: f64 = 1e-12;
 
-// --- Grammar & arithmetic ---------------------------------------------------
-
 #[test]
 fn arithmetic_and_precedence() {
     assert_eq!(eval_ok("1+2*3"), 7.0);
     assert_eq!(eval_ok("(1+2)*3"), 9.0);
     assert_eq!(eval_ok("10/4"), 2.5);
-    assert_eq!(eval_ok("2^3^2"), 512.0); // right-assoc
-    assert_eq!(eval_ok("-2^2"), -4.0); // unary minus looser than ^
+    assert_eq!(eval_ok("2^3^2"), 512.0);
+    assert_eq!(eval_ok("-2^2"), -4.0);
     assert_eq!(eval_ok("+45"), 45.0);
     assert_eq!(eval_ok("=+2^2"), 4.0);
     assert_eq!(eval_ok("2*-+3"), -6.0);
     assert_eq!(eval_ok("-(2+3)"), -5.0);
-    assert_eq!(eval_ok("=50/2"), 25.0); // leading = accepted
+    assert_eq!(eval_ok("=50/2"), 25.0);
     assert_eq!(eval_ok("1 - -3"), 4.0);
     assert_eq!(eval_ok(".5 * 4"), 2.0);
 }
@@ -83,8 +81,6 @@ fn referenced_idents_found() {
     );
 }
 
-// --- Parameter table -----------------------------------------------------------
-
 #[test]
 fn auto_names_and_literals() {
     let mut t = ParamTable::new();
@@ -115,7 +111,7 @@ fn editing_a_parameter_reevaluates_dependents() {
     t.set_expression(d1, "60").unwrap();
     assert_eq!(t.get(d1).unwrap().value, 60.0);
     assert_eq!(t.get(d2).unwrap().value, 30.0);
-    // Formula on the parameter itself.
+
     t.set_expression(d2, "=d1*2").unwrap();
     assert_eq!(t.get(d2).unwrap().value, 120.0);
 }
@@ -134,12 +130,12 @@ fn cycles_are_detected_with_a_clear_path() {
         }
         other => panic!("expected CircularReference, got {other:?}"),
     }
-    // The failed edit rolled back: d1 is still a literal 50.
+
     assert_eq!(t.get(d1).unwrap().value, 50.0);
     assert!(t.get(d1).unwrap().expression.is_none());
-    // Indirect cycle through a chain: break it first, then reform.
-    t.set_expression(d2, "50").unwrap(); // d2 literal
-    t.set_expression(d1, "=d2").unwrap(); // ok: d1 = d2
+
+    t.set_expression(d2, "50").unwrap();
+    t.set_expression(d1, "=d2").unwrap();
     let err = t.set_expression(d2, "=d1 + 1").unwrap_err();
     assert!(matches!(err, ExprError::CircularReference(_)));
     assert_eq!(err.to_string(), "circular reference: d1 → d2 → d1");
@@ -164,9 +160,9 @@ fn rename_rewrites_references_and_rejects_duplicates() {
     let expr = t.get(d2).unwrap().expression.clone().unwrap();
     assert!(expr.contains("width") && !expr.contains("d1"), "{expr}");
     assert_eq!(t.get(d2).unwrap().value, 100.0);
-    // Duplicate name rejected.
+
     assert!(t.rename(d2, "width").is_err());
-    // Formulas can use the new name.
+
     t.set_expression(d2, "=width/2").unwrap();
     assert_eq!(t.get(d2).unwrap().value, 25.0);
 }

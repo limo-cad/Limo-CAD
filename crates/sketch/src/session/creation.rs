@@ -66,10 +66,7 @@ impl SketchSession {
         }
         let start_ray = (start.y - center.y).atan2(start.x - center.x);
         let sweep_ray = (sweep.y - center.y).atan2(sweep.x - center.x);
-        // An arc entity is stored as (start_angle, end_angle) and always swept
-        // counter-clockwise, so a clockwise drag cannot simply negate the
-        // sweep: that would describe the mirror arc. Store the two angles
-        // swapped instead, which walks the very same points the other way.
+
         let sweep_rad = if let Some(text) = angle_text {
             let degrees = self.eval_text(text)?;
             if !degrees.is_finite()
@@ -89,7 +86,6 @@ impl SketchSession {
         };
         let signed_sweep = match sweep_rad {
             Some(travel) if travel.abs() > MIN_ARC_TRAVEL_RAD => {
-                // A drag longer than a full turn is a full circle.
                 let magnitude = travel.abs().min(std::f64::consts::TAU);
                 if travel < 0.0 {
                     -magnitude
@@ -97,11 +93,9 @@ impl SketchSession {
                     magnitude
                 }
             }
-            // A measured travel of zero is a click, not a sweep. The two picks
-            // share one ray, so there is no arc: refuse it rather than invent a
-            // full circle out of a stray click that never moved.
+
             Some(_) => return Err(SessionError::DegenerateSegment),
-            // Picks alone: the historical counter-clockwise reading.
+
             None => {
                 let mut ccw = sweep_ray - start_ray;
                 if ccw <= 0.0 {
@@ -111,7 +105,6 @@ impl SketchSession {
             }
         };
         let (start_angle, end_angle, sweep_is_start) = if signed_sweep < 0.0 {
-            // Clockwise: the pick that ends the drag becomes the stored start.
             (start_ray + signed_sweep, start_ray, true)
         } else {
             (start_ray, start_ray + signed_sweep, false)
@@ -119,9 +112,7 @@ impl SketchSession {
         let start_position =
             center + Vec2::new(radius * start_angle.cos(), radius * start_angle.sin());
         let end_position = center + Vec2::new(radius * end_angle.cos(), radius * end_angle.sin());
-        // Typed sweep and radius locks can move the computed end away from the
-        // cursor. Only acquire a point actually on that endpoint, not merely
-        // one on the same radius. Reverse acquisitions with the stored angles.
+
         let sweep_position = if sweep_is_start {
             start_position
         } else {
@@ -167,7 +158,9 @@ impl SketchSession {
         let (p3, p3_target) = self.snap_creation(p3, ctrl_held);
         let d = 2.0 * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
         if !d.is_finite() || d.abs() < MERGE_EPS {
-            return Err(SessionError::DegenerateSegment); // collinear
+            return Err(SessionError::InvalidConstraint(
+                "Choose three distinct, non-collinear points for the arc".into(),
+            ));
         }
         let (a2, b2, c2) = (p1.dot(p1), p2.dot(p2), p3.dot(p3));
         let ux = (a2 * (p2.y - p3.y) + b2 * (p3.y - p1.y) + c2 * (p1.y - p2.y)) / d;
@@ -179,7 +172,7 @@ impl SketchSession {
         }
         let ang = |p: Vec2| (p.y - center.y).atan2(p.x - center.x);
         let (a0, a1, am) = (ang(p1), ang(p3), ang(p2));
-        // Choose the CCW sweep that contains the mid pick.
+
         let ccw_contains = |s: f64, e: f64, m: f64| {
             let span = (e - s).rem_euclid(std::f64::consts::TAU);
             let off = (m - s).rem_euclid(std::f64::consts::TAU);
@@ -355,7 +348,9 @@ impl SketchSession {
             SlotMode::CenterToCenter => (p1, p2),
             SlotMode::Overall => {
                 if len <= width {
-                    return Err(SessionError::DegenerateSegment);
+                    return Err(SessionError::InvalidConstraint(
+                        "Overall slot width must be smaller than its outside length. Reduce the width or move the endpoints farther apart.".into(),
+                    ));
                 }
                 let offset = d * (width / (2.0 * len));
                 (p1 + offset, p2 - offset)
@@ -363,7 +358,7 @@ impl SketchSession {
             SlotMode::CenterPoint => (p2, p1 * 2.0 - p2),
         };
         let cap = slot_capsule(c1, c2, width).map_err(|_| SessionError::DegenerateSegment)?;
-        // A typed width may put the side away from the acquired cursor.
+
         let on_side = (d.perp().dot(cursor - p1).abs() / len - width / 2.0).abs() <= MERGE_EPS;
         Ok((
             cap,

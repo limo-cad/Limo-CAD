@@ -1,14 +1,18 @@
 //! Sketch manager: owns the document plus the sketch-session lifecycle
 //! (`begin_sketch` / `end_sketch`) and routes drawing ops to the active
-//! session. This is the object both engine hosts (Tauri, WASM) hold.
+//! session. This is the object both engine hosts (native, WASM) hold.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::f64::consts::TAU;
 
+mod component_edit;
+mod component_removal;
+mod rename;
+
 use serde::Serialize;
 
-use nbcad_assembly::{
+use limo_cad_assembly::{
     approximate_interference_report, approximate_pair_result, contact_violation_score,
     ApplyJointMotionsRequestDto, AssemblyDocumentDto, AssemblyPositionDto, AssemblyPositionId,
     AssemblySolutionDto, ComponentDefinitionDto, ComponentOccurrenceDto, ContactSetDto,
@@ -18,13 +22,13 @@ use nbcad_assembly::{
     EvaluateMotionStudyRequestDto, GearRelationDto, InterferenceCheckRequestDto,
     InterferenceReportDto, JointDefinitionDto, JointId, MechanismDragRequestDto,
     MechanismPreviewDto, MotionPathRequestDto, MotionStudyDto, MotionStudyEvaluationDto,
-    MotionStudyId, MotionStudySampleDto, SampleMotionStudyRequestDto,
+    MotionStudyId, MotionStudySampleDto, RemoveOccurrenceRequestDto, SampleMotionStudyRequestDto,
     SetJointCoordinatesRequestDto, SetJointEnabledRequestDto, SetJointMotionRequestDto,
     SetOccurrenceGroundedRequestDto, SetOccurrencePoseRequestDto, SweptCollisionEventDto,
     SweptCollisionReportDto, SweptCollisionRequestDto, UpdateComponentRequestDto,
     UpdateJointRequestDto, UpdateOccurrenceRequestDto,
 };
-use nbcad_cam::{
+use limo_cad_cam::{
     analyze_nbpost, plan_setup, post_event_stream, post_setup, simulate_gcode, simulate_setup,
     CamAdaptiveGeometryDto, CamChainSource, CamDocumentDto, CamGcodeSimulationRequestDto,
     CamHeightExpressionDto, CamHeightReferenceDto, CamHoleDto, CamOperationDto,
@@ -33,11 +37,11 @@ use nbcad_cam::{
     CamSimulationTargetDto, CamStockMeshDto, CamToolpathGenerationDto, CamToolpathStateDto,
     CamToolpathStatusDto, NbPostAnalysisDto, NbPostAnalysisRequestDto, PostEventStreamDto,
 };
-use nbcad_core::{
+use limo_cad_core::{
     BodyAppearance, BodyId, BrowserNodeKind, Document, DocumentDto, EdgeId, FaceId, Feature,
     FeatureId, FeatureKind, FeatureStatus, PlaneBasis, PlaneRef, DEFAULT_MATERIAL_NAME,
 };
-use nbcad_solid::{
+use limo_cad_solid::{
     canonicalize_profile_curves, extract_bounded_faces, BodyFeatureDefinitionDto,
     BodyFeatureRequestDto, CommitKernelRequest, DatumPlaneDefinitionDto, DatumPlaneRequest,
     DatumPlaneSourceDto, DatumPlaneUpdateDto, DeleteFeatureRequest, EditBodyFeatureRequest,
@@ -77,6 +81,12 @@ use crate::project::{
 use crate::session::{
     SessionError, SketchSession, GRID_STEP_MM, MAX_GRID_STEP_MM, MIN_GRID_STEP_MM,
 };
+
+mod print_heights;
+mod print_intent;
+mod print_modifiers;
+mod retention;
+pub use retention::RetainedSketchSessions;
 
 /// A sketch that has been finished and is kept in the document. The full
 /// session is retained (M1d): it renders muted in 3D and re-enters editing
@@ -126,10 +136,10 @@ pub struct SketchManager {
     assembly_solution_cache: RefCell<Option<AssemblySolutionDto>>,
     /// Persistent Browser visibility expressed with stable model identities.
     project_visibility: ProjectVisibilityDto,
-    /// Saved review views. Display offsets are not baked into solids.
+    /// Display layouts leave solid definitions intact.
     named_views: Vec<NamedViewConfigurationDto>,
-    /// View recalled in this session. Not written to the project file.
     active_named_view: Option<String>,
+    print_intent: limo_cad_core::PrintIntentDocumentDto,
     /// Persistent 3-axis manufacturing setups, tools, and operation intent.
     cam: CamDocumentDto,
     /// Candidate manager held until its OCCT replay commits successfully.
@@ -162,6 +172,10 @@ mod cam_order_tests;
 #[path = "cam_tool_compatibility_tests.rs"]
 mod cam_tool_compatibility_tests;
 
+#[cfg(test)]
+#[path = "cam_fingerprint_tests.rs"]
+mod cam_fingerprint_tests;
+
 struct CamSetupDependencyFingerprints {
     model: String,
     setup: String,
@@ -172,9 +186,7 @@ fn stable_cam_fingerprint<T: Serialize + ?Sized>(value: &T) -> Result<String, Se
     let bytes = serde_json::to_vec(value).map_err(|error| {
         SessionError::Solid(format!("could not fingerprint CAM inputs: {error}"))
     })?;
-    // FNV-1a 128 is deterministic across hosts and project reopenings. This
-    // is change detection, not authentication; 128 bits keeps accidental
-    // collisions negligible without adding a platform crypto dependency.
+
     let mut hash = 0x6c62_272e_07bb_0142_62b8_2175_6295_c58d_u128;
     const PRIME: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013b;
     for byte in bytes {
@@ -212,6 +224,7 @@ impl SketchManager {
             project_visibility: ProjectVisibilityDto::default(),
             named_views: Vec::new(),
             active_named_view: None,
+            print_intent: limo_cad_core::PrintIntentDocumentDto::default(),
             cam: CamDocumentDto::default(),
             pending_project: None,
             pending_joint_body_deletion: None,
@@ -226,6 +239,19 @@ impl SketchManager {
         DocumentDto::from(&self.document)
     }
 
+    /// Script playback may start only in a document with no authored work.
+    /// Shared by the desktop lesson controls and the existing script runner.
+    pub fn is_blank_for_script(&self) -> bool {
+        self.active.is_none()
+            && self.document.features().features.is_empty()
+            && self.solids.scene().bodies.is_empty()
+            && self.drawings.sheets.is_empty()
+            && self.assembly == AssemblyDocumentDto::default()
+            && self.cam == CamDocumentDto::default()
+            && self.named_views.is_empty()
+            && self.print_intent == limo_cad_core::PrintIntentDocumentDto::default()
+    }
+
     pub fn set_document_name(&mut self, name: String) -> Result<DocumentDto, SessionError> {
         let name = name.trim();
         if name.is_empty() {
@@ -234,6 +260,53 @@ impl SketchManager {
             ));
         }
         self.document.set_name(name);
+        Ok(self.document_dto())
+    }
+
+    /// Rename an operation and its persisted source references without recomputing geometry.
+    pub fn rename_solid_feature(
+        &mut self,
+        feature_id: FeatureId,
+        name: String,
+    ) -> Result<DocumentDto, SessionError> {
+        if self.active.is_some() {
+            return Err(SessionError::Solid(
+                "finish the active sketch before renaming a feature".into(),
+            ));
+        }
+        if self.pending_project.is_some() {
+            return Err(SessionError::Solid(
+                "features cannot be renamed during project replacement".into(),
+            ));
+        }
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 256 || name.chars().any(char::is_control) {
+            return Err(SessionError::Solid(
+                "feature name must contain 1 to 256 characters without control characters".into(),
+            ));
+        }
+        let index = self
+            .document
+            .features()
+            .features
+            .iter()
+            .position(|feature| feature.id == feature_id)
+            .ok_or_else(|| SessionError::Solid("the history feature no longer exists".into()))?;
+        match self.document.features().features[index].kind {
+            FeatureKind::Sketch => self.rename_sketch(feature_id, name)?,
+            FeatureKind::ConstructionPlane => {
+                return Err(SessionError::Solid(
+                    "name datum planes when creating them".into(),
+                ));
+            }
+            _ => self
+                .solids
+                .rename_feature(feature_id, name)
+                .map_err(|error| SessionError::Solid(error.to_string()))?,
+        }
+        let feature = &mut self.document.features_mut().features[index];
+        feature.name.clear();
+        feature.name.push_str(name);
         Ok(self.document_dto())
     }
 
@@ -273,6 +346,7 @@ impl SketchManager {
             assembly: self.assembly.clone(),
             visibility: self.scrubbed_project_visibility(),
             views: self.scrubbed_named_views(),
+            print_intent: self.print_intent.clone(),
             cam: self.cam.clone(),
             counters: ProjectCountersV2 {
                 sketch: self.sketch_count,
@@ -308,12 +382,22 @@ impl SketchManager {
         &mut self,
         model_json: String,
     ) -> Result<RecomputePlanDto, SessionError> {
+        self.prepare_load_project_ref(&model_json)
+    }
+
+    /// Prepare from retained archive text without copying it. Decoding owns
+    /// the candidate data; the input is never stored or changed, so a cold
+    /// document can keep its recovery snapshot intact if reconstruction fails.
+    pub fn prepare_load_project_ref(
+        &mut self,
+        model_json: &str,
+    ) -> Result<RecomputePlanDto, SessionError> {
         if self.pending_project.is_some() {
             return Err(SessionError::Solid(
                 "a project open is already pending".to_string(),
             ));
         }
-        let model = decode_project(&model_json).map_err(SessionError::Solid)?;
+        let mut model = decode_project(model_json).map_err(SessionError::Solid)?;
         let mut document = Document::new(model.document.name);
         document.restore_history(model.document.settings, model.document.history);
 
@@ -346,18 +430,28 @@ impl SketchManager {
             });
         }
 
-        let solids = SolidDocument::restore_feature_definitions(
-            model.extrudes,
-            model.revolves,
-            model.sweeps,
-            model.lofts,
-            model.ribs,
-            model.fillets,
-            model.chamfers,
-            model.holes,
-            model.body_features,
-        )
-        .map_err(|error| SessionError::Solid(error.to_string()))?;
+        let mut solids =
+            SolidDocument::restore_feature_definitions(limo_cad_solid::SolidFeatureDefinitions {
+                extrudes: model.extrudes,
+                revolves: model.revolves,
+                sweeps: model.sweeps,
+                lofts: model.lofts,
+                ribs: model.ribs,
+                fillets: model.fillets,
+                chamfers: model.chamfers,
+                holes: model.holes,
+                body_features: model.body_features,
+            })
+            .map_err(|error| SessionError::Solid(error.to_string()))?;
+        if let Some(body_id) = print_intent::print_intent_body_floor(&model.print_intent) {
+            solids
+                .reserve_body_ids_through(body_id)
+                .map_err(|error| SessionError::Solid(error.to_string()))?;
+        }
+        model.assembly.component_structure.next_occurrence_id =
+            model.assembly.component_structure.next_occurrence_id.max(
+                print_intent::print_intent_occurrence_floor(&model.print_intent),
+            );
         let mut candidate = SketchManager {
             document,
             active: None,
@@ -390,6 +484,7 @@ impl SketchManager {
             project_visibility: model.visibility,
             named_views: model.views,
             active_named_view: None,
+            print_intent: model.print_intent,
             cam: model.cam,
             pending_project: None,
             pending_joint_body_deletion: None,
@@ -535,7 +630,7 @@ impl SketchManager {
         );
         let mut session = SketchSession::new(name, plane, basis, self.grid_snap);
         self.install_support_references(&mut session, plane, basis);
-        // Palette "Snap" master state applies to new sessions too.
+
         session.set_grid_snap(self.grid_snap);
         session.set_grid_step(self.grid_step)?;
         let dto = session.dto();
@@ -558,6 +653,7 @@ impl SketchManager {
     /// it can render in 3D and be re-entered via `edit_sketch` (M1d).
     pub fn end_sketch(&mut self) -> Result<EndSketchResult, SessionError> {
         let mut session = self.active.take().ok_or(SessionError::NoActiveSketch)?;
+        session.set_edit_placement(None);
         session.refresh_profile_identities();
         let feature_id = self.active_feature_id.take().ok_or_else(|| {
             SessionError::Solid("active sketch has no history feature".to_string())
@@ -566,9 +662,7 @@ impl SketchManager {
             session,
             feature_id,
         });
-        // Load-from-project already sorts saved sketches by feature-tree
-        // index. Live teardown must do the same so rollback → new sketch
-        // → end does not leave the new sketch last in finished.
+
         let feature_order = self
             .document
             .features()
@@ -628,8 +722,6 @@ impl SketchManager {
         self.active.is_some()
     }
 
-    // --- Solid feature history / recompute contract (M2) ---
-
     pub fn profile_catalog(&self) -> Vec<ProfileCatalogItemDto> {
         self.profile_catalog_at(self.document.features().rollback_index)
     }
@@ -656,6 +748,11 @@ impl SketchManager {
         self.solids.scene()
     }
 
+    /// Share immutable evaluated geometry with an in-process renderer or picker.
+    pub fn solid_scene_snapshot(&self) -> std::sync::Arc<SolidSceneDto> {
+        self.solids.scene_snapshot()
+    }
+
     pub fn body_appearances(&self) -> Vec<BodyAppearance> {
         self.body_appearances.clone()
     }
@@ -664,15 +761,30 @@ impl SketchManager {
         self.drawings.clone()
     }
 
+    /// Borrow authored sheets for synchronous inspection under the host guard.
+    pub fn drawing_document_ref(&self) -> &DrawingDocumentDto {
+        &self.drawings
+    }
+
     pub fn assembly_document(&self) -> AssemblyDocumentDto {
         self.assembly.clone()
     }
 
+    /// Borrow assembly intent while a synchronous caller holds the host guard.
+    pub fn assembly_document_ref(&self) -> &AssemblyDocumentDto {
+        &self.assembly
+    }
+
     pub fn set_assembly_document(
         &mut self,
-        document: AssemblyDocumentDto,
+        mut document: AssemblyDocumentDto,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         document.validate().map_err(SessionError::Solid)?;
+        document.component_structure.next_occurrence_id =
+            document.component_structure.next_occurrence_id.max(
+                print_intent::print_intent_occurrence_floor(&self.print_intent),
+            );
         self.assembly = document;
         self.invalidate_assembly_solution();
         Ok(self.assembly.clone())
@@ -688,6 +800,20 @@ impl SketchManager {
     }
 
     fn invalidate_assembly_solution(&mut self) {
+        self.clear_assembly_solution();
+        for sheet in &mut self.drawings.sheets {
+            if sheet.release.status == crate::DrawingReleaseStatus::Released
+                && sheet
+                    .views
+                    .iter()
+                    .any(|view| view.scope == crate::DrawingViewScope::Assembly)
+            {
+                sheet.release.status = crate::DrawingReleaseStatus::Draft;
+            }
+        }
+    }
+
+    fn clear_assembly_solution(&mut self) {
         *self.assembly_solution_cache.get_mut() = None;
         self.active_named_view = None;
     }
@@ -696,6 +822,7 @@ impl SketchManager {
         &mut self,
         request: CreateComponentRequestDto,
     ) -> Result<ComponentDefinitionDto, SessionError> {
+        self.ensure_no_component_edit()?;
         let component = self
             .assembly
             .create_component(request, self.solids.scene())
@@ -708,6 +835,7 @@ impl SketchManager {
         &mut self,
         request: UpdateComponentRequestDto,
     ) -> Result<ComponentDefinitionDto, SessionError> {
+        self.ensure_no_component_edit()?;
         let component = self
             .assembly
             .update_component(request, self.solids.scene())
@@ -720,6 +848,7 @@ impl SketchManager {
         &mut self,
         request: CreateOccurrenceRequestDto,
     ) -> Result<ComponentOccurrenceDto, SessionError> {
+        self.ensure_no_component_edit()?;
         let occurrence = self
             .assembly
             .create_occurrence(request)
@@ -732,6 +861,7 @@ impl SketchManager {
         &mut self,
         request: UpdateOccurrenceRequestDto,
     ) -> Result<ComponentOccurrenceDto, SessionError> {
+        self.ensure_no_component_edit()?;
         let occurrence = self
             .assembly
             .update_occurrence(request)
@@ -744,6 +874,7 @@ impl SketchManager {
         &mut self,
         request: DuplicateOccurrenceRequestDto,
     ) -> Result<ComponentOccurrenceDto, SessionError> {
+        self.ensure_no_component_edit()?;
         let occurrence = self
             .assembly
             .duplicate_occurrence_subtree(request)
@@ -756,6 +887,7 @@ impl SketchManager {
         &mut self,
         request: SetOccurrenceGroundedRequestDto,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .set_occurrence_grounded(request)
             .map_err(SessionError::Solid)?;
@@ -767,6 +899,7 @@ impl SketchManager {
         &mut self,
         request: SetOccurrencePoseRequestDto,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .set_occurrence_pose(request)
             .map_err(SessionError::Solid)?;
@@ -789,6 +922,7 @@ impl SketchManager {
         &mut self,
         request: CreateJointRequestDto,
     ) -> Result<JointDefinitionDto, SessionError> {
+        self.ensure_no_component_edit()?;
         let joint = self
             .assembly
             .create(request, self.solids.scene())
@@ -798,6 +932,7 @@ impl SketchManager {
     }
 
     pub fn delete_joint(&mut self, id: JointId) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly.delete(id).map_err(SessionError::Solid)?;
         self.invalidate_assembly_solution();
         Ok(self.assembly.clone())
@@ -807,6 +942,7 @@ impl SketchManager {
         &mut self,
         request: UpdateJointRequestDto,
     ) -> Result<JointDefinitionDto, SessionError> {
+        self.ensure_no_component_edit()?;
         let joint = self
             .assembly
             .update(request, self.solids.scene())
@@ -830,6 +966,7 @@ impl SketchManager {
         &mut self,
         request: SetJointEnabledRequestDto,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .set_joint_enabled(request.joint_id, request.enabled)
             .map_err(SessionError::Solid)?;
@@ -841,6 +978,7 @@ impl SketchManager {
         &mut self,
         request: SetJointMotionRequestDto,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .drive_joint_motion(request, self.solids.scene())
             .map_err(SessionError::Solid)?;
@@ -866,6 +1004,7 @@ impl SketchManager {
         &mut self,
         request: SetJointCoordinatesRequestDto,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .drive_joint_coordinates(request.motion, self.solids.scene())
             .map_err(SessionError::Solid)?;
@@ -890,6 +1029,7 @@ impl SketchManager {
         &mut self,
         request: CreateGearRelationRequestDto,
     ) -> Result<GearRelationDto, SessionError> {
+        self.ensure_no_component_edit()?;
         let relation = self
             .assembly
             .create_gear_relation(request, self.solids.scene())
@@ -902,6 +1042,7 @@ impl SketchManager {
         &mut self,
         relation: GearRelationDto,
     ) -> Result<GearRelationDto, SessionError> {
+        self.ensure_no_component_edit()?;
         let relation = self
             .assembly
             .update_gear_relation(relation, self.solids.scene())
@@ -911,6 +1052,7 @@ impl SketchManager {
     }
 
     pub fn delete_gear_relation(&mut self, id: u64) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .delete_gear_relation(id)
             .map_err(SessionError::Solid)?;
@@ -931,6 +1073,7 @@ impl SketchManager {
         &mut self,
         request: ApplyJointMotionsRequestDto,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .apply_joint_motions(&request.motions)
             .map_err(SessionError::Solid)?;
@@ -942,6 +1085,7 @@ impl SketchManager {
         &mut self,
         request: CreateAssemblyPositionRequestDto,
     ) -> Result<AssemblyPositionDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .create_position(request)
             .map_err(SessionError::Solid)
@@ -951,6 +1095,7 @@ impl SketchManager {
         &mut self,
         position: AssemblyPositionDto,
     ) -> Result<AssemblyPositionDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .update_position(position)
             .map_err(SessionError::Solid)
@@ -960,6 +1105,7 @@ impl SketchManager {
         &mut self,
         id: AssemblyPositionId,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .delete_position(id)
             .map_err(SessionError::Solid)?;
@@ -970,6 +1116,7 @@ impl SketchManager {
         &mut self,
         id: AssemblyPositionId,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .apply_position(id)
             .map_err(SessionError::Solid)?;
@@ -981,6 +1128,7 @@ impl SketchManager {
         &mut self,
         request: CreateMotionStudyRequestDto,
     ) -> Result<MotionStudyDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .create_motion_study(request)
             .map_err(SessionError::Solid)
@@ -990,6 +1138,7 @@ impl SketchManager {
         &mut self,
         study: MotionStudyDto,
     ) -> Result<MotionStudyDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .update_motion_study(study)
             .map_err(SessionError::Solid)
@@ -999,6 +1148,7 @@ impl SketchManager {
         &mut self,
         id: MotionStudyId,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .delete_motion_study(id)
             .map_err(SessionError::Solid)?;
@@ -1027,6 +1177,7 @@ impl SketchManager {
         &mut self,
         request: CreateContactSetRequestDto,
     ) -> Result<ContactSetDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .create_contact_set(request)
             .map_err(SessionError::Solid)
@@ -1036,6 +1187,7 @@ impl SketchManager {
         &mut self,
         contact: ContactSetDto,
     ) -> Result<ContactSetDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .update_contact_set(contact)
             .map_err(SessionError::Solid)
@@ -1045,6 +1197,7 @@ impl SketchManager {
         &mut self,
         id: ContactSetId,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .delete_contact_set(id)
             .map_err(SessionError::Solid)?;
@@ -1319,8 +1472,9 @@ impl SketchManager {
 
     pub fn set_grounded_body(
         &mut self,
-        body_id: Option<nbcad_core::BodyId>,
+        body_id: Option<limo_cad_core::BodyId>,
     ) -> Result<AssemblyDocumentDto, SessionError> {
+        self.ensure_no_component_edit()?;
         self.assembly
             .set_grounded_body(body_id, self.solids.scene())
             .map_err(SessionError::Solid)?;
@@ -1374,8 +1528,7 @@ impl SketchManager {
                 .into_iter()
                 .collect()
         };
-        // Validate the complete selection before changing either set. The
-        // active sketch is not a retained reference and remains visible.
+
         if let Some(name) = sketches.difference(&retained_sketches).next() {
             return Err(SessionError::Solid(format!(
                 "Retained sketch '{name}' was not found"
@@ -1464,10 +1617,34 @@ impl SketchManager {
         &mut self,
         mut views: Vec<NamedViewConfigurationDto>,
     ) -> Result<NamedViewsDto, SessionError> {
+        if self.pending_project.is_some() {
+            return Err(SessionError::Solid(
+                "Named layouts cannot change during project replacement".into(),
+            ));
+        }
+        self.solids
+            .ensure_metadata_editable()
+            .map_err(|error| SessionError::Solid(error.to_string()))?;
         for view in &mut views {
             view.visible_body_ids.sort_unstable();
             view.visible_body_ids.dedup();
             view.part_offsets.sort_by_key(|offset| offset.body_id);
+            view.occurrence_offsets
+                .sort_by_key(|offset| offset.occurrence_id.0);
+            for offset in &view.occurrence_offsets {
+                if !self
+                    .assembly
+                    .component_structure
+                    .occurrences
+                    .iter()
+                    .any(|o| o.id == offset.occurrence_id)
+                {
+                    return Err(SessionError::Solid(format!(
+                        "Named view '{}' references unknown occurrence {}",
+                        view.name, offset.occurrence_id.0
+                    )));
+                }
+            }
         }
         crate::dto::validate_named_views(&views).map_err(SessionError::Solid)?;
         let retained = self.retained_presentation_body_ids();
@@ -1478,11 +1655,38 @@ impl SketchManager {
                 .copied()
                 .chain(view.part_offsets.iter().map(|offset| offset.body_id))
             {
-                if !retained.contains(&nbcad_core::BodyId(id)) {
+                if !retained.contains(&limo_cad_core::BodyId(id)) {
                     return Err(SessionError::Solid(format!("Body {id} was not found")));
                 }
             }
         }
+        for view in &mut views {
+            if let Some(existing) = self
+                .named_views
+                .iter()
+                .find(|existing| existing.name == view.name)
+            {
+                if view.id.is_some() && view.id != existing.id {
+                    return Err(SessionError::Solid(
+                        "A saved layout identity cannot be replaced".into(),
+                    ));
+                }
+                view.id = existing.id.clone();
+            } else if view.id.as_ref().is_some_and(|id| {
+                !self
+                    .named_views
+                    .iter()
+                    .any(|existing| existing.id.as_ref() == Some(id))
+            }) {
+                return Err(SessionError::Solid(
+                    "New layouts cannot adopt an unknown saved identity".into(),
+                ));
+            }
+            if view.id.is_none() {
+                view.id = Some(uuid::Uuid::new_v4().to_string());
+            }
+        }
+        crate::dto::validate_named_views(&views).map_err(SessionError::Solid)?;
         self.named_views = views;
         self.active_named_view = None;
         self.sync_named_view_browser();
@@ -1504,6 +1708,7 @@ impl SketchManager {
             .into_iter()
             .find(|view| view.name == name)
             .ok_or_else(|| SessionError::Solid(format!("Named view '{name}' was not found")))?;
+        let solution = self.resolve_named_view(&view)?;
         let retained = self.retained_presentation_body_ids();
         let visible = view
             .visible_body_ids
@@ -1518,7 +1723,135 @@ impl SketchManager {
             .collect();
         let visibility = self.set_project_visibility(visibility)?;
         self.active_named_view = Some(view.name.clone());
-        Ok(RecallNamedViewDto { view, visibility })
+        Ok(RecallNamedViewDto {
+            view,
+            visibility,
+            solution,
+        })
+    }
+
+    /// One read-only layout resolver for display, STL and 3MF. Camera has no
+    /// influence on geometry; named-view offsets never modify the assembly.
+    pub fn named_view_solution(
+        &self,
+        name: Option<&str>,
+    ) -> Result<AssemblySolutionDto, SessionError> {
+        if let Some(name) = name {
+            let view = self
+                .named_views()
+                .views
+                .into_iter()
+                .find(|v| v.name == name)
+                .ok_or_else(|| SessionError::Solid(format!("Named view '{name}' was not found")))?;
+            return self.resolve_named_view(&view);
+        }
+        let mut solution = self.assembly_solution();
+        let hidden: BTreeSet<_> = self
+            .project_visibility()
+            .hidden_body_ids
+            .into_iter()
+            .collect();
+        for pose in &mut solution.instance_body_poses {
+            pose.visible &= !hidden.contains(&pose.body_id.0);
+        }
+        Ok(solution)
+    }
+
+    /// Resolve the recalled display with the live Browser eye-toggle choices.
+    /// Saved visibility is a recall snapshot; toggling an eye afterwards does
+    /// not edit that snapshot or discard its occurrence placement.
+    pub fn presentation_solution(&self) -> Result<AssemblySolutionDto, SessionError> {
+        let Some(name) = self.active_named_view.as_deref() else {
+            return self.named_view_solution(None);
+        };
+        let mut view = self
+            .scrubbed_named_views()
+            .into_iter()
+            .find(|view| view.name == name)
+            .ok_or_else(|| SessionError::Solid(format!("Named view '{name}' was not found")))?;
+        let hidden: BTreeSet<_> = self
+            .project_visibility()
+            .hidden_body_ids
+            .into_iter()
+            .collect();
+        view.visible_body_ids = self
+            .retained_presentation_body_ids()
+            .into_iter()
+            .map(|id| id.0)
+            .filter(|id| !hidden.contains(id))
+            .collect();
+        self.resolve_named_view(&view)
+    }
+
+    /// Export selection: absent uses the current display; an empty name uses
+    /// assembled placement and live visibility; a name uses its saved snapshot.
+    pub fn export_view_solution(
+        &self,
+        name: Option<&str>,
+    ) -> Result<AssemblySolutionDto, SessionError> {
+        match name {
+            None => self.presentation_solution(),
+            Some("") => self.named_view_solution(None),
+            Some(name) => self.named_view_solution(Some(name)),
+        }
+    }
+
+    /// The envelope follows the selected display or saved layout unless the
+    /// caller explicitly overrides it. An assembled export uses the default bed.
+    pub fn export_print_bed(
+        &self,
+        name: Option<&str>,
+    ) -> Result<limo_cad_core::PrintBedDto, SessionError> {
+        let name = name
+            .or(self.active_named_view.as_deref())
+            .filter(|name| !name.is_empty());
+        match name {
+            None => Ok(Default::default()),
+            Some(name) => self
+                .scrubbed_named_views()
+                .into_iter()
+                .find(|view| view.name == name)
+                .map(|view| view.print_bed)
+                .ok_or_else(|| SessionError::Solid(format!("Named view '{name}' was not found"))),
+        }
+    }
+
+    pub fn resolve_named_view(
+        &self,
+        view: &NamedViewConfigurationDto,
+    ) -> Result<AssemblySolutionDto, SessionError> {
+        crate::dto::validate_named_views(std::slice::from_ref(view))
+            .map_err(SessionError::Solid)?;
+        let mut solution = limo_cad_assembly::resolve_view_layout(
+            &self.assembly.component_structure,
+            &self.assembly_solution(),
+            &view.occurrence_offsets,
+        )
+        .map_err(SessionError::Solid)?;
+        let visible: BTreeSet<_> = view.visible_body_ids.iter().copied().collect();
+        for pose in &mut solution.instance_body_poses {
+            pose.visible &= visible.contains(&pose.body_id.0);
+            if let Some(offset) = view
+                .part_offsets
+                .iter()
+                .find(|o| o.body_id == pose.body_id.0)
+            {
+                for axis in 0..3 {
+                    pose.translation[axis] += offset.translation[axis];
+                }
+            }
+        }
+        for pose in &mut solution.body_poses {
+            if let Some(instance) = solution
+                .instance_body_poses
+                .iter()
+                .find(|p| p.body_id == pose.body_id)
+            {
+                pose.translation = instance.translation;
+                pose.rotation = instance.rotation;
+            }
+        }
+        Ok(solution)
     }
 
     pub fn set_drawing_document(
@@ -1528,7 +1861,7 @@ impl SketchManager {
         drawing.validate().map_err(SessionError::Solid)?;
         self.drawings = crate::drawing_topology::capture_drawing_topology(
             drawing,
-            &self.solid_scene(),
+            self.solid_scene_ref(),
             Some(&self.drawings),
         )
         .map_err(SessionError::Solid)?;
@@ -1538,7 +1871,7 @@ impl SketchManager {
     pub fn geometry_edge_chain(
         &self,
         request: crate::EdgeChainRequest,
-    ) -> Result<nbcad_core::edge_chain::Chain, SessionError> {
+    ) -> Result<limo_cad_core::edge_chain::Chain, SessionError> {
         let sketches = if request.source == crate::ChainSource::Sketch {
             self.finished_sketches()
         } else {
@@ -1572,11 +1905,7 @@ impl SketchManager {
     ) -> Result<CamDocumentDto, SessionError> {
         cam.migrate_legacy();
         cam.validate_for_editing().map_err(SessionError::Solid)?;
-        // Structural/parameter validation passed. Incompatible tool use is
-        // retained as an invalid operation, not a rejected library edit.
-        // Recompute non-fatal warnings so
-        // fixed operations clear their badge and still-broken disabled ones
-        // keep theirs.
+
         cam.refresh_load_warnings();
         self.upgrade_verified_legacy_cam_generations(&mut cam);
         self.cam = cam;
@@ -1596,7 +1925,7 @@ impl SketchManager {
         }
         for setup in &self.cam.setups {
             let Ok(dependencies) = self.cam_setup_dependency_fingerprints(setup) else {
-                continue; // A broken old setup must not block its repair.
+                continue;
             };
             for operation in setup.operations.iter().filter(|o| o.enabled()) {
                 let Some(saved) =
@@ -1632,9 +1961,7 @@ impl SketchManager {
     ) -> Result<CamSetupDependencyFingerprints, SessionError> {
         let mut setup_intent = setup.clone();
         setup_intent.operations.clear();
-        // Current fixed-axis motion is target-independent. A different post
-        // rechecks compatibility, not geometric freshness; future target-
-        // dependent linking must add its resolved capabilities to this key.
+
         setup_intent.machine = None;
 
         let mut body_ids = BTreeSet::new();
@@ -1678,14 +2005,16 @@ impl SketchManager {
             .iter()
             .filter(|body| body_ids.contains(&body.id))
             .collect::<Vec<_>>();
-        // CAM operations created before associative loop references existed
-        // may still contain sketch-derived coordinates. Including finished
-        // sketches is deliberately conservative: a false stale warning is
-        // safer than silently trusting a path after its source sketch moved.
+
         let sketches = self
             .finished
             .iter()
-            .map(|finished| finished.session.dto())
+            .map(|finished| {
+                let mut sketch = finished.session.dto();
+                sketch.can_undo = false;
+                sketch.can_redo = false;
+                sketch
+            })
             .collect::<Vec<_>>();
         let upstream_tool_ids = upstream_setups
             .iter()
@@ -1780,7 +2109,6 @@ impl SketchManager {
             )
         };
         let operation_fingerprint = if legacy_prefix {
-            // Preserve the exact old encoding solely to verify/migrate it.
             let prefix = setup
                 .operations
                 .iter()
@@ -1808,7 +2136,7 @@ impl SketchManager {
         let order_dependencies = if legacy_prefix {
             None
         } else {
-            let rules = nbcad_cam::cam_operation_dependencies(setup, operation, linking);
+            let rules = limo_cad_cam::cam_operation_dependencies(setup, operation, linking);
             let fingerprint = |kind| {
                 let sources = rules
                     .iter()
@@ -1818,17 +2146,17 @@ impl SketchManager {
                     .collect::<Vec<_>>();
                 stable_cam_fingerprint(&(
                     "cam-order-evidence",
-                    nbcad_cam::CAM_ORDER_DEPENDENCY_RULES_REVISION,
+                    limo_cad_cam::CAM_ORDER_DEPENDENCY_RULES_REVISION,
                     sources,
                 ))
             };
-            Some(nbcad_cam::CamToolpathOrderDependenciesDto {
-                rules_revision: nbcad_cam::CAM_ORDER_DEPENDENCY_RULES_REVISION,
+            Some(limo_cad_cam::CamToolpathOrderDependenciesDto {
+                rules_revision: limo_cad_cam::CAM_ORDER_DEPENDENCY_RULES_REVISION,
                 stock_height_fingerprint: fingerprint(
-                    nbcad_cam::CamOperationDependencyKind::IncomingStockHeight,
+                    limo_cad_cam::CamOperationDependencyKind::IncomingStockHeight,
                 )?,
                 predrill_fingerprint: fingerprint(
-                    nbcad_cam::CamOperationDependencyKind::PredrilledEntry,
+                    limo_cad_cam::CamOperationDependencyKind::PredrilledEntry,
                 )?,
             })
         };
@@ -2079,7 +2407,7 @@ impl SketchManager {
             .iter()
             .filter(|body| wanted_bodies.contains(&body.id))
         {
-            for point in body.mesh.positions.chunks_exact(3) {
+            for point in body.mesh.positions.as_chunks::<3>().0 {
                 let projected = cam_model_point_to_setup(
                     [
                         f64::from(point[0]),
@@ -2137,7 +2465,7 @@ impl SketchManager {
                 Some(cam_selection_reference_z(
                     operation,
                     &setup_snapshot,
-                    &scene,
+                    scene,
                     &sketches,
                     &label,
                 )?)
@@ -2158,7 +2486,7 @@ impl SketchManager {
                     CamHeightReferenceDto::Origin => 0.0,
                     CamHeightReferenceDto::Geometry => crate::cam_height_geometry::resolve(
                         expression.geometry.as_ref().ok_or_else(|| SessionError::Solid("Height geometry is missing".into()))?,
-                        &setup_snapshot, &scene, &sketches,
+                        &setup_snapshot, scene, &sketches,
                     ).map_err(SessionError::Solid)?,
                     CamHeightReferenceDto::HoleTop => hole_top.ok_or_else(|| {
                         SessionError::Solid(format!(
@@ -2523,12 +2851,6 @@ impl SketchManager {
             .expect("operation owner was found above")
             .clone();
 
-        // Plan through the requested operation, retaining its incoming-stock
-        // evidence (e.g. enabled whole-stock facing). Later operations must
-        // not block individual regeneration, but deleting the prefix here
-        // would incorrectly reject a valid lower feed plane after facing.
-        // Generation remains distinct from export's all-operation freshness
-        // and geometric verification gates.
         let mut isolated = self.cam.clone();
         if let Some(setup) = isolated
             .setups
@@ -2642,7 +2964,7 @@ impl SketchManager {
         setup_id: u64,
         operation_id: u64,
     ) -> Result<CamProgramDto, SessionError> {
-        let mut program = nbcad_cam::plan_setup_through(&self.cam, setup_id, operation_id)
+        let mut program = limo_cad_cam::plan_setup_through(&self.cam, setup_id, operation_id)
             .map_err(|error| SessionError::Solid(error.to_string()))?;
         if let Some(warning) = self.cam_toolpath_safety_warning(setup_id)? {
             program.warnings.insert(0, warning);
@@ -2749,14 +3071,14 @@ impl SketchManager {
             .collect();
         let mut thread_section = false;
         for (index, command) in program.commands.iter().enumerate() {
-            if let nbcad_cam::CamCommandDto::SectionStart { operation_id, .. } = command {
+            if let limo_cad_cam::CamCommandDto::SectionStart { operation_id, .. } = command {
                 thread_section = setup.operations.iter().any(|op| {
                     op.id() == *operation_id && matches!(op, CamOperationDto::Thread { .. })
                 });
             }
             if thread_section
                 && axial_stock_removal.contains(&index)
-                && matches!(command, nbcad_cam::CamCommandDto::Linear { .. })
+                && matches!(command, limo_cad_cam::CamCommandDto::Linear { .. })
             {
                 return Err(SessionError::Solid(format!("CAM export blocked: thread-tool entry at motion {} removes incoming stock. Generate the upstream bore and verify its full-diameter depth, including the drill point, before thread milling", index + 1)));
             }
@@ -2832,6 +3154,9 @@ impl SketchManager {
                 "body appearance requires a non-zero body id".to_string(),
             ));
         }
+        if let Some(material) = &appearance.material {
+            material.validate().map_err(SessionError::Solid)?;
+        }
         let material_name = appearance.material_name.trim();
         let material_name = if material_name.is_empty() {
             DEFAULT_MATERIAL_NAME.to_string()
@@ -2842,22 +3167,8 @@ impl SketchManager {
             body_id: appearance.body_id,
             color: appearance.color,
             material_name,
-            filament_type: {
-                let value = appearance.filament_type.trim();
-                if value.is_empty() {
-                    nbcad_core::DEFAULT_FILAMENT_TYPE.to_string()
-                } else {
-                    value.to_string()
-                }
-            },
-            brand: {
-                let value = appearance.brand.trim();
-                if value.is_empty() {
-                    nbcad_core::DEFAULT_BRAND.to_string()
-                } else {
-                    value.to_string()
-                }
-            },
+            filament_type: appearance.filament_type.trim().to_string(),
+            brand: appearance.brand.trim().to_string(),
             color_name: appearance.color_name.trim().to_string(),
             filament_id: appearance
                 .filament_id
@@ -2873,8 +3184,9 @@ impl SketchManager {
             diameter_mm: if appearance.diameter_mm.is_finite() && appearance.diameter_mm > 0.0 {
                 appearance.diameter_mm
             } else {
-                nbcad_core::DEFAULT_FILAMENT_DIAMETER_MM
+                limo_cad_core::DEFAULT_FILAMENT_DIAMETER_MM
             },
+            material: appearance.material,
         };
         if let Some(existing) = self
             .body_appearances
@@ -2889,7 +3201,7 @@ impl SketchManager {
         Ok(self.body_appearances.clone())
     }
 
-    fn retained_presentation_body_ids(&self) -> BTreeSet<nbcad_core::BodyId> {
+    fn retained_presentation_body_ids(&self) -> BTreeSet<limo_cad_core::BodyId> {
         let mut retained = self.solids.retained_body_ids();
         retained.extend(self.solids.scene().bodies.iter().map(|body| body.id));
         retained
@@ -2929,7 +3241,7 @@ impl SketchManager {
             .hidden_body_ids
             .iter()
             .copied()
-            .filter(|id| retained_bodies.contains(&nbcad_core::BodyId(*id)))
+            .filter(|id| retained_bodies.contains(&limo_cad_core::BodyId(*id)))
             .collect::<Vec<_>>();
         hidden_body_ids.sort_unstable();
         hidden_body_ids.dedup();
@@ -2975,22 +3287,37 @@ impl SketchManager {
                     .visible_body_ids
                     .iter()
                     .copied()
-                    .filter(|id| retained.contains(&nbcad_core::BodyId(*id)))
+                    .filter(|id| retained.contains(&limo_cad_core::BodyId(*id)))
                     .collect::<Vec<_>>();
                 visible_body_ids.sort_unstable();
                 visible_body_ids.dedup();
                 let mut part_offsets = view
                     .part_offsets
                     .iter()
-                    .filter(|offset| retained.contains(&nbcad_core::BodyId(offset.body_id)))
+                    .filter(|offset| retained.contains(&limo_cad_core::BodyId(offset.body_id)))
                     .cloned()
                     .collect::<Vec<_>>();
                 part_offsets.sort_by_key(|offset| offset.body_id);
                 NamedViewConfigurationDto {
+                    id: view.id.clone(),
                     name: view.name.clone(),
                     camera: view.camera.clone(),
                     visible_body_ids,
                     part_offsets,
+                    occurrence_offsets: view
+                        .occurrence_offsets
+                        .iter()
+                        .filter(|offset| {
+                            self.assembly
+                                .component_structure
+                                .occurrences
+                                .iter()
+                                .any(|o| o.id == offset.occurrence_id)
+                        })
+                        .cloned()
+                        .collect(),
+                    print_layout: view.print_layout,
+                    print_bed: view.print_bed.clone(),
                 }
             })
             .collect()
@@ -3128,9 +3455,7 @@ impl SketchManager {
                     request.feature_id.0
                 ))
             })?;
-        // A parametric feature may only depend on construction planes that
-        // precede it in history. Besides preventing cycles, this ensures a
-        // rollback never leaves a plane silently reading a future basis.
+
         let feature_order = self
             .document
             .features()
@@ -3209,7 +3534,7 @@ impl SketchManager {
             &mut SolidDocument,
             &[ProfileCatalogItemDto],
             &BTreeSet<FeatureId>,
-        ) -> Result<RecomputePlanDto, nbcad_solid::SolidError>,
+        ) -> Result<RecomputePlanDto, limo_cad_solid::SolidError>,
     {
         let insertion_index = self
             .document
@@ -3494,6 +3819,8 @@ impl SketchManager {
                 "finish the active sketch before creating a Rib".to_string(),
             ));
         }
+        limo_cad_solid::validate_rib_extent(request.operation, request.extent)
+            .map_err(|error| SessionError::Solid(error.to_string()))?;
         let feature_id = self.document.alloc_feature_id();
         let next_number = self.rib_count + 1;
         let name = format!("Rib{next_number}");
@@ -3533,7 +3860,7 @@ impl SketchManager {
         self.ensure_no_active_sketch("creating a solid Fillet")?;
         if request.edge_ids.is_empty() {
             return Err(SessionError::Solid(
-                nbcad_solid::SolidError::EmptyEdgeSelection.to_string(),
+                limo_cad_solid::SolidError::EmptyEdgeSelection.to_string(),
             ));
         }
         let feature_id = self.document.alloc_feature_id();
@@ -3571,7 +3898,7 @@ impl SketchManager {
         self.ensure_no_active_sketch("creating a solid Chamfer")?;
         if request.edge_ids.is_empty() {
             return Err(SessionError::Solid(
-                nbcad_solid::SolidError::EmptyEdgeSelection.to_string(),
+                limo_cad_solid::SolidError::EmptyEdgeSelection.to_string(),
             ));
         }
         let feature_id = self.document.alloc_feature_id();
@@ -3751,7 +4078,8 @@ impl SketchManager {
             ));
         }
         let original_tree = self.document.features().clone();
-        let dependencies = self.timeline_dependencies(&original_tree.features);
+        let (dependencies, _) =
+            self.timeline_dependencies_and_body_writers(&original_tree.features);
         if !self
             .document
             .features_mut()
@@ -3852,6 +4180,62 @@ impl SketchManager {
         &mut self,
         request: CommitKernelRequest,
     ) -> Result<SolidUpdateDto, SessionError> {
+        self.commit_solid_inner(request, false, None)
+    }
+
+    /// Query the support at the sketch's own active history prefix. A pending
+    /// project owns its own history; never borrow the previous document's IDs.
+    pub fn history_support_queries(&self) -> Vec<limo_cad_solid::HistorySupportQuery> {
+        if let Some(pending) = &self.pending_project {
+            return pending.manager.history_support_queries();
+        }
+        let tree = self.document.features();
+        let mut previous = None;
+        let mut queries = Vec::new();
+        for feature in tree
+            .features
+            .iter()
+            .take(tree.rollback_index)
+            .filter(|f| !f.suppressed)
+        {
+            if let Some(finished) = self.finished.iter().find(|f| f.feature_id == feature.id) {
+                if let (Some(after_feature), PlaneRef::PlanarFace { face_id }) =
+                    (previous, finished.session.plane())
+                {
+                    queries.push(limo_cad_solid::HistorySupportQuery {
+                        sketch_id: feature.id,
+                        after_feature,
+                        face_id,
+                    });
+                }
+            }
+            if feature_changes_solid_topology(feature.kind) {
+                previous = Some(feature.id);
+            }
+        }
+        queries
+    }
+
+    /// Internal native-host commit: the set must come from the same kernel
+    /// recompute as `request.scene`. It is not accepted from serialized clients.
+    pub fn commit_solid_with_verified_supports(
+        &mut self,
+        request: CommitKernelRequest,
+        verified: &BTreeSet<FeatureId>,
+    ) -> Result<SolidUpdateDto, SessionError> {
+        // A partial/failed replay supplies no historical proof. Preserve the
+        // ordinary strict scene check instead of marking every face-hosted
+        // sketch broken merely because an unrelated later job failed.
+        let verified = request.scene.errors.is_empty().then_some(verified);
+        self.commit_solid_inner(request, false, verified)
+    }
+
+    fn commit_solid_inner(
+        &mut self,
+        request: CommitKernelRequest,
+        restoring_project: bool,
+        verified_supports: Option<&BTreeSet<FeatureId>>,
+    ) -> Result<SolidUpdateDto, SessionError> {
         if let Some(mut pending) = self.pending_project.take() {
             if pending.transaction_id != request.transaction_id {
                 self.pending_project = Some(pending);
@@ -3859,16 +4243,37 @@ impl SketchManager {
                     "stale project recompute result".to_string(),
                 ));
             }
-            let update = pending.manager.commit_solid(request)?;
+            let update = pending
+                .manager
+                .commit_solid_inner(request, true, verified_supports)?;
             *self = *pending.manager;
             return Ok(update);
         }
 
+        let issued_scene = (!restoring_project
+            && self
+                .drawings
+                .sheets
+                .iter()
+                .any(|sheet| sheet.release.status == crate::DrawingReleaseStatus::Released))
+        .then(|| self.solids.scene_snapshot());
         let scene = self
             .solids
             .commit(request.transaction_id, request.scene)
             .map_err(|error| SessionError::Solid(error.to_string()))?
             .clone();
+        if issued_scene
+            .as_ref()
+            .is_some_and(|prior| prior.bodies != scene.bodies || prior.errors != scene.errors)
+        {
+            for sheet in &mut self.drawings.sheets {
+                if sheet.release.status == crate::DrawingReleaseStatus::Released
+                    && !sheet.views.is_empty()
+                {
+                    sheet.release.status = crate::DrawingReleaseStatus::Draft;
+                }
+            }
+        }
         self.active_named_view = None;
         if let Some((pending_id, deleted_body_ids)) = self.pending_joint_body_deletion.take() {
             if pending_id == request.transaction_id {
@@ -3918,13 +4323,11 @@ impl SketchManager {
         self.assembly
             .synchronize_components(&scene)
             .map_err(SessionError::Solid)?;
-        self.invalidate_assembly_solution();
+        self.clear_assembly_solution();
         self.scrub_body_appearances();
         self.scrub_project_visibility();
         self.scrub_named_views();
 
-        // Every recompute starts clean, then kernel failures and persistent
-        // reference failures are overlaid onto their timeline entries.
         for feature in &mut self.document.features_mut().features {
             feature.status = FeatureStatus::Ok;
         }
@@ -3949,7 +4352,11 @@ impl SketchManager {
             .iter()
             .filter_map(|finished| match finished.session.plane() {
                 PlaneRef::PlanarFace { face_id }
-                    if active.contains(&finished.feature_id) && !self.solids.has_face(face_id) =>
+                    if active.contains(&finished.feature_id)
+                        && verified_supports.map_or_else(
+                            || !self.solids.has_face(face_id),
+                            |verified| !verified.contains(&finished.feature_id),
+                        ) =>
                 {
                     Some((
                         finished.feature_id,
@@ -4049,10 +4456,13 @@ impl SketchManager {
     /// timeline. Reordering may move independent branches, or move a
     /// producer earlier / consumer later, but it may not invert one of these
     /// edges. Stable ids remain unchanged.
-    fn timeline_dependencies(
+    fn timeline_dependencies_and_body_writers(
         &self,
         features: &[Feature],
-    ) -> BTreeMap<FeatureId, BTreeSet<FeatureId>> {
+    ) -> (
+        BTreeMap<FeatureId, BTreeSet<FeatureId>>,
+        BTreeMap<BodyId, FeatureId>,
+    ) {
         #[derive(Default)]
         struct BodyAccess {
             inputs: BTreeSet<BodyId>,
@@ -4411,7 +4821,7 @@ impl SketchManager {
                 }
             }
         }
-        dependencies
+        (dependencies, last_writer)
     }
 
     fn refresh_datum_planes(&mut self, active: &BTreeSet<FeatureId>) -> Vec<(FeatureId, String)> {
@@ -4436,14 +4846,7 @@ impl SketchManager {
             if !active.contains(&working[index].feature_id) {
                 continue;
             }
-            // The current OCCT scene is the result at the rollback marker,
-            // not the scene that existed when an earlier datum was created.
-            // A downstream boolean may reuse the same body-local `face:n`
-            // slot for a perpendicular face. Re-resolving an upstream datum
-            // against that later topology silently rotates the datum and all
-            // dependent sketches. Its persisted basis is authoritative until
-            // the history marker is at a stage where no later topology writer
-            // is active.
+
             if datum_source_reads_solid_topology(&working[index].source)
                 && !self.scene_matches_history_stage(working[index].feature_id)
             {
@@ -4672,10 +5075,32 @@ impl SketchManager {
         Ok(())
     }
 
-    // --- Active-session drawing ops ---
-
     fn active_mut(&mut self) -> Result<&mut SketchSession, SessionError> {
         self.active.as_mut().ok_or(SessionError::NoActiveSketch)
+    }
+
+    /// The native host already serializes engine calls. Restore view settings
+    /// after every dispatch so one window's zoom cannot leak into another caller.
+    pub(crate) fn with_viewport_snap(
+        &mut self,
+        context: crate::dto::ViewportSnapContext,
+        dispatch: impl FnOnce(&mut Self) -> String,
+    ) -> Result<String, SessionError> {
+        let previous = self.active_mut()?.replace_viewport_snap(context)?;
+        let result = dispatch(self);
+        self.active_mut()?.restore_viewport_snap(previous);
+        Ok(result)
+    }
+
+    pub fn preview_creation_point(
+        &self,
+        request: crate::dto::CreationPointPreviewRequest,
+    ) -> Result<PreviewDto, SessionError> {
+        Ok(self
+            .active
+            .as_ref()
+            .ok_or(SessionError::NoActiveSketch)?
+            .preview_creation_point(request))
     }
 
     pub fn preview_segment(&self, request: SegmentRequest) -> Result<PreviewDto, SessionError> {
@@ -4714,7 +5139,7 @@ impl SketchManager {
         request: LockedSegmentRequest,
     ) -> Result<PreviewDto, SessionError> {
         let session = self.active.as_ref().ok_or(SessionError::NoActiveSketch)?;
-        // Formula text evaluates against current params (D9 live preview).
+
         let length_mm =
             session.positive_input(request.length_text.as_deref(), request.length_mm)?;
         let angle_deg = match &request.angle_text {
@@ -4723,14 +5148,15 @@ impl SketchManager {
         };
         Ok(session.preview_segment_locked(
             request.from,
-            length_mm,
-            angle_deg,
+            (length_mm, angle_deg),
             request.to_hint,
             request.ctrl_held,
-            request.tracking,
-            request.intersection,
-            request.from_crossing,
-            request.to_crossing,
+            (
+                request.tracking,
+                request.intersection,
+                request.from_crossing,
+                request.to_crossing,
+            ),
         ))
     }
 
@@ -4773,6 +5199,30 @@ impl SketchManager {
         self.active_mut()?.add_rectangle_locked(&request)
     }
 
+    /// An unfinished rectangle has no preview until both axes have a usable
+    /// extent. Invalid typed sizes still fail; committing remains strict.
+    pub fn preview_rectangle_locked(
+        &self,
+        request: LockedRectangleRequest,
+    ) -> Result<Option<[crate::Vec2; 2]>, SessionError> {
+        let sketch = self.active.as_ref().ok_or(SessionError::NoActiveSketch)?;
+        match sketch.preview_rectangle_locked(&request) {
+            Ok(points) => Ok(Some(points)),
+            Err(SessionError::DegenerateSegment) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn preview_circle_locked(
+        &self,
+        request: LockedCircleRequest,
+    ) -> Result<[crate::Vec2; 2], SessionError> {
+        self.active
+            .as_ref()
+            .ok_or(SessionError::NoActiveSketch)?
+            .preview_circle_locked(&request)
+    }
+
     pub fn add_circle(&mut self, request: CircleRequest) -> Result<ToolResult, SessionError> {
         self.active_mut()?.add_circle_selective(
             request.mode,
@@ -4811,9 +5261,7 @@ impl SketchManager {
         request: ArcCenterRequest,
     ) -> Result<ToolResult, SessionError> {
         self.active_mut()?.add_arc_center_locked(
-            request.center,
-            request.start,
-            request.sweep,
+            (request.center, request.start, request.sweep),
             request.ctrl_held,
             request.radius_mm,
             request.radius_text.as_deref(),
@@ -4886,8 +5334,6 @@ impl SketchManager {
         Ok(session.dto())
     }
 
-    // --- Modify tools (M1c-ii) ---
-
     pub fn fillet_preview(
         &self,
         request: &FilletRequest,
@@ -4904,6 +5350,16 @@ impl SketchManager {
 
     pub fn chamfer_lines(&mut self, request: ChamferRequest) -> Result<ToolResult, SessionError> {
         self.active_mut()?.chamfer_lines(&request)
+    }
+
+    pub fn chamfer_preview(
+        &self,
+        request: ChamferRequest,
+    ) -> Result<crate::PreviewCurve, SessionError> {
+        self.active
+            .as_ref()
+            .ok_or(SessionError::NoActiveSketch)?
+            .chamfer_preview(&request)
     }
 
     pub fn offset_preview(
@@ -5100,15 +5556,13 @@ fn projected_face_boundary_edges(
         .iter()
         .filter(|edge| {
             edge.points.len() >= 2
-                && (boundary_keys.is_empty() || boundary_keys.iter().any(|key| *key == edge.key))
+                && (boundary_keys.is_empty() || boundary_keys.contains(&edge.key))
                 && edge.points.iter().all(|point| {
                     dot3(sub3(point3_array(*point), basis.origin), basis.normal).abs() <= 1e-4
                 })
         })
         .collect::<Vec<_>>();
-    // Deterministic discovery slots, not persistent identities: inserting or
-    // removing an edge can shift these indices. Saved profile identities and
-    // external constraints use the actual body edge id instead.
+
     candidates.sort_by_key(|edge| edge.id.0);
     candidates
         .into_iter()
@@ -5175,8 +5629,7 @@ fn projected_profile_curve(
                 radius: circle.radius,
             };
         }
-        // Every polyline sample lies on the analytic circle, so the middle
-        // sample describes the same arc the projection was cut from.
+
         let mid = path[path.len() / 2];
         return ProfileCurveDto::Arc {
             entity_id,
@@ -5232,8 +5685,7 @@ fn datum_source_reads_solid_topology(source: &DatumPlaneSourceDto) -> bool {
             (first, second),
             (PlaneRef::PlanarFace { .. }, _) | (_, PlaneRef::PlanarFace { .. })
         ),
-        // Even when the reference plane is an origin/datum plane, At Angle
-        // reads a body edge and therefore has the same history-stage rule.
+
         DatumPlaneSourceDto::AtAngle { .. } => true,
     }
 }
@@ -5268,6 +5720,16 @@ fn resolve_datum_source(
         }
     };
 
+    construction_plane_basis(source, resolve, |body, edge| solids.edge_points(body, edge))
+}
+
+/// The same validated construction geometry serves history replay and native
+/// previews. Callers resolve only references from their coherent model snapshot.
+pub fn construction_plane_basis(
+    source: &mut DatumPlaneSourceDto,
+    resolve: impl Fn(PlaneRef) -> Result<PlaneBasis, SessionError>,
+    edge_points: impl Fn(BodyId, limo_cad_core::EdgeId) -> Option<Vec<Point3Dto>>,
+) -> Result<PlaneBasis, SessionError> {
     match source {
         DatumPlaneSourceDto::Offset {
             reference,
@@ -5319,8 +5781,7 @@ fn resolve_datum_source(
                 ));
             }
             let basis = resolve(*reference)?;
-            let points = solids
-                .edge_points(*body_id, *edge_id)
+            let points = edge_points(*body_id, *edge_id)
                 .filter(|points| points.len() >= 2)
                 .or_else(|| axis_points.map(|points| points.to_vec()))
                 .ok_or_else(|| {
@@ -5428,14 +5889,14 @@ fn max_feature_number(document: &Document, prefix: &str) -> u32 {
         .unwrap_or(0)
 }
 
-fn cam_model_point_to_setup(point: [f64; 3], setup: &CamSetupDto) -> nbcad_cam::Point3Dto {
+fn cam_model_point_to_setup(point: [f64; 3], setup: &CamSetupDto) -> limo_cad_cam::Point3Dto {
     let delta = [
         point[0] - setup.wcs.origin.x,
         point[1] - setup.wcs.origin.y,
         point[2] - setup.wcs.origin.z,
     ];
     let project = |axis: [f64; 3]| delta[0] * axis[0] + delta[1] * axis[1] + delta[2] * axis[2];
-    nbcad_cam::Point3Dto::new(
+    limo_cad_cam::Point3Dto::new(
         project(setup.wcs.x_axis),
         project(setup.wcs.y_axis),
         project(setup.wcs.z_axis),
@@ -5460,7 +5921,7 @@ fn resolve_cam_chain(
     scene: &SolidSceneDto,
     sketches: &[SketchDto],
     planar: bool,
-) -> Result<(Vec<nbcad_cam::Point2Dto>, bool), String> {
+) -> Result<(Vec<limo_cad_cam::Point2Dto>, bool), String> {
     let chain = crate::edge_selection::resolve(
         scene,
         sketches,
@@ -5480,7 +5941,7 @@ fn resolve_cam_chain(
         let z = cam_model_point_to_setup(chain.points[0], setup).z;
         if chain.points.iter().any(|p| {
             (cam_model_point_to_setup(*p, setup).z - z).abs()
-                > nbcad_core::edge_chain::JOIN_TOLERANCE
+                > limo_cad_core::edge_chain::JOIN_TOLERANCE
         }) {
             return Err("The selected 2D boundary must lie in one setup-Z plane.".into());
         }
@@ -5491,14 +5952,14 @@ fn resolve_cam_chain(
             .into_iter()
             .map(|p| {
                 let p = cam_model_point_to_setup(p, setup);
-                nbcad_cam::Point2Dto::new(p.x, p.y)
+                limo_cad_cam::Point2Dto::new(p.x, p.y)
             })
             .collect(),
         chain.closed,
     ))
 }
 
-fn resolve_cam_hole(
+pub fn resolve_cam_hole(
     reference: &str,
     hole: &mut CamHoleDto,
     setup: &CamSetupDto,
@@ -5569,7 +6030,7 @@ fn resolve_cam_hole(
             "referenced face {reference} has no trustworthy axial span."
         ));
     }
-    hole.point = nbcad_cam::Point2Dto::new(center.x, center.y);
+    hole.point = limo_cad_cam::Point2Dto::new(center.x, center.y);
     hole.top_z = top;
     hole.bottom_z = bottom;
     hole.axis = [
@@ -5648,7 +6109,7 @@ fn cam_selection_reference_z(
         let z = levels[0];
         if levels
             .iter()
-            .any(|v| (v - z).abs() > nbcad_core::edge_chain::JOIN_TOLERANCE)
+            .any(|v| (v - z).abs() > limo_cad_core::edge_chain::JOIN_TOLERANCE)
         {
             return Err(SessionError::Solid(format!("Cannot regenerate operation '{label}': Selection height requires a chain in one setup-Z plane.")));
         }
@@ -5781,8 +6242,6 @@ fn cam_apply_resolved_heights(
             clearance_z,
             ..
         } => {
-            // Modeled chains retain their individually measured top levels.
-            // Sharp chains use the operation's common explicit top plane.
             if modeled_chamfer.is_none() {
                 *top_z = top;
             }
@@ -5820,9 +6279,7 @@ pub(crate) fn profile_catalog_item(
     feature_id: FeatureId,
 ) -> ProfileCatalogItemDto {
     const PROFILE_TOLERANCE: f64 = 1e-5;
-    // The constraint solver deliberately collapses a fully consumed fillet
-    // carrier to a sub-micron remnant instead of deleting its stable entity.
-    // Do not turn that numerical remnant into a microscopic solid face.
+
     const CONSUMED_LINE_TOLERANCE: f64 = 1e-3;
     let mut segments = Vec::new();
     let mut projected_segments = BTreeSet::new();
@@ -5856,9 +6313,7 @@ pub(crate) fn profile_catalog_item(
                 });
                 let a = Point2Dto::new(start.x, start.y);
                 let b = Point2Dto::new(end.x, end.y);
-                // An exact fillet boundary intentionally leaves a zero-span
-                // carrier line. It remains addressable in the sketch but is
-                // not part of the closed profile boundary.
+
                 if !consumed_trim_carriers.contains(&id.0) {
                     segments.push(Segment2 {
                         id: id.0 * 1_000,
@@ -5983,11 +6438,6 @@ pub(crate) fn profile_catalog_item(
         }
     }
 
-    // Projected support-face boundary edges join the segment graph so a region
-    // the user drew against the face boundary can close. They carry reserved
-    // segment ids, which keeps them recognisable through noding: a piece that
-    // also carries authored geometry keeps the smaller authored id and is
-    // therefore treated as authored.
     debug_assert!(
         sketch
             .entities
@@ -6033,10 +6483,6 @@ pub(crate) fn profile_catalog_item(
         (Vec::new(), None)
     } else {
         match extract_bounded_faces(&segments, PROFILE_TOLERANCE, &projected_segments) {
-            // A face bounded only by projected support geometry seals the
-            // planar subdivision, but the user never drew it: it must not
-            // become a selectable profile, and it must not absorb the shapes
-            // drawn inside it as holes.
             Ok(faces) => (
                 faces
                     .into_iter()
@@ -6283,10 +6729,6 @@ fn ordered_profile_curves(
             segments
                 .iter()
                 .filter(|segment| segment_contains_profile_edge(segment, a, b, tolerance))
-                // Prefer the longest analytic carrier when redundant sketch
-                // geometry overlaps a profile edge. Adjacent noded pieces
-                // then collapse back to the original rectangle/arc entity
-                // instead of producing avoidable split kernel faces.
                 .max_by(|left, right| {
                     segment_length_squared(left)
                         .total_cmp(&segment_length_squared(right))
@@ -6299,8 +6741,6 @@ fn ordered_profile_curves(
         return Vec::new();
     };
 
-    // Start at an entity boundary so a circle/arc cannot be split between
-    // the beginning and end of the returned vector.
     let start_edge = (0..source_ids.len())
         .find(|index| {
             source_ids[*index] != source_ids[(*index + source_ids.len() - 1) % source_ids.len()]
@@ -6324,9 +6764,7 @@ fn ordered_profile_curves(
         .filter_map(|(entity_id, path)| {
             let start = path[0];
             let end = *path.last()?;
-            // Projected support-face boundary: no authored entity owns these
-            // samples, so recover the curve from the projection itself and
-            // keep its exact circle when the body edge carried one.
+
             if let Some(projected) = sketch
                 .projected_edges
                 .iter()
@@ -6377,11 +6815,7 @@ fn ordered_profile_curves(
                         radius: *radius,
                     }
                 }
-                // A line, arc, spline, or another circle may divide a circle
-                // into multiple selectable regions. Preserve just this
-                // boundary fragment as an analytic arc; emitting the source
-                // entity's full circle would create a kernel wire unrelated
-                // to the profile the user selected.
+
                 crate::dto::EntityDto::Circle { .. } => ProfileCurveDto::Arc {
                     entity_id,
                     source_entity_ids: vec![entity_id],
@@ -6409,7 +6843,7 @@ mod project_tests {
     #[test]
     fn loading_a_sketch_saved_without_center_handles_restores_them() {
         let plane = PlaneRef::OriginPlane {
-            plane: nbcad_core::OriginPlane::Xy,
+            plane: limo_cad_core::OriginPlane::Xy,
         };
         let center = crate::geometry::Vec2::new(12.0, 8.0);
         let mut session = SketchSession::new("Legacy", plane, plane.basis().unwrap(), false);
@@ -6421,7 +6855,7 @@ mod project_tests {
             )
             .unwrap()
             .entities[0];
-        // Imitate a legacy project by detaching the handle the tool just made.
+
         let handle = session
             .dto()
             .constraints
@@ -6442,7 +6876,7 @@ mod project_tests {
         )));
 
         let reloaded =
-            SketchSession::from_project_state(session.project_state(nbcad_core::FeatureId(1)))
+            SketchSession::from_project_state(session.project_state(limo_cad_core::FeatureId(1)))
                 .unwrap();
         let dto = reloaded.dto();
         let handles: Vec<_> = dto
@@ -6473,13 +6907,13 @@ mod project_tests {
         let mut manager = SketchManager::new();
         let original = manager.export_project_model().unwrap();
         let fillet = SolidFilletRequest {
-            body_id: nbcad_core::BodyId(1),
+            body_id: limo_cad_core::BodyId(1),
             edge_ids: vec![],
             radius: 1.0,
             tangent_chain: false,
         };
         let chamfer = SolidChamferRequest {
-            body_id: nbcad_core::BodyId(1),
+            body_id: limo_cad_core::BodyId(1),
             edge_ids: vec![],
             distance: 1.0,
             tangent_chain: false,
@@ -6488,11 +6922,11 @@ mod project_tests {
             manager.prepare_solid_fillet(fillet.clone()),
             manager.prepare_solid_chamfer(chamfer.clone()),
             manager.prepare_edit_solid_fillet(EditSolidFilletRequest {
-                feature_id: nbcad_core::FeatureId(1),
+                feature_id: limo_cad_core::FeatureId(1),
                 fillet,
             }),
             manager.prepare_edit_solid_chamfer(EditSolidChamferRequest {
-                feature_id: nbcad_core::FeatureId(1),
+                feature_id: limo_cad_core::FeatureId(1),
                 chamfer,
             }),
         ] {
@@ -6505,7 +6939,7 @@ mod project_tests {
         }
         assert_eq!(
             manager.document.alloc_feature_id(),
-            nbcad_core::FeatureId(1),
+            limo_cad_core::FeatureId(1),
             "rejected selection must not consume a feature identity"
         );
     }
@@ -6516,7 +6950,7 @@ mod project_tests {
         DrawingTolerancePreset, DrawingTopologyAnchorRefDto, DrawingViewAlignment, DrawingViewDto,
         DrawingViewKind,
     };
-    use nbcad_cam::{
+    use limo_cad_cam::{
         CamChainRefDto, CamChainSource, CamHeightExpressionDto, CamHeightReferenceDto, CamHoleDto,
         CamOperationDto, CamOperationHeightExpressionsDto, CamPostConfigDto, CamSetupDto,
         CamToolDto, CamToolKind, CamUnits, CompensationMode, ContourCompensation, CoolantMode,
@@ -6524,22 +6958,25 @@ mod project_tests {
         Point3Dto as CamPoint3Dto, Rect2Dto as CamRect2Dto, StockBoxDto, WcsOriginSpecDto,
         WorkCoordinateSystemDto, WorkOffset,
     };
-    use nbcad_core::{BodyId, DimensionStyle, OriginPlane};
-    use nbcad_solid::{
+    use limo_cad_core::{BodyId, DimensionStyle, OriginPlane};
+    use limo_cad_solid::{
         CylindricalSurfaceDto, ExtrudeExtent, ExtrudeOperation, HoleExtent, HoleStyle,
         ImportStepRequest, KernelBodyDto, KernelCurveDto, KernelEdgeDto, KernelFaceDto,
         KernelJobDto, KernelSceneDto, LoftRequest, PlanarFaceSignatureDto, Point3Dto,
         ProfileRefDto, ReorderFeatureRequest, RibRequest, SweepRequest,
     };
 
-    fn raw_body(body_id: BodyId, basis: nbcad_core::PlaneBasis) -> KernelBodyDto {
+    fn raw_body(body_id: BodyId, basis: limo_cad_core::PlaneBasis) -> KernelBodyDto {
         KernelBodyDto {
             topology_signature: String::new(),
+            display_warnings: Vec::new(),
             body_id,
             positions: vec![0.0, 0.0, 0.0, 20.0, 0.0, 0.0, 0.0, 10.0, 0.0],
             normals: vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0],
             indices: vec![0, 1, 2],
             faces: vec![KernelFaceDto {
+                linear_seam_edge_keys: Vec::new(),
+                outer_shell: None,
                 key: "face:0".to_string(),
                 first_index: 0,
                 index_count: 3,
@@ -6605,7 +7042,7 @@ mod project_tests {
     fn commit_plan(
         manager: &mut SketchManager,
         plan: RecomputePlanDto,
-        basis: nbcad_core::PlaneBasis,
+        basis: limo_cad_core::PlaneBasis,
     ) {
         let ids = plan
             .jobs
@@ -6697,6 +7134,69 @@ mod project_tests {
     }
 
     #[test]
+    fn named_layout_identity_is_owned_atomic_and_retained_across_rename_and_load() {
+        let mut manager = SketchManager::new();
+        let view = NamedViewConfigurationDto {
+            id: None,
+            name: "Print layout".into(),
+            camera: crate::dto::ViewCameraDto {
+                position: [30., -40., 20.],
+                target: [0.; 3],
+                up: [0., 0., 1.],
+            },
+            visible_body_ids: Vec::new(),
+            part_offsets: Vec::new(),
+            occurrence_offsets: Vec::new(),
+            print_layout: true,
+            print_bed: Default::default(),
+        };
+        // A legacy layout remains unassigned through reads and project load.
+        manager.named_views = vec![view.clone()];
+        let legacy = manager.export_project_model().unwrap();
+        assert_eq!(manager.named_views().views[0].id, None);
+        let basis = PlaneRef::OriginPlane {
+            plane: OriginPlane::Xy,
+        }
+        .origin_basis()
+        .unwrap();
+        let mut loaded = SketchManager::new();
+        let plan = loaded.prepare_load_project(legacy).unwrap();
+        commit_plan(&mut loaded, plan, basis);
+        assert_eq!(loaded.named_views().views[0].id, None);
+
+        let stored = loaded.upsert_named_view(view.clone()).unwrap();
+        let id = stored.views[0].id.clone().unwrap();
+        assert_eq!(uuid::Uuid::parse_str(&id).unwrap().to_string(), id);
+        loaded
+            .rename_named_view(view.name.clone(), "Auger horizontal".into())
+            .unwrap();
+        assert_eq!(loaded.named_views().views[0].id.as_ref(), Some(&id));
+
+        let before = loaded.export_project_model().unwrap();
+        let mut replacement = loaded.named_views().views[0].clone();
+        replacement.id = Some(uuid::Uuid::new_v4().to_string());
+        assert!(loaded.upsert_named_view(replacement).is_err());
+        let mut duplicate = loaded.named_views().views[0].clone();
+        duplicate.name = "Duplicate identity".into();
+        assert!(loaded
+            .set_named_views(vec![loaded.named_views().views[0].clone(), duplicate])
+            .is_err());
+        assert_eq!(loaded.export_project_model().unwrap(), before);
+
+        let mut reloaded = SketchManager::new();
+        let plan = reloaded.prepare_load_project(before).unwrap();
+        commit_plan(&mut reloaded, plan, basis);
+        reloaded.scrub_named_views();
+        assert_eq!(reloaded.named_views().views[0].id.as_ref(), Some(&id));
+        let before = reloaded.export_project_model().unwrap();
+        let pending = reloaded.prepare_load_project(before.clone()).unwrap();
+        assert!(reloaded.upsert_named_view(view).is_err());
+        assert_eq!(reloaded.export_project_model().unwrap(), before);
+        commit_plan(&mut reloaded, pending, basis);
+        assert_eq!(reloaded.named_views().views[0].id.as_ref(), Some(&id));
+    }
+
+    #[test]
     fn named_view_recall_roundtrips_without_moving_geometry() {
         let mut manager = SketchManager::new();
         let plane = PlaneRef::OriginPlane {
@@ -6749,6 +7249,7 @@ mod project_tests {
         let scene = manager.solid_scene();
 
         let view = NamedViewConfigurationDto {
+            id: None,
             name: "detent".to_string(),
             camera: crate::dto::ViewCameraDto {
                 position: [80.0, -40.0, 30.0],
@@ -6760,6 +7261,18 @@ mod project_tests {
                 body_id: clip.0,
                 translation: [0.0, 14.0, 0.0],
             }],
+            occurrence_offsets: vec![limo_cad_assembly::ViewOccurrenceOffsetDto {
+                occurrence_id: manager.assembly_document().component_structure.occurrences[0].id,
+                translation: [3., 0., 2.],
+                rotation: [
+                    0.,
+                    0.,
+                    std::f64::consts::FRAC_1_SQRT_2,
+                    std::f64::consts::FRAC_1_SQRT_2,
+                ],
+            }],
+            print_layout: true,
+            print_bed: Default::default(),
         };
         let unknown = NamedViewConfigurationDto {
             visible_body_ids: vec![999],
@@ -6821,6 +7334,11 @@ mod project_tests {
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed["schema_version"], PROJECT_SCHEMA_VERSION);
         assert_eq!(parsed["views"][0]["name"], "detent");
+        assert_eq!(parsed["views"][0]["print_layout"], true);
+        assert_eq!(
+            parsed["views"][0]["occurrence_offsets"][0]["translation"],
+            serde_json::json!([3., 0., 2.])
+        );
         assert_eq!(
             parsed["views"][0]["part_offsets"][0]["translation"][1],
             14.0
@@ -6832,6 +7350,7 @@ mod project_tests {
 
         let mut legacy = parsed.clone();
         legacy["schema_version"] = serde_json::json!(9);
+        legacy.as_object_mut().unwrap().remove("print_intent");
         legacy.as_object_mut().unwrap().remove("views");
         let mut migrated = SketchManager::new();
         let legacy_plan = migrated.prepare_load_project(legacy.to_string()).unwrap();
@@ -6851,6 +7370,15 @@ mod project_tests {
         let recalled = loaded.recall_named_view("detent".into()).unwrap();
         assert_eq!(recalled.view.camera.position, [80.0, -40.0, 30.0]);
         assert_eq!(recalled.view.part_offsets[0].translation, [0.0, 14.0, 0.0]);
+        assert_eq!(
+            recalled.view.occurrence_offsets[0].translation,
+            [3., 0., 2.]
+        );
+        assert!(recalled.view.print_layout);
+        assert_eq!(
+            recalled.solution,
+            loaded.named_view_solution(Some("detent")).unwrap()
+        );
         assert_eq!(recalled.visibility.hidden_body_ids, vec![housing.0]);
         let kept = loaded.set_named_views(loaded.named_views.clone()).unwrap();
         assert_eq!(kept.active, None);
@@ -6890,6 +7418,18 @@ mod project_tests {
         assert_eq!(loaded.named_views().views, saved_views);
         assert_eq!(loaded.project_visibility(), visibility);
         assert_eq!(loaded.extrude_definitions(), definitions);
+        let mut all_visible = loaded.project_visibility();
+        all_visible.hidden_body_ids.clear();
+        loaded.set_project_visibility(all_visible.clone()).unwrap();
+        let before_failed_recall = loaded.export_project_model().unwrap();
+        let mut incomplete = loaded.assembly_solution();
+        incomplete.occurrence_poses.clear();
+        *loaded.assembly_solution_cache.borrow_mut() = Some(incomplete);
+        assert!(loaded.recall_named_view("detent".into()).is_err());
+        assert_eq!(loaded.named_views().active, None);
+        assert_eq!(loaded.project_visibility(), all_visible);
+        assert_eq!(loaded.export_project_model().unwrap(), before_failed_recall);
+        *loaded.assembly_solution_cache.borrow_mut() = None;
         loaded.recall_named_view("detent".into()).unwrap();
         let recompute = loaded.prepare_recompute().unwrap();
         commit_plan(&mut loaded, recompute, basis);
@@ -6962,8 +7502,8 @@ mod project_tests {
             .unwrap();
         manager
             .update_component(UpdateComponentRequestDto::from(
-                nbcad_assembly::ComponentDefinitionDto {
-                    local_coordinate_system: nbcad_assembly::AssemblyTransformDto {
+                limo_cad_assembly::ComponentDefinitionDto {
+                    local_coordinate_system: limo_cad_assembly::AssemblyTransformDto {
                         translation: [2.0, 0.0, 0.0],
                         rotation: [0.0, 0.0, 0.0, 1.0],
                     },
@@ -6975,7 +7515,7 @@ mod project_tests {
             .create_component(CreateComponentRequestDto {
                 name: "Nested fixture".to_string(),
                 body_ids: Vec::new(),
-                local_coordinate_system: nbcad_assembly::AssemblyTransformDto::default(),
+                local_coordinate_system: limo_cad_assembly::AssemblyTransformDto::default(),
                 absorb_promoted_bodies: false,
             })
             .unwrap();
@@ -6991,7 +7531,7 @@ mod project_tests {
                 component_id: promoted.id,
                 name: "Nested part".to_string(),
                 parent_occurrence_id: Some(subassembly_occurrence.id),
-                local_pose: nbcad_assembly::AssemblyTransformDto {
+                local_pose: limo_cad_assembly::AssemblyTransformDto {
                     translation: [15.0, 0.0, 0.0],
                     rotation: [0.0, 0.0, 0.0, 1.0],
                 },
@@ -7007,7 +7547,7 @@ mod project_tests {
         manager
             .set_occurrence_pose(SetOccurrencePoseRequestDto {
                 occurrence_id: duplicate.id,
-                local_pose: nbcad_assembly::AssemblyTransformDto {
+                local_pose: limo_cad_assembly::AssemblyTransformDto {
                     translation: [50.0, 0.0, 0.0],
                     rotation: [0.0, 0.0, 0.0, 1.0],
                 },
@@ -7042,7 +7582,7 @@ mod project_tests {
 
     #[test]
     fn project_roundtrip_persists_appearance_and_visibility_and_scrubs_orphans() {
-        use nbcad_core::{BodyAppearance, Rgba8};
+        use limo_cad_core::{BodyAppearance, Rgba8};
 
         let mut manager = SketchManager::new();
         let basis = PlaneRef::OriginPlane {
@@ -7050,6 +7590,33 @@ mod project_tests {
         }
         .origin_basis()
         .unwrap();
+        let material = limo_cad_core::MaterialDetails {
+            kind: "plastic".into(),
+            catalog_id: "saved.material".into(),
+            warnings: vec!["Saved reference data".into()],
+            sources: vec![limo_cad_core::MaterialSource {
+                id: "saved.source".into(),
+                repository: "test/source".into(),
+                revision: "1".repeat(40),
+                path: "card.json".into(),
+                sha256: "2".repeat(64),
+                license: "CC-BY-4.0".into(),
+                author: "Test author".into(),
+                reference: "https://example.com/card".into(),
+            }],
+            properties: vec![limo_cad_core::MaterialProperty {
+                name: "Density".into(),
+                value: limo_cad_core::MaterialValue::Number(1234.56789012345),
+                unit: "kg/m^3".into(),
+                context: "Engineering reference: saved material".into(),
+                source_id: "saved.source".into(),
+            }],
+            print_profiles: vec![limo_cad_core::MaterialPrintProfile {
+                name: "Saved profile".into(),
+                source_id: "saved.source".into(),
+                compatible_printers: vec!["Test printer".into()],
+            }],
+        };
         manager
             .begin_sketch(PlaneRef::OriginPlane {
                 plane: OriginPlane::Xy,
@@ -7102,10 +7669,11 @@ mod project_tests {
                 filament_id: Some("GFA00".into()),
                 preset_id: Some("bambu.pla.basic.red".into()),
                 density_g_cm3: Some(1.24),
+                material: Some(material.clone()),
                 diameter_mm: 1.75,
             })
             .unwrap();
-        // Orphan appearance for a deleted body must not survive save.
+
         manager.body_appearances.push(BodyAppearance {
             body_id: BodyId(999),
             color: Rgba8::opaque(0, 0, 0),
@@ -7116,6 +7684,7 @@ mod project_tests {
             filament_id: None,
             preset_id: None,
             density_g_cm3: None,
+            material: None,
             diameter_mm: 1.75,
         });
         let visibility = manager
@@ -7162,10 +7731,20 @@ mod project_tests {
         assert_eq!(restored[0].body_id, body_id);
         assert_eq!(restored[0].material_name, "PLA Red");
         assert_eq!(restored[0].color.r, 200);
+        assert_eq!(restored[0].material.as_ref(), Some(&material));
+        let before = loaded.export_project_model().unwrap();
+        let mut bad = restored[0].clone();
+        bad.material.as_mut().unwrap().kind = "invalid".into();
+        assert!(loaded.set_body_appearance(bad).is_err());
+        assert_eq!(loaded.export_project_model().unwrap(), before);
+        let mut bad_project: serde_json::Value = serde_json::from_str(&before).unwrap();
+        bad_project["body_appearances"][0]["material"]["kind"] = serde_json::json!("invalid");
+        assert!(loaded
+            .prepare_load_project(bad_project.to_string())
+            .is_err());
+        assert_eq!(loaded.export_project_model().unwrap(), before);
         assert_eq!(loaded.project_visibility(), visibility);
 
-        // Opening a project repairs datum frames by visiting earlier history
-        // stages. Those temporary scenes must not delete later body metadata.
         let final_rollback = loaded.document.features().rollback_index;
         let plan = loaded
             .prepare_set_rollback(SetRollbackRequest { rollback_index: 0 })
@@ -7175,8 +7754,6 @@ mod project_tests {
         assert_eq!(loaded.body_appearances(), restored);
         assert_eq!(loaded.project_visibility(), visibility);
 
-        // Saving at a rollback marker must preserve the metadata too, so
-        // advancing a reopened project restores the same colored/hidden body.
         let staged_json = loaded.export_project_model().unwrap();
         let mut staged = SketchManager::new();
         let plan = staged.prepare_load_project(staged_json).unwrap();
@@ -7214,7 +7791,7 @@ mod project_tests {
 
     #[test]
     fn consumed_body_metadata_survives_history_navigation_but_not_creator_deletion() {
-        use nbcad_core::{BodyAppearance, Rgba8};
+        use limo_cad_core::{BodyAppearance, Rgba8};
         let mut manager = SketchManager::new();
         let plane = PlaneRef::OriginPlane {
             plane: OriginPlane::Xy,
@@ -7260,6 +7837,7 @@ mod project_tests {
                     filament_id: None,
                     preset_id: None,
                     density_g_cm3: None,
+                    material: None,
                     diameter_mm: 1.75,
                 })
                 .unwrap();
@@ -7273,11 +7851,11 @@ mod project_tests {
             .unwrap();
         let before_combine = manager.document.features().rollback_index;
         let plan = manager
-            .prepare_body_feature(nbcad_solid::BodyFeatureRequestDto::Combine(
-                nbcad_solid::CombineRequest {
+            .prepare_body_feature(limo_cad_solid::BodyFeatureRequestDto::Combine(
+                limo_cad_solid::CombineRequest {
                     target_body_id: target,
                     tool_body_ids: vec![tool],
-                    operation: nbcad_solid::CombineOperation::Join,
+                    operation: limo_cad_solid::CombineOperation::Join,
                     keep_tools: false,
                 },
             ))
@@ -7307,8 +7885,6 @@ mod project_tests {
         assert_eq!(manager.body_appearances(), appearances);
         assert_eq!(manager.project_visibility(), visibility);
 
-        // The retained Combine still references this target, but deleting its
-        // creator must remove presentation metadata for the now-invalid ID.
         let plan = manager
             .prepare_delete_feature(DeleteFeatureRequest {
                 feature_id: bodies[0].feature_id,
@@ -7536,7 +8112,7 @@ mod project_tests {
                             topology_signature: None,
                             occurrence_id: None,
                             body_id: BodyId(1),
-                            edge_id: nbcad_core::EdgeId(101),
+                            edge_id: limo_cad_core::EdgeId(101),
                             edge_key: "edge:0".to_string(),
                             endpoint: DrawingEdgeEndpoint::Start,
                             fallback_point: [0.0, 0.0, 0.0],
@@ -7546,7 +8122,7 @@ mod project_tests {
                             topology_signature: None,
                             occurrence_id: None,
                             body_id: BodyId(1),
-                            edge_id: nbcad_core::EdgeId(102),
+                            edge_id: limo_cad_core::EdgeId(102),
                             edge_key: "edge:1".to_string(),
                             endpoint: DrawingEdgeEndpoint::End,
                             fallback_point: [20.0, 0.0, 0.0],
@@ -7566,7 +8142,7 @@ mod project_tests {
                             topology_signature: None,
                             occurrence_id: None,
                             body_id: BodyId(1),
-                            edge_id: nbcad_core::EdgeId(201),
+                            edge_id: limo_cad_core::EdgeId(201),
                             edge_key: "edge:center-left".to_string(),
                             fallback_start: [0.0, 0.0, 0.0],
                             fallback_end: [20.0, 0.0, 0.0],
@@ -7575,7 +8151,7 @@ mod project_tests {
                             topology_signature: None,
                             occurrence_id: None,
                             body_id: BodyId(1),
-                            edge_id: nbcad_core::EdgeId(202),
+                            edge_id: limo_cad_core::EdgeId(202),
                             edge_key: "edge:center-right".to_string(),
                             fallback_start: [0.0, 10.0, 0.0],
                             fallback_end: [20.0, 10.0, 0.0],
@@ -7622,43 +8198,44 @@ mod project_tests {
 
     #[test]
     fn project_roundtrip_preserves_host_neutral_joint_intent() {
-        let connector = |body_id, face_id, key: &str, origin| nbcad_assembly::JointConnectorDto {
-            body_id: BodyId(body_id),
-            face_id: FaceId(face_id),
-            face_key: key.to_string(),
-            edge_id: None,
-            edge_key: None,
-            kind: nbcad_assembly::JointConnectorKindDto::PlanarFace,
-            radius: None,
-            source_surface_frame: None,
-            frame: nbcad_assembly::JointFrameDto {
-                origin,
-                primary_axis: [0.0, 0.0, 1.0],
-                secondary_axis: [1.0, 0.0, 0.0],
-            },
-        };
+        let connector =
+            |body_id, face_id, key: &str, origin| limo_cad_assembly::JointConnectorDto {
+                body_id: BodyId(body_id),
+                face_id: FaceId(face_id),
+                face_key: key.to_string(),
+                edge_id: None,
+                edge_key: None,
+                kind: limo_cad_assembly::JointConnectorKindDto::PlanarFace,
+                radius: None,
+                source_surface_frame: None,
+                frame: limo_cad_assembly::JointFrameDto {
+                    origin,
+                    primary_axis: [0.0, 0.0, 1.0],
+                    secondary_axis: [1.0, 0.0, 0.0],
+                },
+            };
         let assembly = AssemblyDocumentDto {
-            joints: vec![nbcad_assembly::JointDefinitionDto {
+            joints: vec![limo_cad_assembly::JointDefinitionDto {
                 id: JointId(7),
                 name: "Hinge".to_string(),
-                kind: nbcad_assembly::JointKindDto::Revolute,
+                kind: limo_cad_assembly::JointKindDto::Revolute,
                 connector_a: connector(1, 11, "body-1:face-a", [0.0, 0.0, 0.0]),
                 connector_b: connector(2, 22, "body-2:face-b", [0.0, 0.0, 10.0]),
                 flipped: true,
                 angle_offset_deg: 15.0,
                 linear_offset_mm: 0.0,
-                limits: Some(nbcad_assembly::JointLimitsDto {
+                limits: Some(limo_cad_assembly::JointLimitsDto {
                     min: -90.0,
                     max: 90.0,
                 }),
                 angle_limits: None,
                 linear_limits: None,
-                advanced: nbcad_assembly::JointAdvancedDto::default(),
+                advanced: limo_cad_assembly::JointAdvancedDto::default(),
                 enabled: true,
             }],
             next_joint_id: 8,
             grounded_body_id: Some(BodyId(1)),
-            component_structure: nbcad_assembly::ComponentStructureDto::default(),
+            component_structure: limo_cad_assembly::ComponentStructureDto::default(),
             ..AssemblyDocumentDto::default()
         };
 
@@ -7674,9 +8251,7 @@ mod project_tests {
         assert!(preview.solved);
         assert!(preview.body_poses.is_empty());
         assert!(preview.diagnostics.is_empty());
-        // Host-neutral assembly intent can legitimately outlive the current
-        // feature-history marker. Its absent bodies are inactive here, not a
-        // damaged reference, and the persisted document remains untouched.
+
         assert_eq!(manager.assembly_document(), assembly);
         let json = manager.export_project_model().unwrap();
         let mut loaded = SketchManager::new();
@@ -7692,7 +8267,7 @@ mod project_tests {
     }
 
     pub(super) fn cam_roundtrip_fixture() -> CamDocumentDto {
-        let cam = CamDocumentDto {
+        CamDocumentDto {
             linking: Vec::new(),
             load_warnings: Vec::new(),
             toolpath_generations: Vec::new(),
@@ -7731,15 +8306,15 @@ mod project_tests {
                 wcs_origin: WcsOriginSpecDto::Explicit,
                 work_offset: WorkOffset::G55,
                 work_offset_count: 1,
-                stock_spec: nbcad_cam::CamStockSpecDto::LegacyBox,
-                resolved_stock: nbcad_cam::CamResolvedStockDto::Box,
+                stock_spec: limo_cad_cam::CamStockSpecDto::LegacyBox,
+                resolved_stock: limo_cad_cam::CamResolvedStockDto::Box,
                 stock: StockBoxDto {
                     min: CamPoint3Dto::new(0.0, 0.0, -12.0),
                     max: CamPoint3Dto::new(30.0, 20.0, 0.0),
                 },
                 stock_model_box: None,
                 body_ids: vec![],
-                machine: Some(nbcad_cam::CamMachineAssignmentDto::three_axis(
+                machine: Some(limo_cad_cam::CamMachineAssignmentDto::three_axis(
                     CamPostConfigDto::default(),
                 )),
                 legacy_clearance_z: None,
@@ -7758,7 +8333,7 @@ mod project_tests {
                     step_over: 3.0,
                     step_down: 1.0,
                     safe_distance: 5.0,
-                    direction: nbcad_cam::FaceDirection::BothWays,
+                    direction: limo_cad_cam::FaceDirection::BothWays,
                     clearance_z: 8.0,
                     retract_z: 2.0,
                     feed_height_z: 1.0,
@@ -7795,8 +8370,7 @@ mod project_tests {
             next_setup_id: 4,
             next_operation_id: 8,
             next_tool_id: 6,
-        };
-        cam
+        }
     }
 
     #[test]
@@ -7843,10 +8417,12 @@ mod project_tests {
         let mut model: serde_json::Value =
             serde_json::from_str(&manager.export_project_model().unwrap()).unwrap();
         assert_eq!(model["schema_version"], PROJECT_SCHEMA_VERSION);
-        // Both previously released main readers and CAM preview readers must
-        // migrate without dropping the other workspace's persisted data.
+
         for version in [3, 4, 5, 6, 7] {
             model["schema_version"] = version.into();
+            if version < 11 {
+                model.as_object_mut().unwrap().remove("print_intent");
+            }
             let mut loaded = SketchManager::new();
             let plan = loaded.prepare_load_project(model.to_string()).unwrap();
             loaded
@@ -7930,9 +8506,6 @@ mod project_tests {
             .unwrap();
         assert!(posted.nc.contains("G55"));
 
-        // Height expressions survive project replay and follow their current
-        // stock reference during explicit regeneration. The stale absolute
-        // Z values are never silently re-certified.
         let mut raised_stock = loaded.cam_document();
         raised_stock.setups[0].stock.max.z = 2.0;
         loaded.set_cam_document(raised_stock).unwrap();
@@ -8030,18 +8603,18 @@ mod project_tests {
             .to_string()
             .contains("select a machine/controller"));
         let mut bound = manager.cam_document();
-        bound.setups[0].machine = Some(nbcad_cam::CamMachineAssignmentDto::three_axis(
+        bound.setups[0].machine = Some(limo_cad_cam::CamMachineAssignmentDto::three_axis(
             CamPostConfigDto {
-                dialect: nbcad_cam::PostDialect::Siemens828d,
-                siemens_828d: Some(nbcad_cam::Siemens828dPostConfigDto::default()),
+                dialect: limo_cad_cam::PostDialect::Siemens828d,
+                siemens_828d: Some(limo_cad_cam::Siemens828dPostConfigDto::default()),
                 ..Default::default()
             },
         ));
         let tool_id = bound.tools[0].id;
         bound.setups[0].machine.as_mut().unwrap().tool_calls =
-            vec![nbcad_cam::CamMachineToolBindingDto {
+            vec![limo_cad_cam::CamMachineToolBindingDto {
                 tool_id,
-                call: nbcad_cam::CamMachineToolCallDto::Name {
+                call: limo_cad_cam::CamMachineToolCallDto::Name {
                     name: "HostTest_EM6".into(),
                 },
             }];
@@ -8061,7 +8634,7 @@ mod project_tests {
                 program_name: None,
             })
             .unwrap();
-        assert_eq!(output.dialect, nbcad_cam::PostDialect::Siemens828d);
+        assert_eq!(output.dialect, limo_cad_cam::PostDialect::Siemens828d);
         assert!(manager
             .cam_post(CamPostRequestDto {
                 setup_id: 3,
@@ -8083,15 +8656,14 @@ mod project_tests {
         }
         cam.setups[0].operations.push(second);
         cam.next_operation_id = 9;
-        cam.linking.push(nbcad_cam::CamLinkingDto {
+        cam.linking.push(limo_cad_cam::CamLinkingDto {
             operation_id: 7,
             ..Default::default()
         });
         let mut manager = SketchManager::new();
         manager.set_cam_document(cam).unwrap();
         manager.cam_regenerate_setup(3).unwrap();
-        // Re-resolving an earlier height must stamp the resolved prefix,
-        // not the pre-regeneration absolute coordinates.
+
         let mut raised = manager.cam_document();
         raised.setups[0].stock.max.z = 0.2;
         manager.set_cam_document(raised).unwrap();
@@ -8151,7 +8723,7 @@ mod project_tests {
         rest.name = "Rest setup".into();
         rest.operations.clear();
         rest.resolved_stock = CamResolvedStockDto::Rest { source_setup_id: 3 };
-        rest.stock_spec = nbcad_cam::CamStockSpecDto::RestFromSetup { setup_id: 3 };
+        rest.stock_spec = limo_cad_cam::CamStockSpecDto::RestFromSetup { setup_id: 3 };
         ordered.setups.push(rest);
         ordered.next_setup_id = 5;
         manager.set_cam_document(ordered.clone()).unwrap();
@@ -8200,86 +8772,88 @@ mod project_tests {
             })
             .unwrap();
 
-        let mut cam = CamDocumentDto::default();
-        cam.tools = vec![CamToolDto {
-            id: 1,
-            number: Some(1),
-            name: "EM4".into(),
-            kind: CamToolKind::FlatEndMill,
-            diameter: 4.0,
-            flute_length: 12.0,
-            overall_length: 35.0,
-            center_cutting: true,
-            flute_count: 3,
-            point_angle_degrees: None,
-            corner_radius: None,
-            corner_chamfer: None,
-            cutting: CuttingParametersDto::default(),
-            cutting_presets: vec![],
-            maximum_axial_depth: None,
-            default_step_down: None,
-            default_step_over: None,
-        }];
-        cam.setups = vec![CamSetupDto {
-            id: 1,
-            name: "Associative setup".into(),
-            wcs: WorkCoordinateSystemDto::default(),
-            wcs_origin: WcsOriginSpecDto::Explicit,
-            work_offset: WorkOffset::G54,
-            work_offset_count: 1,
-            stock_spec: nbcad_cam::CamStockSpecDto::LegacyBox,
-            resolved_stock: CamResolvedStockDto::Box,
-            stock: StockBoxDto {
-                min: CamPoint3Dto::new(-5.0, -5.0, -5.0),
-                max: CamPoint3Dto::new(30.0, 15.0, 0.0),
-            },
-            stock_model_box: None,
-            body_ids: vec![body_id],
-            machine: None,
-            legacy_clearance_z: None,
-            legacy_retract_z: None,
-            operations: vec![CamOperationDto::Contour2d {
+        let cam = CamDocumentDto {
+            tools: vec![CamToolDto {
                 id: 1,
-                name: "Associative edge".into(),
-                enabled: true,
-                tool_id: 1,
-                path: vec![CamPoint2Dto::new(5.0, 5.0), CamPoint2Dto::new(6.0, 5.0)],
-                closed: false,
-                top_z: 0.0,
-                bottom_z: -1.0,
-                step_down: 1.0,
-                compensation: ContourCompensation::On,
-                compensation_mode: CompensationMode::InSoftware,
-                lead_in: 2.0,
-                lead_out: 2.0,
-                lead_arc_radius: None,
-                direction: MillingDirection::Climb,
-                roughing_passes: 1,
-                roughing_step_over: None,
-                finishing_pass: false,
-                finish_allowance: 0.0,
-                finish_feed: None,
-                spring_pass: false,
-                chain_ref: Some(CamChainRefDto {
-                    source: CamChainSource::Model,
-                    keys: vec![format!("edge:{}:edge:0", body_id.0)],
-                    reversed: false,
-                }),
-                clearance_z: 8.0,
-                retract_z: 3.0,
-                feed_height_z: 1.0,
-                cutting: CuttingParametersDto {
-                    spindle_rpm: 8_000,
-                    feed_xy: 500.0,
-                    feed_z: 150.0,
-                    coolant: CoolantMode::Flood,
-                },
+                number: Some(1),
+                name: "EM4".into(),
+                kind: CamToolKind::FlatEndMill,
+                diameter: 4.0,
+                flute_length: 12.0,
+                overall_length: 35.0,
+                center_cutting: true,
+                flute_count: 3,
+                point_angle_degrees: None,
+                corner_radius: None,
+                corner_chamfer: None,
+                cutting: CuttingParametersDto::default(),
+                cutting_presets: vec![],
+                maximum_axial_depth: None,
+                default_step_down: None,
+                default_step_over: None,
             }],
-        }];
-        cam.active_setup_id = Some(1);
-        cam.next_setup_id = 2;
-        cam.next_operation_id = 2;
-        cam.next_tool_id = 2;
+            setups: vec![CamSetupDto {
+                id: 1,
+                name: "Associative setup".into(),
+                wcs: WorkCoordinateSystemDto::default(),
+                wcs_origin: WcsOriginSpecDto::Explicit,
+                work_offset: WorkOffset::G54,
+                work_offset_count: 1,
+                stock_spec: limo_cad_cam::CamStockSpecDto::LegacyBox,
+                resolved_stock: CamResolvedStockDto::Box,
+                stock: StockBoxDto {
+                    min: CamPoint3Dto::new(-5.0, -5.0, -5.0),
+                    max: CamPoint3Dto::new(30.0, 15.0, 0.0),
+                },
+                stock_model_box: None,
+                body_ids: vec![body_id],
+                machine: None,
+                legacy_clearance_z: None,
+                legacy_retract_z: None,
+                operations: vec![CamOperationDto::Contour2d {
+                    id: 1,
+                    name: "Associative edge".into(),
+                    enabled: true,
+                    tool_id: 1,
+                    path: vec![CamPoint2Dto::new(5.0, 5.0), CamPoint2Dto::new(6.0, 5.0)],
+                    closed: false,
+                    top_z: 0.0,
+                    bottom_z: -1.0,
+                    step_down: 1.0,
+                    compensation: ContourCompensation::On,
+                    compensation_mode: CompensationMode::InSoftware,
+                    lead_in: 2.0,
+                    lead_out: 2.0,
+                    lead_arc_radius: None,
+                    direction: MillingDirection::Climb,
+                    roughing_passes: 1,
+                    roughing_step_over: None,
+                    finishing_pass: false,
+                    finish_allowance: 0.0,
+                    finish_feed: None,
+                    spring_pass: false,
+                    chain_ref: Some(CamChainRefDto {
+                        source: CamChainSource::Model,
+                        keys: vec![format!("edge:{}:edge:0", body_id.0)],
+                        reversed: false,
+                    }),
+                    clearance_z: 8.0,
+                    retract_z: 3.0,
+                    feed_height_z: 1.0,
+                    cutting: CuttingParametersDto {
+                        spindle_rpm: 8_000,
+                        feed_xy: 500.0,
+                        feed_z: 150.0,
+                        coolant: CoolantMode::Flood,
+                    },
+                }],
+            }],
+            active_setup_id: Some(1),
+            next_setup_id: 2,
+            next_operation_id: 2,
+            next_tool_id: 2,
+            ..Default::default()
+        };
         manager.set_cam_document(cam).unwrap();
 
         manager.cam_regenerate_operation(1).unwrap();
@@ -8292,8 +8866,6 @@ mod project_tests {
             vec![CamPoint2Dto::new(0.0, 0.0), CamPoint2Dto::new(20.0, 0.0)]
         );
 
-        // Recompute the same stable edge at a new endpoint. Regeneration must
-        // use the current scene, not the baked 20 mm path from the last pass.
         body.edges[0].points[1].x = 24.0;
         let recompute = manager.prepare_recompute().unwrap();
         manager
@@ -8346,7 +8918,7 @@ mod project_tests {
         let body_id = result_body_ids(&plan.jobs[0])[0];
         let mut body = raw_body(body_id, basis);
         body.positions = vec![4.0, 3.0, 0.0, 6.0, 3.0, 0.0, 4.0, 3.0, -8.0, 6.0, 3.0, -8.0];
-        body.normals = vec![0.0_f32, -1.0, 0.0].repeat(4);
+        body.normals = [0.0_f32, -1.0, 0.0].repeat(4);
         body.indices = vec![0, 1, 2, 1, 3, 2];
         body.faces[0].first_index = 0;
         body.faces[0].index_count = 6;
@@ -8370,83 +8942,85 @@ mod project_tests {
         let face_id = manager.solids.scene().bodies[0].faces[0].id.0;
         let face_key = format!("{}:{face_id}", body_id.0);
 
-        let mut cam = CamDocumentDto::default();
-        cam.tools = vec![CamToolDto {
-            id: 1,
-            number: Some(1),
-            name: "D1".into(),
-            kind: CamToolKind::Drill,
-            diameter: 1.0,
-            flute_length: 20.0,
-            overall_length: 40.0,
-            center_cutting: true,
-            flute_count: 2,
-            point_angle_degrees: Some(118.0),
-            corner_radius: None,
-            corner_chamfer: None,
-            cutting: CuttingParametersDto::default(),
-            cutting_presets: vec![],
-            maximum_axial_depth: None,
-            default_step_down: None,
-            default_step_over: None,
-        }];
-        cam.setups = vec![CamSetupDto {
-            id: 1,
-            name: "Hole setup".into(),
-            wcs: WorkCoordinateSystemDto::default(),
-            wcs_origin: WcsOriginSpecDto::Explicit,
-            work_offset: WorkOffset::G54,
-            work_offset_count: 1,
-            stock_spec: nbcad_cam::CamStockSpecDto::LegacyBox,
-            resolved_stock: CamResolvedStockDto::Box,
-            stock: StockBoxDto {
-                min: CamPoint3Dto::new(0.0, 0.0, -10.0),
-                max: CamPoint3Dto::new(15.0, 10.0, 0.0),
-            },
-            stock_model_box: None,
-            body_ids: vec![body_id],
-            machine: None,
-            legacy_clearance_z: None,
-            legacy_retract_z: None,
-            operations: vec![CamOperationDto::Drill {
+        let cam = CamDocumentDto {
+            tools: vec![CamToolDto {
                 id: 1,
-                name: "Associative hole".into(),
-                enabled: true,
-                tool_id: 1,
-                points: vec![],
-                holes: vec![CamHoleDto {
-                    point: CamPoint2Dto::new(9.0, 9.0),
-                    top_z: -1.0,
-                    bottom_z: -2.0,
-                    axis: [0.0, 0.0, 1.0],
-                    face_key: Some(face_key),
-                }],
-                top_z: 0.0,
-                bottom_z: -8.0,
-                retract_z: 2.0,
-                drill_tip_through: false,
-                breakthrough_depth: 0.0,
-                peck_depth: None,
-                dwell_seconds: 0.0,
-                clearance_z: 5.0,
-                feed_height_z: 1.0,
-                cycle: DrillCycle::Drill,
-                peck_retract: None,
-                thread_pitch: None,
-                floating_tap_holder: false,
-                feed_out: None,
-                cutting: CuttingParametersDto {
-                    spindle_rpm: 4_000,
-                    feed_xy: 200.0,
-                    feed_z: 100.0,
-                    coolant: CoolantMode::Flood,
-                },
+                number: Some(1),
+                name: "D1".into(),
+                kind: CamToolKind::Drill,
+                diameter: 1.0,
+                flute_length: 20.0,
+                overall_length: 40.0,
+                center_cutting: true,
+                flute_count: 2,
+                point_angle_degrees: Some(118.0),
+                corner_radius: None,
+                corner_chamfer: None,
+                cutting: CuttingParametersDto::default(),
+                cutting_presets: vec![],
+                maximum_axial_depth: None,
+                default_step_down: None,
+                default_step_over: None,
             }],
-        }];
-        cam.active_setup_id = Some(1);
-        cam.next_setup_id = 2;
-        cam.next_operation_id = 2;
-        cam.next_tool_id = 2;
+            setups: vec![CamSetupDto {
+                id: 1,
+                name: "Hole setup".into(),
+                wcs: WorkCoordinateSystemDto::default(),
+                wcs_origin: WcsOriginSpecDto::Explicit,
+                work_offset: WorkOffset::G54,
+                work_offset_count: 1,
+                stock_spec: limo_cad_cam::CamStockSpecDto::LegacyBox,
+                resolved_stock: CamResolvedStockDto::Box,
+                stock: StockBoxDto {
+                    min: CamPoint3Dto::new(0.0, 0.0, -10.0),
+                    max: CamPoint3Dto::new(15.0, 10.0, 0.0),
+                },
+                stock_model_box: None,
+                body_ids: vec![body_id],
+                machine: None,
+                legacy_clearance_z: None,
+                legacy_retract_z: None,
+                operations: vec![CamOperationDto::Drill {
+                    id: 1,
+                    name: "Associative hole".into(),
+                    enabled: true,
+                    tool_id: 1,
+                    points: vec![],
+                    holes: vec![CamHoleDto {
+                        point: CamPoint2Dto::new(9.0, 9.0),
+                        top_z: -1.0,
+                        bottom_z: -2.0,
+                        axis: [0.0, 0.0, 1.0],
+                        face_key: Some(face_key),
+                    }],
+                    top_z: 0.0,
+                    bottom_z: -8.0,
+                    retract_z: 2.0,
+                    drill_tip_through: false,
+                    breakthrough_depth: 0.0,
+                    peck_depth: None,
+                    dwell_seconds: 0.0,
+                    clearance_z: 5.0,
+                    feed_height_z: 1.0,
+                    cycle: DrillCycle::Drill,
+                    peck_retract: None,
+                    thread_pitch: None,
+                    floating_tap_holder: false,
+                    feed_out: None,
+                    cutting: CuttingParametersDto {
+                        spindle_rpm: 4_000,
+                        feed_xy: 200.0,
+                        feed_z: 100.0,
+                        coolant: CoolantMode::Flood,
+                    },
+                }],
+            }],
+            active_setup_id: Some(1),
+            next_setup_id: 2,
+            next_operation_id: 2,
+            next_tool_id: 2,
+            ..Default::default()
+        };
         manager.set_cam_document(cam).unwrap();
         manager.cam_regenerate_operation(1).unwrap();
         let resolved_hole = |manager: &SketchManager| match &manager.cam.setups[0].operations[0] {
@@ -8461,7 +9035,7 @@ mod project_tests {
         // An operation Bottom that does not reference the holes is the depth
         // for every picked hole, past the end of the picked face; the
         // hole-bottom reference keeps each face's own span.
-        let expression = |reference, offset| nbcad_cam::CamHeightExpressionDto {
+        let expression = |reference, offset| limo_cad_cam::CamHeightExpressionDto {
             reference,
             geometry: None,
             offset,
@@ -8485,7 +9059,7 @@ mod project_tests {
         assert!((resolved_hole(&manager).bottom_z - -8.0).abs() < 1.0e-9);
         manager.cam.height_expressions.clear();
 
-        for point in body.positions.chunks_exact_mut(3) {
+        for point in body.positions.as_chunks_mut::<3>().0 {
             point[0] += 2.0;
         }
         body.faces[0].cylinder.as_mut().unwrap().origin.x += 2.0;
@@ -8552,104 +9126,106 @@ mod project_tests {
                 },
             })
             .unwrap();
-        let mut cam = CamDocumentDto::default();
-        cam.tools = vec![CamToolDto {
-            id: 1,
-            number: Some(1),
-            name: "EM4".into(),
-            kind: CamToolKind::FlatEndMill,
-            diameter: 4.0,
-            flute_length: 12.0,
-            overall_length: 35.0,
-            center_cutting: true,
-            flute_count: 3,
-            point_angle_degrees: None,
-            corner_radius: None,
-            corner_chamfer: None,
-            cutting: CuttingParametersDto::default(),
-            cutting_presets: vec![],
-            maximum_axial_depth: None,
-            default_step_down: None,
-            default_step_over: None,
-        }];
-        cam.setups = vec![CamSetupDto {
-            id: 1,
-            name: "Adaptive setup".into(),
-            wcs: WorkCoordinateSystemDto::default(),
-            wcs_origin: WcsOriginSpecDto::Explicit,
-            work_offset: WorkOffset::G54,
-            work_offset_count: 1,
-            stock_spec: nbcad_cam::CamStockSpecDto::LegacyBox,
-            resolved_stock: CamResolvedStockDto::Box,
-            stock: StockBoxDto {
-                min: CamPoint3Dto::new(0.0, 0.0, -2.0),
-                max: CamPoint3Dto::new(10.0, 8.0, 0.0),
-            },
-            stock_model_box: None,
-            body_ids: vec![body_id],
-            machine: None,
-            legacy_clearance_z: None,
-            legacy_retract_z: None,
-            operations: vec![CamOperationDto::Adaptive3d {
+        let cam = CamDocumentDto {
+            tools: vec![CamToolDto {
                 id: 1,
-                name: "Adaptive".into(),
-                enabled: true,
-                tool_id: 1,
-                top_z: 0.0,
-                bottom_z: -1.0,
-                clearance_z: 5.0,
-                retract_z: 3.0,
-                feed_height_z: 1.0,
+                number: Some(1),
+                name: "EM4".into(),
+                kind: CamToolKind::FlatEndMill,
+                diameter: 4.0,
+                flute_length: 12.0,
+                overall_length: 35.0,
+                center_cutting: true,
+                flute_count: 3,
+                point_angle_degrees: None,
+                corner_radius: None,
+                corner_chamfer: None,
                 cutting: CuttingParametersDto::default(),
-                geometry: None,
-                parameters: nbcad_cam::CamAdaptiveParametersDto {
-                    optimal_load: 1.0,
-                    maximum_stepdown: 1.0,
-                    minimum_cutting_radius: 0.8,
-                    radial_stock_to_leave: 0.1,
-                    axial_stock_to_leave: 0.1,
-                    tolerance: 0.3,
-                    ramp_angle_degrees: 3.0,
-                    maximum_ramp_stepdown: 0.5,
-                    ramp_feed: 100.0,
-                    linking_feed: 600.0,
-                    stay_down_distance: 8.0,
-                    machine_cavities: true,
+                cutting_presets: vec![],
+                maximum_axial_depth: None,
+                default_step_down: None,
+                default_step_over: None,
+            }],
+            setups: vec![CamSetupDto {
+                id: 1,
+                name: "Adaptive setup".into(),
+                wcs: WorkCoordinateSystemDto::default(),
+                wcs_origin: WcsOriginSpecDto::Explicit,
+                work_offset: WorkOffset::G54,
+                work_offset_count: 1,
+                stock_spec: limo_cad_cam::CamStockSpecDto::LegacyBox,
+                resolved_stock: CamResolvedStockDto::Box,
+                stock: StockBoxDto {
+                    min: CamPoint3Dto::new(0.0, 0.0, -2.0),
+                    max: CamPoint3Dto::new(10.0, 8.0, 0.0),
+                },
+                stock_model_box: None,
+                body_ids: vec![body_id],
+                machine: None,
+                legacy_clearance_z: None,
+                legacy_retract_z: None,
+                operations: vec![CamOperationDto::Adaptive3d {
+                    id: 1,
+                    name: "Adaptive".into(),
+                    enabled: true,
+                    tool_id: 1,
+                    top_z: 0.0,
+                    bottom_z: -1.0,
+                    clearance_z: 5.0,
+                    retract_z: 3.0,
+                    feed_height_z: 1.0,
+                    cutting: CuttingParametersDto::default(),
+                    geometry: None,
+                    parameters: limo_cad_cam::CamAdaptiveParametersDto {
+                        optimal_load: 1.0,
+                        maximum_stepdown: 1.0,
+                        minimum_cutting_radius: 0.8,
+                        radial_stock_to_leave: 0.1,
+                        axial_stock_to_leave: 0.1,
+                        tolerance: 0.3,
+                        ramp_angle_degrees: 3.0,
+                        maximum_ramp_stepdown: 0.5,
+                        ramp_feed: 100.0,
+                        linking_feed: 600.0,
+                        stay_down_distance: 8.0,
+                        machine_cavities: true,
+                    },
+                }],
+            }],
+            active_setup_id: Some(1),
+            next_setup_id: 2,
+            next_tool_id: 2,
+            next_operation_id: 2,
+            height_expressions: vec![CamOperationHeightExpressionsDto {
+                operation_id: 1,
+                top: CamHeightExpressionDto {
+                    geometry: None,
+                    reference: CamHeightReferenceDto::ModelTop,
+                    offset: -0.25,
+                },
+                bottom: Some(CamHeightExpressionDto {
+                    geometry: None,
+                    reference: CamHeightReferenceDto::Origin,
+                    offset: -1.0,
+                }),
+                feed: CamHeightExpressionDto {
+                    geometry: None,
+                    reference: CamHeightReferenceDto::StockTop,
+                    offset: 1.0,
+                },
+                retract: CamHeightExpressionDto {
+                    geometry: None,
+                    reference: CamHeightReferenceDto::StockTop,
+                    offset: 3.0,
+                },
+                clearance: CamHeightExpressionDto {
+                    geometry: None,
+                    reference: CamHeightReferenceDto::StockTop,
+                    offset: 5.0,
                 },
             }],
-        }];
-        cam.active_setup_id = Some(1);
-        cam.next_setup_id = 2;
-        cam.next_tool_id = 2;
-        cam.next_operation_id = 2;
-        cam.height_expressions = vec![CamOperationHeightExpressionsDto {
-            operation_id: 1,
-            top: CamHeightExpressionDto {
-                geometry: None,
-                reference: CamHeightReferenceDto::ModelTop,
-                offset: -0.25,
-            },
-            bottom: Some(CamHeightExpressionDto {
-                geometry: None,
-                reference: CamHeightReferenceDto::Origin,
-                offset: -1.0,
-            }),
-            feed: CamHeightExpressionDto {
-                geometry: None,
-                reference: CamHeightReferenceDto::StockTop,
-                offset: 1.0,
-            },
-            retract: CamHeightExpressionDto {
-                geometry: None,
-                reference: CamHeightReferenceDto::StockTop,
-                offset: 3.0,
-            },
-            clearance: CamHeightExpressionDto {
-                geometry: None,
-                reference: CamHeightReferenceDto::StockTop,
-                offset: 5.0,
-            },
-        }];
+            ..Default::default()
+        };
         manager.set_cam_document(cam).unwrap();
         manager.cam_regenerate_operation(1).unwrap();
         assert_eq!(
@@ -8693,9 +9269,7 @@ mod project_tests {
             CamToolpathStateDto::Current
         );
 
-        // Commit a changed tessellation under the same stable body id. The
-        // saved snapshot must stay stale until explicit transactional capture.
-        for point in body.positions.chunks_exact_mut(3) {
+        for point in body.positions.as_chunks_mut::<3>().0 {
             point[0] += 1.0;
             point[2] += 0.5;
         }
@@ -8727,8 +9301,7 @@ mod project_tests {
         );
 
         let prior = loaded.cam_document();
-        // Entire stock protected: no successful cut, so neither a new
-        // snapshot nor a new generation signature may be committed.
+
         body.positions = vec![0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 8.0, 0.0, 0.0, 8.0, 0.0];
         let plan = loaded.prepare_recompute().unwrap();
         loaded
@@ -8771,9 +9344,6 @@ mod project_tests {
         }
     }
 
-    // A project saved before the per-operation feed plane existed must still
-    // open: the legacy default (0.0) migrates into the valid band instead of
-    // failing the whole load.
     #[test]
     fn legacy_cam_document_without_feed_height_opens_clean() {
         let cam = CamDocumentDto {
@@ -8788,8 +9358,8 @@ mod project_tests {
                 wcs_origin: WcsOriginSpecDto::Explicit,
                 work_offset: WorkOffset::G54,
                 work_offset_count: 1,
-                stock_spec: nbcad_cam::CamStockSpecDto::LegacyBox,
-                resolved_stock: nbcad_cam::CamResolvedStockDto::Box,
+                stock_spec: limo_cad_cam::CamStockSpecDto::LegacyBox,
+                resolved_stock: limo_cad_cam::CamResolvedStockDto::Box,
                 stock: StockBoxDto {
                     min: CamPoint3Dto::new(0.0, 0.0, 0.0),
                     max: CamPoint3Dto::new(30.0, 20.0, 14.0),
@@ -8813,7 +9383,7 @@ mod project_tests {
                     step_over: 3.0,
                     step_down: 1.0,
                     safe_distance: 5.0,
-                    direction: nbcad_cam::FaceDirection::BothWays,
+                    direction: limo_cad_cam::FaceDirection::BothWays,
                     clearance_z: 20.0,
                     retract_z: 17.0,
                     feed_height_z: 15.0,
@@ -8880,8 +9450,7 @@ mod project_tests {
             panic!("expected the face operation to survive the legacy load");
         };
         assert!(enabled);
-        // Legacy default 0.0 is below the cut top, so the migration clamps it
-        // onto the top of the cut.
+
         assert_eq!(*feed_height_z, 14.0);
         let program = loaded.cam_plan(3).unwrap();
         assert_eq!(program.stats.operation_count, 1);
@@ -8923,19 +9492,19 @@ mod project_tests {
 
         let scene = manager.solid_scene();
         assert_eq!(scene.bodies.len(), 2);
-        let connector = |body: &nbcad_solid::BodyDto| {
+        let connector = |body: &limo_cad_solid::BodyDto| {
             let face = &body.faces[0];
             let face_basis = face.plane.unwrap();
-            nbcad_assembly::JointConnectorDto {
+            limo_cad_assembly::JointConnectorDto {
                 body_id: body.id,
                 face_id: face.id,
                 face_key: face.key.clone(),
                 edge_id: None,
                 edge_key: None,
-                kind: nbcad_assembly::JointConnectorKindDto::PlanarFace,
+                kind: limo_cad_assembly::JointConnectorKindDto::PlanarFace,
                 radius: None,
                 source_surface_frame: None,
-                frame: nbcad_assembly::JointFrameDto {
+                frame: limo_cad_assembly::JointFrameDto {
                     origin: face_basis.origin,
                     primary_axis: face_basis.normal,
                     secondary_axis: face_basis.u,
@@ -8945,7 +9514,7 @@ mod project_tests {
         manager
             .create_joint(CreateJointRequestDto {
                 name: "Disposable mate".to_string(),
-                kind: nbcad_assembly::JointKindDto::Rigid,
+                kind: limo_cad_assembly::JointKindDto::Rigid,
                 connector_a: connector(&scene.bodies[0]),
                 connector_b: connector(&scene.bodies[1]),
                 flipped: true,
@@ -8954,7 +9523,7 @@ mod project_tests {
                 limits: None,
                 angle_limits: None,
                 linear_limits: None,
-                advanced: nbcad_assembly::JointAdvancedDto::default(),
+                advanced: limo_cad_assembly::JointAdvancedDto::default(),
                 grounded_body_id: Some(scene.bodies[1].id),
                 grounded_occurrence_id: None,
             })
@@ -9024,8 +9593,6 @@ mod project_tests {
         assert_eq!(inner.parent_index, Some(outer.index));
         assert_eq!(inner.nesting_depth, 1);
 
-        // Picking either the visible material region or its enclosed void
-        // resolves to the same outer region and carries the hole to the kernel.
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
                 source_face: None,
@@ -9445,15 +10012,15 @@ mod project_tests {
         manager.end_sketch().unwrap();
         let json = manager.export_project_model().unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-        // Existing schema-2 builds reject every version except 1 and 2. Do
-        // not let an additive-field "compatibility" change remove this gate.
+
         assert!(parsed["schema_version"].as_u64().unwrap() > 2);
 
-        // Also preserve reference files from this branch's earlier test
-        // builds, which wrote the mode map without raising schema_version.
         for version in [2, PROJECT_SCHEMA_VERSION] {
             let mut input = parsed.clone();
             input["schema_version"] = version.into();
+            if version < 11 {
+                input.as_object_mut().unwrap().remove("print_intent");
+            }
             let mut loaded = SketchManager::new();
             let plan = loaded.prepare_load_project(input.to_string()).unwrap();
             assert!(plan.jobs.is_empty());
@@ -9493,6 +10060,7 @@ mod project_tests {
         let mut legacy: serde_json::Value =
             serde_json::from_str(&manager.export_project_model().unwrap()).unwrap();
         legacy["schema_version"] = 2.into();
+        legacy.as_object_mut().unwrap().remove("print_intent");
         legacy["sketches"][0]["snapshot"]
             .as_object_mut()
             .unwrap()
@@ -9553,6 +10121,7 @@ mod project_tests {
         let mut legacy: serde_json::Value =
             serde_json::from_str(&manager.export_project_model().unwrap()).unwrap();
         legacy["schema_version"] = serde_json::Value::from(1);
+        legacy.as_object_mut().unwrap().remove("print_intent");
         legacy["document"]["settings"]["dimension_style"] =
             serde_json::Value::String("legacy_default".to_string());
         legacy["sketches"][0]["dimension_style"] =
@@ -9800,19 +10369,19 @@ mod project_tests {
                 counterbore_depth: 0.0,
                 countersink_diameter: 4.0,
                 countersink_angle_deg: 90.0,
-                bottom_style: nbcad_solid::HoleBottomStyle::Flat,
+                bottom_style: limo_cad_solid::HoleBottomStyle::Flat,
                 drill_point_angle_deg: 118.0,
-                thread: Some(nbcad_solid::HoleThreadDto {
-                    standard: nbcad_solid::HoleThreadStandard::IsoMetric,
-                    series: nbcad_solid::HoleThreadSeries::MetricCoarse,
+                thread: Some(limo_cad_solid::HoleThreadDto {
+                    standard: limo_cad_solid::HoleThreadStandard::IsoMetric,
+                    series: limo_cad_solid::HoleThreadSeries::MetricCoarse,
                     designation: "M3 x 0.5 - 6H".to_string(),
                     class: "6H".to_string(),
                     nominal_diameter: 3.0,
                     pitch: 0.5,
                     threads_per_inch: None,
-                    hand: nbcad_solid::HoleThreadHand::Right,
+                    hand: limo_cad_solid::HoleThreadHand::Right,
                     depth: None,
-                    representation: nbcad_solid::HoleThreadRepresentation::Modeled,
+                    representation: limo_cad_solid::HoleThreadRepresentation::Modeled,
                     tap_drill_designation: Some("2.5 mm".to_string()),
                     rounded_profile: None,
                 }),
@@ -10105,6 +10674,7 @@ mod project_tests {
     fn intentional_tiny_untrimmed_edges_are_not_classified_as_consumed() {
         let sketch = SketchDto {
             name: "Tiny".to_string(),
+            edit_occurrence_id: None,
             plane: PlaneRef::OriginPlane {
                 plane: OriginPlane::Xy,
             },
@@ -10155,6 +10725,7 @@ mod project_tests {
             reference_midpoints: Vec::new(),
             dimensions: Vec::new(),
             dimension_style: DimensionStyle::Aligned,
+            grid_snap: true,
             dof: crate::dto::DofDto {
                 value: 0,
                 fully_defined: true,
@@ -10249,7 +10820,7 @@ mod project_tests {
                         plane: OriginPlane::Xy,
                     },
                     body_id: BodyId(99),
-                    edge_id: nbcad_core::EdgeId(101),
+                    edge_id: limo_cad_core::EdgeId(101),
                     angle_deg: 90.0,
                     axis_points: Some([
                         Point3Dto::from([0.0, 0.0, 0.0]),

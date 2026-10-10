@@ -1,10 +1,11 @@
 [package]
-name = "nbcad-print"
+name = "limo-cad-print"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 license = "LGPL-2.1-or-later"
+repository.workspace = true
 description = "Read scanned 2D prints of plates for agents: outline calibration, millimetre crops with a grid and hole overlay, ring scores at model holes, hole-symbol detection with coverage matching"
 
 [dependencies]
-png = "0.17"
-serde_json = { version = "1", features = ["float_roundtrip"] }
+png.workspace = true
+serde_json = { workspace = true, features = ["float_roundtrip"] }

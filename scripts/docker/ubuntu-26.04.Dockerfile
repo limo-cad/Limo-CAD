@@ -1,14 +1,11 @@
+# syntax=docker/dockerfile:1
 FROM ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH=/root/.cargo/bin:${PATH}
+ENV OCCT_ROOT=/opt/opencascade
+ENV LD_LIBRARY_PATH=/opt/opencascade/lib
 
-# Official Ubuntu 26.04 build/runtime SDK for the Tauri + WebKitGTK shell,
-# Bevy/wgpu viewport, HID input and Ubuntu's OpenCASCADE 7.9 packages.
-# Ubuntu's data-exchange -dev meta-package also depends on the VTK/IVTK
-# development stack. noBS CAD needs its STEP headers, but not those
-# visualization SDKs, so the RUN command extracts only that header package
-# after installing its runtime and lower-level development dependencies.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         build-essential \
@@ -19,48 +16,60 @@ RUN apt-get update \
         dbus-x11 \
         desktop-file-utils \
         file \
-        libayatana-appindicator3-dev \
+        git \
+        libdbus-1-3 \
+        libfontconfig-dev \
         libfuse2t64 \
-        libgtk-3-dev \
-        libocct-data-exchange-7.9 \
-        libocct-foundation-dev \
-        libocct-modeling-algorithms-dev \
-        libocct-modeling-data-dev \
-        librsvg2-dev \
-        libssl-dev \
+        libfreetype6-dev \
         libudev-dev \
         libvulkan-dev \
         libwayland-dev \
-        libwebkit2gtk-4.1-dev \
         libx11-dev \
-        libxdo-dev \
+        libx11-xcb1 \
+        libxcursor1 \
+        libxi6 \
         libxkbcommon-dev \
+        libxkbcommon-x11-dev \
         mesa-vulkan-drivers \
         ninja-build \
         patchelf \
         squashfs-tools \
+        pkg-config \
         vulkan-tools \
         weston \
         wget \
         xauth \
         xdg-utils \
+        xdg-desktop-portal \
+        xdg-desktop-portal-gtk \
         xvfb \
+        zenity \
     && if apt-cache show xwayland >/dev/null 2>&1; then \
          apt-get install --yes --no-install-recommends xwayland; \
        fi \
-    && cd /tmp \
-    && apt-get download libocct-data-exchange-dev \
-    && dpkg-deb --extract libocct-data-exchange-dev_*.deb / \
-    && rm -f libocct-data-exchange-dev_*.deb \
     && rm -rf /var/lib/apt/lists/*
 
+COPY rust-toolchain.toml /opt/limo-cad-toolchain/rust-toolchain.toml
+WORKDIR /opt/limo-cad-toolchain
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-      | sh -s -- -y --profile minimal --default-toolchain stable
+      | sh -s -- -y --profile minimal --default-toolchain none
+RUN rustup show
 
-# Keep the reproducible SDK rooted in the official Ubuntu 26.04 archive. CI
-# still uses setup-node for the pinned Node 22 release toolchain.
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends nodejs npm \
-    && rm -rf /var/lib/apt/lists/*
+COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION /tmp/limo-cad-build-tools/
+COPY .cargo/config.toml .cargo/tools.toml /tmp/limo-cad-build-tools/.cargo/
+WORKDIR /tmp/limo-cad-build-tools
+RUN mkdir -p crates xtask assets/i18n native
+ARG CMAKE_BUILD_PARALLEL_LEVEL
+RUN --mount=type=bind,source=crates,target=/tmp/limo-cad-build-tools/crates \
+    --mount=type=bind,source=xtask,target=/tmp/limo-cad-build-tools/xtask \
+    --mount=type=bind,source=native,target=/tmp/limo-cad-build-tools/native \
+    --mount=type=bind,source=assets/i18n,target=/tmp/limo-cad-build-tools/assets/i18n \
+    --mount=type=cache,target=/var/cache/limo-cad-rust-target,sharing=locked \
+    --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
+    --mount=type=cache,target=/root/.cargo/git,sharing=locked \
+    --mount=type=cache,target=/var/cache/limo-cad-sdk,sharing=locked \
+    CARGO_TARGET_DIR=/var/cache/limo-cad-rust-target LIMO_CAD_BUILD_CACHE=/var/cache/limo-cad-sdk \
+      cargo run --quiet --locked -p xtask -- build-occt --prefix /opt/opencascade
+RUN rm -rf /tmp/limo-cad-build-tools
 
 WORKDIR /workspace
