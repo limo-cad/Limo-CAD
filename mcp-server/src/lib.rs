@@ -10536,6 +10536,149 @@ mod tests {
     }
 
     #[test]
+    fn native_axial_split_retains_open_halfbore_candidates_with_exact_face_ownership() {
+        let (mut server, _) = mcp_box();
+        let body = &server.manager.solid_scene_ref().bodies[0];
+        let cap = body
+            .faces
+            .iter()
+            .find(|face| face.plane.is_some_and(|plane| plane.normal[2] > 0.9))
+            .unwrap();
+        let plane = cap.plane.unwrap();
+        let delta = [-plane.origin[0], -plane.origin[1], 10.0 - plane.origin[2]];
+        let project = |axis: [f64; 3]| delta.iter().zip(axis).map(|(a, b)| a * b).sum::<f64>();
+        server
+            .call_tool(
+                "solid_hole",
+                json!({"body_id":body.id.0, "face_id":cap.id.0,
+            "position":{"x":project(plane.u),"y":project(plane.v)}, "diameter":6.0,
+            "extent":{"type":"through_all"}, "style":"simple", "counterbore_diameter":0.0,
+            "counterbore_depth":0.0, "countersink_diameter":0.0, "countersink_angle_deg":90.0,
+            "thread":null, "flip":false}),
+            )
+            .unwrap();
+        let body_id = server.manager.solid_scene_ref().bodies[0].id.0;
+        server
+            .call_tool(
+                "solid_split_body",
+                json!({"body_id":body_id,
+            "plane":{"type":"origin_plane","plane":"yz"}}),
+            )
+            .unwrap();
+
+        let before = server.manager.export_project_model().unwrap();
+        let scene = server.manager.solid_scene_ref();
+        assert!(scene.errors.is_empty());
+        assert_eq!(scene.bodies.len(), 2);
+        let mut native_walls = std::collections::BTreeSet::new();
+        let mut sides = std::collections::BTreeSet::new();
+        for body in &scene.bodies {
+            let xs = body
+                .mesh
+                .positions
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|point| point[0]);
+            let min_x = xs.clone().fold(f32::INFINITY, f32::min);
+            let max_x = xs.fold(f32::NEG_INFINITY, f32::max);
+            let negative = min_x < -9.99 && max_x.abs() < 1e-5;
+            let positive = min_x.abs() < 1e-5 && max_x > 9.99;
+            assert!(
+                negative || positive,
+                "Actual split stock must occupy one X halfspace"
+            );
+            sides.insert(negative);
+            assert!(body
+                .faces
+                .iter()
+                .all(|face| face.planar_inner_ring_edge_keys.is_empty()));
+            let walls = body
+                .faces
+                .iter()
+                .filter(|face| face.cylinder.is_some())
+                .collect::<Vec<_>>();
+            assert!(!walls.is_empty());
+            // A pre-existing periodic seam can subdivide either half into
+            // multiple patches. Native identities, not a fixed face count,
+            // establish the exact candidates that must survive recognition.
+            for wall in walls {
+                native_walls.insert((body.id.0, wall.id.0));
+                let cylinder = wall.cylinder.unwrap();
+                assert!((cylinder.radius - 3.0).abs() < 1e-6);
+                assert!(cylinder.axis.z.abs() > 0.999999);
+                let samples = &body.mesh.indices
+                    [wall.first_index as usize..(wall.first_index + wall.index_count) as usize];
+                assert!(!samples.is_empty());
+                for index in samples {
+                    let point = &body.mesh.positions.as_chunks::<3>().0[*index as usize];
+                    assert!(if negative {
+                        point[0] <= 1e-5
+                    } else {
+                        point[0] >= -1e-5
+                    });
+                    assert!(point[2] >= -1e-5 && point[2] <= 10.0 + 1e-5);
+                    assert!((f64::from(point[0]).hypot(f64::from(point[1])) - 3.0).abs() < 1e-4);
+                }
+                let mut ring_heights = Vec::new();
+                for key in &wall.edge_keys {
+                    let edge = body.edges.iter().find(|edge| &edge.key == key).unwrap();
+                    if let Some(circle) = edge.circle {
+                        assert!(
+                            !circle.closed,
+                            "No full circular boundary survives the axial cut"
+                        );
+                        assert!((circle.radius - 3.0).abs() < 1e-6);
+                        assert!(circle.normal.z.abs() > 0.999999);
+                        assert!(circle.center.x.abs() < 1e-6 && circle.center.y.abs() < 1e-6);
+                        let first = edge.points.first().unwrap();
+                        let last = edge.points.last().unwrap();
+                        let separation = (first.x - last.x)
+                            .hypot(first.y - last.y)
+                            .hypot(first.z - last.z);
+                        assert!(
+                            separation > 1e-6,
+                            "Raw native arc endpoints must corroborate the open span"
+                        );
+                        ring_heights.push(circle.center.z);
+                    }
+                }
+                ring_heights.sort_by(f64::total_cmp);
+                ring_heights.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+                assert_eq!(ring_heights.len(), 2);
+                assert!(ring_heights[0].abs() < 1e-6);
+                assert!((ring_heights[1] - 10.0).abs() < 1e-6);
+            }
+        }
+        assert_eq!(sides.len(), 2);
+        let result = summary::summarize(scene, &[]).json(true);
+        assert_eq!(result["hole_count"], 0);
+        assert_eq!(result["authored_hole_count"], 0);
+        let candidates = result["ambiguous_hole_candidates"].as_array().unwrap();
+        let mut reported_walls = std::collections::BTreeSet::new();
+        for candidate in candidates {
+            let ids = candidate["face_ids"].as_array().unwrap();
+            assert_eq!(ids.len(), 1);
+            let identity = (
+                candidate["body_id"].as_u64().unwrap(),
+                ids[0].as_u64().unwrap(),
+            );
+            assert!(
+                reported_walls.insert(identity),
+                "Native candidates must not repeat a body/face identity"
+            );
+            assert_eq!(candidate["reason"], "open_or_split_circular_boundary");
+            assert_eq!(candidate["classification"], "cylindrical_surface_candidate");
+            assert_eq!(candidate["confidence"], "ambiguous");
+            assert_eq!(candidate["source"], "geometry");
+            assert_eq!(candidate["diameter"], 6.0);
+            assert!(candidate["depth"].is_null() && candidate["through"].is_null());
+        }
+        assert_eq!(reported_walls, native_walls);
+        assert_eq!(server.manager.export_project_model().unwrap(), before);
+    }
+
+    #[test]
     fn native_bore_tangent_to_stock_boundary_has_no_inner_wire_through_proof() {
         let (mut server, _) = mcp_box();
         let body = &server.manager.solid_scene_ref().bodies[0];
