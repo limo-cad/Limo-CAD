@@ -391,7 +391,8 @@ struct DocumentGeometryIndex(HashMap<String, Entity>);
 #[derive(Component, Default)]
 struct ModelEdgeCache {
     scene: std::sync::Weak<SolidSceneDto>,
-    bodies: HashMap<u64, BodyEdgeMetadata>,
+    bodies: HashMap<u64, Arc<BodyEdgeMetadata>>,
+    keys: HashMap<u64, limo_cad_native_engine::NativeBodyGeometryKey>,
 }
 
 /// Strong mesh handles retain one upload per body across occurrence changes.
@@ -399,6 +400,7 @@ struct ModelEdgeCache {
 struct BodyMeshCache {
     scene: std::sync::Weak<SolidSceneDto>,
     bodies: HashMap<u64, Handle<Mesh>>,
+    keys: HashMap<u64, limo_cad_native_engine::NativeBodyGeometryKey>,
     rendered: Option<(u64, u64)>,
 }
 
@@ -409,18 +411,37 @@ struct BodyEdgeMetadata {
 }
 
 impl ModelEdgeCache {
+    #[cfg(test)]
     fn update(&mut self, scene: &Arc<SolidSceneDto>) {
+        self.update_with_keys(scene, |_| None);
+    }
+
+    fn update_with_keys(
+        &mut self,
+        scene: &Arc<SolidSceneDto>,
+        key: impl Fn(limo_cad_core::BodyId) -> Option<limo_cad_native_engine::NativeBodyGeometryKey>,
+    ) {
         if std::ptr::eq(self.scene.as_ptr(), Arc::as_ptr(scene)) {
             return;
         }
+        let mut previous = std::mem::take(&mut self.bodies);
+        let previous_keys = std::mem::take(&mut self.keys);
         self.bodies = scene
             .bodies
             .iter()
             .map(|body| {
+                if let Some(current) = key(body.id) {
+                    self.keys.insert(body.id.0, current);
+                    if previous_keys.get(&body.id.0) == Some(&current) {
+                        if let Some(metadata) = previous.remove(&body.id.0) {
+                            return (body.id.0, metadata);
+                        }
+                    }
+                }
                 let sides = edge_side_faces(body, &Transform::IDENTITY);
                 (
                     body.id.0,
-                    BodyEdgeMetadata {
+                    Arc::new(BodyEdgeMetadata {
                         local_bounds: body_local_bounding_sphere(body),
                         sides: body
                             .edges
@@ -432,7 +453,7 @@ impl ModelEdgeCache {
                             .iter()
                             .map(|face| (face.id.0, Arc::new(face_boundary_segments(body, face))))
                             .collect(),
-                    },
+                    }),
                 )
             })
             .collect();
@@ -878,10 +899,29 @@ fn rebuild_occt_meshes(
     let scene = &model.document.scene;
     let geometry_changed = !std::ptr::eq(body_cache.scene.as_ptr(), Arc::as_ptr(scene));
     if geometry_changed {
-        for handle in body_cache.bodies.values() {
-            meshes.remove(handle);
-        }
-        body_cache.bodies.clear();
+        let prior_keys = std::mem::take(&mut body_cache.keys);
+        body_cache.bodies.retain(|id, handle| {
+            let key = model
+                .document
+                .body_geometry_key(&model.session_id, limo_cad_core::BodyId(*id));
+            if key.is_some() && key.as_ref() == prior_keys.get(id) && meshes.get(&*handle).is_some()
+            {
+                true
+            } else {
+                meshes.remove(&*handle);
+                false
+            }
+        });
+        body_cache.keys = scene
+            .bodies
+            .iter()
+            .filter_map(|body| {
+                model
+                    .document
+                    .body_geometry_key(&model.session_id, body.id)
+                    .map(|key| (body.id.0, key))
+            })
+            .collect();
         body_cache.scene = Arc::downgrade(scene);
         body_cache.rendered = None;
     }
@@ -4557,10 +4597,13 @@ fn bind_document_geometry(world: &mut World) {
             .as_ptr(),
         Arc::as_ptr(&scene),
     ) {
+        let model = world.resource::<ModelResource>();
+        let document = Arc::clone(&model.document);
+        let session_id = model.session_id.clone();
         world
             .get_mut::<ModelEdgeCache>(cache_entity)
             .expect("document edge cache")
-            .update(&scene);
+            .update_with_keys(&scene, |body| document.body_geometry_key(&session_id, body));
     }
 }
 
@@ -5868,6 +5911,248 @@ pub(crate) fn apply_interface_gpu_stock_preference(world: &mut World, enabled: b
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn native_cache_value(response: String) -> serde_json::Value {
+        let response: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(response["ok"], true, "{response}");
+        response["value"].clone()
+    }
+
+    fn native_cache_rectangle(host: &crate::state::AppState, x: f64) -> String {
+        native_cache_value(
+            host.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#),
+        );
+        native_cache_value(
+            host.engine_call(
+                "add_rectangle",
+                &serde_json::json!({
+                    "mode":"two_point","p1":{"x":x,"y":0},"p2":{"x":x+10.,"y":6},"ctrl_held":false
+                })
+                .to_string(),
+            ),
+        );
+        native_cache_value(host.engine_call("end_sketch", ""));
+        host.viewport_frame()
+            .document
+            .finished_sketches
+            .last()
+            .unwrap()
+            .name
+            .clone()
+    }
+
+    fn native_cache_extrude(host: &crate::state::AppState, sketch: &str, targets: &[u64]) {
+        native_cache_value(
+            host.solid_extrude(
+                &serde_json::json!({
+                    "sketch_name":sketch,"profile_indices":[0],
+                    "operation":if targets.is_empty() { "new_body" } else { "cut" },
+                    "extent":{"type":"distance","distance":2},"taper_angle_deg":0,
+                    "flip":false,"target_body_ids":targets
+                })
+                .to_string(),
+            ),
+        );
+    }
+
+    struct BodyCacheFixture {
+        meshes: HashMap<u64, bevy::asset::AssetId<Mesh>>,
+        edges: HashMap<u64, Arc<BodyEdgeMetadata>>,
+    }
+
+    fn body_cache_fixture(world: &mut World) -> BodyCacheFixture {
+        interface_geometry_fixture_snapshot(world);
+        let entity = world.resource::<ModelResource>().cache_entity.unwrap();
+        BodyCacheFixture {
+            meshes: world
+                .get::<BodyMeshCache>(entity)
+                .unwrap()
+                .bodies
+                .iter()
+                .map(|(id, mesh)| (*id, mesh.id()))
+                .collect(),
+            edges: world.get::<ModelEdgeCache>(entity).unwrap().bodies.clone(),
+        }
+    }
+
+    #[test]
+    fn committed_body_proofs_reuse_untouched_assets_and_edges_but_reject_unproved_scenes() {
+        let host = crate::state::AppState::new();
+        native_cache_value(host.bind_project_session("body-cache-owner"));
+        for x in [0., 20.] {
+            let sketch = native_cache_rectangle(&host, x);
+            native_cache_extrude(&host, &sketch, &[]);
+        }
+        let first = host.viewport_frame();
+        let ids = first
+            .document
+            .scene
+            .bodies
+            .iter()
+            .map(|body| body.id.0)
+            .collect::<Vec<_>>();
+        assert_eq!(ids.len(), 2);
+        assert!(first
+            .document
+            .body_geometry_key(&first.session_id, limo_cad_core::BodyId(ids[0]))
+            .is_some());
+        let mut app = interface_scene_fixture();
+        apply_interface_model(app.world_mut(), first.clone()).unwrap();
+        let before = body_cache_fixture(app.world_mut());
+        let sketch = native_cache_rectangle(&host, 5.);
+        native_cache_extrude(&host, &sketch, &[ids[0]]);
+        let edited = host.viewport_frame();
+        assert!(edited.document.scene.errors.is_empty());
+        let model = host.engine_call("project_export_model", "");
+        apply_interface_model(app.world_mut(), edited.clone()).unwrap();
+        let mut after = body_cache_fixture(app.world_mut());
+        assert_ne!(before.meshes[&ids[0]], after.meshes[&ids[0]]);
+        assert!(!Arc::ptr_eq(&before.edges[&ids[0]], &after.edges[&ids[0]]));
+        assert_eq!(before.meshes[&ids[1]], after.meshes[&ids[1]]);
+        assert!(Arc::ptr_eq(&before.edges[&ids[1]], &after.edges[&ids[1]]));
+        assert_eq!(host.engine_call("project_export_model", ""), model);
+        assert!(interface_body_local_center(
+            app.world(),
+            &first.session_id,
+            &first.document.scene,
+            ids[0]
+        )
+        .is_none());
+
+        // A matching body proof cannot resurrect an evicted asset. The next
+        // accepted scene rebuilds that upload while retaining another proved
+        // body and both still-valid derived edge allocations.
+        app.world_mut()
+            .resource_mut::<Assets<Mesh>>()
+            .remove(after.meshes[&ids[1]]);
+        let sketch = native_cache_rectangle(&host, 40.);
+        native_cache_extrude(&host, &sketch, &[]);
+        let edited = host.viewport_frame();
+        apply_interface_model(app.world_mut(), edited.clone()).unwrap();
+        let recovered = body_cache_fixture(app.world_mut());
+        assert_eq!(after.meshes[&ids[0]], recovered.meshes[&ids[0]]);
+        assert_ne!(after.meshes[&ids[1]], recovered.meshes[&ids[1]]);
+        assert!(Arc::ptr_eq(
+            &after.edges[&ids[1]],
+            &recovered.edges[&ids[1]]
+        ));
+        after = recovered;
+        let model = host.engine_call("project_export_model", "");
+
+        let mut unproved = edited.clone();
+        // Retaining a receipt beside a different allocation must not grant it
+        // authority, even with identical body IDs and geometry counters.
+        Arc::make_mut(&mut unproved.document).scene = Arc::new((*edited.document.scene).clone());
+        assert!(unproved
+            .document
+            .body_geometry_key(&unproved.session_id, limo_cad_core::BodyId(ids[1]))
+            .is_none());
+        apply_interface_model(app.world_mut(), unproved).unwrap();
+        let fallback = body_cache_fixture(app.world_mut());
+        for id in &ids {
+            assert_ne!(after.meshes[id], fallback.meshes[id]);
+            assert!(!Arc::ptr_eq(&after.edges[id], &fallback.edges[id]));
+        }
+        let rejected: serde_json::Value = serde_json::from_str(
+            &host.solid_extrude(
+                &serde_json::json!({
+                    "sketch_name":"Missing sketch","profile_indices":[0],"operation":"new_body",
+                    "extent":{"type":"distance","distance":2},"taper_angle_deg":0,
+                    "flip":false,"target_body_ids":[]
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap();
+        assert_eq!(rejected["ok"], false);
+        // A valid request reaches prepare and fails there. The last committed
+        // scene remains authoritative, but no proof is minted from live kernel
+        // state after a failed attempt. Changing away from the unproved copy
+        // must rebuild both caches without that proof.
+        let failed = host.viewport_frame();
+        assert!(Arc::ptr_eq(&edited.document.scene, &failed.document.scene));
+        assert!(failed.document.geometry_proof.is_none());
+        assert_eq!(host.engine_call("project_export_model", ""), model);
+        apply_interface_model(app.world_mut(), failed).unwrap();
+        let failed_cache = body_cache_fixture(app.world_mut());
+        for id in ids {
+            assert_ne!(fallback.meshes[&id], failed_cache.meshes[&id]);
+            assert!(!Arc::ptr_eq(&fallback.edges[&id], &failed_cache.edges[&id]));
+        }
+    }
+
+    #[test]
+    fn body_asset_proofs_invalidate_alias_groups_replacement_and_exact_retirement() {
+        let host = crate::state::AppState::new();
+        native_cache_value(host.bind_project_session("alias-cache-owner"));
+        for x in [0., 20., 40.] {
+            let sketch = native_cache_rectangle(&host, x);
+            native_cache_extrude(&host, &sketch, &[]);
+        }
+        let ids = host
+            .viewport_frame()
+            .document
+            .scene
+            .bodies
+            .iter()
+            .map(|body| body.id.0)
+            .collect::<Vec<_>>();
+        native_cache_value(host.solid_body_feature(&serde_json::json!({
+            "type":"combine","request":{"target_body_id":ids[0],"tool_body_ids":[ids[1]],"operation":"join","keep_tools":true}
+        }).to_string()));
+        let connected = host.viewport_frame();
+        let mut app = interface_scene_fixture();
+        apply_interface_model(app.world_mut(), connected.clone()).unwrap();
+        let before = body_cache_fixture(app.world_mut());
+        let foreign = crate::state::AppState::new();
+        native_cache_value(foreign.bind_project_session("foreign-cache-owner"));
+        let sketch = native_cache_rectangle(&foreign, 80.);
+        native_cache_extrude(&foreign, &sketch, &[]);
+        apply_interface_model(app.world_mut(), foreign.viewport_frame()).unwrap();
+        let foreign_cache = body_cache_fixture(app.world_mut());
+        apply_interface_model(app.world_mut(), connected.clone()).unwrap();
+        body_cache_fixture(app.world_mut());
+        let sketch = native_cache_rectangle(&host, 5.);
+        native_cache_extrude(&host, &sketch, &[ids[0]]);
+        apply_interface_model(app.world_mut(), host.viewport_frame()).unwrap();
+        let after = body_cache_fixture(app.world_mut());
+        for id in &ids[..2] {
+            assert_ne!(before.meshes[id], after.meshes[id]);
+            assert!(!Arc::ptr_eq(&before.edges[id], &after.edges[id]));
+        }
+        assert_eq!(before.meshes[&ids[2]], after.meshes[&ids[2]]);
+        assert!(Arc::ptr_eq(&before.edges[&ids[2]], &after.edges[&ids[2]]));
+
+        let replacement = crate::state::AppState::new();
+        native_cache_value(replacement.bind_project_session(&connected.session_id));
+        let model = native_cache_value(host.engine_call("project_export_model", ""));
+        native_cache_value(replacement.project_load(&model.to_string()));
+        let next = replacement.viewport_frame();
+        assert_eq!(next.document.scene.bodies.len(), 3);
+        apply_interface_model(app.world_mut(), next).unwrap();
+        let replaced = body_cache_fixture(app.world_mut());
+        for id in ids {
+            assert_ne!(after.meshes[&id], replaced.meshes[&id]);
+            assert!(!Arc::ptr_eq(&after.edges[&id], &replaced.edges[&id]));
+        }
+        let held = Arc::clone(&replaced.edges[&connected.document.scene.bodies[0].id.0]);
+        let weak = Arc::downgrade(&held);
+        drop(replaced);
+        retire_interface_model_session(app.world_mut(), &connected.session_id);
+        for mesh in foreign_cache.meshes.values() {
+            assert!(app.world().resource::<Assets<Mesh>>().get(*mesh).is_some());
+        }
+        assert!(weak.upgrade().is_some());
+        drop(held);
+        assert!(
+            weak.upgrade().is_none(),
+            "Retirement must release cache and face-entity readers"
+        );
+        assert!(connected
+            .document
+            .body_geometry_key(&connected.session_id, connected.document.scene.bodies[0].id)
+            .is_some());
+    }
 
     #[test]
     fn world_projection_round_trips_the_actual_pick_camera_and_rejects_retired_owners() {

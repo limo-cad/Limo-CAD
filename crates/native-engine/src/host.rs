@@ -3,7 +3,7 @@
 //! Enable `native-occt` for execution. The default feature set permits SDK-free
 //! compilation of consumers; it does not supply a geometry kernel.
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 
 use limo_cad_cam::CamDocumentDto;
@@ -47,11 +47,84 @@ pub struct NativeViewportDocument {
     /// Authored viewport data changes independently of the geometry revision.
     pub metadata_revision: u64,
     pub scene: Arc<SolidSceneDto>,
+    /// In-process committed geometry authority; never read from model JSON.
+    pub geometry_proof: Option<Arc<NativeBodyGeometryProof>>,
     pub active_sketch: Option<SketchDto>,
     pub finished_sketches: Vec<SketchDto>,
     pub datum_planes: Vec<DatumPlaneDefinitionDto>,
     pub profile_catalog: Vec<ProfileCatalogItemDto>,
     pub body_appearances: Vec<BodyAppearance>,
+}
+
+/// One display mesh/edge identity. Its policy is fixed to the native viewport
+/// mesher (0.15 mm / 0.35 rad), not configurable export/section tessellation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeBodyGeometryKey {
+    identity: limo_cad_occt::KernelBodyGeometryIdentity,
+    display_policy: u32,
+}
+
+/// Only an accepted native commit may construct this receipt. The weak stamp
+/// keeps allocation identity unique without retaining a retired scene payload.
+#[derive(Debug)]
+pub struct NativeBodyGeometryProof {
+    session_id: String,
+    scene: std::sync::Weak<SolidSceneDto>,
+    bodies: std::collections::BTreeMap<limo_cad_core::BodyId, NativeBodyGeometryKey>,
+}
+
+impl NativeBodyGeometryProof {
+    fn committed(
+        session_id: &str,
+        scene: &Arc<SolidSceneDto>,
+        identities: std::collections::BTreeMap<
+            limo_cad_core::BodyId,
+            limo_cad_occt::KernelBodyGeometryIdentity,
+        >,
+    ) -> Option<Arc<Self>> {
+        let ids = scene
+            .bodies
+            .iter()
+            .map(|body| body.id)
+            .collect::<BTreeSet<_>>();
+        if !scene.errors.is_empty()
+            || ids.len() != scene.bodies.len()
+            || ids.len() != identities.len()
+            || !ids.iter().eq(identities.keys())
+        {
+            return None;
+        }
+        Some(Arc::new(Self {
+            session_id: session_id.into(),
+            scene: Arc::downgrade(scene),
+            bodies: identities
+                .into_iter()
+                .map(|(id, identity)| {
+                    (
+                        id,
+                        NativeBodyGeometryKey {
+                            identity,
+                            display_policy: 1,
+                        },
+                    )
+                })
+                .collect(),
+        }))
+    }
+}
+
+impl NativeViewportDocument {
+    pub fn body_geometry_key(
+        &self,
+        session_id: &str,
+        body: limo_cad_core::BodyId,
+    ) -> Option<NativeBodyGeometryKey> {
+        let proof = self.geometry_proof.as_ref()?;
+        (proof.session_id == session_id
+            && std::ptr::eq(proof.scene.as_ptr(), Arc::as_ptr(&self.scene)))
+        .then(|| proof.bodies.get(&body).copied())
+        .flatten()
+    }
 }
 
 /// Geometry, authored data and current placements captured under one engine lock.
@@ -90,6 +163,7 @@ pub struct ResolvedDrawingProjection {
 struct NativeEngine {
     manager: SketchManager,
     kernel: OcctKernel,
+    geometry_proof: Option<Arc<NativeBodyGeometryProof>>,
     geometry_revision: u64,
     viewport_revision: u64,
     viewport_cache: RefCell<Option<CachedViewport>>,
@@ -111,6 +185,7 @@ impl NativeEngine {
             manager: SketchManager::new(),
             kernel: OcctKernel::new()
                 .map_err(|error| format!("native OCCT kernel failed to initialize: {error}"))?,
+            geometry_proof: None,
             geometry_revision: 1,
             viewport_revision: 1,
             viewport_cache: RefCell::new(None),
@@ -122,6 +197,20 @@ impl NativeEngine {
             document: self.manager.document_dto(),
             scene: self.manager.solid_scene(),
         }
+    }
+
+    fn record_geometry_commit(&mut self, session_id: &str) {
+        self.geometry_proof = self
+            .kernel
+            .body_geometry_identities()
+            .ok()
+            .and_then(|identities| {
+                NativeBodyGeometryProof::committed(
+                    session_id,
+                    &self.manager.solid_scene_snapshot(),
+                    identities,
+                )
+            });
     }
 
     fn invalidate_viewport(&mut self) {
@@ -272,7 +361,7 @@ impl NativeEngineHost {
             return ok_json(());
         }
         if let Some(project) = workspace.sessions.get_mut(session_id) {
-            if let Err(error) = project.thaw() {
+            if let Err(error) = project.thaw(session_id) {
                 return err_json(error);
             }
             workspace.active_session_id = session_id.to_string();
@@ -325,7 +414,7 @@ impl NativeEngineHost {
         let Some(project) = workspace.sessions.get_mut(session_id) else {
             return ok_json(false);
         };
-        if let Err(error) = project.thaw() {
+        if let Err(error) = project.thaw(session_id) {
             return err_json(error);
         }
         workspace.active_session_id = session_id.to_string();
@@ -1371,8 +1460,10 @@ impl NativeEngineHost {
         reject_prepare: impl FnOnce(String) -> String,
     ) -> String {
         let mut workspace = self.inner.lock().expect("engine lock poisoned");
+        let session_id = workspace.active_session_id.clone();
         let inner = workspace.active_mut();
         inner.invalidate_viewport();
+        inner.geometry_proof = None;
         let plan = match prepare(&mut inner.manager) {
             Ok(plan) => plan,
             Err(error) => return reject_prepare(error.to_string()),
@@ -1395,6 +1486,7 @@ impl NativeEngineHost {
         ) {
             Ok(update) => {
                 inner.geometry_revision = inner.geometry_revision.wrapping_add(1);
+                inner.record_geometry_commit(&session_id);
                 ok_json(update)
             }
             Err(error) => err_json(error.to_string()),
@@ -1429,6 +1521,7 @@ impl NativeEngineHost {
             document: Arc::new(NativeViewportDocument {
                 metadata_revision: inner.viewport_revision,
                 scene: inner.manager.solid_scene_snapshot(),
+                geometry_proof: inner.geometry_proof.clone(),
                 active_sketch: inner.manager.active_snapshot(),
                 finished_sketches: inner.manager.finished_sketches(),
                 datum_planes: inner.manager.datum_plane_definitions(),
