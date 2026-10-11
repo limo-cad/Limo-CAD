@@ -13,7 +13,7 @@ use bevy::{
     core_pipeline::blit::{BlitPipeline, BlitPipelineKey},
     ecs::{
         schedule::{ScheduleCleanupPolicy, ScheduleLabel},
-        system::SystemAccess,
+        system::{CombinatorSystem, Combine, RunSystemError, System, SystemAccess, SystemIn},
     },
     prelude::*,
     render::{
@@ -41,6 +41,44 @@ impl SharedSubmission {
     }
 }
 
+struct RunGuardedWindow;
+
+impl<A, B> Combine<A, B> for RunGuardedWindow
+where
+    A: System<In = (), Out = ()>,
+    B: System<In = (), Out = ()>,
+{
+    type In = ();
+    type Out = ();
+
+    fn combine<T>(
+        _: (),
+        data: &mut T,
+        _: impl FnOnce(SystemIn<'_, A>, &mut T) -> Result<(), RunSystemError>,
+        guarded: impl FnOnce(SystemIn<'_, B>, &mut T) -> Result<(), RunSystemError>,
+    ) -> Result<(), RunSystemError> {
+        // The guarded system calls the original function with its parameters.
+        // Running the other closure as well would duplicate surface operations.
+        guarded((), data)
+    }
+}
+
+fn guarded_window_system<A, B, AM, BM>(original: A, guarded: B) -> impl System<In = (), Out = ()>
+where
+    A: IntoSystem<(), (), AM>,
+    B: IntoSystem<(), (), BM>,
+{
+    let original = IntoSystem::into_system(original);
+    let guarded = IntoSystem::into_system(guarded);
+    let name = guarded.name();
+    // Bevy's combinator retains both original function-type ordering sets and
+    // normal access/thread/deferred metadata through its public System API.
+    // Function-type sets cannot be assigned with in_set. The original system
+    // contributes identity and metadata, and has no commands to apply because
+    // only the guarded closure runs.
+    CombinatorSystem::<RunGuardedWindow, _, _>::new(original, guarded, name)
+}
+
 pub(super) fn install_interface(render: &mut SubApp) -> SharedSubmission {
     let submission = SharedSubmission::default();
     render.insert_resource(submission.clone());
@@ -66,17 +104,15 @@ pub(super) fn install_interface(render: &mut SubApp) -> SharedSubmission {
                 .expect("find Bevy window surface acquisition");
             assert_eq!(removed, 1, "expected one Bevy surface acquisition system");
             schedule.add_systems(
-                configure_surfaces
+                guarded_window_system(create_surfaces, configure_surfaces)
                     .run_if(need_surface_configuration)
-                    .in_set(create_surfaces)
                     .after(RenderSystems::ExtractCommands)
                     .before(acquire_surfaces),
             );
             schedule.add_systems(
-                acquire_surfaces
+                guarded_window_system(prepare_windows, acquire_surfaces)
                     // With no extracted windows the original loop does no work.
                     .run_if(any_with_component::<ExtractedWindow>)
-                    .in_set(prepare_windows)
                     .in_set(RenderSystems::PrepareViews),
             );
         });
@@ -351,6 +387,18 @@ mod tests {
     #[derive(Default, Resource)]
     struct SurfaceOrder(Vec<&'static str>);
 
+    #[derive(Resource)]
+    struct PreparedSurface;
+
+    fn original_cpu_surface(mut order: ResMut<SurfaceOrder>) {
+        order.0.push("unguarded");
+    }
+
+    fn guarded_cpu_surface(mut commands: Commands, mut order: ResMut<SurfaceOrder>) {
+        order.0.push("guarded");
+        commands.insert_resource(PreparedSurface);
+    }
+
     #[derive(Clone, Default, Resource)]
     struct CpuPipelines {
         processed_in_render: usize,
@@ -427,6 +475,23 @@ mod tests {
     fn worker_submission_and_compilation_preserve_surface_order_and_frame_readiness() {
         // This is a CPU schedule/concurrency contract, not native surface or
         // GPU qualification. Use the real installed window hooks with no window.
+        let mut identity = World::new();
+        identity.init_resource::<SurfaceOrder>();
+        let mut identity_schedule = Schedule::default();
+        identity_schedule.add_systems((
+            guarded_window_system(original_cpu_surface, guarded_cpu_surface),
+            (|_: Res<PreparedSurface>, mut order: ResMut<SurfaceOrder>| {
+                order.0.push("prepared");
+            })
+            .after(original_cpu_surface),
+        ));
+        identity_schedule.run(&mut identity);
+        assert_eq!(
+            identity.resource::<SurfaceOrder>().0,
+            ["guarded", "prepared"],
+            "original identity must order deferred work without duplicate execution"
+        );
+
         let mut interface = SubApp::new();
         interface.update_schedule = Some(Render.intern());
         interface.add_schedule(Render::base_schedule());
