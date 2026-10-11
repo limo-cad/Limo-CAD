@@ -3,6 +3,212 @@ use crate::native_viewport::interface_shell::tests::fixture;
 
 mod window_focus;
 
+#[test]
+fn accepted_number_caption_fits_narrow_field_without_changing_owned_edit_text() {
+    use bevy::text::ComputedTextBlock;
+    let (mut app, handle, entity) = editor_fixture();
+    app.world_mut()
+        .run_system_cached(crate::native_viewport::ui::load_system_font)
+        .unwrap();
+    app.world_mut().flush();
+    app.init_resource::<bevy::ui::ui_surface::UiSurface>();
+    app.update();
+    let assets = app.world().resource::<ViewportUiAssets>().clone();
+    let theme = ViewportUiTheme::from_palette(&default());
+    compact_number_caption(app.world_mut(), entity, theme, &assets);
+    let caption = app.world().get::<CompactNumberCaption>(entity).unwrap().0;
+    app.world_mut()
+        .entity_mut(caption)
+        .insert(ComputedUiRenderTargetInfo::default());
+    handle.blur();
+    for (raw, tiny) in [
+        ("0.0000000000000008881784197001252", true),
+        ("-0.0000000000000008881784197001252", true),
+        ("11.000000000000002", false),
+        ("123456789.0000001", false),
+    ] {
+        app.world_mut()
+            .get_mut::<NativeTextField>(entity)
+            .unwrap()
+            .baseline = raw.into();
+        app.world_mut()
+            .entity_mut(entity)
+            .insert(EditableText::new(raw));
+        app.world_mut()
+            .get_mut::<InterfaceControl>(entity)
+            .unwrap()
+            .field = Field::Text {
+            value: raw.into(),
+            read_only: false,
+            selection: None,
+        };
+        app.update();
+        for scale in [1., 2.] {
+            app.world_mut()
+                .get_mut::<ComputedNode>(entity)
+                .unwrap()
+                .size
+                .x = 86. * scale;
+            app.world_mut()
+                .get_mut::<ComputedNode>(entity)
+                .unwrap()
+                .inverse_scale_factor = 1. / scale;
+            let revision = app.world().get::<InterfaceTextRevision>(entity).unwrap().0;
+            let selection = app
+                .world()
+                .get::<EditableText>(entity)
+                .unwrap()
+                .editor()
+                .raw_selection()
+                .text_range();
+            update_compact_numbers(app.world_mut());
+            let display = app.world().get::<Text>(caption).unwrap().0.clone();
+            assert_eq!(
+                app.world().get::<Node>(caption).unwrap().display,
+                Display::Flex
+            );
+            // Independently shape the resulting ordinary Text via the actual
+            // Bevy UI text system, rather than checking a character formula.
+            app.world_mut()
+                .run_system_cached(bevy::ui::widget::measure_text_system)
+                .unwrap();
+            let rendered_width = app
+                .world()
+                .get::<ComputedTextBlock>(caption)
+                .unwrap()
+                .buffer()
+                .width();
+            assert!(
+                rendered_width > 0. && rendered_width <= 55.,
+                "{display}: {rendered_width}"
+            );
+            if tiny {
+                assert!(display.contains("e-"));
+                let shown: f64 = display.parse().unwrap();
+                assert_ne!(shown, 0.);
+                assert_eq!(shown.is_sign_negative(), raw.starts_with('-'));
+            }
+            assert_eq!(
+                app.world().get::<EditableText>(entity).unwrap().value(),
+                raw
+            );
+            assert_eq!(
+                app.world()
+                    .get::<EditableText>(entity)
+                    .unwrap()
+                    .editor()
+                    .raw_selection()
+                    .text_range(),
+                selection
+            );
+            assert_eq!(
+                app.world().get::<NativeTextField>(entity).unwrap().baseline,
+                raw
+            );
+            assert_eq!(
+                app.world().get::<InterfaceTextRevision>(entity).unwrap().0,
+                revision
+            );
+            let Field::Text { value, .. } =
+                &app.world().get::<InterfaceControl>(entity).unwrap().field
+            else {
+                panic!("text control");
+            };
+            assert_eq!(value, raw);
+        }
+        if tiny {
+            let narrow = app.world().get::<Text>(caption).unwrap().0.clone();
+            app.world_mut()
+                .get_mut::<ComputedNode>(entity)
+                .unwrap()
+                .size
+                .x = 800.;
+            update_compact_numbers(app.world_mut());
+            assert!(app.world().get::<Text>(caption).unwrap().0.len() > narrow.len());
+            app.world_mut()
+                .get_mut::<ComputedNode>(entity)
+                .unwrap()
+                .size
+                .x = 172.;
+            update_compact_numbers(app.world_mut());
+            assert_eq!(app.world().get::<Text>(caption).unwrap().0, narrow);
+        }
+    }
+    // Ownership and editing states keep the exact raw editor visible. Neither
+    // a rounded caption nor its cache becomes a SetValue or selection change.
+    let action = handle
+        .resolve_retained(ControlKey(entity.to_bits()))
+        .unwrap();
+    handle.prepare_activation(&action).unwrap();
+    update_compact_numbers(app.world_mut());
+    assert_eq!(
+        app.world().get::<Node>(caption).unwrap().display,
+        Display::None
+    );
+    assert_eq!(app.world().get::<TextColor>(entity).unwrap().0, theme.ink);
+    assert_eq!(
+        app.world().get::<EditableText>(entity).unwrap().value(),
+        "123456789.0000001"
+    );
+    handle.blur();
+    apply_edit(app.world_mut(), entity, TextEdit::SelectAll).unwrap();
+    apply_edit(app.world_mut(), entity, TextEdit::Insert("1 + 2".into())).unwrap();
+    update_compact_numbers(app.world_mut());
+    assert_eq!(
+        app.world().get::<Node>(caption).unwrap().display,
+        Display::None
+    );
+    assert_eq!(
+        app.world().get::<EditableText>(entity).unwrap().value(),
+        "1 + 2"
+    );
+    app.world_mut()
+        .entity_mut(entity)
+        .insert(EditableText::new("123456789.0000001"));
+    app.world_mut()
+        .get_mut::<NativeTextField>(entity)
+        .unwrap()
+        .queued = Some("123456789.0000001".into());
+    update_compact_numbers(app.world_mut());
+    assert_eq!(
+        app.world().get::<Node>(caption).unwrap().display,
+        Display::None
+    );
+    app.world_mut()
+        .get_mut::<NativeTextField>(entity)
+        .unwrap()
+        .queued = None;
+    update_compact_numbers(app.world_mut());
+    assert_eq!(
+        app.world().get::<Node>(caption).unwrap().display,
+        Display::Flex
+    );
+    apply_edit(
+        app.world_mut(),
+        entity,
+        TextEdit::ImeSetCompose {
+            value: "12".into(),
+            cursor: None,
+        },
+    )
+    .unwrap();
+    assert!(app
+        .world()
+        .get::<EditableText>(entity)
+        .unwrap()
+        .is_composing());
+    update_compact_numbers(app.world_mut());
+    assert_eq!(
+        app.world().get::<Node>(caption).unwrap().display,
+        Display::None
+    );
+    assert_eq!(
+        app.world().get::<NativeTextField>(entity).unwrap().baseline,
+        "123456789.0000001"
+    );
+    assert!(handle.take_actions().unwrap().is_empty());
+}
+
 fn drawing_field(app: &mut App, entity: Entity, index: usize) {
     app.world_mut().entity_mut(entity).insert(DrawingDimension {
         generation: 7,
