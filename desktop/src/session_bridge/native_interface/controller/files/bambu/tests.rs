@@ -928,7 +928,7 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
                 object
                     .parts
                     .iter()
-                    .map(move |part| (object.object_id, instance as u32, part.part_id))
+                    .map(move |part| (object.object_id, instance, part.part_id))
             })
         })
         .collect();
