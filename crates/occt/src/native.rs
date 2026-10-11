@@ -271,6 +271,15 @@ pub struct DetachedSectionKernel(OcctKernel);
 /// Independent selected shapes for static and sampled occurrence interference.
 pub struct DetachedInterferenceKernel(OcctKernel);
 impl DetachedInterferenceKernel {
+    pub fn evaluate_motion(
+        &self,
+        assembly: &limo_cad_sketch::AssemblyDocumentDto,
+        scene: &limo_cad_solid::SolidSceneDto,
+        request: &limo_cad_sketch::EvaluateMotionStudyRequestDto,
+    ) -> Result<limo_cad_sketch::MotionStudyEvaluationDto, String> {
+        crate::evaluate_motion_study_document(assembly, scene, &self.0, request)
+    }
+
     pub fn inspect_swept(
         &self,
         assembly: &limo_cad_sketch::AssemblyDocumentDto,

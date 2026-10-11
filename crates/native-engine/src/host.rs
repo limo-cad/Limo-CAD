@@ -148,6 +148,10 @@ pub use portable_export::{
     FinishedPortableMeshExport, FinishedStepExport, PortableMeshFormat, PreparedPortableMeshExport,
     PreparedStepExport,
 };
+#[path = "motion_evaluation_snapshot.rs"]
+mod motion_evaluation_snapshot;
+pub use motion_evaluation_snapshot::{FinishedMotionEvaluation, PreparedMotionEvaluation};
+
 #[path = "swept_snapshot.rs"]
 mod swept_snapshot;
 pub use swept_snapshot::{FinishedSweptCollisionReview, PreparedSweptCollisionReview};
@@ -971,17 +975,14 @@ impl NativeEngineHost {
     }
 
     pub fn assembly_evaluate_motion_study(&self, payload: &str) -> String {
-        let request = match serde_json::from_str(payload) {
-            Ok(request) => request,
-            Err(error) => return err_json(format!("bad request payload: {error}")),
-        };
-        let workspace = match self.inner.lock() {
-            Ok(workspace) => workspace,
-            Err(_) => return err_json("engine lock poisoned"),
-        };
-        let inner = workspace.active();
-        match limo_cad_occt::evaluate_motion_study(&inner.manager, &inner.kernel, &request) {
-            Ok(result) => ok_json(result),
+        match self
+            .prepare_motion_evaluation(payload)
+            .and_then(|prepared| prepared.evaluate())
+            .and_then(|finished| {
+                self.validate_motion_evaluation(&finished)?;
+                Ok(finished.into_report())
+            }) {
+            Ok(report) => ok_json(report),
             Err(error) => err_json(error),
         }
     }
