@@ -17718,7 +17718,7 @@
           "sheet_id": {
             "$ref": "bench_drawing_seat_front_sheet_id"
           },
-          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\n51.0, 42.5, 35.0\n600.0, 42.5, 35.0\n1149.0, 42.5, 35.0\nThrough notch: X 63..132, Y 28..85. Square internal corners.\nThrough notch: X 1068..1137, Y 28..85. Square internal corners.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
+          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\nCountersink D10 x 90 deg at entry face.\n51.0, 42.5, 35.0\n600.0, 42.5, 35.0\n1149.0, 42.5, 35.0\nThrough notch: X 63..132, Y 28..85. Square internal corners.\nThrough notch: X 1068..1137, Y 28..85. Square internal corners.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -18374,7 +18374,7 @@
           "sheet_id": {
             "$ref": "bench_drawing_seat_second_sheet_id"
           },
-          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\n51.0, 42.5, 35.0\n600.0, 42.5, 35.0\n1149.0, 42.5, 35.0\nThrough notch: X 63..132, Y 0..7. Square internal corners.\nThrough notch: X 1068..1137, Y 0..7. Square internal corners.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
+          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\nCountersink D10 x 90 deg at entry face.\n51.0, 42.5, 35.0\n600.0, 42.5, 35.0\n1149.0, 42.5, 35.0\nThrough notch: X 63..132, Y 0..7. Square internal corners.\nThrough notch: X 1068..1137, Y 0..7. Square internal corners.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -19030,7 +19030,7 @@
           "sheet_id": {
             "$ref": "bench_drawing_seat_middle_sheet_id"
           },
-          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\n51.0, 42.5, 35.0\n600.0, 42.5, 35.0\n1149.0, 42.5, 35.0\nModeled edge rounding R3; see the exact views for selected edges.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
+          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\nCountersink D10 x 90 deg at entry face.\n51.0, 42.5, 35.0\n600.0, 42.5, 35.0\n1149.0, 42.5, 35.0\nModeled edge rounding R3; see the exact views for selected edges.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -19686,7 +19686,7 @@
           "sheet_id": {
             "$ref": "bench_drawing_seat_rear_sheet_id"
           },
-          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\n51.0, 42.5, 35.0\n600.0, 42.5, 35.0\n1149.0, 42.5, 35.0\nThrough notch: X 63..132, Y 18..85. Square internal corners.\nThrough notch: X 1068..1137, Y 18..85. Square internal corners.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
+          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\nCountersink D10 x 90 deg at entry face.\n51.0, 42.5, 35.0\n600.0, 42.5, 35.0\n1149.0, 42.5, 35.0\nThrough notch: X 63..132, Y 18..85. Square internal corners.\nThrough notch: X 1068..1137, Y 18..85. Square internal corners.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -22310,7 +22310,7 @@
           "sheet_id": {
             "$ref": "bench_drawing_arm_left_sheet_id"
           },
-          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\n16.0, 155.0, 35.0\n16.0, 355.0, 35.0\nModeled edge rounding R18; see the exact views for selected edges.\nModeled edge rounding R3; see the exact views for selected edges.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
+          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\nCountersink D10 x 90 deg at entry face.\n16.0, 155.0, 35.0\n16.0, 355.0, 35.0\nModeled edge rounding R18; see the exact views for selected edges.\nModeled edge rounding R3; see the exact views for selected edges.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
@@ -22966,7 +22966,7 @@
           "sheet_id": {
             "$ref": "bench_drawing_arm_right_sheet_id"
           },
-          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\n84.0, 155.0, 35.0\n84.0, 355.0, 35.0\nModeled edge rounding R18; see the exact views for selected edges.\nModeled edge rounding R3; see the exact views for selected edges.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
+          "text": "MACHINING COORDINATES / X,Y,Z mm\nD5.5 / depth 35 along Z:\nCountersink D10 x 90 deg at entry face.\n84.0, 155.0, 35.0\n84.0, 355.0, 35.0\nModeled edge rounding R18; see the exact views for selected edges.\nModeled edge rounding R3; see the exact views for selected edges.\nCheck dry fit; maintain specified clearance. Do not infer dimensions\nby scaling this sheet."
         },
         "group": "drawing/annotate",
         "operation": "drawing_add_note"
