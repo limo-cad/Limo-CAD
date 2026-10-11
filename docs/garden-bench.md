@@ -161,9 +161,20 @@ cargo run -p limo-cad-recipes --example author_bench_drawings
 
 The focused native replay checks all 22 sheets and byte-identical SVG/DXF after
 reopen, then changes picket height and checks the current associative dimension.
-Manufacturing release still requires a review of the sheets, timber/hardware
-selection, and a comfort and assembly mockup. See `parametric-design-principles.md`
-and `flagship-examples.md`.
+A complete digital candidate-sheet review on 2026-10-11 checked all 20 part
+sheets and all 22 saved sheet images, including 60 overall dimensions and 115
+bore centers. It found six seat/arm notes missing their modeled D10 x 90-degree
+countersinks. The drawing author and those six authored notes now retain the
+actual hole style; one focused in-memory author regression checks all 20 parts.
+An independent source/SVG layout bound leaves at least 18.9 mm above the title
+band after the extra line. Historical exports and captures remain unchanged;
+this is not a fresh rendering, printing or native reopen pass. Exact review
+inputs, hashes, scope and the prior failed replay evidence are recorded in
+[`qualification/garden-bench-sheet-review-20261011.json`](qualification/garden-bench-sheet-review-20261011.json).
+
+Manufacturing release still requires timber/hardware selection and a comfort
+and assembly mockup. See `parametric-design-principles.md` and
+`flagship-examples.md`.
 
 Native 3MF/STL export contains the visible solved occurrences at their assembled
 positions, in millimetres. It is a secondary output. Keep `.limo` for parameter edits;

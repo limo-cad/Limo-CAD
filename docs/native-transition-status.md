@@ -28,9 +28,17 @@ Every existing UI/MCP leaf, receipt, incoming renderer recheck and prior section
 needs_recheck remains intact. Broad qualification stays paused. No new human
 pass, fresh live pair, deployment, restart or physical GPU/printing qualification
 is claimed. Saved GUI/recovery data and independent headless documents remain
-preserved. Finite digital bench-sheet review (#93), genuine Bambu external
-qualification (#316), display/cutover work and the genuine #369 witness remain
-separate open work. Main and Jack's PRs are untouched; changes stay in PR124 and
+preserved. The complete historical digital 22-sheet bench review found six
+missing countersink specifications; the author/source repair passes strict
+example compilation and its one new pure author regression. Exact inputs and
+layout bounds are recorded in `qualification/garden-bench-sheet-review-20261011.json`.
+Keep #93 open: the old native bench log failed on an obsolete `$len` assertion
+before reopen/export checks; current source already uses supported `$count`.
+Later logs mark that exact case ignored, and no final successful full-package/
+reopen/upstream receipt is retained. The current bench checkpoint has no drawings;
+22 SVGs plus 22 PNGs are historical review inputs, not 44 retained SVG/DXF files.
+Genuine Bambu external qualification (#316), display/cutover work and the genuine
+#369 witness remain separate open work. Main and Jack's PRs are untouched; changes stay in PR124 and
 both Bevy aliases. Hosted CI for this checkpoint is not yet claimed green.
 
 Historical checkpoint, **2026-10-11 UTC**: swept source `f2c47dd9` and
