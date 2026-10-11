@@ -178,6 +178,10 @@ fn compact_numeric_text(raw: &str, significant_digits: usize) -> Option<String> 
         // A literal below f64's range must never be presented as exact zero.
         return None;
     }
+    if value == 0. {
+        // A signed zero is still exact zero. The owned editor keeps its sign.
+        return Some("0".into());
+    }
     let precision = significant_digits.checked_sub(1)?;
     let scientific = format!("{value:.precision$e}");
     let (mantissa, exponent) = scientific.split_once('e')?;
