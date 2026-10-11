@@ -494,6 +494,22 @@ pub struct DetachedDrawingKernel;
 #[cfg(not(feature = "native-occt"))]
 pub struct DetachedMeshKernel;
 #[cfg(not(feature = "native-occt"))]
+pub struct DetachedSectionKernel;
+#[cfg(not(feature = "native-occt"))]
+impl DetachedSectionKernel {
+    pub fn inspect(
+        &self,
+        request: &section_review::SectionReviewRequest,
+    ) -> Result<section_review::SectionReview, section_review::SectionReviewError> {
+        Err(section_review::SectionReviewError::Kernel {
+            body_id: request.body_id,
+            plane: request.plane,
+            offset_mm: request.offset_mm,
+            source: OcctError("native OCCT support was not enabled at compile time".into()),
+        })
+    }
+}
+#[cfg(not(feature = "native-occt"))]
 impl DetachedMeshKernel {
     pub fn tessellate(
         &self,
@@ -521,6 +537,14 @@ impl DetachedDrawingKernel {
 #[cfg(not(feature = "native-occt"))]
 impl OcctKernel {
     pub fn active_body_ids(&self) -> Result<Vec<BodyId>, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
+    pub fn detached_section_snapshot(
+        &self,
+        _id: BodyId,
+    ) -> Result<DetachedSectionKernel, OcctError> {
         Err(OcctError(
             "native OCCT support was not enabled at compile time".into(),
         ))
@@ -603,7 +627,7 @@ impl OcctKernel {
 #[cfg(feature = "native-occt")]
 mod native;
 #[cfg(feature = "native-occt")]
-pub use native::{DetachedDrawingKernel, DetachedMeshKernel, OcctKernel};
+pub use native::{DetachedDrawingKernel, DetachedMeshKernel, DetachedSectionKernel, OcctKernel};
 
 #[cfg(test)]
 mod drawing_anchor_tests {

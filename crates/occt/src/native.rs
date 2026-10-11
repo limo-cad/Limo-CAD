@@ -266,6 +266,17 @@ pub struct OcctKernel {
 pub struct DetachedDrawingKernel(OcctKernel);
 /// Independent export shapes with no document mutation or geometry authority.
 pub struct DetachedMeshKernel(OcctKernel);
+/// Independent selected-body sections, without live document authority.
+pub struct DetachedSectionKernel(OcctKernel);
+impl DetachedSectionKernel {
+    pub fn inspect(
+        &self,
+        request: &crate::section_review::SectionReviewRequest,
+    ) -> Result<crate::section_review::SectionReview, crate::section_review::SectionReviewError>
+    {
+        crate::section_review::inspect_kernel(&self.0, request)
+    }
+}
 impl DetachedMeshKernel {
     /// Exact AP242 output from independently owned selected B-reps.
     pub fn export_step(&self, request: &StepExportRequest) -> Result<Vec<u8>, OcctError> {
@@ -377,6 +388,14 @@ impl OcctKernel {
         let mut result = Self::new()?;
         result.inner = inner;
         Ok(DetachedDrawingKernel(result))
+    }
+
+    pub fn detached_section_snapshot(
+        &self,
+        id: limo_cad_core::BodyId,
+    ) -> Result<DetachedSectionKernel, OcctError> {
+        self.detached_drawing_snapshot(&[id])
+            .map(|snapshot| DetachedSectionKernel(snapshot.0))
     }
 
     pub fn detached_mesh_snapshot(

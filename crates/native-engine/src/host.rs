@@ -148,6 +148,9 @@ pub use portable_export::{
     FinishedPortableMeshExport, FinishedStepExport, PortableMeshFormat, PreparedPortableMeshExport,
     PreparedStepExport,
 };
+#[path = "section_snapshot.rs"]
+mod section_snapshot;
+pub use section_snapshot::{FinishedSectionReview, PreparedSectionReview};
 #[path = "retention.rs"]
 mod retention;
 use retention::NativeProject;
@@ -1130,16 +1133,9 @@ impl NativeEngineHost {
 
     pub fn section_review(&self, payload: &str) -> String {
         let result = (|| {
-            let request: limo_cad_occt::section_review::SectionReviewRequest =
-                serde_json::from_str(payload).map_err(|e| format!("bad request payload: {e}"))?;
-            let workspace = self.inner.lock().map_err(|_| "engine lock poisoned")?;
-            let inner = workspace.active();
-            limo_cad_occt::section_review::inspect(
-                &inner.kernel,
-                inner.manager.solid_scene_ref(),
-                &request,
-            )
-            .map_err(|error| error.to_string())
+            let finished = self.prepare_section_review(payload)?.inspect()?;
+            self.validate_section_review(&finished)?;
+            Ok::<_, String>(finished.into_report())
         })();
         match result {
             Ok(review) => ok_json(review),
