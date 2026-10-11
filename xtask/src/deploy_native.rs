@@ -238,7 +238,7 @@ pub(crate) fn prepare_runtime(repo_root: &Path, options: &BuildOptions) -> Resul
             .is_some_and(|manifest| manifest.native_computer_control)
     });
     let sdk = windows_sdk(&source.checkout, options)?;
-    let sdk_sha256 = sdk_inputs_sha256(&sdk)?;
+    let sdk_sha256 = preflight_sdk(&sdk)?;
     let build_profile = if options.release {
         "release"
     } else {
@@ -470,6 +470,55 @@ fn windows_sdk(root: &Path, options: &BuildOptions) -> Result<PathBuf> {
     )
     .map_err(anyhow::Error::msg)?;
     Ok(sdk)
+}
+
+/// Qualification is required even when a cached runtime matches the SDK digest.
+fn preflight_sdk(root: &Path) -> Result<String> {
+    let sdk = crate::build_tools::sdk::resolve(
+        &[root.to_owned()],
+        "windows",
+        env::consts::ARCH,
+        env::var_os("LIMO_CAD_OCCT_LIB_DIR")
+            .as_deref()
+            .map(Path::new),
+    )
+    .map_err(anyhow::Error::msg)?;
+    deployment_qualification(root, || {
+        qualify_sdk_inputs(
+            &sdk.include,
+            || sdk_inputs_sha256(root),
+            || {
+                let runtime = crate::package::runtime_bin(root)?;
+                crate::occt_storage::verify_resolved(root, &sdk, Some(&runtime))
+            },
+        )
+    })
+}
+
+fn deployment_qualification(
+    root: &Path,
+    qualify: impl FnOnce() -> Result<String>,
+) -> Result<String> {
+    qualify().with_context(|| format!(
+        "Could not complete required deployment qualification for OCCT SDK {}. Inspect the underlying error before rebuilding: the native probe requires CMake and Ninja on PATH, MSVC and the Windows SDK. If the error identifies an SDK header/runtime defect, preserve this SDK and build OCCT 7.9.3 with the reviewed overlay in a separate prefix; then use deploy-native --occt-root PATH. Header-only replacement is insufficient", root.display()
+    ))
+}
+
+fn qualify_sdk_inputs(
+    include: &Path,
+    digest: impl Fn() -> Result<String>,
+    qualify: impl FnOnce() -> Result<()>,
+) -> Result<String> {
+    // This gate precedes even the cached-runtime branch. A matching content
+    // digest proves identity, not checked allocation/copy behavior.
+    crate::occt_storage::verify_header(include)?;
+    let before = digest()?;
+    qualify()?;
+    ensure!(
+        digest()? == before,
+        "OCCT SDK changed during storage qualification; no runtime was built or installed"
+    );
+    Ok(before)
 }
 
 /// Content identity covers headers, linked import libraries and the packaged SDK payload.
@@ -943,5 +992,157 @@ fn stop_runtime(executable: &Path, restart: bool) -> Result<()> {
             "Installed runtime did not stop; nothing was promoted"
         );
         std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[test]
+    fn deployment_qualification_preserves_missing_tool_cause_without_diagnosing_sdk_damage() {
+        let fixture = tempfile::tempdir().unwrap();
+        fs::write(
+            fixture.path().join("math_DoubleTab.lxx"),
+            include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.lxx"),
+        )
+        .unwrap();
+        let calls = Cell::new(0);
+        let result = deployment_qualification(fixture.path(), || {
+            qualify_sdk_inputs(
+                fixture.path(),
+                || {
+                    calls.set(calls.get() + 1);
+                    Ok("checked-sdk".into())
+                },
+                || Err(std::io::Error::from(std::io::ErrorKind::NotFound)).context("start cmake"),
+            )
+        });
+        let error = result.unwrap_err();
+        assert_eq!(
+            calls.get(),
+            1,
+            "a failed probe cannot return a qualified digest"
+        );
+        assert!(error.to_string().contains("CMake and Ninja on PATH"));
+        assert!(error
+            .to_string()
+            .contains("Inspect the underlying error before rebuilding"));
+        assert!(error
+            .to_string()
+            .contains("If the error identifies an SDK header/runtime defect"));
+        assert!(format!("{error:#}").contains("start cmake"));
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::NotFound
+        );
+    }
+
+    #[test]
+    fn sdk_preflight_rejects_legacy_header_before_digest_or_native_qualification() {
+        let fixture = tempfile::tempdir().unwrap();
+        fs::write(fixture.path().join("math_DoubleTab.lxx"),
+            "memmove(Other.Addr, Addr, (int)((UppR - LowR + 1) * (UppC - LowC + 1) * sizeof(Standard_Real)));"
+        ).unwrap();
+        let calls = Cell::new(0);
+        let result = qualify_sdk_inputs(
+            fixture.path(),
+            || {
+                calls.set(calls.get() + 1);
+                Ok("old-sdk-digest".into())
+            },
+            || {
+                calls.set(calls.get() + 1);
+                Ok(())
+            },
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("lacks the reviewed checked matrix header"));
+        assert_eq!(
+            calls.get(),
+            0,
+            "An unsafe SDK cannot reach qualification or return a reuse/build digest"
+        );
+    }
+
+    #[test]
+    fn sdk_preflight_requires_native_qualification_and_unchanged_actual_inputs() {
+        let fixture = tempfile::tempdir().unwrap();
+        fs::write(
+            fixture.path().join("math_DoubleTab.lxx"),
+            include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.lxx"),
+        )
+        .unwrap();
+        let digest_calls = Cell::new(0);
+        let probe_calls = Cell::new(0);
+        let result = qualify_sdk_inputs(
+            fixture.path(),
+            || {
+                digest_calls.set(digest_calls.get() + 1);
+                Ok("stable-sdk-digest".into())
+            },
+            || {
+                probe_calls.set(probe_calls.get() + 1);
+                bail!("actual native storage probe failed")
+            },
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("actual native storage probe failed"));
+        assert_eq!(digest_calls.get(), 1);
+        assert_eq!(
+            probe_calls.get(),
+            1,
+            "A checked header alone cannot qualify runtime reuse"
+        );
+
+        digest_calls.set(0);
+        probe_calls.set(0);
+        assert_eq!(
+            qualify_sdk_inputs(
+                fixture.path(),
+                || {
+                    digest_calls.set(digest_calls.get() + 1);
+                    Ok("stable-sdk-digest".into())
+                },
+                || {
+                    probe_calls.set(probe_calls.get() + 1);
+                    Ok(())
+                }
+            )
+            .unwrap(),
+            "stable-sdk-digest"
+        );
+        assert_eq!(digest_calls.get(), 2);
+        assert_eq!(probe_calls.get(), 1);
+
+        digest_calls.set(0);
+        probe_calls.set(0);
+        let result = qualify_sdk_inputs(
+            fixture.path(),
+            || {
+                let value = if digest_calls.get() == 0 {
+                    "before"
+                } else {
+                    "changed"
+                };
+                digest_calls.set(digest_calls.get() + 1);
+                Ok(value.into())
+            },
+            || {
+                probe_calls.set(probe_calls.get() + 1);
+                Ok(())
+            },
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("changed during storage qualification"));
+        assert_eq!(digest_calls.get(), 2);
+        assert_eq!(probe_calls.get(), 1);
     }
 }

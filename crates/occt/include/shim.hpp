@@ -27,6 +27,7 @@ namespace limo_cad_occt {
 
 struct FfiJob;
 struct FfiMesh;
+struct FfiBodyGeneration;
 struct FfiSectionOptions;
 struct FfiSectionGeometry;
 struct FfiDrawingProjection;
@@ -42,6 +43,7 @@ class Kernel {
   void reset();
   void apply_job(const FfiJob& job);
   rust::Vec<std::uint64_t> body_ids() const;
+  rust::Vec<FfiBodyGeneration> body_generations() const;
   rust::Vec<std::uint64_t> planar_face_keys() const;
   FfiMesh mesh(std::uint64_t body_id) const;
   FfiSectionGeometry section_geometry(std::uint64_t body_id,
@@ -63,6 +65,7 @@ class Kernel {
       const FfiBodyPlacement& placement_b) const;
 
  private:
+  void apply_job_impl(const FfiJob& job);
   class Impl;
   std::unique_ptr<Impl> impl_;
 };

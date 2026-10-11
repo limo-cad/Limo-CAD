@@ -12,6 +12,7 @@ use limo_cad_solid::{
 };
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use crate::OcctError;
@@ -22,6 +23,10 @@ use crate::{
 
 #[cxx::bridge(namespace = "limo_cad_occt")]
 mod ffi {
+    struct FfiBodyGeneration {
+        body_id: u64,
+        generation: u64,
+    }
     struct FfiBodyPlacement {
         body_id: u64,
         translation: [f64; 3],
@@ -203,6 +208,7 @@ mod ffi {
         fn reset(self: Pin<&mut Kernel>);
         fn apply_job(self: Pin<&mut Kernel>, job: &FfiJob) -> Result<()>;
         fn body_ids(self: &Kernel) -> Vec<u64>;
+        fn body_generations(self: &Kernel) -> Result<Vec<FfiBodyGeneration>>;
         fn planar_face_keys(self: &Kernel) -> Result<Vec<u64>>;
         fn mesh(self: &Kernel, body_id: u64) -> Result<FfiMesh>;
         fn section_geometry(
@@ -240,6 +246,7 @@ unsafe impl Send for ffi::Kernel {}
 
 pub struct OcctKernel {
     inner: UniquePtr<ffi::Kernel>,
+    geometry_owner: u64,
     /// Only a fully successful replay may seed the next append. The jobs
     /// include all resolved geometry inputs, not just feature IDs/revisions.
     successful_jobs: Option<Vec<KernelJobDto>>,
@@ -299,12 +306,19 @@ impl OcctKernel {
         })
     }
     pub fn new() -> Result<Self, OcctError> {
+        static NEXT_GEOMETRY_OWNER: AtomicU64 = AtomicU64::new(1);
+        let geometry_owner = NEXT_GEOMETRY_OWNER
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |owner| {
+                owner.checked_add(1)
+            })
+            .map_err(|_| OcctError("OCCT kernel owner space exhausted".into()))?;
         let inner = ffi::new_kernel();
         if inner.is_null() {
             return Err(OcctError("OCCT kernel allocation failed".to_string()));
         }
         Ok(Self {
             inner,
+            geometry_owner,
             successful_jobs: None,
             support_cache: BTreeMap::new(),
             projection_cache: Mutex::new(VecDeque::new()),
@@ -318,6 +332,34 @@ impl OcctKernel {
     pub fn recompute(&mut self, plan: &RecomputePlanDto) -> Result<KernelSceneDto, OcctError> {
         self.recompute_with_supports(plan, &[])
             .map(|(scene, _)| scene)
+    }
+
+    /// Authoritative live B-rep generations. Existing bodies mentioned as job
+    /// inputs or outputs, including their prior job-connected native subshape
+    /// dependency groups, are conservatively invalidated before mutation even
+    /// on failure. Independent bodies survive successful append unchanged.
+    /// This does not enable reuse of serialized scene/mesh data by itself.
+    pub fn body_geometry_identities(
+        &self,
+    ) -> Result<BTreeMap<limo_cad_core::BodyId, crate::KernelBodyGeometryIdentity>, OcctError> {
+        let generations = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| OcctError("OCCT kernel was released".into()))?
+            .body_generations()
+            .map_err(|error| OcctError(error.to_string()))?;
+        Ok(generations
+            .into_iter()
+            .map(|body| {
+                (
+                    limo_cad_core::BodyId(body.body_id),
+                    crate::KernelBodyGeometryIdentity {
+                        kernel_owner: self.geometry_owner,
+                        generation: body.generation,
+                    },
+                )
+            })
+            .collect())
     }
 
     /// Proofs belong only to this returned scene/transaction. Failed replay
@@ -1819,6 +1861,157 @@ mod tests {
             target_body_ids: Vec::new(),
             result_body_ids: vec![BodyId(body_id)],
         })
+    }
+
+    #[test]
+    fn native_body_generations_follow_append_partial_failure_deletion_replay_and_owner() {
+        let mut kernel = OcctKernel::new().unwrap();
+        assert!(kernel.body_geometry_identities().unwrap().is_empty());
+        let mut plan = RecomputePlanDto {
+            transaction_id: 1,
+            jobs: vec![box_job(1, 1), box_job(2, 2)],
+            errors: vec![],
+        };
+        let initial = kernel.recompute(&plan).unwrap();
+        assert!(initial.errors.is_empty());
+        let identities = kernel.body_geometry_identities().unwrap();
+        assert_eq!(identities.len(), 2);
+        assert_eq!(kernel.recompute(&plan).unwrap(), initial);
+        assert_eq!(kernel.body_geometry_identities().unwrap(), identities);
+        plan.jobs.push(box_job(3, 3));
+        let appended = kernel.recompute(&plan).unwrap();
+        assert!(appended.errors.is_empty());
+        let append_ids = kernel.body_geometry_identities().unwrap();
+        assert_eq!(append_ids[&BodyId(1)], identities[&BodyId(1)]);
+        assert_eq!(append_ids[&BodyId(2)], identities[&BodyId(2)]);
+        assert_eq!(appended.bodies[0], initial.bodies[0]);
+        assert_eq!(appended.bodies[1], initial.bodies[1]);
+
+        let cut_job = |feature, targets, start, end| {
+            let KernelJobDto::Extrude(mut job) = box_job(feature, 1) else {
+                unreachable!()
+            };
+            job.operation = ExtrudeOperation::Cut;
+            job.target_body_ids = targets;
+            job.result_body_ids.clear();
+            job.profiles = vec![rectangle_profile(0, start, end, start, end)];
+            job.end_offset = 3.;
+            KernelJobDto::Extrude(job)
+        };
+        plan.jobs.push(cut_job(4, vec![BodyId(1)], -2., 2.));
+        let edited = kernel.recompute(&plan).unwrap();
+        assert!(edited.errors.is_empty());
+        let edited_ids = kernel.body_geometry_identities().unwrap();
+        assert_ne!(edited_ids[&BodyId(1)], append_ids[&BodyId(1)]);
+        assert_eq!(edited_ids[&BodyId(2)], append_ids[&BodyId(2)]);
+        assert_eq!(edited_ids[&BodyId(3)], append_ids[&BodyId(3)]);
+        assert_ne!(edited.bodies[0], appended.bodies[0]);
+        let good = plan.clone();
+        // The first target really changes before the second, absent target
+        // throws. Partial failure must not lend its old geometry identity.
+        plan.jobs
+            .push(cut_job(5, vec![BodyId(1), BodyId(99)], 3., 7.));
+        let failed = kernel.recompute(&plan).unwrap();
+        assert!(!failed.errors.is_empty());
+        let failed_ids = kernel.body_geometry_identities().unwrap();
+        assert_ne!(failed_ids[&BodyId(1)], edited_ids[&BodyId(1)]);
+        assert_ne!(failed.bodies[0], edited.bodies[0]);
+        assert_eq!(failed_ids[&BodyId(2)], edited_ids[&BodyId(2)]);
+        assert_eq!(failed_ids[&BodyId(3)], edited_ids[&BodyId(3)]);
+        assert!(!failed_ids.contains_key(&BodyId(99)));
+        assert_eq!(kernel.recompute(&good).unwrap(), edited);
+        let replayed_ids = kernel.body_geometry_identities().unwrap();
+        for body in [BodyId(1), BodyId(2), BodyId(3)] {
+            assert_ne!(replayed_ids[&body], failed_ids[&body]);
+        }
+        plan = good;
+        plan.jobs.push(KernelJobDto::Combine(KernelCombineJobDto {
+            feature_id: FeatureId(6),
+            target_body_id: BodyId(1),
+            tool_body_ids: vec![BodyId(2)],
+            operation: CombineOperation::Intersect,
+            keep_tools: false,
+        }));
+        let combined = kernel.recompute(&plan).unwrap();
+        assert!(combined.errors.is_empty());
+        let combined_ids = kernel.body_geometry_identities().unwrap();
+        assert!(!combined_ids.contains_key(&BodyId(2)));
+        assert_ne!(combined_ids[&BodyId(1)], replayed_ids[&BodyId(1)]);
+        assert_eq!(combined_ids[&BodyId(3)], replayed_ids[&BodyId(3)]);
+        let mut replacement = OcctKernel::new().unwrap();
+        assert_eq!(replacement.recompute(&plan).unwrap(), combined);
+        let replacement_ids = replacement.body_geometry_identities().unwrap();
+        assert_ne!(
+            replacement_ids[&BodyId(1)].kernel_owner,
+            combined_ids[&BodyId(1)].kernel_owner
+        );
+        let mut moved = kernel;
+        assert_eq!(moved.body_geometry_identities().unwrap(), combined_ids);
+        let empty = RecomputePlanDto {
+            transaction_id: 9,
+            jobs: vec![],
+            errors: vec![],
+        };
+        assert!(moved.recompute(&empty).unwrap().bodies.is_empty());
+        assert!(moved.body_geometry_identities().unwrap().is_empty());
+        assert_eq!(moved.recompute(&plan).unwrap(), combined);
+        let reborn = moved.body_geometry_identities().unwrap();
+        assert_ne!(reborn[&BodyId(1)], combined_ids[&BodyId(1)]);
+        assert_eq!(
+            reborn[&BodyId(1)].kernel_owner,
+            combined_ids[&BodyId(1)].kernel_owner
+        );
+    }
+
+    #[test]
+    fn native_body_generations_invalidate_kept_tool_dependencies_and_unknown_dispatch() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let mut plan = RecomputePlanDto {
+            transaction_id: 1,
+            jobs: vec![box_job(1, 1), box_job(2, 2), box_job(3, 3)],
+            errors: vec![],
+        };
+        assert!(kernel.recompute(&plan).unwrap().errors.is_empty());
+        let independent = kernel.body_geometry_identities().unwrap();
+        plan.jobs.push(KernelJobDto::Combine(KernelCombineJobDto {
+            feature_id: FeatureId(4),
+            target_body_id: BodyId(1),
+            tool_body_ids: vec![BodyId(2)],
+            operation: CombineOperation::Intersect,
+            keep_tools: true,
+        }));
+        let connected = kernel.recompute(&plan).unwrap();
+        assert!(connected.errors.is_empty() && connected.bodies.len() == 3);
+        let connected_ids = kernel.body_geometry_identities().unwrap();
+        assert_ne!(connected_ids[&BodyId(1)], independent[&BodyId(1)]);
+        assert_ne!(connected_ids[&BodyId(2)], independent[&BodyId(2)]);
+        assert_eq!(connected_ids[&BodyId(3)], independent[&BodyId(3)]);
+        let KernelJobDto::Extrude(mut cut) = box_job(5, 1) else {
+            unreachable!()
+        };
+        cut.operation = ExtrudeOperation::Cut;
+        cut.target_body_ids = vec![BodyId(1)];
+        cut.result_body_ids.clear();
+        cut.profiles = vec![rectangle_profile(0, -2., 2., -2., 2.)];
+        cut.end_offset = 3.;
+        plan.jobs.push(KernelJobDto::Extrude(cut));
+        let edited = kernel.recompute(&plan).unwrap();
+        assert!(edited.errors.is_empty());
+        assert_ne!(edited.bodies[0], connected.bodies[0]);
+        let edited_ids = kernel.body_geometry_identities().unwrap();
+        assert_ne!(edited_ids[&BodyId(1)], connected_ids[&BodyId(1)]);
+        assert_ne!(edited_ids[&BodyId(2)], connected_ids[&BodyId(2)]);
+        assert_eq!(edited_ids[&BodyId(3)], connected_ids[&BodyId(3)]);
+        assert_eq!(edited.bodies[2], connected.bodies[2]);
+        // No currently supported dispatch produces this job. Exercise the
+        // native fail-closed guard itself, including all independent roots.
+        let unknown = empty_ffi_job(99, u8::MAX);
+        assert!(kernel.inner.pin_mut().apply_job(&unknown).is_err());
+        let unknown_ids = kernel.body_geometry_identities().unwrap();
+        for body in [BodyId(1), BodyId(2), BodyId(3)] {
+            assert_ne!(unknown_ids[&body], edited_ids[&body]);
+        }
+        assert_eq!(unknown_ids.len(), edited_ids.len());
     }
 
     #[test]

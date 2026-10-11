@@ -409,7 +409,7 @@
       {"id":"move-copy-floating-point-presentation","status":"needs_recheck","cycles":0,"affected_cases":["ui/solid/moveCopy","ui/feature-forms/movecopy"],"actual":"Exact picked and retained transforms expose long floating-point noise in narrow numeric fields; values such as11.000000000000002 and near-zero roundoff are clipped.","evidence_paths":["D:/limo-cad-maintenance/surface-move-copy-picked-from-confirmed.png","D:/limo-cad-maintenance/surface-move-copy-retained-edit.png"],"next":"Recheck retained 11.000000000000002 and tiny values, raw focus reveal, explicit typing zero, expressions, Cancel/Apply/Undo and saved exact precision after deployment.","fix_commit":"99893382","fix":"Opt-in presentation captions compact accepted/unfocused MoveCopy translation/rotation/pivot/from/to numeric fields. Focus reveals exact raw text; dirty edits, expressions, queued edits and IME remain literal. Tiny nonzero uses scientific notation. Raw editor/control/model/transform values never change.","validation":"Root and peer source review, formatting and diff check only; not deployed.","fix_commits":["99893382","03ee0c4f"],"ci_correction":"307347c7 all three native lints rejected E0308: EditableText.value returns SplitString, while caption formatter expects &str.03ee0c4f formats the exact accepted baseline string, protected by existing editor==baseline gate. Corrected compilation and deployed UI qualification pending."},
       {"id":"combine-active-picker-guidance","status":"needs_recheck","cycles":0,"affected_cases":["ui/solid/combine","ui/feature-forms/combine"],"actual":"Tool Bodies selection is active but the viewport banner requests target bodies. The single target prompt is also plural.","fix":"Use existing localized clickTargetBody/clickToolBodies prompts only for the active Combine picker. Other forms and all picker/validation behavior are unchanged.","fix_commit":"7f6d25ec","evidence_paths":["D:/limo-cad-maintenance/surface-combine-target-tool-rejection.png"],"next":"Recheck initial target and active tool banners after the next bounded native deployment."},
       {"id":"local-native-deployment-build-resource-blocker","status":"resolved","cycles":2,"affected_cases":["ui/solid/moveCopy","ui/feature-forms/movecopy","ui/solid/combine","ui/feature-forms/combine"],"revision":"d53f4fd7","actual":"The first batched guidance build failed with rustc thread stack overflow while compiling the desktop executable. One bounded retry with compiler RUST_MIN_STACK=67108864 passed compilation, then MSVC link failed LNK1318 Unexpected PDB error LIMIT(12). Both attempts preserved the installed a3cebb9c clean/native-control runtime. Fresh Observe confirmed GUI PID34756, foreground true and matched build pair. D free space was162811904 bytes; the generated PDB was51822592 bytes. Automatic review rejected removal of obsolete dedicated-task compiler cache directories with reason blocked by policy; no directories were deleted. Safe in-place NTFS compression of two verified old incremental directories preserved cache files and increased observed D free space to952135680 bytes. CAD documents/source/installed/recovery/session/evidence files were not altered by cache compression.","evidence_paths":["D:/limo-cad-maintenance/deploy-guidance-d53f-cycle2.log"],"next":"Build blocker resolved. Resume only after fresh observation confirms CAD foreground ownership; verify targeted repairs, then next not-run Parallel constraint. No live repair pass is inferred from deployment.","resumed_deployment":{"user_authorized_priority":"2026-10-09","build_revision":"d5af845b6b4883d2252443f19da1ea58e40f0d6c","compiler_and_linker":"success","build_duration":"9m16s","promotion":"refused as intended: canonical headless runtime still running; installed a3ce preserved","gui":"Save all and close exited normally; 78 archive model.json contents unchanged","preservation":{"path":"C:/Users/jeffg/AppData/Local/limo-cad-maintenance/deployment-preservation-d5af-20261009","session_model_hashes_verified":192,"archives_verified":78},"pending_source":"bd69f00d includes merged PR359; needs fresh build/promotion and matched live pair","evidence_paths":["D:/limo-cad-maintenance/deploy-priority-d5af-cycle1.log","D:/limo-cad-maintenance/deployment-parallel-saved.png","D:/limo-cad-maintenance/deployment-save-all-exit-prompt.png","D:/limo-cad-maintenance/deployment-cache-compression-priority.log"],"latest":{"revision":"93823f6d609799932209bcbeae3938d6fb2e0ce6","gui_pid":34320,"mcp_pid":25152,"process_instance_id":"5ae0a6ce-c6c5-47d3-bfa5-b762c3fb5a40","session_id":"91896efb-f882-4bcd-9b88-874d3cb070d0","executable_sha256":"45a253fce260fd6d7454d12d62cc037ebe8a6695a237e4f559f8d412bec2681a","build_pair":"matched","payload_hashes_verified":70,"source_modified":false,"native_computer_control":true,"compiler_and_linker":"success","duration":"5m45s","promotion":"supported deploy-native --computer-control --restart --launch succeeded","separate_roller_gui_pid":30300,"foreground":"denied; activation_accepted false, activation_acknowledged true, no input sent; fresh observation remains foreground false","evidence_paths":["D:/limo-cad-maintenance/deploy-priority-93823f6-cycle2.log","D:/limo-cad-maintenance/deployment-938-fresh-gui.png"]}}},
-      {"id":"split-body-invalid-new-creation","status":"in_progress","cycles":0,"affected_cases":["ui/solid/splitBody","ui/feature-forms/splitbody"],"actual":"Healthy unsplit20x10x8 baseline with Body1 and Plane1 X10: New Split boundary X20 rejected with readable feedback, form retained, and exact published model/scene unchanged. Correction to Plane1 produced two healthy10x10x8 halves. Undo restored baseline geometry, definitions, occurrences and every model field except the documented monotonic occurrence allocation floor11 to12; the full expected model with explicit floor12 matches exactly. Fresh Undo session97224f34-3f15-41c2-a955-70f82f830de6 reports Redo available.","fix":"New native Split creation prepares an isolated document copy. It rejects errors introduced during baseline replay or Split dispatch, preserves existing live error pairs, and installs successful model/history changes atomically through the existing ownership and revision checks. Other new operations and core/MCP failed-history policy are unchanged.","fix_commit":"12a4ec64","validation":"Targeted human UI receipts on clean matched5d qualify only the latest_qualification scopes; retained older source/test evidence remains historical.","next":"Finish only this new creation Redo after a fresh matched runtime observation, preserving repaired rejection/correction/Undo passes.","latest_qualification":{"revision":"5d46045c19c83f03cd7784196583c1dc3a488fac","build_pair":"matched","functional":"passed_boundary_rejection_corrected_creation_and_undo; redo_pending","actual":"Healthy unsplit20x10x8 baseline with Body1 and Plane1 X10: New Split boundary X20 rejected with readable feedback, form retained, and exact published model/scene unchanged. Correction to Plane1 produced two healthy10x10x8 halves. Undo restored baseline geometry, definitions, occurrences and every model field except the documented monotonic occurrence allocation floor11 to12; the full expected model with explicit floor12 matches exactly. Fresh Undo session97224f34-3f15-41c2-a955-70f82f830de6 reports Redo available.","allocator_proof":["desktop/src/session_bridge/native_interface/history.rs:61","desktop/src/session_bridge/native_interface/history/tests.rs:8","desktop/src/session_bridge/native_interface/feature/tests/combine.rs:228","docs/adr/0003-bevy-interface.md:529"],"remaining":["Actual Redo of this repaired new creation; no Redo was attempted after unexpected GUI/operator lifecycle loss."],"scope":"One rectangular baseline, boundary face and interior datum correction. Existing retained-edit/save-reopen passes remain historical; no arbitrary topology, full Split surface or new Redo pass claimed.","evidence_paths":["D:/limo-cad-maintenance/backlog-autonomous-20261010/split-unsplit-baseline-model-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-unsplit-scene-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-boundary-rejected-observe-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-rejected-model-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-rejected-scene-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-corrected-model-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-corrected-summary-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-undo-model-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-undo-observe-5d46045c.json"]},"historical_actual":"A boundary plane creates a failed Split feature in live history instead of keeping the form open and preserving the healthy model.","historical_validation":"Root and source peer review plus formatting only; no local compiler, tests or repaired-runtime qualification. Source peer review corrected the baseline replay error gap before commit."},
+      {"id":"split-body-invalid-new-creation","status":"passed","cycles":0,"affected_cases":["ui/solid/splitBody","ui/feature-forms/splitbody"],"actual":"Earlier clean5d boundary rejection, interior-plane correction and Undo receipts remain retained. Fresh cleana314 new Split creation at X10 yields healthy bodies1/2, each10x10x8. Undo restores the entire20x10x8 baseline model except the documented monotonic assembly/component_structure/next_occurrence_id floor11 to12. Redo exactly restores the complete created model and entire native scene. UI SaveAs matches the published Redo model and preserves the original fixture archive.","fix":"New native Split creation prepares an isolated document copy. It rejects errors introduced during baseline replay or Split dispatch, preserves existing live error pairs, and installs successful model/history changes atomically through the existing ownership and revision checks. Other new operations and core/MCP failed-history policy are unchanged.","fix_commit":"12a4ec64","validation":"Targeted human UI acceptance only: prior matched5d boundary/correction/Undo qualification is preserved verbatim; fresh clean matcheda314 qualifies a new creation Undo/Redo transaction and SaveAs preservation. No original lost Undo stack restoration, broad Split or full UI/MCP qualification claimed.","next":"Completed this bounded local defect acceptance; preserve all unrelated cases and broad paused coverage.","latest_qualification":{"revision":"a3145e2c04902c47fc4ce269dc71dc69567f5110","build_pair":"matched","source_modified":false,"functional":"passed_fresh_new_creation_undo_redo","actual":"Earlier clean5d boundary rejection, interior-plane correction and Undo receipts remain retained. Fresh cleana314 new Split creation at X10 yields healthy bodies1/2, each10x10x8. Undo restores the entire20x10x8 baseline model except the documented monotonic assembly/component_structure/next_occurrence_id floor11 to12. Redo exactly restores the complete created model and entire native scene. UI SaveAs matches the published Redo model and preserves the original fixture archive.","scope":"Fresh transaction on one rectangular stock split by interior Plane1 X10. Does not claim restoration of the original lost Undo stack, arbitrary topology, broad Split coverage or repeat persistence qualification.","undo_model_exception":{"path":"/assembly/component_structure/next_occurrence_id","before":11,"after":12,"reason":"documented monotonic allocation floor"},"redo_model_differences":[],"redo_native_scene_equal":true,"active_sessions":{"created":"21cdc0fb-f3c0-4b84-8df5-d607dd20d33c","undo":"f31e11c2-5425-4860-a7c8-de640b24f9e2","redo":"1b833e8a-0f63-496e-a247-422f4974b13b"},"saved_archive":"D:/limo-cad-maintenance/backlog-autonomous-20261010/repair-acceptance-batch/Split Redo accepted a3145e2c.limo","saved_model_equals_redo":true,"original_archive_preserved":true,"evidence_paths":["D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-comparison.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-saved-archive-verified.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-unsplit-model-receipt.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-unsplit-scene-receipt.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-unsplit.png","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-created-model-receipt.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-created-scene-receipt.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-created.png","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-created-observation.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-undo-model-receipt.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-undo-scene-receipt.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-undo.png","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-undo-observation.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-redo-model-receipt.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-redo-scene-receipt.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-redo.png","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-redo-observation.json"]},"historical_actual":"A boundary plane creates a failed Split feature in live history instead of keeping the form open and preserving the healthy model.","historical_validation":"Root and source peer review plus formatting only; no local compiler, tests or repaired-runtime qualification. Source peer review corrected the baseline replay error gap before commit.","boundary_correction_undo_qualification":{"revision":"5d46045c19c83f03cd7784196583c1dc3a488fac","build_pair":"matched","functional":"passed_boundary_rejection_corrected_creation_and_undo; redo_pending","actual":"Healthy unsplit20x10x8 baseline with Body1 and Plane1 X10: New Split boundary X20 rejected with readable feedback, form retained, and exact published model/scene unchanged. Correction to Plane1 produced two healthy10x10x8 halves. Undo restored baseline geometry, definitions, occurrences and every model field except the documented monotonic occurrence allocation floor11 to12; the full expected model with explicit floor12 matches exactly. Fresh Undo session97224f34-3f15-41c2-a955-70f82f830de6 reports Redo available.","allocator_proof":["desktop/src/session_bridge/native_interface/history.rs:61","desktop/src/session_bridge/native_interface/history/tests.rs:8","desktop/src/session_bridge/native_interface/feature/tests/combine.rs:228","docs/adr/0003-bevy-interface.md:529"],"remaining":["Actual Redo of this repaired new creation; no Redo was attempted after unexpected GUI/operator lifecycle loss."],"scope":"One rectangular baseline, boundary face and interior datum correction. Existing retained-edit/save-reopen passes remain historical; no arbitrary topology, full Split surface or new Redo pass claimed.","evidence_paths":["D:/limo-cad-maintenance/backlog-autonomous-20261010/split-unsplit-baseline-model-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-unsplit-scene-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-boundary-rejected-observe-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-rejected-model-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-rejected-scene-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-corrected-model-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-corrected-summary-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-undo-model-5d46045c.json","D:/limo-cad-maintenance/backlog-autonomous-20261010/split-new-undo-observe-5d46045c.json"]}},
       {"id":"construction-visibility-toggle-state","status":"needs_recheck","cycles":0,"affected_cases":["ui/solid/constructionVisibility"],"actual":"Show refs has no selected/checked state whether references are visible or hidden.","fix":"Expose existing any-visible predicate as toolbar/menu selected state; reuse existing active fill and menu checkmark. Caption/localization and mutation behavior are unchanged.","fix_commit":"5783b6e8","validation":"Root and peer source review, formatting and diff check only.","next":"Recheck all-visible/all-hidden toolbar, menu and fresh Observe after deployment."},
       {"id":"restored-datum-loses-hidden-state","status":"needs_recheck","cycles":0,"affected_cases":["ui/solid/constructionVisibility"],"actual":"Hide all refs, Undo Plane3 creation, Redo: the restored same-ID Plane3 becomes visible while surviving Plane1/2 remain hidden.","fix":"For target datum IDs that survive in the current document, retain CURRENT visibility. For restored target datum IDs absent from current, recover the target snapshot hidden state. Body/sketch behavior, owner/history guards and all other visibility fields are unchanged.","fix_commit":"46d61dd4616683737f597454c51ec7e51ab46638","validation":"Source review and formatting only; no local suite or repaired GUI qualification.","next":"Recheck hidden Plane3 creation Undo/Redo, plus current visibility changes to surviving Plane1/2, after deployment."},
       {"id":"sketch-dimension-construction-ink","status":"needs_recheck","cycles":0,"affected_cases":["ui/sketch/line","ui/sketch/rect2pt","ui/sketch/rectangle","ui/sketch/rectCenter","ui/sketch/circleCenter","ui/sketch/circle","ui/sketch/circle2pt","ui/sketch/slotCenterToCenter","ui/sketch/slot","ui/sketch/slotOverall","ui/sketch/slotCenterPoint","ui/sketch/offset"],"actual":"Drawing tools disable dimension edit buttons and generic disabled styling dims their text, while extension lines retain dimension ink. Measurements become hard to read while constructing additional geometry.","fix":"Read DimensionInk in the existing retained-control style query and preserve that exact ink only for disabled dimension captions. Disabled/input/owner state, enabled hover/focus, non-dimension styles, geometry and solver values are unchanged.","fix_commit":"6f24e14835cd102ea30944ca0fef7c59a514a1f2","validation":"Root and peer source review, all DimensionInk call-site inspection, formatting and diff check. No local tests/build or repaired live UI qualification.","next":"After the permitted deployment, recheck only active-drawing dimension readability, retained edit/focus and theme refresh. Complete line angle-lock variant before final line acceptance."},
@@ -1681,85 +1681,317 @@
     ]
   },
   "parallel_repairs_checkpoint": {
-    "source_revision":  "418e8931d98fd509b50239096f8b18f831ff9cd4",
-    "base_revision":  "4859c8bd",
-    "commits":  [
-                    "090efe6a",
-                    "28edcada",
-                    "3181443d",
-                    "88a69218",
-                    "db1aa006",
-                    "4d7cb0ac",
-                    "e3d4021f",
-                    "0c587b12",
-                    "479665c7",
-                    "ea78f812",
-                    "3b48378d",
-                    "30864843",
-                    "418e8931"
-                ],
-    "qualification":  "source_reviewed_nine_focused_checks_passed_five_new_checks_and_native_acceptance_pending",
-    "new_focused_checks_unrun":  [
-                                     "engine_response_transfers_owned_model_and_nested_document_payloads",
-                                     "engine_response_ownership_preserves_envelope_and_text_error_contracts",
-                                     "document_replacement_retires_transient_preview_and_cam_stock_before_render",
-                                     "center_arc_overshoot_backtrack_final_click_preserves_a_true_full_turn",
-                                     "queued_or_refused_exposure_never_certifies_focus_or_input"
-                                 ],
-    "installed_revision":  "4859c8bdc5575fe8858bfb3c0153c48569f8e6eb",
-    "installed_payload_verified":  70,
-    "installed_executable_sha256":  "94c5e541db3b9a05f22c75560c8e31f89c7ee45590f513e32bee144771c2e856",
-    "fresh_live_pair":  {
-                            "foreground_observed":  true,
-                            "status":  "matched",
-                            "desktop_pid":  22412,
-                            "mcp_pid":  15380,
-                            "source_modified":  false,
-                            "latest_foreground_observed":  false,
-                            "focus_request":  "refused_without_input"
-                        },
-    "prior_hosted_native":  {
-                                "revision":  "4859c8bd",
-                                "ubuntu":  {
-                                               "ignored":  10,
-                                               "failed":  0,
-                                               "passed":  983
-                                           },
-                                "macos":  {
-                                              "ignored":  10,
-                                              "failed":  0,
-                                              "passed":  988
-                                          },
-                                "windows":  "pending"
-                            },
-    "closed_issues":  [
-                          12,
-                          94,
-                          231,
-                          312,
-                          313,
-                          314,
-                          315,
-                          360
-                      ],
-    "remaining_open_at_reconciliation":  18,
-    "new_manual_passes_claimed":  false,
-    "broad_catalog_statuses_changed":  false,
-    "completed_focused_checks":  {
-                                     "revision":  "ff6b635cdcdd4dc5830dbafa61201500f2ee5ea4",
-                                     "passed":  9,
-                                     "failed":  0,
-                                     "new":  8,
-                                     "specifically_affected_existing":  1,
-                                     "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/parallel-repairs-ff6b635c-tests.json"
-                                 },
-    "compatible_windows_sdk_cache":  {
-                                         "scope":  "refs/pull/124/merge",
-                                         "installed_id":  8785316823,
-                                         "binary_id":  8785314732,
-                                         "inputs_key":  "82943b69",
-                                         "saved_after_qualification":  true,
-                                         "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/ci-4859c8bd-qualified-windows-sdk-cache-saved.json"
-                                     }
-}
+    "source_revision": "04551840189895d83fb95123f91968f12c063ba5",
+    "base_revision": "4859c8bd",
+    "commits": [
+      "090efe6a",
+      "28edcada",
+      "3181443d",
+      "88a69218",
+      "db1aa006",
+      "0d4c5e2e",
+      "4d7cb0ac",
+      "ff6b635c",
+      "e3d4021f",
+      "0c587b12",
+      "479665c7",
+      "30864843",
+      "418e8931",
+      "2cda40b5",
+      "08e6ca5c",
+      "b498e6a4",
+      "c1f1e566",
+      "1671a574",
+      "88df73f8",
+      "94df968d",
+      "f184efdd",
+      "bc90baeb",
+      "5daa6160",
+      "676751ff",
+      "1ea5a165",
+      "876b913f",
+      "42ec4d2f",
+      "212cec35",
+      "2f466b60",
+      "6cd9d57f",
+      "c7ae2bf4",
+      "eabccdf6",
+      "f066a8b8",
+      "e9f43173",
+      "0c2e30b4",
+      "c4570f6c",
+      "a3c6d1ede834dbe36e5d28245579c95c93a73c7b",
+      "8fae444c233f00c3e91db9a633759c1baf11990a",
+      "560c2f8299759d192490c63af2ff1813da7e5d9a",
+      "f52aa609842a4cbef10a6c23aae1ba1bfa7331f3",
+      "8352889c20bf90308271587403850e6e7d42b9e9",
+      "d0267058b8889d415aa79cf9ce6f49c9b9ffa860",
+      "8135b1ad4c988d4e54acacc3be49a431c2607155",
+      "cf5cae14b3f9a787e00e5417a6c8cc5075689bf0",
+      "cf1fd18b2b5898282793294336bbbf75808bc7ac",
+      "7733f8f2a8e70e5ae4f0cc49a60f14ed64feef04",
+      "84db2bba720ceb115683da644195f01bf77fc50b",
+      "90acec1b045ca15caf396cf240869f3fd7c769f6",
+      "3eb0cd0d22ad918f6bf330c3e30e5c691088a0c5",
+      "e0e0a7524f65d373cbc4bdd0cc48d8f06e6869ab",
+      "5a4ecc8e21329ca1dbd649a54f0e900e1a29e9cd",
+      "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+      "04551840189895d83fb95123f91968f12c063ba5"
+    ],
+    "qualification": "reviewed_repairs_targeted_checks_passed_clean_live_pair_matched_fresh_split_redo_passed",
+    "new_focused_checks_unrun": [],
+    "installed_revision": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+    "installed_payload_verified": 63,
+    "installed_executable_sha256": "effaac9acf3e044a75bb4d4f13edf0ca8c9dd49bf92cfbfd092f4f59d81a829b",
+    "fresh_live_pair": {
+      "revision": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+      "foreground_observed": true,
+      "status": "matched",
+      "desktop_pid": 28600,
+      "mcp_pid": 14480,
+      "source_modified": false,
+      "latest_foreground_observed": true,
+      "focus_request": "guarded_focus_succeeded_fresh_observation",
+      "latest_observation_utc": "2026-10-11T05:54:14.312Z",
+      "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/live-pair-a3145e2c-focused-observation.json"
+    },
+    "previous_installed_runtime": {
+      "revision": "4859c8bdc5575fe8858bfb3c0153c48569f8e6eb",
+      "payload_verified": 70,
+      "executable_sha256": "94c5e541db3b9a05f22c75560c8e31f89c7ee45590f513e32bee144771c2e856"
+    },
+    "previous_live_pair": {
+      "foreground_observed": true,
+      "status": "matched",
+      "desktop_pid": 22412,
+      "mcp_pid": 15380,
+      "source_modified": false,
+      "latest_foreground_observed": false,
+      "focus_request": "refused_without_input",
+      "latest_observation_utc": "2026-10-11T05:24:00Z"
+    },
+    "prior_hosted_native": {
+      "revision": "4859c8bd",
+      "ubuntu": {
+        "ignored": 10,
+        "failed": 0,
+        "passed": 983
+      },
+      "macos": {
+        "ignored": 10,
+        "failed": 0,
+        "passed": 988
+      },
+      "windows": "pending"
+    },
+    "closed_issues": [
+      12,
+      94,
+      231,
+      312,
+      313,
+      314,
+      315,
+      360
+    ],
+    "remaining_open_at_reconciliation": 18,
+    "new_manual_passes_claimed": true,
+    "broad_catalog_statuses_changed": false,
+    "completed_focused_checks": {
+      "passed": 36,
+      "failed": 0,
+      "new": 34,
+      "specifically_affected_existing": 2,
+      "batches": [
+        {
+          "revision": "ff6b635cdcdd4dc5830dbafa61201500f2ee5ea4",
+          "passed": 9,
+          "failed": 0,
+          "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/parallel-repairs-ff6b635c-tests.json"
+        },
+        {
+          "revision": "2cda40b5ffaf8de2b73914bd2b09b81d236ef0a0",
+          "passed": 5,
+          "failed": 0,
+          "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/parallel-repairs-2cda40b5-tests.json"
+        },
+        {
+          "revision": "f184efdd6b86fc984ff72abd758f8523a8d9ea07",
+          "passed": 4,
+          "failed": 0,
+          "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/new-ownership-f184efdd-tests.json"
+        },
+        {
+          "revision": "42ec4d2f49e1453ec7b7bffb62b56066fe55a4af",
+          "passed": 10,
+          "failed": 0,
+          "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/known-fixes-42ec4d2f-results.json"
+        },
+        {
+          "revision": "2f466b60e9626464a839dfbb1c1cc619ef5cdeff",
+          "passed": 3,
+          "failed": 0,
+          "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/sdk-gate-2f466b60-results.json"
+        },
+        {
+          "revision": "c7ae2bf4dda6cb4886e8b50d5897ba229fc5df27",
+          "passed": 2,
+          "failed": 0,
+          "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/native-holes-c7ae2bf4-results.json"
+        },
+        {
+          "revision": "0c2e30b4461d5a6ce6db130234b01637ab0cb719",
+          "passed": 2,
+          "failed": 0,
+          "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/pointer-and-sdk-path-0c2e30b4-results.json"
+        },
+        {
+          "revision": "c4570f6c740a4e728c656112eacafaeb02e32f43",
+          "passed": 1,
+          "failed": 0,
+          "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/overlapping-recess-c4570f6c-results.json"
+        }
+      ]
+    },
+    "compatible_windows_sdk_cache": {
+      "scope": "refs/pull/124/merge",
+      "installed_id": 8785316823,
+      "binary_id": 8785314732,
+      "inputs_key": "82943b69",
+      "saved_after_qualification": true,
+      "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/ci-4859c8bd-qualified-windows-sdk-cache-saved.json"
+    },
+    "local_sdk_checkpoint": {
+      "root": "C:/Users/jeffg/dev/noBS-CAD/vcpkg_installed/x64-windows",
+      "version": "7.9.3",
+      "port_version": 1,
+      "checked_storage_qualified": false,
+      "runtime_inputs_sha256": "7823e2d72c730f20740c976b508dcb163b38f49bf953232a6d683fb5c5b767bb",
+      "reviewed_source_repair": "5fd87e6c",
+      "deployment_preflight_fix": "212cec35",
+      "qualified_replacement_status": "installed_probe_passed_complete_inventory_recorded",
+      "replacement_prefix": "D:/limo-cad-maintenance/checked-occt-sdk",
+      "replacement_key": "db1f66e6db6fc92b222dd8994b171da7fefb59e56f438a8380eba07a34f028d2",
+      "replacement_log": "D:/limo-cad-maintenance/backlog-autonomous-20261010/checked-occt-20261011T052233Z-fd0b157faef44461b8f76b29b01425f6.log",
+      "preserved_failed_resume_log": "D:/limo-cad-maintenance/backlog-autonomous-20261010/checked-occt-20261011T040652Z-5f450c7f38874dbf9f8b6f958a1a4687.log",
+      "replacement_cache": "D:/lc",
+      "windows_path_guard_fix": "0c2e30b4",
+      "replacement_checked_storage_qualified": true,
+      "replacement_storage_layout_bytes": 160,
+      "replacement_inventory_file_count": 7455,
+      "replacement_complete_receipt_sha256": "2BC69F3ED9C26327036C867E9D7C3D9363487A59095FD8D5587D4934468FBBFA",
+      "replacement_qualification_receipt": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\checked-sdk-finalization-3eb0cd0d.json",
+      "runtime_dependency_repair": {
+        "status": "installed_closure_verified",
+        "source_commits": [
+          "a3c6d1ed",
+          "8fae444c",
+          "8135b1ad"
+        ],
+        "dlls": [
+          "freetype.dll",
+          "z.dll",
+          "bz2.dll",
+          "libpng16.dll",
+          "brotlidec.dll",
+          "brotlicommon.dll"
+        ],
+        "notice_ports": [
+          "freetype",
+          "zlib",
+          "bzip2",
+          "libpng",
+          "brotli"
+        ]
+      },
+      "package_relative_include_repair": "560c2f82",
+      "retained_prior_object_count": 3153,
+      "prior_objects_missing_or_changed": 0,
+      "latest_ninja_no_work": true
+    },
+    "hosted_ci_checkpoint": {
+      "revision": "3288ec99a8c0aef2e9ae12c510c6465d87527050",
+      "status": "two_known_failures_remaining_jobs_running",
+      "windows_native_failure": "query result visible before heartbeat/process lease; production d0267058 fix passes original failing test",
+      "macos_package_failure": "clean native close receipt followed by process shutdown timeout; causal attribution remains unproven",
+      "retained_close_fix": "7733f8f2",
+      "shutdown_stages": "84db2bba",
+      "lifecycle_artifact_retention": "cf1fd18b",
+      "new_head_status": "targeted_checks_passed_ready_to_push",
+      "manual_reruns_dispatched": false,
+      "package_concurrency": {
+        "fix": "5a4ecc8e",
+        "contract": "e0e0a752",
+        "policy": "preserve_running_qualification_coalesce_pending_revisions",
+        "saved_arm_cache_not_yet_claimed": true
+      }
+    },
+    "new_checkpoint_check_batches": {
+      "sdk_runtime_closure": {
+        "revision": "f52aa609",
+        "new_passed": 9,
+        "affected_existing_passed": 2,
+        "failed": 0,
+        "receipt": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\sdk-runtime-closure-f52aa609-results.json"
+      },
+      "mcp_borrowed_reads": {
+        "revision": "8352889c",
+        "affected_existing_passed": 2,
+        "failed": 0,
+        "receipt": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\mcp-read-borrows-8352889c-results.json"
+      },
+      "query_liveness": {
+        "production_revision": "d0267058",
+        "corrected_fixture_revision": "3eb0cd0d",
+        "new_passed": 2,
+        "affected_existing_passed": 2,
+        "failed_after_correction": 0,
+        "receipts": [
+          "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\native-query-liveness-d0267058-remaining-results.json",
+          "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\close-and-query-finalization-3eb0cd0d-results.json"
+        ],
+        "preserved_fixture_failure": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\native-query-liveness-d0267058-results.json",
+        "fixture_correction": "90acec1b"
+      },
+      "retained_close_receipt": {
+        "revision": "3eb0cd0d",
+        "new_passed": 1,
+        "affected_existing_passed": 1,
+        "failed": 0,
+        "receipt": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\close-and-query-finalization-3eb0cd0d-results.json"
+      },
+      "package_concurrency": {
+        "revision": "5a4ecc8e21329ca1dbd649a54f0e900e1a29e9cd",
+        "new_passed": 1,
+        "affected_existing_passed": 1,
+        "failed": 0,
+        "strict_xtask_clippy": "passed",
+        "receipt": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\package-concurrency-5a4ecc8e-results.json"
+      }
+    },
+    "new_checkpoint_counts_note": "The prior 36 distinct passes remain retained. The latest 21 new/affected batch passes remain separate, and the one deployment diagnostic pass is separate post-push validation; no combined deduplicated count is claimed.",
+    "post_push_diagnostic_validation": {
+      "tested_revision": "e23e43b0b6b0bb9d5bbce3257d0051257414dbb1",
+      "integrated_revision": "04551840189895d83fb95123f91968f12c063ba5",
+      "new_passed": 1,
+      "failed": 0,
+      "filter": "deployment_qualification_preserves_missing_tool_cause_without_diagnosing_sdk_damage",
+      "strict_xtask_clippy": "passed",
+      "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/deployment-diagnostic-e23e43b0-results.json"
+    },
+    "source_deployment_status": "clean_a314_deployed_qualified_sdk_source_045_diagnostic_only",
+    "installed_runtime_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/runtime-a3145e2c-payload-verified.json",
+    "installed_qualified_sdk": "D:/limo-cad-maintenance/checked-occt-sdk",
+    "targeted_root_ui_acceptance": {
+      "new_document_split_redo": "passed_fresh_transaction_entire_created_model_and_native_scene_restored",
+      "split_redo_scope": "New clean a314 transaction only; not restoration of the original lost Undo stack or broad Split coverage",
+      "split_redo_comparison_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-comparison.json",
+      "split_redo_saved_archive_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/split-redo-a3145e2c-saved-archive-verified.json",
+      "broad_ui_mcp_coverage": "paused",
+      "canonical_source_pinned_during_ui": true,
+      "native_application_revision": "a3145e2c04902c47fc4ce269dc71dc69567f5110"
+    },
+    "saved_scratch_document_preservation_receipt": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\pre-deployment-split-document-preserved.json",
+    "native_application_check_revision": "3eb0cd0d22ad918f6bf330c3e30e5c691088a0c5"
+  }
 }

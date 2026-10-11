@@ -1879,6 +1879,99 @@ mod tests {
         writer.finish().unwrap().into_inner()
     }
 
+    #[test]
+    fn rewritten_repeat_identity_reports_explicit_baseline_consent_and_retains_strict_failure() {
+        let (template, meshes, appearances, instances, structure, intent, mut request) =
+            crate::bambu_project::tests::fixture();
+        let written = crate::bambu_project::write_bambu_project(
+            &template,
+            &meshes,
+            &appearances,
+            &instances,
+            &structure,
+            &intent,
+            &request,
+        )
+        .unwrap();
+        let changed = edit_test_project(&written.bytes, |entries| {
+            let config =
+                String::from_utf8(entries["Metadata/model_settings.config"].clone()).unwrap();
+            assert!(config.contains("key=\"identify_id\" value=\"121\""));
+            entries.insert(
+                "Metadata/model_settings.config".into(),
+                config
+                    .replace(
+                        "key=\"identify_id\" value=\"121\"",
+                        "key=\"identify_id\" value=\"9\"",
+                    )
+                    .into_bytes(),
+            );
+        });
+        request.refresh_reference = Some(written.report.refresh_reference.clone());
+        let before = request.clone();
+        let error = crate::bambu_project::write_bambu_project(
+            &changed,
+            &meshes,
+            &appearances,
+            &instances,
+            &structure,
+            &intent,
+            &request,
+        )
+        .err()
+        .unwrap()
+        .to_string();
+        for expected in [
+            "identify_id 121",
+            "identify_id=9",
+            "every intended repeated instance",
+            "normal multipart sibling",
+            "Start reviewed native baseline",
+            "clearing a handoff alone does not replace a stale embedded reference",
+        ] {
+            assert!(error.contains(expected), "{error}");
+        }
+        assert_eq!(request, before);
+        let (readback, issues) = native_geometry_readback(&written.bytes, &changed, 1).unwrap();
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.contains("identity missing:") && issue.contains("identify121")),
+            "{issues:?}"
+        );
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.contains("Unexpected native volume")
+                    && issue.contains("identify9")),
+            "{issues:?}"
+        );
+        let volumes = readback["volumes"].as_array().unwrap();
+        assert_eq!(volumes.len(), 4);
+        let mut retained_bindings: Vec<_> = volumes
+            .iter()
+            .map(|record| record["source_binding"].to_string())
+            .collect();
+        let mut expected_bindings: Vec<_> = request
+            .bindings
+            .iter()
+            .map(|binding| serde_json::to_value(binding).unwrap().to_string())
+            .collect();
+        retained_bindings.sort();
+        expected_bindings.sort();
+        assert_eq!(retained_bindings, expected_bindings);
+        for record in volumes {
+            assert!(record["source_binding"].is_object());
+            if record["written"]["instance_identify_id"] == 121 {
+                assert!(record["native"].is_null());
+                assert_eq!(record["world_geometry_verified"], false);
+            } else {
+                assert_eq!(record["written"]["instance_identify_id"], 120);
+                assert_eq!(record["world_geometry_verified"], true);
+            }
+        }
+    }
+
     fn shift_test_normal_mesh(bytes: &[u8], recenter: bool) -> Vec<u8> {
         edit_test_project(bytes, |entries| {
             if recenter {

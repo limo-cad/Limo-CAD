@@ -217,7 +217,7 @@ pub fn handle_read_only(manager: &SketchManager, method: &str, payload: &str) ->
         "cam_chamfer_geometry" => {
             with_payload(payload, |request| manager.cam_chamfer_geometry(request))
         }
-        "cam_document" => ok_json(manager.cam_document()),
+        "cam_document" => ok_json(manager.cam_document_ref()),
         "cam_cutter_mesh" => {
             with_payload(payload, |geometry: limo_cad_cam::CamCutterGeometryDto| {
                 limo_cad_cam::cutter_mesh(geometry).map_err(crate::SessionError::Solid)

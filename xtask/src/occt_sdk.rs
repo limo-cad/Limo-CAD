@@ -9,6 +9,12 @@ use std::{
     process::Command,
     time::Duration,
 };
+#[cfg(any(windows, test))]
+#[path = "occt_includes.rs"]
+mod includes;
+#[cfg(any(windows, test))]
+#[path = "occt_runtime.rs"]
+mod runtime;
 
 const VERSION: &str = "7_9_3";
 const SHA256: &str = "5ecf094ec6b12d5413dfb851d8c3590c354058aee556e32e408bdfbf8c357d57";
@@ -69,6 +75,7 @@ struct Options {
     cache: PathBuf,
     sccache: bool,
     github_key: bool,
+    repair_runtime: bool,
     freetype: Vec<String>,
 }
 impl Options {
@@ -79,6 +86,7 @@ impl Options {
         let mut cache = None;
         let mut sccache = false;
         let mut github_key = false;
+        let mut repair_runtime = false;
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--prefix" => {
@@ -96,7 +104,8 @@ impl Options {
                 }
                 "--sccache" => sccache = true,
                 "--github-key" => github_key = true,
-                _ => bail!("use build-occt --prefix PATH [--jobs N] [--cache-dir PATH] [--sccache] [--dry-run]"),
+                "--repair-runtime" => repair_runtime = true,
+                _ => bail!("use build-occt --prefix PATH [--jobs N] [--cache-dir PATH] [--sccache] [--dry-run] [--repair-runtime]"),
             }
         }
         let prefix = prefix.context("missing --prefix PATH")?;
@@ -132,6 +141,7 @@ impl Options {
             cache,
             sccache,
             github_key,
+            repair_runtime,
             freetype: Vec::new(),
         })
     }
@@ -161,6 +171,10 @@ fn configure(options: &Options, source: &Path, build: &Path) -> Command {
 }
 pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     let mut options = Options::parse(args)?;
+    ensure!(
+        !options.repair_runtime || cfg!(windows),
+        "--repair-runtime is supported on Windows only"
+    );
     let overrides = override_digest()?;
     let url =
         format!("https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V{VERSION}.tar.gz");
@@ -227,21 +241,42 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
         apply_overrides(&extracted, SOURCE_OVERRIDES)?;
         fs::rename(extracted, &source)?;
     }
-    verify_source_with_overrides(&archive, &source, SHA256, SOURCE_OVERRIDES)?;
+    let source_inventory =
+        verify_source_with_overrides(&archive, &source, SHA256, SOURCE_OVERRIDES)?;
     drop(source_lock);
     let work = options.cache.join("builds").join(&key);
+    let build = work.join("build");
+    #[cfg(windows)]
+    verify_windows_compiler_paths(None, Some(&build), &source_inventory)?;
+    #[cfg(not(windows))]
+    drop(source_inventory);
     let _build_lock = crate::occt_cache::lock(&work)?;
     let _prefix_lock = crate::occt_cache::prepare_locked(&options.prefix, &key)?;
     if crate::occt_cache::complete(&options.prefix, &key)? {
+        #[cfg(windows)]
+        let repaired =
+            runtime::verify_or_repair(&options.prefix, &key, &compiler, options.repair_runtime)?;
         crate::occt_storage::verify(&options.prefix)?;
+        #[cfg(windows)]
+        if repaired {
+            crate::occt_cache::publish(&options.prefix, &key)?;
+        }
         println!(
             "Verified installed OCCT SDK cache hit: {}",
             options.prefix.display()
         );
         return Ok(());
     }
-    let build = work.join("build");
+    // Validate and capture the exact dependency inputs before an expensive
+    // native build; assembly rechecks this snapshot before/after adding files.
+    #[cfg(windows)]
+    let runtime_plan = runtime::Plan::from_compiler_identity(&compiler)?;
     run_command(&mut configure(&options, &source, &build))?;
+    #[cfg(windows)]
+    println!(
+        "Verified {} package-relative private-header fallbacks",
+        includes::prepare(&source, &build, &source_inventory)?
+    );
     run_command(
         Command::new("cmake")
             .arg("--build")
@@ -250,6 +285,8 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
             .arg(options.jobs.to_string()),
     )?;
     run_command(Command::new("cmake").arg("--install").arg(&build))?;
+    #[cfg(windows)]
+    runtime_plan.apply(&options.prefix, &key)?;
     let doc = options.prefix.join("share/doc/opencascade");
     fs::create_dir_all(&doc)?;
     let mut copyright = fs::File::create(doc.join("copyright"))?;
@@ -420,7 +457,74 @@ fn source_files(root: &Path, directory: &Path, files: &mut BTreeMap<String, Stri
 }
 
 fn verify_source(archive: &Path, source: &Path, digest: &str) -> Result<()> {
-    verify_source_with_overrides(archive, source, digest, &[])
+    verify_source_with_overrides(archive, source, digest, &[]).map(|_| ())
+}
+
+// The supported Windows compiler still rejects these native paths at MAX_PATH,
+// regardless of Rust's ability to inspect an extended-length source tree. This
+// guards real source/header paths and generated forwarding headers only; it
+// does not certify every future object/PDB path or third-party dependency path.
+#[cfg(any(windows, test))]
+fn require_windows_compiler_path(path: &Path) -> Result<()> {
+    #[cfg(windows)]
+    let units = {
+        use std::os::windows::ffi::OsStrExt;
+        path.as_os_str().encode_wide().count()
+    };
+    #[cfg(not(windows))]
+    let units = path
+        .to_str()
+        .context("non-Unicode compiler path")?
+        .encode_utf16()
+        .count();
+    ensure!(
+        units < 260,
+        "OCCT Windows compiler path has {units} UTF-16 units (must be below 260): {}. Use a short absolute --cache-dir, such as D:/lc; existing SDK/cache ownership is preserved",
+        path.display()
+    );
+    Ok(())
+}
+
+#[cfg(any(windows, test))]
+fn verify_windows_compiler_paths(
+    source: Option<&Path>,
+    build: Option<&Path>,
+    inventory: &BTreeMap<String, String>,
+) -> Result<()> {
+    let source = source.map(std::path::absolute).transpose()?;
+    let build = build.map(std::path::absolute).transpose()?;
+    for (relative, fingerprint) in inventory {
+        if !relative.starts_with("src/") || !fingerprint.starts_with("file:") {
+            continue;
+        }
+        let relative = Path::new(relative);
+        let extension = relative.extension().and_then(|value| value.to_str());
+        // OCCT's registered include directory is build/include/opencascade.
+        let forwarding_header = forwarding_header(relative);
+        if !forwarding_header && !matches!(extension, Some("c" | "cpp" | "cxx" | "ixx")) {
+            continue;
+        }
+        if let Some(source) = &source {
+            require_windows_compiler_path(&source.join(relative))?;
+        }
+        if let Some(build) = build.as_ref().filter(|_| forwarding_header) {
+            require_windows_compiler_path(
+                &build
+                    .join("include/opencascade")
+                    .join(relative.file_name().unwrap()),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(any(windows, test))]
+fn forwarding_header(path: &Path) -> bool {
+    // Same extension set as COLLECT_AND_INSTALL_OCCT_HEADER_FILES.
+    matches!(
+        path.extension().and_then(|value| value.to_str()),
+        Some("h" | "g" | "p" | "hpp" | "hxx" | "lxx" | "gxx" | "pxx")
+    )
 }
 
 fn apply_overrides(source: &Path, overrides: &[SourceOverride<'_>]) -> Result<()> {
@@ -440,7 +544,7 @@ fn verify_source_with_overrides(
     source: &Path,
     digest: &str,
     overrides: &[SourceOverride<'_>],
-) -> Result<()> {
+) -> Result<BTreeMap<String, String>> {
     ensure!(
         crate::hash::file(archive)? == digest,
         "cached OCCT archive checksum differs; refusing reuse"
@@ -458,6 +562,8 @@ fn verify_source_with_overrides(
         );
     }
     let mut expected = source_inventory(archive)?;
+    #[cfg(windows)]
+    verify_windows_compiler_paths(Some(source), None, &expected)?;
     for (relative, original, replacement) in overrides {
         ensure!(
             expected.get(*relative) == Some(&format!("file:{original}")),
@@ -475,7 +581,7 @@ fn verify_source_with_overrides(
         actual == expected,
         "cached OCCT sources differ from the verified archive; select a fresh cache directory"
     );
-    Ok(())
+    Ok(expected)
 }
 
 fn download(url: &str, archive: &std::path::Path) -> Result<()> {
@@ -510,6 +616,84 @@ fn download(url: &str, archive: &std::path::Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn runtime_repair_flag_keeps_the_original_occt_configure_recipe() {
+        let base = Options::parse(
+            ["--prefix", "same-owned-sdk"]
+                .map(str::to_owned)
+                .into_iter(),
+        )
+        .unwrap();
+        let repair = Options::parse(
+            ["--prefix", "same-owned-sdk", "--repair-runtime"]
+                .map(str::to_owned)
+                .into_iter(),
+        )
+        .unwrap();
+        assert!(repair.repair_runtime);
+        assert_eq!(
+            configure(&base, Path::new("SOURCE"), Path::new("BUILD"))
+                .get_args()
+                .collect::<Vec<_>>(),
+            configure(&repair, Path::new("SOURCE"), Path::new("BUILD"))
+                .get_args()
+                .collect::<Vec<_>>()
+        );
+    }
+    #[test]
+    fn windows_compiler_paths_count_utf16_and_keep_the_259_unit_boundary() {
+        assert!(require_windows_compiler_path(Path::new(&"a".repeat(259))).is_ok());
+        let error = require_windows_compiler_path(Path::new(&"a".repeat(260)))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("260 UTF-16 units"));
+        assert!(error.contains("short absolute --cache-dir"));
+        assert!(
+            require_windows_compiler_path(Path::new(&format!("{}\u{1f600}", "a".repeat(257))))
+                .is_ok()
+        );
+        assert!(
+            require_windows_compiler_path(Path::new(&format!("{}\u{1f600}", "a".repeat(258))))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn verified_source_inventory_guards_native_and_forwarding_header_paths() {
+        let (temporary, archive, source, digest) = source_fixture(false);
+        let inventory = verify_source_with_overrides(&archive, &source, &digest, &[]).unwrap();
+        verify_windows_compiler_paths(
+            Some(&source),
+            Some(&temporary.path().join("short-build")),
+            &inventory,
+        )
+        .unwrap();
+        // Resolve the same relative path spelling that Options accepts, without
+        // using process-wide cwd changes or invoking CMake/the compiler.
+        let long = Path::new(&"a".repeat(180)).join("b".repeat(80));
+        let source_error = verify_windows_compiler_paths(Some(&long), None, &inventory)
+            .unwrap_err()
+            .to_string();
+        assert!(source_error.contains("src"));
+        assert!(source_error.contains("example.cxx"));
+        let header_error = verify_windows_compiler_paths(None, Some(&long), &inventory)
+            .unwrap_err()
+            .to_string();
+        assert!(header_error.contains("inc"));
+        assert!(header_error.contains("example.hxx"));
+        #[cfg(windows)]
+        {
+            let long_parent = temporary.path().join(&long);
+            fs::create_dir_all(&long_parent).unwrap();
+            let long_source = long_parent.join(format!("OCCT-{VERSION}"));
+            fs::rename(&source, &long_source).unwrap();
+            let error = verify_source(&archive, &long_source, &digest)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("OCCT Windows compiler path"));
+            assert!(error.contains("short absolute --cache-dir"));
+        }
+    }
     #[test]
     fn checked_overrides_are_verified_against_both_pristine_and_resulting_sources() {
         let (_temporary, archive, source, digest) = source_fixture(false);
@@ -547,6 +731,7 @@ mod tests {
         for (name, content) in [
             ("CMakeLists.txt", "project(OCCT)"),
             ("src/example.cxx", "pinned source"),
+            ("src/example.hxx", "pinned header"),
         ] {
             let mut header = tar::Header::new_gnu();
             header.set_mode(0o644);

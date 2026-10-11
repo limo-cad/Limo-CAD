@@ -25,8 +25,9 @@ permissions:
 
 concurrency:
   group: desktop-packages-${{ github.ref }}
-  # Keep release/manual receipts; cancel obsolete PR builds before they occupy runners.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Let cold SDK builds qualify and save their cache before the next revision runs.
+  # Pending revisions still consolidate within this group.
+  cancel-in-progress: false
 
 jobs:
   version_preflight:
@@ -812,6 +813,7 @@ jobs:
           name: Limo-CAD-macos-mcp-diagnostics
           path: |
             ${{ runner.temp }}/limo-cad-mcp-macos.json
+            ${{ runner.temp }}/limo-cad-mcp-macos.json.lifecycle
             ${{ runner.temp }}/limo-cad-macos-uri.json
           if-no-files-found: warn
           retention-days: 7

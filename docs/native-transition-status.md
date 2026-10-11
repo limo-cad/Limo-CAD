@@ -1910,12 +1910,16 @@ This main draft still targets the earlier viewport and is not integrated into
 the Bevy rc.2 application.
 
 CodeQL alert [#147](https://github.com/limo-cad/Limo-CAD/security/code-scanning/147)
-identified unsafe matrix-copy arithmetic in the packaged OpenCASCADE 7.9.3 header;
-that SDK remains unpatched. Its size calculation can overflow or narrow before
-`memmove`. A large-matrix application trigger has not been established. The
-upstream 8.0.1 repair changes class layout and cannot be copied into the 7.9 SDK.
-This finding is retained for an ABI-compatible SDK repair or a separately
-reviewed SDK migration; it was not suppressed to clear CI.
+identified unsafe matrix-copy arithmetic in OpenCASCADE 7.9.3. The reviewed
+ABI-preserving repair is already in the repository's overlay and portable SDK
+builder (`5fd87e6c`); current Bevy/PR124 alert instances are fixed. The upstream
+8.0.1 class-layout change was not copied into 7.9, and the finding was not
+suppressed. The October 11 provenance audit found that the local `4859c8bd`
+runtime still uses the older port-version 1 SDK: its unsafe inline header and
+TKMath DLL match the developer SDK. The separately qualified hosted SDK cache
+does not qualify that local installation. A repaired local SDK must pass the
+existing checked-storage probe before the next native deployment. No large-matrix
+application trigger or fresh patched-runtime pass is claimed.
 
 ## Deployment and preserved data
 
@@ -2043,9 +2047,9 @@ PR124 now includes six further reviewed source commits: `090efe6a` exposes actua
 
 Eight new focused regressions and the specifically affected existing history drag/rollback regression passed locally at clean `ff6b635cdcdd4dc5830dbafa61201500f2ee5ea4`: native Bambu readback; scoped hole-warning provenance; ambiguous blind-bore ownership; browser projection and replacement; retained history and stale drag receipts; CAM selection-only reuse; and actual history drop/rollback. Exactly nine filters ran, each selecting one test, with zero failures. Receipts are `parallel-repairs-ff6b635c-tests.json` and the two compile logs under the evidence directory below. No full suite or previously unaffected passing case was rerun.
 
-Further reviewed source repairs through `418e8931` transfer owned engine model/text responses without another full payload copy (`0c587b12`), retire transient viewport preview and CAM stock before rendering a replacement document (`479665c7`), and integrate Jack's PR366 arc repair with the separately reviewed full-turn overshoot/backtracking correction (`3b48378d`, merge `30864843`). Four new production-path desktop regressions remain pending execution for these changes. Cache policy `e3d4021f` replaces four whole Rust-target archives with the existing pinned dependency-cleaning action; SDK cache keys, qualification gates and actual build/test commands are unchanged. Workflow parsing and gate/command comparisons passed; savings and cache-eviction attribution are not established.
+Further reviewed source repairs through `418e8931` transfer owned engine model/text responses without another full payload copy (`0c587b12`), retire transient viewport preview and CAM stock before rendering a replacement document (`479665c7`), and integrate Jack's PR366 arc repair with the separately reviewed full-turn overshoot/backtracking correction (`3b48378d`, merge `30864843`). All four new production-path desktop regressions passed at clean `2cda40b5`. PR366 is now merged into the Bevy branch; its original commits remain represented. Cache policy `e3d4021f` replaces four whole Rust-target archives with the existing pinned dependency-cleaning action; SDK cache keys, qualification gates and actual build/test commands are unchanged. Workflow parsing and gate/command comparisons passed; cache-eviction attribution is not established.
 
-Guarded Windows control at `418e8931` can request nonactivating exposure of the exact observed CAD window when focus was refused. It sends no mouse/keyboard input, consumes the observation, and always reports `not_focused`, `input_sent=false` and `foreground_verified=false`; a fresh observation and existing qualified caption check remain mandatory. Windows can refuse or queue exposure. The new receipt regression and actual native exposure/focus acceptance are pending; this is not a working-foreground claim.
+Guarded Windows control at `418e8931` can request nonactivating exposure of the exact observed CAD window when focus was refused. It sends no mouse/keyboard input, consumes the observation, and always reports `not_focused`, `input_sent=false` and `foreground_verified=false`; a fresh observation and existing qualified caption check remain mandatory. Windows can refuse or queue exposure. The new receipt regression passed at clean `2cda40b5`; actual native exposure/focus acceptance remains pending. This is not a working-foreground claim.
 
 The preceding clean `4859c8bdc5575fe8858bfb3c0153c48569f8e6eb` native build was installed with control enabled, all 70 payload hashes verified and executable SHA256 `94c5e541db3b9a05f22c75560c8e31f89c7ee45590f513e32bee144771c2e856`. Fresh GUI PID22412 and MCP PID15380 reported `build_pair.status=matched`; foreground ownership was initially observed, then lost. The latest observation confirmed CAD in the background and guarded focus was refused without input. This qualifies that pair's provenance, not the newer source commits or their visible behavior. Finite scratch-document acceptance is blocked on foreground ownership; broad UI inventory and manual MCP mutation qualification remain paused. A rejected Windows file-picker path and a correctly rejected expired observation are not acceptance passes or application-geometry defects.
 
@@ -2054,3 +2058,174 @@ Retained hosted evidence at 4859c8bd: macOS native library 988 passed/0 failed/1
 The compatible Windows SDK installed and binary caches were saved under PR124 after checked-runtime qualification at 02:53 UTC on October 11 (IDs `8785316823` and `8785314732`, inputs key `82943b69`). A parallel same-key consumer produced the saved pair while the native-host job was still running; this is not evidence that every Windows job finished. Exact cache and current-rollup receipts are retained in that evidence directory. The source push no longer needs to wait for the cold SDK build.
 
 Issue reconciliation closed eight confirmed Bevy deliverables (#12, #94, #231, #312, #313, #314, #315, #360), reducing the then-current open count from 26 to18. Each closure has specific retained evidence and scope limits. #316 retains genuine repeated-instance/service and live cancellation/staleness acceptance; #348 retains the pinned real imported-assembly report; #333 retains the remaining ownership/invalidation/lifetime inventory. Main is unchanged and PR124 still requires Jack's approval before merging.
+
+### Owned input and finer body rendering checkpoint
+
+Reviewed source through `1ea5a165` transfers owned MCP responses (`08e6ca5c`, allocation proof strengthened in `f184efdd`) and incoming stdio arguments (`1ea5a165`). The latter preserves missing/null/malformed request and notification semantics; error-response ID copying is unchanged. Deferred pointer admission (`b498e6a4`), lesson preview input (`94df968d`) and fallback window metrics (`676751ff`) use narrow coherent presented data instead of copying surface text and the complete frame. Actual window sizing retains precedence over the fallback.
+
+Authoritative native kernel body identities (`1671a574`) include a checked kernel owner and nonwrapping mutation generation. Conservative dependency groups invalidate retained Boolean tools and split relatives; deletion, partial failure, unknown dispatch, replay and reset cannot certify stale geometry. The pinned Rust atomic API correction is `bc90baeb`. Private in-process commit proofs in `5daa6160` bind the exact committed scene allocation, session, complete body set and fixed display policy. Only matching body proofs can retain that document's mesh handles and derived edge Arcs across accepted edits. Missing proof, failed attempts, replacement, missing assets and retired ownership retain conservative rebuilding/retirement. No proof is serialized or accepted from model JSON. Kernel tessellation and whole-scene DTO construction remain unchanged; no latency, FPS or physical GPU-memory claim follows.
+
+The two new native generation regressions and two new MCP response regressions passed at clean `f184efdd`; receipts are `new-ownership-f184efdd-tests.json`. The two stdio checks, a new strict native Bambu identity-failure check, new/affected counterbore ownership checks and all five new desktop projection/body-asset checks passed at clean `42ec4d2f`. Together with the earlier nine and five passes, 28 distinct focused checks have passed without repeating unaffected passing cases. The desktop checks exercise real native engine commits and Bevy Assets, including independent bodies, dependency aliases, rejected prepare, owner replacement, eviction recovery and foreign-document retirement; they do not qualify interactive GPU behavior.
+
+CI on pushed `2cda40b5` exposed two distinct strict-Clippy failures across four jobs: CAM tuple type complexity and Windows exposure tests placed before production items. `c1f1e566` names the unchanged input tuple; `88df73f8` moves the unchanged test module to the end of its file. No assertion, warning gate or test was removed. Strict Windows desktop/MCP Clippy completed at `1ea5a165`; a maintenance receipt-writer error stopped before executing tests. New affected export/MCP Clippy passed at `42ec4d2f`, with normal retained receipts. This checkpoint does not claim green hosted CI. The same-key Windows SDK setup on `2cda40b5` completed in 96 seconds, and finished native/MCP logs confirm installed-cache hits. This is specific hosted-cache evidence, not local SDK qualification or an overall CI timing promise.
+
+Counterbore inference (`876b913f`) now requires unique shoulder ownership on both selected joint rings. Duplicate, reversed or touching faces preserve the bore candidate and radii while leaving ambiguous inferred dimensions unknown. The strict Bambu recovery error (`42ec4d2f`) names complete repeated-instance/multipart bindings and explicit **Start reviewed native baseline** consent. Existing native service failures are retained: both pinned reports contain seven compatibility issues and zero setting changes for the 121-to-9 identity rewrite, not nine setting failures. Current originals and exact source bindings are pinned by `issue316-strict-native-receipts-1ea5a165.json`; no automatic identity match or baseline adoption was introduced.
+
+Deployment preflight (`212cec35`) now rejects a legacy checked-storage header before even cached-runtime reuse. It runs the existing native storage probe against the exact selected include/import libraries and the TKernel/TKMath DLLs that deployment will stage, checks unchanged SDK content before and after qualification, and bounds the probe child to 30 seconds. Alternate-layout SDK and external-library overrides cannot silently qualify another DLL pair from PATH. All three new gate/staging regressions and strict xtask Clippy passed at clean `2f466b60`, bringing the total to 31 distinct focused passes. This source gate does not qualify the existing local SDK. The isolated direct-builder cache has only 279 of 5,373 declared objects; a supported toolchain/key-matched resume and actual installed probe are required before deployment.
+
+Two additional native contracts passed at clean `c7ae2bf4`, bringing the total to 33 focused passes (31 new and two specifically affected existing cases). Real simple blind and counterbore holes retain independently checked radii, ring elevations, terminal disks, shoulders and depth evidence after actual STEP export/import without authored feature provenance (`6cd9d57f`). An actual axial stock split retains open half-bore candidates with the exact native body/face identities and unknown extent (`c7ae2bf4`); seam subdivisions are allowed. Strict MCP Clippy also passed with both new tests. These normal-size native geometry checks used the preserved local SDK; they do not qualify its checked matrix storage. Genuine touching-shoulder ambiguity remains a separate evidence gap, so #348 is not closed by these passes.
+
+The supported isolated SDK resume started with MSVC 14.44.35207, Windows SDK 10.0.26100.0 and the exact existing `db1f66e6db6fc92b222dd8994b171da7fefb59e56f438a8380eba07a34f028d2` cache key. It preserves the old C: SDK and private Vita runtime. The builder must finish its actual installed probe and completion receipt before the GUI can use this SDK; a matching key and a started build are not qualification.
+
+Hole-callout preparation (`2f466b60`) shares the immutable drawing snapshot under its unchanged document receipt guard. Its editable draft still copies drawing intent once; the preceding full copy of every sheet, view and annotation is removed. Owner, revision, cancellation and worker commit checks remain unchanged. Source and peer review establish that allocation removal; no new test that only mirrors the implementation was added.
+
+The installed GUI/MCP remains the matched clean `4859c8bd` pair described above. New source is not yet deployed; no additional manual pass or issue closure is claimed here. Source workers and the CI watcher operate in parallel while root owns compilation and the sole guarded GUI operator.
+
+### Short-cache SDK recovery and remaining pointer paths
+
+The first supported SDK resume failed when MSVC rejected intact source/header
+paths longer than its 260-unit Windows limit. The original archive, cache and
+prefix remain preserved. A verified copy of the official archive is compiling
+in `D:/lc` with the same `db1f66e6` recipe key and existing isolated prefix.
+Failure and recovery logs are respectively
+`checked-occt-20261011T040652Z-5f450c7f38874dbf9f8b6f958a1a4687.log` and
+`checked-occt-20261011T042106Z-0b4e9e8935924d30bb9af95acd8f6266.log`
+under the evidence directory above. Recovery is still in progress.
+
+`0c2e30b4` checks absolute Windows native source/header and actual forwarding
+header paths before compilation or SDK prefix preparation. It reuses the
+verified archive inventory and reports the offending path, UTF-16 length and
+short-cache remedy. Both new boundary/verified-source regressions passed,
+including a real overlong Windows source tree. Strict xtask and desktop Clippy
+passed. Mechanism/history drag and general editor input use the existing narrow
+presented projection (`eabccdf6`, `e9f43173`), preserving the snapshot point and
+ownership, modal, bounds, camera and receipt guards. No latency claim follows.
+
+The new native overlapping-recess contract passed at `c4570f6c`, with strict MCP
+Clippy. Two diameter-4 stems retain their independently measured local depth4
+from Z8 to Z4; their intersecting diameter-8 recess walls remain ambiguous with
+exact body/face ownership and unknown extent. Actual STEP export/import retains
+those distinctions without authored provenance; authored total depth6 remains
+separate. This raises the retained focused total to36, with no unaffected
+passing filter repeated. Receipts are `pointer-and-sdk-path-0c2e30b4-results.json`
+and `overlapping-recess-c4570f6c-results.json`. Exact shared-ring/nonmanifold
+shoulder qualification and fresh real-assembly reader acceptance remain open.
+
+CI on pushed `f58d022f` found one hole-callout formatting error, corrected by
+`f066a8b8`; the full repository format check passes. Its Windows SDK setup and
+checked-storage qualification passed in124seconds. Remaining hosted checks and
+the next pushed head are separate evidence.
+
+Deployment preparation also found a concrete standalone-runtime gap:
+`Limo-CAD.exe -> TKDESTEP -> TKXCAF -> TKService -> freetype.dll`. The supported
+direct builder selects shared FreeType but does not install it or its five
+compression DLLs; package staging currently copies only the selected SDK's bin
+directory. Exact binary import inspection confirms the dependency. Runtime
+assembly and license-notice handling are being repaired in parallel. The legacy
+C: SDK, current GUI and private Vita runtime remain preserved; no new SDK or GUI
+qualification is claimed by the started compile.
+
+### Qualified SDK and query/close delivery checkpoint
+
+Reviewed repairs through clean `3eb0cd0d` close the direct Windows SDK runtime
+gap with the exact selected FreeType/compression DLLs and their five license
+notices (`a3c6d1ed`, `8fae444c`). Bounded PE normal/delay-import validation rejects
+missing transitive dependencies and mixed machine types before packaging;
+Windows/API-set/VC prerequisites remain explicit. Actual installed imports
+required the exact Windows builtin `wsock32.dll` (`8135b1ad`). No ambient PATH
+lookup or arbitrary system DLL exception was added.
+
+`560c2f82` adds verified package-relative private-header forwarding paths without
+changing the OCCT source, recipe, key or completed objects. Both previously
+failing STEP translation units compiled; all remaining C++ work and installation
+finished. All 3,153 retained objects had unchanged paths, lengths and timestamps.
+The final supported resume reported `ninja: no work to do`, verified runtime
+closure, passed the actual installed checked-matrix probe with layout bytes 160,
+and published the owned inventory of 7,455 files. The qualified prefix is
+`D:/limo-cad-maintenance/checked-occt-sdk`, key `db1f66e6`.
+Its complete receipt SHA256 is
+`2bc69f3ed9c26327036c867e9d7c3d9363487a59095fd8d5587d4934468fbbfa`.
+The legacy C: SDK, original caches and private Vita runtime remain preserved.
+
+Nine new SDK/runtime/include checks and two specifically affected existing
+checks passed at `f52aa609`, with strict xtask Clippy and the native harness build.
+The two affected snapshot/CAM wire checks and strict MCP Clippy passed at
+`8352889c`. File shortcut admission also uses the narrow coherent modal projection
+instead of copying the presented frame (`cf5cae14`); its guards are unchanged.
+
+Windows CI at `3288ec99` exposed a real result-publication race. `d0267058`
+publishes heartbeat and process lease before the query result becomes visible,
+retains guarded produced outcomes on publication failure, and retries delivery
+without replaying the action. The original failing MCP sequence and two other
+new/affected native checks passed. A fourth new fault fixture initially used a
+public operation name instead of the engine method; `90acec1b` corrects that
+fixture and adds an exact recovered-value assertion without weakening its
+publication, freshness or model fences. Its corrected check passed at `3eb0cd0d`.
+
+`7733f8f2` repairs a separate concrete close-retry early return: successful durable
+receipt delivery now reaches guarded shutdown in the same frame. The new actual
+blocked-publication/retry shutdown check and affected existing rejection check
+passed at `3eb0cd0d`, with strict desktop Clippy. The macOS packaged process timeout
+is not yet causally attributed to this defect. Fixed stderr stage markers
+(`84db2bba`) and retained owned lifecycle artifacts (`cf1fd18b`) preserve evidence
+for the next normal hosted run; no timeout or assertion was relaxed.
+
+Receipts are `sdk-runtime-closure-f52aa609-results.json`,
+`mcp-read-borrows-8352889c-results.json`,
+`native-query-liveness-d0267058-remaining-results.json`,
+`close-and-query-finalization-3eb0cd0d-results.json` and
+`checked-sdk-finalization-3eb0cd0d.json` under the evidence directory above.
+The earlier 36 distinct passes remain retained; affected existing checks are
+listed per batch rather than added again to a deduplicated total.
+
+Before deployment, the old clean `4859c8bd` GUI's freshly attached Split scratch
+snapshot matched the saved archive's complete model content. Deployment and
+finite visible acceptance were pending; broad UI/MCP qualification stays
+paused. No new manual pass or issue closure is claimed. GitHub still has 18 open
+issues; main remains unchanged pending Jack's approval.
+
+Desktop packaging keeps its existing concurrency group but lets running jobs
+finish before a pending revision runs. The active Windows ARM SDK build has no
+restorable PR124/main cache yet; cancelling it would discard that cold build
+before qualification and cache publication. Pending pushes still consolidate,
+and every package matrix entry and acceptance command remains enabled.
+The revised executable-YAML policy contract and specifically affected existing
+stale-check/trigger contract both passed at `5a4ecc8e`, with strict xtask Clippy.
+The other workflows retain their prior cancellation and trigger checks; no
+check was removed or disabled. The receipt is
+`package-concurrency-5a4ecc8e-results.json`.
+
+The clean `a3145e2c` native application is now deployed with the qualified
+`D:/limo-cad-maintenance/checked-occt-sdk`. All 63 runtime payload hashes were
+verified; the executable SHA256 is
+`effaac9acf3e044a75bb4d4f13edf0ca8c9dd49bf92cfbfd092f4f59d81a829b`.
+Fresh guarded observation confirms a clean matched desktop/MCP pair (desktop
+PID 28600, MCP PID 14480) and foreground ownership after guarded focus. This
+supersedes the old-runtime deployment status, not any pending functional check.
+The canonical checkout remains pinned during root's targeted UI acceptance;
+source `04551840` adds only the deployment diagnostic after the native build.
+
+That diagnostic's one new regression and strict xtask Clippy passed separately
+at isolated `e23e43b0`; no qualification gate or SDK assertion was weakened.
+Retain the latest 21 new/affected batch passes separately from the earlier 36
+distinct passes, and this one diagnostic pass as post-push validation; no
+combined deduplicated count is claimed. Evidence is
+`runtime-a3145e2c-payload-verified.json`,
+`live-pair-a3145e2c-focused-observation.json` and
+`deployment-diagnostic-e23e43b0-results.json` under the evidence directory above.
+The targeted new-document Split Redo check now passed through guarded human UI
+input on clean matched `a3145e2c`. Fresh creation produced healthy bodies 1/2,
+each 10×10×8; Undo restored the entire 20×10×8 baseline model except the documented
+monotonic `assembly/component_structure/next_occurrence_id` floor 11→12. Redo
+exactly restored the complete created model and entire native scene. Fresh
+active sessions were followed after each history transition. UI SaveAs to
+`repair-acceptance-batch/Split Redo accepted a3145e2c.limo` matches the published
+Redo model, and the original fixture archive SHA256 remains unchanged.
+Evidence is `split-redo-a3145e2c-comparison.json`, the corresponding
+`split-redo-a3145e2c-{unsplit,created,undo,redo}` captures/model/scene receipts,
+and `split-redo-a3145e2c-saved-archive-verified.json` under the evidence directory.
+Only local issue `split-body-invalid-new-creation` is marked passed. The earlier
+clean `5d46045c` boundary rejection, corrected creation and Undo qualification
+remains intact. This is a fresh transaction, not recovery of the original lost
+Undo stack or broad Split coverage. All unrelated leaves and MCP statuses remain
+unchanged; broad UI/MCP qualification stays paused.

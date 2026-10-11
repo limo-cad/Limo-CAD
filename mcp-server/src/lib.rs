@@ -1719,8 +1719,7 @@ impl CadServer {
         let plan_value = parse_engine_envelope(host::handle(
             &mut self.manager,
             "project_prepare_load",
-            &serde_json::to_string(&Value::String(model_json.clone()))
-                .map_err(|e| e.to_string())?,
+            &serde_json::to_string(&model_json).map_err(|e| e.to_string())?,
         ))?;
         let plan: RecomputePlanDto = serde_json::from_value(plan_value)
             .map_err(|error| format!("invalid model.json / recompute plan: {error}"))?;
@@ -2140,14 +2139,20 @@ impl CadServer {
 fn parse_engine_envelope(raw: String) -> Result<Value, String> {
     let envelope: Value =
         serde_json::from_str(&raw).map_err(|error| format!("invalid engine response: {error}"))?;
+    engine_envelope_value(envelope)
+}
+
+fn engine_envelope_value(mut envelope: Value) -> Result<Value, String> {
     if envelope.get("ok").and_then(Value::as_bool) == Some(true) {
-        Ok(envelope.get("value").cloned().unwrap_or(Value::Null))
+        Ok(envelope
+            .get_mut("value")
+            .map(Value::take)
+            .unwrap_or(Value::Null))
     } else {
-        Err(envelope
-            .get("error")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown Limo CAD engine error")
-            .to_string())
+        Err(match envelope.get_mut("error").map(Value::take) {
+            Some(Value::String(error)) => error,
+            _ => "unknown Limo CAD engine error".into(),
+        })
     }
 }
 
@@ -5274,32 +5279,35 @@ fn tool_list_result(disclosure: &mut DisclosureState) -> Value {
     )]))
 }
 
-fn success_result(value: Value) -> Value {
-    let mut value = value;
-    let image = value
-        .pointer("/image/png_base64")
-        .and_then(Value::as_str)
-        .map(str::to_owned);
-    if image.is_some() {
-        value["image"]["png_base64"] = json!("(attached as image content)");
-    }
-    let structured = if value.is_object() {
-        value.clone()
-    } else {
-        json!({ "value": value.clone() })
+fn success_result(mut value: Value) -> Value {
+    let image = match value.pointer_mut("/image/png_base64") {
+        Some(Value::String(png)) => {
+            Some(std::mem::replace(png, "(attached as image content)".into()))
+        }
+        _ => None,
     };
-    let mut content = vec![json!({
-        "type": "text",
-        "text": serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string())
-    })];
+    let text = serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string());
+    let structured = if value.is_object() {
+        value
+    } else {
+        Value::Object(Map::from_iter([("value".into(), value)]))
+    };
+    let mut content = vec![Value::Object(Map::from_iter([
+        ("type".into(), Value::String("text".into())),
+        ("text".into(), Value::String(text)),
+    ]))];
     if let Some(png) = image {
-        content.push(json!({"type": "image", "data": png, "mimeType": "image/png"}));
+        content.push(Value::Object(Map::from_iter([
+            ("type".into(), Value::String("image".into())),
+            ("data".into(), Value::String(png)),
+            ("mimeType".into(), Value::String("image/png".into())),
+        ])));
     }
-    json!({
-        "content": content,
-        "structuredContent": structured,
-        "isError": false
-    })
+    Value::Object(Map::from_iter([
+        ("content".into(), Value::Array(content)),
+        ("structuredContent".into(), structured),
+        ("isError".into(), Value::Bool(false)),
+    ]))
 }
 
 fn tool_error(message: String) -> Value {
@@ -5310,7 +5318,11 @@ fn tool_error(message: String) -> Value {
 }
 
 fn response(id: Value, result: Value) -> Value {
-    json!({ "jsonrpc": "2.0", "id": id, "result": result })
+    Value::Object(Map::from_iter([
+        ("jsonrpc".into(), Value::String("2.0".into())),
+        ("id".into(), id),
+        ("result".into(), result),
+    ]))
 }
 
 fn error_response(id: Value, code: i64, message: impl Into<String>) -> Value {
@@ -5321,12 +5333,26 @@ fn error_response(id: Value, code: i64, message: impl Into<String>) -> Value {
     })
 }
 
-fn handle_message(server: &mut CadServer, message: Value) -> Vec<Value> {
-    let Some(method) = message.get("method").and_then(Value::as_str) else {
+/// The stdio dispatcher owns the request. Transfer potentially large export
+/// arguments rather than cloning them while retaining the discarded envelope.
+fn take_tool_call(message: &mut Value) -> Option<(String, Value)> {
+    let params = message.get_mut("params")?;
+    let Value::String(name) = params.get_mut("name")?.take() else {
+        return None;
+    };
+    let arguments = params
+        .get_mut("arguments")
+        .map(Value::take)
+        .unwrap_or_else(|| json!({}));
+    Some((name, arguments))
+}
+
+fn handle_message(server: &mut CadServer, mut message: Value) -> Vec<Value> {
+    let Some(Value::String(method)) = message.get_mut("method").map(Value::take) else {
         return Vec::new();
     };
-    let id = message.get("id").cloned();
-    let mut responses = match method {
+    let id = message.get_mut("id").map(Value::take);
+    let mut responses = match method.as_str() {
         "initialize" => {
             let requested = message
                 .pointer("/params/protocolVersion")
@@ -5428,21 +5454,17 @@ fn handle_message(server: &mut CadServer, message: Value) -> Vec<Value> {
         )],
         "tools/call" => {
             let id = id.unwrap_or(Value::Null);
-            let Some(name) = message.pointer("/params/name").and_then(Value::as_str) else {
+            let Some((name, arguments)) = take_tool_call(&mut message) else {
                 return vec![error_response(
                     id,
                     -32602,
                     "tools/call is missing params.name",
                 )];
             };
-            let arguments = message
-                .pointer("/params/arguments")
-                .cloned()
-                .unwrap_or_else(|| json!({}));
             if !tool_specs().iter().any(|tool| tool.name == name) {
                 return vec![error_response(id, -32602, format!("unknown tool: {name}"))];
             }
-            let result = match server.call_tool(name, arguments) {
+            let result = match server.call_tool(&name, arguments) {
                 Ok(value) => success_result(value),
                 Err(error) => tool_error(error),
             };
@@ -5551,6 +5573,269 @@ mod tests {
     mod print_intent;
     use super::*;
     mod cam_query_effects;
+
+    #[test]
+    fn stdio_tool_request_transfers_owned_model_and_nested_arguments() {
+        let manager = SketchManager::new();
+        let model = manager.export_project_model().unwrap();
+        let mut model_text = String::with_capacity(model.len() + 4096);
+        model_text.push_str(&model);
+        let model_ptr = model_text.as_ptr();
+        let model_capacity = model_text.capacity();
+        let mut rows = Vec::with_capacity(64);
+        rows.push(Value::Object(Map::from_iter([(
+            "model_json".into(),
+            Value::String(model_text),
+        )])));
+        let rows_ptr = rows.as_ptr();
+        let rows_capacity = rows.capacity();
+        let mut name = String::with_capacity(128);
+        name.push_str("solid_export_step");
+        let name_ptr = name.as_ptr();
+        let name_capacity = name.capacity();
+        let mut message = json!({"method":"tools/call","id":17});
+        message["params"] = Value::Object(Map::from_iter([
+            ("name".into(), Value::String(name)),
+            (
+                "arguments".into(),
+                Value::Object(Map::from_iter([(
+                    "reviewed_sources".into(),
+                    Value::Array(rows),
+                )])),
+            ),
+        ]));
+        let expected = message["params"]["arguments"].clone();
+        let (name, arguments) = take_tool_call(&mut message).unwrap();
+        assert_eq!(name.as_ptr(), name_ptr);
+        assert_eq!(name.capacity(), name_capacity);
+        assert_eq!(arguments, expected);
+        let rows = arguments["reviewed_sources"].as_array().unwrap();
+        assert_eq!(rows.as_ptr(), rows_ptr);
+        assert_eq!(rows.capacity(), rows_capacity);
+        let Value::String(model) = &rows[0]["model_json"] else {
+            panic!("The exported model must remain text");
+        };
+        assert_eq!(model.as_ptr(), model_ptr);
+        assert_eq!(model.capacity(), model_capacity);
+        assert!(message["params"]["name"].is_null());
+        assert!(message["params"]["arguments"].is_null());
+        assert_eq!(manager.export_project_model().unwrap(), *model);
+    }
+
+    #[test]
+    fn owned_stdio_dispatch_preserves_read_only_rpc_and_error_contracts() {
+        let mut server = CadServer::new().unwrap();
+        let before = server.manager.export_project_model().unwrap();
+        let expected = server.call_tool("cad_document", json!({})).unwrap();
+        let mut id = String::with_capacity(128);
+        id.push_str("read-only-document");
+        let id_ptr = id.as_ptr();
+        let id_capacity = id.capacity();
+        let mut message = json!({
+            "jsonrpc":"2.0","method":"tools/call","params":{"name":"cad_document"}
+        });
+        message["id"] = Value::String(id);
+        let result = handle_message(&mut server, message);
+        assert_eq!(result[0]["result"]["isError"], false);
+        assert_eq!(result[0]["result"]["structuredContent"], expected);
+        let Value::String(id) = &result[0]["id"] else {
+            panic!("RPC ID must remain text");
+        };
+        assert_eq!(id.as_ptr(), id_ptr);
+        assert_eq!(id.capacity(), id_capacity);
+
+        for arguments in [Value::Null, json!(false), json!([1]), json!({})] {
+            let direct = server.call_tool("cad_help", arguments.clone()).unwrap_err();
+            let result = handle_message(
+                &mut server,
+                json!({
+                    "id":23,"method":"tools/call","params":{"name":"cad_help","arguments":arguments}
+                }),
+            );
+            assert_eq!(result[0]["id"], 23);
+            assert_eq!(result[0]["result"], tool_error(direct));
+        }
+        for params in [Value::Null, json!([]), json!({}), json!({"name":false})] {
+            let result = handle_message(
+                &mut server,
+                json!({"id":24,"method":"tools/call","params":params}),
+            );
+            assert_eq!(
+                result[0],
+                error_response(json!(24), -32602, "tools/call is missing params.name")
+            );
+        }
+        let unknown = handle_message(
+            &mut server,
+            json!({"id":25,"method":"tools/call","params":{"name":"unpublished-tool","arguments":null}}),
+        );
+        assert_eq!(
+            unknown[0],
+            error_response(json!(25), -32602, "unknown tool: unpublished-tool")
+        );
+        let unknown = handle_message(&mut server, json!({"id":26,"method":"unpublished-method"}));
+        assert_eq!(
+            unknown[0],
+            error_response(json!(26), -32601, "method not found: unpublished-method")
+        );
+        assert!(handle_message(&mut server, json!({"method":"unpublished-method"})).is_empty());
+        assert!(handle_message(&mut server, json!({"method":false,"id":27})).is_empty());
+        assert_eq!(server.manager.export_project_model().unwrap(), before);
+    }
+
+    #[test]
+    fn mcp_response_transfers_owned_engine_payload_through_text_and_structured_output() {
+        let mut manager = SketchManager::new();
+        let before = host::handle(&mut manager, "project_export_model", "");
+        let envelope: Value =
+            serde_json::from_str(&host::handle(&mut manager, "document", "")).unwrap();
+        let rows = envelope["value"]["browser"].as_array().unwrap();
+        assert!(!rows.is_empty());
+        let original_rows = rows.as_ptr();
+        let expected = envelope["value"].clone();
+        let payload = engine_envelope_value(envelope).unwrap();
+        assert_eq!(
+            payload["browser"].as_array().unwrap().as_ptr(),
+            original_rows
+        );
+        let result = success_result(payload);
+        assert_eq!(
+            result["structuredContent"]["browser"]
+                .as_array()
+                .unwrap()
+                .as_ptr(),
+            original_rows
+        );
+        let output = response(json!(17), result);
+        assert_eq!(output["jsonrpc"], "2.0");
+        assert_eq!(output["id"], 17);
+        assert_eq!(output["result"]["isError"], false);
+        assert_eq!(output["result"]["structuredContent"], expected);
+        assert_eq!(
+            output["result"]["structuredContent"]["browser"]
+                .as_array()
+                .unwrap()
+                .as_ptr(),
+            original_rows
+        );
+        assert_eq!(
+            output["result"]["content"][0]["text"],
+            serde_json::to_string_pretty(&expected).unwrap()
+        );
+
+        let envelope: Value = serde_json::from_str(&before).unwrap();
+        let original_model = envelope["value"].as_str().unwrap().as_ptr();
+        let payload = engine_envelope_value(envelope).unwrap();
+        assert_eq!(payload.as_str().unwrap().as_ptr(), original_model);
+        let result = success_result(payload);
+        assert_eq!(
+            result["structuredContent"]["value"]
+                .as_str()
+                .unwrap()
+                .as_ptr(),
+            original_model
+        );
+        let output = response(Value::Null, result);
+        let model = output["result"]["structuredContent"]["value"]
+            .as_str()
+            .unwrap();
+        assert_eq!(model.as_ptr(), original_model);
+        assert!(serde_json::from_str::<Value>(model).is_ok());
+        assert_eq!(
+            output["result"]["content"][0]["text"],
+            serde_json::to_string_pretty(&Value::String(model.into())).unwrap()
+        );
+        assert_eq!(
+            before,
+            host::handle(&mut manager, "project_export_model", "")
+        );
+    }
+
+    #[test]
+    fn mcp_response_preserves_scalar_image_and_error_contracts() {
+        for value in [
+            Value::Null,
+            json!(true),
+            json!(42),
+            json!("model"),
+            json!([1, 2]),
+        ] {
+            let expected = value.clone();
+            let output = success_result(value);
+            assert_eq!(output["structuredContent"], json!({"value":expected}));
+            assert_eq!(output["content"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                output["content"][0]["text"],
+                serde_json::to_string_pretty(&expected).unwrap()
+            );
+        }
+        let mut value = json!({"image":{"width":1,"height":1},"source":"bevy_window"});
+        // Retaining spare capacity distinguishes ownership transfer from an
+        // allocator coincidentally reusing a freed clone's former address.
+        let mut png = String::with_capacity(4096);
+        png.push_str("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMxkAAAAASUVORK5CYII=");
+        let original_capacity = png.capacity();
+        value["image"]["png_base64"] = Value::String(png);
+        let original_png = value["image"]["png_base64"].as_str().unwrap().as_ptr();
+        let result = success_result(value);
+        let Value::String(png) = &result["content"][1]["data"] else {
+            panic!("Image content must retain the PNG string");
+        };
+        assert_eq!(png.as_ptr(), original_png);
+        assert_eq!(png.capacity(), original_capacity);
+        let output = response(json!("capture"), result);
+        let result = &output["result"];
+        assert_eq!(result["content"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            result["content"][1]["data"].as_str().unwrap().as_ptr(),
+            original_png
+        );
+        assert_eq!(result["content"][1]["type"], "image");
+        assert_eq!(result["content"][1]["mimeType"], "image/png");
+        assert_eq!(
+            result["structuredContent"]["image"]["png_base64"],
+            "(attached as image content)"
+        );
+        assert_eq!(result["structuredContent"]["image"]["width"], 1);
+        assert_eq!(result["structuredContent"]["source"], "bevy_window");
+        assert_eq!(
+            serde_json::from_str::<Value>(result["content"][0]["text"].as_str().unwrap()).unwrap(),
+            result["structuredContent"]
+        );
+        for value in [json!({}), json!({"image":{"png_base64":42}})] {
+            let expected = value.clone();
+            let result = success_result(value);
+            assert_eq!(result["structuredContent"], expected);
+            assert_eq!(result["content"].as_array().unwrap().len(), 1);
+        }
+        let envelope = json!({"ok":false,"error":"Kernel rejected extent"});
+        let original_error = envelope["error"].as_str().unwrap().as_ptr();
+        let error = engine_envelope_value(envelope).unwrap_err();
+        assert_eq!(error, "Kernel rejected extent");
+        assert_eq!(error.as_ptr(), original_error);
+        for envelope in [
+            Value::Null,
+            json!({}),
+            json!({"ok":"true"}),
+            json!({"ok":false,"error":42}),
+        ] {
+            assert_eq!(
+                engine_envelope_value(envelope).unwrap_err(),
+                "unknown Limo CAD engine error"
+            );
+        }
+        assert_eq!(
+            engine_envelope_value(json!({"ok":true})).unwrap(),
+            Value::Null
+        );
+        assert_eq!(
+            parse_engine_envelope(r#"{"ok":true,"value":42}"#.into()).unwrap(),
+            json!(42)
+        );
+        assert!(parse_engine_envelope("invalid json".into())
+            .unwrap_err()
+            .starts_with("invalid engine response:"));
+    }
 
     #[test]
     fn dimensioned_rectangle_rejects_misspelled_drivers_without_mutating_the_sketch() {
@@ -10075,6 +10360,509 @@ mod tests {
             )
             .unwrap();
         assert_native_extent(&imported);
+    }
+
+    #[test]
+    fn native_blind_and_counterbore_depths_survive_step_without_authored_provenance() {
+        fn assert_geometry(server: &CadServer, counterbore: bool) {
+            let scene = server.manager.solid_scene_ref();
+            assert!(scene.errors.is_empty());
+            let body = &scene.bodies[0];
+            let expected_depth = if counterbore { 6.0 } else { 4.0 };
+            let bottom_z = 10.0 - expected_depth;
+            let cylinders = body
+                .faces
+                .iter()
+                .filter(|face| face.cylinder.is_some())
+                .collect::<Vec<_>>();
+            assert_eq!(cylinders.len(), if counterbore { 2 } else { 1 });
+            for wall in &cylinders {
+                let cylinder = wall.cylinder.unwrap();
+                assert!(wall.outer_shell == Some(true));
+                let mut ring_heights = wall
+                    .edge_keys
+                    .iter()
+                    .filter_map(|key| {
+                        body.edges
+                            .iter()
+                            .find(|edge| &edge.key == key)
+                            .and_then(|edge| {
+                                edge.circle.map(|circle| {
+                                    assert!(circle.closed);
+                                    assert!((circle.radius - cylinder.radius).abs() < 1e-6);
+                                    assert!(
+                                        circle.center.x.abs() < 1e-6
+                                            && circle.center.y.abs() < 1e-6
+                                    );
+                                    assert!(circle.normal.z.abs() > 0.999999);
+                                    let adjacent = body
+                                        .faces
+                                        .iter()
+                                        .filter(|face| {
+                                            face.id != wall.id && face.edge_keys.contains(key)
+                                        })
+                                        .collect::<Vec<_>>();
+                                    assert_eq!(
+                                        adjacent.len(),
+                                        1,
+                                        "Every actual ring has exactly one non-wall owner"
+                                    );
+                                    assert!(adjacent[0].plane.is_some());
+                                    circle.center.z
+                                })
+                            })
+                    })
+                    .collect::<Vec<_>>();
+                ring_heights.sort_by(f64::total_cmp);
+                let expected = if counterbore && (cylinder.radius - 4.0).abs() < 1e-6 {
+                    [8.0, 10.0]
+                } else {
+                    assert!((cylinder.radius - 2.0).abs() < 1e-6);
+                    [bottom_z, if counterbore { 8.0 } else { 10.0 }]
+                };
+                assert_eq!(ring_heights.len(), 2);
+                for (actual, expected) in ring_heights.into_iter().zip(expected) {
+                    assert!((actual - expected).abs() < 1e-6);
+                }
+            }
+            let disk = body
+                .faces
+                .iter()
+                .filter(|face| {
+                    face.edge_keys.len() == 1
+                        && face
+                            .plane
+                            .is_some_and(|plane| (plane.origin[2] - bottom_z).abs() < 1e-6)
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                disk.len(),
+                1,
+                "Native blind depth needs a unique terminal disk"
+            );
+            assert!(disk[0].plane.unwrap().normal[2] > 0.999999);
+            if counterbore {
+                let shoulder = body
+                    .faces
+                    .iter()
+                    .filter(|face| {
+                        face.edge_keys.len() == 2
+                            && face
+                                .plane
+                                .is_some_and(|plane| (plane.origin[2] - 8.0).abs() < 1e-6)
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(shoulder.len(), 1);
+                assert!(cylinders.iter().all(|wall| shoulder[0]
+                    .edge_keys
+                    .iter()
+                    .any(|key| wall.edge_keys.contains(key))));
+            }
+            let inferred = summary::summarize(scene, &[]).json(true);
+            assert_eq!(inferred["hole_candidate_count"], 1);
+            assert_eq!(inferred["authored_hole_count"], 0);
+            let hole = &inferred["holes"][0];
+            assert_eq!(hole["body_id"], body.id.0);
+            assert_eq!(hole["confidence"], "candidate");
+            assert_eq!(hole["source"], "geometry");
+            assert!(hole["feature_id"].is_null());
+            assert_eq!(hole["diameter"], 4.0);
+            assert_eq!(hole["depth"], expected_depth);
+            assert_eq!(hole["through"], false);
+            assert_eq!(hole["through_evidence"], "analytic_terminal_disk");
+            let mut reported_faces = hole["face_ids"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|id| id.as_u64().unwrap())
+                .collect::<Vec<_>>();
+            let mut native_faces = cylinders.iter().map(|wall| wall.id.0).collect::<Vec<_>>();
+            reported_faces.sort_unstable();
+            native_faces.sort_unstable();
+            assert_eq!(reported_faces, native_faces);
+            if counterbore {
+                assert_eq!(hole["style"], "counterbore");
+                assert_eq!(hole["counterbore_diameter"], 8.0);
+                assert_eq!(hole["counterbore_depth"], 2.0);
+                assert_eq!(
+                    hole["depth_evidence"],
+                    "analytic_counterbore_rings_shoulder_and_terminal_disk"
+                );
+            } else {
+                assert_eq!(hole["style"], "simple");
+                assert!(hole["counterbore_depth"].is_null());
+                assert_eq!(
+                    hole["depth_evidence"],
+                    "two_analytic_rings_and_one_planar_disk"
+                );
+            }
+        }
+
+        for counterbore in [false, true] {
+            let (mut donor, _) = mcp_box();
+            let body = &donor.manager.solid_scene_ref().bodies[0];
+            let cap = body
+                .faces
+                .iter()
+                .find(|face| face.plane.is_some_and(|plane| plane.normal[2] > 0.9))
+                .unwrap();
+            let plane = cap.plane.unwrap();
+            let delta = [-plane.origin[0], -plane.origin[1], 10.0 - plane.origin[2]];
+            let project = |axis: [f64; 3]| delta.iter().zip(axis).map(|(a, b)| a * b).sum::<f64>();
+            donor.call_tool("solid_hole", json!({"body_id":body.id.0, "face_id":cap.id.0,
+                "position":{"x":project(plane.u),"y":project(plane.v)}, "diameter":4.0,
+                "extent":{"type":"distance","depth":if counterbore {6.0} else {4.0}},
+                "style":if counterbore {"counterbore"} else {"simple"},
+                "counterbore_diameter":if counterbore {8.0} else {0.0},
+                "counterbore_depth":if counterbore {2.0} else {0.0},
+                "countersink_diameter":0.0, "countersink_angle_deg":90.0, "thread":null, "flip":false})).unwrap();
+            let definitions = donor.manager.hole_definitions();
+            assert_eq!(definitions.len(), 1);
+            let authored =
+                summary::summarize(donor.manager.solid_scene_ref(), &definitions).json(true);
+            assert_eq!(authored["authored_hole_count"], 1);
+            assert_eq!(authored["holes"][0]["confidence"], "authored");
+            assert!(authored["holes"][0]["feature_id"].as_u64().is_some());
+            assert_geometry(&donor, counterbore);
+            let exported = donor.call_tool("solid_export_step", json!({})).unwrap();
+            let mut imported = CadServer::new().unwrap();
+            imported.call_tool("solid_import_step", json!({"file_name":"blind-depth-contract.step", "data_base64":exported["bytes_base64"].as_str().unwrap()})).unwrap();
+            assert!(imported.manager.hole_definitions().is_empty());
+            let before = imported.manager.export_project_model().unwrap();
+            assert_geometry(&imported, counterbore);
+            assert_eq!(imported.manager.export_project_model().unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn native_axial_split_retains_open_halfbore_candidates_with_exact_face_ownership() {
+        let (mut server, _) = mcp_box();
+        let body = &server.manager.solid_scene_ref().bodies[0];
+        let cap = body
+            .faces
+            .iter()
+            .find(|face| face.plane.is_some_and(|plane| plane.normal[2] > 0.9))
+            .unwrap();
+        let plane = cap.plane.unwrap();
+        let delta = [-plane.origin[0], -plane.origin[1], 10.0 - plane.origin[2]];
+        let project = |axis: [f64; 3]| delta.iter().zip(axis).map(|(a, b)| a * b).sum::<f64>();
+        server
+            .call_tool(
+                "solid_hole",
+                json!({"body_id":body.id.0, "face_id":cap.id.0,
+            "position":{"x":project(plane.u),"y":project(plane.v)}, "diameter":6.0,
+            "extent":{"type":"through_all"}, "style":"simple", "counterbore_diameter":0.0,
+            "counterbore_depth":0.0, "countersink_diameter":0.0, "countersink_angle_deg":90.0,
+            "thread":null, "flip":false}),
+            )
+            .unwrap();
+        let body_id = server.manager.solid_scene_ref().bodies[0].id.0;
+        server
+            .call_tool(
+                "solid_split_body",
+                json!({"body_id":body_id,
+            "plane":{"type":"origin_plane","plane":"yz"}}),
+            )
+            .unwrap();
+
+        let before = server.manager.export_project_model().unwrap();
+        let scene = server.manager.solid_scene_ref();
+        assert!(scene.errors.is_empty());
+        assert_eq!(scene.bodies.len(), 2);
+        let mut native_walls = std::collections::BTreeSet::new();
+        let mut sides = std::collections::BTreeSet::new();
+        for body in &scene.bodies {
+            let xs = body
+                .mesh
+                .positions
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|point| point[0]);
+            let min_x = xs.clone().fold(f32::INFINITY, f32::min);
+            let max_x = xs.fold(f32::NEG_INFINITY, f32::max);
+            let negative = min_x < -9.99 && max_x.abs() < 1e-5;
+            let positive = min_x.abs() < 1e-5 && max_x > 9.99;
+            assert!(
+                negative || positive,
+                "Actual split stock must occupy one X halfspace"
+            );
+            sides.insert(negative);
+            assert!(body
+                .faces
+                .iter()
+                .all(|face| face.planar_inner_ring_edge_keys.is_empty()));
+            let walls = body
+                .faces
+                .iter()
+                .filter(|face| face.cylinder.is_some())
+                .collect::<Vec<_>>();
+            assert!(!walls.is_empty());
+            // A pre-existing periodic seam can subdivide either half into
+            // multiple patches. Native identities, not a fixed face count,
+            // establish the exact candidates that must survive recognition.
+            for wall in walls {
+                native_walls.insert((body.id.0, wall.id.0));
+                let cylinder = wall.cylinder.unwrap();
+                assert!((cylinder.radius - 3.0).abs() < 1e-6);
+                assert!(cylinder.axis.z.abs() > 0.999999);
+                let samples = &body.mesh.indices
+                    [wall.first_index as usize..(wall.first_index + wall.index_count) as usize];
+                assert!(!samples.is_empty());
+                for index in samples {
+                    let point = &body.mesh.positions.as_chunks::<3>().0[*index as usize];
+                    assert!(if negative {
+                        point[0] <= 1e-5
+                    } else {
+                        point[0] >= -1e-5
+                    });
+                    assert!(point[2] >= -1e-5 && point[2] <= 10.0 + 1e-5);
+                    assert!((f64::from(point[0]).hypot(f64::from(point[1])) - 3.0).abs() < 1e-4);
+                }
+                let mut ring_heights = Vec::new();
+                for key in &wall.edge_keys {
+                    let edge = body.edges.iter().find(|edge| &edge.key == key).unwrap();
+                    if let Some(circle) = edge.circle {
+                        assert!(
+                            !circle.closed,
+                            "No full circular boundary survives the axial cut"
+                        );
+                        assert!((circle.radius - 3.0).abs() < 1e-6);
+                        assert!(circle.normal.z.abs() > 0.999999);
+                        assert!(circle.center.x.abs() < 1e-6 && circle.center.y.abs() < 1e-6);
+                        let first = edge.points.first().unwrap();
+                        let last = edge.points.last().unwrap();
+                        let separation = (first.x - last.x)
+                            .hypot(first.y - last.y)
+                            .hypot(first.z - last.z);
+                        assert!(
+                            separation > 1e-6,
+                            "Raw native arc endpoints must corroborate the open span"
+                        );
+                        ring_heights.push(circle.center.z);
+                    }
+                }
+                ring_heights.sort_by(f64::total_cmp);
+                ring_heights.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+                assert_eq!(ring_heights.len(), 2);
+                assert!(ring_heights[0].abs() < 1e-6);
+                assert!((ring_heights[1] - 10.0).abs() < 1e-6);
+            }
+        }
+        assert_eq!(sides.len(), 2);
+        let result = summary::summarize(scene, &[]).json(true);
+        assert_eq!(result["hole_count"], 0);
+        assert_eq!(result["authored_hole_count"], 0);
+        let candidates = result["ambiguous_hole_candidates"].as_array().unwrap();
+        let mut reported_walls = std::collections::BTreeSet::new();
+        for candidate in candidates {
+            let ids = candidate["face_ids"].as_array().unwrap();
+            assert_eq!(ids.len(), 1);
+            let identity = (
+                candidate["body_id"].as_u64().unwrap(),
+                ids[0].as_u64().unwrap(),
+            );
+            assert!(
+                reported_walls.insert(identity),
+                "Native candidates must not repeat a body/face identity"
+            );
+            assert_eq!(candidate["reason"], "open_or_split_circular_boundary");
+            assert_eq!(candidate["classification"], "cylindrical_surface_candidate");
+            assert_eq!(candidate["confidence"], "ambiguous");
+            assert_eq!(candidate["source"], "geometry");
+            assert_eq!(candidate["diameter"], 6.0);
+            assert!(candidate["depth"].is_null() && candidate["through"].is_null());
+        }
+        assert_eq!(reported_walls, native_walls);
+        assert_eq!(server.manager.export_project_model().unwrap(), before);
+    }
+
+    #[test]
+    fn native_intersecting_counterbore_recesses_keep_local_stems_and_ambiguous_outer_walls() {
+        fn assert_geometry(server: &CadServer) {
+            let scene = server.manager.solid_scene_ref();
+            assert!(scene.errors.is_empty());
+            assert_eq!(scene.bodies.len(), 1);
+            let body = &scene.bodies[0];
+            let mut stems = std::collections::BTreeSet::new();
+            let mut outer_walls = std::collections::BTreeSet::new();
+            for wall in body.faces.iter().filter(|face| face.cylinder.is_some()) {
+                let cylinder = wall.cylinder.unwrap();
+                assert!((cylinder.origin.x.abs() - 3.25).abs() < 1e-6);
+                assert!(cylinder.origin.y.abs() < 1e-6 && cylinder.axis.z.abs() > 0.999999);
+                let stem = (cylinder.radius - 2.0).abs() < 1e-6;
+                assert!(stem || (cylinder.radius - 4.0).abs() < 1e-6);
+                let identity = (body.id.0, wall.id.0);
+                if stem {
+                    stems.insert(identity);
+                } else {
+                    outer_walls.insert(identity);
+                }
+                let mut heights = Vec::new();
+                for key in &wall.edge_keys {
+                    let edge = body.edges.iter().find(|edge| &edge.key == key).unwrap();
+                    let Some(circle) = edge.circle else {
+                        continue;
+                    };
+                    assert!((circle.radius - cylinder.radius).abs() < 1e-6);
+                    assert!((circle.center.x - cylinder.origin.x).abs() < 1e-6);
+                    assert!(circle.center.y.abs() < 1e-6 && circle.normal.z.abs() > 0.999999);
+                    heights.push(circle.center.z);
+                    if stem {
+                        assert!(circle.closed, "Both independent stem rings remain complete");
+                        let adjacent = body
+                            .faces
+                            .iter()
+                            .filter(|face| face.id != wall.id && face.edge_keys.contains(key))
+                            .collect::<Vec<_>>();
+                        assert_eq!(adjacent.len(), 1);
+                        let plane = adjacent[0].plane.unwrap();
+                        assert!((plane.origin[2] - circle.center.z).abs() < 1e-6);
+                        assert!(plane.normal[2] > 0.999999);
+                        if (circle.center.z - 4.0).abs() < 1e-6 {
+                            assert_eq!(
+                                adjacent[0].edge_keys.len(),
+                                1,
+                                "A unique terminal disk bounds each stem"
+                            );
+                        } else {
+                            assert!((circle.center.z - 8.0).abs() < 1e-6);
+                            assert!(
+                                adjacent[0].edge_keys.len() > 2,
+                                "Intersecting recesses lack a complete two-ring shoulder"
+                            );
+                        }
+                    } else {
+                        assert!(
+                            !circle.closed,
+                            "Intersecting outer recesses have open circular spans"
+                        );
+                        let first = edge.points.first().unwrap();
+                        let last = edge.points.last().unwrap();
+                        assert!(
+                            (first.x - last.x)
+                                .hypot(first.y - last.y)
+                                .hypot(first.z - last.z)
+                                > 1e-6
+                        );
+                    }
+                }
+                heights.sort_by(f64::total_cmp);
+                heights.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+                assert_eq!(heights.len(), 2);
+                assert!((heights[0] - if stem { 4.0 } else { 8.0 }).abs() < 1e-6);
+                assert!((heights[1] - if stem { 8.0 } else { 10.0 }).abs() < 1e-6);
+            }
+            assert_eq!(stems.len(), 2);
+            assert!(
+                outer_walls.len() >= 2,
+                "Native seams may subdivide the partial outer walls"
+            );
+            let summary = summary::summarize(scene, &[]).json(true);
+            let mut reported_stems = std::collections::BTreeSet::new();
+            for hole in summary["holes"].as_array().unwrap() {
+                let ids = hole["face_ids"].as_array().unwrap();
+                assert_eq!(ids.len(), 1);
+                assert!(reported_stems
+                    .insert((hole["body_id"].as_u64().unwrap(), ids[0].as_u64().unwrap())));
+                assert_eq!(hole["style"], "simple");
+                assert_eq!(hole["source"], "geometry");
+                assert_eq!(hole["confidence"], "candidate");
+                assert_eq!(
+                    hole["inference_method"],
+                    "closed_analytic_circle_and_inward_display_normals"
+                );
+                assert!(hole["feature_id"].is_null());
+                assert_eq!(hole["diameter"], 4.0);
+                assert_eq!(
+                    hole["depth"], 4.0,
+                    "Geometry depth is the local stem span, not the authored total6"
+                );
+                assert_eq!(hole["z"], 8.0);
+                assert_eq!(hole["through"], false);
+                assert_eq!(
+                    hole["depth_evidence"],
+                    "two_analytic_rings_and_one_planar_disk"
+                );
+                assert!(
+                    hole["counterbore_diameter"].is_null() && hole["counterbore_depth"].is_null()
+                );
+            }
+            assert_eq!(reported_stems, stems);
+            let mut reported_outer = std::collections::BTreeSet::new();
+            for candidate in summary["ambiguous_hole_candidates"].as_array().unwrap() {
+                let ids = candidate["face_ids"].as_array().unwrap();
+                assert_eq!(ids.len(), 1);
+                assert!(reported_outer.insert((
+                    candidate["body_id"].as_u64().unwrap(),
+                    ids[0].as_u64().unwrap()
+                )));
+                assert_eq!(candidate["reason"], "open_or_split_circular_boundary");
+                assert_eq!(candidate["source"], "geometry");
+                assert_eq!(candidate["confidence"], "ambiguous");
+                assert_eq!(
+                    candidate["inference_method"],
+                    "analytic_cylinder_boundary_and_display_normals"
+                );
+                assert_eq!(candidate["diameter"], 8.0);
+                assert!(candidate["depth"].is_null() && candidate["through"].is_null());
+            }
+            assert_eq!(reported_outer, outer_walls);
+        }
+
+        let (mut donor, _) = mcp_box();
+        // 6.5mm separation intersects R4 recesses but keeps them clear of the
+        // other R2 stem. 6mm would also introduce an unrelated exact tangency.
+        for x in [-3.25, 3.25] {
+            let body = &donor.manager.solid_scene_ref().bodies[0];
+            let cap = body
+                .faces
+                .iter()
+                .find(|face| {
+                    face.plane.is_some_and(|plane| {
+                        plane.normal[2] > 0.9 && (plane.origin[2] - 10.0).abs() < 1e-6
+                    })
+                })
+                .unwrap();
+            let plane = cap.plane.unwrap();
+            let delta = [
+                x - plane.origin[0],
+                -plane.origin[1],
+                10.0 - plane.origin[2],
+            ];
+            let project = |axis: [f64; 3]| delta.iter().zip(axis).map(|(a, b)| a * b).sum::<f64>();
+            donor
+                .call_tool(
+                    "solid_hole",
+                    json!({"body_id":body.id.0,"face_id":cap.id.0,
+                "position":{"x":project(plane.u),"y":project(plane.v)},"diameter":4.0,
+                "extent":{"type":"distance","depth":6.0},"style":"counterbore",
+                "counterbore_diameter":8.0,"counterbore_depth":2.0,"countersink_diameter":0.0,
+                "countersink_angle_deg":90.0,"thread":null,"flip":false}),
+                )
+                .unwrap();
+        }
+        let definitions = donor.manager.hole_definitions();
+        assert_eq!(definitions.len(), 2);
+        let authored = summary::summarize(donor.manager.solid_scene_ref(), &definitions).json(true);
+        assert_eq!(authored["authored_hole_count"], 2);
+        assert_eq!(authored["holes"].as_array().unwrap().len(), 2);
+        for hole in authored["holes"].as_array().unwrap() {
+            assert_eq!(hole["confidence"], "authored");
+            assert_eq!(hole["style"], "counterbore");
+            assert_eq!(hole["depth"], 6.0);
+            assert_eq!(hole["counterbore_depth"], 2.0);
+        }
+        let before = donor.manager.export_project_model().unwrap();
+        assert_geometry(&donor);
+        assert_eq!(donor.manager.export_project_model().unwrap(), before);
+        let exported = donor.call_tool("solid_export_step", json!({})).unwrap();
+        let mut imported = CadServer::new().unwrap();
+        imported.call_tool("solid_import_step",json!({"file_name":"intersecting-recesses.step","data_base64":exported["bytes_base64"].as_str().unwrap()})).unwrap();
+        assert!(imported.manager.hole_definitions().is_empty());
+        let before = imported.manager.export_project_model().unwrap();
+        assert_geometry(&imported);
+        assert_eq!(imported.manager.export_project_model().unwrap(), before);
     }
 
     #[test]

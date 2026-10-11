@@ -70,6 +70,7 @@ mod showcase_media;
 mod switching_comparison;
 mod test_mcp;
 mod wasm_build;
+mod windows_runtime;
 #[cfg(test)]
 mod workflow_contracts;
 
@@ -161,7 +162,8 @@ Commands:
   build-wasm    Build the browser's Rust engine with wasm-pack (--dev or --release).
   smoke-wasm    Test the Rust engine facade in headless Chrome using wasm-bindgen-test.
   build-occt    Build pinned OCCT 7.9.3 with CMake/Ninja on the host:
-                --prefix PATH [--jobs N] [--cache-dir PATH] [--sccache] [--dry-run].
+                --prefix PATH [--jobs N] [--cache-dir PATH] [--sccache] [--dry-run]
+                [--repair-runtime] (Windows: explicitly repair owned runtime closure).
                 Requires CMake/Ninja, a C++ compiler and FreeType; preserves compatible build objects.
   verify-occt-storage  Qualify checked allocation/copy in the installed SDK: --prefix PATH.
   ci            Rust CI tasks: mcp-shard SHARD, stage-demo-projects, require-platform.

@@ -263,6 +263,18 @@ pub fn prepare_locked(prefix: &Path, key: &str) -> Result<fs::File> {
     Ok(lock)
 }
 
+/// Runtime finalization may add reviewed files only to this existing owner.
+/// The caller must retain the prefix lock; this never initializes ownership.
+#[cfg(any(windows, test))]
+pub fn verify_owner(prefix: &Path, key: &str) -> Result<()> {
+    crate::package::ordinary_file(&prefix.join(OWNER))?;
+    ensure!(
+        fs::read_to_string(prefix.join(OWNER))? == key,
+        "SDK runtime finalization belongs to another build; existing prefix is preserved"
+    );
+    Ok(())
+}
+
 pub fn complete(prefix: &Path, key: &str) -> Result<bool> {
     if !prefix.join(RECEIPT).is_file() {
         return Ok(false);
