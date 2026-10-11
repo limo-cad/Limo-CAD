@@ -209,8 +209,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Isolate diagnostic package outputs
+        id: package-target
         shell: bash
-        run: echo "CARGO_TARGET_DIR=$RUNNER_TEMP/native-package-target" >> "$GITHUB_ENV"
+        run: |
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/native-package-target" >> "$GITHUB_ENV"
+          # rust-cache interprets targets relative to the workspace root.
+          echo "cache-target=$(realpath -m --relative-to="$GITHUB_WORKSPACE/desktop" "$RUNNER_TEMP/native-package-target")" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-rust
       - name: Install Ubuntu desktop and disposable-input SDK
         uses: ./.github/actions/setup-linux-desktop
@@ -218,15 +222,13 @@ jobs:
           desktop-input: 'true'
       - name: Install checked OCCT SDK
         uses: ./.github/actions/setup-unix-occt
-      - uses: actions/cache@v4
+      # Keep dependency artifacts, not diagnostic executables/package bundles.
+      # Whole target archives compete with the much costlier checked OCCT SDK.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ${{ runner.temp }}/native-package-target
-          key: native-package-linux-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock', 'desktop/Cargo.lock', 'desktop/Cargo.toml', 'crates/**/Cargo.toml') }}
-          restore-keys: |
-            native-package-linux-${{ runner.arch }}-
+          workspaces: desktop -> ${{ steps.package-target.outputs.cache-target }}
+          key: native-package-linux
+          cache-workspace-crates: false
       - name: Build and audit locked diagnostic Bevy packages
         shell: bash
         run: |
@@ -300,15 +302,15 @@ jobs:
 
       - name: Cache Rust build
         id: rust-cache
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            desktop/target
-          key: native-host-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'desktop/Cargo.lock', 'desktop/Cargo.toml', 'crates/**/Cargo.toml') }}
-          restore-keys: |
-            native-host-${{ runner.arch }}-
+          workspaces: |
+            . -> target
+            desktop -> target
+          key: native-host-linux
+          cache-workspace-crates: false
+          # Retain completed dependency compilation even when a live check fails.
+          cache-on-failure: true
 
       - name: Test concurrent first-use OCCT projection
         if: matrix.family == 'all' || matrix.family == 'keyboard'
@@ -500,16 +502,6 @@ jobs:
           path: ${{ runner.temp }}/native-input-linux-*/
           if-no-files-found: warn
           retention-days: 14
-
-      - name: Preserve successful build cache after a live-check failure
-        if: failure() && inputs.desktop-input && steps.native-build.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            desktop/target
-          key: native-host-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'desktop/Cargo.lock', 'desktop/Cargo.toml', 'crates/**/Cargo.toml') }}
 
   macos-native-host-tests:
     name: macOS native Bevy host
