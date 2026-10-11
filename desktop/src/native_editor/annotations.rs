@@ -6,6 +6,11 @@ use crate::native_viewport::{interface_shell, ViewportColorRole, ViewportLineLay
 use crate::session_bridge::native_interface::controller::chrome::{rect, Widgets};
 use limo_cad_sketch::{ConstraintKind, DimensionDto, EntityDto, Vec2 as Point};
 
+mod layout;
+
+#[cfg(test)]
+#[path = "annotations/layout_tests.rs"]
+mod layout_tests;
 #[cfg(test)]
 #[path = "annotations/theme_tests.rs"]
 mod theme_tests;
@@ -292,6 +297,10 @@ pub(super) fn synchronize(
             visibility.hide_dimensions as u32,
             visibility.hide_constraints as u32,
             geometry_tool as u32,
+            world
+                .get_resource::<bevy::ui::UiScale>()
+                .map_or(1., |scale| scale.0)
+                .to_bits(),
         ]);
         let appearance = native_viewport::ui::appearance_revision(world);
         key.extend([appearance as u32, (appearance >> 32) as u32]);
@@ -309,6 +318,9 @@ pub(super) fn synchronize(
         if let Some(sketch) = &state.sketch {
             let (_, _, _, size) = native_viewport::interface_view(world);
             let offset = [canvas.x as f32, canvas.y as f32];
+            // Dimensions keep their preferred position first. Constraint
+            // badges then share the same rotation-aware collision layout.
+            let mut layout = layout::Layout::new(size);
             for dim in sketch
                 .dimensions
                 .iter()
@@ -336,7 +348,7 @@ pub(super) fn synchronize(
                         unit = unit.max((p[0] - screen[0]).hypot(p[1] - screen[1]));
                     }
                 }
-                let lines = leaders(dim, &sketch.entities, 6. / f64::from(unit));
+                let mut lines = leaders(dim, &sketch.entities, 6. / f64::from(unit));
                 let angle = if sketch.dimension_style == limo_cad_core::DimensionStyle::Aligned
                     && dim.kind != "angle"
                 {
@@ -362,15 +374,34 @@ pub(super) fn synchronize(
                 } else {
                     0.
                 };
+                let w = (dim.text.chars().count() as f32 * 7. + 12.).max(36.);
+                let preferred = [screen[0] + angle.sin() * 12., screen[1] - angle.cos() * 12.];
+                let Some(center) = layout.place(preferred, [w, 20.], angle) else {
+                    continue;
+                };
+                if center != preferred {
+                    // This connector is presentation-only: keep the stored
+                    // anchor and exact measured extension endpoints intact.
+                    if let Some(point) = native_viewport::interface_sketch_point(
+                        world,
+                        &owner.document_id,
+                        [
+                            screen[0] + center[0] - preferred[0],
+                            screen[1] + center[1] - preferred[1],
+                        ],
+                        sketch.basis,
+                    )? {
+                        lines.push([dim.text_pos, point]);
+                    }
+                }
                 for pair in lines {
                     for point in pair {
                         segments.extend(world_point(point).map(|v| v as f32));
                     }
                 }
-                let w = (dim.text.chars().count() as f32 * 7. + 12.).max(36.);
                 let mut bounds = rect(
-                    offset[0] + screen[0] - w / 2. + angle.sin() * 12.,
-                    offset[1] + screen[1] - 10. - angle.cos() * 12.,
+                    offset[0] + center[0] - w / 2.,
+                    offset[1] + center[1] - 10.,
                     w,
                     20.,
                 );
@@ -407,7 +438,6 @@ pub(super) fn synchronize(
                     .entity_mut(entity)
                     .insert(UiTransform::from_rotation(Rot2::radians(angle)));
             }
-            let mut anchors = HashMap::<(i32, i32), usize>::new();
             for constraint in sketch
                 .constraints
                 .iter()
@@ -435,18 +465,13 @@ pub(super) fn synchronize(
                 else {
                     continue;
                 };
-                let count = anchors
-                    .entry((
-                        (screen[0] / 24.).round() as i32,
-                        (screen[1] / 24.).round() as i32,
-                    ))
-                    .or_default();
-                let x = screen[0] + (*count % 5) as f32 * 22.;
-                let y = screen[1] + 14. + (*count / 5) as f32 * 22.;
-                *count += 1;
-                if x < 0. || y < 0. || x + 22. > size[0] || y + 22. > size[1] {
+                if screen[0] < 0. || screen[1] < 0. || screen[0] > size[0] || screen[1] > size[1] {
                     continue;
                 }
+                let Some([x, y]) = layout.place([screen[0], screen[1] + 14.], [22., 22.], 0.)
+                else {
+                    continue;
+                };
                 let kind = constraint.constraint.kind_str();
                 let mut control = InterfaceControl::button(
                     "sketch/constrain",
