@@ -96,6 +96,9 @@ bevy = { version = "=0.20.0-rc.2", default-features = false, features = [
 bevy_ecs = "=0.20.0-rc.2"
 bevy_gizmos = "=0.20.0-rc.2"
 bevy_reflect = "=0.20.0-rc.2"
+# Native renderers share a device across threads. Bevy disables wgpu's default
+# features; std is required for wgpu's documented thread-local error scopes.
+wgpu = { version = "=30.0.1", default-features = false, features = ["std"] }
 raw-window-handle = "0.6.2"
 accesskit = { version = "=0.24.1" }
 svg2pdf = { version = "=0.13.0", default-features = false, features = ["text"] }
