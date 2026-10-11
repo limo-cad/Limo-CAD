@@ -1,8 +1,9 @@
 # Bounded Bevy ownership audit (#333)
 
 This is a source inventory, not an FPS, latency, memory-pressure or deployed
-application qualification. It covers the native browser/history and CAM snapshot
-consumers inspected on 2026-10-10. Other UI/MCP call sites still require audit.
+application qualification. It covers the native browser/history/CAM snapshots,
+presented input/window projections, MCP response/request ownership and committed
+body render consumers inspected on 2026-10-10. Other UI/MCP call sites still require audit.
 Previously integrated shared scene, pose, metadata and immutable drawing work is
 not reimplemented here.
 
@@ -37,6 +38,23 @@ not reimplemented here.
   CAM stock inputs on document replacement before successor rendering
   (`479665c7`). Existing readers can retain immutable old snapshots; clearing
   stock advances its revision so downstream CPU/GPU refresh paths see retirement.
+- MCP engine envelopes, successful structured responses, image data and final
+  JSON-RPC responses transfer their owned values (`08e6ca5c`, `f184efdd`). Text is
+  serialized before the structured payload moves. Incoming stdio tool arguments
+  and names also move into dispatch (`1ea5a165`); error-response ID copying stays
+  outside this change. Missing/null/error and notification contracts are retained.
+- Deferred pointer and lesson-preview guards consume one narrow presented
+  owner/modal/canvas projection (`b498e6a4`, `94df968d`), without retaining surface
+  text. Window fallback consumes paired presented bounds/scale (`676751ff`),
+  preserving actual Window/current UiScale precedence and avoiding a second read.
+- Native body mutation identities (`1671a574`) provide conservative dependency
+  invalidation and a checked kernel owner. Exact private commit proofs let the
+  renderer reuse same-document mesh handles and edge metadata across unchanged
+  bodies (`5daa6160`). Proofs require the complete error-free committed body set
+  and exact Scene Arc; they are neither serialized nor derived from model input.
+  Failed attempts clear proof. Replacement/thaw uses a new kernel owner. Missing
+  proof or assets falls back to rebuilding; foreign-document assets stay owned
+  by that document. Kernel tessellation and DTO construction remain unchanged.
 
 ## Required ownership retained
 
@@ -60,28 +78,38 @@ not reimplemented here.
 - Drawing paper and annotation synchronization use `shared_drawing_snapshot`;
   their retained Arc is necessary for editor/render readers. Editing or document
   replacement must publish a successor, leaving existing readers immutable.
+- Hole-callout preparation now uses that immutable snapshot under its exact
+  document receipt (`2f466b60`), avoiding an initial full drawing copy. Creating
+  the edited annotation draft still needs one owned copy of drawing intent.
+  Owner/revision, cancellation and worker commit guards are unchanged. This is
+  a reviewed allocation removal, not a measured latency improvement.
 
 ## Evidence and remaining acceptance
 
 Browser/history/CAM production-path regressions passed at clean `ff6b635c`,
 including the specifically affected existing history drag/rollback case. The CAM
 regression uses the same guarded input acquisition as `synchronize`, without
-starting simulation threads. New owned-envelope and replacement-stock checks are
-pending. Source review, formatting and diff checks passed; no runtime latency or
-physical GPU-memory qualification follows from those results.
+starting simulation threads. Owned desktop envelopes, replacement-stock, arc
+overshoot and guarded exposure receipts passed at clean `2cda40b5`. Native
+generation and MCP response transfer checks passed at clean `f184efdd` (four new
+filters). Incoming stdio and all five presented pointer/lesson/window and body
+Assets reuse checks passed at clean `42ec4d2f`. Source
+review, formatting and diff checks passed; no runtime latency or physical
+GPU-memory qualification follows.
 
 Further source inspection confirms exact closed-document retirement, cold-owner
 cleanup after worker errors, weak scene stamps and document-specific mesh/entity
 removal. Existing close/low-memory regressions were not rerun. The actual kernel
-still meshes every live body after solid recompute, and successor whole-scene
-identity invalidates all derived body/edge assets. Body IDs, pointers and topology
-signatures are not geometry revisions. Finer reuse needs authoritative
-document-scoped kernel body generations covering mutation, deletion, replay,
-reset and failed operations before render consumers may trust them.
+still meshes every live body after solid recompute. The new renderer can preserve
+unchanged body uploads/derived edges only through the authoritative identities
+and exact scene proofs described above. Body IDs, pointers and topology
+signatures alone are not geometry revisions. Both new native/Assets checks
+passed; this does not qualify deployed rendering or physical GPU memory.
 
 This does not close #333. Remaining work includes broader menu/window/MCP and
-background-export lifetime/lock-order inspection, document-cache behavior under
-memory pressure, and finer render invalidation. Stable per-body kernel revisions
-or dirty-body identities are needed before claiming correct per-body incremental
-updates. A shared Arc alone does not prove inactive-document eviction, worker
-retirement or reduced stutter across the application.
+document-cache behavior under memory pressure and deployed render acceptance.
+The bounded drawing/mesh background-export inspection found an existing exact
+publisher-to-engine receipt fence, single pending job, final owner/revision check
+and atomic publication; no additional defect was established there. Knowledge
+resources are static bundled data. Other consumers remain unaudited. A shared
+Arc alone does not prove worker retirement or reduced stutter across the application.
