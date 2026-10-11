@@ -877,13 +877,14 @@ fn inspect_template_snapshot(
             ("context".into(), source),
         ]))
     });
+    // Dispatch was admitted before capture. Its busy frame may disable the
+    // initiating control; read-only completion must not admit it a second time.
     services
         .bridge
         .with_native_document_receipt(&services.engine, &receipt.owner, |revision| {
             if revision != receipt.revision {
                 return Err("The document changed during template inspection".into());
             }
-            validate_io()?;
             Ok(NativeMutationResult {
                 context: receipt.owner.clone(),
                 engine_revision: revision,

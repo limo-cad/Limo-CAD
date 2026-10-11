@@ -641,6 +641,9 @@ fn template_inspection_runs_outside_publisher_and_rejects_changed_source_receipt
         &receipt,
         &intent,
         || {
+            if validations.get() != 0 {
+                return Err("Initiating control is disabled by its admitted busy frame".into());
+            }
             validations.set(validations.get() + 1);
             Ok(())
         },
@@ -657,7 +660,7 @@ fn template_inspection_runs_outside_publisher_and_rejects_changed_source_receipt
     )
     .unwrap_err();
     assert_eq!(error, expected);
-    assert_eq!(validations.get(), 2);
+    assert_eq!(validations.get(), 1);
     assert_eq!(current(app.world(), &services, &owner).unwrap(), receipt);
     assert_eq!(
         parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap(),
