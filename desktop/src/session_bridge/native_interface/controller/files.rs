@@ -10,6 +10,7 @@ use std::{path::PathBuf, sync::mpsc};
 
 mod bambu;
 mod drawing_output;
+mod export_operation;
 mod io;
 mod lessons;
 mod panel;
@@ -129,6 +130,32 @@ pub(super) struct Files {
     verification: bambu::verification::Jobs,
 }
 
+impl Files {
+    fn replace_dialog_kind(&mut self, kind: DialogKind) {
+        if let Some(dialog) = &mut self.dialog {
+            if let DialogKind::Export(intent) = &dialog.kind {
+                intent.bambu.operation.revoke();
+            }
+            dialog.kind = kind;
+        }
+    }
+    fn replace_dialog(&mut self, dialog: Option<Dialog>) {
+        if let Some(Dialog {
+            kind: DialogKind::Export(intent),
+            ..
+        }) = &self.dialog
+        {
+            intent.bambu.operation.revoke();
+        }
+        self.dialog = dialog;
+    }
+}
+impl Drop for Files {
+    fn drop(&mut self) {
+        self.replace_dialog(None);
+    }
+}
+
 pub(crate) fn invalidate_clean_sketch(world: &World, owner: &DocumentContext) {
     if let Some(files) = world.get_resource::<Files>() {
         if let Ok(mut workspace) = files.workspace.lock() {
@@ -241,10 +268,8 @@ fn finish_document_transition(
 
 pub(super) fn initialize(world: &mut World, workspace: Arc<Mutex<DocumentWorkspace>>) {
     if !world.contains_resource::<Files>() {
-        world.insert_resource(Files {
-            workspace,
-            ..default()
-        });
+        world.init_resource::<Files>();
+        world.resource_mut::<Files>().workspace = workspace;
     }
 }
 pub(super) fn awaiting(world: &World) -> bool {
@@ -363,12 +388,13 @@ fn show_dialog(
         .next_token
         .checked_add(1)
         .ok_or("File dialog sequence exhausted")?;
-    f.dialog = Some(Dialog {
-        token: f.next_token,
+    let token = f.next_token;
+    f.replace_dialog(Some(Dialog {
+        token,
         receipt,
         kind,
         error: None,
-    });
+    }));
     f.menu = false;
     Ok(json!({"awaiting_input":true}))
 }
@@ -441,8 +467,9 @@ pub(crate) fn reduce(
             return Err("Not a profile export dialog".into());
         };
         selection.select(&action.control.input)?;
-        world.resource_mut::<Files>().dialog.as_mut().unwrap().kind =
-            DialogKind::Profile(selection);
+        world
+            .resource_mut::<Files>()
+            .replace_dialog_kind(DialogKind::Profile(selection));
         return Ok(json!({"changed":true}));
     }
     if matches!(
@@ -476,7 +503,9 @@ pub(crate) fn reduce(
         if dialog.token != *token || dialog.receipt.owner != action.context {
             return Err("Rename dialog was replaced".into());
         }
-        world.resource_mut::<Files>().dialog.as_mut().unwrap().kind = DialogKind::Rename(name);
+        world
+            .resource_mut::<Files>()
+            .replace_dialog_kind(DialogKind::Rename(name));
         return Ok(json!({"changed":true}));
     }
     if let FileCommand::Activate(target) = command {
@@ -591,6 +620,7 @@ fn edit_export_dialog(
         }
         _ => unreachable!(),
     }
+    intent.bambu.operation.revoke();
     if matches!(command, FileCommand::ExportAllowIssues(_)) {
         Ok(json!({"changed":true}))
     } else {
@@ -748,7 +778,7 @@ fn execute(
             .as_ref()
             .is_some_and(|d| d.token == token && &d.receipt.owner == owner)
         {
-            world.resource_mut::<Files>().dialog = None;
+            world.resource_mut::<Files>().replace_dialog(None);
             return Ok(json!({"cancelled":true}));
         }
         return Err("File dialog was replaced".into());
@@ -935,7 +965,7 @@ fn execute(
                 json!({"name":name}),
                 move |world, services, result| {
                     let result = result?;
-                    world.resource_mut::<Files>().dialog = None;
+                    world.resource_mut::<Files>().replace_dialog(None);
                     Ok(finish_mutation(
                         &services.engine,
                         &services.bridge,
@@ -1032,7 +1062,7 @@ fn perform_intent(
                 },
                 |world, services, result| {
                     let result = result?;
-                    world.resource_mut::<Files>().dialog = None;
+                    world.resource_mut::<Files>().replace_dialog(None);
                     Ok(finish_document_transition(
                         world,
                         services,
@@ -1168,7 +1198,7 @@ fn transition(
         },
         move |world, services, result| {
             let result = result?;
-            world.resource_mut::<Files>().dialog = None;
+            world.resource_mut::<Files>().replace_dialog(None);
             let window_id = result.context.window_id.clone();
             let document_id = result.context.document_id.clone();
             let presentation = finish_document_transition(world, services, "document_tab", result);
@@ -1267,7 +1297,7 @@ fn save(
         },
         move |world, _services, result| {
             let result = result?;
-            world.resource_mut::<Files>().dialog = None;
+            world.resource_mut::<Files>().replace_dialog(None);
             if let Some(intent) = continuation {
                 perform_intent(
                     world,
@@ -1609,7 +1639,7 @@ pub(super) fn escape(world: &mut World) {
     f.menu = false;
     f.scripts = false;
     f.settings = false;
-    f.dialog = None;
+    f.replace_dialog(None);
 }
 pub(super) fn dialog_error(world: &mut World, error: &str) {
     if let Some(dialog) = world.resource_mut::<Files>().dialog.as_mut() {

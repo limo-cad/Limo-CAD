@@ -73,6 +73,7 @@ struct Template {
 pub(super) struct Settings {
     pub enabled: bool,
     pub generation: u64,
+    pub(super) operation: export_operation::Authority,
     pub scroll: usize,
     path: String,
     template: Option<Template>,
@@ -108,6 +109,10 @@ impl std::fmt::Debug for Settings {
 impl Settings {
     pub(super) fn invalidate(&mut self) {
         self.reviewed = None;
+        self.advance_generation();
+    }
+    fn advance_generation(&mut self) {
+        self.operation.revoke();
         self.generation = self.generation.saturating_add(1);
     }
     fn template(&self) -> Result<&Template, String> {
@@ -277,7 +282,7 @@ fn field_text(intent: &io::ExportIntent, field: Field) -> String {
         }
     }
 }
-fn request(intent: &io::ExportIntent) -> Result<BambuExportRequest, String> {
+pub(super) fn request(intent: &io::ExportIntent) -> Result<BambuExportRequest, String> {
     request_with_template(intent, true)
 }
 fn request_with_template(
@@ -364,27 +369,6 @@ pub(super) fn check_output(
     }
     Ok(())
 }
-pub(super) fn export_bytes(
-    engine: &AppState,
-    intent: &io::ExportIntent,
-    current_model: &str,
-) -> Result<(Vec<u8>, Value), String> {
-    check_review(intent)?;
-    let request = request(intent)?;
-    request.validate(current_model).map_err(|e| e.to_string())?;
-    let value = parse_engine_envelope(engine.engine_call(
-        "solid_export_bambu_project",
-        &serde_json::to_string(&request).map_err(|e| e.to_string())?,
-    ))?;
-    let bytes = STANDARD
-        .decode(
-            value["bytes_base64"]
-                .as_str()
-                .ok_or("Bambu writer returned no bytes")?,
-        )
-        .map_err(|e| e.to_string())?;
-    Ok((bytes, value["report"].clone()))
-}
 
 fn context(engine: &AppState, intent: &io::ExportIntent) -> Result<Value, String> {
     let model = parse_engine_envelope(engine.engine_call("project_export_model", ""))?;
@@ -434,6 +418,7 @@ fn context(engine: &AppState, intent: &io::ExportIntent) -> Result<Value, String
     Ok(json!({"model":model,"document":document,"sources":sources}))
 }
 fn accept_context(s: &mut Settings, value: &Value) -> Result<(), String> {
+    s.operation.revoke();
     s.model = value["model"]
         .as_str()
         .ok_or("Missing owned model snapshot")?
@@ -689,7 +674,7 @@ pub(super) fn reduce(
                 | Field::VerifierPath
                 | Field::VerifierTimeout
         ) {
-            intent.bambu.generation = intent.bambu.generation.saturating_add(1);
+            intent.bambu.advance_generation();
         } else {
             intent.bambu.invalidate();
         }
@@ -803,7 +788,7 @@ pub(super) fn reduce(
         }
         Command::Field(_) => unreachable!(),
     }
-    intent.bambu.generation = intent.bambu.generation.saturating_add(1);
+    intent.bambu.advance_generation();
     Ok(json!({"changed":true}))
 }
 
@@ -1015,7 +1000,7 @@ fn refresh_context(
 fn accept_preview(intent: &mut io::ExportIntent, key: Value, report: BambuProjectReport) {
     intent.bambu.bindings = report.parts.iter().map(|p| p.binding.clone()).collect();
     intent.bambu.reviewed = Some((key, report));
-    intent.bambu.generation = intent.bambu.generation.saturating_add(1);
+    intent.bambu.advance_generation();
 }
 
 fn preview_snapshot(
