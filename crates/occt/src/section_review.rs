@@ -154,6 +154,15 @@ pub fn inspect(
     scene: &limo_cad_solid::SolidSceneDto,
     request: &SectionReviewRequest,
 ) -> Result<SectionReview, SectionReviewError> {
+    validate_source(scene, request)?;
+    inspect_kernel(kernel, request)
+}
+
+/// Validate against the authoritative source before copying a selected body.
+pub fn validate_source(
+    scene: &limo_cad_solid::SolidSceneDto,
+    request: &SectionReviewRequest,
+) -> Result<(), SectionReviewError> {
     request
         .validate()
         .map_err(SectionReviewError::InvalidRequest)?;
@@ -167,6 +176,13 @@ pub fn inspect(
             "Section body is missing".into(),
         ));
     }
+    Ok(())
+}
+
+pub(crate) fn inspect_kernel(
+    kernel: &crate::OcctKernel,
+    request: &SectionReviewRequest,
+) -> Result<SectionReview, SectionReviewError> {
     let geometry =
         kernel
             .section_geometry(request)
