@@ -1,6 +1,7 @@
 use super::super::tests::{drain, path, setup};
 use super::*;
 use crate::session_bridge::native_interface::tests::Fixture;
+use crate::session_bridge::parse_engine_envelope;
 
 fn mutate(fixture: &Fixture, operation: &str, arguments: Value) {
     fixture
