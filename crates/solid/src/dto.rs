@@ -426,6 +426,10 @@ pub struct SolidChamferRequest {
     pub body_id: BodyId,
     pub edge_ids: Vec<EdgeId>,
     pub distance: f64,
+    /// Acute angle in degrees from the first adjacent face. Missing values
+    /// retain the equal-distance chamfer used by existing callers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle_deg: Option<f64>,
     #[serde(default)]
     pub tangent_chain: bool,
 }
@@ -842,6 +846,8 @@ pub struct SolidChamferDefinitionDto {
     #[serde(default)]
     pub edge_keys: Vec<String>,
     pub distance: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle_deg: Option<f64>,
     #[serde(default)]
     pub tangent_chain: bool,
 }
@@ -1393,6 +1399,8 @@ pub struct KernelChamferJobDto {
     pub target_body_id: BodyId,
     pub edge_keys: Vec<String>,
     pub distance: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle_deg: Option<f64>,
     pub tangent_chain: bool,
 }
 

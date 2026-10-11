@@ -366,6 +366,7 @@ fn arcs_and_chamfers_share_formula_validation_and_resolved_geometry() {
         l1,
         l2,
         distance_text: "=3*2".into(),
+        angle_text: None,
     };
     let preview = s
         .preview_creation(&CreationPreviewRequest::Chamfer(request.clone()))

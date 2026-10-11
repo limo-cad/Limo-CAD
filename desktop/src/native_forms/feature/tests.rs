@@ -1,5 +1,79 @@
 use super::*;
-use limo_cad_core::{Document, FaceId, Feature, UnitSystem};
+use limo_cad_core::{Document, EdgeId, FaceId, Feature, UnitSystem};
+
+#[test]
+fn chamfer_forms_default_to_45_validate_exclusive_bounds_and_restore_saved_angles() {
+    let mut fixture = Fixture::new();
+    fixture.document.settings.units = UnitSystem::In;
+    fixture
+        .document
+        .features
+        .push(Feature::new(FeatureId(9), "Chamfer", FeatureKind::Chamfer));
+    fixture.scene.bodies[0].edges.push(
+        serde_json::from_value(json!({
+            "id":21, "key":"edge:0", "points":[{"x":0.,"y":0.,"z":0.},{"x":0.,"y":0.,"z":10.}]
+        }))
+        .unwrap(),
+    );
+    let model = fixture.model();
+    let mut form = SolidForm::new_kind(SolidFormKind::Chamfer, &model);
+    form.set_edges(Some(BodyId(1)), vec![EdgeId(21)], &model)
+        .unwrap();
+    assert_eq!(form.payload(&model).unwrap().1["angle_deg"], 45.);
+    assert!(form
+        .fields(&model)
+        .iter()
+        .any(|field| field.field == SolidField::Angle
+            && field.visible
+            && field.label == "Angle (deg)"));
+    for invalid in ["0", "90", "-1", "91", "1/0", "2 rad"] {
+        form.set_value(SolidField::Angle, invalid, &model).unwrap();
+        assert!(!form.can_apply(&model), "invalid chamfer angle {invalid}");
+        assert!(form
+            .fields(&model)
+            .iter()
+            .any(|field| field.field == SolidField::Angle && field.error.is_some()));
+    }
+    form.set_value(SolidField::Angle, "60/2 deg", &model)
+        .unwrap();
+    assert!(form.can_apply(&model));
+    let applied = form.prepare_apply(&model).unwrap();
+    assert_eq!(applied.operation(), "solid_chamfer");
+    assert_eq!(applied.arguments()["angle_deg"], 30.);
+    assert!((applied.arguments()["distance"].as_f64().unwrap() - 2.).abs() < 1e-9);
+
+    for saved_angle in [None, Some(30.), Some(60.)] {
+        let definition = json!(limo_cad_solid::SolidChamferDefinitionDto {
+            feature_id: FeatureId(9),
+            name: "Chamfer".into(),
+            body_id: BodyId(1),
+            edge_ids: vec![EdgeId(21)],
+            edge_keys: vec!["edge:0".into()],
+            distance: 2.,
+            angle_deg: saved_angle,
+            tangent_chain: false,
+        });
+        let mut edit = SolidForm::edit_edges(SolidFormKind::Chamfer, &definition, &model).unwrap();
+        let payload = edit.payload(&model).unwrap();
+        assert_eq!(payload.0, "solid_edit_chamfer");
+        assert_eq!(
+            payload.1["chamfer"]
+                .get("angle_deg")
+                .and_then(Value::as_f64),
+            saved_angle
+        );
+        edit.set_value(SolidField::Angle, "15", &model).unwrap();
+        assert_eq!(
+            edit.prepare_apply(&model).unwrap().arguments()["chamfer"]["angle_deg"],
+            15.
+        );
+    }
+    let fillet = SolidForm::new_kind(SolidFormKind::Fillet, &model);
+    assert!(!fillet
+        .fields(&model)
+        .iter()
+        .any(|field| field.field == SolidField::Angle && field.visible));
+}
 
 #[test]
 fn numeric_steps_resolve_units_and_expressions_without_reusing_invalid_input() {

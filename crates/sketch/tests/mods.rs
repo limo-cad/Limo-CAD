@@ -114,6 +114,7 @@ fn chamfer_trims_and_connects() {
             l1,
             l2,
             distance_text: "10".to_string(),
+            angle_text: None,
         })
         .unwrap();
     let dto = r.sketch;
@@ -1051,6 +1052,7 @@ fn chamfer_distance_edit_keeps_equal_cutbacks() {
             l1: first.entity_id,
             l2: second.entity_id,
             distance_text: "10".to_string(),
+            angle_text: None,
         })
         .unwrap();
     assert!(result
