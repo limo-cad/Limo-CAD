@@ -161,7 +161,9 @@ pub struct ResolvedDrawingProjection {
 }
 
 mod drawing_snapshot;
-pub use drawing_snapshot::DetachedDrawingSnapshot;
+pub use drawing_snapshot::{
+    DetachedDrawingSnapshot, FinishedDrawingProjections, SharedDrawingProjection,
+};
 
 struct NativeEngine {
     manager: SketchManager,

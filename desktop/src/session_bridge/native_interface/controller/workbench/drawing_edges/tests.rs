@@ -41,7 +41,7 @@ fn native_detached_paper_job_preserves_selected_geometry_and_rejects_retired_she
     for name in ["First", "Second"] {
         mutate(
             "drawing_add_view",
-            json!({"sheet_id":1,"view":{"name":name,"kind":"front","direction":[0.,-1.,0.],"up":[0.,0.,1.],"body_ids":[1],"position":[25.,25.],"scale":1.}}),
+            json!({"sheet_id":1,"view":{"name":name,"kind":"front","scope":"assembly","direction":[0.,-1.,0.],"up":[0.,0.,1.],"body_ids":[1],"position":[25.,25.],"scale":1.}}),
         );
     }
     let services = NativeServices {
@@ -67,7 +67,7 @@ fn native_detached_paper_job_preserves_selected_geometry_and_rejects_retired_she
     unselected.body_ids = vec![limo_cad_core::BodyId(2)];
     assert!(
         selected.project(&unselected, &sheet.views).is_err(),
-        "Only selected definitions were copied, not the whole kernel"
+        "A request outside captured projection intent is rejected"
     );
     let key = SourceKey::new(receipt.owner.clone(), receipt.revision, geometry, sheet);
     let input = || ColdSourceInput {
@@ -110,6 +110,147 @@ fn native_detached_paper_job_preserves_selected_geometry_and_rejects_retired_she
         .prepared_source
         .as_ref()
         .is_some_and(|s| s.projections.len() == 2));
+    let bundle = Arc::clone(&cache.bundle.as_ref().unwrap().projections);
+    // Real annotation publication changes the drawing Arc/revision, but neither
+    // authoritative scene nor resolved assembly intent. Reuse is a finished
+    // bundle hit, not a retag of the old paper SourceKey.
+    mutate(
+        "drawing_add_annotation",
+        json!({"sheet_id":1,"annotation":{
+        "kind":"note","text":"Review","position":[10.,10.]}}),
+    );
+    let (annotated, annotated_geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    assert_eq!(annotated_geometry, geometry);
+    assert!(!Arc::ptr_eq(&annotated, &drawing));
+    let reused = fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &annotated,
+            annotated_geometry,
+            &annotated.sheets[0],
+            (&annotated.sheets[0].views, false),
+            Some(&bundle),
+        )
+        .unwrap();
+    assert!(Arc::ptr_eq(
+        &reused.finished_bundle().unwrap().unwrap(),
+        &bundle
+    ));
+    let shared = reused
+        .project_shared(&annotated.sheets[0].views[0], &annotated.sheets[0].views)
+        .unwrap();
+    let again = reused
+        .project_shared(&annotated.sheets[0].views[0], &annotated.sheets[0].views)
+        .unwrap();
+    assert!(Arc::ptr_eq(&shared.projection, &again.projection));
+    assert_eq!(
+        serde_json::to_value(shared.projection.as_ref()).unwrap(),
+        serde_json::to_value(&original.projection).unwrap()
+    );
+
+    // A real occurrence pose changes without native geometry revision. The
+    // fully resolved request must reject the annotation bundle nevertheless.
+    let assembly = crate::session_bridge::parse_engine_envelope(
+        fixture.engine.engine_call("assembly_document", ""),
+    )
+    .unwrap();
+    let occurrence = assembly["component_structure"]["occurrences"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| {
+            node["component_id"] == assembly["component_structure"]["definitions"][0]["id"]
+        })
+        .unwrap()["id"]
+        .clone();
+    mutate(
+        "assembly_set_occurrence_pose",
+        json!({"occurrence_id":occurrence,
+        "local_pose":{"translation":[7.,0.,0.],"rotation":[0.,0.,0.,1.]}}),
+    );
+    let (posed, posed_geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    assert_eq!(posed_geometry, geometry);
+    let moved = fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &posed,
+            posed_geometry,
+            &posed.sheets[0],
+            (&posed.sheets[0].views, false),
+            Some(&bundle),
+        )
+        .unwrap();
+    assert!(moved.finished_bundle().unwrap().is_none());
+    let moved_projection = moved
+        .project(&posed.sheets[0].views[0], &posed.sheets[0].views)
+        .unwrap();
+    assert!(
+        (moved_projection.projection.bounds[0] - original.projection.bounds[0] - 7.).abs() < 1e-7
+    );
+    moved
+        .project(&posed.sheets[0].views[1], &posed.sheets[0].views)
+        .unwrap();
+    let moved_bundle = moved.finished_bundle().unwrap().unwrap();
+
+    let model = crate::session_bridge::parse_engine_envelope(
+        fixture.engine.engine_call("project_export_model", ""),
+    )
+    .unwrap();
+    mutate(
+        "solid_edit_extrude",
+        json!({"feature_id":model["extrudes"][0]["feature_id"],
+        "extrude":{"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body",
+        "extent":{"type":"distance","distance":9.},"taper_angle_deg":0.,"flip":false,"target_body_ids":[]}}),
+    );
+    let (changed, changed_geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    let rebuilt = fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &changed,
+            changed_geometry,
+            &changed.sheets[0],
+            (&changed.sheets[0].views, false),
+            Some(&moved_bundle),
+        )
+        .unwrap();
+    assert!(rebuilt.finished_bundle().unwrap().is_none());
+    let changed_projection = rebuilt
+        .project(&changed.sheets[0].views[0], &changed.sheets[0].views)
+        .unwrap();
+    assert!(
+        (changed_projection.projection.bounds[3] - changed_projection.projection.bounds[1] - 9.)
+            .abs()
+            < 1e-7
+    );
+    // A stale drawing snapshot is rejected before optional bundle use; its
+    // completed old geometry remains readable but cannot acquire new authority.
+    assert!(fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &annotated,
+            annotated_geometry,
+            &annotated.sheets[0],
+            (&annotated.sheets[0].views, false),
+            Some(&bundle)
+        )
+        .is_err());
+    // Actual deletion leaves the authored view selecting a missing definition.
+    // A prior valid bundle cannot hide this current projection failure.
+    mutate(
+        "solid_delete_feature",
+        json!({"feature_id":model["extrudes"][0]["feature_id"]}),
+    );
+    let (missing, missing_geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    assert!(fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &missing,
+            missing_geometry,
+            &missing.sheets[0],
+            (&missing.sheets[0].views, false),
+            Some(&moved_bundle)
+        )
+        .is_err());
     // Completion is ready but has not been installed. Replace the actual owner
     // before the next paper frame: no old result may acquire the new title.
     mutate("cad_new_project", json!({}));
@@ -121,6 +262,20 @@ fn native_detached_paper_job_preserves_selected_geometry_and_rejects_retired_she
     let model = fixture.engine.engine_call("project_export_model", "");
     let (next_drawing, next_geometry, _) = fixture.engine.drawing_presentation_snapshot();
     let next_sheet = &next_drawing.sheets[0];
+    let successor = fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &next_drawing,
+            next_geometry,
+            next_sheet,
+            (&next_sheet.views, false),
+            Some(&bundle),
+        )
+        .unwrap();
+    assert!(!Arc::ptr_eq(
+        &successor.finished_bundle().unwrap().unwrap(),
+        &bundle
+    ));
     let next_receipt = fixture
         .bridge
         .native_document_receipt(&fixture.engine, &fixture.owner())
