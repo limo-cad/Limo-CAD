@@ -32,6 +32,7 @@ use std::{
     thread::JoinHandle,
 };
 
+#[path = "viewport_renderer/surface_submission.rs"]
 mod surface_submission;
 
 const CAD_TARGET_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
