@@ -567,7 +567,7 @@ pub(super) fn export(
         world,
         format!("export_{}", intent.format.extension()),
         move |services, guard| {
-            services.bridge.with_native_document_receipt(
+            let (mut result, written_bytes) = services.bridge.with_native_document_receipt(
                 &services.engine,
                 &receipt.owner,
                 |revision| {
@@ -622,16 +622,25 @@ pub(super) fn export(
                         limo_cad_project_file::write_binary_file_new(&path, &bytes)
                     }
                     .map_err(|e| e.to_string())?;
-                    let written_template=if intent.bambu.enabled {
-                        Some(json!({"encoded":STANDARD.encode(&bytes),"summary":limo_cad_export::bambu_project::inspect_bambu_template(&bytes).map_err(|e|e.to_string())?}))
-                    } else { None };
-                    Ok(NativeMutationResult {
+                    Ok((NativeMutationResult {
                         context: receipt.owner.clone(),
                         engine_revision: revision,
-                        value: json!({"exported":true,"path":path,"bytes":bytes.len(),"export_mode":if intent.bambu.enabled {"bambu_project"}else{"portable_model"},"report":project_report,"requires_reslicing":intent.bambu.enabled,"written_template":written_template}),
-                    })
+                        value: json!({"exported":true,"path":path,"bytes":bytes.len(),"export_mode":if intent.bambu.enabled {"bambu_project"}else{"portable_model"},"report":project_report,"requires_reslicing":intent.bambu.enabled,"written_template":null}),
+                    }, intent.bambu.enabled.then_some(bytes)))
                 },
-            )
+            )?;
+            // The file is already written under its exact receipt/I/O guard.
+            // Preparing its handoff bytes and parsed metadata grants no later
+            // adoption authority; after_write retains the callback fences.
+            if let Some(bytes) = written_bytes {
+                let summary = limo_cad_export::bambu_project::inspect_bambu_template(&bytes)
+                    .map_err(|error| format!("The Bambu file was written, but its handoff metadata could not be prepared: {error}"))?;
+                result.value["written_template"] = Value::Object(serde_json::Map::from_iter([
+                    ("encoded".into(), Value::String(STANDARD.encode(bytes))),
+                    ("summary".into(), serde_json::to_value(summary).map_err(|error| format!("The Bambu file was written, but its handoff metadata could not be encoded: {error}"))?),
+                ]));
+            }
+            Ok(result)
         },
         move |world, services, result| {
             let mut value = result?.value;
