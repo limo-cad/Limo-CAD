@@ -592,3 +592,104 @@ fn revision_exhaustion_rejects_before_mutating_the_live_model() {
     assert!(fixture.rename(&owner, "Must not commit").is_err());
     assert_eq!(fixture.engine.document_snapshot(), before);
 }
+
+/// Genuine repeated native stock and authored slider law shared by the two
+/// detached swept worker/admission regressions; no synthetic scene metadata.
+pub(crate) fn swept_stock(
+    engine: &AppState,
+    bridge: &SessionBridgeState,
+    owner: &DocumentContext,
+) -> limo_cad_sketch::MotionStudyDto {
+    use limo_cad_sketch::{
+        MotionCoordinateDto, MotionDriverDto, MotionDriverId, MotionDriverLawDto, MotionStudyDto,
+        MotionStudySampleDto,
+    };
+    let mutate = |operation: &str, args: Value| {
+        bridge
+            .apply_native_mutation(engine, owner, operation, &args, || Ok(()))
+            .unwrap()
+            .value
+    };
+    for (operation, args) in [
+        (
+            "sketch_begin",
+            json!({"name":"Swept stock","plane":{"type":"origin_plane","plane":"xy"}}),
+        ),
+        (
+            "sketch_add_rectangle",
+            json!({"mode":"two_point","p1":{"x":0.,"y":0.},"p2":{"x":10.,"y":6.},"ctrl_held":true}),
+        ),
+        ("sketch_finish", json!({})),
+        (
+            "solid_extrude",
+            json!({"sketch_name":"Swept stock","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":3.}}),
+        ),
+    ] {
+        mutate(operation, args);
+    }
+    let scene = engine.solid_scene_snapshot();
+    let body = &scene.bodies[0];
+    let face = body
+        .faces
+        .iter()
+        .find(|f| {
+            f.plane
+                .is_some_and(|p| p.normal[2] > 0.9 && (p.origin[2] - 3.).abs() < 1e-6)
+        })
+        .unwrap();
+    let plane = face.plane.unwrap();
+    let root = engine.with_assembly(|a| a.component_structure.occurrences[0].clone());
+    let moving=mutate("assembly_create_occurrence",json!({"component_id":root.component_id,"name":"Moving repeat","local_pose":{"translation":[0,0,5],"rotation":[0,0,0,1]}}))["id"].as_u64().unwrap();
+    let connector = json!({"body_id":body.id,"face_id":face.id,"face_key":face.key,"frame":{"origin":plane.origin,"primary_axis":plane.normal,"secondary_axis":plane.u}});
+    let joint = mutate(
+        "assembly_create_joint",
+        json!({"name":"Physical slider","kind":"slider","connector_a":connector,"connector_b":connector,"flipped":true,"linear_offset_mm":5,"advanced":{"connector_a_occurrence_id":root.id,"connector_b_occurrence_id":moving},"grounded_occurrence_id":root.id}),
+    );
+    let mut study: MotionStudyDto = serde_json::from_value(mutate(
+        "assembly_create_motion_study",
+        json!({"name":"Approach","duration_seconds":1}),
+    ))
+    .unwrap();
+    study.drivers.push(MotionDriverDto {
+        id: MotionDriverId(1),
+        name: "Approach".into(),
+        joint_id: serde_json::from_value(joint["id"].clone()).unwrap(),
+        coordinate: MotionCoordinateDto::PrimaryLinear,
+        law: MotionDriverLawDto::Motor {
+            initial_value: 5.,
+            velocity_per_second: -5.,
+            acceleration_per_second2: 0.,
+        },
+        enabled: true,
+    });
+    study.next_driver_id = 2;
+    mutate(
+        "assembly_update_motion_study",
+        serde_json::to_value(&study).unwrap(),
+    );
+    for (time, z) in [(0., 5.), (1., 0.)] {
+        let sample: MotionStudySampleDto = serde_json::from_value(
+            parse_engine_envelope(engine.engine_call(
+                "assembly_sample_motion_study",
+                &json!({"study_id":study.id,"time_seconds":time}).to_string(),
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(sample.solution.solved);
+        let pose = sample
+            .solution
+            .instance_body_poses
+            .iter()
+            .find(|p| p.occurrence_id.0 == moving)
+            .unwrap();
+        assert!(
+            pose.body_id == body.id
+                && pose.translation[0].abs() < 1e-6
+                && pose.translation[1].abs() < 1e-6
+                && (pose.translation[2] - z).abs() < 1e-6,
+            "Genuine slider must move the repeated stock along Z"
+        );
+    }
+    study
+}
