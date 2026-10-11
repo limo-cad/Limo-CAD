@@ -22,7 +22,12 @@ fn prepare(
             crate::session_bridge::parse_engine_envelope(encoded)?,
         )
         .map_err(|error| error.to_string())?;
-        let next = create(&engine.shared_drawing_snapshot(), stamp, target, &definitions)?;
+        let next = create(
+            &engine.shared_drawing_snapshot(),
+            stamp,
+            target,
+            &definitions,
+        )?;
         super::super::runtime::created_annotation(next, stamp)
     })
 }
