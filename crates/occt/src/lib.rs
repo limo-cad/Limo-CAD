@@ -13,7 +13,9 @@ pub use drawing_instances::{
     resolve_drawing_request,
 };
 mod interference;
-pub use interference::{exact_interference_report, exact_pair_result};
+pub use interference::{
+    exact_interference_report, exact_pair_result, validate_source as validate_interference_source,
+};
 mod motion_evaluation;
 pub use motion_evaluation::evaluate_motion_study;
 mod motion_inspection;
@@ -496,6 +498,19 @@ pub struct DetachedMeshKernel;
 #[cfg(not(feature = "native-occt"))]
 pub struct DetachedSectionKernel;
 #[cfg(not(feature = "native-occt"))]
+pub struct DetachedInterferenceKernel;
+#[cfg(not(feature = "native-occt"))]
+impl DetachedInterferenceKernel {
+    pub fn inspect(
+        &self,
+        _scene: &SolidSceneDto,
+        _poses: &[limo_cad_assembly::InstanceBodyPoseDto],
+        _request: &limo_cad_assembly::InterferenceCheckRequestDto,
+    ) -> Result<limo_cad_assembly::InterferenceReportDto, String> {
+        Err("native OCCT support was not enabled at compile time".into())
+    }
+}
+#[cfg(not(feature = "native-occt"))]
 impl DetachedSectionKernel {
     pub fn inspect(
         &self,
@@ -537,6 +552,14 @@ impl DetachedDrawingKernel {
 #[cfg(not(feature = "native-occt"))]
 impl OcctKernel {
     pub fn active_body_ids(&self) -> Result<Vec<BodyId>, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
+    pub fn detached_interference_snapshot(
+        &self,
+        _ids: &[BodyId],
+    ) -> Result<DetachedInterferenceKernel, OcctError> {
         Err(OcctError(
             "native OCCT support was not enabled at compile time".into(),
         ))
@@ -627,7 +650,10 @@ impl OcctKernel {
 #[cfg(feature = "native-occt")]
 mod native;
 #[cfg(feature = "native-occt")]
-pub use native::{DetachedDrawingKernel, DetachedMeshKernel, DetachedSectionKernel, OcctKernel};
+pub use native::{
+    DetachedDrawingKernel, DetachedInterferenceKernel, DetachedMeshKernel, DetachedSectionKernel,
+    OcctKernel,
+};
 
 #[cfg(test)]
 mod drawing_anchor_tests {
