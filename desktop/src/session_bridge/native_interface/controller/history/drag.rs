@@ -74,9 +74,9 @@ pub(super) fn tick_at(
         .bridge
         .native_document_receipt(&services.engine, &drag.receipt.owner)
         .is_ok_and(|current| current == drag.receipt)
-        || handle.frame().is_none_or(|frame| {
-            frame.context != drag.receipt.owner || !frame.modal_stack.is_empty()
-        })
+        || handle
+            .presented_pointer_context()
+            .is_none_or(|(owner, modal_empty, _)| owner != drag.receipt.owner || !modal_empty)
     {
         edge_updates(world, false);
         crate::native_viewport::winit_host::cancel_native_pointer(world, handle);

@@ -44,13 +44,13 @@ impl Drag {
     fn view_current(&self, world: &World, handle: &NativeInterfaceHandle) -> bool {
         let (document, camera) = native_viewport::interface_camera_snapshot(world);
         document == self.owner.document_id
-            && handle.frame().is_some_and(|frame| {
-                frame.context == self.owner
-                    && frame.modal_stack.is_empty()
-                    && frame.canvases.iter().any(|canvas| {
-                        canvas.name == "viewport" && self.same_view(camera, canvas.bounds)
-                    })
-            })
+            && handle
+                .presented_pointer_context()
+                .is_some_and(|(owner, modal_empty, canvas)| {
+                    owner == self.owner
+                        && modal_empty
+                        && canvas.is_some_and(|bounds| self.same_view(camera, bounds))
+                })
     }
     fn moved(&self) -> bool {
         self.engaged
@@ -192,19 +192,18 @@ pub(super) fn pointer(
         {
             return Ok(false);
         }
-        let Some(frame) = handle.frame() else {
+        let Some((owner, modal_empty, canvas)) = handle.presented_pointer_context() else {
             return Ok(false);
         };
-        if !frame.modal_stack.is_empty() || event.context.as_ref() != Some(&frame.context) {
+        if !modal_empty || event.context.as_ref() != Some(&owner) {
             return Ok(false);
         }
         let Some(cursor) = event.cursor else {
             return Ok(false);
         };
-        let Some(canvas) = frame.canvases.iter().find(|c| c.name == "viewport") else {
+        let Some(bounds) = canvas else {
             return Ok(false);
         };
-        let bounds = canvas.bounds;
         if handle.owns_pointer([cursor.x as f64, cursor.y as f64])
             || cursor.x < bounds.x as f32
             || cursor.y < bounds.y as f32
@@ -215,17 +214,17 @@ pub(super) fn pointer(
         }
         let revision = services
             .bridge
-            .native_document_receipt(&services.engine, &frame.context)?
+            .native_document_receipt(&services.engine, &owner)?
             .revision;
         services
             .bridge
-            .with_native_document_receipt(&services.engine, &frame.context, |current| {
+            .with_native_document_receipt(&services.engine, &owner, |current| {
                 if current != revision {
                     return Err("Assembly changed before the drag started".into());
                 }
                 let Some(hit) = native_viewport::interface_pick(
                     world,
-                    &frame.context.document_id,
+                    &owner.document_id,
                     [cursor.x - bounds.x as f32, cursor.y - bounds.y as f32],
                     NativePickPurpose::Geometry,
                 )?
@@ -272,7 +271,7 @@ pub(super) fn pointer(
                 .to_array();
                 state.serial = state.serial.wrapping_add(1);
                 state.drag = Some(Drag {
-                    owner: frame.context.clone(),
+                    owner: owner.clone(),
                     revision,
                     serial: state.serial,
                     camera,
