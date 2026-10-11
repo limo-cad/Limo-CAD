@@ -1038,6 +1038,10 @@ pub fn warnings(
             warnings.push(json!({
                 "code": "hole_position_ignored",
                 "feature_id": definition.feature_id.0,
+                "body_id": definition.body_id.0,
+                "face_ids": [definition.face_id.0],
+                "source": "feature_definition",
+                "evidence": "authored_position_list",
                 "message": format!(
                     "Hole feature {} ({}): position ({}, {}) is not among its {} positions; when positions is given only those points are drilled, so repeat the first point inside positions if it is meant to be a hole",
                     definition.feature_id.0, definition.name, round3(definition.position.x), round3(definition.position.y), definition.positions.len()
@@ -1087,8 +1091,13 @@ pub fn warnings(
             warnings.push(json!({
                 "code": "hole_outside_body",
                 "feature_id": hole.feature_id,
+                "body_id": hole.body_id,
+                "face_ids": hole.face_ids,
+                "source": if hole.feature_id.is_some() { "feature_definition" } else { "geometry" },
+                "confirmed": false,
+                "evidence": "position_outside_display_mesh_bounding_box",
                 "message": format!(
-                    "Hole at ({}, {}, {}) Ø{} lies outside body {} (bbox {:?} to {:?})",
+                    "Hole position candidate at ({}, {}, {}) Ø{} lies outside body {}'s display mesh bounds ({:?} to {:?}); verify the support face and exact geometry",
                     round3(hole.position[0]), round3(hole.position[1]), round3(hole.position[2]), round3(hole.diameter),
                     body.id, body.min.map(round3), body.max.map(round3)
                 ),
@@ -1102,8 +1111,14 @@ pub fn warnings(
                 warnings.push(json!({
                     "code": "blind_depth_exceeds_body",
                     "feature_id": hole.feature_id,
+                    "body_id": hole.body_id,
+                    "face_ids": hole.face_ids,
+                    "source": if hole.feature_id.is_some() { "feature_definition" } else { "geometry" },
+                    "confirmed": false,
+                    "evidence": "blind_extent_exceeds_projected_display_mesh_bounding_box",
+                    "depth_evidence": hole.depth_evidence,
                     "message": format!(
-                        "Hole at ({}, {}, {}) Ø{} is blind to {} mm but body {} is only {} mm along its axis; it breaks through",
+                        "Hole at ({}, {}, {}) Ø{} has a blind extent of {} mm, exceeding body {}'s {} mm projected display mesh span; verify the mouth, direction and exact material intersection before concluding it breaks through",
                         round3(hole.position[0]), round3(hole.position[1]), round3(hole.position[2]), round3(hole.diameter),
                         round3(depth), body.id, round3(extent)
                     ),
@@ -1276,6 +1291,79 @@ mod tests {
                     "reference":point(1.,0.,0.), "radius":2.}}], "edges":edges
         }],"errors":[]}))
         .unwrap()
+    }
+
+    #[test]
+    fn bounds_warnings_keep_body_face_provenance_and_do_not_certify_cut_volume() {
+        let mut scene = cylinder_scene();
+        let definition: HoleDefinitionDto = serde_json::from_value(json!({
+            "feature_id":41,"name":"Requested bore","body_id":1,"face_id":77,
+            "position":{"x":0.,"y":0.},
+            "positions":[{"position":{"x":10.,"y":10.}}],
+            "diameter":4.,"extent":{"type":"distance","depth":12.},
+            "style":"simple","counterbore_diameter":0.,"counterbore_depth":0.,
+            "countersink_diameter":0.,"countersink_angle_deg":90.,"flip":false,
+            "face_basis":{"origin":[0.,0.,0.],"u":[1.,0.,0.],"v":[0.,1.,0.],
+                "normal":[0.,0.,1.]}
+        }))
+        .unwrap();
+        let definitions = [definition];
+        let original_scene = serde_json::to_value(&scene).unwrap();
+        let original_definitions = serde_json::to_value(&definitions).unwrap();
+        let summary = summarize(&scene, &definitions);
+        let before = summary.json(true);
+        let diagnostics = warnings(&summary, &definitions, &[]);
+        assert_eq!(diagnostics.len(), 3);
+        for diagnostic in &diagnostics {
+            assert_eq!(diagnostic["body_id"], 1);
+            assert_eq!(diagnostic["face_ids"], json!([77]));
+            assert_eq!(diagnostic["feature_id"], 41);
+            assert_eq!(diagnostic["source"], "feature_definition");
+            assert!(diagnostic["evidence"].is_string());
+        }
+        for code in ["hole_outside_body", "blind_depth_exceeds_body"] {
+            let diagnostic = diagnostics
+                .iter()
+                .find(|value| value["code"] == code)
+                .unwrap();
+            assert_eq!(diagnostic["confirmed"], false);
+            assert!(diagnostic["message"].as_str().unwrap().contains("verify"));
+        }
+        let depth = diagnostics
+            .iter()
+            .find(|value| value["code"] == "blind_depth_exceeds_body")
+            .unwrap();
+        assert_eq!(depth["depth_evidence"], "authored_feature_extent");
+        assert!(!depth["message"]
+            .as_str()
+            .unwrap()
+            .contains("; it breaks through"));
+        assert_eq!(summary.json(true), before);
+        assert_eq!(before["authored_hole_count"], 1);
+        assert_eq!(before["additional_geometry_candidate_count"], 1);
+        assert_eq!(serde_json::to_value(&scene).unwrap(), original_scene);
+        assert_eq!(
+            serde_json::to_value(&definitions).unwrap(),
+            original_definitions
+        );
+
+        // An incomplete display mesh can bound only part of the retained
+        // analytic cavity. Its bounds warning must keep geometric provenance
+        // and cannot certify a physical miss or invent authored feature IDs.
+        scene.bodies[0].mesh.positions[1] = 1.;
+        scene.bodies[0].mesh.positions[4] = 1.;
+        let summary = summarize(&scene, &[]);
+        let diagnostics = warnings(&summary, &[], &[]);
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0]["code"], "hole_outside_body");
+        assert_eq!(diagnostics[0]["body_id"], 1);
+        assert_eq!(diagnostics[0]["face_ids"], json!([1]));
+        assert!(diagnostics[0]["feature_id"].is_null());
+        assert_eq!(diagnostics[0]["source"], "geometry");
+        assert_eq!(diagnostics[0]["confirmed"], false);
+        let hole = &summary.json(true)["holes"][0];
+        assert_eq!(hole["confidence"], "candidate");
+        assert!(hole["depth"].is_null());
     }
 
     #[test]
