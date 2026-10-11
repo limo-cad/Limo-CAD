@@ -267,6 +267,10 @@ pub struct DetachedDrawingKernel(OcctKernel);
 /// Independent export shapes with no document mutation or geometry authority.
 pub struct DetachedMeshKernel(OcctKernel);
 impl DetachedMeshKernel {
+    /// Exact AP242 output from independently owned selected B-reps.
+    pub fn export_step(&self, request: &StepExportRequest) -> Result<Vec<u8>, OcctError> {
+        self.0.export_step(request)
+    }
     pub fn tessellate(&self, request: &MeshExportRequest) -> Result<Vec<TriangleMesh>, OcctError> {
         self.0.tessellate_bodies(request)
     }

@@ -566,7 +566,7 @@ pub(super) fn export(
     let operation = written_bambu
         .then(|| export_operation::begin(world, &receipt, &intent))
         .transpose()?;
-    let portable_operation = (!written_bambu && intent.format != Format::Step)
+    let portable_operation = (!written_bambu)
         .then(|| export_operation::begin_portable(world, &receipt))
         .transpose()?;
     worker::enqueue_document_io(
@@ -586,8 +586,9 @@ pub(super) fn export(
                 prepare_written_template(&mut result, bytes)?;
                 return Ok(result);
             }
-            if let Some(operation) = portable_operation {
-                return portable_write_snapshot(
+            let operation = portable_operation.ok_or("Export job was not issued")?;
+            if intent.format == Format::Step {
+                step_write_snapshot(
                     services,
                     &receipt,
                     &intent,
@@ -595,38 +596,18 @@ pub(super) fn export(
                     (&path, overwrite),
                     || guard.validate(),
                     |prepared| prepared.build(),
-                );
+                )
+            } else {
+                portable_write_snapshot(
+                    services,
+                    &receipt,
+                    &intent,
+                    &operation,
+                    (&path, overwrite),
+                    || guard.validate(),
+                    |prepared| prepared.build(),
+                )
             }
-            // Exact STEP export still uses its original guarded live-kernel path.
-            services.bridge.with_native_document_receipt(
-                &services.engine,
-                &receipt.owner,
-                |revision| {
-                    check_revision(&receipt, revision)?;
-                    guard.validate()?;
-                    let layout_report = fresh_layout_report(&services.engine, &intent)?;
-                    check_report_confirmation(layout_report.as_ref(), super::bambu::target_layout_has_issues(&intent), intent.allow_layout_issues)?;
-                    let model = engine_text(
-                        parse_engine_envelope(services.engine.engine_call("project_export_model", ""))?,
-                        "Project export was not text",
-                    )?;
-                    let bytes = services.engine.export_step(
-                        &serde_json::to_string(&step_request(&services.engine, &intent, model)?)
-                            .map_err(|e| e.to_string())?,
-                    )?;
-                    if overwrite {
-                        limo_cad_project_file::write_binary_file_atomic(&path, &bytes)
-                    } else {
-                        limo_cad_project_file::write_binary_file_new(&path, &bytes)
-                    }
-                    .map_err(|e| e.to_string())?;
-                    Ok(NativeMutationResult {
-                        context: receipt.owner.clone(),
-                        engine_revision: revision,
-                        value: json!({"exported":true,"path":path,"bytes":bytes.len(),"export_mode":"portable_model","report":null,"requires_reslicing":false,"written_template":null}),
-                    })
-                },
-            )
         },
         move |world, services, result| {
             let mut value = result?.value;
@@ -644,6 +625,59 @@ pub(super) fn export(
             Ok(value)
         },
     )
+}
+
+// Exact AP242 serialization owns independent shapes; source metadata and
+// placements are captured under the original receipt before leaving the engine.
+pub(super) fn step_write_snapshot(
+    services: &NativeServices,
+    receipt: &DocumentReceipt,
+    intent: &ExportIntent,
+    operation: &export_operation::Lease,
+    destination: (&std::path::Path, bool),
+    validate_dispatch: impl FnOnce() -> Result<(), String>,
+    build: impl FnOnce(
+        limo_cad_native_engine::PreparedStepExport,
+    ) -> Result<limo_cad_native_engine::FinishedStepExport, String>,
+) -> Result<NativeMutationResult, String> {
+    let (path, overwrite) = destination;
+    let prepared = services.bridge.with_native_document_receipt(
+        &services.engine,
+        &receipt.owner,
+        |revision| {
+            check_revision(receipt, revision)?;
+            validate_dispatch()?;
+            if intent.format != Format::Step {
+                return Err("Exact export requires STEP".into());
+            }
+            check_path(path, intent.format)?;
+            check_report_confirmation(
+                None,
+                super::bambu::target_layout_has_issues(intent),
+                intent.allow_layout_issues,
+            )?;
+            let model = engine_text(
+                parse_engine_envelope(services.engine.engine_call("project_export_model", ""))?,
+                "Project export was not text",
+            )?;
+            services
+                .engine
+                .prepare_step_export(step_request(&services.engine, intent, model)?)
+        },
+    )?;
+    let outcome = build(prepared);
+    services.bridge.with_native_document_receipt(&services.engine, &receipt.owner, |revision| {
+        check_revision(receipt, revision)?;
+        operation.commit(|| {
+            let finished = outcome?;
+            check_path(path, intent.format)?;
+            services.engine.validate_step_export(&finished)?;
+            if overwrite { limo_cad_project_file::write_binary_file_atomic(path, finished.bytes()) }
+            else { limo_cad_project_file::write_binary_file_new(path, finished.bytes()) }.map_err(|e| e.to_string())?;
+            Ok(NativeMutationResult { context: receipt.owner.clone(), engine_revision: revision,
+                value: json!({"exported":true,"path":path,"bytes":finished.bytes().len(),"export_mode":"portable_model","report":null,"requires_reslicing":false,"written_template":null}) })
+        })
+    })
 }
 
 // Captured native geometry and intent grant no file publication authority.
