@@ -20,6 +20,166 @@ fn observe(workspace: &mut DocumentWorkspace, fixture: &Fixture) -> DocumentRece
 }
 
 #[test]
+fn clean_existing_sketch_round_trip_preserves_content_and_save_owner_fences() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    for case in [
+        "unchanged",
+        "recompute",
+        "changed",
+        "dirty-entry",
+        "save",
+        "replace",
+        "file-intent",
+    ] {
+        let fixture = Fixture::new();
+        let mut workspace = DocumentWorkspace::default();
+        let initial = observe(&mut workspace, &fixture);
+        let mutate = |owner: &DocumentContext, operation: &str, arguments| {
+            fixture
+                .bridge
+                .apply_native_mutation(&fixture.engine, owner, operation, &arguments, || Ok(()))
+                .unwrap()
+        };
+        mutate(
+            &initial.owner,
+            "sketch_begin",
+            json!({"type":"origin_plane","plane":"xy"}),
+        );
+        mutate(
+            &initial.owner,
+            "sketch_add_rectangle",
+            json!({"mode":"two_point","p1":{"x":0.,"y":0.},"p2":{"x":10.,"y":10.},"ctrl_held":false}),
+        );
+        mutate(&initial.owner, "sketch_finish", json!({}));
+        mutate(
+            &initial.owner,
+            "solid_extrude",
+            json!({"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":5.},"taper_angle_deg":0.,"flip":false,"target_body_ids":[]}),
+        );
+        let clean = observe(&mut workspace, &fixture);
+        let save = workspace
+            .prepare_save_guarded(
+                &fixture.bridge,
+                &fixture.engine,
+                &clean,
+                (path(&format!("clean-sketch-{case}.limo")), false),
+                metadata(),
+                || Ok(()),
+            )
+            .unwrap();
+        workspace
+            .complete_save(&fixture.bridge, save.write())
+            .unwrap();
+        let baseline = engine_text(
+            parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap(),
+            "model",
+        )
+        .unwrap();
+        let archive = workspace.tabs[0].archive.clone().unwrap();
+        // Real archives may terminate JSON with a newline; do not parse or
+        // normalize values merely to qualify this harmless outer whitespace.
+        archive
+            .lock()
+            .unwrap()
+            .update_model(format!("{baseline}\n"), metadata())
+            .unwrap();
+        if case == "dirty-entry" {
+            fixture
+                .rename(&clean.owner, "Existing unsaved edit")
+                .unwrap();
+        }
+        let entry = observe(&mut workspace, &fixture);
+        workspace
+            .begin_clean_sketch(&fixture.bridge, &fixture.engine, &entry)
+            .unwrap();
+        mutate(&entry.owner, "sketch_edit", json!({"name":"Sketch1"}));
+        if case == "changed" {
+            mutate(
+                &entry.owner,
+                "sketch_add_rectangle",
+                json!({"mode":"two_point","p1":{"x":30.,"y":30.},"p2":{"x":35.,"y":35.},"ctrl_held":false}),
+            );
+        }
+        if case == "file-intent" {
+            workspace.invalidate_clean_sketch(&entry.owner);
+        }
+        mutate(&entry.owner, "sketch_finish", json!({}));
+        let finished = observe(&mut workspace, &fixture);
+        assert!(
+            workspace
+                .summaries(&fixture.bridge, &finished.owner)
+                .unwrap()[0]
+                .dirty
+        );
+        let dependent = case != "unchanged";
+        let first = workspace
+            .finish_clean_sketch(&fixture.bridge, &fixture.engine, &finished, dependent)
+            .unwrap();
+        assert_eq!(first, case == "unchanged");
+        let mut pending_save = None;
+        if case == "save" {
+            pending_save = Some(
+                workspace
+                    .prepare_save_guarded(
+                        &fixture.bridge,
+                        &fixture.engine,
+                        &finished,
+                        (path("mid-round-trip-save.limo"), false),
+                        metadata(),
+                        || Ok(()),
+                    )
+                    .unwrap(),
+            );
+            assert!(workspace.tabs[0].clean_sketch.is_none());
+        }
+        let final_receipt = if case == "replace" {
+            mutate(
+                &finished.owner,
+                "cad_load_project_model",
+                json!({"model_json":baseline}),
+            );
+            let replacement = observe(&mut workspace, &fixture);
+            assert_ne!(replacement.owner, finished.owner);
+            replacement
+        } else if dependent {
+            mutate(&finished.owner, "solid_recompute", json!({}));
+            observe(&mut workspace, &fixture)
+        } else {
+            finished
+        };
+        if dependent {
+            let reconciled = workspace
+                .finish_clean_sketch(&fixture.bridge, &fixture.engine, &final_receipt, false)
+                .unwrap();
+            assert_eq!(reconciled, case == "recompute", "{case}");
+        }
+        let summary = &workspace
+            .summaries(&fixture.bridge, &final_receipt.owner)
+            .unwrap()[0];
+        assert_eq!(
+            summary.dirty,
+            !matches!(case, "unchanged" | "recompute"),
+            "{case}"
+        );
+        assert!(final_receipt.revision > entry.revision || case == "replace");
+        if matches!(case, "unchanged" | "recompute") {
+            let current = engine_text(
+                parse_engine_envelope(fixture.engine.engine_call("project_export_model", ""))
+                    .unwrap(),
+                "model",
+            )
+            .unwrap();
+            assert_eq!(current, baseline);
+            assert!(Arc::ptr_eq(
+                workspace.tabs[0].archive.as_ref().unwrap(),
+                &archive
+            ));
+        }
+        drop(pending_save);
+    }
+}
+
+#[test]
 fn snapshot_history_keeps_the_file_destination_but_retires_save_receipts() {
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
     let fixture = Fixture::new();

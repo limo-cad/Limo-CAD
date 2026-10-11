@@ -10,6 +10,7 @@ use std::{path::PathBuf, sync::mpsc};
 
 mod bambu;
 mod drawing_output;
+mod export_operation;
 mod io;
 mod lessons;
 mod panel;
@@ -127,6 +128,92 @@ pub(super) struct Files {
     picker: Option<Picker>,
     views: HashMap<String, (u64, native_viewport::ViewportCamera)>,
     verification: bambu::verification::Jobs,
+    portable_operation: export_operation::Authority,
+}
+
+impl Files {
+    fn replace_picker(&mut self, picker: Option<Picker>) {
+        self.portable_operation.revoke();
+        self.picker = picker;
+    }
+    fn take_picker(&mut self) -> Option<Picker> {
+        self.portable_operation.revoke();
+        self.picker.take()
+    }
+    fn replace_dialog_kind(&mut self, kind: DialogKind) {
+        self.portable_operation.revoke();
+        if let Some(dialog) = &mut self.dialog {
+            if let DialogKind::Export(intent) = &dialog.kind {
+                intent.bambu.operation.revoke();
+            }
+            dialog.kind = kind;
+        }
+    }
+    fn replace_dialog(&mut self, dialog: Option<Dialog>) {
+        self.portable_operation.revoke();
+        if let Some(Dialog {
+            kind: DialogKind::Export(intent),
+            ..
+        }) = &self.dialog
+        {
+            intent.bambu.operation.revoke();
+        }
+        self.dialog = dialog;
+    }
+}
+impl Drop for Files {
+    fn drop(&mut self) {
+        self.replace_dialog(None);
+    }
+}
+
+pub(crate) fn invalidate_clean_sketch(world: &World, owner: &DocumentContext) {
+    if let Some(files) = world.get_resource::<Files>() {
+        if let Ok(mut workspace) = files.workspace.lock() {
+            workspace.invalidate_clean_sketch(owner);
+        }
+    }
+}
+
+pub(crate) fn begin_clean_sketch(
+    world: &World,
+    engine: &AppState,
+    bridge: &SessionBridgeState,
+    expected: &DocumentReceipt,
+) -> Result<(), String> {
+    let Some(files) = world.get_resource::<Files>() else {
+        return Ok(());
+    };
+    let mut workspace = files
+        .workspace
+        .lock()
+        .map_err(|_| "Document workspace lock poisoned")?;
+    if files.dialog.is_some() || files.picker.is_some() {
+        workspace.invalidate_clean_sketch(&expected.owner);
+        return Ok(());
+    }
+    workspace.begin_clean_sketch(bridge, engine, expected)
+}
+
+pub(crate) fn finish_clean_sketch(
+    world: &World,
+    engine: &AppState,
+    bridge: &SessionBridgeState,
+    expected: &DocumentReceipt,
+    recompute_pending: bool,
+) -> Result<bool, String> {
+    let Some(files) = world.get_resource::<Files>() else {
+        return Ok(false);
+    };
+    let mut workspace = files
+        .workspace
+        .lock()
+        .map_err(|_| "Document workspace lock poisoned")?;
+    if files.dialog.is_some() || files.picker.is_some() {
+        workspace.invalidate_clean_sketch(&expected.owner);
+        return Ok(false);
+    }
+    workspace.finish_clean_sketch(bridge, engine, expected, recompute_pending)
 }
 
 fn remember_view(world: &mut World, owner: &DocumentContext) {
@@ -192,10 +279,8 @@ fn finish_document_transition(
 
 pub(super) fn initialize(world: &mut World, workspace: Arc<Mutex<DocumentWorkspace>>) {
     if !world.contains_resource::<Files>() {
-        world.insert_resource(Files {
-            workspace,
-            ..default()
-        });
+        world.init_resource::<Files>();
+        world.resource_mut::<Files>().workspace = workspace;
     }
 }
 pub(super) fn awaiting(world: &World) -> bool {
@@ -314,12 +399,13 @@ fn show_dialog(
         .next_token
         .checked_add(1)
         .ok_or("File dialog sequence exhausted")?;
-    f.dialog = Some(Dialog {
-        token: f.next_token,
+    let token = f.next_token;
+    f.replace_dialog(Some(Dialog {
+        token,
         receipt,
         kind,
         error: None,
-    });
+    }));
     f.menu = false;
     Ok(json!({"awaiting_input":true}))
 }
@@ -392,8 +478,9 @@ pub(crate) fn reduce(
             return Err("Not a profile export dialog".into());
         };
         selection.select(&action.control.input)?;
-        world.resource_mut::<Files>().dialog.as_mut().unwrap().kind =
-            DialogKind::Profile(selection);
+        world
+            .resource_mut::<Files>()
+            .replace_dialog_kind(DialogKind::Profile(selection));
         return Ok(json!({"changed":true}));
     }
     if matches!(
@@ -427,7 +514,9 @@ pub(crate) fn reduce(
         if dialog.token != *token || dialog.receipt.owner != action.context {
             return Err("Rename dialog was replaced".into());
         }
-        world.resource_mut::<Files>().dialog.as_mut().unwrap().kind = DialogKind::Rename(name);
+        world
+            .resource_mut::<Files>()
+            .replace_dialog_kind(DialogKind::Rename(name));
         return Ok(json!({"changed":true}));
     }
     if let FileCommand::Activate(target) = command {
@@ -542,6 +631,7 @@ fn edit_export_dialog(
         }
         _ => unreachable!(),
     }
+    intent.bambu.operation.revoke();
     if matches!(command, FileCommand::ExportAllowIssues(_)) {
         Ok(json!({"changed":true}))
     } else {
@@ -699,12 +789,13 @@ fn execute(
             .as_ref()
             .is_some_and(|d| d.token == token && &d.receipt.owner == owner)
         {
-            world.resource_mut::<Files>().dialog = None;
+            world.resource_mut::<Files>().replace_dialog(None);
             return Ok(json!({"cancelled":true}));
         }
         return Err("File dialog was replaced".into());
     }
     if command == FileCommand::Exit {
+        world.resource::<Files>().portable_operation.revoke();
         world.resource_mut::<Files>().menu = false;
         return Ok(json!({"request_exit":true}));
     }
@@ -721,6 +812,21 @@ fn execute(
     require_file_ready(world, closing)?;
     world.resource_mut::<Files>().menu = false;
     let receipt = current(world, services, owner)?;
+    if matches!(
+        &command,
+        FileCommand::New
+            | FileCommand::Open
+            | FileCommand::Save
+            | FileCommand::SaveAs
+            | FileCommand::Close
+            | FileCommand::CloseTab(_)
+            | FileCommand::Activate(_)
+            | FileCommand::Exit
+            | FileCommand::SaveAllAndExit
+    ) {
+        world.resource::<Files>().portable_operation.revoke();
+        invalidate_clean_sketch(world, owner);
+    }
     match command {
         FileCommand::PrintDrawing => printing::request(world, receipt),
         FileCommand::ImportStep => io::choose_import(world, handle, services, receipt),
@@ -872,7 +978,7 @@ fn execute(
                 json!({"name":name}),
                 move |world, services, result| {
                     let result = result?;
-                    world.resource_mut::<Files>().dialog = None;
+                    world.resource_mut::<Files>().replace_dialog(None);
                     Ok(finish_mutation(
                         &services.engine,
                         &services.bridge,
@@ -969,7 +1075,7 @@ fn perform_intent(
                 },
                 |world, services, result| {
                     let result = result?;
-                    world.resource_mut::<Files>().dialog = None;
+                    world.resource_mut::<Files>().replace_dialog(None);
                     Ok(finish_document_transition(
                         world,
                         services,
@@ -1105,7 +1211,7 @@ fn transition(
         },
         move |world, services, result| {
             let result = result?;
-            world.resource_mut::<Files>().dialog = None;
+            world.resource_mut::<Files>().replace_dialog(None);
             let window_id = result.context.window_id.clone();
             let document_id = result.context.document_id.clone();
             let presentation = finish_document_transition(world, services, "document_tab", result);
@@ -1204,7 +1310,7 @@ fn save(
         },
         move |world, _services, result| {
             let result = result?;
-            world.resource_mut::<Files>().dialog = None;
+            world.resource_mut::<Files>().replace_dialog(None);
             if let Some(intent) = continuation {
                 perform_intent(
                     world,
@@ -1303,11 +1409,11 @@ fn choose_path(
             handle.request_redraw();
         })
         .map_err(|e| format!("Cannot open file chooser: {e}"))?;
-    world.resource_mut::<Files>().picker = Some(Picker {
+    world.resource_mut::<Files>().replace_picker(Some(Picker {
         receipt,
         kind: PickerKind::Project { save, continuation },
         result: Mutex::new(receive),
-    });
+    }));
     Ok(json!({"awaiting_input":true}))
 }
 pub(super) fn poll(world: &mut World, services: &NativeServices) -> Result<(), String> {
@@ -1330,11 +1436,11 @@ pub(super) fn poll(world: &mut World, services: &NativeServices) -> Result<(), S
         None | Some(Ok(None)) => return Ok(()),
         Some(Ok(Some(path))) => path,
         Some(Err(error)) => {
-            world.resource_mut::<Files>().picker = None;
+            world.resource_mut::<Files>().replace_picker(None);
             return Err(error);
         }
     };
-    let picker = world.resource_mut::<Files>().picker.take().unwrap();
+    let picker = world.resource_mut::<Files>().take_picker().unwrap();
     let Some(path) = path else {
         return Ok(());
     };
@@ -1420,11 +1526,11 @@ pub(super) fn request(
                     .ok_or("Import requires an absolute STEP/STP path")?,
             ),
         ),
-        "export_drawing_svg" | "export_drawing_dxf" => {
-            let format = if ui["command"] == "export_drawing_svg" {
-                drawing_output::Format::Svg
-            } else {
-                drawing_output::Format::Dxf
+        "export_drawing_svg" | "export_drawing_dxf" | "export_drawing_pdf" => {
+            let format = match ui["command"].as_str().unwrap() {
+                "export_drawing_svg" => drawing_output::Format::Svg,
+                "export_drawing_dxf" => drawing_output::Format::Dxf,
+                _ => drawing_output::Format::Pdf,
             };
             let intent = drawing_output::capture(services, &receipt, format)?;
             let path = PathBuf::from(
@@ -1546,7 +1652,7 @@ pub(super) fn escape(world: &mut World) {
     f.menu = false;
     f.scripts = false;
     f.settings = false;
-    f.dialog = None;
+    f.replace_dialog(None);
 }
 pub(super) fn dialog_error(world: &mut World, error: &str) {
     if let Some(dialog) = world.resource_mut::<Files>().dialog.as_mut() {

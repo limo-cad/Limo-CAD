@@ -73,6 +73,7 @@ struct Template {
 pub(super) struct Settings {
     pub enabled: bool,
     pub generation: u64,
+    pub(super) operation: export_operation::Authority,
     pub scroll: usize,
     path: String,
     template: Option<Template>,
@@ -108,6 +109,10 @@ impl std::fmt::Debug for Settings {
 impl Settings {
     pub(super) fn invalidate(&mut self) {
         self.reviewed = None;
+        self.advance_generation();
+    }
+    fn advance_generation(&mut self) {
+        self.operation.revoke();
         self.generation = self.generation.saturating_add(1);
     }
     fn template(&self) -> Result<&Template, String> {
@@ -277,12 +282,19 @@ fn field_text(intent: &io::ExportIntent, field: Field) -> String {
         }
     }
 }
-fn request(intent: &io::ExportIntent) -> Result<BambuExportRequest, String> {
+pub(super) fn request(intent: &io::ExportIntent) -> Result<BambuExportRequest, String> {
     request_with_template(intent, true)
 }
 fn request_with_template(
     intent: &io::ExportIntent,
     include_bytes: bool,
+) -> Result<BambuExportRequest, String> {
+    request_fields(intent, include_bytes, true)
+}
+fn request_fields(
+    intent: &io::ExportIntent,
+    include_bytes: bool,
+    include_model: bool,
 ) -> Result<BambuExportRequest, String> {
     let s = &intent.bambu;
     let template = s.template()?;
@@ -307,7 +319,7 @@ fn request_with_template(
     bindings.sort();
     Ok(BambuExportRequest {
         export: MeshExportRequest {
-            expected_model_json: Some(s.model.clone()),
+            expected_model_json: include_model.then(|| s.model.clone()),
             body_ids: intent.body_ids.clone(),
             scope: intent.scope,
             slicer_target: limo_cad_export::SlicerTarget::BambuStudio,
@@ -341,11 +353,39 @@ pub(super) fn check_review(intent: &io::ExportIntent) -> Result<(), String> {
     if !intent.bambu.enabled {
         return Ok(());
     }
-    let request = request_with_template(intent, false)?;
     let (reviewed, _) = intent.bambu.reviewed.as_ref().ok_or(
         "Preview the Bambu project with its current bindings and confirmations before writing",
     )?;
-    if reviewed != &review_key(&request, &intent.bambu.template()?.summary) {
+    // Panel layout checks this gate repeatedly. Borrow the model for its exact
+    // comparison; only actual export jobs need an owned model/template payload.
+    let request = request_fields(intent, false, false)?;
+    let choices = review_key(&request, &intent.bambu.template()?.summary);
+    let matches = (|| {
+        let reviewed = reviewed.as_object()?;
+        let choices = choices.as_object()?;
+        if reviewed.len() != choices.len() {
+            return None;
+        }
+        for (name, expected) in choices {
+            let actual = reviewed.get(name)?;
+            if name == "export" {
+                let actual = actual.as_object()?;
+                let expected = expected.as_object()?;
+                if actual.len() != expected.len()
+                    || actual.get("expected_model_json")?.as_str()? != intent.bambu.model.as_str()
+                    || !expected.iter().all(|(field, value)| {
+                        field == "expected_model_json" || actual.get(field) == Some(value)
+                    })
+                {
+                    return None;
+                }
+            } else if actual != expected {
+                return None;
+            }
+        }
+        Some(())
+    })();
+    if matches.is_none() {
         return Err("Bambu project choices changed; preview them again before writing".into());
     }
     Ok(())
@@ -363,27 +403,6 @@ pub(super) fn check_output(
         }
     }
     Ok(())
-}
-pub(super) fn export_bytes(
-    engine: &AppState,
-    intent: &io::ExportIntent,
-    current_model: &str,
-) -> Result<(Vec<u8>, Value), String> {
-    check_review(intent)?;
-    let request = request(intent)?;
-    request.validate(current_model).map_err(|e| e.to_string())?;
-    let value = parse_engine_envelope(engine.engine_call(
-        "solid_export_bambu_project",
-        &serde_json::to_string(&request).map_err(|e| e.to_string())?,
-    ))?;
-    let bytes = STANDARD
-        .decode(
-            value["bytes_base64"]
-                .as_str()
-                .ok_or("Bambu writer returned no bytes")?,
-        )
-        .map_err(|e| e.to_string())?;
-    Ok((bytes, value["report"].clone()))
 }
 
 fn context(engine: &AppState, intent: &io::ExportIntent) -> Result<Value, String> {
@@ -434,6 +453,7 @@ fn context(engine: &AppState, intent: &io::ExportIntent) -> Result<Value, String
     Ok(json!({"model":model,"document":document,"sources":sources}))
 }
 fn accept_context(s: &mut Settings, value: &Value) -> Result<(), String> {
+    s.operation.revoke();
     s.model = value["model"]
         .as_str()
         .ok_or("Missing owned model snapshot")?
@@ -689,7 +709,7 @@ pub(super) fn reduce(
                 | Field::VerifierPath
                 | Field::VerifierTimeout
         ) {
-            intent.bambu.generation = intent.bambu.generation.saturating_add(1);
+            intent.bambu.advance_generation();
         } else {
             intent.bambu.invalidate();
         }
@@ -803,7 +823,7 @@ pub(super) fn reduce(
         }
         Command::Field(_) => unreachable!(),
     }
-    intent.bambu.generation = intent.bambu.generation.saturating_add(1);
+    intent.bambu.advance_generation();
     Ok(json!({"changed":true}))
 }
 
@@ -832,11 +852,11 @@ fn browse(
             wake.request_redraw();
         })
         .map_err(|e| e.to_string())?;
-    world.resource_mut::<Files>().picker = Some(Picker {
+    world.resource_mut::<Files>().replace_picker(Some(Picker {
         receipt,
         kind: PickerKind::BambuTemplate { token, generation },
         result: Mutex::new(receive),
-    });
+    }));
     Ok(json!({"awaiting_input":true}))
 }
 pub(super) fn selected_path(
@@ -850,6 +870,49 @@ pub(super) fn selected_path(
     owned(world, services, &receipt.owner, token, generation)?;
     inspect(world, services, &receipt.owner, token, path)
 }
+// Only source-context capture and final result admission require the publisher.
+// File I/O, base64 and bounded ZIP/XML inspection grant no document authority.
+fn inspect_template_snapshot(
+    services: &NativeServices,
+    receipt: &DocumentReceipt,
+    intent: &io::ExportIntent,
+    mut validate_io: impl FnMut() -> Result<(), String>,
+    inspect: impl FnOnce() -> Result<(String, Value), String>,
+) -> Result<NativeMutationResult, String> {
+    let source = services.bridge.with_native_document_receipt(
+        &services.engine,
+        &receipt.owner,
+        |revision| {
+            if revision != receipt.revision {
+                return Err("The document changed before template inspection".into());
+            }
+            validate_io()?;
+            context(&services.engine, intent)
+        },
+    )?;
+    let inspected = inspect().map(|(encoded, summary)| {
+        Value::Object(serde_json::Map::from_iter([
+            ("encoded".into(), Value::String(encoded)),
+            ("summary".into(), summary),
+            ("context".into(), source),
+        ]))
+    });
+    // Dispatch was admitted before capture. Its busy frame may disable the
+    // initiating control; read-only completion must not admit it a second time.
+    services
+        .bridge
+        .with_native_document_receipt(&services.engine, &receipt.owner, |revision| {
+            if revision != receipt.revision {
+                return Err("The document changed during template inspection".into());
+            }
+            Ok(NativeMutationResult {
+                context: receipt.owner.clone(),
+                engine_revision: revision,
+                value: inspected?,
+            })
+        })
+}
+
 fn inspect(
     world: &mut World,
     services: &NativeServices,
@@ -875,14 +938,32 @@ fn inspect(
         world,
         "inspect_bambu_template".into(),
         move |services, guard| {
-            services.bridge.with_native_document_receipt(&services.engine,&receipt.owner,|revision|{
-            if revision!=receipt.revision{return Err("The document changed before template inspection".into())}guard.validate()?;
-            if std::fs::metadata(&path).map_err(|e|e.to_string())?.len()>128*1024*1024{return Err("Bambu template input is limited to128MiB".into())}
-            let bytes=limo_cad_project_file::read_binary_file(&path).map_err(|e|e.to_string())?;
-            if bytes.len()>128*1024*1024{return Err("Bambu template input is limited to128MiB".into())}
-            let encoded=STANDARD.encode(bytes);let summary=parse_engine_envelope(services.engine.engine_call("bambu_template_inspect",&json!({"template_base64":encoded}).to_string()))?;
-            Ok(NativeMutationResult{context:receipt.owner.clone(),engine_revision:revision,value:json!({"path":path,"encoded":encoded,"summary":summary,"context":context(&services.engine,&intent)?})})
-        })
+            let mut result = inspect_template_snapshot(
+                services,
+                &receipt,
+                &intent,
+                || guard.validate(),
+                || {
+                    if std::fs::metadata(&path).map_err(|e| e.to_string())?.len()
+                        > 128 * 1024 * 1024
+                    {
+                        return Err("Bambu template input is limited to128MiB".into());
+                    }
+                    let bytes = limo_cad_project_file::read_binary_file(&path)
+                        .map_err(|e| e.to_string())?;
+                    if bytes.len() > 128 * 1024 * 1024 {
+                        return Err("Bambu template input is limited to128MiB".into());
+                    }
+                    let encoded = STANDARD.encode(bytes);
+                    let summary = parse_engine_envelope(services.engine.engine_call(
+                        "bambu_template_inspect",
+                        &json!({"template_base64":encoded}).to_string(),
+                    ))?;
+                    Ok((encoded, summary))
+                },
+            )?;
+            result.value["path"] = json!(path);
+            Ok(result)
         },
         move |world, services, result| {
             let result = result?;
@@ -954,7 +1035,42 @@ fn refresh_context(
 fn accept_preview(intent: &mut io::ExportIntent, key: Value, report: BambuProjectReport) {
     intent.bambu.bindings = report.parts.iter().map(|p| p.binding.clone()).collect();
     intent.bambu.reviewed = Some((key, report));
-    intent.bambu.generation = intent.bambu.generation.saturating_add(1);
+    intent.bambu.advance_generation();
+}
+
+fn preview_snapshot(
+    services: &NativeServices,
+    receipt: &DocumentReceipt,
+    request: BambuExportRequest,
+    mut validate_io: impl FnMut() -> Result<(), String>,
+    preview: impl FnOnce(limo_cad_native_engine::PreparedBambuPreview) -> Result<Value, String>,
+) -> Result<NativeMutationResult, String> {
+    let prepared = services.bridge.with_native_document_receipt(
+        &services.engine,
+        &receipt.owner,
+        |revision| {
+            if revision != receipt.revision {
+                return Err("The model changed before the preview could run".into());
+            }
+            validate_io()?;
+            services.engine.prepare_bambu_preview(request)
+        },
+    )?;
+    let outcome = preview(prepared);
+    // The original dispatch was admitted before busy presentation disabled
+    // its control. Read-only completion grants no new dispatch/write authority.
+    services
+        .bridge
+        .with_native_document_receipt(&services.engine, &receipt.owner, |revision| {
+            if revision != receipt.revision {
+                return Err("The document changed during Bambu preview".into());
+            }
+            Ok(NativeMutationResult {
+                context: receipt.owner.clone(),
+                engine_revision: revision,
+                value: outcome?,
+            })
+        })
 }
 
 fn preview(
@@ -971,12 +1087,19 @@ fn preview(
     let key = review_key(&request, &intent.bambu.template()?.summary);
     let generation = intent.bambu.generation;
     let callback_owner = owner.clone();
-    worker::enqueue_query(
+    let receipt = dialog.receipt;
+    worker::enqueue_document_io(
         world,
-        dialog.receipt.owner,
-        dialog.receipt.revision,
         "bambu_project_preview".into(),
-        serde_json::to_value(request).map_err(|e| e.to_string())?,
+        move |services, guard| {
+            preview_snapshot(
+                services,
+                &receipt,
+                request,
+                || guard.validate(),
+                |prepared| prepared.preview(),
+            )
+        },
         move |world, services, result| {
             let result = result?;
             services.bridge.with_native_document_receipt(

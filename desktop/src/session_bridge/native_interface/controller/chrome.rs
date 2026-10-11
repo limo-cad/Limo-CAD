@@ -152,6 +152,17 @@ impl Widgets {
     pub(crate) fn begin(&mut self) {
         self.live.clear();
     }
+    /// Keep only an existing decorative container while its contents are not
+    /// publishable. Children still retire normally at finish; no controls stay live.
+    pub(crate) fn retain_hidden_panel(&mut self, world: &mut World, key: &str) {
+        let Some(&entity) = self.decoration.get(key) else {
+            return;
+        };
+        if let Some(mut node) = world.get_mut::<Node>(entity) {
+            node.display = Display::None;
+            self.live.insert(key.into());
+        }
+    }
     /// Retain a fixed decorative SVG alongside the panel's controls.
     pub(crate) fn glyph(
         &mut self,

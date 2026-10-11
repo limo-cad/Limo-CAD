@@ -116,4 +116,4 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 
 [target.'cfg(target_os = "windows")'.dependencies]
 hidapi = { version = "2.6.7", default-features = false, features = ["windows-native"] }
-windows = { version = "=0.62.2", default-features = false, features = ["Win32_System_Registry", "Win32_Security", "Win32_UI_Controls_Dialogs", "Win32_Graphics_Gdi", "Win32_Graphics_Printing", "Win32_Storage_Xps", "Win32_System_Memory", "Win32_System_Com", "Win32_System_Threading", "Win32_UI_Input_Ime", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_TextServices", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "=0.62.2", default-features = false, features = ["Win32_System_Registry", "Win32_Security", "Win32_UI_Controls_Dialogs", "Win32_Graphics_Gdi", "Win32_Graphics_Printing", "Win32_Storage_Xps", "Win32_System_Memory", "Win32_System_Com", "Win32_System_Threading", "Win32_UI_Input_Ime", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_TextServices", "Win32_UI_WindowsAndMessaging"] }

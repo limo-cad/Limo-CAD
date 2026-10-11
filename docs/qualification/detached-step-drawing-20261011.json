@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "source_revision": "fd85a5567a39486376177c0f62c8b96a4cafb21d",
+  "recorded_utc": "2026-10-11T12:46:09.0375578Z",
+  "qualification": "focused_source_checks_passed_live_acceptance_pending",
+  "integration": "PR124; both Bevy aliases; incoming6c897699 preserved; main untouched; Jack PRs untouched",
+  "results_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/step-drawing-guards-fd85a556-results.json",
+  "strict_windows_packages": [
+    "desktop",
+    "native-engine",
+    "sketch",
+    "OCCT",
+    "export"
+  ],
+  "artifacts": [
+    {
+      "kind": "desktop",
+      "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-9b90afe074be23da.exe",
+      "sha256": "18648b930081e7dc3b65b9c18d3fdd8844b74a1d460df56e77d8db376168d2ce"
+    },
+    {
+      "kind": "native-engine",
+      "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_native_engine-ff1a5f47721e5df5.exe",
+      "sha256": "3a246a72506aaf58038a3648c91ba888f7d2dde615b75f3b70c6131eea0f315f"
+    }
+  ],
+  "new_exact_checks_passed_once": [
+    "session_bridge::native_interface::controller::files::io::tests::exact_step_write_detaches_shapes_and_preserves_metadata_and_job_fences",
+    "session_bridge::native_control::tests::native_drawing_query_releases_live_guards_and_fences_original_completion_once",
+    "host::drawing_export_tests::detached_drawing_export_preserves_observers_and_rejects_stale_native_sources"
+  ],
+  "specifically_affected_checks_passed_once": [
+    "session_bridge::native_interface::history::tests::sketch_history_and_rollback_markers_use_their_real_engine_paths",
+    "session_bridge::native_interface::controller::tests::native_read_only_claims_preserve_user_and_agent_saves"
+  ],
+  "source_scope": {
+    "step": "Independent selected native B-reps and exact AP242 writer; actual importer bounds and thread metadata; solved occurrence priority; units; original job lease, cancellation and owner/model/geometry proof before atomic write. Shared OCCT exchange mutex protects mutable process-global STEP reader/writer state; concurrent exchanges serialize.",
+    "native_drawing": "Original observer and projection request/result without duplicate HLR; private host/session, exact captured drawing/scene/assembly/units and selected native geometry proof; stale edit/replacement/foreign host/unchanged-model kernel mutation rejected.",
+    "attached_drawing": "Genuine admitted native ticket only; both process lease and publisher released during actual projection/encoding; original admission/completion once; current authority before projection handoff; delivery-only retry never redispatches native work.",
+    "sketch_scalars": "Actual active-session presence and Undo/Redo flags borrowed without geometry DTO or JSON; existing real history/Undo/Redo/Finish/rollback regression reopened once because its production read changed.",
+    "frame_routing": "Wheel and interface-only busy Save/Escape use existing narrow presented projections at each original read position; owner/modal/canvas and missing/poisoned semantics preserved. Actual busy Save regression reopened once; prior generic pointer projection pass retained.",
+    "warning_labels": "Only requested occurrence label strings allocated under a borrowed assembly read; ordering, duplicate IDs, first match, malformed-ID handling and unknown fallback preserved. Existing caller guards and required full edit/target assembly reads unchanged; no mirror test added."
+  },
+  "preserved_failure": {
+    "revision": "8d4acaea047223af8f75dab8bb0603d5d1cc44c3",
+    "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/step-drawing-guards-8d4acaea-results.json",
+    "scope": "Strict lint stopped before artifacts/tests on two newly written STEP bounds-oracle iterator lints.",
+    "correction": "76655f57 uses fixed array chunks and direct coordinate iteration; all independent geometry assertions retained. No test or production guard weakened."
+  },
+  "retained_without_repetition": [
+    "docs/qualification/detached-export-ownership-20261011.json: three9e16 export passes plus returned Print-to-File9cdf pass",
+    "docs/qualification/detached-drawing-output-20261011.json: six1c new passes and three earlier de62 passes",
+    "Earlier generic pointer projection and unrelated UI/MCP coverage statuses"
+  ],
+  "limits": {
+    "new_hosted_ci_claimed": false,
+    "installed_revision": "eb71c32dba4b15aea7973d2511466d3325dc0ff2",
+    "new_live_pair_claimed": false,
+    "canonical_gui": "Saved and closed with complete model/archive preservation",
+    "deployment": "Unverified canonical headless stdio documents preserved; coordination requested before restart",
+    "direct_pdf_cold_paper_live_acceptance": "Pending fresh deployment and matched pair",
+    "physical_os_print": "Explorer-owned proxy still outside the current private CAD-process control capability; no OS dialog/cancel/spooler/physical print pass",
+    "bambu_repeat_native_service": "Visible report, edit/cancel/restore staleness and explicit complete binding/native reread/slice remain separate316 acceptance",
+    "performance": "No FPS/latency/memory-pressure/universal retirement or GPU release claim",
+    "broad_ui_and_manual_mcp_mutation": "Paused; all original ui and mcp entries retained exactly",
+    "suites_recipe_replay_live_model_mutations": false
+  }
+}

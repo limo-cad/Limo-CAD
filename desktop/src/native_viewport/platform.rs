@@ -13,11 +13,15 @@ use super::{
     ViewportSnapMarker,
 };
 #[cfg(target_os = "linux")]
-use bevy::render::settings::{RenderCreation, WgpuFeatures, WgpuSettings, WgpuSettingsPriority};
+use bevy::render::settings::WgpuFeatures;
+use bevy::render::settings::{RenderCreation, WgpuSettings, WgpuSettingsPriority};
 use bevy::{
     asset::RenderAssetUsages,
     camera::{visibility::RenderLayers, ClearColorConfig},
-    light::{NotShadowCaster, NotShadowReceiver},
+    light::{
+        cluster::{ClusterConfig, GlobalClusterSettings},
+        NotShadowCaster, NotShadowReceiver,
+    },
     mesh::Indices,
     prelude::*,
     render::{render_resource::PrimitiveTopology, RenderPlugin},
@@ -664,20 +668,23 @@ struct CadSketchPointOutlineGizmos;
 struct CadSketchPointGizmos;
 
 pub(super) fn cad_render_plugin() -> RenderPlugin {
-    let render_plugin = RenderPlugin {
-        synchronous_pipeline_compilation: true,
+    // Request the portable GPU feature/limit profile the CAD scene uses. The
+    // functionality profile enables every adapter capability, eagerly compiling
+    // environment filtering, SSAO and occlusion-culling passes before menus.
+    let settings = WgpuSettings {
+        priority: WgpuSettingsPriority::WebGPU,
         ..default()
     };
     #[cfg(target_os = "linux")]
-    let render_plugin = RenderPlugin {
-        render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
-            priority: WgpuSettingsPriority::WebGPU,
-            features: WgpuFeatures::empty(),
-            ..default()
-        })),
-        ..render_plugin
+    let settings = WgpuSettings {
+        features: WgpuFeatures::empty(),
+        ..settings
     };
-    render_plugin
+    RenderPlugin {
+        synchronous_pipeline_compilation: true,
+        render_creation: RenderCreation::Automatic(Box::new(settings)),
+        ..default()
+    }
 }
 
 /// The application viewport and immutable script previews run these exact systems
@@ -753,7 +760,13 @@ fn setup_scene(
     mut materials: ResMut<Assets<ReferencePlaneMaterial>>,
     mut gizmo_config: ResMut<GizmoConfigStore>,
     target: Option<Res<SceneImageTarget>>,
+    cluster_settings: Option<ResMut<GlobalClusterSettings>>,
 ) {
+    // The scene uses ambient and two directional lights, which do not belong
+    // to light clusters. Disable their otherwise eager GPU clustering passes.
+    if let Some(mut settings) = cluster_settings {
+        settings.gpu_clustering = None;
+    }
     configure_viewport_line_widths(
         &mut gizmo_config,
         VIEWPORT_LINE_REFERENCE_DIAGONAL * 0.8,
@@ -793,6 +806,7 @@ fn setup_scene(
             NativeViewportCamera,
             NativeCadCamera,
             Camera3d::default(),
+            ClusterConfig::None,
             VIEWPORT_MSAA,
             BoxShadowSamples(6),
             Projection::Perspective(PerspectiveProjection {
@@ -812,6 +826,7 @@ fn setup_scene(
             NativeOverlayCamera,
             IsDefaultUiCamera,
             Camera3d::default(),
+            ClusterConfig::None,
             VIEWPORT_MSAA,
             Camera {
                 order: 1,
@@ -1449,13 +1464,24 @@ fn apply_native_presentation_styles(
             };
             (color, AlphaMode::Opaque, emissive)
         };
+        // Kept Boolean tools can legitimately share a surface with the result.
+        // Prefer the opaque body selection there, but retain the existing face
+        // overlay priority and transparent ghost depth policy.
+        let depth_bias =
+            if selected_body_index.is_some() && !ghosted && state.hovered_face_id.is_none() {
+                1.0
+            } else {
+                0.0
+            };
         if material.base_color != base_color
             || material.alpha_mode != alpha_mode
             || material.emissive != emissive
+            || material.depth_bias != depth_bias
         {
             material.base_color = base_color;
             material.alpha_mode = alpha_mode;
             material.emissive = emissive;
+            material.depth_bias = depth_bias;
         }
     }
 
@@ -6307,6 +6333,14 @@ mod tests {
             vec![Msaa::Sample4; 2],
             "both CAD and overlay cameras must use portable 4x multisampling"
         );
+        let mut cameras = world.query_filtered::<&ClusterConfig, With<NativeViewportCamera>>();
+        assert_eq!(cameras.iter(world).count(), 2);
+        assert!(cameras
+            .iter(world)
+            .all(|config| matches!(config, ClusterConfig::None)));
+        assert_eq!(world.query::<&DirectionalLight>().iter(world).count(), 2);
+        assert_eq!(world.query::<&PointLight>().iter(world).count(), 0);
+        assert_eq!(world.query::<&SpotLight>().iter(world).count(), 0);
     }
 
     #[test]
@@ -8182,6 +8216,124 @@ mod tests {
         assert_eq!(
             interface_cam_stock_snapshot(app.world()).0,
             current_revision
+        );
+    }
+
+    #[test]
+    fn selected_body_depth_priority_preserves_occurrence_ghost_and_face_ownership() {
+        use bevy::ecs::system::RunSystemOnce;
+        let mut app = interface_scene_fixture();
+        apply_interface_model(app.world_mut(), instance_cache_model("other-owner", &[9])).unwrap();
+        interface_geometry_fixture_snapshot(app.world_mut());
+        let mut model = instance_cache_model("selection-depth", &[1, 2]);
+        let document = Arc::make_mut(&mut model.document);
+        let scene = Arc::make_mut(&mut document.scene);
+        scene.bodies[0].faces.push(limo_cad_solid::FaceDto {
+            id: limo_cad_core::FaceId(99),
+            key: "selection-triangle".into(),
+            first_index: 0,
+            index_count: 3,
+            plane: None,
+            signature: None,
+            cylinder: None,
+            edge_keys: vec![],
+            linear_seam_edge_keys: vec![],
+            planar_inner_ring_edge_keys: vec![],
+            outer_shell: None,
+            cone: None,
+        });
+        let mut other = scene.bodies[0].clone();
+        other.id = limo_cad_core::BodyId(2);
+        other.faces.clear();
+        scene.bodies.push(other);
+        let poses = Arc::make_mut(&mut model.instance_body_poses);
+        let mut other = poses[0];
+        other.body_id = limo_cad_core::BodyId(2);
+        other.occurrence_id = limo_cad_sketch::OccurrenceId(3);
+        poses.push(other);
+        apply_interface_model(app.world_mut(), model.clone()).unwrap();
+        let geometry = interface_geometry_fixture_snapshot(app.world_mut());
+        let scene_before = serde_json::to_value(&*model.document.scene).unwrap();
+        let mut query = app.world_mut().query::<(
+            &NativeCadBody,
+            &NativeModelGeometry,
+            &MeshMaterial3d<StandardMaterial>,
+        )>();
+        let handles: Vec<_> = query
+            .iter(app.world())
+            .map(|(_, _, handle)| handle.0.id())
+            .collect();
+        assert_eq!(handles.len(), 4);
+        assert_eq!(
+            handles
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            4
+        );
+
+        // Drive the actual styling system through occurrence selection, ghost,
+        // face overlay, multi-body selection and clearing without rebuilding.
+        for (stage, expected) in [
+            ("occurrence", [1.0, 0.0, 0.0]),
+            ("ghost", [0.0, 0.0, 0.0]),
+            ("hovered-face", [0.0, 0.0, 0.0]),
+            ("selected-face", [0.0, 0.0, 0.0]),
+            ("multiple", [1.0, 1.0, 1.0]),
+            ("clear", [0.0, 0.0, 0.0]),
+        ] {
+            let mut state = ViewportPresentation::default();
+            if stage != "clear" {
+                state.selected_body_ids = vec![1];
+                state.selected_occurrence_id = Some(1);
+            }
+            match stage {
+                "ghost" => state.ghosted_body_ids = vec![1],
+                "hovered-face" => state.hovered_face_id = Some(99),
+                "selected-face" => state.selected_face_ids = vec![99],
+                "multiple" => {
+                    state.selected_body_ids = vec![1, 2];
+                    state.selected_occurrence_id = None;
+                }
+                _ => {}
+            }
+            app.world_mut().resource_mut::<PresentationResource>().0 = state;
+            app.world_mut()
+                .run_system_once(apply_native_presentation_styles)
+                .unwrap();
+            let materials = app.world().resource::<Assets<StandardMaterial>>();
+            for (body, owner, handle) in query.iter(app.world()) {
+                let material = materials.get(&handle.0).unwrap();
+                if owner.session_id == "other-owner" {
+                    assert_eq!(material.depth_bias, 0.0);
+                    assert_eq!(material.alpha_mode, AlphaMode::Opaque);
+                    continue;
+                }
+                let index = match (body.body_id, body.occurrence_id) {
+                    (1, Some(1)) => 0,
+                    (1, Some(2)) => 1,
+                    (2, Some(3)) => 2,
+                    other => panic!("unexpected body occurrence: {other:?}"),
+                };
+                assert_eq!(material.depth_bias, expected[index], "{stage}");
+                assert_eq!(
+                    material.alpha_mode,
+                    if stage == "ghost" && body.body_id == 1 {
+                        AlphaMode::Blend
+                    } else {
+                        AlphaMode::Opaque
+                    },
+                    "{stage}"
+                );
+            }
+        }
+        assert_eq!(
+            interface_geometry_fixture_snapshot(app.world_mut()),
+            geometry
+        );
+        assert_eq!(
+            serde_json::to_value(&*app.world().resource::<ModelResource>().document.scene).unwrap(),
+            scene_before
         );
     }
 

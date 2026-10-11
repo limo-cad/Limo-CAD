@@ -87,11 +87,16 @@ and a typed bounded completion channel. Source/diff inspection confirms those
 changes are present; their implementation work is not duplicated in this PR.
 
 [The upstream qualification record](https://github.com/limo-cad/Limo-CAD/issues/339#issuecomment-6016455742)
-reports 14 focused native/desktop/MCP cases and strict Clippy. #339 remains open
-for hosted/platform qualification and packaged visual boundary/idle checks.
+reports 14 focused native/desktop/MCP cases and strict Clippy.
+[Packaged acceptance recorded on 2026-10-11](https://github.com/limo-cad/Limo-CAD/issues/339#issuecomment-6106333435)
+completed #339's targeted boundary/source-restoration and idle checks at matched
+`a3145e2c`, with retained native desktop host evidence. #339 is closed. Section
+inspection remains on the Bevy integration branch; PR #124 is still open, so
+this acceptance does not establish delivery to main or complete application
+qualification.
 Cooperative cancellation still does not provide hard process memory/deadline
 containment. This experiment does not claim to have independently rerun that
-entire app suite or performed the outstanding packaged visual checks.
+entire app suite or performed those packaged visual checks itself.
 
 ## Existing application capabilities to preserve
 

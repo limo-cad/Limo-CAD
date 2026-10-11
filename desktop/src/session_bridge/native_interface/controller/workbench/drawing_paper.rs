@@ -18,6 +18,8 @@ pub(super) use annotations::resolved_center_circle;
 pub(super) use annotations::{chamfer_caption, valid_line_dimension, valid_point_line};
 pub(super) use view::diagnostics::snapshot as diagnostics;
 pub(super) use view::navigation_snapshot;
+#[cfg(test)]
+pub(super) use view::paint_until_settled;
 pub(super) use view::{canvas, paint, repaint, PaperView};
 
 type PaperPlane = Option<(f64, [f64; 2], [f64; 2], [f64; 2], [f64; 2])>;
@@ -917,7 +919,7 @@ mod tests {
         let mut state = Workbench::default();
         state.refresh_owner(&owner);
         state.widgets.begin();
-        paint(
+        paint_until_settled(
             world,
             camera,
             &services,
@@ -1029,7 +1031,7 @@ mod tests {
         let with_dimension = export();
         assert_eq!(services.engine.geometry_revision(), geometry_revision);
         state.widgets.begin();
-        paint(
+        paint_until_settled(
             world,
             camera,
             &services,

@@ -59,6 +59,9 @@ fn submitted(
             receipt.handle.request_redraw();
         }
         *compiling = pending;
+        if pending {
+            return;
+        }
         if let Err(error) = receipt.handle.submitted_revision(receipt.revision) {
             eprintln!("Native render receipt rejected: {error}");
         }

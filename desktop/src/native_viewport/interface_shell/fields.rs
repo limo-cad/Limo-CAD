@@ -110,6 +110,15 @@ pub(crate) struct LiveValue;
 #[derive(Component)]
 struct CompactNumberCaption(Entity);
 
+#[derive(Component)]
+struct CompactNumberMeasurement {
+    raw: String,
+    width: f32,
+    font: TextFont,
+    font_assets_changed: u32,
+    value: Option<String>,
+}
+
 pub(crate) fn compact_number_caption(
     world: &mut World,
     entity: Entity,
@@ -146,9 +155,9 @@ pub(crate) fn compact_number_caption(
         .insert(CompactNumberCaption(caption));
 }
 
-fn compact_numeric_text(raw: &str) -> Option<String> {
-    // Expressions and whitespace remain literal. Nine significant digits are
-    // a read-only presentation; focus always reveals the unchanged raw number.
+fn compact_numeric_text(raw: &str, significant_digits: usize) -> Option<String> {
+    // Expressions and whitespace remain literal. Rounded captions are only
+    // presentation; focus always reveals the unchanged raw number.
     if !raw
         .bytes()
         .all(|c| c.is_ascii_digit() || b"-+.eE".contains(&c))
@@ -169,16 +178,21 @@ fn compact_numeric_text(raw: &str) -> Option<String> {
         // A literal below f64's range must never be presented as exact zero.
         return None;
     }
-    let scientific = format!("{value:.8e}");
+    if value == 0. {
+        // A signed zero is still exact zero. The owned editor keeps its sign.
+        return Some("0".into());
+    }
+    let precision = significant_digits.checked_sub(1)?;
+    let scientific = format!("{value:.precision$e}");
     let (mantissa, exponent) = scientific.split_once('e')?;
     let exponent: i32 = exponent.parse().ok()?;
-    let compact = if value != 0. && !(-3..=8).contains(&exponent) {
+    let compact = if value != 0. && !(-3..=precision as i32).contains(&exponent) {
         format!(
             "{}e{exponent}",
             mantissa.trim_end_matches('0').trim_end_matches('.')
         )
     } else {
-        let decimals = (8 - exponent).max(0) as usize;
+        let decimals = (precision as i32 - exponent).max(0) as usize;
         let fixed = format!("{value:.decimals$}");
         if fixed.contains('.') {
             fixed.trim_end_matches('0').trim_end_matches('.').to_owned()
@@ -186,7 +200,104 @@ fn compact_numeric_text(raw: &str) -> Option<String> {
             fixed
         }
     };
-    (compact.len() < raw.len()).then_some(compact)
+    Some(compact)
+}
+
+fn measure_number_caption(world: &mut World, caption: Entity, value: &str) -> Option<f32> {
+    use bevy::text::{ComputedTextBlock, FontCx, LayoutCx, TextElement, TextPipeline};
+    let font = world.get::<TextFont>(caption)?.clone();
+    if !world.contains_resource::<TextPipeline>()
+        || !world.contains_resource::<FontCx>()
+        || !world.contains_resource::<LayoutCx>()
+        || !world.contains_resource::<Assets<Font>>()
+    {
+        return None;
+    }
+    world.resource_scope(|world, mut pipeline: Mut<TextPipeline>| {
+        world.resource_scope(|world, mut fonts: Mut<FontCx>| {
+            world.resource_scope(|world, mut layouts: Mut<LayoutCx>| {
+                let mut computed = ComputedTextBlock::default();
+                let measured = pipeline
+                    .create_text_measure(
+                        caption,
+                        world.resource::<Assets<Font>>(),
+                        std::iter::once((
+                            caption,
+                            0,
+                            TextElement::Text {
+                                text: value,
+                                font: &font,
+                                color: Color::WHITE,
+                                line_height: default(),
+                                letter_spacing: default(),
+                            },
+                        )),
+                        1.,
+                        &TextLayout::no_wrap(),
+                        &mut computed,
+                        &mut fonts,
+                        &mut layouts,
+                        Vec2::ZERO,
+                        default(),
+                    )
+                    .ok()?;
+                (measured.max.x.is_finite() && measured.max.x > 0.).then_some(measured.max.x)
+            })
+        })
+    })
+}
+
+fn fitting_number_caption(
+    world: &mut World,
+    entity: Entity,
+    caption: Entity,
+    raw: &str,
+) -> Option<String> {
+    let node = world.get::<ComputedNode>(entity)?;
+    // The caption uses fixed 7px/22px insets, including room for the stepper.
+    // Convert the actual laid-out field to logical pixels before font shaping.
+    let width = node.size().x * node.inverse_scale_factor - 7. - 22. - 2.;
+    if !width.is_finite() || width <= 0. {
+        return None;
+    }
+    let font = world.get::<TextFont>(caption)?.clone();
+    let font_assets_changed = world
+        .get_resource_ref::<Assets<Font>>()?
+        .last_changed()
+        .get();
+    if let Some(cached) = world
+        .get::<CompactNumberMeasurement>(caption)
+        .filter(|cached| {
+            cached.raw == raw
+                && cached.width == width
+                && cached.font == font
+                && cached.font_assets_changed == font_assets_changed
+        })
+    {
+        return cached.value.clone();
+    }
+    let mut fitted = None;
+    for significant_digits in (1..=9).rev() {
+        let Some(value) = compact_numeric_text(raw, significant_digits) else {
+            break;
+        };
+        let Some(measured) = measure_number_caption(world, caption, &value) else {
+            // Font availability can change on the next text/layout pass.
+            return None;
+        };
+        if measured <= width {
+            fitted = (value.len() < raw.len()).then_some(value);
+            break;
+        }
+    }
+    world.entity_mut(caption).insert(CompactNumberMeasurement {
+        raw: raw.into(),
+        width,
+        font,
+        font_assets_changed,
+        value: fitted.clone(),
+    });
+    fitted
 }
 
 fn update_compact_numbers(world: &mut World) {
@@ -205,12 +316,12 @@ fn update_compact_numbers(world: &mut World) {
                 && field.composition.is_none()
                 && !editor.is_composing()
                 && editor.value() == field.baseline.as_str())
-            .then(|| compact_numeric_text(field.baseline.as_str()))
-            .flatten();
+            .then(|| field.baseline.clone());
             (entity, caption.0, field.theme, compact)
         })
         .collect();
-    for (entity, caption, theme, compact) in updates {
+    for (entity, caption, theme, raw) in updates {
+        let compact = raw.and_then(|raw| fitting_number_caption(world, entity, caption, &raw));
         let color = if compact.is_some() {
             Color::NONE
         } else {
@@ -327,9 +438,8 @@ fn apply_requested_focus(world: &mut World) {
             || control.modal_scope != *modal_scope
             || !control.visible
             || control.disabled
-    }) || handle.frame().is_none_or(|frame| {
-        frame.context != *owner || frame.modal_stack.last() != modal_scope.as_ref()
-    }) {
+    }) || !handle.presented_focus_matches(owner, modal_scope.as_deref())
+    {
         return;
     }
     // Newly spawned editors can need another text/layout pass before their
@@ -505,8 +615,8 @@ fn commit_active(
         .get::<NativeTextField>(active_entity(&action))
         .is_none_or(|field| field.binding != action.control.binding())
         || handle
-            .frame()
-            .is_none_or(|frame| frame.context != action.context)
+            .presented_context()
+            .is_none_or(|owner| owner != action.context)
     {
         world.resource_mut::<EditorSession>().active = None;
         return Ok(None);
