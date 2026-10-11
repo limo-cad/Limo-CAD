@@ -227,9 +227,15 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
         apply_overrides(&extracted, SOURCE_OVERRIDES)?;
         fs::rename(extracted, &source)?;
     }
-    verify_source_with_overrides(&archive, &source, SHA256, SOURCE_OVERRIDES)?;
+    let source_inventory =
+        verify_source_with_overrides(&archive, &source, SHA256, SOURCE_OVERRIDES)?;
     drop(source_lock);
     let work = options.cache.join("builds").join(&key);
+    let build = work.join("build");
+    #[cfg(windows)]
+    verify_windows_compiler_paths(None, Some(&build), &source_inventory)?;
+    #[cfg(not(windows))]
+    drop(source_inventory);
     let _build_lock = crate::occt_cache::lock(&work)?;
     let _prefix_lock = crate::occt_cache::prepare_locked(&options.prefix, &key)?;
     if crate::occt_cache::complete(&options.prefix, &key)? {
@@ -240,7 +246,6 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
         );
         return Ok(());
     }
-    let build = work.join("build");
     run_command(&mut configure(&options, &source, &build))?;
     run_command(
         Command::new("cmake")
@@ -420,7 +425,65 @@ fn source_files(root: &Path, directory: &Path, files: &mut BTreeMap<String, Stri
 }
 
 fn verify_source(archive: &Path, source: &Path, digest: &str) -> Result<()> {
-    verify_source_with_overrides(archive, source, digest, &[])
+    verify_source_with_overrides(archive, source, digest, &[]).map(|_| ())
+}
+
+// The supported Windows compiler still rejects these native paths at MAX_PATH,
+// regardless of Rust's ability to inspect an extended-length source tree. This
+// guards real source/header paths and generated forwarding headers only; it
+// does not certify every future object/PDB path or third-party dependency path.
+#[cfg(any(windows, test))]
+fn require_windows_compiler_path(path: &Path) -> Result<()> {
+    #[cfg(windows)]
+    let units = {
+        use std::os::windows::ffi::OsStrExt;
+        path.as_os_str().encode_wide().count()
+    };
+    #[cfg(not(windows))]
+    let units = path
+        .to_str()
+        .context("non-Unicode compiler path")?
+        .encode_utf16()
+        .count();
+    ensure!(
+        units < 260,
+        "OCCT Windows compiler path has {units} UTF-16 units (must be below 260): {}. Use a short absolute --cache-dir, such as D:/lc; existing SDK/cache ownership is preserved",
+        path.display()
+    );
+    Ok(())
+}
+
+#[cfg(any(windows, test))]
+fn verify_windows_compiler_paths(
+    source: Option<&Path>,
+    build: Option<&Path>,
+    inventory: &BTreeMap<String, String>,
+) -> Result<()> {
+    let source = source.map(std::path::absolute).transpose()?;
+    let build = build.map(std::path::absolute).transpose()?;
+    for (relative, fingerprint) in inventory {
+        if !relative.starts_with("src/") || !fingerprint.starts_with("file:") {
+            continue;
+        }
+        let relative = Path::new(relative);
+        let extension = relative.extension().and_then(|value| value.to_str());
+        // OCCT's COLLECT_AND_INSTALL_OCCT_HEADER_FILES uses this extension set
+        // and places each selected header basename in build/inc.
+        let forwarding_header = matches!(
+            extension,
+            Some("h" | "g" | "p" | "hpp" | "hxx" | "lxx" | "gxx" | "pxx")
+        );
+        if !forwarding_header && !matches!(extension, Some("c" | "cpp" | "cxx" | "ixx")) {
+            continue;
+        }
+        if let Some(source) = &source {
+            require_windows_compiler_path(&source.join(relative))?;
+        }
+        if let Some(build) = build.as_ref().filter(|_| forwarding_header) {
+            require_windows_compiler_path(&build.join("inc").join(relative.file_name().unwrap()))?;
+        }
+    }
+    Ok(())
 }
 
 fn apply_overrides(source: &Path, overrides: &[SourceOverride<'_>]) -> Result<()> {
@@ -440,7 +503,7 @@ fn verify_source_with_overrides(
     source: &Path,
     digest: &str,
     overrides: &[SourceOverride<'_>],
-) -> Result<()> {
+) -> Result<BTreeMap<String, String>> {
     ensure!(
         crate::hash::file(archive)? == digest,
         "cached OCCT archive checksum differs; refusing reuse"
@@ -458,6 +521,8 @@ fn verify_source_with_overrides(
         );
     }
     let mut expected = source_inventory(archive)?;
+    #[cfg(windows)]
+    verify_windows_compiler_paths(Some(source), None, &expected)?;
     for (relative, original, replacement) in overrides {
         ensure!(
             expected.get(*relative) == Some(&format!("file:{original}")),
@@ -475,7 +540,7 @@ fn verify_source_with_overrides(
         actual == expected,
         "cached OCCT sources differ from the verified archive; select a fresh cache directory"
     );
-    Ok(())
+    Ok(expected)
 }
 
 fn download(url: &str, archive: &std::path::Path) -> Result<()> {
@@ -510,6 +575,60 @@ fn download(url: &str, archive: &std::path::Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn windows_compiler_paths_count_utf16_and_keep_the_259_unit_boundary() {
+        assert!(require_windows_compiler_path(Path::new(&"a".repeat(259))).is_ok());
+        let error = require_windows_compiler_path(Path::new(&"a".repeat(260)))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("260 UTF-16 units"));
+        assert!(error.contains("short absolute --cache-dir"));
+        assert!(
+            require_windows_compiler_path(Path::new(&format!("{}\u{1f600}", "a".repeat(257))))
+                .is_ok()
+        );
+        assert!(
+            require_windows_compiler_path(Path::new(&format!("{}\u{1f600}", "a".repeat(258))))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn verified_source_inventory_guards_native_and_forwarding_header_paths() {
+        let (temporary, archive, source, digest) = source_fixture(false);
+        let inventory = verify_source_with_overrides(&archive, &source, &digest, &[]).unwrap();
+        verify_windows_compiler_paths(
+            Some(&source),
+            Some(&temporary.path().join("short-build")),
+            &inventory,
+        )
+        .unwrap();
+        // Resolve the same relative path spelling that Options accepts, without
+        // using process-wide cwd changes or invoking CMake/the compiler.
+        let long = Path::new(&"a".repeat(180)).join("b".repeat(80));
+        let source_error = verify_windows_compiler_paths(Some(&long), None, &inventory)
+            .unwrap_err()
+            .to_string();
+        assert!(source_error.contains("src"));
+        assert!(source_error.contains("example.cxx"));
+        let header_error = verify_windows_compiler_paths(None, Some(&long), &inventory)
+            .unwrap_err()
+            .to_string();
+        assert!(header_error.contains("inc"));
+        assert!(header_error.contains("example.hxx"));
+        #[cfg(windows)]
+        {
+            let long_parent = temporary.path().join(&long);
+            fs::create_dir_all(&long_parent).unwrap();
+            let long_source = long_parent.join(format!("OCCT-{VERSION}"));
+            fs::rename(&source, &long_source).unwrap();
+            let error = verify_source(&archive, &long_source, &digest)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("OCCT Windows compiler path"));
+            assert!(error.contains("short absolute --cache-dir"));
+        }
+    }
     #[test]
     fn checked_overrides_are_verified_against_both_pristine_and_resulting_sources() {
         let (_temporary, archive, source, digest) = source_fixture(false);
@@ -547,6 +666,7 @@ mod tests {
         for (name, content) in [
             ("CMakeLists.txt", "project(OCCT)"),
             ("src/example.cxx", "pinned source"),
+            ("src/example.hxx", "pinned header"),
         ] {
             let mut header = tar::Header::new_gnu();
             header.set_mode(0o644);
