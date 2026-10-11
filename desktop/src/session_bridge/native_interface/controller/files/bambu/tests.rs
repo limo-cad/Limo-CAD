@@ -608,3 +608,129 @@ fn multipart_preflight_sources_remain_visible_and_distinct_across_repaint() {
         retained = Some(entities);
     }
 }
+
+#[test]
+fn template_inspection_runs_outside_publisher_and_rejects_changed_source_receipts() {
+    use super::super::tests::setup;
+    use crate::session_bridge::native_interface::tests::Fixture;
+    use std::cell::Cell;
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let (app, services, _) = setup(&fixture);
+    let owner = fixture.owner();
+    let receipt = current(app.world(), &services, &owner).unwrap();
+    let intent = intent();
+    let before =
+        parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap();
+    // This real generic 3MF lacks saved Bambu settings. Preserve the actual
+    // parser failure; it is not a successful native-template qualification.
+    let archive =
+        include_bytes!("../../../../../../../crates/export/fixtures/smoke/cube_bambu_studio.3mf");
+    let encoded = STANDARD.encode(archive);
+    let parse = || {
+        parse_engine_envelope(services.engine.engine_call(
+            "bambu_template_inspect",
+            &json!({"template_base64":encoded}).to_string(),
+        ))
+        .map(|summary| (encoded.clone(), summary))
+    };
+    let expected = parse().unwrap_err();
+    let validations = Cell::new(0);
+    let error = inspect_template_snapshot(
+        &services,
+        &receipt,
+        &intent,
+        || {
+            validations.set(validations.get() + 1);
+            Ok(())
+        },
+        || {
+            // Re-enter the actual live receipt while parsing. This would deadlock
+            // if bulk inspection still retained the enclosing publisher guard.
+            services
+                .bridge
+                .with_native_document_receipt(&services.engine, &owner, |revision| {
+                    assert_eq!(revision, receipt.revision);
+                    parse()
+                })
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error, expected);
+    assert_eq!(validations.get(), 2);
+    assert_eq!(current(app.world(), &services, &owner).unwrap(), receipt);
+    assert_eq!(
+        parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap(),
+        before
+    );
+
+    let error = inspect_template_snapshot(
+        &services,
+        &receipt,
+        &intent,
+        || Ok(()),
+        || {
+            let parsed = parse();
+            fixture
+                .rename(&owner, "Changed during template inspection")
+                .unwrap();
+            parsed
+        },
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("document changed during template inspection"),
+        "{error}"
+    );
+    inspect_template_snapshot(
+        &services,
+        &receipt,
+        &intent,
+        || Ok(()),
+        || panic!("A stale source must reject before reading the template"),
+    )
+    .unwrap_err();
+
+    let receipt = current(app.world(), &services, &owner).unwrap();
+    let changed =
+        parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap();
+    let error = inspect_template_snapshot(
+        &services,
+        &receipt,
+        &intent,
+        || Ok(()),
+        || {
+            let parsed = parse();
+            services
+                .bridge
+                .apply_native_mutation(
+                    &services.engine,
+                    &owner,
+                    "cad_load_project_model",
+                    &json!({"model_json":changed}),
+                    || Ok(()),
+                )
+                .unwrap();
+            parsed
+        },
+    )
+    .unwrap_err();
+    assert!(error.contains("replaced"), "{error}");
+    let replacement = fixture.owner();
+    assert_eq!(replacement.document_id, owner.document_id);
+    assert_ne!(replacement.epoch, owner.epoch);
+    assert_eq!(
+        parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap(),
+        changed
+    );
+    let receipt = current(app.world(), &services, &replacement).unwrap();
+    let error = inspect_template_snapshot(
+        &services,
+        &receipt,
+        &intent,
+        || Err("Original I/O ownership rejected".into()),
+        || panic!("Failed I/O ownership must reject before template parsing"),
+    )
+    .unwrap_err();
+    assert_eq!(error, "Original I/O ownership rejected");
+}
