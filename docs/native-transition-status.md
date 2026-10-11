@@ -1,6 +1,24 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: source `35c2a8bf` integrates
+Current checkpoint, **2026-10-11 UTC**: source `8b6825c6` repairs
+receipt-only routed completion for **#377**. Public `cad_route` status now accepts
+`include_values:false`; inbox polling skips the full result read before allocation,
+and receipt-only batches use the same boundary. Full values remain the default.
+Original tickets, operation errors and publication/admission ownership fences are
+retained; full queries and internal scene readers remain compatible. Independent
+review corrected one timing-sensitive synthetic admission fixture. The strict
+changed MCP check and one new exact public-contract regression pass once on this
+clean source, using a private unit registry without submitting a CAD operation.
+The original large production-document retry and connector limits remain
+unqualified. The `c11a51cd` hosted matrix exposed an Apple-only strict lint failure:
+the surface wrapper's main-thread marker adds an eighth parameter. Its signature
+repair is separate pending source work; no hosted green or fresh deployed pair is
+claimed. Broad UI/MCP coverage remains paused, with
+saved documents, recovery/session data, the runtime and coverage ledger preserved.
+Exact source bindings, commands, artifacts and scope:
+`docs/qualification/receipt-only-status-20261011.json`.
+
+Historical checkpoint, **2026-10-11 UTC**: source `35c2a8bf` integrates
 the reviewed shared GPU surface/submission repair for **#374**, retained owned-child
 exit diagnostics, executable slicer-toolpath evidence for **#316**, and the
 strengthened authentic native tangent/full-reader test for **#369**. Strict changed
