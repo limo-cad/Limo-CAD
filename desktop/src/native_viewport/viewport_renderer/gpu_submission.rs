@@ -208,6 +208,8 @@ mod tests {
             .unwrap();
     }
 
+    fn intermediate_phase(_: Res<Upload>) {}
+
     fn render_fixture() -> SubApp {
         bevy::tasks::ComputeTaskPool::get_or_init(|| {
             bevy::tasks::TaskPoolBuilder::new().num_threads(2).build()
@@ -233,11 +235,15 @@ mod tests {
         });
         // Both systems read their ECS resource, just like GPU queue operations.
         // Phase ordering must protect GPU operations even without an ECS conflict.
+        // Populate the intervening phases to reproduce the native render schedule.
         render.add_systems(
             Render,
             (
                 acquire.in_set(RenderSystems::PrepareViews),
                 upload.in_set(RenderSystems::PrepareAssets),
+                intermediate_phase.in_set(RenderSystems::PrepareMeshes),
+                intermediate_phase.in_set(RenderSystems::CreateViews),
+                intermediate_phase.in_set(RenderSystems::Specialize),
             ),
         );
         let thread = std::thread::spawn(move || render.world_mut().run_schedule(Render));
