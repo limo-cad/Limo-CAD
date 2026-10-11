@@ -129,6 +129,55 @@ pub(super) struct Files {
     verification: bambu::verification::Jobs,
 }
 
+pub(crate) fn invalidate_clean_sketch(world: &World, owner: &DocumentContext) {
+    if let Some(files) = world.get_resource::<Files>() {
+        if let Ok(mut workspace) = files.workspace.lock() {
+            workspace.invalidate_clean_sketch(owner);
+        }
+    }
+}
+
+pub(crate) fn begin_clean_sketch(
+    world: &World,
+    engine: &AppState,
+    bridge: &SessionBridgeState,
+    expected: &DocumentReceipt,
+) -> Result<(), String> {
+    let Some(files) = world.get_resource::<Files>() else {
+        return Ok(());
+    };
+    let mut workspace = files
+        .workspace
+        .lock()
+        .map_err(|_| "Document workspace lock poisoned")?;
+    if files.dialog.is_some() || files.picker.is_some() {
+        workspace.invalidate_clean_sketch(&expected.owner);
+        return Ok(());
+    }
+    workspace.begin_clean_sketch(bridge, engine, expected)
+}
+
+pub(crate) fn finish_clean_sketch(
+    world: &World,
+    engine: &AppState,
+    bridge: &SessionBridgeState,
+    expected: &DocumentReceipt,
+    recompute_pending: bool,
+) -> Result<bool, String> {
+    let Some(files) = world.get_resource::<Files>() else {
+        return Ok(false);
+    };
+    let mut workspace = files
+        .workspace
+        .lock()
+        .map_err(|_| "Document workspace lock poisoned")?;
+    if files.dialog.is_some() || files.picker.is_some() {
+        workspace.invalidate_clean_sketch(&expected.owner);
+        return Ok(false);
+    }
+    workspace.finish_clean_sketch(bridge, engine, expected, recompute_pending)
+}
+
 fn remember_view(world: &mut World, owner: &DocumentContext) {
     let (document, camera) = native_viewport::interface_camera_snapshot(world);
     if document == owner.document_id {
@@ -721,6 +770,20 @@ fn execute(
     require_file_ready(world, closing)?;
     world.resource_mut::<Files>().menu = false;
     let receipt = current(world, services, owner)?;
+    if matches!(
+        &command,
+        FileCommand::New
+            | FileCommand::Open
+            | FileCommand::Save
+            | FileCommand::SaveAs
+            | FileCommand::Close
+            | FileCommand::CloseTab(_)
+            | FileCommand::Activate(_)
+            | FileCommand::Exit
+            | FileCommand::SaveAllAndExit
+    ) {
+        invalidate_clean_sketch(world, owner);
+    }
     match command {
         FileCommand::PrintDrawing => printing::request(world, receipt),
         FileCommand::ImportStep => io::choose_import(world, handle, services, receipt),
