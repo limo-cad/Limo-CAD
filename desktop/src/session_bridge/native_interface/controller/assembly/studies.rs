@@ -140,39 +140,65 @@ fn evaluate(
         s.original = Some(native_viewport::interface_view_snapshot(world).2);
     }
     let previous = s.evaluation.as_ref().map(|e| e.sample.time_seconds);
+    s.serial = s.serial.wrapping_add(1);
     let serial = s.serial;
     let query_owner = owner.clone();
     s.error = None;
-    worker::enqueue_query(
+    worker::enqueue_motion_evaluation(
         world,
         owner.clone(),
         revision,
-        "assembly_evaluate_motion_study".into(),
         json!({"study_id":study,"time_seconds":time,"previous_time_seconds":previous,"enforce_contacts":true}),
+        |finished| Ok((finished, ())),
         move |world, services, result| {
-            services.bridge.with_native_document_receipt(&services.engine,&query_owner,|current|{
-            if current!=revision {return Err("Motion study changed during playback".into());}
-            let mut b=world.remove_resource::<Browser>().ok_or("Assembly browser closed")?;
-            let result=(||{
-                if b.owner.as_ref()!=Some(&query_owner)||b.revision!=revision||b.studies.serial!=serial||b.studies.selected!=Some(study){return Err("Motion preview was superseded".into());}
-                let s=&mut b.studies;
-                match result {
-                    Ok(result)=>{
-                        let e:MotionStudyEvaluationDto=serde_json::from_value(result.value).map_err(|e|e.to_string())?;
-                        if !e.sample.solution.solved {return Err("Motion study has an unsolved position".into());}
-                        let (_,_,mut view,_)=native_viewport::interface_view_snapshot(world);
-                        view.body_poses=e.sample.solution.body_poses.clone().into();view.instance_body_poses=e.sample.solution.instance_body_poses.clone().into();
-                        native_viewport::apply_interface_view(world,&query_owner.document_id,None,Some(view))?;
-                        s.time=e.sample.time_seconds;if e.stopped_by_contact.is_some(){s.started=None;}
-                        let result=json!({"time_seconds":s.time,"stopped_by_contact":e.stopped_by_contact,"preview":true});s.evaluation=Some(e);Ok(result)
-                    }
-                    Err(e)=>{restore(world,s,&query_owner)?;s.error=Some(e.clone());Err(e)}
-                }
-            })();world.insert_resource(b);result
-        })
+            adopt_evaluation(
+                world,
+                services,
+                &query_owner,
+                revision,
+                serial,
+                study,
+                result.map(|(finished, ())| finished),
+            )
         },
     )
 }
+fn adopt_evaluation(
+    world: &mut World,
+    services: &NativeServices,
+    owner: &DocumentContext,
+    revision: u64,
+    serial: u64,
+    study: u64,
+    result: Result<limo_cad_native_engine::FinishedMotionEvaluation, String>,
+) -> Result<Value, String> {
+    services.bridge.with_native_document_receipt(&services.engine,owner,|current| {
+        if current!=revision { return Err("Motion study changed during playback".into()); }
+        let mut b=world.remove_resource::<Browser>().ok_or("Assembly browser closed")?;
+        let result=(|| {
+            if b.owner.as_ref()!=Some(owner)||b.revision!=revision||!b.enabled||b.tab!=Tab::Motion||b.studies.serial!=serial||b.studies.selected!=Some(study) { return Err("Motion preview was superseded".into()); }
+            let s=&mut b.studies;
+            match result {
+                Ok(finished)=> {
+                    services.engine.validate_motion_evaluation(&finished)?;
+                    let e=finished.into_report();
+                    if !e.sample.solution.solved {return Err("Motion study has an unsolved position".into());}
+                    let (_,_,mut view,_)=native_viewport::interface_view_snapshot(world);
+                    view.body_poses=e.sample.solution.body_poses.clone().into();
+                    view.instance_body_poses=e.sample.solution.instance_body_poses.clone().into();
+                    native_viewport::apply_interface_view(world,&owner.document_id,None,Some(view))?;
+                    s.time=e.sample.time_seconds;
+                    if e.stopped_by_contact.is_some() {s.started=None;}
+                    let value=json!({"time_seconds":s.time,"stopped_by_contact":e.stopped_by_contact,"preview":true});
+                    s.evaluation=Some(e);Ok(value)
+                }
+                Err(error)=> {restore(world,s,owner)?;s.error=Some(error.clone());Err(error)}
+            }
+        })();
+        world.insert_resource(b);result
+    })
+}
+
 fn key<T: serde::Serialize>(value: T) -> String {
     serde_json::to_value(value)
         .unwrap()
@@ -467,6 +493,7 @@ pub(super) fn reduce(
             if f.value(a)? != f.original {
                 return Err("Apply the study changes before playback".into());
             }
+            s.serial = s.serial.wrapping_add(1);
             if s.started.take().is_some() {
                 return Ok(json!({"playing":false}));
             }

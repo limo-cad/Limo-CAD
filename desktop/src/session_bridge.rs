@@ -1788,6 +1788,35 @@ fn control_for_window_owned_with_swept_observer(
     engine: &AppState,
     response: Option<Value>,
     expected: Option<(&limo_cad_interface::DocumentContext, &str)>,
+    observed: impl FnMut(&limo_cad_occt::DrawingProjectionRequest, &limo_cad_occt::DrawingProjectionDto),
+    detached_finished: (
+        impl FnMut(&limo_cad_native_engine::FinishedSectionReview),
+        impl FnMut(&limo_cad_native_engine::FinishedInterferenceReview),
+        impl FnMut(&limo_cad_native_engine::FinishedSweptCollisionReview),
+    ),
+) -> Result<Value, String> {
+    control_for_window_owned_with_contact_observer(
+        state,
+        window_label,
+        engine,
+        response,
+        expected,
+        observed,
+        (
+            detached_finished.0,
+            detached_finished.1,
+            detached_finished.2,
+            |_| {},
+        ),
+    )
+}
+
+fn control_for_window_owned_with_contact_observer(
+    state: &SessionBridgeState,
+    window_label: &str,
+    engine: &AppState,
+    response: Option<Value>,
+    expected: Option<(&limo_cad_interface::DocumentContext, &str)>,
     mut observed: impl FnMut(
         &limo_cad_occt::DrawingProjectionRequest,
         &limo_cad_occt::DrawingProjectionDto,
@@ -1796,6 +1825,7 @@ fn control_for_window_owned_with_swept_observer(
         impl FnMut(&limo_cad_native_engine::FinishedSectionReview),
         impl FnMut(&limo_cad_native_engine::FinishedInterferenceReview),
         impl FnMut(&limo_cad_native_engine::FinishedSweptCollisionReview),
+        impl FnMut(&limo_cad_native_engine::FinishedMotionEvaluation),
     ),
 ) -> Result<Value, String> {
     let mut lease_path = state
@@ -2057,6 +2087,33 @@ fn control_for_window_owned_with_swept_observer(
                     .map_err(|_| "publisher lock poisoned")?;
                 match finished {
                     Ok(finished) => engine.validate_swept_collision_review(&finished).and(value),
+                    Err(error) => Err(error),
+                }
+            } else if supported
+                && method == "assembly_evaluate_motion_study"
+                && native_ticket.is_some()
+            {
+                let prepared = engine.prepare_motion_evaluation(payload);
+                drop(publishers);
+                drop(lease_path);
+                let finished = prepared.and_then(|prepared| prepared.evaluate());
+                let value = finished
+                    .as_ref()
+                    .map_err(Clone::clone)
+                    .and_then(|finished| {
+                        detached_finished.3(finished);
+                        serde_json::to_value(finished.report()).map_err(|error| error.to_string())
+                    });
+                lease_path = state
+                    .process_lease_path
+                    .lock()
+                    .map_err(|_| "session process lease lock poisoned")?;
+                publishers = state
+                    .publishers
+                    .lock()
+                    .map_err(|_| "publisher lock poisoned")?;
+                match finished {
+                    Ok(finished) => engine.validate_motion_evaluation(&finished).and(value),
                     Err(error) => Err(error),
                 }
             } else if supported {
