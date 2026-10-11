@@ -15,6 +15,9 @@ pub(super) fn finish_polled_control_fixture(
     state: &mut Controller,
     request: &Value,
 ) {
+    // Ordinary controller update initializes file state before dispatch, even
+    // when a capture request will reject its missing destination.
+    files::initialize(world, state.workspace.clone());
     let polled = state.polled_control.take().expect("fixture polled control");
     assert_eq!(request["id"], polled.id);
     assert_eq!(request["session_id"], polled.session);
