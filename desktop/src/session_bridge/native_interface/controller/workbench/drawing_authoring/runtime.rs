@@ -391,7 +391,7 @@ pub(in super::super) fn synchronize(
                 previous.owner == *owner && previous.revision == receipt.revision
             })
             .map(|(_, document)| document.clone())
-            .unwrap_or_else(|| Arc::new(services.engine.drawing_snapshot()));
+            .unwrap_or_else(|| services.engine.shared_drawing_snapshot());
         let Some(sheet) = document
             .sheets
             .iter()
@@ -1091,6 +1091,113 @@ pub(in super::super) fn reduce(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn annotation_fallback_shares_authoritative_drawing_and_rejects_stale_paper_receipts() {
+        crate::session_bridge::tests::with_isolated_session_test(|| {
+            use crate::session_bridge::native_interface::tests::Fixture;
+            let fixture = Fixture::new();
+            let owner = fixture.owner();
+            fixture
+                .bridge
+                .apply_native_mutation(
+                    &fixture.engine,
+                    &owner,
+                    "drawing_set_document",
+                    &serde_json::to_value(super::super::tests::document()).unwrap(),
+                    || Ok(()),
+                )
+                .unwrap();
+            let services = NativeServices {
+                engine: fixture.engine.clone(),
+                bridge: fixture.bridge.clone(),
+            };
+            let original = fixture.engine.shared_drawing_snapshot();
+            let old = Arc::downgrade(&original);
+            let original_receipt = fixture
+                .bridge
+                .native_document_receipt(&fixture.engine, &owner)
+                .unwrap();
+            let export = || {
+                crate::session_bridge::parse_engine_envelope(
+                    fixture.engine.engine_call("project_export_model", ""),
+                )
+                .unwrap()
+            };
+            let before = export();
+            let mut state = Workbench::default();
+            let mut app = crate::native_viewport::interface_scene_fixture();
+            let world = app.world_mut();
+            let camera = world.spawn(InterfaceCamera).id();
+            synchronize(world, camera, &services, &owner, (800., 240.), true, &state).unwrap();
+            assert!(
+                Arc::ptr_eq(&world.resource::<Editor>().document, &original),
+                "Missing paper must borrow the authoritative allocation, not deep-clone all sheets"
+            );
+            world.resource_mut::<Editor>().select(1).unwrap();
+            world.resource_mut::<Editor>().fields[0].text = "Unapplied fallback note".into();
+            synchronize(world, camera, &services, &owner, (800., 240.), true, &state).unwrap();
+            assert!(Arc::ptr_eq(&world.resource::<Editor>().document, &original));
+            assert_eq!(
+                world.resource::<Editor>().fields[0].text,
+                "Unapplied fallback note"
+            );
+            assert_eq!(
+                export(),
+                before,
+                "Fallback reads must not mutate the drawing or model"
+            );
+
+            // A stale retained paper snapshot must not override the current engine.
+            state.paper_document = Some((original_receipt, Arc::clone(&original)));
+            let mut changed = original.as_ref().clone();
+            changed.sheets[0].name = "Actual drawing successor".into();
+            fixture
+                .bridge
+                .apply_native_mutation(
+                    &fixture.engine,
+                    &owner,
+                    "drawing_set_document",
+                    &serde_json::to_value(&changed).unwrap(),
+                    || Ok(()),
+                )
+                .unwrap();
+            let current = fixture.engine.shared_drawing_snapshot();
+            let after_edit = export();
+            synchronize(world, camera, &services, &owner, (800., 240.), true, &state).unwrap();
+            assert!(Arc::ptr_eq(&world.resource::<Editor>().document, &current));
+            assert!(!Arc::ptr_eq(&original, &current));
+            assert_eq!(world.resource::<Editor>().document.as_ref(), &changed);
+            assert_eq!(
+                original.sheets[0].name, "Released",
+                "Retained predecessor remains immutable"
+            );
+            assert_eq!(export(), after_edit);
+            state.paper_document = None;
+            drop(original);
+            assert!(
+                old.upgrade().is_none(),
+                "Fallback must not pin superseded paper snapshots"
+            );
+            let mut replacement = owner;
+            replacement.epoch += 1;
+            synchronize(
+                world,
+                camera,
+                &services,
+                &replacement,
+                (800., 240.),
+                false,
+                &state,
+            )
+            .unwrap();
+            assert!(world.resource::<Editor>().document.sheets.is_empty());
+            assert!(
+                Arc::ptr_eq(&current, &fixture.engine.shared_drawing_snapshot()),
+                "Editor retirement does not retire the engine's live drawing"
+            );
+        });
+    }
+
     #[test]
     fn annotation_editor_shares_paper_snapshots_and_releases_retired_documents() {
         use crate::session_bridge::native_interface::tests::Fixture;
