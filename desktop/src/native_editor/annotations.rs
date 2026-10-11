@@ -1,6 +1,16 @@
 //! Dimension leaders and editable labels, projected by the same native camera
 //! as sketch geometry. Cache model data; camera changes only redo projection.
 use super::*;
+fn annotation_keys() -> Vec<limo_cad_interface::KeyChord> {
+    use limo_cad_interface::KeyChord;
+    vec![
+        KeyChord::plain("ContextMenu"),
+        KeyChord {
+            shift: true,
+            ..KeyChord::plain("F10")
+        },
+    ]
+}
 use crate::native_viewport::interface_shell::ribbon::Icon;
 use crate::native_viewport::{interface_shell, ViewportColorRole, ViewportLineLayer};
 use crate::session_bridge::native_interface::controller::chrome::{rect, Widgets};
@@ -8,6 +18,9 @@ use limo_cad_sketch::{ConstraintKind, DimensionDto, EntityDto, Vec2 as Point};
 
 mod layout;
 
+#[cfg(test)]
+#[path = "annotations/context_tests.rs"]
+mod context_tests;
 #[cfg(test)]
 #[path = "annotations/layout_tests.rs"]
 mod layout_tests;
@@ -415,6 +428,7 @@ pub(super) fn synchronize(
                 // canvas and blur the editor it just opened.
                 let blocked = geometry_tool && !editing_dimension(editor, dim.constraint_id);
                 c.disabled = blocked;
+                c.owned_keys = annotation_keys();
                 let entity = state.widgets.button(
                     world,
                     camera,
@@ -479,6 +493,7 @@ pub(super) fn synchronize(
                 );
                 control.selected = Some(selected == constraint.id.0);
                 control.disabled = geometry_tool;
+                control.owned_keys = annotation_keys();
                 let entity = state.widgets.button(
                     world,
                     camera,
