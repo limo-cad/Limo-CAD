@@ -7,6 +7,27 @@ has occurred. The user approved known-defect completion and targeted repaired
 acceptance. **Broad exploratory UI coverage and manual MCP mutation coverage
 remain paused**; preserve earlier passes and do not advance to untouched cases.
 
+Jack's subsequent `c3d7f7fe` and `25f1cffe` were preserved by fast-forwarding both
+checkouts and Bevy branch aliases. They enable lazy system-font discovery and
+strip release symbols without LTO. Independent source review found no concrete
+blocker; rendered fallback glyphs and performance remain unqualified. The
+canonical production rebuild is fixed at clean 25f1cffe while the separate user
+checkout integrates the reviewed follow-up source **`76ba0099`**: `b0b60471`
+removes the remaining whole-drawing clone in annotation synchronization;
+`42d6ec88` and `76ba0099` repair three picker scheduling fixtures through real
+private-ticket dispatch, durable completion and ordinary file-state initialization.
+
+Exact 25f1cffe macOS native CI failed with 815 passed, 172 failed and 10 ignored.
+The complete log has two independent pending-control panics followed by 170
+shared-lock poison failures. The old fixtures discarded worker outcomes and
+cleared only local poll state; the new helper preserves the admission guard and
+all existing staging, Escape, selection, model and history assertions. Capture
+without a destination truthfully completes as failed; this is scheduling
+coverage, not GPU capture qualification. The three affected picker tests and
+new annotation regression are **not yet executed**. Hosted CI verification is
+pending; the earlier 20 focused passes are retained without repetition. Installed
+runtime remains historical 5d until promotion; no fresh live pair is claimed.
+
 The later clean source **`35bd6aae`** now contains fourteen commits after 5d:
 original-ticket native admission/completion retention and delivery-only retry,
 guarded caption recovery, camera/error fixes, bounded shortcut diagnostics,
