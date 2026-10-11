@@ -2,6 +2,173 @@ use super::*;
 use limo_cad_occt::DrawingPolylineDto;
 use serde_json::json;
 
+#[test]
+fn native_detached_paper_job_preserves_selected_geometry_and_rejects_retired_sheet_results() {
+    use crate::session_bridge::native_interface::tests::Fixture;
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let mutate = |operation, arguments| {
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &fixture.owner(),
+                operation,
+                &arguments,
+                || Ok(()),
+            )
+            .unwrap()
+    };
+    for (x, name) in [(0., "Sketch1"), (60., "Sketch2")] {
+        mutate(
+            "sketch_begin",
+            json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+        );
+        mutate(
+            "sketch_add_rectangle",
+            json!({"mode":"two_point","p1":{"x":x,"y":0.},"p2":{"x":x+40.,"y":25.},"ctrl_held":true}),
+        );
+        mutate("sketch_finish", json!({}));
+        mutate(
+            "solid_extrude",
+            json!({"sketch_name":name,"profile_indices":[0],"extent":{"type":"distance","distance":6.}}),
+        );
+    }
+    mutate(
+        "drawing_create_sheet",
+        json!({"name":"Selected only","format":"a4","orientation":"landscape"}),
+    );
+    for name in ["First", "Second"] {
+        mutate(
+            "drawing_add_view",
+            json!({"sheet_id":1,"view":{"name":name,"kind":"front","direction":[0.,-1.,0.],"up":[0.,0.,1.],"body_ids":[1],"position":[25.,25.],"scale":1.}}),
+        );
+    }
+    let services = NativeServices {
+        engine: fixture.engine.clone(),
+        bridge: fixture.bridge.clone(),
+    };
+    let receipt = fixture
+        .bridge
+        .native_document_receipt(&fixture.engine, &fixture.owner())
+        .unwrap();
+    let (drawing, geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    let sheet = &drawing.sheets[0];
+    let selected = fixture
+        .engine
+        .detached_drawing_snapshot(&drawing, geometry, sheet, &sheet.views, false)
+        .unwrap();
+    let original = selected.project(&sheet.views[0], &sheet.views).unwrap();
+    assert!(!original.projection.visible.is_empty());
+    let [min_x, min_y, max_x, max_y] = original.projection.bounds;
+    assert!((max_x - min_x - 40.).abs() < 1e-7);
+    assert!((max_y - min_y - 6.).abs() < 1e-7);
+    let mut unselected = sheet.views[0].clone();
+    unselected.body_ids = vec![limo_cad_core::BodyId(2)];
+    assert!(
+        selected.project(&unselected, &sheet.views).is_err(),
+        "Only selected definitions were copied, not the whole kernel"
+    );
+    let key = SourceKey::new(receipt.owner.clone(), receipt.revision, geometry, sheet);
+    let input = || ColdSourceInput {
+        drawing: &drawing,
+        sheet,
+        original_views: &sheet.views,
+        repair_view: None,
+    };
+    let mut cache = EdgeCache::default();
+    let mut images = Assets::<Image>::default();
+    // Hold the live engine read so the real worker cannot complete capture.
+    // Starting/pending cache and navigation reads must not reenter that lock.
+    fixture.engine.with_drawing(|_| {
+        assert!(!cache
+            .ensure_source(&key, raster(), &services, &receipt, input(), None)
+            .unwrap());
+        assert!(cache
+            .prepare_sheet(
+                &mut images,
+                key.clone(),
+                raster(),
+                |_| panic!("Pending navigation must not project on the UI thread"),
+                |_, _| panic!("Pending navigation must not read live topology")
+            )
+            .is_err());
+        assert!(
+            cache.failure.is_none(),
+            "Not-ready is transient, not a cached source failure"
+        );
+    });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !cache
+        .ensure_source(&key, raster(), &services, &receipt, input(), None)
+        .unwrap()
+    {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    assert!(cache
+        .prepared_source
+        .as_ref()
+        .is_some_and(|s| s.projections.len() == 2));
+    // Completion is ready but has not been installed. Replace the actual owner
+    // before the next paper frame: no old result may acquire the new title.
+    mutate("cad_new_project", json!({}));
+    mutate(
+        "drawing_create_sheet",
+        json!({"name":"Successor","format":"a4","orientation":"landscape"}),
+    );
+    assert_ne!(fixture.owner(), receipt.owner);
+    let model = fixture.engine.engine_call("project_export_model", "");
+    let (next_drawing, next_geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    let next_sheet = &next_drawing.sheets[0];
+    let next_receipt = fixture
+        .bridge
+        .native_document_receipt(&fixture.engine, &fixture.owner())
+        .unwrap();
+    let next_key = SourceKey::new(
+        next_receipt.owner.clone(),
+        next_receipt.revision,
+        next_geometry,
+        next_sheet,
+    );
+    assert!(!cache
+        .ensure_source(
+            &next_key,
+            raster(),
+            &services,
+            &next_receipt,
+            ColdSourceInput {
+                drawing: &next_drawing,
+                sheet: next_sheet,
+                original_views: &next_sheet.views,
+                repair_view: None
+            },
+            None
+        )
+        .unwrap());
+    assert!(cache.prepared_source.is_none());
+    assert!(!cache.source_available(&next_key));
+    assert!(cache.source.is_none());
+    let retained = selected.project(&sheet.views[0], &sheet.views).unwrap();
+    assert_eq!(
+        serde_json::to_value(&retained.projection).unwrap(),
+        serde_json::to_value(&original.projection).unwrap(),
+        "Detached exact shapes survive live-kernel replacement without replay"
+    );
+    assert!(fixture
+        .engine
+        .detached_drawing_snapshot(&drawing, geometry, sheet, &sheet.views, false)
+        .is_err());
+    assert_eq!(
+        fixture.engine.engine_call("project_export_model", ""),
+        model
+    );
+    // Retiring the cache drops any successor result; an already running native
+    // job may finish its owned copy, but never joins or publishes on this thread.
+    cache.evict_document(&next_receipt.owner);
+    assert!(cache.cold.as_ref().unwrap().retired.load(Ordering::Acquire));
+}
+
 fn sheet() -> DrawingSheetDto {
     serde_json::from_value(json!({"id":1,"name":"Dense sheet","format":"a4","orientation":"landscape",
         "views":[

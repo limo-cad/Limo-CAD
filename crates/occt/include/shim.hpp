@@ -43,6 +43,7 @@ class Kernel {
   void reset();
   void apply_job(const FfiJob& job);
   rust::Vec<std::uint64_t> body_ids() const;
+  std::unique_ptr<Kernel> drawing_snapshot(const rust::Vec<std::uint64_t>& body_ids) const;
   rust::Vec<FfiBodyGeneration> body_generations() const;
   rust::Vec<std::uint64_t> planar_face_keys() const;
   FfiMesh mesh(std::uint64_t body_id) const;

@@ -8,7 +8,9 @@ pub mod drawing_export;
 mod drawing_instances;
 pub mod drawing_presentation;
 pub mod section_review;
-pub use drawing_instances::{project_drawing, resolve_drawing_anchor, resolve_drawing_line};
+pub use drawing_instances::{
+    drawing_required_body_ids, project_drawing, resolve_drawing_anchor, resolve_drawing_line,
+};
 mod interference;
 pub use interference::{exact_interference_report, exact_pair_result};
 mod motion_evaluation;
@@ -487,7 +489,31 @@ impl std::error::Error for OcctError {}
 pub struct OcctKernel;
 
 #[cfg(not(feature = "native-occt"))]
+pub struct DetachedDrawingKernel;
+#[cfg(not(feature = "native-occt"))]
+impl DetachedDrawingKernel {
+    pub fn project(
+        &self,
+        _scene: &SolidSceneDto,
+        _assembly: &limo_cad_assembly::AssemblyDocumentDto,
+        _request: &DrawingProjectionRequest,
+    ) -> Result<DrawingProjectionDto, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
+}
+
+#[cfg(not(feature = "native-occt"))]
 impl OcctKernel {
+    pub fn detached_drawing_snapshot(
+        &self,
+        _ids: &[BodyId],
+    ) -> Result<DetachedDrawingKernel, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
     pub fn body_geometry_identities(
         &self,
     ) -> Result<std::collections::BTreeMap<BodyId, KernelBodyGeometryIdentity>, OcctError> {
@@ -553,7 +579,7 @@ impl OcctKernel {
 #[cfg(feature = "native-occt")]
 mod native;
 #[cfg(feature = "native-occt")]
-pub use native::OcctKernel;
+pub use native::{DetachedDrawingKernel, OcctKernel};
 
 #[cfg(test)]
 mod drawing_anchor_tests {

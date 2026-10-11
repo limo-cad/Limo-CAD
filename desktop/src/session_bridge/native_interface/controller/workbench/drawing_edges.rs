@@ -2,6 +2,9 @@
 //! for associative annotations; one retained physical-resolution image carries
 //! the visible strokes.
 use super::{paper_point, raster_stroke_width, Label};
+use crate::session_bridge::native_interface::{
+    controller::NativeServices, workspace::DocumentReceipt,
+};
 use crate::state::{DrawingProjectionBasis, ResolvedDrawingProjection};
 use bevy::{
     asset::RenderAssetUsages,
@@ -18,7 +21,9 @@ use resvg::tiny_skia::{
     LineCap, LineJoin, Paint, PathBuilder, Pixmap, Stroke, StrokeDash, Transform,
 };
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::{mpsc, Mutex};
 
 #[path = "drawing_edges/derived.rs"]
 mod derived;
@@ -186,6 +191,25 @@ pub(super) struct EdgeCache {
     raster: Option<(RasterKey, RasterRegion, Handle<Image>)>,
     previous_raster: Option<(RasterKey, RasterRegion, Image)>,
     failure: Option<(SourceKey, RasterKey, String)>,
+    prepared_source: Option<Source>,
+    cold: Option<ColdProjection>,
+}
+
+struct ColdProjection {
+    key: SourceKey,
+    receiver: Mutex<mpsc::Receiver<Result<Source, String>>>,
+    retired: Arc<AtomicBool>,
+}
+pub(super) struct ColdSourceInput<'a> {
+    pub drawing: &'a Arc<limo_cad_sketch::DrawingDocumentDto>,
+    pub sheet: &'a DrawingSheetDto,
+    pub original_views: &'a [DrawingViewDto],
+    pub repair_view: Option<u64>,
+}
+impl Drop for ColdProjection {
+    fn drop(&mut self) {
+        self.retired.store(true, Ordering::Release);
+    }
 }
 
 pub(super) struct Prepared<'a> {
@@ -199,7 +223,174 @@ pub(super) struct Prepared<'a> {
 }
 
 impl EdgeCache {
+    pub(super) fn retire_sources(&mut self) {
+        self.source = None;
+        self.previous_source = None;
+        self.raster = None;
+        self.previous_raster = None;
+        self.prepared_source = None;
+        self.failure = None;
+        if let Some(job) = &self.cold {
+            job.retired.store(true, Ordering::Release);
+            // Retain only the in-flight slot so empty/new documents cannot fan
+            // out jobs. Drop a completed result if it was already delivered.
+            if let Ok(receiver) = job.receiver.lock() {
+                let _ = receiver.try_recv();
+            }
+        }
+    }
+    pub(super) fn source_available(&self, key: &SourceKey) -> bool {
+        self.source.as_ref().is_some_and(|s| s.key == *key)
+            || self.previous_source.as_ref().is_some_and(|s| s.key == *key)
+            || self.prepared_source.as_ref().is_some_and(|s| s.key == *key)
+    }
+    #[cfg(test)]
+    pub(super) fn source_pending(&self) -> bool {
+        self.cold.is_some()
+    }
+    /// At most one detached exact-geometry job per cache. Superseded work owns
+    /// its copy until completion, but can never qualify a successor source.
+    pub(super) fn ensure_source(
+        &mut self,
+        key: &SourceKey,
+        raster: RasterKey,
+        services: &NativeServices,
+        receipt: &DocumentReceipt,
+        input: ColdSourceInput<'_>,
+        wake: Option<crate::native_viewport::interface_shell::NativeInterfaceHandle>,
+    ) -> Result<bool, String> {
+        if let Some(job) = &self.cold {
+            let result = job
+                .receiver
+                .lock()
+                .map_err(|_| "Drawing projection delivery poisoned")?
+                .try_recv();
+            match result {
+                Ok(result) => {
+                    let job = self.cold.take().unwrap();
+                    if job.key == *key && !job.retired.load(Ordering::Acquire) {
+                        match result {
+                            Ok(source) => {
+                                self.prepared_source = Some(source);
+                                if self.failure.as_ref().is_some_and(|(k, _, _)| k == key) {
+                                    self.failure = None;
+                                }
+                            }
+                            Err(error) => self.failure = Some((key.clone(), raster, error)),
+                        }
+                    }
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    let job = self.cold.take().unwrap();
+                    if job.key == *key && !job.retired.load(Ordering::Acquire) {
+                        self.failure = Some((
+                            key.clone(),
+                            raster,
+                            "Drawing projection worker stopped".into(),
+                        ));
+                    }
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        if self.source.as_ref().is_some_and(|s| s.key == *key)
+            || self.previous_source.as_ref().is_some_and(|s| s.key == *key)
+            || self.prepared_source.as_ref().is_some_and(|s| s.key == *key)
+            || self
+                .failure
+                .as_ref()
+                .is_some_and(|(k, r, _)| k == key && *r == raster)
+        {
+            return Ok(true);
+        }
+        if self.cold.is_some() {
+            return Ok(false);
+        }
+        self.prepared_source = None;
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let retired = Arc::new(AtomicBool::new(false));
+        let worker_retired = Arc::clone(&retired);
+        let services = services.clone();
+        let receipt = receipt.clone();
+        let source_key = key.clone();
+        let drawing = Arc::clone(input.drawing);
+        let sheet = input.sheet.clone();
+        let original_views = input.original_views.to_vec();
+        let repair_view = input.repair_view;
+        std::thread::Builder::new()
+            .name("drawing-projection".into())
+            .spawn(move || {
+                let result = (|| {
+                    let snapshot = services.bridge.with_native_document_receipt(
+                        &services.engine,
+                        &receipt.owner,
+                        |revision| {
+                            if revision != receipt.revision {
+                                return Err("The drawing changed before projection capture".into());
+                            }
+                            services.engine.detached_drawing_snapshot(
+                                &drawing,
+                                source_key.geometry_revision,
+                                &sheet,
+                                &original_views,
+                                repair_view.is_some(),
+                            )
+                        },
+                    )?;
+                    // HLR now owns independent shapes; release live document services.
+                    drop(services);
+                    drop(drawing);
+                    Source::project_resolved(
+                        source_key,
+                        |view| {
+                            if repair_view.is_some() {
+                                let saved = original_views
+                                    .iter()
+                                    .find(|v| v.id == view.id)
+                                    .ok_or("Repair view was removed")?;
+                                snapshot.project(saved, &original_views)
+                            } else {
+                                snapshot.project(view, &sheet.views)
+                            }
+                        },
+                        |projections, budget| {
+                            snapshot.source_graphics(
+                                &sheet,
+                                |id| projections.get(&id).map(|(_, p)| p),
+                                budget,
+                            )
+                        },
+                        Limits::default(),
+                    )
+                })();
+                if !worker_retired.load(Ordering::Acquire) {
+                    let _ = sender.send(result);
+                }
+                if let Some(wake) = wake {
+                    wake.request_redraw();
+                }
+            })
+            .map_err(|error| format!("Could not start drawing projection: {error}"))?;
+        self.cold = Some(ColdProjection {
+            key: key.clone(),
+            receiver: Mutex::new(receiver),
+            retired,
+        });
+        Ok(false)
+    }
     pub(super) fn evict_document(&mut self, owner: &DocumentContext) {
+        if self
+            .prepared_source
+            .as_ref()
+            .is_some_and(|s| s.key.belongs_to_document(owner))
+        {
+            self.prepared_source = None;
+        }
+        if let Some(job) = &self.cold {
+            if job.key.belongs_to_document(owner) {
+                job.retired.store(true, Ordering::Release);
+            }
+        }
         if self
             .source
             .as_ref()
@@ -283,6 +474,9 @@ impl EdgeCache {
             &mut PaperGraphicsBudget,
         ) -> Result<Vec<PaperPrimitive>, String>,
     ) -> Result<Prepared<'a>, String> {
+        if self.cold.is_some() && !self.source_available(&key) {
+            return Err("Drawing projection is not ready".into());
+        }
         self.prepare_sheet_with_limits(images, key, raster, project, sources, Limits::default())
     }
     #[cfg(test)]
@@ -340,12 +534,18 @@ impl EdgeCache {
             let result = (|| {
                 let region = raster.region(&key, limits)?;
                 let next = if source_changed && !warm_hit {
-                    Some(Source::project_resolved(
-                        key.clone(),
-                        project,
-                        sources,
-                        limits,
-                    )?)
+                    Some(
+                        match self
+                            .prepared_source
+                            .take()
+                            .filter(|source| source.key == key)
+                        {
+                            Some(source) => source,
+                            None => {
+                                Source::project_resolved(key.clone(), project, sources, limits)?
+                            }
+                        },
+                    )
                 } else {
                     None
                 };

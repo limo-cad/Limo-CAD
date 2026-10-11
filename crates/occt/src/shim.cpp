@@ -2184,6 +2184,21 @@ class Kernel::Impl {
 };
 
 Kernel::Kernel() : impl_(std::make_unique<Impl>()) {}
+
+std::unique_ptr<Kernel> Kernel::drawing_snapshot(const rust::Vec<std::uint64_t>& ids) const {
+  auto result = std::make_unique<Kernel>();
+  for (const auto id : ids) {
+    if (result->impl_->bodies.count(id)) continue;
+    const auto found = impl_->bodies.find(id);
+    if (found == impl_->bodies.end()) throw std::runtime_error("Drawing snapshot body is missing");
+    // Geometry must be independent: an HLR worker must never share mutable
+    // OCCT curves/surfaces with the document's mutation or meshing kernel.
+    BRepBuilderAPI_Copy copy(found->second, true, false);
+    if (!copy.IsDone() || copy.Shape().IsNull()) throw std::runtime_error("Drawing snapshot copy failed");
+    result->impl_->bodies.emplace(id, copy.Shape());
+  }
+  return result;
+}
 Kernel::~Kernel() = default;
 
 void Kernel::reset() {

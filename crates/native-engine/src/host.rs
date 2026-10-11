@@ -160,6 +160,9 @@ pub struct ResolvedDrawingProjection {
     pub basis: DrawingProjectionBasis,
 }
 
+mod drawing_snapshot;
+pub use drawing_snapshot::DetachedDrawingSnapshot;
+
 struct NativeEngine {
     manager: SketchManager,
     kernel: OcctKernel,
