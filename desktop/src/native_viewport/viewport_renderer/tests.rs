@@ -81,6 +81,86 @@ fn changed(a: &[u8], b: &[u8]) -> usize {
 }
 
 #[test]
+#[ignore = "requires a native graphics adapter"]
+fn native_viewport_grid_restores_without_pointer_motion_or_another_scene_request() {
+    use crate::session_bridge::native_interface::controller::workbench::{self, Command};
+
+    let mut app = App::new();
+    app.add_plugins(
+        interface_plugins()
+            .disable::<bevy::winit::WinitPlugin>()
+            .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: bevy::window::WindowResolution::new(320, 200),
+                    ..default()
+                }),
+                exit_condition: ExitCondition::DontExit,
+                ..default()
+            }),
+    );
+    app.insert_resource(NativeInterfaceHandle::new(|| {}))
+        .init_resource::<Captured>();
+    install(&mut app);
+    app.world_mut().resource_mut::<ModelResource>().session_id = "grid-owner".into();
+    bind_document_geometry(app.world_mut());
+    *app.world_mut().resource_mut::<ViewportSizeResource>() = ViewportSizeResource {
+        logical_width: 320.,
+        logical_height: 200.,
+    };
+    {
+        let mut palette = app.world_mut().resource_mut::<PaletteResource>();
+        palette.0.grid_fine = [0.9, 0.9, 0.9];
+        palette.0.grid_major = [1., 1., 1.];
+    }
+    let original_camera = app.world().resource::<CameraResource>().camera;
+    app.finish();
+    app.cleanup();
+    app.main_mut().update();
+    let target = app
+        .world_mut()
+        .resource_mut::<Assets<Image>>()
+        .add(target_image(UVec2::new(320, 200)));
+    let camera = app
+        .world_mut()
+        .query_filtered::<Entity, With<NativeOverlayCamera>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(camera)
+        .insert(bevy::camera::RenderTarget::Image(target.clone().into()));
+    ready(&mut app);
+    let showing = capture(&mut app, &target, "grid-initial");
+    for cycle in 0..3 {
+        workbench::execute(app.world_mut(), &Command::ToggleGrid).unwrap();
+        app.update();
+        ready(&mut app);
+        let hidden = capture(&mut app, &target, "grid-hidden");
+        assert!(changed(&showing, &hidden) > 200, "Grid must disappear");
+
+        workbench::execute(app.world_mut(), &Command::ToggleGrid).unwrap();
+        app.update();
+        ready(&mut app);
+        let sent = app.world().resource::<Worker>().sent.clone();
+        let restored = capture(&mut app, &target, "grid-restored");
+        assert_eq!(
+            changed(&showing, &restored),
+            0,
+            "Cycle {cycle}: the completed viewport frame must restore the grid without pointer input"
+        );
+        assert_eq!(
+            app.world().resource::<CameraResource>().camera,
+            original_camera
+        );
+        assert!(
+            app.world().resource::<Worker>().sent == sent,
+            "Capturing the completed frame must not submit another CAD scene request"
+        );
+        assert!(!app.world().resource::<Worker>().in_flight);
+    }
+}
+
+#[test]
 fn camera_snapshots_keep_document_and_presentation_state_resident() {
     let mut world = World::new();
     world.init_resource::<ModelResource>();

@@ -2815,6 +2815,9 @@ fn draw_cad_gizmos(
     let fine = rgba(palette.0.grid_fine, 0.28);
     let major = rgba(palette.0.grid_major, 0.48);
 
+    // Hiding the grid can empty this group. Keep its uploaded asset alive so
+    // restoring it does not need another scene update to prepare a new asset.
+    keep_gizmo_asset_resident(&mut gizmos);
     keep_gizmo_asset_resident(&mut highlights);
     keep_gizmo_asset_resident(&mut model_edges);
     keep_gizmo_asset_resident(&mut cam_completed);
@@ -5985,6 +5988,14 @@ mod tests {
                 .and_then(|handle| world.resource::<Assets<GizmoAsset>>().get(handle))
                 .map_or(0, |asset| asset.buffer().list_positions.len())
         };
+        let grid_asset = |world: &World| {
+            world
+                .resource::<GizmoHandles>()
+                .handles()
+                .get(&std::any::TypeId::of::<DefaultGizmoConfigGroup>())
+                .and_then(Option::as_ref)
+                .map(Handle::id)
+        };
         for mode in [
             ViewportMode::Solid,
             ViewportMode::Sketch,
@@ -5995,12 +6006,19 @@ mod tests {
                 .0
                 .mode = mode;
             let showing = vertices(app.world_mut());
+            let asset = grid_asset(app.world());
+            assert!(asset.is_some());
             assert!(showing > 0, "{mode:?} must draw its grid by default");
             app.world_mut()
                 .resource_mut::<PresentationResource>()
                 .0
                 .toggle_grid();
             let hidden = vertices(app.world_mut());
+            assert_eq!(
+                grid_asset(app.world()),
+                asset,
+                "Hiding must retain the grid asset"
+            );
             assert!(
                 hidden < showing,
                 "Hiding the {mode:?} grid must remove its rendered lines"
@@ -6013,6 +6031,11 @@ mod tests {
                 vertices(app.world_mut()),
                 showing,
                 "Showing the {mode:?} grid must restore its lines"
+            );
+            assert_eq!(
+                grid_asset(app.world()),
+                asset,
+                "Showing must reuse the uploaded grid asset"
             );
         }
     }
