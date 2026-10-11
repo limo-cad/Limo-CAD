@@ -718,14 +718,15 @@ pub(crate) fn process_one(
         return Err("Wait for the current modeling operation to finish".into());
     }
     initialize(world);
-    let Some(frame) = handle.frame() else {
+    let Some((presented_owner, modal_empty, viewport_bounds)) = handle.presented_pointer_context()
+    else {
         return Ok(json!({"handled":false}));
     };
     if mechanism::pointer(world, handle, services, event)? {
         world.resource_mut::<Editor>().press = None;
         return Ok(json!({"handled":true,"mechanism_drag":true}));
     }
-    if frame.modal_stack.is_empty() && event.context.as_ref() == Some(&frame.context) {
+    if modal_empty && event.context.as_ref() == Some(&presented_owner) {
         if matches!(&event.event, WindowEvent::KeyboardInput(key)
             if key.state == ButtonState::Pressed && key.logical_key == bevy::input::keyboard::Key::Escape)
             && !event.modifiers.ctrl
@@ -737,7 +738,7 @@ pub(crate) fn process_one(
                     &services.engine,
                     &services.bridge,
                     world,
-                    &frame.context,
+                    &presented_owner,
                     &crate::session_bridge::native_interface::feature::FeatureCommand::Control {
                         form_id: panel.form_id,
                         action: panel.choice_field.map_or(
@@ -755,7 +756,7 @@ pub(crate) fn process_one(
                     world,
                     &services.engine,
                     &services.bridge,
-                    &frame.context,
+                    &presented_owner,
                 );
             }
             if named_views::active(world) {
@@ -763,7 +764,7 @@ pub(crate) fn process_one(
                     world,
                     &services.engine,
                     &services.bridge,
-                    &frame.context,
+                    &presented_owner,
                 );
             }
         }
@@ -783,8 +784,8 @@ pub(crate) fn process_one(
         };
         if let Some(phase) = phase {
             let point = event.cursor.and_then(|p| {
-                let canvas = frame.canvases.iter().find(|c| c.name == "viewport")?;
-                let a = canvas.bounds;
+                let canvas = viewport_bounds?;
+                let a = canvas;
                 if matches!(phase, Pointer::Press)
                     && (handle.owns_pointer([p.x as f64, p.y as f64])
                         || p.x < a.x as f32
@@ -796,23 +797,20 @@ pub(crate) fn process_one(
                 }
                 Some([p.x - a.x as f32, p.y - a.y as f32])
             });
-            if manipulator::pointer(world, services, &frame.context, phase, point)? {
+            if manipulator::pointer(world, services, &presented_owner, phase, point)? {
                 return Ok(json!({"handled":true,"offset_drag":true}));
             }
         }
     }
-    if frame.modal_stack.is_empty()
-        && event.context.as_ref() == Some(&frame.context)
-        && joint::active(world)
-    {
+    if modal_empty && event.context.as_ref() == Some(&presented_owner) && joint::active(world) {
         if matches!(&event.event, WindowEvent::KeyboardInput(k) if k.state==ButtonState::Pressed && k.key_code==KeyCode::Escape)
         {
-            return joint::cancel(world, &services.engine, &services.bridge, &frame.context);
+            return joint::cancel(world, &services.engine, &services.bridge, &presented_owner);
         }
         if let WindowEvent::CursorMoved(moved) = &event.event {
-            if let Some(c) = frame.canvases.iter().find(|c| c.name == "viewport") {
+            if let Some(c) = viewport_bounds {
                 let p = moved.position;
-                let a = c.bounds;
+                let a = c;
                 let inside = p.x >= a.x as f32
                     && p.y >= a.y as f32
                     && p.x < (a.x + a.width) as f32
@@ -821,7 +819,7 @@ pub(crate) fn process_one(
                 if let Some(value) = joint::canvas(
                     world,
                     services,
-                    &frame.context,
+                    &presented_owner,
                     inside.then_some([p.x - a.x as f32, p.y - a.y as f32]),
                     false,
                 )? {
@@ -833,76 +831,76 @@ pub(crate) fn process_one(
     let next = stamp(
         &services.engine,
         &services.bridge,
-        &frame.context,
+        &presented_owner,
         world.resource::<Editor>().stamp.as_ref(),
     )?;
     world.resource_scope(|world, mut editor: Mut<Editor>| {
         synchronize_stamp(&mut editor, next);
         let mut result = json!({"handled":false});
-        if !frame.modal_stack.is_empty() {
+        if !modal_empty {
             editor.press = None;
             return Ok(result);
         }
-        if event.context.as_ref() != Some(&frame.context) {
+        if event.context.as_ref() != Some(&presented_owner) {
             editor.press = None;
             return Ok(result);
         }
         match &event.event {
             WindowEvent::WindowFocused(event) if !event.focused => {
                 editor.press = None;
-                clear_preview(world, &services.engine, &services.bridge, &frame.context)?;
+                clear_preview(world, &services.engine, &services.bridge, &presented_owner)?;
             }
             WindowEvent::CursorLeft(_) => {
                 editor.press = None;
-                clear_preview(world, &services.engine, &services.bridge, &frame.context)?;
-                support::hover(world, &frame.context, &mut editor.support, None)?;
-                crate::session_bridge::native_interface::feature::hover_references(world,services,&frame.context,None)?;
-                solid::hover(world, services, &frame.context, None)?;
+                clear_preview(world, &services.engine, &services.bridge, &presented_owner)?;
+                support::hover(world, &presented_owner, &mut editor.support, None)?;
+                crate::session_bridge::native_interface::feature::hover_references(world,services,&presented_owner,None)?;
+                solid::hover(world, services, &presented_owner, None)?;
             }
             WindowEvent::CursorMoved(moved) if editor.support.active => {
-                if let Some(canvas) = frame.canvases.iter().find(|c| c.name == "viewport") {
+                if let Some(canvas) = viewport_bounds {
                     let p = moved.position;
-                    let a = canvas.bounds;
+                    let a = canvas;
                     let inside = f64::from(p.x) >= a.x && f64::from(p.x) < a.x+a.width &&
                         f64::from(p.y) >= a.y && f64::from(p.y) < a.y+a.height && !handle.owns_pointer([f64::from(p.x),f64::from(p.y)]);
-                    support::hover(world, &frame.context, &mut editor.support, inside.then_some([p.x-a.x as f32,p.y-a.y as f32]))?;
+                    support::hover(world, &presented_owner, &mut editor.support, inside.then_some([p.x-a.x as f32,p.y-a.y as f32]))?;
                     result = json!({"handled":true,"hover":inside});
                 }
             }
             WindowEvent::CursorMoved(moved) if editor.draft.tool.is_none() && editor.stamp.as_ref().is_none_or(|s|s.sketch.is_none()) => {
-                if let Some(canvas)=frame.canvases.iter().find(|c|c.name=="viewport") {
-                    let p=moved.position;let a=canvas.bounds;
+                if let Some(canvas)=viewport_bounds {
+                    let p=moved.position;let a=canvas;
                     let inside=f64::from(p.x)>=a.x&&f64::from(p.x)<a.x+a.width&&f64::from(p.y)>=a.y&&f64::from(p.y)<a.y+a.height&&!handle.owns_pointer([f64::from(p.x),f64::from(p.y)]);
-                    let handled=crate::session_bridge::native_interface::feature::hover_references(world,services,&frame.context,inside.then_some([p.x-a.x as f32,p.y-a.y as f32]))?;
+                    let handled=crate::session_bridge::native_interface::feature::hover_references(world,services,&presented_owner,inside.then_some([p.x-a.x as f32,p.y-a.y as f32]))?;
                     if !handled {
-                        solid::hover(world, services, &frame.context, inside.then_some([p.x-a.x as f32,p.y-a.y as f32]))?;
+                        solid::hover(world, services, &presented_owner, inside.then_some([p.x-a.x as f32,p.y-a.y as f32]))?;
                     }
                     result=json!({"handled":true,"hover":inside});
                 }
             }
             WindowEvent::CursorMoved(moved) if editor.draft.tool.is_some() || editor.interaction.form.as_ref().is_some_and(|form| form.kind == FormKind::Polygon) => {
                 let Some(basis) = editor.stamp.as_ref().and_then(|stamp| stamp.basis) else { return Ok(result); };
-                let Some(canvas) = frame.canvases.iter().find(|canvas| canvas.name == "viewport") else { return Ok(result); };
+                let Some(canvas) = viewport_bounds else { return Ok(result); };
                 let cursor = moved.position;
                 if handle.owns_pointer([f64::from(cursor.x),f64::from(cursor.y)]) {return Ok(result);}
-                if f64::from(cursor.x) < canvas.bounds.x || f64::from(cursor.x) >= canvas.bounds.x+canvas.bounds.width
-                    || f64::from(cursor.y) < canvas.bounds.y || f64::from(cursor.y) >= canvas.bounds.y+canvas.bounds.height {
-                    clear_preview(world, &services.engine, &services.bridge, &frame.context)?;
+                if f64::from(cursor.x) < canvas.x || f64::from(cursor.x) >= canvas.x+canvas.width
+                    || f64::from(cursor.y) < canvas.y || f64::from(cursor.y) >= canvas.y+canvas.height {
+                    clear_preview(world, &services.engine, &services.bridge, &presented_owner)?;
                     return Ok(result);
                 }
-                if let Some(point) = native_viewport::interface_sketch_point(world, &frame.context.document_id,
-                    [cursor.x-canvas.bounds.x as f32,cursor.y-canvas.bounds.y as f32],basis)? {
-                    preview(world,&services.engine,&services.bridge,&frame.context,&mut editor,point,event.modifiers.ctrl)?;
+                if let Some(point) = native_viewport::interface_sketch_point(world, &presented_owner.document_id,
+                    [cursor.x-canvas.x as f32,cursor.y-canvas.y as f32],basis)? {
+                    preview(world,&services.engine,&services.bridge,&presented_owner,&mut editor,point,event.modifiers.ctrl)?;
                     result = json!({"handled":true,"preview":true,"instruction":editor.draft.instruction()});
                 }
             }
             WindowEvent::CursorMoved(moved) if editor.stamp.as_ref().is_some_and(|s|s.sketch.is_some()) => {
-                if let Some(canvas) = frame.canvases.iter().find(|c| c.name == "viewport") {
+                if let Some(canvas) = viewport_bounds {
                     let p = moved.position;
-                    let a = canvas.bounds;
+                    let a = canvas;
                     let inside = f64::from(p.x) >= a.x && f64::from(p.x) < a.x+a.width &&
                         f64::from(p.y) >= a.y && f64::from(p.y) < a.y+a.height && !handle.owns_pointer([f64::from(p.x),f64::from(p.y)]);
-                    interaction::hover(world, services, &frame.context, &editor, inside.then_some(p), a)?;
+                    interaction::hover(world, services, &presented_owner, &editor, inside.then_some(p), a)?;
                     result = json!({"handled":true,"hover":inside});
                 }
             }
@@ -917,19 +915,19 @@ pub(crate) fn process_one(
                     KeyCode::Escape => {
                         editor.draft.escape();
                         if editor.stamp.as_ref().is_none_or(|stamp| stamp.sketch.is_none()) {
-                            solid::clear(world, &frame.context)?;
+                            solid::clear(world, &presented_owner)?;
                         }
                         editor.interaction=Default::default();
-                        interaction::present(world,&frame.context,&editor.interaction)?;
+                        interaction::present(world,&presented_owner,&editor.interaction)?;
                         editor.error.clear();
                         editor.press = None;
                         editor.support = Default::default();
-                        support::present(world, &frame.context, &editor.support)?;
-                        clear_preview(world, &services.engine, &services.bridge, &frame.context)?;
+                        support::present(world, &presented_owner, &editor.support)?;
+                        clear_preview(world, &services.engine, &services.bridge, &presented_owner)?;
                         result = json!({"handled":true,"cancelled":true});
                     }
                     KeyCode::Delete | KeyCode::Backspace if !editor.interaction.selection.is_empty() => {
-                        return interaction::execute(world,&services.engine,&services.bridge,&frame.context,&mut editor,InteractionCommand::Delete,||Ok(()));
+                        return interaction::execute(world,&services.engine,&services.bridge,&presented_owner,&mut editor,InteractionCommand::Delete,||Ok(()));
                     }
                     KeyCode::Enter | KeyCode::NumpadEnter => match editor.draft.complete() {
                         Ok(Some(command)) => {
@@ -956,48 +954,45 @@ pub(crate) fn process_one(
                     editor.press = None;
                     return Ok(result);
                 };
-                let Some(canvas) = frame
-                    .canvases
-                    .iter()
-                    .find(|canvas| canvas.name == "viewport")
+                let Some(canvas) = viewport_bounds
                 else {
                     return Ok(result);
                 };
-                let in_canvas = f64::from(cursor.x) >= canvas.bounds.x
-                    && f64::from(cursor.x) < canvas.bounds.x + canvas.bounds.width
-                    && f64::from(cursor.y) >= canvas.bounds.y
-                    && f64::from(cursor.y) < canvas.bounds.y + canvas.bounds.height;
+                let in_canvas = f64::from(cursor.x) >= canvas.x
+                    && f64::from(cursor.x) < canvas.x + canvas.width
+                    && f64::from(cursor.y) >= canvas.y
+                    && f64::from(cursor.y) < canvas.y + canvas.height;
                 if button.state == ButtonState::Pressed {
-                    editor.press = in_canvas.then(|| (frame.context.clone(), cursor));
+                    editor.press = in_canvas.then(|| (presented_owner.clone(), cursor));
                 } else {
                     let Some((owner, start)) = editor.press.take() else {
                         return Ok(result);
                     };
-                    if owner != frame.context || !in_canvas {
+                    if owner != presented_owner || !in_canvas {
                         return Ok(result);
                     }
                     if editor.draft.tool.is_none() && editor.stamp.as_ref().is_some_and(|s|s.sketch.is_some()) {
                         return interaction::pointer(world,
         (services, &owner),
         &mut editor,
-        (start, cursor, canvas.bounds),
+        (start, cursor, canvas),
         event.modifiers.shift,
         event.modifiers.ctrl);
                     }
                     if start.distance(cursor)>3. {return Ok(result);}
                     if editor.support.active {
                         return support::pick(world, services, &owner, &mut editor,
-                            [cursor.x-canvas.bounds.x as f32,cursor.y-canvas.bounds.y as f32]);
+                            [cursor.x-canvas.x as f32,cursor.y-canvas.y as f32]);
                     }
-                    if let Some(value)=joint::canvas(world,services,&owner,Some([cursor.x-canvas.bounds.x as f32,cursor.y-canvas.bounds.y as f32]),true)? {return Ok(value);}
+                    if let Some(value)=joint::canvas(world,services,&owner,Some([cursor.x-canvas.x as f32,cursor.y-canvas.y as f32]),true)? {return Ok(value);}
                     if let Some(value) = crate::session_bridge::native_interface::feature::handle_canvas_pick(
                         world, services, &owner,
-                        [cursor.x-canvas.bounds.x as f32,cursor.y-canvas.bounds.y as f32],
+                        [cursor.x-canvas.x as f32,cursor.y-canvas.y as f32],
                     )? {
                         return Ok(value);
                     }
                     let Some(basis) = editor.stamp.as_ref().and_then(|stamp| stamp.basis) else {
-                        return solid::select(world, services, &owner, [cursor.x-canvas.bounds.x as f32,cursor.y-canvas.bounds.y as f32], event.modifiers.shift || event.modifiers.ctrl || event.modifiers.meta);
+                        return solid::select(world, services, &owner, [cursor.x-canvas.x as f32,cursor.y-canvas.y as f32], event.modifiers.shift || event.modifiers.ctrl || event.modifiers.meta);
                     };
                     if editor.draft.tool.is_none() {
                         return Ok(result);
@@ -1006,8 +1001,8 @@ pub(crate) fn process_one(
                         world,
                         &owner.document_id,
                         [
-                            cursor.x - canvas.bounds.x as f32,
-                            cursor.y - canvas.bounds.y as f32,
+                            cursor.x - canvas.x as f32,
+                            cursor.y - canvas.y as f32,
                         ],
                         basis,
                     )?;
