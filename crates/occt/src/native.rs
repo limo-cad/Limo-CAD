@@ -264,6 +264,13 @@ pub struct OcctKernel {
 /// Independent projection-only shapes; cannot mint live body generations,
 /// mutate a document, or qualify native viewport geometry reuse.
 pub struct DetachedDrawingKernel(OcctKernel);
+/// Independent export shapes with no document mutation or geometry authority.
+pub struct DetachedMeshKernel(OcctKernel);
+impl DetachedMeshKernel {
+    pub fn tessellate(&self, request: &MeshExportRequest) -> Result<Vec<TriangleMesh>, OcctError> {
+        self.0.tessellate_bodies(request)
+    }
+}
 impl DetachedDrawingKernel {
     pub fn project(
         &self,
@@ -366,6 +373,26 @@ impl OcctKernel {
         let mut result = Self::new()?;
         result.inner = inner;
         Ok(DetachedDrawingKernel(result))
+    }
+
+    pub fn detached_mesh_snapshot(
+        &self,
+        ids: &[limo_cad_core::BodyId],
+    ) -> Result<DetachedMeshKernel, OcctError> {
+        self.detached_drawing_snapshot(ids)
+            .map(|snapshot| DetachedMeshKernel(snapshot.0))
+    }
+
+    pub fn active_body_ids(&self) -> Result<Vec<limo_cad_core::BodyId>, OcctError> {
+        let kernel = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| OcctError("OCCT kernel was released".into()))?;
+        Ok(kernel
+            .body_ids()
+            .into_iter()
+            .map(limo_cad_core::BodyId)
+            .collect())
     }
 
     /// Authoritative live B-rep generations. Existing bodies mentioned as job
