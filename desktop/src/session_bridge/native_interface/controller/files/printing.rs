@@ -1,7 +1,7 @@
 //! One immutable print snapshot from the existing drawing export service.
 //! Preparation never edits the document or inserts a history record.
 use super::*;
-use crate::{native_print, session_bridge::parse_engine_envelope};
+use crate::native_print;
 use bevy::window::RawHandleWrapper;
 use limo_cad_occt::drawing_export::{DrawingExportFormat, DrawingExportRequest};
 
@@ -19,37 +19,40 @@ fn prepare(
     receipt: &DocumentReceipt,
     check: impl FnOnce() -> Result<(), String>,
 ) -> Result<(native_print::Page, u64), String> {
-    services
-        .bridge
-        .with_native_document_receipt(&services.engine, &receipt.owner, |revision| {
+    let prepared = services.bridge.with_native_document_receipt(
+        &services.engine,
+        &receipt.owner,
+        |revision| {
             if revision != receipt.revision {
                 return Err("The drawing changed before printing could start".into());
             }
             check()?;
-            // Release the borrowed engine read before drawing_export reenters it.
-            let (sheet_id, sheet_name) = services.engine.with_drawing(|drawing| {
+            // Release the borrowed sheet read before capturing exact geometry.
+            let sheet_id = services.engine.with_drawing(|drawing| {
                 drawing
                     .sheets
                     .iter()
                     .find(|sheet| Some(sheet.id) == drawing.active_sheet_id)
-                    .map(|sheet| (sheet.id, sheet.name.clone()))
+                    .map(|sheet| sheet.id)
                     .ok_or("Select a drawing sheet to print")
             })?;
-            let request = DrawingExportRequest {
-                sheet_id,
-                format: DrawingExportFormat::Svg,
-            };
-            let output = parse_engine_envelope(
-                services
-                    .engine
-                    .drawing_export(&serde_json::to_string(&request).map_err(|e| e.to_string())?),
-            )?;
-            let svg = output["content"]
-                .as_str()
-                .ok_or("Drawing export returned no page")?;
-            let title = format!("{} — {}", services.engine.document_name(), sheet_name);
-            Ok((native_print::Page::prepare(title, svg)?, sheet_id))
-        })
+            services
+                .engine
+                .prepare_drawing_export(&DrawingExportRequest {
+                    sheet_id,
+                    format: DrawingExportFormat::Svg,
+                })
+        },
+    )?;
+    // The exact snapshot owns its selected geometry. HLR, SVG text resolution
+    // and PDF conversion must not keep the live publisher or engine locked.
+    // request() rechecks the original receipt before adopting the page or
+    // opening a native print dialog; preparation grants no later authority.
+    let svg = prepared.content()?;
+    Ok((
+        native_print::Page::prepare(prepared.title().to_owned(), &svg)?,
+        prepared.sheet_id(),
+    ))
 }
 
 pub(super) fn request(world: &mut World, receipt: DocumentReceipt) -> Result<Value, String> {
