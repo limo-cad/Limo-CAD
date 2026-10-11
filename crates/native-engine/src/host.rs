@@ -162,7 +162,8 @@ pub struct ResolvedDrawingProjection {
 
 mod drawing_snapshot;
 pub use drawing_snapshot::{
-    DetachedDrawingSnapshot, FinishedDrawingProjections, SharedDrawingProjection,
+    DetachedDrawingSnapshot, FinishedDrawingProjections, PreparedDrawingExport,
+    SharedDrawingProjection,
 };
 
 struct NativeEngine {
