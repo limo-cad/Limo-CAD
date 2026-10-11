@@ -372,18 +372,22 @@ fn wcs_inspect_and_capture_polls_preserve_release_and_stage_once_after_idle() {
             2
         );
         let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
+        let request = loop {
             if let Some(outcome) = controller::worker::poll(app.world_mut(), &services) {
-                assert_eq!(
-                    outcome.value.unwrap()["control_request"]["ui"]["action"],
-                    action
-                );
-                break;
+                let request = outcome.value.unwrap()["control_request"].clone();
+                assert_eq!(request["ui"]["action"], action);
+                break request;
             }
             assert!(Instant::now() < deadline);
             std::thread::sleep(Duration::from_millis(1));
-        }
-        controller.polled_control = None;
+        };
+        controller::tests::finish_polled_control_fixture(
+            app.world_mut(),
+            &handle,
+            &services,
+            &mut controller,
+            &request,
+        );
         let replay = controller::take_deferred_pointer_input(
             app.world_mut(),
             &handle,

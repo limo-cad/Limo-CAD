@@ -6,6 +6,86 @@ use std::fs;
 mod playback_priority;
 mod window_close;
 
+/// Finish the actual control admitted by a fixture's poll worker. Discarding
+/// its outcome leaves the window's one-use admission pending for the next poll.
+pub(super) fn finish_polled_control_fixture(
+    world: &mut World,
+    handle: &NativeInterfaceHandle,
+    services: &NativeServices,
+    state: &mut Controller,
+    request: &Value,
+) {
+    let polled = state.polled_control.take().expect("fixture polled control");
+    assert_eq!(request["id"], polled.id);
+    assert_eq!(request["session_id"], polled.session);
+    let ticket =
+        native_control::ticket_for(&services.bridge, &polled.owner, &polled.session, &polled.id)
+            .unwrap();
+    assert!(native_control::has_pending(&services.bridge, &polled.owner.window_id).unwrap());
+    start_control_with_ticket(
+        world,
+        handle,
+        services,
+        state,
+        &polled.owner,
+        request,
+        Some(ticket),
+    )
+    .unwrap();
+
+    assert!(!world.contains_resource::<Controller>());
+    world.insert_resource(services.clone());
+    world.insert_resource(handle.clone());
+    let placeholder = Controller::new(
+        state.window_id.clone(),
+        None,
+        Arc::new(AtomicBool::new(false)),
+    );
+    world.insert_resource(std::mem::replace(state, placeholder));
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        complete_control(world);
+        if world.resource::<Controller>().pending.is_none() {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "fixture completion timed out"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    *state = world.remove_resource::<Controller>().unwrap();
+    assert!(!native_control::has_pending(&services.bridge, &polled.owner.window_id).unwrap());
+    let controls = crate::session_bridge::session_root()
+        .join(&polled.session)
+        .join("controls");
+    let response: Value = serde_json::from_str(
+        &fs::read_to_string(controls.join(format!("{}.result.json", polled.id))).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(response["request_id"], polled.id);
+    assert_eq!(response["session_id"], polled.session);
+    assert_eq!(response["control_admission"]["request_id"], polled.id);
+    assert_eq!(
+        response["control_admission"]["document_id"],
+        polled.owner.document_id
+    );
+    if request["ui"]["action"] == "capture" {
+        // These scheduling fixtures have no capture destination or GPU. The
+        // actual rejection must still complete and retire the admitted ticket.
+        assert_eq!(response["status"], "failed");
+        assert_eq!(response["error"], "Capture requires an absolute PNG path");
+    } else {
+        assert_eq!(response["status"], "applied");
+    }
+    assert!(!controls
+        .join(format!("{}.request.json", polled.id))
+        .exists());
+    assert!(!controls
+        .join(format!("{}.admitted.json", polled.id))
+        .exists());
+}
+
 #[test]
 fn rejected_native_receipt_retries_on_frame_and_prevents_early_shutdown() {
     crate::session_bridge::tests::with_isolated_session_test(|| {

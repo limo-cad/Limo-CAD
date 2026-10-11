@@ -1094,11 +1094,15 @@ fn published_picker_escape_and_retired_owner_leave_engine_and_history_unchanged(
             assert!(std::time::Instant::now() < deadline);
             std::thread::sleep(Duration::from_millis(1));
         };
-        assert_eq!(
-            outcome.value.unwrap()["control_request"]["ui"]["action"],
-            action
+        let request = outcome.value.unwrap()["control_request"].clone();
+        assert_eq!(request["ui"]["action"], action);
+        controller::tests::finish_polled_control_fixture(
+            app.world_mut(),
+            &handle,
+            &services,
+            &mut controller,
+            &request,
         );
-        controller.polled_control = None;
         let events = controller::take_deferred_pointer_input(
             app.world_mut(),
             &handle,
