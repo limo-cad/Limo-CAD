@@ -103,8 +103,8 @@ pub(crate) fn window_ui_size(world: &mut World) -> Option<Vec2> {
         return Some(size / scale);
     }
     let handle = world.get_resource::<NativeInterfaceHandle>()?;
-    let client = handle.frame()?.client;
-    Some(Vec2::new(client.width as f32, client.height as f32) * handle.presented_ui_scale() / scale)
+    let (client, presented_scale) = handle.presented_window_metrics()?;
+    Some(Vec2::new(client.width as f32, client.height as f32) * presented_scale / scale)
 }
 
 /// The 3D rectangle remains the frame's `viewport` canvas; it is not inferred
@@ -861,6 +861,16 @@ impl NativeInterfaceHandle {
 
     pub fn frame(&self) -> Option<InterfaceFrame> {
         self.shared.lock().ok()?.presented_frame.clone()
+    }
+
+    /// Client bounds and their layout scale belong to one presented frame.
+    /// Window fallback sizing needs neither surface text nor a second lock.
+    pub(crate) fn presented_window_metrics(&self) -> Option<(InterfaceRect, f32)> {
+        let shared = self.shared.lock().ok()?;
+        Some((
+            shared.presented_frame.as_ref()?.client,
+            shared.presented_ui_scale,
+        ))
     }
 
     /// Stamp ordered OS input with exactly the same laid-out owner as `frame`,

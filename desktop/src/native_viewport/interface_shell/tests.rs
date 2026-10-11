@@ -755,6 +755,66 @@ fn pointer_projection_uses_one_presented_owner_modal_and_canvas_without_retainin
 }
 
 #[test]
+fn window_fallback_size_uses_paired_presented_metrics_without_retaining_surface_text() {
+    let (mut app, handle, _, _) = fixture();
+    app.world_mut().insert_resource(bevy::ui::UiScale(2.));
+    let mut first = frame("document-a", 1);
+    first.surfaces[0].text = Some("retained window report ".repeat(4096));
+    handle.present(first.clone()).unwrap();
+    app.update();
+    let text_identity = || {
+        let shared = handle.shared.lock().unwrap();
+        shared.presented_frame.as_ref().unwrap().surfaces[0]
+            .text
+            .as_ref()
+            .unwrap()
+            .as_ptr() as usize
+    };
+    let text = text_identity();
+    let held = handle.presented_window_metrics().unwrap();
+    assert_eq!(held, (first.client, 2.));
+    for _ in 0..16 {
+        assert_eq!(
+            window_ui_size(app.world_mut()),
+            Some(Vec2::new(1000., 800.))
+        );
+    }
+    assert_eq!(text_identity(), text);
+
+    let mut next = frame("document-b", 2);
+    next.client.width = 1200.;
+    next.client.height = 900.;
+    handle.present(next.clone()).unwrap();
+    app.world_mut().resource_mut::<bevy::ui::UiScale>().0 = 4.;
+    // Pending client and scale changes cannot be mixed with the last layout.
+    assert_eq!(handle.presented_window_metrics(), Some(held));
+    assert_eq!(window_ui_size(app.world_mut()), Some(Vec2::new(500., 400.)));
+    app.update();
+    assert_eq!(handle.presented_window_metrics(), Some((next.client, 4.)));
+    assert_eq!(
+        window_ui_size(app.world_mut()),
+        Some(Vec2::new(1200., 900.))
+    );
+    assert_eq!(held, (first.client, 2.));
+
+    let window = app
+        .world_mut()
+        .spawn((
+            Window {
+                resolution: bevy::window::WindowResolution::new(900, 700),
+                ..Default::default()
+            },
+            bevy::window::PrimaryWindow,
+        ))
+        .id();
+    handle.shared.lock().unwrap().presented_frame = None;
+    assert_eq!(window_ui_size(app.world_mut()), Some(Vec2::new(225., 175.)));
+    app.world_mut().despawn(window);
+    assert!(window_ui_size(app.world_mut()).is_none());
+    assert!(handle.presented_window_metrics().is_none());
+}
+
+#[test]
 fn removal_of_focused_controls_keeps_publication_live() {
     let (mut app, handle, entity, _) = fixture();
     click(&handle).unwrap();
