@@ -12,6 +12,8 @@ pub(crate) use platform::script_preview;
 pub(crate) use platform::section_view;
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub mod interface_shell;
+#[cfg(all(windows, feature = "native-computer-control"))]
+pub(crate) mod native_key_diagnostics;
 mod preview_color;
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 mod profile_outline;
