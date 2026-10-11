@@ -13,7 +13,8 @@ use super::{
     ViewportSnapMarker,
 };
 #[cfg(target_os = "linux")]
-use bevy::render::settings::{RenderCreation, WgpuFeatures, WgpuSettings, WgpuSettingsPriority};
+use bevy::render::settings::WgpuFeatures;
+use bevy::render::settings::{RenderCreation, WgpuSettings, WgpuSettingsPriority};
 use bevy::{
     asset::RenderAssetUsages,
     camera::{visibility::RenderLayers, ClearColorConfig},
@@ -667,28 +668,21 @@ struct CadSketchPointOutlineGizmos;
 struct CadSketchPointGizmos;
 
 pub(super) fn cad_render_plugin() -> RenderPlugin {
-    let render_plugin = RenderPlugin {
-        synchronous_pipeline_compilation: true,
+    // Request the portable GPU feature/limit profile the CAD scene uses. The
+    // functionality profile enables every adapter capability, eagerly compiling
+    // environment filtering, SSAO and occlusion-culling passes before menus.
+    let settings = WgpuSettings {
+        priority: WgpuSettingsPriority::WebGPU,
         ..default()
     };
     #[cfg(target_os = "linux")]
-    let render_plugin = RenderPlugin {
-        render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
-            priority: WgpuSettingsPriority::WebGPU,
-            features: WgpuFeatures::empty(),
-            ..default()
-        })),
-        ..render_plugin
+    let settings = WgpuSettings {
+        features: WgpuFeatures::empty(),
+        ..settings
     };
-    render_plugin
-}
-
-pub(super) fn cad_pbr_plugin() -> bevy::pbr::PbrPlugin {
-    // CAD presents retained, individually editable bodies. CPU instance
-    // preparation avoids compiling and dispatching GPU batch-building passes
-    // before the first menu frame, while keeping the same mesh/material renderer.
-    bevy::pbr::PbrPlugin {
-        use_gpu_instance_buffer_builder: false,
+    RenderPlugin {
+        synchronous_pipeline_compilation: true,
+        render_creation: RenderCreation::Automatic(Box::new(settings)),
         ..default()
     }
 }

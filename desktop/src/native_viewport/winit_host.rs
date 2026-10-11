@@ -255,8 +255,7 @@ pub(crate) fn build(configure: impl FnOnce(&mut App, NativeInterfaceHandle)) -> 
             close_when_requested: false,
             ..default()
         })
-        .set(platform::cad_render_plugin())
-        .set(platform::cad_pbr_plugin());
+        .set(platform::cad_render_plugin());
     #[cfg(target_os = "linux")]
     let plugins = plugins.disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>();
     #[cfg(feature = "dev-native-ime-trace")]
