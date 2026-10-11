@@ -1,8 +1,9 @@
 # Section inspection and diagram capability
 
 Section Analysis is a modeling inspection tool in the native Bevy desktop.
-It reuses the existing OCCT drawing-section pipeline without creating features
-or drawing sheets and without changing source geometry.
+It shares exact OCCT section primitives with drawings without creating features
+or drawing sheets and without changing source geometry. Inspection uses a focused
+section query; it does not run the drawings' full hidden-line projection.
 
 ## Capability audit and order of work (2026-10-06)
 
@@ -42,7 +43,8 @@ of occurrence transforms, exploded presentation and print-bed placement.
 
 `solid_section_review` takes `body_id`, `plane` (`xy`, `xz`, `yz`), `offset_mm`,
 optional `probe_mm`, and optional `deflection_mm` (0.001–0.1; default 0.01).
-It returns section-only bounds, sampled intersection curves, separate
+It returns an explicit outcome (`material_section`, `boundary_contact` or
+`no_intersection`), section-only bounds, sampled intersection curves, separate
 `probe_spans` with start/end/length in mm, and an SVG document. The SVG can be
 saved by a client without creating a drawing sheet. XY uses X/Y, XZ X/Z, YZ Y/Z
 as horizontal/vertical axes. The offset refers to Z, Y, X respectively.
@@ -67,12 +69,17 @@ above the plane instead of below. The viewport and drawings share the same
 copies source geometry before clipping/tessellation and is limited to one million
 vertices, one million triangles and 100,000 edge points.
 
-Intersections come from the existing OCCT drawing-section pipeline; hatching
-uses the existing bounded paper-graphics code. Probe distances use the sampled
-section curves, including holes and disconnected material with even/odd
+Intersections use exact OCCT section primitives shared with drawings; hatching
+uses the existing bounded paper-graphics code. Cutaway meshing runs only when
+requested. Probe distances use sampled section curves, including holes and
+disconnected material with even/odd
 crossings. Open/ambiguous probe intersections reject rather than invent a
-thickness. Tangent planes and invalid requests reject; an empty intersection
-returns no bounds and no SVG. Curves are limited to 100,000 points and probe
+thickness. Invalid requests and kernel failures return errors. A plane that
+touches the boundary without splitting a connected source solid returns
+`boundary_contact`, with empty material spans and no cutaway. The diagram can
+show its boundary contours; 3D mode preserves the source instead of displaying
+an empty clipped body. `no_intersection` returns no bounds and an empty SVG.
+Curves are limited to 100,000 points and probe
 results to 128 intervals. A probe on a boundary follows a half-open convention;
 move it inside the material for an interior measurement.
 
