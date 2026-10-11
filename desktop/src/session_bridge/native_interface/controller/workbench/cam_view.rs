@@ -59,6 +59,51 @@ struct Key {
     revision: u64,
     selection: Option<cam::Selection>,
 }
+
+/// Selection changes require a different preview job, not another owned CAM
+/// document. Retain the exact immutable input only within its owner/revision.
+/// Call under the existing document receipt fence before starting any worker.
+fn retained_document(
+    engine: &AppState,
+    key: &Key,
+    previous: Option<(&Key, &Arc<CamDocumentDto>)>,
+) -> Arc<CamDocumentDto> {
+    if let Some((_, document)) =
+        previous.filter(|(prior, _)| prior.owner == key.owner && prior.revision == key.revision)
+    {
+        return Arc::clone(document);
+    }
+    Arc::new(engine.cam_document_snapshot())
+}
+
+fn document_inputs(
+    services: &NativeServices,
+    key: &Key,
+    previous: Option<(&Key, &Arc<CamDocumentDto>)>,
+) -> Result<
+    (
+        Arc<CamDocumentDto>,
+        Option<u64>,
+        Option<u64>,
+        Option<String>,
+    ),
+    String,
+> {
+    services
+        .bridge
+        .with_native_document_receipt(&services.engine, &key.owner, |revision| {
+            if revision != key.revision {
+                return Err("CAM document changed while preparing preview".into());
+            }
+            let document = retained_document(&services.engine, key, previous);
+            let (setup, operation) = selection(&document, key.selection);
+            let warning = setup
+                .map(|id| services.engine.cam_toolpath_safety_warning(id))
+                .transpose()?
+                .flatten();
+            Ok((document, setup, operation, warning))
+        })
+}
 struct Prepared {
     paths: Vec<ViewportLineLayer>,
     tool: Option<ViewportCamTool>,
@@ -973,20 +1018,11 @@ pub(super) fn synchronize(
             if let Some(pending) = &state.pending {
                 pending.cancellation.cancel();
             }
-            let (document, setup, operation, warning) = services
-                .bridge
-                .with_native_document_receipt(&services.engine, owner, |revision| {
-                    if revision != key.revision {
-                        return Err("CAM document changed while preparing preview".into());
-                    }
-                    let document = services.engine.cam_document_snapshot();
-                    let (setup, operation) = selection(&document, key.selection);
-                    let warning = setup
-                        .map(|id| services.engine.cam_toolpath_safety_warning(id))
-                        .transpose()?
-                        .flatten();
-                    Ok((document, setup, operation, warning))
-                })?;
+            let (document, setup, operation, warning) = document_inputs(
+                services,
+                &key,
+                state.key.as_ref().zip(state.document.as_ref()),
+            )?;
             state.warning = warning;
             if state
                 .key
@@ -1000,7 +1036,7 @@ pub(super) fn synchronize(
             state.key = Some(key.clone());
             state.report = false;
             state.settings_open = false;
-            state.document = Some(Arc::new(document));
+            state.document = Some(document);
             state.setup = setup;
             state.operation = operation;
             state.prepared = None;

@@ -2,6 +2,101 @@ use super::*;
 use crate::session_bridge::{native_interface::tests::Fixture, parse_engine_envelope};
 
 #[test]
+fn cam_preview_selection_reuses_document_but_source_and_owner_changes_retire_it() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let (_, services, _, _) = fixture_world(&fixture);
+        let owner = fixture.owner();
+        let receipt = fixture
+            .bridge
+            .native_document_receipt(&fixture.engine, &owner)
+            .unwrap();
+        let first_key = Key {
+            owner: owner.clone(),
+            revision: receipt.revision,
+            selection: None,
+        };
+        let before = fixture.engine.engine_call("project_export_model", "");
+        let (first, setup, operation, _) = document_inputs(&services, &first_key, None).unwrap();
+        assert_eq!((setup, operation), (Some(1), None));
+        let selected_key = Key {
+            selection: Some(cam::Selection::Operation(1)),
+            ..first_key.clone()
+        };
+        let (selected, setup, operation, _) =
+            document_inputs(&services, &selected_key, Some((&first_key, &first))).unwrap();
+        assert!(Arc::ptr_eq(&first, &selected));
+        assert_eq!((setup, operation), (Some(1), Some(1)));
+        let missing_key = Key {
+            selection: Some(cam::Selection::Setup(99)),
+            ..first_key.clone()
+        };
+        let (missing, setup, operation, _) =
+            document_inputs(&services, &missing_key, Some((&selected_key, &selected))).unwrap();
+        assert!(Arc::ptr_eq(&first, &missing));
+        assert_eq!((setup, operation), (None, None));
+        assert_eq!(
+            before,
+            fixture.engine.engine_call("project_export_model", "")
+        );
+
+        let mut edited = first.as_ref().clone();
+        edited.setups[0].name = "Edited setup".into();
+        let changed = fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &owner,
+                "cam_set_document",
+                &serde_json::to_value(&edited).unwrap(),
+                || Ok(()),
+            )
+            .unwrap();
+        assert!(document_inputs(&services, &selected_key, Some((&first_key, &first))).is_err());
+        let changed_key = Key {
+            revision: changed.engine_revision,
+            ..selected_key.clone()
+        };
+        let (current, setup, operation, _) =
+            document_inputs(&services, &changed_key, Some((&selected_key, &selected))).unwrap();
+        assert!(!Arc::ptr_eq(&first, &current));
+        assert_eq!((setup, operation), (Some(1), Some(1)));
+        assert_eq!(current.setups[0].name, "Edited setup");
+        assert_ne!(first.setups[0].name, current.setups[0].name);
+        let retired = Arc::downgrade(&current);
+
+        let successor = fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &owner,
+                "cad_new_project",
+                &json!({}),
+                || Ok(()),
+            )
+            .unwrap();
+        assert_ne!(owner, successor.context);
+        assert!(document_inputs(&services, &changed_key, Some((&changed_key, &current))).is_err());
+        let successor_key = Key {
+            owner: successor.context,
+            revision: successor.engine_revision,
+            selection: None,
+        };
+        let (empty, setup, operation, _) =
+            document_inputs(&services, &successor_key, Some((&changed_key, &current))).unwrap();
+        assert!(!Arc::ptr_eq(&current, &empty));
+        assert!(empty.setups.is_empty());
+        assert_eq!((setup, operation), (None, None));
+        assert!(
+            retired.upgrade().is_some(),
+            "A reader may finish on the immutable predecessor"
+        );
+        drop(current);
+        assert!(retired.upgrade().is_none());
+    });
+}
+
+#[test]
 fn physical_picker_visibility_restores_stock_hiding_and_retains_user_visibility() {
     let _lock = crate::session_bridge::tests::TEST_LOCK
         .lock()
