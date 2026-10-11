@@ -107,6 +107,7 @@ pub(super) fn capture(
         })
 }
 
+#[cfg(test)]
 fn fresh_layout_report(engine: &AppState, intent: &ExportIntent) -> Result<Option<Value>, String> {
     Ok(if needs_layout_check(intent) {
         Some(parse_engine_envelope(engine.engine_call(
