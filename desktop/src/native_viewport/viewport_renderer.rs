@@ -208,6 +208,9 @@ impl Drop for Worker {
 
 struct ViewportRendererPlugin;
 
+#[path = "viewport_renderer/gpu_queue.rs"]
+mod gpu_queue;
+
 pub(crate) fn interface_plugins() -> bevy::app::PluginGroupBuilder {
     DefaultPlugins
         .build()
@@ -241,6 +244,7 @@ pub(crate) fn install(app: &mut App) {
 impl Plugin for ViewportRendererPlugin {
     fn build(&self, app: &mut App) {
         let render = app.sub_app_mut(RenderApp);
+        gpu_queue::install_interface(render, gpu_queue::SharedQueue::default());
         render
             .add_systems(ExtractSchedule, extract_texture)
             .add_systems(
@@ -253,6 +257,7 @@ impl Plugin for ViewportRendererPlugin {
 
     fn finish(&self, app: &mut App) {
         let render = app.sub_app(RenderApp).world();
+        let queue_access = render.resource::<gpu_queue::SharedQueue>().clone();
         let resources = RenderResources(
             render.resource::<RenderDevice>().clone(),
             render.resource::<RenderQueue>().clone(),
@@ -279,7 +284,14 @@ impl Plugin for ViewportRendererPlugin {
                             return Ok(());
                         }
                     }
-                    render_worker(resources, jobs, &replies, &handle, &worker_stopped)
+                    render_worker(
+                        resources,
+                        queue_access,
+                        jobs,
+                        &replies,
+                        &handle,
+                        &worker_stopped,
+                    )
                 }));
                 let error = match result {
                     Ok(Ok(())) => return,
@@ -478,6 +490,7 @@ fn target_image(size: UVec2) -> Image {
 
 fn render_worker(
     resources: RenderResources,
+    queue_access: gpu_queue::SharedQueue,
     jobs: mpsc::Receiver<Snapshot>,
     replies: &mpsc::SyncSender<Result<Frame, String>>,
     handle: &NativeInterfaceHandle,
@@ -505,6 +518,7 @@ fn render_worker(
     #[cfg(feature = "dev-native-ime-trace")]
     let plugins = plugins.disable::<bevy::log::LogPlugin>();
     app.add_plugins(plugins);
+    gpu_queue::install_worker(app.sub_app_mut(RenderApp), queue_access);
     install_cad_renderer(&mut app, false);
     app.finish();
     app.cleanup();
