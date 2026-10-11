@@ -1863,6 +1863,22 @@ fn control_for_window_owned(
                 Value::Null
             };
 
+            // A reader can observe the receipt immediately. Publish both liveness
+            // records first so its next request cannot race a stale heartbeat.
+            if supported {
+                let document_id = publisher.active_project_session_id.clone();
+                write_project_heartbeat(
+                    publisher.active_mut(),
+                    window_label,
+                    document_id.as_deref(),
+                    &state.process_instance_id,
+                    "query_completed",
+                )?;
+                state.write_process_instance_file_locked(&publishers, &mut lease_path)?;
+            }
+            let publisher = publishers
+                .get_mut(window_label)
+                .expect("control window remains locked during query completion");
             let id = request["id"].as_str().unwrap();
             if let Some(ticket) = native_ticket.as_ref() {
                 response["request_id"] = json!(id);
@@ -1884,17 +1900,6 @@ fn control_for_window_owned(
                     &response.to_string(),
                 )?;
                 let _ = fs::remove_file(path);
-            }
-            if supported {
-                let document_id = publisher.active_project_session_id.clone();
-                write_project_heartbeat(
-                    publisher.active_mut(),
-                    window_label,
-                    document_id.as_deref(),
-                    &state.process_instance_id,
-                    "query_completed",
-                )?;
-                state.write_process_instance_file_locked(&publishers, &mut lease_path)?;
             }
             return Ok(handoff);
         }
@@ -2521,6 +2526,59 @@ mod tests {
         }
         std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn query_receipt_waits_for_heartbeat_and_process_lease_publication() {
+        with_isolated_session_test(|| {
+            let dir =
+                std::env::temp_dir().join(format!("limo-cad-query-receipt-{}", Uuid::new_v4()));
+            std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+            for block_lease in [false, true] {
+                let state = SessionBridgeState::default();
+                let engine = AppState::new();
+                envelope_ok(&state.with_project_session_transition("main", &engine, || {
+                    engine.bind_project_session("receipt-order")
+                }));
+                let (session, _) = reserve(&state, "main");
+                let controls = dir.join(&session).join("controls");
+                let request = controls.join("100-1.request.json");
+                let result = controls.join("100-1.result.json");
+                atomic_write(
+                    &request,
+                    &json!({"id":"100-1", "expires_ms":now_ms()+30_000,
+                        "sketch_query":{"method":"active_sketch", "payload":""}})
+                    .to_string(),
+                )
+                .unwrap();
+                state.heartbeat_for_window("main").unwrap();
+                let heartbeat = dir.join(&session).join("heartbeat.json");
+                let lease = dir
+                    .join("_ui/processes")
+                    .join(format!("{}.json", state.process_instance_id));
+                let blocked = if block_lease { &lease } else { &heartbeat };
+                fs::remove_file(blocked).unwrap();
+                fs::create_dir(blocked).unwrap();
+                assert!(control_for_window(&state, "main", &engine, None).is_err());
+                assert!(
+                    !result.exists(),
+                    "no query receipt before liveness is durable"
+                );
+                assert!(request.exists(), "an unacknowledged read remains pending");
+                fs::remove_dir(blocked).unwrap();
+                let started = now_ms();
+                control_for_window(&state, "main", &engine, None).unwrap();
+                let receipt: Value =
+                    serde_json::from_str(&fs::read_to_string(result).unwrap()).unwrap();
+                assert_eq!(receipt["status"], "applied");
+                for path in [&heartbeat, &lease] {
+                    let live: Value =
+                        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+                    assert!(live["updated_ms"].as_u64().unwrap() >= started);
+                }
+            }
+            fs::remove_dir_all(dir).unwrap();
+        });
     }
 
     #[test]

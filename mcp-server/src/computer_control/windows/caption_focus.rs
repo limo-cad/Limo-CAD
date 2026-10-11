@@ -259,27 +259,6 @@ fn exposure_response(owner: &Value, requested: bool) -> Value {
         "hint":"A best-effort nonactivating CAD exposure request was attempted. It may be refused or still queued. Observe again; only a fresh qualified exposed native caption can permit the existing focus click. Ordinary background input remains refused."})
 }
 
-#[cfg(test)]
-mod exposure_tests {
-    use super::*;
-
-    #[test]
-    fn queued_or_refused_exposure_never_certifies_focus_or_input() {
-        let owner = json!({"pid":42,"session_id":"current-document","epoch":9});
-        for requested in [true, false] {
-            let receipt = exposure_response(&owner, requested);
-            assert_eq!(receipt["owner"], owner);
-            assert_eq!(receipt["exposure_requested"], requested);
-            assert_eq!(receipt["status"], "not_focused");
-            assert_eq!(receipt["foreground_verified"], false);
-            assert_eq!(receipt["input_sent"], false);
-            assert_eq!(receipt["observation_consumed"], true);
-            assert!(receipt.get("native_caption_focus").is_none());
-            assert!(receipt.get("completed_primitives").is_none());
-        }
-    }
-}
-
 fn owner_scope(observed: &Observation, target: Target, proof: &Proof) -> Result<(), String> {
     observed.process.verify()?;
     let session_id = observed.owner["session_id"]
@@ -575,4 +554,25 @@ pub(super) fn recover(
         "observation_consumed":true,
         "hint":"One guarded native caption click was inserted. Foreground held during bounded sampling only; observe again before ordinary input. This does not prove product effects or future ownership."}),
     )
+}
+
+#[cfg(test)]
+mod exposure_tests {
+    use super::*;
+
+    #[test]
+    fn queued_or_refused_exposure_never_certifies_focus_or_input() {
+        let owner = json!({"pid":42,"session_id":"current-document","epoch":9});
+        for requested in [true, false] {
+            let receipt = exposure_response(&owner, requested);
+            assert_eq!(receipt["owner"], owner);
+            assert_eq!(receipt["exposure_requested"], requested);
+            assert_eq!(receipt["status"], "not_focused");
+            assert_eq!(receipt["foreground_verified"], false);
+            assert_eq!(receipt["input_sent"], false);
+            assert_eq!(receipt["observation_consumed"], true);
+            assert!(receipt.get("native_caption_focus").is_none());
+            assert!(receipt.get("completed_primitives").is_none());
+        }
+    }
 }
