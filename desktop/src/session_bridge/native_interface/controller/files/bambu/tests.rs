@@ -1020,8 +1020,10 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
         .clone();
     accept_preview(&mut source, key, report);
     check_review(&source).unwrap();
+    assert!(target_layout_has_issues(&source));
     let (mut app, services, handle) = setup(&fixture);
     for case in [
+        "layout",
         "valid",
         "overwrite",
         "cancel",
@@ -1032,7 +1034,12 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
     ] {
         let owner = fixture.owner();
         let receipt = current(app.world(), &services, &owner).unwrap();
-        let source = Arc::new(source.clone());
+        let mut case_source = source.clone();
+        // This authentic template reports layout warnings for the replacement
+        // stock. Review establishes its choices; exporting those warnings needs
+        // separate explicit consent, which the refusal case deliberately omits.
+        case_source.allow_layout_issues = case != "layout";
+        let source = Arc::new(case_source);
         show_dialog(
             app.world_mut(),
             receipt.clone(),
@@ -1053,6 +1060,7 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
             std::fs::write(&destination, b"Existing explicitly replaceable output").unwrap();
         }
         let admitted = Cell::new(0);
+        let built = Cell::new(0);
         let expected = RefCell::new(Vec::new());
         let outcome = io::bambu_write_snapshot(
             &services,
@@ -1069,6 +1077,7 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
                 Ok(())
             },
             |prepared| {
+                assert_eq!(built.replace(built.get() + 1), 0);
                 // Real native meshing/archive construction while both original live
                 // locks are held proves the detached builder cannot reenter them.
                 let finished = services.bridge.with_native_document_receipt(
@@ -1076,6 +1085,7 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
                     &owner,
                     |_| fixture.engine.with_drawing(|_| prepared.build()),
                 )?;
+                assert!(!finished.source_layout_has_issues());
                 expected.replace(finished.bytes().to_vec());
                 match case {
                     "cancel" => {
@@ -1126,6 +1136,7 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
             },
         );
         assert_eq!(admitted.get(), 1);
+        assert_eq!(built.get(), usize::from(case != "layout"));
         if matches!(case, "valid" | "overwrite") {
             let (mut result, bytes) = outcome.unwrap();
             assert_eq!(bytes, *expected.borrow());
@@ -1139,6 +1150,7 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
         } else {
             let error = outcome.unwrap_err();
             let expected_refusal = match case {
+                "layout" => "explicitly choose Export despite layout issues",
                 "cancel" | "choices" | "dialog" => "cancelled or its choices were replaced",
                 "owner" => "replaced",
                 "model" => "changed",
@@ -1149,6 +1161,9 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
                 !destination.exists(),
                 "Revoked operation must materialize no output"
             );
+            if case == "layout" {
+                assert!(expected.borrow().is_empty());
+            }
         }
         if case == "model" {
             assert_ne!(model(), before);
