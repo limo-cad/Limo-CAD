@@ -542,6 +542,12 @@ impl NativeEngineHost {
             .map(str::to_owned)
     }
 
+    /// History and focus checks need only borrowed active-session scalars.
+    pub fn active_sketch_history(&self) -> Option<(bool, bool)> {
+        let workspace = self.inner.lock().expect("engine lock poisoned");
+        workspace.active().manager.active_sketch_history()
+    }
+
     pub fn document_units(&self) -> limo_cad_core::UnitSystem {
         self.inner
             .lock()
