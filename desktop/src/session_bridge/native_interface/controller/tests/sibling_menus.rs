@@ -7,8 +7,8 @@ fn paint_order(world: &mut World) -> Vec<Entity> {
 
     fn visit(entity: Entity, children: &HashMap<Entity, Vec<Entity>>, order: &mut Vec<Entity>) {
         order.push(entity);
-        if let Some(children) = children.get(&entity) {
-            for child in children {
+        if let Some(entries) = children.get(&entity) {
+            for child in entries {
                 visit(*child, children, order);
             }
         }
