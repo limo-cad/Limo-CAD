@@ -1,6 +1,6 @@
 # Simulation research and evidence index
 
-Updated 2026-10-06. This index preserves successful experiments, negative results,
+Updated 2026-10-11. This index preserves successful experiments, negative results,
 review findings, rejected interpretations, sources and remaining qualification
 gaps. Evidence for the private part stays in its private repository; no part STEP,
 STL or full source model is copied into this public application repository.
@@ -40,8 +40,10 @@ STL or full source model is copied into this public application repository.
 - [Section hardening #339](https://github.com/limo-cad/Limo-CAD/issues/339)
   tracks the kernel exception, empty/tangent outcome, native budgeting, pipeline
   and Bevy lifecycle findings after PR 337 merged. Upstream `74a8f8df` implemented
-  their source fixes; hosted/platform and packaged visual qualification remain
-  open. The plan preserves the original findings and records current fix status.
+  their source fixes. [Targeted packaged acceptance on 2026-10-11](https://github.com/limo-cad/Limo-CAD/issues/339#issuecomment-6106333435)
+  completed the boundary/source-restoration and idle checks; #339 is closed.
+  These section features remain on the Bevy integration branch in open PR #124,
+  rather than on main. Broad application qualification is separate.
 - [Structural analysis #336](https://github.com/limo-cad/Limo-CAD/issues/336)
   holds the original external-worker experiment, the Rust experiment and follow-up
   design. Neither experiment installs a structural solver into the CAD app.
