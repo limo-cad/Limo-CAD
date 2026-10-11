@@ -2229,3 +2229,26 @@ clean `5d46045c` boundary rejection, corrected creation and Undo qualification
 remains intact. This is a fresh transaction, not recovery of the original lost
 Undo stack or broad Split coverage. All unrelated leaves and MCP statuses remain
 unchanged; broad UI/MCP qualification stays paused.
+
+The remaining packaged boundary/source-restoration gate for #339 passed on
+clean matched `a3145e2c`. On the preserved 18x12x8 `part-a.nbcad` fixture, actual
+human UI XY0 Below and XY8 Above, both with Probe 6 and 3D cutaway mode, show
+readable boundary-contact feedback while retaining the full source block:
+neither a blank viewport nor a false orange cap. Matching read-only
+`solid_section_review` reports return `boundary_contact`, empty probe spans and
+no cutaway field; these reports are not represented as the UI ingress response.
+Close removes the section panel. Physical selection of the source top face
+produces an orange face with a white outline, retained after idle with Body1
+selected and the camera unchanged. Whole before/after models match exactly;
+the lower-boundary and after-Close native scenes match exactly. The original
+fixture SHA256 remains `3fd9de9ea88e4fb1e8e9e18c918224161be32c3be296197b90dad8d07ad457c2`.
+
+`issue339-a3145e2c-comparison.json` records independent saved-image/receipt review;
+the corresponding `issue339-a3145e2c-*` reports, observations and captures retain
+the evidence. The prior 14 targeted source checks and hosted `f7aacc2c` acceptance
+remain retained; all three native desktop hosts passed at `a3145e2c`, while
+`2da8cbd0` CI is ongoing at this checkpoint. This completes the finite #339
+closure evidence, not broad Section/drawing qualification or a GPU performance
+claim. Native cooperative limits still do not provide hard worker-process
+memory/deadline containment. No existing broad coverage leaf changed; the root
+UI/MCP run state remains paused.
