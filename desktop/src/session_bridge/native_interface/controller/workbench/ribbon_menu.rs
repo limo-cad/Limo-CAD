@@ -408,6 +408,13 @@ pub(super) fn synchronize(
                 let (command, disabled, selected) = if bid == "constructionVisibility" {
                     let (command, disabled, showing) = references(world, services)?;
                     (command, disabled, Some(showing))
+                } else if bid == "measure" {
+                    (
+                        NativeCommand::Measure(0, measure::Command::Open),
+                        !measure::available(world)
+                            || services.engine.solid_scene_snapshot().bodies.is_empty(),
+                        None,
+                    )
                 } else if bid == "sectionAnalysis" {
                     (
                         NativeCommand::SectionReview(0, section_review::Command::Open),
@@ -644,6 +651,12 @@ fn menu(
             )
         } else if let Some((command, disabled, _)) = &reference {
             (command.clone(), *disabled)
+        } else if id == "measure" {
+            (
+                NativeCommand::Measure(0, measure::Command::Open),
+                !measure::available(world)
+                    || services.engine.solid_scene_snapshot().bodies.is_empty(),
+            )
         } else if id == "sectionAnalysis" {
             (
                 NativeCommand::SectionReview(0, section_review::Command::Open),

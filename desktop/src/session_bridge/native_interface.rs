@@ -433,6 +433,7 @@ pub(crate) enum NativeCommand {
     NamedView(u64, controller::named_views::Command),
     PrintIntent(u64, controller::print_intent::Command),
     SectionReview(u64, controller::section_review::Command),
+    Measure(u64, controller::measure::Command),
     AppSettings(controller::app_settings::Command),
     SixDof(controller::six_dof::Command),
     Feature(feature::FeatureCommand),
@@ -708,6 +709,17 @@ pub(crate) fn reduce_action(
             command,
         );
     }
+    if let NativeCommand::Measure(generation, command) = &binding.command {
+        return controller::measure::reduce(
+            world,
+            handle,
+            engine,
+            bridge,
+            action,
+            *generation,
+            command,
+        );
+    }
     if let NativeCommand::NamedView(generation, command) = &binding.command {
         return controller::named_views::reduce(
             world,
@@ -793,6 +805,7 @@ pub(crate) fn reduce_action(
         return controller::workbench::execute(world, command);
     }
     match binding.command {
+        NativeCommand::ClearSelection if controller::measure::active(world)=>bridge.with_native_document_owner(engine,&action.context,||{handle.validate_action(action)?;controller::measure::clear_current(world,&action.context)}),
         NativeCommand::ClearSelection if crate::native_editor::active(engine)?.is_some()=>crate::native_editor::execute(world,engine,bridge,&action.context,crate::native_editor::EditorCommand::Interaction(crate::native_editor::InteractionCommand::Select),||handle.validate_action(action)),
         NativeCommand::Sketch(command)=>crate::native_editor::execute(world,engine,bridge,&action.context,command,||handle.validate_action(action)),
         NativeCommand::File(_)=>unreachable!("File fields are reduced before button activation"),
@@ -803,7 +816,7 @@ pub(crate) fn reduce_action(
         NativeCommand::History(_)=>unreachable!("History input is reduced before button activation"),
         NativeCommand::Presentation(_)=>unreachable!("Presentation input is reduced before button activation"),
         NativeCommand::Cam(_)=>unreachable!("CAM fields are reduced before button activation"),
-        NativeCommand::Drawing(_) | NativeCommand::BodyAppearance(_, _) | NativeCommand::NamedView(_, _) | NativeCommand::PrintIntent(_, _) | NativeCommand::SectionReview(_, _)=>unreachable!("Document fields are reduced before button activation"),
+        NativeCommand::Drawing(_) | NativeCommand::BodyAppearance(_, _) | NativeCommand::NamedView(_, _) | NativeCommand::PrintIntent(_, _) | NativeCommand::SectionReview(_, _) | NativeCommand::Measure(_, _)=>unreachable!("Document fields are reduced before button activation"),
         NativeCommand::Feature(_)=>unreachable!("Extrude fields are reduced before button activation"),
         NativeCommand::CancelClose | NativeCommand::DiscardAndClose => {
             bridge.with_native_document_owner(engine, &action.context, || {

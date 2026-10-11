@@ -200,6 +200,37 @@ mod ffi {
         closest_point_b_z: f64,
     }
 
+    struct FfiMeasurementSelection {
+        placement: FfiBodyPlacement,
+        kind: u8,
+        index: u32,
+    }
+    struct FfiMeasurementProperties {
+        flags: u32,
+        length: f64,
+        area: f64,
+        loop_length: f64,
+        volume: f64,
+        radius: f64,
+        position: [f64; 3],
+        center: [f64; 3],
+        size: [f64; 3],
+        direction_kind: u8,
+        direction: [f64; 3],
+    }
+    struct FfiMeasurementResult {
+        selections: Vec<FfiMeasurementProperties>,
+        flags: u32,
+        distance: f64,
+        point_a: [f64; 3],
+        point_b: [f64; 3],
+        angle_degrees: f64,
+        center_distance: f64,
+        maximum_distance: f64,
+        maximum_point_a: [f64; 3],
+        maximum_point_b: [f64; 3],
+    }
+
     unsafe extern "C++" {
         include!("shim.hpp");
 
@@ -240,6 +271,10 @@ mod ffi {
             placement_a: &FfiBodyPlacement,
             placement_b: &FfiBodyPlacement,
         ) -> Result<FfiInterferenceResult>;
+        fn measure(
+            self: &Kernel,
+            selections: &Vec<FfiMeasurementSelection>,
+        ) -> Result<FfiMeasurementResult>;
     }
 }
 
@@ -270,6 +305,60 @@ pub struct DetachedMeshKernel(OcctKernel);
 pub struct DetachedSectionKernel(OcctKernel);
 /// Independent selected shapes for static and sampled occurrence interference.
 pub struct DetachedInterferenceKernel(OcctKernel);
+/// Independent topology used only for read-only measurement.
+pub struct DetachedMeasurementKernel(OcctKernel);
+impl DetachedMeasurementKernel {
+    pub fn inspect(
+        &self,
+        selections: &[crate::measurement::ResolvedMeasurementSelection],
+    ) -> Result<crate::measurement::MeasurementReport, OcctError> {
+        use crate::measurement::{MeasurementProperties, MeasurementReport};
+        let selections = selections
+            .iter()
+            .map(|s| ffi::FfiMeasurementSelection {
+                placement: ffi::FfiBodyPlacement {
+                    body_id: s.body_id.0,
+                    translation: s.translation,
+                    rotation: s.rotation,
+                },
+                kind: s.kind,
+                index: s.index,
+            })
+            .collect();
+        let raw = self
+            .0
+            .inner
+            .measure(&selections)
+            .map_err(|e| OcctError(e.to_string()))?;
+        let properties: Vec<_> = raw
+            .selections
+            .iter()
+            .map(|p| MeasurementProperties {
+                length: (p.flags & 1 != 0).then_some(p.length),
+                area: (p.flags & 2 != 0).then_some(p.area),
+                loop_length: (p.flags & 4 != 0).then_some(p.loop_length),
+                volume: (p.flags & 8 != 0).then_some(p.volume),
+                radius: (p.flags & 16 != 0).then_some(p.radius),
+                position: (p.flags & 32 != 0).then_some(p.position),
+                center: (p.flags & 64 != 0).then_some(p.center),
+                size: (p.flags & 128 != 0).then_some(p.size),
+            })
+            .collect();
+        let center_points =
+            (raw.flags & 4 != 0).then(|| [raw.selections[0].center, raw.selections[1].center]);
+        Ok(MeasurementReport {
+            selections: properties,
+            distance: (raw.flags & 1 != 0).then_some(raw.distance),
+            closest_points: (raw.flags & 1 != 0).then_some([raw.point_a, raw.point_b]),
+            angle_degrees: (raw.flags & 2 != 0).then_some(raw.angle_degrees),
+            center_distance: (raw.flags & 4 != 0).then_some(raw.center_distance),
+            center_points,
+            maximum_distance: (raw.flags & 8 != 0).then_some(raw.maximum_distance),
+            maximum_points: (raw.flags & 8 != 0)
+                .then_some([raw.maximum_point_a, raw.maximum_point_b]),
+        })
+    }
+}
 impl DetachedInterferenceKernel {
     pub fn evaluate_motion(
         &self,
@@ -426,6 +515,14 @@ impl OcctKernel {
     ) -> Result<DetachedInterferenceKernel, OcctError> {
         self.detached_drawing_snapshot(ids)
             .map(|snapshot| DetachedInterferenceKernel(snapshot.0))
+    }
+
+    pub fn detached_measurement_snapshot(
+        &self,
+        ids: &[limo_cad_core::BodyId],
+    ) -> Result<DetachedMeasurementKernel, OcctError> {
+        self.detached_drawing_snapshot(ids)
+            .map(|snapshot| DetachedMeasurementKernel(snapshot.0))
     }
 
     pub fn detached_section_snapshot(

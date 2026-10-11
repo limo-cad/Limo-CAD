@@ -7,6 +7,7 @@
 pub mod drawing_export;
 mod drawing_instances;
 pub mod drawing_presentation;
+pub mod measurement;
 pub mod section_review;
 pub use drawing_instances::{
     drawing_required_body_ids, project_drawing, resolve_drawing_anchor, resolve_drawing_line,
@@ -671,8 +672,8 @@ impl OcctKernel {
 mod native;
 #[cfg(feature = "native-occt")]
 pub use native::{
-    DetachedDrawingKernel, DetachedInterferenceKernel, DetachedMeshKernel, DetachedSectionKernel,
-    OcctKernel,
+    DetachedDrawingKernel, DetachedInterferenceKernel, DetachedMeasurementKernel,
+    DetachedMeshKernel, DetachedSectionKernel, OcctKernel,
 };
 
 #[cfg(test)]

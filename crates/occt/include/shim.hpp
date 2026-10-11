@@ -34,6 +34,8 @@ struct FfiDrawingProjection;
 struct FfiDrawingOptions;
 struct FfiBodyPlacement;
 struct FfiInterferenceResult;
+struct FfiMeasurementSelection;
+struct FfiMeasurementResult;
 
 class Kernel {
  public:
@@ -64,6 +66,7 @@ class Kernel {
   FfiInterferenceResult exact_interference(
       const FfiBodyPlacement& placement_a,
       const FfiBodyPlacement& placement_b) const;
+  FfiMeasurementResult measure(const rust::Vec<FfiMeasurementSelection>& selections) const;
 
  private:
   void apply_job_impl(const FfiJob& job);

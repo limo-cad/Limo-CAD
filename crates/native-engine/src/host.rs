@@ -163,6 +163,9 @@ pub use swept_snapshot::{FinishedSweptCollisionReview, PreparedSweptCollisionRev
 #[path = "interference_snapshot.rs"]
 mod interference_snapshot;
 pub use interference_snapshot::{FinishedInterferenceReview, PreparedInterferenceReview};
+#[path = "measurement_snapshot.rs"]
+mod measurement_snapshot;
+pub use measurement_snapshot::{FinishedMeasurementReview, PreparedMeasurementReview};
 
 #[path = "section_snapshot.rs"]
 mod section_snapshot;

@@ -160,6 +160,11 @@ pub enum ViewportOriginPlane {
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewportPresentation {
+    /// Disposable read-only inspection guides, independent of modeling previews.
+    #[serde(default, deserialize_with = "deserialize_shared_values")]
+    pub measurement_lines: std::sync::Arc<Vec<ViewportMeasurementLine>>,
+    #[serde(default, deserialize_with = "deserialize_shared_values")]
+    pub measurement_points: std::sync::Arc<Vec<[f32; 3]>>,
     /// Presentation-only palette choices; hiding a point never deletes it or
     /// disables snapping. False preserves existing clients' display defaults.
     #[serde(default)]
@@ -251,6 +256,12 @@ pub struct ViewportPresentation {
     pub cam_gpu_stock_removal: bool,
     /// Keep cutter metadata for hidden paths without drawing the cutter.
     pub cam_tool_hidden: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct ViewportMeasurementLine {
+    pub points: [f32; 6],
+    pub color: [f32; 4],
 }
 
 fn deserialize_shared_values<'de, T, D>(deserializer: D) -> Result<std::sync::Arc<Vec<T>>, D::Error>
@@ -646,6 +657,7 @@ pub enum NativePickPurpose {
     Edge,
     StraightEdge,
     Vertex,
+    CurveCenter,
 }
 
 #[derive(Debug, Clone, Serialize)]
