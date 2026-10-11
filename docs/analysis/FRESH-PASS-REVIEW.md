@@ -6,8 +6,10 @@ performed these reviews; no specialized Bugbot/security runner is claimed.
 
 The source status was refreshed too: upstream Bevy commit `74a8f8df` has landed
 repairs for the previously reported section findings. The project plan now records
-that work and #339's remaining hosted/platform and packaged visual qualification,
-rather than treating the old e1b6f4f findings as unchanged current source.
+that work and the hosted/platform and packaged visual qualification then pending
+for #339, rather than treating the old e1b6f4f findings as unchanged current source.
+[Targeted packaged acceptance on 2026-10-11](https://github.com/limo-cad/Limo-CAD/issues/339#issuecomment-6106333435)
+subsequently closed #339; the Bevy integration into main remains in open PR #124.
 
 ## New numerical evidence
 
