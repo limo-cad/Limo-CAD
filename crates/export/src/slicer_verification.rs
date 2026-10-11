@@ -1937,14 +1937,14 @@ mod tests {
             issues
                 .iter()
                 .any(|issue| issue.contains("identity missing:") && issue.contains("identify121")),
-            "{issues:?}"
+            "Expected the missing repeated-instance identity diagnostic"
         );
         assert!(
             issues
                 .iter()
                 .any(|issue| issue.contains("Unexpected native volume")
                     && issue.contains("identify9")),
-            "{issues:?}"
+            "Expected the unexpected native-volume identity diagnostic"
         );
         let volumes = readback["volumes"].as_array().unwrap();
         assert_eq!(volumes.len(), 4);
