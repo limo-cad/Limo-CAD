@@ -127,6 +127,12 @@ fn stage(
     computer_control: bool,
 ) -> Result<()> {
     ensure!(executable.is_file(), "Cargo did not produce limo-cad.exe");
+    let expected_machine = if target.arch == "x64" { 0x8664 } else { 0xaa64 };
+    ensure!(
+        crate::windows_runtime::inspect_imports(executable)?.machine == expected_machine,
+        "Windows executable architecture does not match requested target {}",
+        target.triple
+    );
     let name = format!(
         "Limo-CAD-{}-windows-{}{}",
         package.version,
@@ -206,6 +212,7 @@ pub(crate) fn stage_runtime(
             "required OCCT runtime library missing: {name}"
         );
     }
+    crate::windows_runtime::verify_directory(directory)?;
     let licenses = directory.join("licenses");
     fs::create_dir_all(&licenses)?;
     common::ordinary_directory(&licenses)?;
@@ -240,6 +247,16 @@ pub(crate) fn stage_runtime(
         licenses.join("vcpkg-opencascade.txt").is_file(),
         "vcpkg OpenCASCADE license notice missing"
     );
+    for entry in fs::read_dir(directory)? {
+        let name = entry?.file_name();
+        if let Some(port) = crate::windows_runtime::dependency_port(&name.to_string_lossy()) {
+            ensure!(
+                licenses.join(format!("vcpkg-{port}.txt")).is_file(),
+                "packaged runtime {} lacks its vcpkg-{port} license notice",
+                name.to_string_lossy()
+            );
+        }
+    }
     Ok(count)
 }
 #[cfg(test)]
@@ -281,6 +298,7 @@ mod tests {
 
     #[test]
     fn windows_package_requires_runtime_and_license_closure() {
+        use crate::windows_runtime::fixture_image;
         let temp = tempfile::tempdir().unwrap();
         let resolved = temp.path().canonicalize().unwrap();
         let root = resolved.as_path();
@@ -292,10 +310,10 @@ mod tests {
         fs::create_dir_all(sdk.join("share/opencascade")).unwrap();
         fs::write(sdk.join("share/opencascade/copyright"), "OCCT").unwrap();
         for name in ["TKernel.dll", "TKDESTEP.dll", "TKFillet.dll"] {
-            fs::write(bin.join(name), "DLL").unwrap();
+            fs::write(bin.join(name), fixture_image(0x8664, &["kernel32.dll"])).unwrap();
         }
         let exe = root.join("limo-cad.exe");
-        fs::write(&exe, "exe").unwrap();
+        fs::write(&exe, fixture_image(0x8664, &["TKHLR.dll"])).unwrap();
         let package = Package {
             root: root.to_owned(),
             desktop: root.into(),
@@ -309,7 +327,27 @@ mod tests {
             modified: true,
         };
         assert!(stage(&package, &target, &exe, &sdk, &output, &source, false).is_err());
-        fs::write(bin.join("TKHLR.dll"), "DLL").unwrap();
+        fs::write(
+            bin.join("TKHLR.dll"),
+            fixture_image(0x8664, &["freetype.dll"]),
+        )
+        .unwrap();
+        assert!(
+            stage(&package, &target, &exe, &sdk, &output, &source, false)
+                .unwrap_err()
+                .to_string()
+                .contains("freetype.dll")
+        );
+        assert!(!output.join("Limo-CAD-0.3.0-rc.1-windows-x64.zip").exists());
+        fs::write(bin.join("freetype.dll"), fixture_image(0x8664, &[])).unwrap();
+        assert!(
+            stage(&package, &target, &exe, &sdk, &output, &source, false)
+                .unwrap_err()
+                .to_string()
+                .contains("vcpkg-freetype")
+        );
+        fs::create_dir_all(sdk.join("share/freetype")).unwrap();
+        fs::write(sdk.join("share/freetype/copyright"), "FreeType").unwrap();
         stage(&package, &target, &exe, &sdk, &output, &source, false).unwrap();
         let readme =
             fs::read_to_string(output.join("Limo-CAD-0.3.0-rc.1-windows-x64/README.txt")).unwrap();
@@ -328,6 +366,22 @@ mod tests {
         drop(archive);
         for arch in ["x86_64", "aarch64"] {
             let target = super::target(arch, None).unwrap();
+            let machine = if arch == "x86_64" { 0x8664 } else { 0xaa64 };
+            fs::write(&exe, fixture_image(machine, &["TKHLR.dll"])).unwrap();
+            for name in [
+                "TKernel.dll",
+                "TKDESTEP.dll",
+                "TKFillet.dll",
+                "TKHLR.dll",
+                "freetype.dll",
+            ] {
+                let imports: &[&str] = if name == "TKHLR.dll" {
+                    &["freetype.dll"]
+                } else {
+                    &["kernel32.dll"]
+                };
+                fs::write(bin.join(name), fixture_image(machine, imports)).unwrap();
+            }
             for control in [false, true] {
                 stage(&package, &target, &exe, &sdk, &output, &source, control).unwrap();
                 let name = format!(
