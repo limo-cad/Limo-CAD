@@ -18,6 +18,7 @@ pub fn with_file_options(mut schema: Value) -> Value {
                 "export_stl",
                 "export_drawing_svg",
                 "export_drawing_dxf",
+                "export_drawing_pdf",
                 "export_profile_dxf",
                 "print_drawing",
                 "print_status",
@@ -192,6 +193,7 @@ mod tests {
         for command in [
             "export_drawing_svg",
             "export_drawing_dxf",
+            "export_drawing_pdf",
             "export_profile_dxf",
         ] {
             assert!(commands.contains(&json!(command)));

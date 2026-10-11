@@ -21,20 +21,6 @@ fn state(owner: &DocumentContext, project: &ProjectPublisher) -> HistoryState {
     }
 }
 
-fn active_sketch_history(engine: &AppState) -> Result<Option<(bool, bool)>, String> {
-    let sketch = parse_engine_envelope(engine.engine_call("active_sketch", ""))?;
-    if sketch.is_null() {
-        return Ok(None);
-    }
-    let undo = sketch["can_undo"]
-        .as_bool()
-        .ok_or("Active sketch omitted Undo availability")?;
-    let redo = sketch["can_redo"]
-        .as_bool()
-        .ok_or("Active sketch omitted Redo availability")?;
-    Ok(Some((undo, redo)))
-}
-
 struct MetadataPresentation {
     active_view: Option<String>,
     visibility: Value,
@@ -241,7 +227,7 @@ impl SessionBridgeState {
         let project = publisher.active_mut();
         let before = state(expected, project);
         project.native_history.observe(&before)?;
-        if let Some(available) = active_sketch_history(engine)? {
+        if let Some(available) = engine.active_sketch_history() {
             return Ok(available);
         }
         let (rollback_index, feature_count) = engine.document_history_position();
@@ -314,7 +300,7 @@ impl SessionBridgeState {
             "There is nothing to undo"
         };
 
-        let value = if let Some((can_undo, can_redo)) = active_sketch_history(engine)? {
+        let value = if let Some((can_undo, can_redo)) = engine.active_sketch_history() {
             if !(if redo { can_redo } else { can_undo }) {
                 return Err(nothing.into());
             }

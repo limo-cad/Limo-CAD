@@ -1,6 +1,85 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: PR124 remains open. Main advanced to
+Current checkpoint, **2026-10-11 UTC**: clean reviewed source `fd85a556`
+passes strict Windows desktop/native-engine/sketch/OCCT/export checks and exactly
+five targeted regressions: three new STEP/native/attached drawing checks and two
+specifically affected history/busy Save checks. Earlier export, drawing, Print-to-File
+and generic pointer passes remain recorded without repetition. Exact artifact hashes,
+original strict-lint failure and qualification limits are in
+`docs/qualification/detached-step-drawing-20261011.json`.
+
+STEP and attached/native drawing output release live guards during expensive work,
+then validate the original native source and job/ticket authority before publication.
+STEP exchanges share a gate for OCCT's mutable global exchange state. Active-sketch
+availability/focus, wheel/busy input and occurrence warning labels now use narrow reads.
+Full editable/public transport data, ownership checks and geometry assertions remain.
+Incoming Bevy documentation at `6c897699` is preserved. Work stays in PR124; main and
+Jack's PRs are untouched. New hosted CI is pending.
+
+The canonical GUI remains saved and closed at installed `eb71c32d`; a new live pair
+is not claimed. Other canonical headless transports can contain independent unsaved
+models and are preserved pending ownership handoff. Direct PDF/cold-paper and the
+reported Bambu repeat-service acceptance remain pending fresh deployment. The observed
+Explorer-owned Print proxy remains outside current guarded input authority; no physical
+Print/cancel pass is claimed. Broad UI and manual MCP mutation coverage remain paused.
+
+Historical checkpoint, **2026-10-11 12:04 UTC**: reviewed source `9e16fade` passes
+strict Windows desktop/native-engine/OCCT/export lint and its three necessary
+export checks. Bambu WRITE and portable STL/3MF prepare native geometry/output
+outside the live publisher and engine, then require the original source proof
+and current dialog/export-job lease before atomic publication. The Bambu panel
+borrows the saved model during repeated review checks. The authentic template's
+layout-warning refusal was correct: its new fixture now checks refusal without
+consent before deliberately consenting for the original write/cancellation cases.
+All original byte, ownership, cancellation and input-preservation assertions remain.
+
+The Print-to-File option check passed once at `9cdf863d` and is retained without
+repetition. CodeQL's prior aggregate failed at `9ae0090d` on two sensitive assertion
+report dumps; the new source keeps both assertions and uses fixed failure messages.
+All prior package jobs succeeded. New hosted CI remains pending. Exact receipts
+and limits are in `docs/qualification/detached-export-ownership-20261011.json`.
+The separate STEP and attached drawing-export repairs are not qualified by this
+checkpoint. Main is unchanged; Jack's PRs remain outside the current work.
+
+The installed payload remains clean `eb71c32d`; its canonical GUI is saved and
+closed. Final complete model/archive preservation passed. A fresh deployment and
+matched live pair are still required for direct PDF/cold-paper acceptance.
+Positive single-plate CAD-placement Bambu acceptance and physical printing remain
+unqualified. Broad UI and manual MCP mutation coverage remain paused.
+
+Historical checkpoint, **2026-10-11 UTC**: PR124 remains open, and main is unchanged
+at `54dcab7f`. Reviewed code `1c0dc76e` follows the published `32b11c53`
+checkpoint. Strict Windows desktop, native-engine/OCCT and MCP Clippy
+passed on that source. All six necessary drawing/Bambu/modal checks passed once;
+the three exact passing drawing/File checks from `de62fa52` are retained without
+repetition. This checkpoint does not claim the new source is deployed or that its
+CI has run. Exact results and limits are recorded in
+`docs/qualification/detached-drawing-output-20261011.json`. Historical checkpoints
+below retain their original revision, failures
+and scope; their installed/live identities are not current runtime identities.
+
+The new source moves cold drawing projection and drawing-file/print preparation
+off the live publisher and engine, with independent native copies, exact owner
+and projection-intent guards, and bounded completed-result reuse. It adds direct
+Drawing PDF export through CAD's owned Save dialog. Necessary regression checks
+found and led to repairs for PDF pages being 4/3 too large and paper-container
+identity being lost during pending repaint. Original assertions and failure
+receipts remain intact. Bambu template inspection, preview meshing/ZIP work and
+post-write inspection move off the publisher; the actual write's preparation and
+cancellation ownership are being repaired separately. Native modal refusals gain
+bounded class/owner diagnostics without broadening input authority.
+
+The installed GUI remains clean `eb71c32d`. Its turbine document is fully saved
+at `D:/limo-cad-maintenance/ui-models/Turbine assembly - native window acceptance.limo`;
+complete model and archive preservation are recorded in
+`turbine-eb71-print-dialog-document-preservation.json`. Physical Print presented an
+Explorer-owned `ProxyModalWindow`, which the guarded operator correctly refused.
+No physical print job or Print-dialog cancellation is qualified. Targeted direct
+PDF acceptance and the repaired cold-paper response require a fresh deployment
+and matched GUI/MCP pair. Broad exploratory UI and manual MCP mutation coverage
+remain paused. Saved/recovery data and other executable paths remain preserved.
+
+Historical checkpoint, **2026-10-11 UTC**: PR124 remains open. Main advanced to
 54dcab7f after PR338 merged; Bevy includes that history through merge `08cdd6b9`.
 Incoming research/license corrections were preserved. No Bevy merge into main
 has occurred. The user approved known-defect completion and targeted repaired
@@ -2229,3 +2308,162 @@ clean `5d46045c` boundary rejection, corrected creation and Undo qualification
 remains intact. This is a fresh transaction, not recovery of the original lost
 Undo stack or broad Split coverage. All unrelated leaves and MCP statuses remain
 unchanged; broad UI/MCP qualification stays paused.
+
+The remaining packaged boundary/source-restoration gate for #339 passed on
+clean matched `a3145e2c`. On the preserved 18x12x8 `part-a.nbcad` fixture, actual
+human UI XY0 Below and XY8 Above, both with Probe 6 and 3D cutaway mode, show
+readable boundary-contact feedback while retaining the full source block:
+neither a blank viewport nor a false orange cap. Matching read-only
+`solid_section_review` reports return `boundary_contact`, empty probe spans and
+no cutaway field; these reports are not represented as the UI ingress response.
+Close removes the section panel. Physical selection of the source top face
+produces an orange face with a white outline, retained after idle with Body1
+selected and the camera unchanged. Whole before/after models match exactly;
+the lower-boundary and after-Close native scenes match exactly. The original
+fixture SHA256 remains `3fd9de9ea88e4fb1e8e9e18c918224161be32c3be296197b90dad8d07ad457c2`.
+
+`issue339-a3145e2c-comparison.json` records independent saved-image/receipt review;
+the corresponding `issue339-a3145e2c-*` reports, observations and captures retain
+the evidence. The prior 14 targeted source checks and hosted `f7aacc2c` acceptance
+remain retained; all three native desktop hosts passed at `a3145e2c`, while
+`2da8cbd0` CI is ongoing at this checkpoint. This completes the finite #339
+closure evidence, not broad Section/drawing qualification or a GPU performance
+claim. Native cooperative limits still do not provide hard worker-process
+memory/deadline containment. No existing broad coverage leaf changed; the root
+UI/MCP run state remains paused.
+
+The original #347 silent named-camera failure now has finite human UI evidence
+on clean matched `a3145e2c`. The authentic garden-auger assembly archive SHA256
+is `32cd9fa180c96b102c22beaadd02f7eeb0797f21e10ba8c4b04609914475ec60`.
+Physical Recall followed by Close applied **Assembly - exploded**, **Fit
+inspection - mating surfaces** and **Assembly - open housing**. Each actual
+camera, visible-body list and occurrence-offset list exactly matches its saved
+view. The first two views have distinct cameras and visibly different framing;
+open housing clears offsets and hides Body26. All have no part offsets.
+
+Independent saved capture/model/observation review is recorded in
+`issue347-a3145e2c-comparison.json`. Exploded and Fit preserve the entire post-open
+model exactly. Open housing changes only `/visibility/hidden_body_ids` from
+`[213]` to `[26,213]`, the intended saved visibility; mechanical assembly poses,
+history, saved-view definitions and every other field remain unchanged. The
+preliminary `exploded-observation.png` predates Recall and is excluded as pass
+evidence. File-menu SaveAs to `repair-acceptance-batch/Named views accepted
+a3145e2c.limo` preserves the published open-housing model exactly; the original
+archive remains unchanged. `issue347-a3145e2c-saved-archive-verified.json` records
+this SaveAs preservation, not a repeated full persistence qualification. The
+independent Ctrl+Shift+S missing-dialog observation is not counted as a pass.
+
+The explicit contract repair `75883438` rejects unsupported
+`cad_interface action=view` plus `named_view` and directs callers to
+`recall_named_view`; its focused MCP regression remains retained. This closes
+the concrete silent-ignore defect scope, not the original full qualification
+matrix. Live MCP mutations, animated recall/readiness, stale-session/replacement,
+tab-switch and missing-viewport acceptance remain unclaimed. No broad UI/MCP
+leaf changes or repeated test passes follow from this targeted recall evidence.
+
+The local Combine picker-guidance repair `7f6d25ec` now passed on the same
+clean matched `a3145e2c` pair. Physical input shows the singular **Click the
+target body** banner, then selects Body1 and activates the enabled Tool Bodies
+card with the plural **Click one or more tool bodies** banner. Cancel removes
+the form and preserves the complete 27,326-character published model exactly.
+The original fixture archive SHA256 remains
+`9cdf0c9ae714e2c49f90c1c058714263a2c8a60079c7e39dc392c5d557a1a846`.
+`combine-guidance-a3145e2c-comparison.json`, the target/tools-selected captures
+and observations, and before/after model receipts retain the evidence.
+The preliminary attempt to activate a disabled tool card before selecting a
+target is excluded from the pass. No Apply or Boolean transaction was repeated;
+prior geometry and persistence passes remain intact. Only this local guidance
+issue changes to passed. A separate selected/coplanar-body striping observation
+in the tool-selection capture is under bounded source investigation; this prompt
+pass does not qualify that rendering behavior. Broad UI/MCP coverage stays paused.
+
+The local sketch form Tab-order repair `148d9f0e` has finite human UI acceptance
+on clean matched `a3145e2c`. In Move/Copy, the actual focused-control IDs map to
+X distance with typed `12.5`, then Y distance after Tab while X retains exactly
+`12.5`, then X after Shift+Tab. A further Shift+Tab leaves the form for the
+noneditable Named Views control without wrapping. Independent review of the
+saved captures and observations is recorded in `form-tab-a3145e2c-comparison.json`.
+Fresh accepted Cancel removes the form; Finish exits Sketch mode. The complete
+before/after model text remains exactly 4,754 characters, and the original fixture
+SHA256 remains `c92f65e0f34e040e9146c7ca93a436cda149537423cfdcaffdbb3399b718cede`.
+An earlier Cancel attempt returned a tool error whose original reason was
+overwritten; neither its exact cause nor a successful input is inferred. No Apply,
+geometry replay, other-form, clipped-target or form/document-switch acceptance
+is claimed. Only this local Tab-order issue changes to passed; broad UI/MCP
+coverage stays paused.
+
+The separate Q9 coplanar kept-body striping observation is now tracked as
+`selected-coplanar-kept-body-striping`, pending recheck. Reviewed source repair
+`e1a9169a`, integrated at `52ad36b1`, gives selected opaque per-occurrence body
+materials integer depth bias 1 and restores 0 on clearing, ghosts and face-overlay
+modes. Strict Windows desktop Clippy passed at `52ad36b1`; the new production
+styling regression and a clean matched GPU visual recheck remain pending at this
+checkpoint. Multiple selected coplanar bodies still share equal bias; preserving
+hovered/selected-face priority does not qualify all overlaps. The original Q9
+guidance pass and all geometry/persistence evidence remain unchanged.
+
+Both new native input/selection source checks are now complete. Strict Windows
+desktop Clippy and only the new bounded key-trace regression passed at
+`92ddcb65`; strict Windows desktop Clippy and only the new production styling
+regression passed at `52ad36b1`. The initial Windows must-use BOOL errors and
+their two-line correction remain recorded. No prior passing filter was rerun.
+The qualified D-drive SDK, pinned MSVC/Windows SDK, test artifacts and logs are
+retained in `native-key-92ddcb65-results.json` and
+`selected-depth-52ad36b1-results.json`. Material ownership, ghost/face-mode guards,
+selection clearing and unchanged geometry/model are verified in the actual
+styling path. The installed GUI remains clean matched `a3145e2c`; the new
+selection raster result and native shortcut message witness await deployment.
+
+The key witness is opt-in via `LIMO_CAD_FILE_SHORTCUT_DIAGNOSTICS=1`, confined
+to CAD's own UI-thread window and bounded to 32 selected key/modifier message
+records. It records no character-message payloads and forwards messages unchanged.
+Compilation and the pure callback-observation regression do not qualify live
+subclass forwarding, shortcut dispatch or physical keyboard behavior. The earlier
+missing Ctrl+Shift+S press remains unattributed until fresh native/Winit evidence.
+
+Jack's incoming normal-startup changes and measurement record are preserved.
+Independent source correctness/security review found no blocking production
+finding; two historical-pass annotations were corrected without changing raw
+measurements. Physical Windows/Linux cold startup, large models and degraded
+rendering are not implied passes. The preserved `2da8cbd0` macOS and Windows ARM
+package jobs completed successfully with real clean-close/stdout lifecycle
+evidence; latest `500e5eda` checks are ongoing. Broad UI/MCP coverage stays paused.
+
+A separate no-op sketch Edit/Cancel/Finish observation produced an Unsaved
+changes prompt despite an exactly unchanged complete persisted model. A scoped
+source repair is underway; engine revision and readiness fences remain intact.
+The Q5 Tab traversal pass does not qualify this separate dirty-state behavior.
+
+Two further source repairs are integrated: `c96f22f7` reconciles clean saved
+existing-sketch round trips against the complete persisted model without
+weakening revision/history or owner/save fences; `053a68ed` shapes accepted
+numeric captions to the actual field width while preserving raw editor precision,
+focus, dirty expressions and IME. At clean `053a68ed`, strict Windows desktop
+Clippy and only the two new production regressions passed once.
+`sketch-clean-caption-053a68ed-results.json` retains the exact artifact, SDK,
+toolchain and raw results; prior passing filters were not rerun. Live prompt and
+caption acceptance remain pending. The previous matched `a3145e2c` window was
+physically closed after Cancel and exact complete model/archive preservation;
+`move-copy-presentation-a3145e2c-cancel-preservation.json` records the unchanged
+original. The retained `2da8cbd0` package workflow is now green across all four
+platforms. Current PR124 checks remain ongoing. Broad UI/MCP coverage stays paused.
+
+### Focused source 115 and matched EB acceptance checkpoint
+
+Clean source `115bc19a` passed strict Windows desktop Clippy and exactly the two new production filters once: accepted signed-zero caption ownership and requested-editor-focus presented-modal ownership. The single native-control artifact SHA was `18ab9754d67221773a80d71fb9b833cb1f58f936991be2f3e3120e0ee9d661cf`; receipt: `D:/limo-cad-maintenance/backlog-autonomous-20261010/signed-zero-focus-115bc19a-results.json`. The `452ba807` field-commit owner read and `0320098d` requested-focus check borrow only the exact presented owner/top modal under existing locks, retaining absence/poison, pending presentation, queued/IME and owned-editor guards. These source results do not qualify live 115 focus, GPU output or physical DPI.
+
+Immutable package classification landed as `7fd769ca`, tested at reviewed `99f289ca`: strict xtask Clippy and only the two new exact event-head/base advancement and conservative-unknown-inventory filters passed once. `D:/limo-cad-maintenance/backlog-autonomous-20261010/desktop-classifier-99f289ca-results.json` retains commands and artifact SHA `243a3861c9fef816421aa83a47b1abf5faac470de078130d9f9ea52398fd9a28`. Classification binds immutable event SHAs; unavailable, malformed or truncated inventories build all, preserving exact checkout and existing gates. The original 2b classifier failure remains retained; these local results do not claim a subsequent hosted API, scheduler or cache outcome.
+
+On clean matched `eb71c32d`, the retained 86px Move/Copy Translation Y caption showed readable `8.88e-16` and Z showed `11`. Focus exposed the exact owned Y text `0.0000000000000008881784197001252`; physical Cancel removed the form and preserved all 13346 model characters and the original archive SHA `adf2bcd58c6219cec8fe1c460549329622dc15b0fc438da3caf877034bcddd6a`. Captures were independently viewed and `q8-eb71-caption-preservation.json` retains complete comparison. This is partial caption-width/raw/Cancel acceptance only: observed Rotation Y `-0` awaits the separately source-qualified115 presentation correction; component wording/modes and other expression/intentional-zero live variants remain unclaimed.
+
+The same clean matched EB runtime passed the targeted unchanged-existing-sketch false-dirty-prompt check: physical existing Sketch 1 Edit then Finish without drafting, followed by File Open, directly presented the owned native Open dialog without an Unsaved changes prompt. Independently viewed active-sketch/native-dialog captures and `unchanged-sketch-eb71-model-preservation.json` prove all 4754 model characters and original archive SHA `c92f65e0f34e040e9146c7ca93a436cda149537423cfdcaffdbb3399b718cede` unchanged. Rejected stale-observation input is excluded. Native File Open Cancel then returned to the unchanged owned document with foreground ownership, retained in `unchanged-sketch-eb71-file-open-cancelled-observation.json`. The prior Q5 Tab pass is preserved; dependent-solid recompute, dirty-entry, replacement and failure live variants are not claimed by this single acceptance.
+
+The authentic native-opened #348 saved fixture received the finite read-only MCP reader audit on matched EB: 71 model features, 7 native bodies, 282 faces, 11 reported holes, 30 ambiguous candidates and one approximate overlap advisory; authored hole features/definitions were zero. `issue348-eb71-final-reader-audit-corrected.json` retains the saved-summary/native-scene/body-face checks and input hashes, with original fixture SHA `3a50eff6a61fe26c481d305743e8312cc1ea9ac0d0424c3ecf0f29e04b402b1e` preserved. The initial outside reader adapter failure (`Whole model features unavailable`) remains retained; correcting its schema14 `document.history.features` assumption used the same saved inputs. Root and peer viewed the native capture. This does not qualify the generic Manufacturing review panel, a genuine nonmanifold/shared-ring witness or the paused broad MCP mutation matrix. Issue #348 was closed after this targeted reader acceptance: https://github.com/limo-cad/Limo-CAD/issues/348#issuecomment-6107313638. Genuine native shared-ring/nonmanifold qualification remains open in follow-up #369: https://github.com/limo-cad/Limo-CAD/issues/369. All unrelated ledger entries and the broad paused state remain intact.
+
+### Targeted turbine native paper and CAM retirement checkpoint
+
+On clean matched `eb71c32d`, actual native-window capture `turbine-eb71-assembly-native-capture.png` visibly shows linework in both placed Assembly front/top views on the full `TUR-000` paper. Root and peer independently viewed it; fresh `turbine-eb71-assembly-after-ticket-observation.json` confirms the matched pair and saved sheet 13, Turbine assembly, two views 25/26. The authentic retained Windows CI archive SHA `f226328ff0d0435dd6021eb4abd2a401d37d4e568ddb40beaf5a237c322af44e` is unchanged. `turbine-eb71-assembly-selection-preservation.json` and independent `turbine-eb71-peer-comparison.json` prove the complete 2035322-byte models differ only by `$.drawings.active_sheet_id` 14→13. There was no model replay or export regeneration. This fills the finite packaged-window assembly-linework check; it does not establish identity with the original #119 archive, every drawing/annotation case, physical print/PDF or manufacturing approval.
+
+The initial observation 106 timed out, and its original ticket expired with `applied=false`; error and ticket receipts remain retained. `turbine-eb71-attached-new-session.json`, `turbine-eb71-loaded-observation.json`, and `turbine-eb71-assembly-sheet-observation.json` were copied before completion or contain an input receipt and are excluded from acceptance. A concrete #333 source boundary is being repaired separately: cold assembly paper projection executes expensive `project_sheet_view_resolved` while holding the live engine mutex. The scoped asynchronous preparation repair is still in progress, with no qualification or universal timeout/performance claim.
+
+Source `0bd892bc` retires inactive/replaced CAM library project snapshots without changing authoritative documents. Strict Windows desktop Clippy passed, and only the new production filter `native_central_inactive_and_replaced_owner_retire_project_snapshot_without_editing_documents` passed once. `cam-retirement-0bd892bc-results.json` retains exact commands and artifact SHA `4e705621147786e8ce641de5a59ce3447aa1d89274bb4b76c5ed062bf56900e9`. No older filters were repeated; this is source ownership qualification, not live memory/GPU evidence or closure of #333. All existing UI/MCP leaves and the broad paused state remain unchanged.

@@ -676,18 +676,16 @@ fn update_inner(
                 }
             }
             if !state.close_pending && files::modal(world).is_none() {
-                if let (Some(cursor), Some(frame)) = (event.cursor, handle.frame()) {
-                    if event.context.as_ref() != Some(&frame.context) {
+                if let (Some(cursor), Some((owner, _, canvas))) =
+                    (event.cursor, handle.presented_pointer_context())
+                {
+                    if event.context.as_ref() != Some(&owner) {
                         continue;
                     }
-                    if let Some(canvas) = frame
-                        .canvases
-                        .iter()
-                        .find(|canvas| canvas.name == "viewport")
-                    {
+                    if let Some(bounds) = canvas {
                         if cursor.x >= 0.
-                            && f64::from(cursor.x) < canvas.bounds.x
-                            && f64::from(cursor.y) >= canvas.bounds.y
+                            && f64::from(cursor.x) < bounds.x
+                            && f64::from(cursor.y) >= bounds.y
                         {
                             let factor = if matches!(
                                 wheel.unit,
@@ -1253,9 +1251,11 @@ fn process_busy_input(
     {
         if !event.consumed
             && files::is_save_shortcut(event)
-            && handle.frame().is_some_and(|frame| {
-                event.context.as_ref() == Some(&frame.context) && frame.modal_stack.is_empty()
-            })
+            && handle
+                .presented_pointer_context()
+                .is_some_and(|(owner, modal_empty, _)| {
+                    event.context.as_ref() == Some(&owner) && modal_empty
+                })
         {
             handle.record_file_shortcut(event, "deferred_save");
             state.deferred_save = Some(event.clone());
@@ -1273,8 +1273,8 @@ fn process_busy_input(
             );
         let escape = !event.consumed
             && handle
-                .frame()
-                .is_some_and(|frame| event.context.as_ref() == Some(&frame.context))
+                .presented_context()
+                .is_some_and(|owner| event.context.as_ref() == Some(&owner))
             && matches!(&event.event, WindowEvent::KeyboardInput(key)
                 if key.state == bevy::input::ButtonState::Pressed
                     && key.logical_key == bevy::input::keyboard::Key::Escape);
@@ -1780,7 +1780,8 @@ fn inspect_native_window(world: &World, window_id: &str) -> Result<Value, String
             return Err("The CAD native window does not have a Win32 handle".into());
         };
         Ok(json!({"hwnd":handle.hwnd.get() as usize,
-            "pid":std::process::id(),"window_id":window_id}))
+            "pid":std::process::id(),"window_id":window_id,
+            "native_key_diagnostics":crate::native_viewport::native_key_diagnostics::snapshot(handle.hwnd.get() as usize)}))
     })
 }
 

@@ -4,7 +4,7 @@ use super::{Outcome, Page};
 use bevy::window::RawHandleWrapper;
 use raw_window_handle::RawWindowHandle;
 use windows::{
-    core::PCWSTR,
+    core::{w, PCWSTR},
     Win32::{
         Foundation::{GlobalFree, HGLOBAL, HWND},
         Graphics::{
@@ -104,7 +104,7 @@ pub(super) fn print(parent: RawHandleWrapper, page: Page) -> Result<Outcome, Str
         if dialog.0.hDC.is_invalid() {
             return Err("The selected printer returned no print context".into());
         }
-        submit(dialog.0.hDC, &page)?;
+        submit(dialog.0.hDC, &page, dialog.0.Flags)?;
     }
     Ok(Outcome::Submitted { pdf_path: None })
 }
@@ -156,7 +156,23 @@ unsafe fn selected_device_name(devnames: HGLOBAL) -> String {
     String::from_utf16_lossy(&units)
 }
 
-unsafe fn submit(dc: HDC, page: &Page) -> Result<(), String> {
+fn document_info(title: &[u16], flags: PRINTDLGEX_FLAGS) -> DOCINFOW {
+    DOCINFOW {
+        cbSize: std::mem::size_of::<DOCINFOW>() as i32,
+        lpszDocName: PCWSTR(title.as_ptr()),
+        // PrintDlgEx returns PD_PRINTTOFILE when the user requests the spooler's
+        // output-name prompt. FILE: has static UTF-16 storage through StartDocW.
+        // https://learn.microsoft.com/en-us/windows/win32/api/commdlg/ns-commdlg-printdlgexw
+        lpszOutput: if flags.contains(PD_PRINTTOFILE) {
+            w!("FILE:")
+        } else {
+            PCWSTR::null()
+        },
+        ..Default::default()
+    }
+}
+
+unsafe fn submit(dc: HDC, page: &Page, flags: PRINTDLGEX_FLAGS) -> Result<(), String> {
     let dpi = [
         GetDeviceCaps(Some(dc), LOGPIXELSX),
         GetDeviceCaps(Some(dc), LOGPIXELSY),
@@ -174,11 +190,7 @@ unsafe fn submit(dc: HDC, page: &Page) -> Result<(), String> {
         }
     }
     let name: Vec<u16> = page.title.encode_utf16().chain(Some(0)).collect();
-    let info = DOCINFOW {
-        cbSize: std::mem::size_of::<DOCINFOW>() as i32,
-        lpszDocName: PCWSTR(name.as_ptr()),
-        ..Default::default()
-    };
+    let info = document_info(&name, flags);
     if StartDocW(dc, &info) <= 0 {
         return Err("The printer could not start the confirmed job".into());
     }
@@ -283,4 +295,29 @@ unsafe fn raster_tiles(dc: HDC, page: &Page, dpi: [i32; 2]) -> Result<(), String
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn returned_print_to_file_option_sets_spooler_output_without_changing_title() {
+        let title: Vec<u16> = "Drawing sheet".encode_utf16().chain(Some(0)).collect();
+        let ordinary = document_info(&title, PD_RETURNDC | PD_USEDEVMODECOPIESANDCOLLATE);
+        assert!(ordinary.lpszOutput.is_null());
+        assert_eq!(ordinary.lpszDocName.0, title.as_ptr());
+        assert_eq!(ordinary.cbSize as usize, std::mem::size_of::<DOCINFOW>());
+
+        let to_file = document_info(
+            &title,
+            PD_RETURNDC | PD_USEDEVMODECOPIESANDCOLLATE | PD_PRINTTOFILE,
+        );
+        assert_eq!(to_file.lpszDocName.0, title.as_ptr());
+        // Read the actual StartDocW argument, including its UTF-16 terminator.
+        assert_eq!(
+            unsafe { std::slice::from_raw_parts(to_file.lpszOutput.0, 6) },
+            &[70, 73, 76, 69, 58, 0]
+        );
+    }
 }

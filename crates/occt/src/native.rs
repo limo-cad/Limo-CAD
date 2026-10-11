@@ -211,6 +211,7 @@ mod ffi {
         fn reset(self: Pin<&mut Kernel>);
         fn apply_job(self: Pin<&mut Kernel>, job: &FfiJob) -> Result<()>;
         fn body_ids(self: &Kernel) -> Vec<u64>;
+        fn drawing_snapshot(self: &Kernel, body_ids: &Vec<u64>) -> Result<UniquePtr<Kernel>>;
         fn body_generations(self: &Kernel) -> Result<Vec<FfiBodyGeneration>>;
         fn planar_face_keys(self: &Kernel) -> Result<Vec<u64>>;
         fn mesh(self: &Kernel, body_id: u64) -> Result<FfiMesh>;
@@ -261,6 +262,31 @@ pub struct OcctKernel {
     last_applied_jobs: usize,
     #[cfg(test)]
     projection_calculations: std::sync::atomic::AtomicUsize,
+}
+
+/// Independent projection-only shapes; cannot mint live body generations,
+/// mutate a document, or qualify native viewport geometry reuse.
+pub struct DetachedDrawingKernel(OcctKernel);
+/// Independent export shapes with no document mutation or geometry authority.
+pub struct DetachedMeshKernel(OcctKernel);
+impl DetachedMeshKernel {
+    /// Exact AP242 output from independently owned selected B-reps.
+    pub fn export_step(&self, request: &StepExportRequest) -> Result<Vec<u8>, OcctError> {
+        self.0.export_step(request)
+    }
+    pub fn tessellate(&self, request: &MeshExportRequest) -> Result<Vec<TriangleMesh>, OcctError> {
+        self.0.tessellate_bodies(request)
+    }
+}
+impl DetachedDrawingKernel {
+    pub fn project(
+        &self,
+        scene: &limo_cad_solid::SolidSceneDto,
+        assembly: &limo_cad_assembly::AssemblyDocumentDto,
+        request: &DrawingProjectionRequest,
+    ) -> Result<DrawingProjectionDto, OcctError> {
+        crate::project_drawing(&self.0, scene, assembly, request)
+    }
 }
 
 impl std::fmt::Debug for OcctKernel {
@@ -335,6 +361,45 @@ impl OcctKernel {
     pub fn recompute(&mut self, plan: &RecomputePlanDto) -> Result<KernelSceneDto, OcctError> {
         self.recompute_with_supports(plan, &[])
             .map(|(scene, _)| scene)
+    }
+
+    /// Owned exact shapes for one cold drawing job, without meshes, feature
+    /// history or live-kernel aliases. This is deliberately a geometry copy,
+    /// not a geometry-generation authority or a document reconstruction.
+    pub fn detached_drawing_snapshot(
+        &self,
+        ids: &[limo_cad_core::BodyId],
+    ) -> Result<DetachedDrawingKernel, OcctError> {
+        let ids = ids.iter().map(|id| id.0).collect();
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| OcctError("OCCT kernel was released".into()))?
+            .drawing_snapshot(&ids)
+            .map_err(|error| OcctError(error.to_string()))?;
+        let mut result = Self::new()?;
+        result.inner = inner;
+        Ok(DetachedDrawingKernel(result))
+    }
+
+    pub fn detached_mesh_snapshot(
+        &self,
+        ids: &[limo_cad_core::BodyId],
+    ) -> Result<DetachedMeshKernel, OcctError> {
+        self.detached_drawing_snapshot(ids)
+            .map(|snapshot| DetachedMeshKernel(snapshot.0))
+    }
+
+    pub fn active_body_ids(&self) -> Result<Vec<limo_cad_core::BodyId>, OcctError> {
+        let kernel = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| OcctError("OCCT kernel was released".into()))?;
+        Ok(kernel
+            .body_ids()
+            .into_iter()
+            .map(limo_cad_core::BodyId)
+            .collect())
     }
 
     /// Authoritative live B-rep generations. Existing bodies mentioned as job

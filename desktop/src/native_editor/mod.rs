@@ -399,6 +399,16 @@ pub(crate) fn execute(
                 let occurrence_id = native_viewport::interface_navigation_source(world)
                     .1
                     .selected_occurrence_id;
+                let expected = editor.stamp.as_ref().unwrap();
+                crate::session_bridge::native_interface::controller::files::begin_clean_sketch(
+                    world,
+                    engine,
+                    bridge,
+                    &crate::session_bridge::native_interface::workspace::DocumentReceipt {
+                        owner: expected.owner.clone(),
+                        revision: expected.revision,
+                    },
+                )?;
                 queue_mutation(
                     world,
                     editor.stamp.as_ref().unwrap().clone(),
@@ -576,7 +586,8 @@ fn queue_mutation(
     arguments: Value,
     kind: Completion,
 ) -> Result<Value, String> {
-    worker::enqueue_operation(
+    let failure_owner = expected.owner.clone();
+    let queued = worker::enqueue_operation(
         world,
         expected.owner.clone(),
         expected.revision,
@@ -589,6 +600,7 @@ fn queue_mutation(
                 let result = match result {
                     Ok(result) => result,
                     Err(error) => {
+                        crate::session_bridge::native_interface::controller::files::invalidate_clean_sketch(world, &expected.owner);
                         editor.error = error.clone();
                         editor.creation_error = matches!(kind, Completion::Primitive)
                             .then(|| error.clone());
@@ -643,31 +655,56 @@ fn queue_mutation(
                     }
                     clear_preview(world, engine, bridge, &owner)
                 })();
+                let followed_up = followup.is_ok() && output["render_error"].is_null();
                 committed_feedback(&mut output, &mut editor, followup);
-                if matches!(kind, Completion::Finish)
-                    && engine.with_document(|document| document.features().features.iter().any(|f| !matches!(f.kind, limo_cad_core::FeatureKind::Sketch | limo_cad_core::FeatureKind::ConstructionPlane)))
-                {
+                let recompute = matches!(kind, Completion::Finish)
+                    && engine.with_document(|document| document.features().features.iter().any(|f| !matches!(f.kind, limo_cad_core::FeatureKind::Sketch | limo_cad_core::FeatureKind::ConstructionPlane)));
+                if matches!(kind, Completion::Finish) {
+                    if followed_up {
+                        let receipt = bridge.native_document_receipt(engine, &owner)?;
+                        crate::session_bridge::native_interface::controller::files::finish_clean_sketch(world, engine, bridge, &receipt, recompute)?;
+                    } else {
+                        crate::session_bridge::native_interface::controller::files::invalidate_clean_sketch(world, &owner);
+                    }
+                }
+                if recompute {
                     let receipt = bridge.native_document_receipt(engine, &owner)?;
-                    let pending = worker::enqueue_operation(world, receipt.owner, receipt.revision, "solid_recompute".into(), json!({}), |world, services, result| {
+                    let recompute_owner = owner.clone();
+                    let pending = worker::enqueue_operation(world, receipt.owner, receipt.revision, "solid_recompute".into(), json!({}), move |world, services, result| {
                         match result {
                             Ok(result) => {
                                 let owner = result.context.clone();
                                 let mut value = finish_mutation(&services.engine, &services.bridge, world, "solid_recompute", result);
                                 let receipt = services.bridge.native_document_receipt(&services.engine, &owner)?;
                                 crate::session_bridge::native_interface::restore_model_view(world, &owner, receipt.revision)?;
+                                if value["render_error"].is_null() {
+                                    crate::session_bridge::native_interface::controller::files::finish_clean_sketch(world, &services.engine, &services.bridge, &receipt, false)?;
+                                } else {
+                                    crate::session_bridge::native_interface::controller::files::invalidate_clean_sketch(world, &owner);
+                                }
                                 value["committed"] = json!(true);
                                 Ok(value)
                             }
-                            Err(error) => Ok(json!({"committed":true,"model_error":format!("Sketch saved, but dependent solids could not be rebuilt: {error}")})),
+                            Err(error) => {
+                                crate::session_bridge::native_interface::controller::files::invalidate_clean_sketch(world, &recompute_owner);
+                                Ok(json!({"committed":true,"model_error":format!("Sketch saved, but dependent solids could not be rebuilt: {error}")}))
+                            },
                         }
-                    })?;
+                    }).inspect_err(|_| crate::session_bridge::native_interface::controller::files::invalidate_clean_sketch(world, &owner))?;
                     output["mutation_pending"] = json!(true);
                     output["mutation_id"] = pending["mutation_id"].clone();
                 }
                 Ok(output)
             })
         },
-    )
+    );
+    if queued.is_err() {
+        crate::session_bridge::native_interface::controller::files::invalidate_clean_sketch(
+            world,
+            &failure_owner,
+        );
+    }
+    queued
 }
 
 fn look_at_sketch(

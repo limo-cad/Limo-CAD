@@ -29,7 +29,16 @@ struct Tab {
     archive: Option<Arc<Mutex<ProjectArchive>>>,
     saved: Option<DocumentReceipt>,
     saving: Weak<()>,
+    clean_sketch: Option<CleanSketchEntry>,
     last_used: Instant,
+}
+
+struct CleanSketchEntry {
+    saved: DocumentReceipt,
+    archive: Weak<Mutex<ProjectArchive>>,
+    file_epoch: u64,
+    expected_revision: u64,
+    awaiting_recompute: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -156,6 +165,7 @@ impl SessionBridgeState {
 }
 
 mod retention;
+mod sketch_cleanliness;
 pub(crate) use retention::MemoryPressure;
 
 impl DocumentWorkspace {
@@ -214,6 +224,7 @@ impl DocumentWorkspace {
                 tab.file_epoch = file_epoch;
                 tab.saved = None;
                 tab.saving = Weak::new();
+                tab.clean_sketch = None;
             }
             tab.name = name;
             tab.last_used = Instant::now();
@@ -226,6 +237,7 @@ impl DocumentWorkspace {
                 archive: None,
                 saved: Some(receipt.clone()),
                 saving: Weak::new(),
+                clean_sketch: None,
                 last_used: Instant::now(),
             });
         }
@@ -340,6 +352,7 @@ impl DocumentWorkspace {
             .iter_mut()
             .find(|tab| tab.owner == expected.owner)
             .ok_or("The document tab was removed or replaced")?;
+        tab.clean_sketch = None;
         if tab.saving.upgrade().is_some() {
             return Err("This document already has a save in progress".into());
         }

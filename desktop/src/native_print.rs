@@ -42,6 +42,7 @@ impl Page {
         });
         let svg = limo_cad_occt::drawing_export::resolve_svg_text(svg, fonts)?;
         let options = resvg::usvg::Options {
+            dpi: 96.,
             fontdb: fonts.clone(),
             font_family: "Fira Mono".into(),
             resources_dir: None,
@@ -53,8 +54,8 @@ impl Page {
         };
         let tree = resvg::usvg::Tree::from_str(&svg, &options).map_err(|e| e.to_string())?;
         let size_mm = [
-            f64::from(tree.size().width()) * 25.4 / 96.,
-            f64::from(tree.size().height()) * 25.4 / 96.,
+            f64::from(tree.size().width()) * 25.4 / f64::from(options.dpi),
+            f64::from(tree.size().height()) * 25.4 / f64::from(options.dpi),
         ];
         if size_mm
             .iter()
@@ -68,7 +69,9 @@ impl Page {
                 embed_text: false,
                 ..Default::default()
             },
-            svg2pdf::PageOptions::default(),
+            // usvg resolves millimetres to 96-DPI pixels. PDF points are 72-DPI;
+            // use the same parser DPI for both page bounds and content scaling.
+            svg2pdf::PageOptions { dpi: options.dpi },
         )
         .map_err(|e| e.to_string())?;
         if pdf.len() > 64 * 1024 * 1024 {

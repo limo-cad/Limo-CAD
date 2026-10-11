@@ -335,6 +335,13 @@ fn input_window(event: &WindowEvent) -> Option<Entity> {
 }
 
 fn route_window_input(world: &mut World) {
+    #[cfg(all(windows, feature = "native-computer-control"))]
+    super::native_key_diagnostics::reconcile(
+        world
+            .query_filtered::<Entity, With<PrimaryWindow>>()
+            .single(world)
+            .ok(),
+    );
     let Ok(window) = world
         .query_filtered::<Entity, With<PrimaryWindow>>()
         .single(world)

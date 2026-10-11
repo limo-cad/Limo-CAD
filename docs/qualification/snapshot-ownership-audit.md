@@ -1,8 +1,10 @@
 # Native snapshot ownership audit
 
 Source review for [#333](https://github.com/limo-cad/Limo-CAD/issues/333), based on
-`278025a52247c7316c8553fd2a390f9179150733` plus the borrowed CAM posting and
-drawing-export reads described below, on 2026-10-10. This is a concrete inventory
+the historical `278025a52247c7316c8553fd2a390f9179150733` census and the
+bounded source follow-up through clean `fd85a556` on 2026-10-11. Scoped STEP,
+native/attached drawing and affected history/input qualification is recorded
+below. This is a concrete inventory
 of production snapshot APIs and their desktop consumers, shared host/MCP read
 contracts, and the document caches they feed. It is not a census of every clone
 in the repository, a benchmark, or live UI qualification. Test fixtures and
@@ -38,26 +40,21 @@ invalidation boundary, and remaining disposition. Paths under
    intentional holders can outlive one frame; a weak cache stamp alone cannot
    prove every reader has released its Arc.
 
-3. **Retained browser/history panels**: `native/controller/browser.rs`
-   `synchronize` and `controller/history/panel.rs::synchronize` each capture
-   `document_snapshot` on owner/revision refresh and retain it in an Arc.
-   `DocumentDto` owns names/settings, browser nodes and history feature metadata
-   (`crates/core/src/dto.rs`), not evaluated solid geometry. Cost scales with
-   nodes/features; unchanged refreshes share the retained Arc. Owner changes
-   replace the panel snapshot. These are remaining metadata-copy candidates:
-   document whether each panel needs the whole DTO or can share a smaller
-   immutable projection. Do not report ordinary camera/menu reads as mesh
-   copying merely because these revision-bound snapshots exist.
+3. **Retained browser/history panels: repaired**: browser synchronization owns
+   only title, units and hierarchy (`3181443d`); history synchronization owns
+   `Arc<FeatureTree>` (`db1aa006`). Short manager reads compare their consumed
+   metadata and reuse the projection when unchanged. Owner replacement retires
+   the prior holder before reuse. Costs scale with their respective hierarchy
+   or history; neither panel retains the complete DocumentDto or geometry.
 
-4. **History and feature edit boundaries**: `native/controller/history/drag.rs`
-   captures a receipt-bound DocumentDto used across drag events for slot and
-   operation decisions; changed receipts reject the drag. `native/feature.rs`
-   `Snapshot::capture` owns document metadata, parameter/source-occurrence
-   lists and decoded assembly intent/solution, while sharing its viewport.
-   The edit snapshot belongs to the exact document receipt and survives
-   Apply/Cancel preparation. Preserve this lifetime; replacing it with a lock
-   held across user events would be incorrect. Copies scale with history,
-   parameters and assembly structure, not shared scene buffers.
+4. **History and feature edit boundaries**: history drag shares the current
+   FeatureTree only at an exact owner/revision receipt; otherwise it captures
+   that narrow tree under the publisher-to-engine guard. Drag needs stable
+   ordering/rollback inputs until drop or cancellation. `native/feature.rs`
+   `Snapshot::capture` retains document metadata, parameters/source occurrences,
+   decoded assembly intent/solution and its shared viewport for Apply/Cancel.
+   Required edit/recovery state stays owned across events; a borrowed guard
+   must not replace that lifetime.
 
 5. **Undo/Redo decision reads: repaired**: `native/history.rs`
    `apply_native_history_guarded` previously copied a whole DocumentDto to read
@@ -70,11 +67,13 @@ invalidation boundary, and remaining disposition. Paths under
 
 6. **Drawing paper and editors**:
    `native/controller/workbench/drawing_paper_view.rs::paint` owns one
-   DrawingDocumentDto per owner/revision receipt; annotation `runtime.rs` and
-   `drawing_editor.rs` share that paper-document Arc when its receipt matches,
-   with an owned fallback when no matching retained publication exists.
-   Copies scale with authored sheets/views/annotations/templates, not OCCT
-   projected line buffers. Editor retirement releases the applicable Arc;
+   shared DrawingDocumentDto Arc per owner/revision receipt; annotation
+   `runtime.rs` and `drawing_editor.rs` share the authoritative Arc, including
+   guarded fallback when no matching paper publication exists.
+   Ordinary reads share that Arc without copying authored data. Its retained
+   allocation scales with sheets/views/annotations/templates; successor edits
+   may require an owned mutation result. Native projected line buffers are
+   separate derived output. Editor retirement releases the applicable Arc;
    dirty draft protection must run before transitions. Paper artwork retains
    one selected-sheet DTO after successful rendering, keyed by geometry revision,
    sheet content and units; a rejected frame moves that same snapshot into its
@@ -99,15 +98,19 @@ invalidation boundary, and remaining disposition. Paths under
    now returns only the selected sheet ID/name and requested format under the
    existing owner/revision fence. Missing active-sheet selection still returns
    `Select a drawing sheet to export`. The owned output intent survives the
-   picker; delayed export still revalidates the receipt and owns its SVG/DXF
-   payload. Document validation remains at the existing setters/loaders.
+   picker; delayed export owns its SVG/DXF/PDF payload. Prepared selected native
+   copies move HLR/encoding/Page work outside live engine and publisher guards;
+   final original receipt and I/O validation precede atomic publication. Native
+   Print uses the same detached export/Page seam with separate native-dialog
+   ownership. Document validation remains at existing setters/loaders.
 
 8. **CAM intent consumers**: `native/controller/workbench/cam.rs` owns
    CamDocumentDto on editor owner/revision refresh; `cam_view.rs` owns an Arc
    per owner/revision/selection key and clears it when inactive, cancelling
    pending work. `cam/central.rs` owns the project CAM intent when opening the
-   library; Close clears the receipt/draft but retains project/library context
-   until the next Open or resource destruction. These copies scale with
+   library. Inactive/replaced-owner retirement (`0bd892bc`) clears the project
+   baseline and receipt/draft; active library data and required readers retain
+   their bounded lifetimes. These copies scale with
    tools/setups/operations and regeneration fingerprint stamps. Derived toolpath
    motion and NativeViewportFrame geometry are not stored in this DTO.
    `cam_view.rs` previously discarded the DTO returned by `cam_snapshot`
@@ -126,8 +129,9 @@ invalidation boundary, and remaining disposition. Paths under
    and worker/export snapshots. Summary construction scans current setup/tool
    metadata under the engine guard; it is not constant-time. The callback does
    not reenter the host/bridge or retain a borrow across user events. Full CAM
-   editor/library snapshots remain intentional lifetime boundaries; their
-   projection/retirement acceptance is still open.
+   editor/library snapshots remain intentional lifetime boundaries; CAM
+   selection-only reuse and inactive/replaced library retirement have focused
+   source passes, while deployed memory-pressure acceptance remains open.
 
 9. **Borrowed menus and actions**: `native/controller/browser.rs::action_node`,
    history validation/rename/edit preparation, file export readiness, sketch
@@ -145,9 +149,10 @@ invalidation boundary, and remaining disposition. Paths under
     section/projection, preflight and mesh export paths borrow source scene
     and assembly structure; generated query/export payloads are owned
     transport results. `document` still derives an owned DocumentDto, and
-    `cam_document` clones CAM intent before serialization: document those
-    remaining metadata-copy boundaries or add a borrowed serializer where
-    valuable. Owned tessellation/export meshes, JSON/base64 and saved model
+    `cam_document` now serializes `cam_document_ref()` under the same manager
+    read (`8352889c`), without a full temporary CAM clone. DocumentDto assembly
+    remains an owned metadata/wire boundary, rather than evaluated mesh data.
+    Owned tessellation/export meshes, JSON/base64 and saved model
     strings scale with the requested output and must remain valid after the
     call. The compatibility API `NativeEngineHost::viewport_snapshot`
     explicitly returns owned geometry/metadata. No ordinary desktop menu or
@@ -157,21 +162,24 @@ invalidation boundary, and remaining disposition. Paths under
 
 ## Native UI entrypoint census
 
-The finite source scan at the exact base above covers the production desktop
+The historical finite scan at `278025a5` covered the production desktop
 calls to `document_snapshot`, `drawing_snapshot`, `cam_document_snapshot`,
 `viewport_snapshot`, `solid_scene_snapshot`, `viewport_frame`, `cam_snapshot`,
 borrowed document/drawing callbacks and the CAM warning accessor. It also covers
 multiline literal `engine_call` reads for document/drawing/CAM/assembly intent,
 assembly solution, active sketch, named views, print intent and project model
-export. It found 73 matching source blocks in 34 files before the two new
-reductions. Blocks can contain multiple calls; this is not an allocation count.
+export. It found 73 matching source blocks in 34 files before the then-current
+borrowed CAM/drawing reductions. Blocks can contain multiple calls; this is not an allocation count.
 Tests, replay/capture fixtures and schema construction were excluded. Dynamic
 dispatch, aliases and derived-output consumers were inspected by the groups
 below, rather than assumed absent because they lack a literal API name.
 
 The exact source excerpts remain outside the repository at
 `D:/limo-cad-maintenance/backlog-autonomous-20261010/issue333-native-entrypoint-census-278-source.json`.
-The covered native entrypoint groups and their lifetime dispositions are:
+The covered native entrypoint groups and their lifetime dispositions follow.
+Unresolved projection suggestions from that historical census are inspection
+leads, not proof of a remaining current defect. The repaired paths are updated
+below and in the later export-isolation section:
 
 - **Host/publication/save/history bridge**: `native_interface.rs`,
   `native/workspace.rs`, `native/publication.rs` and `native/history.rs`.
@@ -179,9 +187,12 @@ The covered native entrypoint groups and their lifetime dispositions are:
   owned across broker/write/mutation/recovery boundaries. Publication uses the
   existing reservation/owner fence and releases engine reads before publishing.
   Published snapshot reads are not instantaneous live-engine snapshots. The
-  model-frame alias shares `viewport_frame` Arcs. Active-sketch nullness and
-  Undo/Redo-availability reads still serialize a whole sketch to obtain scalars;
-  these are remaining narrow projection candidates.
+  model-frame alias shares `viewport_frame` Arcs. Active-sketch presence and
+  Undo/Redo availability now use the borrowed session scalars (`8d4acaea`),
+  removing the historical whole-sketch serialization from history decisions
+  and fallback publication focus. Public/editor sketch DTOs remain owned where
+  their full content is required. Original owner/history ordering and the
+  poisoned host-lock behavior are preserved.
 
 - **Sketch and mechanism input**: `native_editor/mod.rs`, `support.rs` and
   `mechanism.rs`, plus the `active` helper consumers in `palette.rs`,
@@ -201,8 +212,8 @@ The covered native entrypoint groups and their lifetime dispositions are:
   `controller/history/drag.rs`. Borrowed menu/history validation returns owned
   metadata. Browser/panel snapshots, drag intent and feature edit/cancel
   snapshots retain exact receipts across events; shared frames carry geometry.
-  Full DTO projections for clean browser/history panels remain candidates,
-  while edit/recovery snapshots require their owned lifetime.
+  Clean browser/history use the narrow projections above; edit/recovery
+  snapshots still require their owned lifetime.
 
 - **Assembly/named-view/section ingress**: `controller/assembly.rs`,
   `controller/named_views.rs`, `named_views/panel.rs` and `section_review.rs`.
@@ -269,8 +280,9 @@ allocation graph, service/cache architecture or memory-pressure acceptance.
 - **Body meshes / local edges:** the document-indexed `BodyMeshCache` owns mesh
   handles, and `ModelEdgeCache` owns local bounds/edge-side/face-boundary data.
   Both store weak scene identity stamps. Occurrence/visibility changes can
-  reuse body mesh handles. Changed scene identity rebuilds the body map/uploads
-  coarsely; transient isolated scenes are distinct. Close/eviction drops only
+  reuse body mesh handles. Private authoritative body-generation proofs now
+  preserve unchanged same-document meshes/edge Arcs across successor scenes;
+  missing/error/stale/isolated proof or evicted asset falls back to rebuild. Close/eviction drops only
   the addressed document entities/cache/instance state. Weak stamps do not
   pin CPU scenes, but handles and derived boundaries intentionally retain
   assets until that retirement.
@@ -283,7 +295,10 @@ allocation graph, service/cache architecture or memory-pressure acceptance.
   reusable source; edits/Undo/replacement miss the exact key. Document eviction
   clears matching current/previous/error entries and paper geometry. Retaining
   one previous result is deliberate rollback/error presentation, not a claim
-  of unlimited sheet caching.
+  of unlimited sheet caching. Cold native projection now owns selected shape
+  copies and coherent source intent on its worker; finished native projection
+  reuse also checks selected geometry and resolved intent exactly. Those native
+  copies are required to prevent concurrent mutation of live OCCT shapes.
 
 - **Editors / background work:** drawing/CAM clean inactive editor snapshots
   retire on the matching document policy; dirty drafts remain protected until
@@ -311,12 +326,14 @@ allocation graph, service/cache architecture or memory-pressure acceptance.
    publisher fence while its callback runs. `with_document`, `with_drawing` and
    `with_cam` hold only the inner engine guard for the synchronous borrowed read. Never call
    another engine method or publisher-locking bridge method inside them.
-2. **Print/history/drawing-output/CAM-posting changes here:** owned callback
-   outputs return and release the engine guard before export, page preparation or history
-   mutation reenters the engine. The publisher fence, revision checks and
-   history transaction boundaries remain in their existing positions. Print
-   preparation/result storage is taken independently before completion enters
-   another receipt fence; no slot guard is held across that reentry.
+2. **Print/drawing-output/background exports:** coherent selected native
+   copies and intent are captured under the original receipt, then release both
+   publisher and engine before HLR, mesh/ZIP/STEP serialization or Page work.
+   Final original owner/revision and actual job/I/O validation remain separate.
+   History/CAM posting callbacks return owned scalar/draft inputs before another
+   engine call; their existing mutation/history transaction fences remain.
+   Print result storage is taken independently before receipt reentry; no slot
+   guard is held across it. Long work never holds the export-operation lease.
 3. **Frame/cache synchronization:** capture a coherent Arc frame under the
    engine mutex, release it, then change ECS/cache state. Pointer/camera reads
    use retained frame/geometry and do not borrow an engine guard across events.
@@ -327,24 +344,70 @@ allocation graph, service/cache architecture or memory-pressure acceptance.
    not a model mutation. This is a reviewed path-specific order, not proof of
    the full application/service lock graph.
 
-## Remaining acceptance and validation
+## Follow-up export isolation and remaining qualification
 
-Keep #333 open. The native ingress census above is source-complete for its
-explicit API/literal-read scope. Remaining work is the wider service/transport
-allocation and lock graph, justified reductions of the remaining metadata
-candidates above, memory-pressure and background-holder acceptance, and any
-consumer-specific presentation split
-supported by an actual invalidation problem. Per-body render updates require
-stable authoritative kernel body revisions or dirty-body identities; body IDs
-alone cannot prove unchanged geometry. Do not implement that architecture from
-this audit or recreate the already shared metadata/pose caches.
+The earlier borrowed selection reductions did not remove the long live holds
+inside native HLR, mesh/ZIP and STEP output work. The bounded subsequent repairs
+are documented in [the Bevy ownership audit](bevy-ownership-audit.md#detached-native-work-and-final-publication):
 
-Existing identity/retention tests cover shared frames, independent metadata and
-placement invalidation, drawing edits/tab reuse/eviction, mesh reuse and dirty
-archive/history retention. The issue records historical focused passes; this
-source audit did not rerun them. All five bounded metadata/selection reductions
-received independent source review and scoped edition-2021 rustfmt/diff checks.
-The two new CAM/drawing-output reductions have not been compiled or exercised
-by this audit; the installed runtime and earlier focused passes predate them.
-No tests, builds, benchmarks or live GUI/MCP qualification were performed here, and no FPS,
-latency, universal cache-release or current deployed-build claim is made.
+- Cold paper has coherent selected-shape/scene/assembly/sheet worker snapshots,
+  exact stale source rejection and bounded finished-projection reuse. Paper
+  errors retain hidden parent identity while retiring stale children.
+- Drawing File SVG/DXF/PDF and native Print capture selected native shapes and
+  intent briefly, then prepare output/Page outside live guards. Final file or
+  dialog owner/revision checks remain separate from computation.
+- Bambu inspection/previews own exact context and selected shapes outside the
+  publisher. WRITE additionally needs the current dialog-operation lease,
+  exact native owner/model/geometry registration and final atomic write.
+- STL/3MF use a distinct Files export-job lease and selected native copies plus
+  coherent units/placements/name/appearance/structure/bed intent. Original
+  writers and layout checks run outside document locks.
+- STEP uses that job lifecycle and copies the effective exact body selection;
+  AP242/thread/units/occurrences remain unchanged. A process-global STEP exchange
+  mutex protects OCCT initialization/parameters/transfer/serialization, without
+  granting document or file authority. Concurrent STEP exchanges serialize.
+
+Copies that enable native background isolation, editable Apply/Cancel drafts,
+recovery/history, output bytes and genuinely running immutable readers are
+required. Final job locking is publisher -> operation lease -> native validation
+and atomic write, never long meshing/HLR/ZIP under that lease. UI revocation has
+no inverse lease-to-publisher callback. Bambu metadata preparation after an actual
+write cannot retroactively claim the file was not written.
+
+Keep #333 open. Historical census counts/excerpts remain historical, not an
+updated whole-repository clone count. Per-body upload reuse is now implemented
+using private checked kernel owner/body generations and exact committed scene
+proof; body IDs/topology/pointers still cannot authorize it. The wider service
+lock graph, memory pressure and actual deployed background-holder/render behavior
+remain acceptance work.
+
+Browser/history/CAM, native identities/body Assets and earlier transport/input
+passes are retained in [the Bevy ownership audit](bevy-ownership-audit.md).
+The `1c0dc76e` drawing/PDF/inspection/preview checkpoint passed six exact filters
+once with strict Windows source checks, retaining three earlier passes:
+[receipt](detached-drawing-output-20261011.json). This includes independent PDF
+physical dimensions and actual detached native lock reentry; it does not qualify
+successful native Bambu service/toolpaths or physical OS printing.
+[The newer export receipt](detached-export-ownership-20261011.json) records
+strict Windows source checks and exactly three focused passes at `9e16fade`:
+Bambu WRITE, portable STL/3MF and borrowed panel review. The existing `9cdf863d`
+Print-to-File option check is retained without repetition; it is not an OS
+print acceptance. The panel comparison preserves exact choices/model equality
+and real worker-owned payloads, removing only a repeated temporary model copy.
+The authentic four-plate template does not positively qualify single-plate
+ResolvedScene layout. At clean `fd85a556`, integrated STEP `d493f04e`, native
+drawing-export `27ec6551` and desktop `4382a5a8` passed their three new regressions
+once, plus strict Windows desktop/native-engine/sketch/OCCT/export checks.
+[The STEP/drawing receipt](detached-step-drawing-20261011.json) records exact
+artifacts, stale-source/lock/ticket/job cases and the initial strict-lint failure
+corrected without weakening the independent bounds oracle.
+
+The same source also removes full frame copies from sidebar wheel and busy
+Save/Escape routing at each original separate read (`d20d62b1`), and borrows
+assembly data solely for requested named-view/export warning labels (`fd85a556`).
+The specifically affected real history and busy Save checks passed once;
+unrelated earlier passes and the generic pointer projection check were retained.
+No mirror test was added for label formatting. Installed EB and retained UI
+passes remain separate from these source revisions. This census update ran no
+additional tests or live UI/MCP actions. No deployed, universal latency/FPS,
+memory-pressure, physical GPU release or final #333 closure is claimed.

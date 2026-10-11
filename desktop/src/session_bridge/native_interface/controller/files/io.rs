@@ -107,6 +107,7 @@ pub(super) fn capture(
         })
 }
 
+#[cfg(test)]
 fn fresh_layout_report(engine: &AppState, intent: &ExportIntent) -> Result<Option<Value>, String> {
     Ok(if needs_layout_check(intent) {
         Some(parse_engine_envelope(engine.engine_call(
@@ -310,13 +311,13 @@ fn picker(
             wake.request_redraw();
         })
         .map_err(|e| format!("Cannot open file chooser: {e}"))?;
-    world.resource_mut::<Files>().picker = Some(Picker {
+    world.resource_mut::<Files>().replace_picker(Some(Picker {
         receipt,
         kind,
         result: Mutex::new(receive),
-    });
+    }));
     if !keep_options {
-        world.resource_mut::<Files>().dialog = None;
+        world.resource_mut::<Files>().replace_dialog(None);
     }
     Ok(json!({"awaiting_input":true}))
 }
@@ -563,75 +564,51 @@ pub(super) fn export(
     let written_receipt = receipt.clone();
     let written_generation = intent.bambu.generation;
     let written_bambu = intent.bambu.enabled;
+    let operation = written_bambu
+        .then(|| export_operation::begin(world, &receipt, &intent))
+        .transpose()?;
+    let portable_operation = (!written_bambu)
+        .then(|| export_operation::begin_portable(world, &receipt))
+        .transpose()?;
     worker::enqueue_document_io(
         world,
         format!("export_{}", intent.format.extension()),
         move |services, guard| {
-            services.bridge.with_native_document_receipt(
-                &services.engine,
-                &receipt.owner,
-                |revision| {
-                    check_revision(&receipt, revision)?;
-                    guard.validate()?;
-                    if intent.bambu.enabled { super::bambu::check_output(&intent, &path)?; }
-                    let layout_report = fresh_layout_report(&services.engine, &intent)?;
-                    check_report_confirmation(layout_report.as_ref(), super::bambu::target_layout_has_issues(&intent), intent.allow_layout_issues)?;
-                    let model = engine_text(
-                        parse_engine_envelope(services.engine.engine_call("project_export_model", ""))?,
-                        "Project export was not text",
-                    )?;
-                    let mut project_report = None;
-                    let bytes = if intent.bambu.enabled {
-                        let (bytes, report) = super::bambu::export_bytes(&services.engine, &intent, &model)?;
-                        project_report = Some(report);
-                        bytes
-                    } else if intent.format == Format::Step {
-                        services.engine.export_step(
-                            &serde_json::to_string(&step_request(
-                                &services.engine,
-                                &intent,
-                                model,
-                            )?)
-                            .map_err(|e| e.to_string())?,
-                        )?
-                    } else {
-                        let request = limo_cad_export::MeshExportRequest {
-                            expected_model_json: Some(model),
-                            body_ids: intent.body_ids.clone(),
-                            scope: intent.scope,
-                            slicer_target: intent.slicer_target,
-                            named_view: (intent.scope == MeshExportScope::Assembly)
-                                .then(|| intent.named_view.clone())
-                                .flatten(),
-                            print_bed: (intent.scope == MeshExportScope::Assembly)
-                                .then(|| intent.print_bed.clone())
-                                .flatten(),
-                            include_appearance: intent.format == Format::ThreeMf,
-                            ..default()
-                        };
-                        let payload = serde_json::to_string(&request).map_err(|e| e.to_string())?;
-                        if intent.format == Format::ThreeMf {
-                            services.engine.export_3mf(&payload)?
-                        } else {
-                            services.engine.export_stl(&payload)?
-                        }
-                    };
-                    if overwrite {
-                        limo_cad_project_file::write_binary_file_atomic(&path, &bytes)
-                    } else {
-                        limo_cad_project_file::write_binary_file_new(&path, &bytes)
-                    }
-                    .map_err(|e| e.to_string())?;
-                    let written_template=if intent.bambu.enabled {
-                        Some(json!({"encoded":STANDARD.encode(&bytes),"summary":limo_cad_export::bambu_project::inspect_bambu_template(&bytes).map_err(|e|e.to_string())?}))
-                    } else { None };
-                    Ok(NativeMutationResult {
-                        context: receipt.owner.clone(),
-                        engine_revision: revision,
-                        value: json!({"exported":true,"path":path,"bytes":bytes.len(),"export_mode":if intent.bambu.enabled {"bambu_project"}else{"portable_model"},"report":project_report,"requires_reslicing":intent.bambu.enabled,"written_template":written_template}),
-                    })
-                },
-            )
+            if let Some(operation) = operation {
+                let (mut result, bytes) = bambu_write_snapshot(
+                    services,
+                    &receipt,
+                    &intent,
+                    &operation,
+                    (&path, overwrite),
+                    || guard.validate(),
+                    |prepared| prepared.build(),
+                )?;
+                prepare_written_template(&mut result, bytes)?;
+                return Ok(result);
+            }
+            let operation = portable_operation.ok_or("Export job was not issued")?;
+            if intent.format == Format::Step {
+                step_write_snapshot(
+                    services,
+                    &receipt,
+                    &intent,
+                    &operation,
+                    (&path, overwrite),
+                    || guard.validate(),
+                    |prepared| prepared.build(),
+                )
+            } else {
+                portable_write_snapshot(
+                    services,
+                    &receipt,
+                    &intent,
+                    &operation,
+                    (&path, overwrite),
+                    || guard.validate(),
+                    |prepared| prepared.build(),
+                )
+            }
         },
         move |world, services, result| {
             let mut value = result?.value;
@@ -649,6 +626,231 @@ pub(super) fn export(
             Ok(value)
         },
     )
+}
+
+// Exact AP242 serialization owns independent shapes; source metadata and
+// placements are captured under the original receipt before leaving the engine.
+pub(super) fn step_write_snapshot(
+    services: &NativeServices,
+    receipt: &DocumentReceipt,
+    intent: &ExportIntent,
+    operation: &export_operation::Lease,
+    destination: (&std::path::Path, bool),
+    validate_dispatch: impl FnOnce() -> Result<(), String>,
+    build: impl FnOnce(
+        limo_cad_native_engine::PreparedStepExport,
+    ) -> Result<limo_cad_native_engine::FinishedStepExport, String>,
+) -> Result<NativeMutationResult, String> {
+    let (path, overwrite) = destination;
+    let prepared = services.bridge.with_native_document_receipt(
+        &services.engine,
+        &receipt.owner,
+        |revision| {
+            check_revision(receipt, revision)?;
+            validate_dispatch()?;
+            if intent.format != Format::Step {
+                return Err("Exact export requires STEP".into());
+            }
+            check_path(path, intent.format)?;
+            check_report_confirmation(
+                None,
+                super::bambu::target_layout_has_issues(intent),
+                intent.allow_layout_issues,
+            )?;
+            let model = engine_text(
+                parse_engine_envelope(services.engine.engine_call("project_export_model", ""))?,
+                "Project export was not text",
+            )?;
+            services
+                .engine
+                .prepare_step_export(step_request(&services.engine, intent, model)?)
+        },
+    )?;
+    let outcome = build(prepared);
+    services.bridge.with_native_document_receipt(&services.engine, &receipt.owner, |revision| {
+        check_revision(receipt, revision)?;
+        operation.commit(|| {
+            let finished = outcome?;
+            check_path(path, intent.format)?;
+            services.engine.validate_step_export(&finished)?;
+            if overwrite { limo_cad_project_file::write_binary_file_atomic(path, finished.bytes()) }
+            else { limo_cad_project_file::write_binary_file_new(path, finished.bytes()) }.map_err(|e| e.to_string())?;
+            Ok(NativeMutationResult { context: receipt.owner.clone(), engine_revision: revision,
+                value: json!({"exported":true,"path":path,"bytes":finished.bytes().len(),"export_mode":"portable_model","report":null,"requires_reslicing":false,"written_template":null}) })
+        })
+    })
+}
+
+// Captured native geometry and intent grant no file publication authority.
+// All meshing and encoding run after releasing publisher and engine locks.
+pub(super) fn portable_write_snapshot(
+    services: &NativeServices,
+    receipt: &DocumentReceipt,
+    intent: &ExportIntent,
+    operation: &export_operation::Lease,
+    destination: (&std::path::Path, bool),
+    validate_dispatch: impl FnOnce() -> Result<(), String>,
+    build: impl FnOnce(
+        limo_cad_native_engine::PreparedPortableMeshExport,
+    ) -> Result<limo_cad_native_engine::FinishedPortableMeshExport, String>,
+) -> Result<NativeMutationResult, String> {
+    let (path, overwrite) = destination;
+    let prepared = services.bridge.with_native_document_receipt(
+        &services.engine,
+        &receipt.owner,
+        |revision| {
+            check_revision(receipt, revision)?;
+            validate_dispatch()?;
+            check_path(path, intent.format)?;
+            let model = engine_text(
+                parse_engine_envelope(services.engine.engine_call("project_export_model", ""))?,
+                "Project export was not text",
+            )?;
+            let format = match intent.format {
+                Format::Stl => limo_cad_native_engine::PortableMeshFormat::Stl,
+                Format::ThreeMf if !intent.bambu.enabled => {
+                    limo_cad_native_engine::PortableMeshFormat::ThreeMf
+                }
+                _ => return Err("Portable mesh preparation requires STL or portable 3MF".into()),
+            };
+            services.engine.prepare_portable_mesh_export(
+                limo_cad_export::MeshExportRequest {
+                    expected_model_json: Some(model),
+                    body_ids: intent.body_ids.clone(),
+                    scope: intent.scope,
+                    slicer_target: intent.slicer_target,
+                    named_view: (intent.scope == MeshExportScope::Assembly)
+                        .then(|| intent.named_view.clone())
+                        .flatten(),
+                    print_bed: (intent.scope == MeshExportScope::Assembly)
+                        .then(|| intent.print_bed.clone())
+                        .flatten(),
+                    include_appearance: intent.format == Format::ThreeMf,
+                    ..default()
+                },
+                format,
+            )
+        },
+    )?;
+    let outcome = build(prepared);
+    services.bridge.with_native_document_receipt(&services.engine, &receipt.owner, |revision| {
+        check_revision(receipt, revision)?;
+        // Same lock order as Bambu writes; revocation never enters publisher or
+        // engine while holding this short final-commit lease.
+        operation.commit(|| {
+            let finished = outcome?;
+            check_report_confirmation(None, finished.layout_has_issues() || super::bambu::target_layout_has_issues(intent), intent.allow_layout_issues)?;
+            check_path(path, intent.format)?;
+            services.engine.validate_portable_mesh_export(&finished)?;
+            if overwrite { limo_cad_project_file::write_binary_file_atomic(path, finished.bytes()) }
+            else { limo_cad_project_file::write_binary_file_new(path, finished.bytes()) }
+                .map_err(|e| e.to_string())?;
+            Ok(NativeMutationResult {
+                context: receipt.owner.clone(), engine_revision: revision,
+                value: json!({"exported":true,"path":path,"bytes":finished.bytes().len(),"export_mode":"portable_model","report":null,"requires_reslicing":false,"written_template":null}),
+            })
+        })
+    })
+}
+
+pub(super) fn prepare_written_template(
+    result: &mut NativeMutationResult,
+    bytes: Vec<u8>,
+) -> Result<(), String> {
+    let summary = limo_cad_export::bambu_project::inspect_bambu_template(&bytes)
+        .map_err(|error| format!("The Bambu file was written, but its handoff metadata could not be prepared: {error}"))?;
+    result.value["written_template"] = Value::Object(serde_json::Map::from_iter([
+        ("encoded".into(), Value::String(STANDARD.encode(bytes))),
+        ("summary".into(), serde_json::to_value(summary).map_err(|error| format!("The Bambu file was written, but its handoff metadata could not be encoded: {error}"))?),
+    ]));
+    Ok(())
+}
+
+pub(super) fn bambu_write_snapshot(
+    services: &NativeServices,
+    receipt: &DocumentReceipt,
+    intent: &ExportIntent,
+    operation: &export_operation::Lease,
+    destination: (&std::path::Path, bool),
+    validate_dispatch: impl FnOnce() -> Result<(), String>,
+    build: impl FnOnce(
+        limo_cad_native_engine::PreparedBambuExport,
+    ) -> Result<limo_cad_native_engine::FinishedBambuExport, String>,
+) -> Result<(NativeMutationResult, Vec<u8>), String> {
+    let (path, overwrite) = destination;
+    let prepared = services.bridge.with_native_document_receipt(
+        &services.engine,
+        &receipt.owner,
+        |revision| {
+            check_revision(receipt, revision)?;
+            validate_dispatch()?;
+            super::bambu::check_output(intent, path)?;
+            check_report_confirmation(
+                None,
+                super::bambu::target_layout_has_issues(intent),
+                intent.allow_layout_issues,
+            )?;
+            services
+                .engine
+                .prepare_bambu_export(super::bambu::request(intent)?)
+        },
+    )?;
+    // Meshing, archive work, and report encoding own only the detached snapshot.
+    let outcome = build(prepared).and_then(|finished| {
+        let report = serde_json::to_value(finished.report()).map_err(|e| e.to_string())?;
+        let value = Value::Object(serde_json::Map::from_iter([
+            ("exported".into(), Value::Bool(true)),
+            (
+                "path".into(),
+                serde_json::to_value(path).map_err(|e| e.to_string())?,
+            ),
+            ("bytes".into(), finished.bytes().len().into()),
+            ("export_mode".into(), Value::String("bambu_project".into())),
+            ("report".into(), report),
+            ("requires_reslicing".into(), Value::Bool(true)),
+            ("written_template".into(), Value::Null),
+        ]));
+        Ok((finished, value))
+    });
+    services
+        .bridge
+        .with_native_document_receipt(&services.engine, &receipt.owner, |revision| {
+            check_revision(receipt, revision)?;
+            // Publisher -> operation -> engine: UI revocation only takes the
+            // operation mutex and cannot invert the publisher's lock order.
+            operation.commit(|| {
+                let (finished, value) = outcome?;
+                check_report_confirmation(
+                    None,
+                    finished.source_layout_has_issues()
+                        || finished
+                            .report()
+                            .z_preflight
+                            .iter()
+                            .any(|group| !group.issues.is_empty()),
+                    intent.allow_layout_issues,
+                )?;
+                // Recheck destination aliasing after detached preparation;
+                // this is a filesystem fence, not another control admission.
+                super::bambu::check_output(intent, path)?;
+                services.engine.register_bambu_export(&finished)?;
+                if overwrite {
+                    limo_cad_project_file::write_binary_file_atomic(path, finished.bytes())
+                } else {
+                    limo_cad_project_file::write_binary_file_new(path, finished.bytes())
+                }
+                .map_err(|e| e.to_string())?;
+                let (bytes, _) = finished.into_parts();
+                Ok((
+                    NativeMutationResult {
+                        context: receipt.owner.clone(),
+                        engine_revision: revision,
+                        value,
+                    },
+                    bytes,
+                ))
+            })
+        })
 }
 
 #[cfg(test)]

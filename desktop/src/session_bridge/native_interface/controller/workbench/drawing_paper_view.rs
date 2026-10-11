@@ -170,7 +170,7 @@ pub(in super::super) fn paint(
         .owner
         .clone()
         .ok_or("Drawing paper has no document owner")?;
-    let (receipt, drawing) =
+    let (receipt, drawing, revision, units) =
         services
             .bridge
             .with_native_document_receipt(&services.engine, &owner, |revision| {
@@ -178,15 +178,16 @@ pub(in super::super) fn paint(
                     owner: owner.clone(),
                     revision,
                 };
+                let (drawing, geometry_revision, units) =
+                    services.engine.drawing_presentation_snapshot();
                 if state
                     .paper_document
                     .as_ref()
                     .is_none_or(|(previous, _)| previous != &receipt)
                 {
-                    state.paper_document =
-                        Some((receipt.clone(), services.engine.shared_drawing_snapshot()));
+                    state.paper_document = Some((receipt.clone(), Arc::clone(&drawing)));
                 }
-                Ok((receipt, state.paper_document.as_ref().unwrap().1.clone()))
+                Ok((receipt, drawing, geometry_revision, units))
             })?;
     let Some(sheet) = drawing.sheets.iter().find(|sheet| {
         drawing.active_sheet_id == Some(sheet.id)
@@ -198,7 +199,9 @@ pub(in super::super) fn paint(
         state.paper_labels.clear();
         state.paper_fills.clear();
         state.paper_view = None;
-        world.remove_resource::<edges::EdgeCache>();
+        if let Some(mut cache) = world.get_resource_mut::<edges::EdgeCache>() {
+            cache.retire_sources();
+        }
         return Ok(());
     };
     let repair_view =
@@ -215,8 +218,6 @@ pub(in super::super) fn paint(
         preview.annotations.clear();
     }
     let sheet = preview.as_ref();
-    let revision = services.engine.geometry_revision();
-    let units = services.engine.document_units();
     let (sheet_w, sheet_h) = sheet_size(sheet);
     let sheet_mm = [sheet_w as f64, sheet_h as f64];
     if let Some(view) = &mut state.paper_view {
@@ -250,33 +251,47 @@ pub(in super::super) fn paint(
         .as_ref()
         .is_none_or(|(r, s, u)| *r != revision || s != sheet || *u != units);
     world.init_resource::<edges::EdgeCache>();
+    let wake = world.get_resource::<NativeInterfaceHandle>().cloned();
+    let available =
+        services
+            .bridge
+            .with_native_document_receipt(&services.engine, &receipt.owner, |current| {
+                if current != receipt.revision {
+                    return Err("The drawing changed before projection delivery".into());
+                }
+                world.resource_mut::<edges::EdgeCache>().ensure_source(
+                    &source,
+                    raster,
+                    services,
+                    &receipt,
+                    edges::ColdSourceInput {
+                        drawing: &drawing,
+                        sheet,
+                        original_views,
+                        repair_view,
+                    },
+                    wake,
+                )
+            });
+    match available {
+        Ok(true) => {}
+        pending => {
+            let message = pending
+                .err()
+                .unwrap_or_else(|| "Preparing drawing projection…".into());
+            fail(world, state, &message);
+            toolbar(world, state, controls)?;
+            return Ok(());
+        }
+    }
     let prepared = world.resource_scope(|world, mut cache: Mut<edges::EdgeCache>| {
         let mut images = world.resource_mut::<Assets<Image>>();
         let ready = cache.prepare_sheet(
             &mut images,
             source,
             raster,
-            |view| {
-                if repair_view.is_some() {
-                    let saved = original_views
-                        .iter()
-                        .find(|saved| saved.id == view.id)
-                        .ok_or("Repair view was removed")?;
-                    return services
-                        .engine
-                        .project_sheet_view_resolved(saved, original_views);
-                }
-                services
-                    .engine
-                    .project_sheet_view_resolved(view, &sheet.views)
-            },
-            |projections, budget| {
-                services.engine.section_source_graphics(
-                    sheet,
-                    |id| projections.get(&id).map(|(_, p)| p),
-                    budget,
-                )
-            },
+            |_| Err("Drawing projection is not ready".into()),
+            |_, _| Err("Drawing source marks are not ready".into()),
         )?;
         if art_changed || ready.source_changed {
             let art = state.paper_view.as_mut().unwrap().annotations(
@@ -308,6 +323,35 @@ pub(in super::super) fn paint(
     toolbar(world, state, controls)
 }
 
+/// Fixtures drive real asynchronous preparation to a completed source/error;
+/// they never replace the production worker with synchronous projection.
+#[cfg(test)]
+pub(in super::super) fn paint_until_settled(
+    world: &mut World,
+    camera: Entity,
+    services: &NativeServices,
+    state: &mut Workbench,
+    size: (f32, f32, f32),
+    controls: &HashMap<String, Entity>,
+) -> Result<(), String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        state.widgets.begin();
+        paint(world, camera, services, state, size, controls)?;
+        state.widgets.finish(world);
+        if !world
+            .get_resource::<edges::EdgeCache>()
+            .is_some_and(edges::EdgeCache::source_pending)
+        {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err("Drawing fixture projection did not complete".into());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
 pub(in super::super) fn repaint(world: &mut World, state: &mut Workbench) -> Result<(), String> {
     let view = state.paper_view.as_ref().ok_or("Open a drawing sheet")?;
     if let Some(failed) = &view.art_failure {
@@ -321,6 +365,14 @@ pub(in super::super) fn repaint(world: &mut World, state: &mut Workbench) -> Res
     let source = view.source.clone();
     if !world.contains_resource::<edges::EdgeCache>() {
         return Err("Drawing projection is not ready".into());
+    }
+    if !world
+        .resource::<edges::EdgeCache>()
+        .source_available(&source)
+    {
+        let message = "Drawing projection is not ready";
+        fail(world, state, message);
+        return Err(message.into());
     }
     let prepared = world.resource_scope(|world, mut cache: Mut<edges::EdgeCache>| {
         let mut images = world.resource_mut::<Assets<Image>>();
@@ -343,10 +395,10 @@ pub(in super::super) fn repaint(world: &mut World, state: &mut Workbench) -> Res
 }
 
 fn show_error(world: &mut World, state: &mut Workbench, error: &str) {
-    if let Some(entity) = state.widgets.entity("drawing-paper") {
-        if let Some(mut node) = world.get_mut::<Node>(entity) {
-            node.display = Display::None;
-        }
+    // Retire stale art without destroying the retained paper or its ancestor.
+    // Keeping only paper would still let ancestor despawn recursively remove it.
+    for key in ["drawing-content-clip", "drawing-paper"] {
+        state.widgets.retain_hidden_panel(world, key);
     }
     if let Some(view) = &state.paper_view {
         state.widgets.text(
@@ -614,7 +666,7 @@ fn toolbar(
             NativeCommand::Workbench(command),
             rect(x + left, y + 5., w, 24.),
             selected,
-            false,
+            state.paper_key.is_none(),
             31,
         )?;
     }

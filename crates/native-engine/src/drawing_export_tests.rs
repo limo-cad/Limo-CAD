@@ -2,6 +2,130 @@
 use super::*;
 use serde_json::{json, Value};
 
+#[test]
+fn detached_drawing_export_preserves_observers_and_rejects_stale_native_sources() {
+    use limo_cad_occt::drawing_export::{DrawingExportFormat, DrawingExportRequest};
+    let state = NativeEngineHost::new();
+    value(state.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#));
+    value(state.engine_call(
+        "add_rectangle",
+        r#"{"mode":"two_point","p1":{"x":0.0,"y":0.0},"p2":{"x":40.0,"y":30.0},"ctrl_held":true}"#,
+    ));
+    value(state.engine_call("end_sketch", ""));
+    value(state.solid_extrude(r#"{"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":6.0}}"#));
+    let body_id = state.viewport_snapshot().2.bodies[0].id;
+    let mut manager = SketchManager::new();
+    let mut drawing = manager.drawing_command(serde_json::from_value(json!({
+        "type":"create_sheet","arguments":{"name":"Detached observer QA","format":"a4","orientation":"landscape"}
+    })).unwrap()).unwrap();
+    drawing.sheets[0].views.push(
+        serde_json::from_value(json!({
+            "id":1,"name":"Top","kind":"top","body_ids":[body_id],
+            "direction":[0.,0.,1.],"up":[0.,1.,0.],"position":[100.,75.],"scale":1.
+        }))
+        .unwrap(),
+    );
+    drawing.next_view_id = 2;
+    value(state.engine_call(
+        "drawing_set_document",
+        &serde_json::to_string(&drawing).unwrap(),
+    ));
+    let before = value(state.engine_call("project_export_model", ""));
+    let request = DrawingExportRequest {
+        sheet_id: 1,
+        format: DrawingExportFormat::Svg,
+    };
+    // Independent predecessor path, using the real kernel and exporter.
+    let mut expected_observers = Vec::new();
+    let expected = {
+        let workspace = state.inner.lock().unwrap();
+        let inner = workspace.active();
+        let scene = inner.manager.solid_scene_ref();
+        let assembly = inner.manager.assembly_document_ref();
+        limo_cad_occt::drawing_export::export_sheet_with_units(
+            inner.manager.drawing_document_ref(),
+            scene,
+            assembly,
+            &request,
+            inner.manager.document().settings().units,
+            |request| {
+                let projection =
+                    limo_cad_occt::project_drawing(&inner.kernel, scene, assembly, request)
+                        .map_err(|e| e.to_string())?;
+                expected_observers.push(json!({"request":request,"projection":projection}));
+                Ok(projection)
+            },
+        )
+        .unwrap()
+    };
+    assert!(!expected_observers.is_empty());
+    let prepared = state.prepare_drawing_export(&request).unwrap();
+    let mut observed = Vec::new();
+    let detached = state
+        .with_drawing(|_| {
+            prepared.content_observing(|request, projection| {
+                observed.push(json!({"request":request,"projection":projection}));
+            })
+        })
+        .unwrap();
+    assert_eq!(detached, expected);
+    assert_eq!(observed, expected_observers);
+    state.validate_drawing_export(&prepared).unwrap();
+    let payload = serde_json::to_string(&request).unwrap();
+    let mut observed = Vec::new();
+    let exported = value(
+        state.drawing_export_observing(&payload, |request, projection| {
+            // This would deadlock in the predecessor's lock-held observer call.
+            state.with_drawing(|drawing| assert_eq!(drawing.sheets.len(), 1));
+            observed.push(json!({"request":request,"projection":projection}));
+        }),
+    );
+    assert_eq!(exported["content"], expected);
+    assert_eq!(exported["format"], "svg");
+    assert_eq!(exported["encoding"], "utf8");
+    assert_eq!(exported["sheet_id"], 1);
+    assert_eq!(observed, expected_observers);
+    assert_eq!(value(state.engine_call("project_export_model", "")), before);
+
+    drawing.sheets[0].name = "Changed during export".into();
+    let stale: Value = serde_json::from_str(&state.drawing_export_observing(&payload, |_, _| {
+        value(state.engine_call(
+            "drawing_set_document",
+            &serde_json::to_string(&drawing).unwrap(),
+        ));
+    }))
+    .unwrap();
+    assert_eq!(stale["ok"], false);
+    assert!(stale["error"].as_str().unwrap().contains("changed"));
+    assert!(stale.get("value").is_none());
+    assert!(state
+        .validate_drawing_export(&prepared)
+        .unwrap_err()
+        .contains("changed"));
+
+    let before_replacement = state.prepare_drawing_export(&request).unwrap();
+    let model = value(state.engine_call("project_export_model", ""));
+    value(state.project_load(&serde_json::to_string(model.as_str().unwrap()).unwrap()));
+    assert_eq!(value(state.engine_call("project_export_model", "")), model);
+    assert!(state.validate_drawing_export(&before_replacement).is_err());
+    assert!(NativeEngineHost::new()
+        .validate_drawing_export(&before_replacement)
+        .unwrap_err()
+        .contains("replaced"));
+
+    let native_replacement = state.prepare_drawing_export(&request).unwrap();
+    let captured_content = native_replacement.content().unwrap();
+    // A genuine replacement kernel invalidates private native identities even
+    // when authored model, drawing and presentation storage are unchanged.
+    state.inner.lock().unwrap().active_mut().kernel = OcctKernel::new().unwrap();
+    assert_eq!(value(state.engine_call("project_export_model", "")), model);
+    assert!(state
+        .validate_drawing_export(&native_replacement)
+        .unwrap_err()
+        .contains("native geometry"));
+    assert_eq!(native_replacement.content().unwrap(), captured_content);
+}
+
 fn value(json: String) -> Value {
     let envelope: Value = serde_json::from_str(&json).unwrap();
     assert_eq!(envelope["ok"], true, "{envelope}");

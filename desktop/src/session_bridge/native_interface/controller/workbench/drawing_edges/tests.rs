@@ -2,6 +2,352 @@ use super::*;
 use limo_cad_occt::DrawingPolylineDto;
 use serde_json::json;
 
+#[test]
+fn native_detached_paper_job_preserves_selected_geometry_and_rejects_retired_sheet_results() {
+    use crate::session_bridge::native_interface::tests::Fixture;
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let mutate = |operation, arguments| {
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &fixture.owner(),
+                operation,
+                &arguments,
+                || Ok(()),
+            )
+            .unwrap()
+    };
+    for (x, name) in [(0., "Sketch1"), (60., "Sketch2")] {
+        mutate(
+            "sketch_begin",
+            json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+        );
+        mutate(
+            "sketch_add_rectangle",
+            json!({"mode":"two_point","p1":{"x":x,"y":0.},"p2":{"x":x+40.,"y":25.},"ctrl_held":true}),
+        );
+        mutate("sketch_finish", json!({}));
+        mutate(
+            "solid_extrude",
+            json!({"sketch_name":name,"profile_indices":[0],"extent":{"type":"distance","distance":6.}}),
+        );
+    }
+    mutate(
+        "drawing_create_sheet",
+        json!({"name":"Selected only","format":"a4","orientation":"landscape"}),
+    );
+    for name in ["First", "Second"] {
+        mutate(
+            "drawing_add_view",
+            json!({"sheet_id":1,"view":{"name":name,"kind":"front","scope":"assembly","direction":[0.,-1.,0.],"up":[0.,0.,1.],"body_ids":[1],"position":[25.,25.],"scale":1.}}),
+        );
+    }
+    let services = NativeServices {
+        engine: fixture.engine.clone(),
+        bridge: fixture.bridge.clone(),
+    };
+    let receipt = fixture
+        .bridge
+        .native_document_receipt(&fixture.engine, &fixture.owner())
+        .unwrap();
+    let (drawing, geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    let sheet = &drawing.sheets[0];
+    let selected = fixture
+        .engine
+        .detached_drawing_snapshot(&drawing, geometry, sheet, &sheet.views, false)
+        .unwrap();
+    let original = selected.project(&sheet.views[0], &sheet.views).unwrap();
+    assert!(!original.projection.visible.is_empty());
+    let [min_x, min_y, max_x, max_y] = original.projection.bounds;
+    assert!((max_x - min_x - 40.).abs() < 1e-7);
+    assert!((max_y - min_y - 6.).abs() < 1e-7);
+    let export = fixture
+        .engine
+        .prepare_drawing_export(&limo_cad_occt::drawing_export::DrawingExportRequest {
+            sheet_id: 1,
+            format: limo_cad_occt::drawing_export::DrawingExportFormat::Svg,
+        })
+        .unwrap();
+    assert_eq!(export.sheet_id(), 1);
+    assert!(export.title().ends_with("Selected only"));
+    // Actual export/HLR can run while the live engine read is held. Its owned
+    // captured inputs must never try to reacquire that workspace mutex.
+    let exported = fixture.engine.with_drawing(|_| export.content().unwrap());
+    assert!(exported.contains("<svg"));
+    let mut unselected = sheet.views[0].clone();
+    unselected.body_ids = vec![limo_cad_core::BodyId(2)];
+    assert!(
+        selected.project(&unselected, &sheet.views).is_err(),
+        "A request outside captured projection intent is rejected"
+    );
+    let key = SourceKey::new(receipt.owner.clone(), receipt.revision, geometry, sheet);
+    let input = || ColdSourceInput {
+        drawing: &drawing,
+        sheet,
+        original_views: &sheet.views,
+        repair_view: None,
+    };
+    let mut cache = EdgeCache::default();
+    let mut images = Assets::<Image>::default();
+    // Hold the live engine read so the real worker cannot complete capture.
+    // Starting/pending cache and navigation reads must not reenter that lock.
+    fixture.engine.with_drawing(|_| {
+        assert!(!cache
+            .ensure_source(&key, raster(), &services, &receipt, input(), None)
+            .unwrap());
+        assert!(cache
+            .prepare_sheet(
+                &mut images,
+                key.clone(),
+                raster(),
+                |_| panic!("Pending navigation must not project on the UI thread"),
+                |_, _| panic!("Pending navigation must not read live topology")
+            )
+            .is_err());
+        assert!(
+            cache.failure.is_none(),
+            "Not-ready is transient, not a cached source failure"
+        );
+    });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !cache
+        .ensure_source(&key, raster(), &services, &receipt, input(), None)
+        .unwrap()
+    {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    assert!(cache
+        .prepared_source
+        .as_ref()
+        .is_some_and(|s| s.projections.len() == 2));
+    let bundle = Arc::clone(&cache.bundle.as_ref().unwrap().projections);
+    // Real annotation publication changes the drawing Arc/revision, but neither
+    // authoritative scene nor resolved assembly intent. Reuse is a finished
+    // bundle hit, not a retag of the old paper SourceKey.
+    mutate(
+        "drawing_add_annotation",
+        json!({"sheet_id":1,"annotation":{
+        "kind":"note","text":"Review","position":[10.,10.]}}),
+    );
+    let (annotated, annotated_geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    assert_eq!(annotated_geometry, geometry);
+    assert!(!Arc::ptr_eq(&annotated, &drawing));
+    let reused = fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &annotated,
+            annotated_geometry,
+            &annotated.sheets[0],
+            (&annotated.sheets[0].views, false),
+            Some(&bundle),
+        )
+        .unwrap();
+    assert!(Arc::ptr_eq(
+        &reused.finished_bundle().unwrap().unwrap(),
+        &bundle
+    ));
+    let shared = reused
+        .project_shared(&annotated.sheets[0].views[0], &annotated.sheets[0].views)
+        .unwrap();
+    let again = reused
+        .project_shared(&annotated.sheets[0].views[0], &annotated.sheets[0].views)
+        .unwrap();
+    assert!(Arc::ptr_eq(&shared.projection, &again.projection));
+    assert_eq!(
+        serde_json::to_value(shared.projection.as_ref()).unwrap(),
+        serde_json::to_value(&original.projection).unwrap()
+    );
+
+    // A real occurrence pose changes without native geometry revision. The
+    // fully resolved request must reject the annotation bundle nevertheless.
+    let assembly = crate::session_bridge::parse_engine_envelope(
+        fixture.engine.engine_call("assembly_document", ""),
+    )
+    .unwrap();
+    let occurrence = assembly["component_structure"]["occurrences"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| {
+            node["component_id"] == assembly["component_structure"]["definitions"][0]["id"]
+        })
+        .unwrap()["id"]
+        .clone();
+    mutate(
+        "assembly_set_occurrence_pose",
+        json!({"occurrence_id":occurrence,
+        "local_pose":{"translation":[7.,0.,0.],"rotation":[0.,0.,0.,1.]}}),
+    );
+    let (posed, posed_geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    assert_eq!(posed_geometry, geometry);
+    let moved = fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &posed,
+            posed_geometry,
+            &posed.sheets[0],
+            (&posed.sheets[0].views, false),
+            Some(&bundle),
+        )
+        .unwrap();
+    assert!(moved.finished_bundle().unwrap().is_none());
+    let moved_projection = moved
+        .project(&posed.sheets[0].views[0], &posed.sheets[0].views)
+        .unwrap();
+    assert!(
+        (moved_projection.projection.bounds[0] - original.projection.bounds[0] - 7.).abs() < 1e-7
+    );
+    moved
+        .project(&posed.sheets[0].views[1], &posed.sheets[0].views)
+        .unwrap();
+    let moved_bundle = moved.finished_bundle().unwrap().unwrap();
+
+    let exported_model = crate::session_bridge::parse_engine_envelope(
+        fixture.engine.engine_call("project_export_model", ""),
+    )
+    .unwrap();
+    let model: serde_json::Value = serde_json::from_str(
+        exported_model
+            .as_str()
+            .expect("project_export_model returns the serialized model"),
+    )
+    .unwrap();
+    mutate(
+        "solid_edit_extrude",
+        json!({"feature_id":model["extrudes"][0]["feature_id"],
+        "extrude":{"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body",
+        "extent":{"type":"distance","distance":9.},"taper_angle_deg":0.,"flip":false,"target_body_ids":[]}}),
+    );
+    let (changed, changed_geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    let rebuilt = fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &changed,
+            changed_geometry,
+            &changed.sheets[0],
+            (&changed.sheets[0].views, false),
+            Some(&moved_bundle),
+        )
+        .unwrap();
+    assert!(rebuilt.finished_bundle().unwrap().is_none());
+    let changed_projection = rebuilt
+        .project(&changed.sheets[0].views[0], &changed.sheets[0].views)
+        .unwrap();
+    assert!(
+        (changed_projection.projection.bounds[3] - changed_projection.projection.bounds[1] - 9.)
+            .abs()
+            < 1e-7
+    );
+    // A stale drawing snapshot is rejected before optional bundle use; its
+    // completed old geometry remains readable but cannot acquire new authority.
+    assert!(fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &annotated,
+            annotated_geometry,
+            &annotated.sheets[0],
+            (&annotated.sheets[0].views, false),
+            Some(&bundle)
+        )
+        .is_err());
+    // Actual deletion leaves the authored view selecting a missing definition.
+    // A prior valid bundle cannot hide this current projection failure.
+    mutate(
+        "solid_delete_feature",
+        json!({"feature_id":model["extrudes"][0]["feature_id"]}),
+    );
+    let (missing, missing_geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    assert!(fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &missing,
+            missing_geometry,
+            &missing.sheets[0],
+            (&missing.sheets[0].views, false),
+            Some(&moved_bundle)
+        )
+        .is_err());
+    // Completion is ready but has not been installed. Replace the actual owner
+    // before the next paper frame: no old result may acquire the new title.
+    mutate("cad_new_project", json!({}));
+    mutate(
+        "drawing_create_sheet",
+        json!({"name":"Successor","format":"a4","orientation":"landscape"}),
+    );
+    assert_ne!(fixture.owner(), receipt.owner);
+    let model = fixture.engine.engine_call("project_export_model", "");
+    let (next_drawing, next_geometry, _) = fixture.engine.drawing_presentation_snapshot();
+    let next_sheet = &next_drawing.sheets[0];
+    let successor = fixture
+        .engine
+        .detached_drawing_snapshot_reusing(
+            &next_drawing,
+            next_geometry,
+            next_sheet,
+            (&next_sheet.views, false),
+            Some(&bundle),
+        )
+        .unwrap();
+    assert!(!Arc::ptr_eq(
+        &successor.finished_bundle().unwrap().unwrap(),
+        &bundle
+    ));
+    let next_receipt = fixture
+        .bridge
+        .native_document_receipt(&fixture.engine, &fixture.owner())
+        .unwrap();
+    let next_key = SourceKey::new(
+        next_receipt.owner.clone(),
+        next_receipt.revision,
+        next_geometry,
+        next_sheet,
+    );
+    assert!(!cache
+        .ensure_source(
+            &next_key,
+            raster(),
+            &services,
+            &next_receipt,
+            ColdSourceInput {
+                drawing: &next_drawing,
+                sheet: next_sheet,
+                original_views: &next_sheet.views,
+                repair_view: None
+            },
+            None
+        )
+        .unwrap());
+    assert!(cache.prepared_source.is_none());
+    assert!(!cache.source_available(&next_key));
+    assert!(cache.source.is_none());
+    let retained = selected.project(&sheet.views[0], &sheet.views).unwrap();
+    assert_eq!(
+        serde_json::to_value(&retained.projection).unwrap(),
+        serde_json::to_value(&original.projection).unwrap(),
+        "Detached exact shapes survive live-kernel replacement without replay"
+    );
+    assert_eq!(
+        export.content().unwrap(),
+        exported,
+        "Prepared export keeps the original drawing/units/exact shapes after replacement"
+    );
+    assert!(fixture
+        .engine
+        .detached_drawing_snapshot(&drawing, geometry, sheet, &sheet.views, false)
+        .is_err());
+    assert_eq!(
+        fixture.engine.engine_call("project_export_model", ""),
+        model
+    );
+    // Retiring the cache drops any successor result; an already running native
+    // job may finish its owned copy, but never joins or publishes on this thread.
+    cache.evict_document(&next_receipt.owner);
+    assert!(cache.cold.as_ref().unwrap().retired.load(Ordering::Acquire));
+}
+
 fn sheet() -> DrawingSheetDto {
     serde_json::from_value(json!({"id":1,"name":"Dense sheet","format":"a4","orientation":"landscape",
         "views":[

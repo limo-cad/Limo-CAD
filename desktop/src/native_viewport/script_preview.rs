@@ -809,6 +809,66 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires a GPU; run explicitly when validating CAD startup pipelines"]
+    fn native_preview_startup_uses_only_cad_gpu_capabilities() {
+        let mut renderer = PreviewRenderer::new().unwrap();
+        renderer
+            .prepare_image(&AtomicBool::new(false), Instant::now() + REQUEST_LIFETIME)
+            .unwrap();
+        let render_world = renderer.app.sub_app(RenderApp).world();
+        let compute_labels: Vec<_> = render_world
+            .resource::<PipelineCache>()
+            .pipelines()
+            .filter_map(|pipeline| match &pipeline.descriptor {
+                bevy::render::render_resource::PipelineDescriptor::ComputePipelineDescriptor(
+                    descriptor,
+                ) => Some(
+                    descriptor
+                        .label
+                        .as_deref()
+                        .unwrap_or("<unnamed>")
+                        .to_owned(),
+                ),
+                _ => None,
+            })
+            .collect();
+        let limits = render_world.resource::<RenderDevice>().limits();
+        assert!(limits.max_storage_textures_per_shader_stage <= 4);
+        assert!(limits.max_storage_buffers_per_shader_stage <= 8);
+        assert!(renderer
+            .app
+            .world()
+            .resource::<bevy::light::cluster::GlobalClusterSettings>()
+            .gpu_clustering
+            .is_none());
+        let cache = render_world.resource::<PipelineCache>();
+        assert!(
+            cache.pipelines().next().is_some(),
+            "render real scene pipelines"
+        );
+        assert!(
+            compute_labels.len() <= 10,
+            "portable CAD startup must not compile the full adapter's compute passes: {compute_labels:?}"
+        );
+        assert!(
+            compute_labels.iter().all(|label| {
+                ![
+                    "occlusion",
+                    "ssao",
+                    "radiance",
+                    "irradiance",
+                    "mip generation",
+                    "cluster",
+                    "limo-cad GPU stock",
+                ]
+                .iter()
+                .any(|unused| label.contains(unused))
+            }),
+            "unused CAD startup compute passes: {compute_labels:?}"
+        );
+    }
+
+    #[test]
     #[ignore = "requires a GPU; run explicitly when validating the native preview renderer"]
     fn native_preview_gpu_renders_real_kernel_frames_and_orbit() {
         let active = crate::state::AppState::new();

@@ -87,7 +87,7 @@ fn broken_detail_keeps_its_real_parent_pickable_and_repairs_in_one_history_entry
     let mut workbench = Workbench::default();
     workbench.refresh_owner(&owner);
     workbench.widgets.begin();
-    drawing_paper::paint(
+    drawing_paper::paint_until_settled(
         world,
         camera,
         &services,
@@ -122,7 +122,7 @@ fn broken_detail_keeps_its_real_parent_pickable_and_repairs_in_one_history_entry
     assert!(runtime::repair_view(world, &saved.sheets[0], &foreign, receipt.revision).is_none());
     let mut workbench = world.remove_resource::<Workbench>().unwrap();
     workbench.widgets.begin();
-    drawing_paper::paint(
+    drawing_paper::paint_until_settled(
         world,
         camera,
         &services,

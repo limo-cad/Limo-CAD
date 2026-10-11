@@ -17,7 +17,7 @@ pub fn project_drawing(
             "Resolve timeline errors before generating a drawing view".into(),
         ));
     }
-    let request = resolve_request(scene, assembly, request)?;
+    let request = resolve_drawing_request(scene, assembly, request)?;
     let mut projection = kernel.drawing_projection(&request)?;
     projection.anchors = drawing_projection_anchors(scene, &request, &projection)?;
     projection.circles = drawing_projection_circles(scene, &request, &projection)?;
@@ -26,7 +26,7 @@ pub fn project_drawing(
     Ok(projection)
 }
 
-fn resolve_request(
+pub fn resolve_drawing_request(
     scene: &SolidSceneDto,
     assembly: &AssemblyDocumentDto,
     request: &DrawingProjectionRequest,
@@ -101,6 +101,23 @@ fn resolve_request(
     }
     resolved.resolved_occurrences = Some(poses);
     Ok(resolved)
+}
+
+/// Resolve the same definition/occurrence selection used by exact projection.
+/// Repeated occurrences share a single copied body definition in a worker.
+pub fn drawing_required_body_ids(
+    scene: &SolidSceneDto,
+    assembly: &AssemblyDocumentDto,
+    request: &DrawingProjectionRequest,
+) -> Result<Vec<BodyId>, OcctError> {
+    let request = resolve_drawing_request(scene, assembly, request)?;
+    let mut ids = drawing_bodies(scene, &request)?
+        .into_iter()
+        .map(|(body, _)| body.id)
+        .collect::<Vec<_>>();
+    ids.sort();
+    ids.dedup();
+    Ok(ids)
 }
 
 pub(super) fn drawing_bodies<'a>(
