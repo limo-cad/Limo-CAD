@@ -2080,3 +2080,47 @@ The supported isolated SDK resume started with MSVC 14.44.35207, Windows SDK 10.
 Hole-callout preparation (`2f466b60`) shares the immutable drawing snapshot under its unchanged document receipt guard. Its editable draft still copies drawing intent once; the preceding full copy of every sheet, view and annotation is removed. Owner, revision, cancellation and worker commit checks remain unchanged. Source and peer review establish that allocation removal; no new test that only mirrors the implementation was added.
 
 The installed GUI/MCP remains the matched clean `4859c8bd` pair described above. New source is not yet deployed; no additional manual pass or issue closure is claimed here. Source workers and the CI watcher operate in parallel while root owns compilation and the sole guarded GUI operator.
+
+### Short-cache SDK recovery and remaining pointer paths
+
+The first supported SDK resume failed when MSVC rejected intact source/header
+paths longer than its 260-unit Windows limit. The original archive, cache and
+prefix remain preserved. A verified copy of the official archive is compiling
+in `D:/lc` with the same `db1f66e6` recipe key and existing isolated prefix.
+Failure and recovery logs are respectively
+`checked-occt-20261011T040652Z-5f450c7f38874dbf9f8b6f958a1a4687.log` and
+`checked-occt-20261011T042106Z-0b4e9e8935924d30bb9af95acd8f6266.log`
+under the evidence directory above. Recovery is still in progress.
+
+`0c2e30b4` checks absolute Windows native source/header and actual forwarding
+header paths before compilation or SDK prefix preparation. It reuses the
+verified archive inventory and reports the offending path, UTF-16 length and
+short-cache remedy. Both new boundary/verified-source regressions passed,
+including a real overlong Windows source tree. Strict xtask and desktop Clippy
+passed. Mechanism/history drag and general editor input use the existing narrow
+presented projection (`eabccdf6`, `e9f43173`), preserving the snapshot point and
+ownership, modal, bounds, camera and receipt guards. No latency claim follows.
+
+The new native overlapping-recess contract passed at `c4570f6c`, with strict MCP
+Clippy. Two diameter-4 stems retain their independently measured local depth4
+from Z8 to Z4; their intersecting diameter-8 recess walls remain ambiguous with
+exact body/face ownership and unknown extent. Actual STEP export/import retains
+those distinctions without authored provenance; authored total depth6 remains
+separate. This raises the retained focused total to36, with no unaffected
+passing filter repeated. Receipts are `pointer-and-sdk-path-0c2e30b4-results.json`
+and `overlapping-recess-c4570f6c-results.json`. Exact shared-ring/nonmanifold
+shoulder qualification and fresh real-assembly reader acceptance remain open.
+
+CI on pushed `f58d022f` found one hole-callout formatting error, corrected by
+`f066a8b8`; the full repository format check passes. Its Windows SDK setup and
+checked-storage qualification passed in124seconds. Remaining hosted checks and
+the next pushed head are separate evidence.
+
+Deployment preparation also found a concrete standalone-runtime gap:
+`Limo-CAD.exe -> TKDESTEP -> TKXCAF -> TKService -> freetype.dll`. The supported
+direct builder selects shared FreeType but does not install it or its five
+compression DLLs; package staging currently copies only the selected SDK's bin
+directory. Exact binary import inspection confirms the dependency. Runtime
+assembly and license-notice handling are being repaired in parallel. The legacy
+C: SDK, current GUI and private Vita runtime remain preserved; no new SDK or GUI
+qualification is claimed by the started compile.

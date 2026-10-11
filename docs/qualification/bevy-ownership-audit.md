@@ -47,6 +47,14 @@ not reimplemented here.
   owner/modal/canvas projection (`b498e6a4`, `94df968d`), without retaining surface
   text. Window fallback consumes paired presented bounds/scale (`676751ff`),
   preserving actual Window/current UiScale precedence and avoiding a second read.
+- Mechanism admission and drag continuation, history drag ticks and general
+  editor input now use the same atomic presented owner/modal/viewport projection
+  (`eabccdf6`, `e9f43173`). The general editor captures it before mechanism
+  delegation, at the previous snapshot point. Camera, epoch, receipt, capture,
+  modal, bounds and cached press-owner checks retain their original order and
+  meaning. Validated canvas names are unique. Strict affected desktop Clippy
+  passed at `0c2e30b4`; repeating pure gesture tests would not measure this
+  allocation removal, so those earlier passes remain retained.
 - Native body mutation identities (`1671a574`) provide conservative dependency
   invalidation and a checked kernel owner. Exact private commit proofs let the
   renderer reuse same-document mesh handles and edge metadata across unchanged

@@ -1676,162 +1676,189 @@
     ]
   },
   "parallel_repairs_checkpoint": {
-    "source_revision":  "c7ae2bf4dda6cb4886e8b50d5897ba229fc5df27",
-    "base_revision":  "4859c8bd",
-    "commits":  [
-                    "090efe6a",
-                    "28edcada",
-                    "3181443d",
-                    "88a69218",
-                    "db1aa006",
-                    "0d4c5e2e",
-                    "4d7cb0ac",
-                    "ff6b635c",
-                    "e3d4021f",
-                    "0c587b12",
-                    "479665c7",
-                    "30864843",
-                    "418e8931",
-                    "2cda40b5",
-                    "08e6ca5c",
-                    "b498e6a4",
-                    "c1f1e566",
-                    "1671a574",
-                    "88df73f8",
-                    "94df968d",
-                    "f184efdd",
-                    "bc90baeb",
-                    "5daa6160",
-                    "676751ff",
-                    "1ea5a165",
-                    "876b913f",
-                    "42ec4d2f",
-                    "212cec35",
-                    "2f466b60",
-                    "6cd9d57f",
-                    "c7ae2bf4"
-                ],
-    "qualification":  "source_reviewed_33_focused_checks_passed_native_acceptance_pending",
-    "new_focused_checks_unrun":  [
+      "source_revision":  "c4570f6c740a4e728c656112eacafaeb02e32f43",
+      "base_revision":  "4859c8bd",
+      "commits":  [
+                      "090efe6a",
+                      "28edcada",
+                      "3181443d",
+                      "88a69218",
+                      "db1aa006",
+                      "0d4c5e2e",
+                      "4d7cb0ac",
+                      "ff6b635c",
+                      "e3d4021f",
+                      "0c587b12",
+                      "479665c7",
+                      "30864843",
+                      "418e8931",
+                      "2cda40b5",
+                      "08e6ca5c",
+                      "b498e6a4",
+                      "c1f1e566",
+                      "1671a574",
+                      "88df73f8",
+                      "94df968d",
+                      "f184efdd",
+                      "bc90baeb",
+                      "5daa6160",
+                      "676751ff",
+                      "1ea5a165",
+                      "876b913f",
+                      "42ec4d2f",
+                      "212cec35",
+                      "2f466b60",
+                      "6cd9d57f",
+                      "c7ae2bf4",
+                      "eabccdf6",
+                      "f066a8b8",
+                      "e9f43173",
+                      "0c2e30b4",
+                      "c4570f6c"
+                  ],
+      "qualification":  "source_reviewed_36_focused_checks_passed_native_acceptance_pending",
+      "new_focused_checks_unrun":  [
 
-                                 ],
-    "installed_revision":  "4859c8bdc5575fe8858bfb3c0153c48569f8e6eb",
-    "installed_payload_verified":  70,
-    "installed_executable_sha256":  "94c5e541db3b9a05f22c75560c8e31f89c7ee45590f513e32bee144771c2e856",
-    "fresh_live_pair":  {
-                            "foreground_observed":  true,
-                            "status":  "matched",
-                            "desktop_pid":  22412,
-                            "mcp_pid":  15380,
-                            "source_modified":  false,
-                            "latest_foreground_observed":  false,
-                            "focus_request":  "refused_without_input"
-                        },
-    "prior_hosted_native":  {
-                                "revision":  "4859c8bd",
-                                "ubuntu":  {
-                                               "ignored":  10,
-                                               "failed":  0,
-                                               "passed":  983
-                                           },
-                                "macos":  {
-                                              "ignored":  10,
-                                              "failed":  0,
-                                              "passed":  988
-                                          },
-                                "windows":  "pending"
-                            },
-    "closed_issues":  [
-                          12,
-                          94,
-                          231,
-                          312,
-                          313,
-                          314,
-                          315,
-                          360
-                      ],
-    "remaining_open_at_reconciliation":  18,
-    "new_manual_passes_claimed":  false,
-    "broad_catalog_statuses_changed":  false,
-    "completed_focused_checks":  {
-                                     "passed":  33,
-                                     "failed":  0,
-                                     "new":  31,
-                                     "specifically_affected_existing":  2,
-                                     "batches":  [
-                                                     {
-                                                         "revision":  "ff6b635cdcdd4dc5830dbafa61201500f2ee5ea4",
-                                                         "passed":  9,
-                                                         "failed":  0,
-                                                         "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/parallel-repairs-ff6b635c-tests.json"
-                                                     },
-                                                     {
-                                                         "revision":  "2cda40b5ffaf8de2b73914bd2b09b81d236ef0a0",
-                                                         "passed":  5,
-                                                         "failed":  0,
-                                                         "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/parallel-repairs-2cda40b5-tests.json"
-                                                     },
-                                                     {
-                                                         "revision":  "f184efdd6b86fc984ff72abd758f8523a8d9ea07",
-                                                         "passed":  4,
-                                                         "failed":  0,
-                                                         "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/new-ownership-f184efdd-tests.json"
-                                                     },
-                                                     {
-                                                         "revision":  "42ec4d2f49e1453ec7b7bffb62b56066fe55a4af",
-                                                         "passed":  10,
-                                                         "failed":  0,
-                                                         "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/known-fixes-42ec4d2f-results.json"
-                                                     },
-                                                     {
-                                                         "revision":  "2f466b60e9626464a839dfbb1c1cc619ef5cdeff",
-                                                         "passed":  3,
-                                                         "failed":  0,
-                                                         "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/sdk-gate-2f466b60-results.json"
-                                                     },
-                                                     {
-                                                         "revision":  "c7ae2bf4dda6cb4886e8b50d5897ba229fc5df27",
-                                                         "passed":  2,
-                                                         "failed":  0,
-                                                         "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/native-holes-c7ae2bf4-results.json"
-                                                     }
-                                                 ]
-                                 },
-    "compatible_windows_sdk_cache":  {
-                                         "scope":  "refs/pull/124/merge",
-                                         "installed_id":  8785316823,
-                                         "binary_id":  8785314732,
-                                         "inputs_key":  "82943b69",
-                                         "saved_after_qualification":  true,
-                                         "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/ci-4859c8bd-qualified-windows-sdk-cache-saved.json"
-                                     },
-    "local_sdk_checkpoint":  {
-                                 "root":  "C:/Users/jeffg/dev/noBS-CAD/vcpkg_installed/x64-windows",
-                                 "version":  "7.9.3",
-                                 "port_version":  1,
-                                 "checked_storage_qualified":  false,
-                                 "runtime_inputs_sha256":  "7823e2d72c730f20740c976b508dcb163b38f49bf953232a6d683fb5c5b767bb",
-                                 "reviewed_source_repair":  "5fd87e6c",
-                                 "deployment_preflight_fix":  "212cec35",
-                                 "qualified_replacement_status":  "supported_resume_started_not_qualified",
-                                 "replacement_prefix":  "D:/limo-cad-maintenance/checked-occt-sdk",
-                                 "replacement_key":  "db1f66e6db6fc92b222dd8994b171da7fefb59e56f438a8380eba07a34f028d2",
-                                 "replacement_log":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/checked-occt-20261011T040652Z-5f450c7f38874dbf9f8b6f958a1a4687.log"
-                             },
-    "hosted_ci_checkpoint":  {
-                                 "revision":  "2cda40b5ffaf8de2b73914bd2b09b81d236ef0a0",
-                                 "status":  "not_green",
-                                 "distinct_lint_failures":  [
-                                                                "CAM tuple type complexity",
-                                                                "Windows test module before production items"
-                                                            ],
-                                 "source_fixes":  [
-                                                      "c1f1e566",
-                                                      "88df73f8"
-                                                  ],
-                                 "new_head_status":  "not_yet_pushed",
-                                 "manual_reruns_dispatched":  false
-                             }
-}
+                                   ],
+      "installed_revision":  "4859c8bdc5575fe8858bfb3c0153c48569f8e6eb",
+      "installed_payload_verified":  70,
+      "installed_executable_sha256":  "94c5e541db3b9a05f22c75560c8e31f89c7ee45590f513e32bee144771c2e856",
+      "fresh_live_pair":  {
+                              "foreground_observed":  true,
+                              "status":  "matched",
+                              "desktop_pid":  22412,
+                              "mcp_pid":  15380,
+                              "source_modified":  false,
+                              "latest_foreground_observed":  false,
+                              "focus_request":  "refused_without_input"
+                          },
+      "prior_hosted_native":  {
+                                  "revision":  "4859c8bd",
+                                  "ubuntu":  {
+                                                 "ignored":  10,
+                                                 "failed":  0,
+                                                 "passed":  983
+                                             },
+                                  "macos":  {
+                                                "ignored":  10,
+                                                "failed":  0,
+                                                "passed":  988
+                                            },
+                                  "windows":  "pending"
+                              },
+      "closed_issues":  [
+                            12,
+                            94,
+                            231,
+                            312,
+                            313,
+                            314,
+                            315,
+                            360
+                        ],
+      "remaining_open_at_reconciliation":  18,
+      "new_manual_passes_claimed":  false,
+      "broad_catalog_statuses_changed":  false,
+      "completed_focused_checks":  {
+                                       "passed":  36,
+                                       "failed":  0,
+                                       "new":  34,
+                                       "specifically_affected_existing":  2,
+                                       "batches":  [
+                                                       {
+                                                           "revision":  "ff6b635cdcdd4dc5830dbafa61201500f2ee5ea4",
+                                                           "passed":  9,
+                                                           "failed":  0,
+                                                           "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/parallel-repairs-ff6b635c-tests.json"
+                                                       },
+                                                       {
+                                                           "revision":  "2cda40b5ffaf8de2b73914bd2b09b81d236ef0a0",
+                                                           "passed":  5,
+                                                           "failed":  0,
+                                                           "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/parallel-repairs-2cda40b5-tests.json"
+                                                       },
+                                                       {
+                                                           "revision":  "f184efdd6b86fc984ff72abd758f8523a8d9ea07",
+                                                           "passed":  4,
+                                                           "failed":  0,
+                                                           "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/new-ownership-f184efdd-tests.json"
+                                                       },
+                                                       {
+                                                           "revision":  "42ec4d2f49e1453ec7b7bffb62b56066fe55a4af",
+                                                           "passed":  10,
+                                                           "failed":  0,
+                                                           "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/known-fixes-42ec4d2f-results.json"
+                                                       },
+                                                       {
+                                                           "revision":  "2f466b60e9626464a839dfbb1c1cc619ef5cdeff",
+                                                           "passed":  3,
+                                                           "failed":  0,
+                                                           "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/sdk-gate-2f466b60-results.json"
+                                                       },
+                                                       {
+                                                           "revision":  "c7ae2bf4dda6cb4886e8b50d5897ba229fc5df27",
+                                                           "passed":  2,
+                                                           "failed":  0,
+                                                           "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/native-holes-c7ae2bf4-results.json"
+                                                       },
+                                                       {
+                                                           "revision":  "0c2e30b4461d5a6ce6db130234b01637ab0cb719",
+                                                           "passed":  2,
+                                                           "failed":  0,
+                                                           "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/pointer-and-sdk-path-0c2e30b4-results.json"
+                                                       },
+                                                       {
+                                                           "revision":  "c4570f6c740a4e728c656112eacafaeb02e32f43",
+                                                           "passed":  1,
+                                                           "failed":  0,
+                                                           "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/overlapping-recess-c4570f6c-results.json"
+                                                       }
+                                                   ]
+                                   },
+      "compatible_windows_sdk_cache":  {
+                                           "scope":  "refs/pull/124/merge",
+                                           "installed_id":  8785316823,
+                                           "binary_id":  8785314732,
+                                           "inputs_key":  "82943b69",
+                                           "saved_after_qualification":  true,
+                                           "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/ci-4859c8bd-qualified-windows-sdk-cache-saved.json"
+                                       },
+      "local_sdk_checkpoint":  {
+                                   "root":  "C:/Users/jeffg/dev/noBS-CAD/vcpkg_installed/x64-windows",
+                                   "version":  "7.9.3",
+                                   "port_version":  1,
+                                   "checked_storage_qualified":  false,
+                                   "runtime_inputs_sha256":  "7823e2d72c730f20740c976b508dcb163b38f49bf953232a6d683fb5c5b767bb",
+                                   "reviewed_source_repair":  "5fd87e6c",
+                                   "deployment_preflight_fix":  "212cec35",
+                                   "qualified_replacement_status":  "short_cache_recovery_compiling_runtime_dependency_repair_pending",
+                                   "replacement_prefix":  "D:/limo-cad-maintenance/checked-occt-sdk",
+                                   "replacement_key":  "db1f66e6db6fc92b222dd8994b171da7fefb59e56f438a8380eba07a34f028d2",
+                                   "replacement_log":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/checked-occt-20261011T042106Z-0b4e9e8935924d30bb9af95acd8f6266.log",
+                                   "preserved_failed_resume_log":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/checked-occt-20261011T040652Z-5f450c7f38874dbf9f8b6f958a1a4687.log",
+                                   "replacement_cache":  "D:/lc",
+                                   "windows_path_guard_fix":  "0c2e30b4",
+                                   "standalone_runtime_dependency_gap":  [
+                                                                             "freetype.dll",
+                                                                             "z.dll",
+                                                                             "bz2.dll",
+                                                                             "libpng16.dll",
+                                                                             "brotlidec.dll",
+                                                                             "brotlicommon.dll"
+                                                                         ]
+                               },
+      "hosted_ci_checkpoint":  {
+                                   "revision":  "f58d022f9340448196a8caee4bd42899024a49e2",
+                                   "status":  "format_failure_remaining_jobs_running",
+                                   "distinct_lint_failures":  [
+                                                                  "hole-callout preparation formatting"
+                                                              ],
+                                   "source_fixes":  [
+                                                        "f066a8b8"
+                                                    ],
+                                   "new_head_status":  "locally_checked_not_yet_pushed",
+                                   "manual_reruns_dispatched":  false,
+                                   "windows_sdk_qualification":  "success_124_seconds"
+                               }
+  }
 }
