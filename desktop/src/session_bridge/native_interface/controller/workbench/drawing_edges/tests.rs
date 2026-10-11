@@ -205,8 +205,14 @@ fn native_detached_paper_job_preserves_selected_geometry_and_rejects_retired_she
         .unwrap();
     let moved_bundle = moved.finished_bundle().unwrap().unwrap();
 
-    let model = crate::session_bridge::parse_engine_envelope(
+    let exported_model = crate::session_bridge::parse_engine_envelope(
         fixture.engine.engine_call("project_export_model", ""),
+    )
+    .unwrap();
+    let model: serde_json::Value = serde_json::from_str(
+        exported_model
+            .as_str()
+            .expect("project_export_model returns the serialized model"),
     )
     .unwrap();
     mutate(
