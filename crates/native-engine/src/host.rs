@@ -141,7 +141,7 @@ pub struct NativeViewportFrame {
 mod local_slicer;
 #[path = "manufacturing.rs"]
 mod manufacturing;
-pub use manufacturing::PreparedBambuPreview;
+pub use manufacturing::{FinishedBambuExport, PreparedBambuExport, PreparedBambuPreview};
 #[path = "retention.rs"]
 mod retention;
 use retention::NativeProject;
