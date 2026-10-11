@@ -1109,6 +1109,41 @@ impl SessionBridgeState {
         self.write_process_instance_file_locked(&publishers, &mut remembered_path)
     }
 
+    fn refresh_query_liveness(&self, window_label: &str) -> Result<(), String> {
+        let mut lease_path = self
+            .process_lease_path
+            .lock()
+            .map_err(|_| "session process lease lock poisoned")?;
+        let mut publishers = self
+            .publishers
+            .lock()
+            .map_err(|_| "session publisher lock poisoned")?;
+        self.refresh_query_liveness_locked(window_label, &mut publishers, &mut lease_path)
+    }
+
+    fn refresh_query_liveness_locked(
+        &self,
+        window_label: &str,
+        publishers: &mut HashMap<String, WindowPublisher>,
+        lease_path: &mut Option<PathBuf>,
+    ) -> Result<(), String> {
+        let publisher = publishers
+            .get(window_label)
+            .ok_or("The query publisher is unavailable before completion")?;
+        // A retained outcome can outlive its original document. Refresh only
+        // the current live owner, never resurrect a closed source session.
+        if let Some(project) = publisher.by_project.get(publisher.active_key()) {
+            write_project_heartbeat(
+                project,
+                window_label,
+                publisher.active_project_session_id.as_deref(),
+                &self.process_instance_id,
+                "query_completed",
+            )?;
+        }
+        self.write_process_instance_file_locked(publishers, lease_path)
+    }
+
     fn write_process_instance_file_locked(
         &self,
         publishers: &HashMap<String, WindowPublisher>,
@@ -1864,10 +1899,36 @@ fn control_for_window_owned(
             };
 
             let id = request["id"].as_str().unwrap();
+            let presentation = expected.map(|(owner, _)| (owner, generation));
+            if let Some(ticket) = native_ticket.as_ref().filter(|_| supported) {
+                response["request_id"] = json!(id);
+                response["session_id"] = json!(session_id);
+                native_control::retain_query_locked(
+                    publisher,
+                    &state.process_instance_id,
+                    engine,
+                    ticket,
+                    presentation,
+                    &mut response,
+                )
+                .map_err(|error| error.to_string())?;
+            }
+            // A consumer may submit its next query or Stop as soon as the
+            // receipt is visible. Publish both liveness files first, while
+            // retaining the same owner/revision and process-lease locks.
+            if supported {
+                state.refresh_query_liveness_locked(
+                    window_label,
+                    &mut publishers,
+                    &mut lease_path,
+                )?;
+            }
+            let publisher = publishers
+                .get_mut(window_label)
+                .ok_or("The query publisher is unavailable before completion")?;
             if let Some(ticket) = native_ticket.as_ref() {
                 response["request_id"] = json!(id);
                 response["session_id"] = json!(session_id);
-                let presentation = expected.map(|(owner, _)| (owner, generation));
                 native_control::complete_locked(
                     publisher,
                     &state.process_instance_id,
@@ -1884,17 +1945,6 @@ fn control_for_window_owned(
                     &response.to_string(),
                 )?;
                 let _ = fs::remove_file(path);
-            }
-            if supported {
-                let document_id = publisher.active_project_session_id.clone();
-                write_project_heartbeat(
-                    publisher.active_mut(),
-                    window_label,
-                    document_id.as_deref(),
-                    &state.process_instance_id,
-                    "query_completed",
-                )?;
-                state.write_process_instance_file_locked(&publishers, &mut lease_path)?;
             }
             return Ok(handoff);
         }
@@ -2515,6 +2565,158 @@ mod tests {
             );
         }
         std::env::remove_var("LIMO_CAD_SESSION_DIR");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn native_query_receipt_waits_for_both_liveness_publications() {
+        let _test = TEST_LOCK.lock().unwrap();
+        let dir =
+            std::env::temp_dir().join(format!("limo-cad-query-publication-{}", Uuid::new_v4()));
+        let previous = std::env::var_os("LIMO_CAD_SESSION_DIR");
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        {
+            let state = SessionBridgeState::default();
+            let engine = AppState::new();
+            envelope_ok(&state.with_project_session_transition("main", &engine, || {
+                engine.bind_project_session("query-publication")
+            }));
+            let reserved = state
+                .reserve_for_window_on_project("main", Some("query-publication"))
+                .unwrap();
+            let session = reserved["session_id"].as_str().unwrap();
+            let mut project_payload = payload_on_project(
+                session,
+                "query-publication",
+                reserved["generation"].as_u64().unwrap(),
+                "unused",
+            );
+            let original_engine = engine.engine_call("project_export_model", "");
+            project_payload.model_json = Some(
+                parse_engine_envelope(original_engine.clone())
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+            );
+            state.write_for_window("main", project_payload).unwrap();
+            let controls = dir.join(session).join("controls");
+            let heartbeat = dir.join(session).join("heartbeat.json");
+            let lease = dir
+                .join("_ui/processes")
+                .join(format!("{}.json", state.process_instance_id));
+            let original_model = fs::read(dir.join(session).join("model.json")).unwrap();
+            let original_heartbeat: Value =
+                serde_json::from_slice(&fs::read(&heartbeat).unwrap()).unwrap();
+            for (index, blocked) in [&heartbeat, &lease].into_iter().enumerate() {
+                for path in [&heartbeat, &lease] {
+                    let mut stale: Value =
+                        serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+                    stale["updated_ms"] = json!(now_ms().saturating_sub(120_000));
+                    atomic_write(path, &stale.to_string()).unwrap();
+                }
+                let id = format!("100-{index}");
+                let request = controls.join(format!("{id}.request.json"));
+                let receipt = controls.join(format!("{id}.result.json"));
+                atomic_write(
+                    &request,
+                    &json!({"id":id,"expires_ms":now_ms()+30_000,
+                    "sketch_query":{"method":"sketch_active","payload":""}})
+                    .to_string(),
+                )
+                .unwrap();
+                let saved = fs::read(blocked).unwrap();
+                fs::remove_file(blocked).unwrap();
+                fs::create_dir(blocked).unwrap();
+                assert!(control_for_window(&state, "main", &engine, None).is_err());
+                assert!(
+                    !receipt.exists(),
+                    "a visible receipt must not precede either liveness write"
+                );
+                assert!(request.is_file(), "unpublished query remains available");
+                assert_eq!(
+                    engine.engine_call("project_export_model", ""),
+                    original_engine
+                );
+                fs::remove_dir(blocked).unwrap();
+                atomic_write(blocked, std::str::from_utf8(&saved).unwrap()).unwrap();
+                let started = now_ms();
+                control_for_window(&state, "main", &engine, None).unwrap();
+                let result: Value = serde_json::from_slice(&fs::read(&receipt).unwrap()).unwrap();
+                assert_eq!(result["status"], "applied");
+                assert!(!request.exists());
+                let completed: Value =
+                    serde_json::from_slice(&fs::read(&heartbeat).unwrap()).unwrap();
+                assert_eq!(completed["kind"], "query_completed");
+                assert!(completed["updated_ms"].as_u64().unwrap() >= started);
+                assert!(
+                    read_process_lease(&state, &dir)["updated_ms"]
+                        .as_u64()
+                        .unwrap()
+                        >= started
+                );
+                for field in [
+                    "generation",
+                    "published_generation",
+                    "model_generation",
+                    "active_sketch_generation",
+                    "session_id",
+                    "document_id",
+                ] {
+                    assert_eq!(completed[field], original_heartbeat[field]);
+                }
+                assert_eq!(
+                    fs::read(dir.join(session).join("model.json")).unwrap(),
+                    original_model
+                );
+            }
+            // Legacy unbound publishers are live too. Reuse their existing
+            // publisher, but do not create one after it has been tombstoned.
+            let legacy = state.reserve_for_window("legacy").unwrap();
+            let legacy_session = legacy["session_id"].as_str().unwrap();
+            let mut legacy_payload = payload(
+                legacy_session,
+                legacy["generation"].as_u64().unwrap(),
+                "unused",
+            );
+            legacy_payload.model_json = Some(
+                parse_engine_envelope(original_engine)
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+            );
+            state.write_for_window("legacy", legacy_payload).unwrap();
+            let legacy_heartbeat = dir.join(legacy_session).join("heartbeat.json");
+            let legacy_model = fs::read(dir.join(legacy_session).join("model.json")).unwrap();
+            let original_legacy: Value =
+                serde_json::from_slice(&fs::read(&legacy_heartbeat).unwrap()).unwrap();
+            let started = now_ms();
+            state.refresh_query_liveness("legacy").unwrap();
+            let refreshed: Value =
+                serde_json::from_slice(&fs::read(&legacy_heartbeat).unwrap()).unwrap();
+            assert_eq!(refreshed["kind"], "query_completed");
+            assert!(refreshed["updated_ms"].as_u64().unwrap() >= started);
+            assert!(refreshed["document_id"].is_null());
+            assert_eq!(refreshed["generation"], original_legacy["generation"]);
+            assert_eq!(
+                fs::read(dir.join(legacy_session).join("model.json")).unwrap(),
+                legacy_model
+            );
+            state.drop_bound_project_session("legacy", UNBOUND_PROJECT);
+            let retired_heartbeat = fs::read(&legacy_heartbeat).unwrap();
+            state.refresh_query_liveness("legacy").unwrap();
+            assert_eq!(fs::read(&legacy_heartbeat).unwrap(), retired_heartbeat);
+            assert!(dir.join(legacy_session).join("closed.json").is_file());
+            assert!(state.publishers.lock().unwrap()["legacy"]
+                .by_project
+                .is_empty());
+        }
+        if let Some(previous) = previous {
+            std::env::set_var("LIMO_CAD_SESSION_DIR", previous);
+        } else {
+            std::env::remove_var("LIMO_CAD_SESSION_DIR");
+        }
         let _ = fs::remove_dir_all(dir);
     }
 

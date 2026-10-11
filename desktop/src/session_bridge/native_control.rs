@@ -19,6 +19,7 @@ pub(super) struct Admission {
     ticket: Ticket,
     started: bool,
     pending_receipt: Option<(Value, Option<(DocumentContext, u64)>)>,
+    query_liveness: bool,
 }
 
 fn owner_matches(
@@ -150,6 +151,7 @@ pub(super) fn admit(
         ticket: ticket.clone(),
         started: false,
         pending_receipt: None,
+        query_liveness: false,
     });
     claim.committed = true;
     Ok(ticket)
@@ -292,6 +294,84 @@ pub(super) fn complete_locked(
     response: &mut Value,
     published_ms: u64,
 ) -> Result<(), CompletionError> {
+    prepare_completion_locked(
+        publisher,
+        process_instance_id,
+        engine,
+        ticket,
+        presentation,
+        response,
+        published_ms,
+    )?;
+    let result =
+        marker_path(ticket).with_file_name(format!("{}.result.json", ticket.marker.request_id));
+    if let Err(error) =
+        limo_cad_session_storage::atomic_write_new(&result, response.to_string().as_bytes())
+    {
+        retain_receipt(publisher, response, presentation);
+        return Err(CompletionError::Publication(format!(
+            "Native completion receipt was not published: {error}"
+        )));
+    }
+    publisher.native_control = None;
+    // The receipt is already durable and wins during status polling even if
+    // cleanup fails or the process exits immediately afterward.
+    let _ = fs::remove_file(marker_path(ticket));
+    Ok(())
+}
+
+/// Preserve the genuine supported-query outcome before fallible liveness
+/// publication. Only delivery may be retried; admission still blocks dispatch.
+pub(super) fn retain_query_locked(
+    publisher: &mut WindowPublisher,
+    process_instance_id: &str,
+    engine: &AppState,
+    ticket: &Ticket,
+    presentation: Option<(&DocumentContext, u64)>,
+    response: &mut Value,
+) -> Result<(), CompletionError> {
+    prepare_completion_locked(
+        publisher,
+        process_instance_id,
+        engine,
+        ticket,
+        presentation,
+        response,
+        now_ms(),
+    )?;
+    retain_receipt(publisher, response, presentation);
+    publisher
+        .native_control
+        .as_mut()
+        .expect("validated private admission")
+        .query_liveness = true;
+    Ok(())
+}
+
+fn retain_receipt(
+    publisher: &mut WindowPublisher,
+    response: &Value,
+    presentation: Option<(&DocumentContext, u64)>,
+) {
+    publisher
+        .native_control
+        .as_mut()
+        .expect("validated private admission")
+        .pending_receipt = Some((
+        response.clone(),
+        presentation.map(|(owner, revision)| (owner.clone(), revision)),
+    ));
+}
+
+fn prepare_completion_locked(
+    publisher: &mut WindowPublisher,
+    process_instance_id: &str,
+    engine: &AppState,
+    ticket: &Ticket,
+    presentation: Option<(&DocumentContext, u64)>,
+    response: &mut Value,
+    published_ms: u64,
+) -> Result<(), CompletionError> {
     let reject = |message: &str| CompletionError::Rejected(message.into());
     let admission = publisher
         .native_control
@@ -348,27 +428,6 @@ pub(super) fn complete_locked(
     response["control_admission"] = serde_json::to_value(&ticket.marker)
         .map_err(|error| CompletionError::Rejected(error.to_string()))?;
     response["receipt_published_ms"] = json!(published_ms);
-    let result =
-        marker_path(ticket).with_file_name(format!("{}.result.json", ticket.marker.request_id));
-    if let Err(error) =
-        limo_cad_session_storage::atomic_write_new(&result, response.to_string().as_bytes())
-    {
-        publisher
-            .native_control
-            .as_mut()
-            .expect("validated private admission")
-            .pending_receipt = Some((
-            response.clone(),
-            presentation.map(|(owner, revision)| (owner.clone(), revision)),
-        ));
-        return Err(CompletionError::Publication(format!(
-            "Native completion receipt was not published: {error}"
-        )));
-    }
-    publisher.native_control = None;
-    // The receipt is already durable and wins during status polling even if
-    // cleanup fails or the process exits immediately afterward.
-    let _ = fs::remove_file(marker_path(ticket));
     Ok(())
 }
 
@@ -396,11 +455,15 @@ pub(super) fn retry_pending(
                             admission.ticket.clone(),
                             response.clone(),
                             presentation.clone(),
+                            admission.query_liveness,
                         )
                     })
             })
     };
-    if let Some((ticket, mut response, presentation)) = pending {
+    if let Some((ticket, mut response, presentation, query_liveness)) = pending {
+        if query_liveness {
+            state.refresh_query_liveness(window)?;
+        }
         complete(
             state,
             engine,

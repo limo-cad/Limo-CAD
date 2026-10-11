@@ -328,6 +328,93 @@ fn native_owned_query_publishes_exact_read_only_result_and_original_admission() 
 }
 
 #[test]
+fn native_owned_query_retains_outcome_until_liveness_and_delivery_succeed() {
+    super::super::tests::with_isolated_session_test(|| {
+        for block_heartbeat in [true, false] {
+            let f = Fixture::new();
+            let id = "610-1";
+            let controls = f.root.join(&f.session).join("controls");
+            let request = controls.join(format!("{id}.request.json"));
+            let result_path = controls.join(format!("{id}.result.json"));
+            let expected = parse_engine_envelope(f.engine.engine_call("document", "")).unwrap();
+            let before = serde_json::to_string(&f.engine.document_snapshot()).unwrap();
+            let geometry_revision = f.engine.geometry_revision();
+            let heartbeat = f.root.join(&f.session).join("heartbeat.json");
+            let lease = f
+                .root
+                .join("_ui/processes")
+                .join(format!("{}.json", f.state.process_instance_id));
+            f.state.refresh_query_liveness("main").unwrap();
+            for path in [&heartbeat, &lease] {
+                let mut stale: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+                stale["updated_ms"] = json!(now_ms().saturating_sub(120_000));
+                atomic_write(path, &stale.to_string()).unwrap();
+            }
+            atomic_write(
+                &request,
+                &json!({"id":id,"expires_ms":now_ms()+30_000,
+                "owner":{"session_id":f.session,"window_id":"main","document_id":f.owner.document_id,
+                    "process_instance_id":f.state.process_instance_id,"base_generation":f.revision},
+                "sketch_query":{"method":"document","payload":""}})
+                .to_string(),
+            )
+            .unwrap();
+            let blocked = if block_heartbeat { &heartbeat } else { &lease };
+            let saved = fs::read(blocked).unwrap();
+            fs::remove_file(blocked).unwrap();
+            fs::create_dir(blocked).unwrap();
+            assert!(control_for_window_owned(
+                &f.state,
+                "main",
+                &f.engine,
+                None,
+                Some((&f.owner, id))
+            )
+            .is_err());
+            assert!(!result_path.exists());
+            assert!(
+                !request.exists(),
+                "the original request remains claimed, never replayable"
+            );
+            let ticket = ticket_for(&f.state, &f.owner, &f.session, id).unwrap();
+            let retained = {
+                let publishers = f.state.publishers.lock().unwrap();
+                let admission = publishers["main"].native_control.as_ref().unwrap();
+                assert!(admission.started && admission.query_liveness);
+                admission.pending_receipt.as_ref().unwrap().0.clone()
+            };
+            assert_eq!(retained["value"], expected);
+            assert!(validate_start(&f.state, &f.engine, &ticket).is_err());
+            assert!(retry_pending(&f.state, &f.engine, "main").is_err());
+            assert!(!result_path.exists());
+            assert!(has_pending(&f.state, "main").unwrap());
+            fs::remove_dir(blocked).unwrap();
+            atomic_write(blocked, std::str::from_utf8(&saved).unwrap()).unwrap();
+            let started = now_ms();
+            retry_pending(&f.state, &f.engine, "main").unwrap();
+            let result = f.read_result(id);
+            assert_eq!(result["status"], "applied");
+            assert_eq!(result["value"], expected);
+            assert_eq!(result["control_admission"], retained["control_admission"]);
+            for path in [&heartbeat, &lease] {
+                let fresh: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+                assert!(fresh["updated_ms"].as_u64().unwrap() >= started);
+            }
+            assert!(!has_pending(&f.state, "main").unwrap());
+            assert!(!marker_path(&ticket).exists());
+            assert!(ticket_for(&f.state, &f.owner, &f.session, id).is_err());
+            retry_pending(&f.state, &f.engine, "main").unwrap();
+            assert_eq!(f.read_result(id), result, "delivery is one-use");
+            assert_eq!(
+                serde_json::to_string(&f.engine.document_snapshot()).unwrap(),
+                before
+            );
+            assert_eq!(f.engine.geometry_revision(), geometry_revision);
+        }
+    });
+}
+
+#[test]
 fn native_rejected_completion_retries_transport_without_restarting_action() {
     super::super::tests::with_isolated_session_test(|| {
         let f = Fixture::new();
