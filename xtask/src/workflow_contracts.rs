@@ -922,6 +922,43 @@ fn check_superseded_pr_policy(source: &Value) -> Result<()> {
     Ok(())
 }
 
+fn check_sdk_preserving_package_policy(source: &Value) -> Result<()> {
+    ensure!(
+        source["concurrency"]["group"].as_str() == Some("desktop-packages-${{ github.ref }}"),
+        "serialize package revisions by branch/PR so pending work consolidates"
+    );
+    ensure!(
+        source["concurrency"]["cancel-in-progress"].as_bool() == Some(false),
+        "finish active SDK qualification and cache publication before the next package revision"
+    );
+    Ok(())
+}
+
+#[test]
+fn desktop_package_sdk_qualification_survives_superseding_revisions() {
+    let policy = workflow(".github/workflows/desktop-packages.yml");
+    check_sdk_preserving_package_policy(&policy).unwrap();
+    for cancellation in [
+        Value::Bool(true),
+        Value::String("${{ github.event_name == 'pull_request' }}".into()),
+        Value::String("false".into()),
+        Value::Null,
+    ] {
+        let mut drift = policy.clone();
+        drift["concurrency"]["cancel-in-progress"] = cancellation;
+        assert!(check_sdk_preserving_package_policy(&drift).is_err());
+    }
+    for group in [
+        "desktop-packages-${{ github.sha }}",
+        "desktop-packages-${{ github.ref }}-${{ github.run_id }}",
+        "desktop-packages",
+    ] {
+        let mut drift = policy.clone();
+        drift["concurrency"]["group"] = Value::String(group.into());
+        assert!(check_sdk_preserving_package_policy(&drift).is_err());
+    }
+}
+
 #[test]
 fn security_and_heavy_ci_keep_coverage_without_duplicate_or_stale_pr_work() {
     let codeql = workflow(".github/workflows/codeql.yml");
@@ -939,7 +976,6 @@ fn security_and_heavy_ci_keep_coverage_without_duplicate_or_stale_pr_work() {
         .remove(Value::String("pull_request".into()));
     assert!(check_security_scan_triggers(&missing_pr).is_err());
     for file in [
-        "desktop-packages",
         "mcp-server",
         "native-host-tests",
         "linux-engine-tests",
