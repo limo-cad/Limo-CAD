@@ -7,17 +7,19 @@ use limo_cad_occt::drawing_export::{DrawingExportFormat, DrawingExportRequest};
 pub(crate) enum Format {
     Svg,
     Dxf,
+    Pdf,
 }
 impl Format {
     fn extension(self) -> &'static str {
         match self {
             Self::Svg => "svg",
             Self::Dxf => "dxf",
+            Self::Pdf => "pdf",
         }
     }
     fn shared(self) -> DrawingExportFormat {
         match self {
-            Self::Svg => DrawingExportFormat::Svg,
+            Self::Svg | Self::Pdf => DrawingExportFormat::Svg,
             Self::Dxf => DrawingExportFormat::Dxf,
         }
     }
@@ -150,17 +152,25 @@ pub(super) fn export(
                     let content = result["content"]
                         .as_str()
                         .ok_or("Drawing export returned no content")?;
+                    let page = (intent.format == Format::Pdf)
+                        .then(|| {
+                            crate::native_print::Page::prepare(intent.sheet_name.clone(), content)
+                        })
+                        .transpose()?;
+                    let bytes = page
+                        .as_ref()
+                        .map_or(content.as_bytes(), |page| page.pdf.as_slice());
                     guard.validate()?;
                     if overwrite {
-                        limo_cad_project_file::write_binary_file_atomic(&path, content.as_bytes())
+                        limo_cad_project_file::write_binary_file_atomic(&path, bytes)
                     } else {
-                        limo_cad_project_file::write_binary_file_new(&path, content.as_bytes())
+                        limo_cad_project_file::write_binary_file_new(&path, bytes)
                     }
                     .map_err(|error| error.to_string())?;
                     Ok(NativeMutationResult {
                         context: receipt.owner.clone(),
                         engine_revision: revision,
-                        value: json!({"exported":true,"path":path,"bytes":content.len(),
+                        value: json!({"exported":true,"path":path,"bytes":bytes.len(),
                             "sheet_id":intent.sheet_id,"format":intent.format.extension()}),
                     })
                 },

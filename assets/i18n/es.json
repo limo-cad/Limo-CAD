@@ -47,6 +47,7 @@
     "export3mfSelected": "Exportar cuerpo seleccionado como 3MF…",
     "exportDrawingDxf": "Exportar dibujo activo como DXF…",
     "exportDrawingSvg": "Exportar dibujo activo como SVG…",
+    "exportDrawingPdf": "Exportar dibujo activo como PDF…",
     "exportManufacturingProfileDxf": "Exportar perfil de fabricación 1:1 DXF…",
     "exportCamNc": "Postprocesar el setup CAM activo como NC…",
     "stlDropsAppearance": "STL no tiene materiales ni colores; se omitirá la apariencia.",

@@ -47,6 +47,7 @@
     "export3mfSelected": "导出选中的实体为 3MF…",
     "exportDrawingDxf": "导出当前工程图为 DXF…",
     "exportDrawingSvg": "将当前图纸导出为 SVG…",
+    "exportDrawingPdf": "将当前图纸导出为 PDF…",
     "exportManufacturingProfileDxf": "导出 1:1 制造轮廓 DXF…",
     "exportCamNc": "输出当前 Setup 的 NC 程序…",
     "stlDropsAppearance": "STL 不包含材料或颜色——外观将被忽略。",
