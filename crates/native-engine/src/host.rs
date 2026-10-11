@@ -491,6 +491,16 @@ impl NativeEngineHost {
         inspect(inner.active().manager.drawing_document_ref())
     }
 
+    /// Inspect assembly intent without cloning its occurrences or constraints.
+    /// The callback runs under the engine guard and must not reenter this host.
+    pub fn with_assembly<R>(
+        &self,
+        inspect: impl FnOnce(&limo_cad_sketch::AssemblyDocumentDto) -> R,
+    ) -> R {
+        let workspace = self.inner.lock().expect("engine lock poisoned");
+        inspect(workspace.active().manager.assembly_document_ref())
+    }
+
     /// Retain immutable drawing intent without copying sheets, projected view
     /// definitions or annotation records. The active engine owns publication;
     /// edits invalidate drawing storage independently of viewport metadata.
