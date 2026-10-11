@@ -2,7 +2,7 @@
 //! raycast cannot select ordinary edges: their tessellation has zero area.
 use super::*;
 
-fn project(
+pub(super) fn project(
     basis: &CameraProjectionBasis,
     viewport: (f32, f32),
     point: Vec3,

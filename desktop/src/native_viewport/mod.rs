@@ -262,6 +262,9 @@ pub struct ViewportPresentation {
 pub struct ViewportMeasurementLine {
     pub points: [f32; 6],
     pub color: [f32; 4],
+    /// Formatted metric for a connection guide; topology highlights have none.
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 fn deserialize_shared_values<'de, T, D>(deserializer: D) -> Result<std::sync::Arc<Vec<T>>, D::Error>

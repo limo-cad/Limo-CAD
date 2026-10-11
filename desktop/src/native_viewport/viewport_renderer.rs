@@ -279,6 +279,7 @@ pub(crate) fn install(app: &mut App) {
             Update,
             (
                 rebuild_native_annotations,
+                measurement_labels::update,
                 rebuild_native_hud,
                 update_native_hud_orientation,
             )

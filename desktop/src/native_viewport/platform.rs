@@ -8,9 +8,9 @@ use super::ui::{
 };
 use super::{
     NativePick, NativePickPurpose, ViewportAnnotationKind, ViewportCamStock, ViewportCamTool,
-    ViewportCamera, ViewportHud, ViewportLinePattern, ViewportMode, ViewportModel,
-    ViewportOriginPlane, ViewportPalette, ViewportPresentation, ViewportPreview, ViewportSnapKind,
-    ViewportSnapMarker,
+    ViewportCamera, ViewportHud, ViewportLinePattern, ViewportMeasurementLine, ViewportMode,
+    ViewportModel, ViewportOriginPlane, ViewportPalette, ViewportPresentation, ViewportPreview,
+    ViewportSnapKind, ViewportSnapMarker,
 };
 #[cfg(target_os = "linux")]
 use bevy::render::settings::WgpuFeatures;
@@ -151,6 +151,8 @@ type BodyPoseQuery<'w, 's> = Query<
     ),
 >;
 
+#[path = "measurement_labels.rs"]
+mod measurement_labels;
 #[path = "script_preview.rs"]
 pub(crate) mod script_preview;
 #[path = "section_view.rs"]
@@ -761,6 +763,7 @@ fn install_cad_renderer(app: &mut bevy::app::App, viewport_ui: bool) {
             Update,
             (
                 rebuild_native_annotations,
+                measurement_labels::update,
                 rebuild_native_hud,
                 update_native_hud_orientation,
             )

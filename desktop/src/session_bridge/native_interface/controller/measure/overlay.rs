@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) fn present(world: &mut World, owner: &DocumentContext) -> Result<(), String> {
     let state = world.resource::<State>();
-    let row_list = rows(state, UnitSystem::Mm);
+    let row_list = rows(state, state.units);
     let hovered = row_list
         .iter()
         .enumerate()
@@ -17,7 +17,12 @@ pub(super) fn present(world: &mut World, owner: &DocumentContext) -> Result<(), 
                 })
         })
         .map(|(_, r)| r.guide);
-    let key = (state.generation, hovered, state.hover_points.clone());
+    let key = OverlayKey {
+        generation: state.generation,
+        units: state.units,
+        hovered,
+        hover_points: state.hover_points.clone(),
+    };
     if state.overlay_key.as_ref() == Some(&key) {
         return apply_overlay(
             world,
@@ -28,10 +33,11 @@ pub(super) fn present(world: &mut World, owner: &DocumentContext) -> Result<(), 
     }
     let mut lines = vec![];
     let mut points = vec![];
-    let mut line = |a: Vec3, b: Vec3, color| {
+    let mut line = |a: Vec3, b: Vec3, color, label| {
         lines.push(ViewportMeasurementLine {
             points: [a.x, a.y, a.z, b.x, b.y, b.z],
             color,
+            label,
         });
     };
     let accent = [1., 0.78, 0.12, 1.];
@@ -88,21 +94,33 @@ pub(super) fn present(world: &mut World, owner: &DocumentContext) -> Result<(), 
                 };
                 if include {
                     for pair in edge.points.windows(2) {
-                        line(at(&pair[0]), at(&pair[1]), color);
+                        line(at(&pair[0]), at(&pair[1]), color, None);
                     }
                 }
             }
         }
         if let Some(report) = &state.report {
-            if let Some([a, b]) = match hovered {
-                Some(Guide::Centers) => report.center_points,
-                Some(Guide::Maximum) => report.maximum_points,
-                Some(Guide::Objects | Guide::Selection(_)) => None,
-                _ => report.closest_points,
-            } {
+            let (connection, value, prefix) = match hovered {
+                Some(Guide::Centers) => (report.center_points, report.center_distance, "Center: "),
+                Some(Guide::Maximum) => (report.maximum_points, report.maximum_distance, "Max: "),
+                Some(Guide::Objects | Guide::Selection(_)) => (None, None, ""),
+                _ => (report.closest_points, report.distance, ""),
+            };
+            if let Some([a, b]) = connection {
                 let a = DVec3::from_array(a);
                 let b = DVec3::from_array(b);
-                line(a.as_vec3(), b.as_vec3(), accent);
+                let value = value
+                    .filter(|v| v.is_finite())
+                    .unwrap_or_else(|| a.distance(b));
+                line(
+                    a.as_vec3(),
+                    b.as_vec3(),
+                    accent,
+                    Some(format!(
+                        "{prefix}{}",
+                        readout::format_value(value, 1, state.units, state)
+                    )),
+                );
                 points.push(a.as_vec3().to_array());
                 points.push(b.as_vec3().to_array());
                 if state.delta != "none"
@@ -120,6 +138,11 @@ pub(super) fn present(world: &mut World, owner: &DocumentContext) -> Result<(), 
                                 start.as_vec3(),
                                 end.as_vec3(),
                                 [[1., 0.3, 0.3, 1.], [0.3, 1., 0.4, 1.], [0.35, 0.6, 1., 1.]][axis],
+                                Some(format!(
+                                    "Δ {}: {}",
+                                    ["X", "Y", "Z"][axis],
+                                    readout::format_value(delta[axis], 1, state.units, state),
+                                )),
                             );
                         }
                         start = end;

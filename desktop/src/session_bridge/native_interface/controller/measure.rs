@@ -46,6 +46,7 @@ struct State {
     visible: bool,
     filter: String,
     precision: String,
+    units: UnitSystem,
     secondary: String,
     delta: String,
     snaps: bool,
@@ -58,9 +59,16 @@ struct State {
     scroll: usize,
     widgets: chrome::Widgets,
     original: Option<ViewportPresentation>,
-    overlay_key: Option<(u64, Option<Guide>, Vec<[f32; 3]>)>,
+    overlay_key: Option<OverlayKey>,
     overlay_lines: Arc<Vec<ViewportMeasurementLine>>,
     overlay_points: Arc<Vec<[f32; 3]>>,
+}
+#[derive(PartialEq)]
+struct OverlayKey {
+    generation: u64,
+    units: UnitSystem,
+    hovered: Option<Guide>,
+    hover_points: Vec<[f32; 3]>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -71,6 +79,7 @@ impl Default for State {
             visible: false,
             filter: "geometry".into(),
             precision: "3".into(),
+            units: UnitSystem::Mm,
             secondary: "none".into(),
             delta: "global".into(),
             snaps: true,
@@ -273,6 +282,7 @@ pub(crate) fn reduce(
                 state.owner = Some(action.context.clone());
                 state.revision = revision;
                 state.visible = true;
+                state.units = engine.document_units();
                 let (_, _, view, _) = native_viewport::interface_view(world);
                 state.selections = initial(view, native_viewport::interface_geometry(world).scene);
                 state.bodies = view.body_poses.clone();

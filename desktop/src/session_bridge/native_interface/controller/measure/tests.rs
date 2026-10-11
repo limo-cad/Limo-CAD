@@ -225,7 +225,8 @@ fn measure_overlay_highlights_the_correct_extremum_reuses_idle_guides_and_preser
         .clone();
     assert!(first
         .iter()
-        .any(|line| line.points == [3., 0., 0., 7., 0., 3.]));
+        .any(|line| line.points == [3., 0., 0., 7., 0., 3.]
+            && line.label.as_deref() == Some("Max: 5.000 mm")));
     assert!(
         !first
             .iter()
@@ -237,6 +238,26 @@ fn measure_overlay_highlights_the_correct_extremum_reuses_idle_guides_and_preser
         &first,
         &native_viewport::interface_view(world).2.measurement_lines
     ));
+    world
+        .entity_mut(maximum)
+        .insert(bevy::picking::hover::Hovered(false));
+    let center = world
+        .resource::<State>()
+        .widgets
+        .entity("measure-row-1")
+        .unwrap();
+    world
+        .entity_mut(center)
+        .insert(bevy::picking::hover::Hovered(true));
+    present(world, &owner).unwrap();
+    assert!(native_viewport::interface_view(world)
+        .2
+        .measurement_lines
+        .iter()
+        .any(|line| {
+            line.points == [5., 0., 0., 5., 0., 3.]
+                && line.label.as_deref() == Some("Center: 3.000 mm")
+        }));
     world.resource_mut::<State>().owner = Some(owner.clone());
     clear_current(world, &owner).unwrap();
     present(world, &owner).unwrap();
@@ -290,5 +311,86 @@ fn measure_overlay_highlights_the_correct_extremum_reuses_idle_guides_and_preser
             .selected_body_ids
             .is_empty(),
         "Closing must not restore preselection after a placement change"
+    );
+}
+
+#[test]
+fn measure_connection_labels_match_panel_units_precision_and_signed_local_deltas() {
+    let mut app = native_viewport::interface_scene_fixture();
+    let world = app.world_mut();
+    world.init_resource::<ViewportUiAssets>();
+    let owner = DocumentContext {
+        window_id: "qa".into(),
+        document_id: native_viewport::interface_view(world).0.into(),
+        epoch: 0,
+    };
+    let mut state = State {
+        visible: true,
+        selections: vec![selected(Some(3)), selected(Some(4))],
+        instances: Arc::new(vec![limo_cad_sketch::InstanceBodyPoseDto {
+            occurrence_id: limo_cad_sketch::OccurrenceId(3),
+            component_id: limo_cad_sketch::ComponentId(1),
+            body_id: BodyId(1),
+            translation: [0.; 3],
+            rotation: DQuat::from_rotation_z(std::f64::consts::FRAC_PI_2).to_array(),
+            visible: true,
+        }]),
+        delta: "first".into(),
+        precision: "4".into(),
+        secondary: "mm".into(),
+        report: Some(MeasurementReport {
+            distance: Some(127.000001),
+            closest_points: Some([[0.; 3], [76.2, 101.6, 0.]]),
+            selections: vec![MeasurementProperties::default(); 2],
+            ..default()
+        }),
+        ..default()
+    };
+    let source = state.report.clone();
+    let camera = world.spawn_empty().id();
+    paint(world, camera, &mut state, UnitSystem::In, 1200., 900.).unwrap();
+    world.insert_resource(state);
+    present(world, &owner).unwrap();
+    let labels: Vec<_> = native_viewport::interface_view(world)
+        .2
+        .measurement_lines
+        .iter()
+        .filter_map(|line| line.label.clone())
+        .collect();
+    assert_eq!(
+        labels,
+        vec![
+            "5.0000 in (127.0000 mm)",
+            "Δ X: 4.0000 in (101.6000 mm)",
+            "Δ Y: -3.0000 in (-76.2000 mm)",
+            "Δ Z: 0.0000 in (0.0000 mm)"
+        ]
+    );
+    assert_eq!(world.resource::<State>().report, source);
+    // A document-unit change must refresh the retained overlay even without a
+    // new measurement result or panel generation.
+    world.resource_mut::<State>().units = UnitSystem::Cm;
+    present(world, &owner).unwrap();
+    assert_eq!(
+        native_viewport::interface_view(world)
+            .2
+            .measurement_lines
+            .iter()
+            .find_map(|line| line.label.as_deref()),
+        Some("12.7000 cm (127.0000 mm)")
+    );
+    let mut state = world.resource_mut::<State>();
+    state.precision = "6".into();
+    state.units = UnitSystem::Mm;
+    state.secondary = "none".into();
+    state.generation += 1;
+    present(world, &owner).unwrap();
+    assert_eq!(
+        native_viewport::interface_view(world)
+            .2
+            .measurement_lines
+            .iter()
+            .find_map(|line| line.label.as_deref()),
+        Some("127.000001 mm")
     );
 }

@@ -42,6 +42,12 @@ value highlights its object or the appropriate distance segment. Minimum,
 center and maximum distances use their own points. XYZ guides use red, green
 and blue for X, Y and Z. Longer result lists scroll inside the panel.
 
+Connection lines also display their metric directly in the viewport. Distance
+labels and signed XYZ labels use the panel's precision, document units and
+secondary units. Labels follow camera movement and resizing, stay beside the
+visible segment and clear with their guides. They allow geometry picks through
+them and remain separate from modeling preview annotations.
+
 Two repeated occurrences of one source body remain distinct selections. Exact
 queries run on detached selected geometry through the ordered native worker.
 Document incarnation, model revision, authoritative placement, native geometry

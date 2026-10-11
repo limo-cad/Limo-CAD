@@ -8,6 +8,7 @@ pub(super) fn paint(
     width: f32,
     height: f32,
 ) -> Result<(), String> {
+    state.units = units;
     let w = 324f32.min((width - 24.).max(220.));
     let x = (width - w - 12.).max(0.);
     let y = 128.;

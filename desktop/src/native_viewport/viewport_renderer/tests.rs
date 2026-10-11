@@ -261,6 +261,79 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
     );
     assert!(!app.world().resource::<ViewportReady>().0);
 
+    app.world_mut().resource_mut::<CameraResource>().camera = ViewportCamera {
+        position: [0., 0., 10.],
+        target: [0.; 3],
+        up: [0., 1., 0.],
+        vertical_fov_degrees: 90.,
+    };
+    app.world_mut()
+        .resource_mut::<PresentationResource>()
+        .0
+        .measurement_lines = Arc::new(vec![ViewportMeasurementLine {
+        points: [-1., 0., 0., 1., 0., 0.],
+        color: [1., 0.78, 0.12, 1.],
+        label: Some("2.000 mm".into()),
+    }]);
+    let measured = capture(&mut app, &target, "measurement-value-before-3d");
+    let region = |pixels: &[u8]| -> Vec<[u8; 4]> {
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| (110..210).contains(&(i % 320)) && (60..105).contains(&(i / 320)))
+            .map(|(_, pixel)| *pixel)
+            .collect()
+    };
+    let ink = app
+        .world()
+        .resource::<PaletteResource>()
+        .0
+        .ink
+        .map(|value| (value * 255.).round() as u8);
+    assert!(
+        region(&measured)
+            .iter()
+            .filter(|p| (0..3).all(|channel| p[channel].abs_diff(ink[channel]) < 20))
+            .count()
+            > 30,
+        "Measurement glyphs must render in the guide's screen region"
+    );
+    assert!(
+        region(&measured)
+            .iter()
+            .zip(region(&interactive))
+            .filter(|(a, b)| **a != *b)
+            .count()
+            > 100,
+        "The retained 2D renderer must draw measurement readouts before CAD compilation completes"
+    );
+    assert!(!app.world().resource::<ViewportReady>().0);
+    app.world_mut()
+        .resource_mut::<CameraResource>()
+        .camera
+        .position[0] = 2.;
+    app.world_mut()
+        .resource_mut::<CameraResource>()
+        .camera
+        .target[0] = 2.;
+    let moved = capture(&mut app, &target, "measurement-value-camera-moved");
+    assert!(
+        changed(&measured, &moved) > 100,
+        "Readout pixels must follow camera movement"
+    );
+    app.world_mut()
+        .resource_mut::<PresentationResource>()
+        .0
+        .measurement_lines = Arc::default();
+    let cleared = capture(&mut app, &target, "measurement-value-cleared");
+    assert_eq!(
+        region(&cleared),
+        region(&interactive),
+        "Clearing guides must retire their value pixels"
+    );
+
     // Replace the owner while the first snapshot is still pending. Its eventual
     // completion must neither display old geometry nor acknowledge this owner.
     let source = r#"{"version":1,"name":"Independent viewport render fixture","steps":[
