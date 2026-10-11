@@ -21,6 +21,70 @@ fn stock() -> NativeEngineHost {
     state
 }
 #[test]
+fn failed_chamfer_keeps_available_body_inspectable_and_preserves_source_proof() {
+    let state = stock();
+    let scene = state.solid_scene_snapshot();
+    let body = &scene.bodies[0];
+    let edge = &body.edges[0];
+    let mut model: serde_json::Value = serde_json::from_str(
+        value(state.engine_call("project_export_model", ""))
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    model["document"]["history"]["features"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":3,"name":"Failed chamfer","kind":"chamfer","suppressed":false,"status":{"state":"ok"}}));
+    model["document"]["history"]["rollback_index"] = json!(3);
+    model["chamfers"] = json!([{"feature_id":3,"name":"Failed chamfer","body_id":body.id,
+        "edge_ids":[edge.id],"edge_keys":[edge.key],"distance":100.,"tangent_chain":false}]);
+    value(state.project_load(&serde_json::to_string(&model.to_string()).unwrap()));
+    let scene = state.solid_scene_snapshot();
+    assert_eq!(
+        scene.errors.len(),
+        1,
+        "The chamfer must genuinely fail in OCCT"
+    );
+    let before = value(state.engine_call("project_export_model", ""));
+    let revision = state.geometry_revision();
+    let mut request: SectionReviewRequest = serde_json::from_value(
+        json!({"body_id":body.id,"plane":"xy","offset_mm":2.,"include_cutaway":true}),
+    )
+    .unwrap();
+    let source = state
+        .prepare_section_review(&serde_json::to_string(&request).unwrap())
+        .unwrap();
+    for offset in [2., 4., 6.] {
+        request.offset_mm = offset;
+        let finished = source.inspect_at(&request).unwrap();
+        state.validate_section_review(&finished).unwrap();
+        let report = finished.report();
+        assert_eq!(report.outcome, SectionOutcome::MaterialSection);
+        assert_eq!(report.source_errors, scene.errors);
+        assert!(report.svg.contains("Showing available geometry"));
+        let mesh = report.cutaway.as_ref().unwrap();
+        let max_z = mesh
+            .positions
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|p| p[2])
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert!((f64::from(max_z) - offset).abs() < 1e-5);
+    }
+    assert_eq!(value(state.engine_call("project_export_model", "")), before);
+    assert_eq!(state.geometry_revision(), revision);
+    assert!(Arc::ptr_eq(&scene, &state.solid_scene_snapshot()));
+    assert!(state
+        .prepare_section_review(&json!({"body_id":9999,"plane":"xy","offset_mm":4.}).to_string())
+        .is_err());
+    request.offset_mm = 4.;
+    let finished = source.inspect_at(&request).unwrap();
+    value(state.project_load(&serde_json::to_string(before.as_str().unwrap()).unwrap()));
+    assert!(state.validate_section_review(&finished).is_err());
+}
+#[test]
 fn cached_section_source_supports_live_offsets_and_keeps_publication_proof() {
     let state = stock();
     let scene = state.solid_scene_snapshot();

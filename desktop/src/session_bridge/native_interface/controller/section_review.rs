@@ -45,7 +45,7 @@ struct State {
     offset: String,
     probe: String,
     side: String,
-    in_3d: bool,
+    show_diagram: bool,
     cutaway: Option<Arc<native_viewport::section_view::PreparedCutaway>>,
     report: Option<SectionReview>,
     image: Option<Handle<Image>>,
@@ -106,7 +106,7 @@ impl State {
         }
     }
     fn toggle_view(&mut self) {
-        self.in_3d = !self.in_3d;
+        self.show_diagram = !self.show_diagram;
         self.controls_generation = self.controls_generation.saturating_add(1);
         // Existing geometry is still useful in the other view, but an older
         // query must not complete into the replacement presentation scope.
@@ -182,8 +182,13 @@ impl State {
         owner: &DocumentContext,
         revision: u64,
         request: &SectionReviewRequest,
+        diagram: bool,
     ) -> bool {
-        if !self.visible || self.owner.as_ref() != Some(owner) || self.revision != revision {
+        if !self.visible
+            || self.owner.as_ref() != Some(owner)
+            || self.revision != revision
+            || self.show_diagram != diagram
+        {
             return false;
         }
         self.request(self.units).is_ok_and(|current| {
@@ -243,7 +248,7 @@ impl State {
                 Some(coordinate(&self.probe, units)?)
             },
             deflection_mm: 0.01,
-            include_cutaway: self.in_3d,
+            include_cutaway: true,
             keep_positive: self.side == "positive",
         };
         req.validate()?;
@@ -293,7 +298,7 @@ pub(crate) fn reduce(
         state.body = body.id.0.to_string();
         state.plane = "yz".into();
         state.side = "negative".into();
-        state.in_3d = true;
+        state.show_diagram = false;
         state.units = engine.document_units();
         state.offset = "0".into();
         state.source(&scene, true);
@@ -351,7 +356,7 @@ pub(crate) fn reduce(
     if *command == Command::ToggleView {
         let mut state = world.resource_mut::<State>();
         state.toggle_view();
-        return Ok(json!({"view":if state.in_3d {"cutaway"} else {"diagram"}}));
+        return Ok(json!({"view":if state.show_diagram {"cutaway_and_diagram"} else {"cutaway"}}));
     }
     if *command == Command::CopySvg {
         let state = world.resource::<State>();
@@ -495,17 +500,13 @@ pub(crate) fn synchronize(
             world.init_resource::<Assets<Image>>();
             state.image = Some(world.resource_mut::<Assets<Image>>().add(image));
         }
-        if state.in_3d {
-            if let Some(report) = &state.report {
-                native_viewport::section_view::show(
-                    world,
-                    &owner.document_id,
-                    &report.request,
-                    state.cutaway.clone(),
-                )?;
-            } else {
-                native_viewport::section_view::clear(world);
-            }
+        if let Some(report) = &state.report {
+            native_viewport::section_view::show(
+                world,
+                &owner.document_id,
+                &report.request,
+                state.cutaway.clone(),
+            )?;
         } else {
             native_viewport::section_view::clear(world);
         }
@@ -536,12 +537,10 @@ pub(crate) fn active(world: &World) -> bool {
 }
 #[cfg(test)]
 fn in_3d(world: &World) -> bool {
-    world
-        .get_resource::<State>()
-        .is_some_and(|s| s.visible && s.in_3d)
+    world.get_resource::<State>().is_some_and(|s| s.visible)
 }
 
-fn control(label: &str, _in_3d: bool) -> InterfaceControl {
+fn control(label: &str) -> InterfaceControl {
     InterfaceControl::button("document/section", label)
 }
 
@@ -555,7 +554,7 @@ fn paint(
     let w = (width - 24.).clamp(240., 312.);
     let x = (width - w - 16.).max(12.);
     let y = 130.;
-    let preview_height = if !state.in_3d && state.image.is_some() {
+    let preview_height = if state.show_diagram && state.image.is_some() {
         ((w - 24.) * 0.75).min((height - y - 16. - 368.).max(0.))
     } else {
         0.
@@ -588,7 +587,7 @@ fn paint(
         world,
         camera,
         "section-close",
-        control("Close section analysis", state.in_3d),
+        control("Close section analysis"),
         Some("×"),
         NativeCommand::SectionReview(state.controls_generation, Command::Close),
         chrome::rect(x + w - 38., y + 8., 26., 24.),
@@ -634,7 +633,7 @@ fn paint(
             11.,
             72,
         );
-        let mut control = control(&label, state.in_3d);
+        let mut control = control(&label);
         let mut choice_caption = None;
         if let Some(options) = state.choices(field) {
             choice_caption = options
@@ -677,10 +676,7 @@ fn paint(
     }
     let range = state.range();
     let (min, max) = range.unwrap_or((-1., 1.));
-    let mut slider = control(
-        &format!("Section {} position slider (mm)", labels[2]),
-        state.in_3d,
-    );
+    let mut slider = control(&format!("Section {} position slider (mm)", labels[2]));
     slider.disabled = range.is_none();
     slider.field = ControlField::Range {
         value: coordinate(&state.offset, state.units)
@@ -734,18 +730,18 @@ fn paint(
         world,
         camera,
         "section-mode",
-        control("Switch section view", state.in_3d),
-        Some(if state.in_3d {
-            "2D diagram"
+        control("Show or hide section diagram"),
+        Some(if state.show_diagram {
+            "Hide 2D diagram"
         } else {
-            "3D cutaway"
+            "Show 2D diagram"
         }),
         NativeCommand::SectionReview(state.controls_generation, Command::ToggleView),
         chrome::rect(x + 12., y + 274., half, 28.),
         None,
         72,
     )?;
-    let mut copy = control("Copy section SVG", state.in_3d);
+    let mut copy = control("Copy section SVG");
     copy.disabled =
         !state.report_current() || state.report.as_ref().is_none_or(|r| r.svg.is_empty());
     state.widgets.button(
@@ -820,7 +816,7 @@ pub(crate) fn paint_capture(
         plane: std::env::var("LIMO_CAD_SECTION_LAB_PLANE").unwrap_or_else(|_| "xy".into()),
         side: "negative".into(),
         units: engine.document_units(),
-        in_3d: std::env::var_os("LIMO_CAD_SECTION_LAB_DIAGRAM").is_none(),
+        show_diagram: std::env::var_os("LIMO_CAD_SECTION_LAB_DIAGRAM").is_some(),
         ..Default::default()
     };
     state.source(&scene, true);
@@ -837,23 +833,19 @@ pub(crate) fn paint_capture(
         .cutaway
         .take()
         .map(|body| Arc::new(native_viewport::section_view::PreparedCutaway::new(body)));
-    if state.in_3d {
-        native_viewport::section_view::show(world, &session, &request, state.cutaway.clone())?;
-    } else if !report.svg.is_empty() {
+    native_viewport::section_view::show(world, &session, &request, state.cutaway.clone())?;
+    if state.show_diagram && !report.svg.is_empty() {
         state.image = Some(
             world
                 .resource_mut::<Assets<Image>>()
                 .add(rasterize(&report.svg)?),
         );
     }
+    state.message = report
+        .source_notice()
+        .unwrap_or_else(|| "Drag the bar to move the cut. Orange faces show the section.".into());
     state.report = Some(report);
     state.finished_generation = Some(state.generation);
-    state.message = if state.in_3d {
-        "Drag the bar to move the cut. Orange faces show the section."
-    } else {
-        "Drag the bar to move the section. Copy SVG for the full diagram."
-    }
-    .into();
     let bounds = InterfaceRect {
         x: 0.,
         y: 0.,
@@ -902,7 +894,7 @@ mod tests {
         let camera = world.spawn_empty().id();
         let mut state = State {
             visible: true,
-            in_3d: true,
+            show_diagram: false,
             body: "1".into(),
             plane: "xy".into(),
             side: "negative".into(),
@@ -960,7 +952,7 @@ mod tests {
             owner: Some(owner.clone()),
             revision: 8,
             visible: true,
-            in_3d: true,
+            show_diagram: false,
             body: "1".into(),
             bodies: vec![(1, "Fixture".into())],
             plane: "xy".into(),
@@ -970,12 +962,12 @@ mod tests {
         };
         let request = state.request(UnitSystem::Mm).unwrap();
         state.set_value(Field::Offset, "6".into());
-        assert!(state.accepts_preview(&owner, 8, &request));
+        assert!(state.accepts_preview(&owner, 8, &request, false));
         assert!(!state.report_current());
-        assert!(!state.accepts_preview(&owner, 9, &request));
+        assert!(!state.accepts_preview(&owner, 9, &request, false));
         let mut other = owner.clone();
         other.epoch += 1;
-        assert!(!state.accepts_preview(&other, 8, &request));
+        assert!(!state.accepts_preview(&other, 8, &request, false));
         for change in [Field::Body, Field::Plane, Field::Side] {
             let old = state.value(change).to_owned();
             let changed = match change {
@@ -984,33 +976,37 @@ mod tests {
                 _ => "positive",
             };
             state.set_value(change, changed.into());
-            assert!(!state.accepts_preview(&owner, 8, &request));
+            assert!(!state.accepts_preview(&owner, 8, &request, false));
             state.set_value(change, old);
         }
         state.toggle_view();
-        assert!(!state.accepts_preview(&owner, 8, &request));
+        assert!(!state.accepts_preview(&owner, 8, &request, false));
         state.toggle_view();
         state.visible = false;
-        assert!(!state.accepts_preview(&owner, 8, &request));
+        assert!(!state.accepts_preview(&owner, 8, &request, false));
     }
     #[test]
     fn three_d_inspection_keeps_camera_navigation_available_and_escape_closes() {
         let mut world = World::new();
         world.insert_resource(State {
             visible: true,
-            in_3d: true,
+            show_diagram: false,
             ..Default::default()
         });
         assert_eq!(modal(&world), None);
         assert!(in_3d(&world));
-        assert!(control("Inspect", true).modal_scope.is_none());
+        assert!(control("Inspect").modal_scope.is_none());
         assert!(escape(&mut world));
         assert!(!in_3d(&world));
         world.resource_mut::<State>().visible = true;
-        world.resource_mut::<State>().in_3d = false;
+        world.resource_mut::<State>().show_diagram = true;
         assert_eq!(modal(&world), None);
         assert!(active(&world));
-        assert!(control("Inspect", false).modal_scope.is_none());
+        assert!(
+            in_3d(&world),
+            "The diagram must not turn off the viewport cut"
+        );
+        assert!(control("Inspect").modal_scope.is_none());
         assert!(escape(&mut world));
         assert!(!active(&world));
     }
@@ -1322,6 +1318,7 @@ mod tests {
             plane: "xy".into(),
             offset: "3 mm".into(),
             image: Some(image),
+            show_diagram: true,
             ..Default::default()
         };
         state.widgets.begin();

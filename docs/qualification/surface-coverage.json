@@ -1,4 +1,14 @@
 {
+  "section_slider_viewport_repair_checkpoint": {
+    "base_revision": "c11a51cd41239ad4e8f5a7ce2e32e3d971fa8ea8",
+    "evidence": "docs/qualification/section-slider-viewport-repair-20261011.json",
+    "native_source_checks_passed": 1,
+    "desktop_section_checks_passed": 10,
+    "strict_release_checks": "passed",
+    "affected_case": "ui/feature-forms/section-analysis-exact180",
+    "status": "needs_recheck",
+    "reason": "Reported failed-history gating and diagram-mode viewport loss are repaired in source; physical dragging on a fresh matched app remains pending. Broad UI/MCP coverage stays paused and unrelated passes are retained."
+  },
   "garden_bench_sheet_content_source_checkpoint": {
     "source_revision": "19840d61ece6a921c2a2708f76191c119c8d1884",
     "recorded_utc": "2026-10-11T15:58:57.4799178Z",
