@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="description" content="Kostenloses, offenes und lokales parametrisches CAD. Erstelle editierbare Bauteile, Baugruppen und Zeichnungen von Hand oder mit deinem eigenen Agenten.">
+    <title>Lokale, editierbare mechanische Konstruktion | Limo CAD</title>
+    <link rel="stylesheet" href="./product.css">
+    <link rel="alternate" hreflang="en" href="./home.html">
+    <link rel="alternate" hreflang="es" href="./home.es.html">
+    <link rel="alternate" hreflang="de" href="./home.de.html">
+    <link rel="alternate" hreflang="zh-CN" href="./home.zh-CN.html">
+    <link rel="alternate" hreflang="x-default" href="./home.html">
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="./home.de.html">Limo CAD</a>
+      <nav aria-label="Hauptnavigation">
+        <a href="#download">Herunterladen</a>
+        <a href="./showcase.html">Entstanden in Limo CAD (englisch)</a>
+        <a href="https://github.com/limo-cad/Limo-CAD/blob/main/docs/INDEX.md">Anleitungen (englisch)</a>
+        <a href="https://github.com/limo-cad/Limo-CAD">GitHub</a>
+      </nav>
+      <nav class="languages" aria-label="Sprache">
+        <a href="./home.html" hreflang="en" lang="en">English</a>
+        <a href="./home.es.html" hreflang="es" lang="es">Español</a>
+        <a href="./home.de.html" hreflang="de" lang="de" aria-current="page">Deutsch</a>
+        <a href="./home.zh-CN.html" hreflang="zh-CN" lang="zh-CN">简体中文</a>
+      </nav>
+    </header>
+    <main>
+      <p class="note">Die Bevy-rc.2-Vorschau ist für Windows x64 und Ubuntu 26.04 x64 verfügbar. Die Pakete verwenden den Quellstand <code>9b082687</code>; die Filme und Beispielkonstruktionen behalten ihren früheren Versionsstand.</p>
+      <div class="hero">
+        <div>
+          <p class="eyebrow">Mechanisches CAD &middot; Pre-Alpha</p>
+          <h1>Bauteile erstellen.<br>Die Konstruktion behalten.</h1>
+          <p class="lead">Skizziere, forme und montiere mechanische Konstruktionen. Behalte die Maße, Features und Beziehungen, durch die sie editierbar bleiben. Arbeite von Hand oder mit deinem eigenen Agenten, vollständig auf deinem Rechner.</p>
+          <p>Kein Konto, kein Abonnement und kein Cloud-CAD-Dienst nötig.</p>
+          <div class="actions">
+            <a class="button" href="#download">Bevy-Vorschau herunterladen</a>
+            <a href="#first-part">Dein erstes Bauteil erstellen</a>
+          </div>
+        </div>
+        <figure>
+          <a href="./showcase.html#garden-bench"><img src="https://raw.githubusercontent.com/limo-cad/Limo-CAD/v0.2.0/docs/assets/showcase/bench.png" width="800" height="520" alt="Gartenbank aus bemaßten Holzteilen und wiederholten Rückenlatten mit gewölbten Oberkanten"></a>
+          <figcaption>In Limo CAD aus einem leeren Dokument erstellt, mit denselben Befehlen, die einem Agenten zur Verfügung stehen. <a href="./showcase.html#garden-bench">Aufbau ansehen und Rezept erkunden (englisch)</a>.</figcaption>
+        </figure>
+      </div>
+      <section id="download">
+        <h2>Eine Desktop-App. Du wählst die Werkzeuge.</h2>
+        <p><strong>Bevy-rc.2-Vorschau &middot; Anwendungsversion 0.2.2.</strong> Native parametrische Modellierung, verbundene Baugruppen, assoziative Zeichnungen und lokale MCP-Steuerung. Die Software ist Pre-Alpha; sichere wichtige Konstruktionen.</p>
+        <div class="actions">
+          <a class="button" href="https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS-CAD-0.2.2-windows-x64.zip">Windows x64</a>
+          <a class="button" href="https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS.CAD_0.2.2_amd64.deb">Ubuntu 26.04</a>
+        </div>
+        <p class="muted">Portables ZIP für Windows x64 &middot; DEB für Ubuntu x64. Veröffentlichte Dateinamen behalten den früheren Namen noBS CAD. <a href="https://github.com/limo-cad/Limo-CAD/blob/feat/bevy-interface/docs/INSTALL.md">Voraussetzungen, Installation und Aktualisierung (englisch)</a>.</p>
+        <details>
+          <summary>Build-Informationen und noch zurückgehaltene Plattformen</summary>
+          <p><a href="https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1">Vorschauhinweise, Quellstand und Prüfsummen (englisch)</a>. Windows ARM64, macOS und AppImage bleiben bis zur Qualifikation zurückgehalten. Die Bevy-Browser-App ist noch in Entwicklung. Diese öffentlichen Pakete enthalten spätere Integrationskorrekturen noch nicht. Den installierten Build findest du unter File &rarr; Settings &rarr; About Limo CAD.</p>
+        </details>
+      </section>
+      <p class="muted">Dieser Einstieg ist auf Deutsch. Die verlinkten Anleitungen, Lektionen, Filme und Wissensressourcen sind auf Englisch; die Namen der Steuerelemente der Lektion entsprechen der Oberfläche. <a href="https://github.com/limo-cad/Limo-CAD/blob/feat/bevy-interface/README.de.md">Lies die deutsche Projektübersicht</a>.</p>
+      <section id="first-part" class="card">
+        <p class="eyebrow">Hier beginnen</p>
+        <h2>Ein Bauteil, das du ändern kannst.</h2>
+        <p>Öffne <strong>Scripts</strong>, wähle <strong>Sketch, extrude, ease the edges</strong> und dann <strong>Run in new design</strong>. Sieh zu, wie aus einem bemaßten Block ein Volumenkörper mit abgerundeter Kante wird.</p>
+        <p>Klicke im Feature-Verlauf doppelt auf die Extrusion. Ändere <strong>12 auf 18 mm</strong>, speichere <code>first-part.nbcad</code> und öffne die Datei erneut. Die editierbare Historie bleibt beim Bauteil. Die veröffentlichte Vorschau verwendet <code>.nbcad</code>; aktuelle Quell-Builds speichern <code>.limo</code>.</p>
+        <div class="actions">
+          <a class="button" href="./open.html#fillet-basics">Lektion in CAD öffnen (englische Seite)</a>
+          <a href="https://github.com/limo-cad/Limo-CAD/blob/feat/bevy-interface/docs/INSTALL.md#make-your-first-part">Anleitung zum ersten Bauteil (englisch)</a>
+        </div>
+      </section>
+      <section>
+        <h2>Vollständige Konstruktionen erkunden.</h2>
+        <p>Aufbau, Baugruppenbeziehungen und Zeichnungen gehören zur editierbaren Konstruktion. Die Beispiele sind digital geprüft; physische Passung und Belastbarkeit sind noch nicht qualifiziert.</p>
+        <div class="grid">
+          <article class="card">
+            <a href="./showcase.html#d-screw-vise"><img loading="lazy" src="https://raw.githubusercontent.com/limo-cad/Limo-CAD/v0.2.0/docs/assets/showcase/vise.png" width="800" height="520" alt="Gedruckter Schraubstock mit geführter Gleitbacke und kompaktem D-Spindelgriff"></a>
+            <h3>Der gedruckte Schraubstock</h3>
+            <p>100-mm-Backen, 90 mm Hub, sechs gedruckte Teile und Normteile. Erkunde eine geführte Gleitbacke, eine D-Spindel und Fertigungszeichnungen.</p>
+            <a href="./showcase.html#d-screw-vise">Schraubstock ansehen, prüfen oder nachbauen (englisch)</a>
+          </article>
+          <article class="card">
+            <a href="./showcase.html#vertical-axis-turbine"><img loading="lazy" src="https://raw.githubusercontent.com/limo-cad/Limo-CAD/v0.2.0/docs/assets/showcase/turbine.png" width="800" height="520" alt="Zweistufige Windturbine mit vertikaler Achse und Generatorantrieb"></a>
+            <h3>Die Windturbine</h3>
+            <p>Ein zweistufiger Savonius-Rotor, eine gelagerte Welle und ein Generatorantrieb mit Übersetzung 4:1. Erkunde druckbare Teile und gekoppelte Drehbewegungen.</p>
+            <a href="./showcase.html#vertical-axis-turbine">Turbine ansehen, prüfen oder nachbauen (englisch)</a>
+          </article>
+        </div>
+      </section>
+      <section>
+        <h2>Selbst konstruieren. Oder einen Agenten mitbringen.</h2>
+        <p>Manuelle Modellierung und MCP verwenden dieselbe gruppierte Schnittstelle. Ein Agent kann in der laufenden Anwendung eine Konstruktion prüfen, erstellen, bearbeiten und präsentieren. Rezepte spielen diese Operationen ohne eine separate Modellierungssprache ab.</p>
+        <div class="actions">
+          <a href="https://github.com/limo-cad/Limo-CAD/blob/feat/bevy-interface/docs/INSTALL.md#connect-an-mcp-agent">Deinen Agenten verbinden (englisch)</a>
+          <a href="https://github.com/limo-cad/Limo-CAD/blob/main/examples/scripts/README.md">Alle Rezepte erkunden (englisch)</a>
+        </div>
+        <p class="muted">Den Funktionsumfang und seine Grenzen beschreiben die <a href="https://github.com/limo-cad/Limo-CAD/blob/main/docs/INDEX.md">Anleitungen zu Modellierung, Zeichnungen und Export (englisch)</a>.</p>
+      </section>
+    </main>
+    <footer>
+      <p>Kostenlos, offen und lokal. Aufgebaut auf <a href="https://dev.opencascade.org/">Open CASCADE</a>, <a href="https://bevy.org/">Bevy</a> und der Arbeit vieler Open-Source-Mitwirkender. <a href="https://github.com/limo-cad/Limo-CAD/blob/main/THIRD_PARTY_NOTICES.md">Mitwirkende und Lizenzen (englisch)</a>.</p>
+      <p><a href="https://github.com/limo-cad/Limo-CAD/blob/main/knowledge/index.md">Konstruktionswissen für Menschen und Agenten (englisch)</a> &middot; <a href="https://github.com/limo-cad/Limo-CAD/blob/main/CONTRIBUTING.md">Mitwirken (englisch)</a></p>
+    </footer>
+  </body>
+</html>

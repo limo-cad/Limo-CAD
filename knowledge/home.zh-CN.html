@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="description" content="免费、开源、本地运行的参数化 CAD。亲手操作或使用自己的智能体，创建可编辑的零件、装配体和工程图。">
+    <title>本地、可编辑的机械设计 | 砺模 CAD</title>
+    <link rel="stylesheet" href="./product.css">
+    <link rel="alternate" hreflang="en" href="./home.html">
+    <link rel="alternate" hreflang="es" href="./home.es.html">
+    <link rel="alternate" hreflang="de" href="./home.de.html">
+    <link rel="alternate" hreflang="zh-CN" href="./home.zh-CN.html">
+    <link rel="alternate" hreflang="x-default" href="./home.html">
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="./home.zh-CN.html">砺模 CAD</a>
+      <nav aria-label="主导航">
+        <a href="#download">下载</a>
+        <a href="./showcase.html">砺模 CAD 作品（英文）</a>
+        <a href="https://github.com/limo-cad/Limo-CAD/blob/main/docs/INDEX.md">指南（英文）</a>
+        <a href="https://github.com/limo-cad/Limo-CAD">GitHub</a>
+      </nav>
+      <nav class="languages" aria-label="语言">
+        <a href="./home.html" hreflang="en" lang="en">English</a>
+        <a href="./home.es.html" hreflang="es" lang="es">Español</a>
+        <a href="./home.de.html" hreflang="de" lang="de">Deutsch</a>
+        <a href="./home.zh-CN.html" hreflang="zh-CN" lang="zh-CN" aria-current="page">简体中文</a>
+      </nav>
+    </header>
+    <main>
+      <p class="note">Bevy rc.2 预览版已提供 Windows x64 和 Ubuntu 26.04 x64 软件包。这些包使用源码版本 <code>9b082687</code>；建模视频和作品示例保留其较早的版本。</p>
+      <div class="hero">
+        <div>
+          <p class="eyebrow">机械 CAD &middot; 早期预览版</p>
+          <h1>做出零件。<br>保留设计。</h1>
+          <p class="lead">绘制草图、创建形体、组装机械设计。保留尺寸、特征和关联，让设计始终可编辑。亲手操作或使用自己的智能体，所有工作都在你的电脑上完成。</p>
+          <p>无需账号、订阅或云端 CAD 服务。</p>
+          <div class="actions">
+            <a class="button" href="#download">下载 Bevy 预览版</a>
+            <a href="#first-part">做出你的第一个零件</a>
+          </div>
+        </div>
+        <figure>
+          <a href="./showcase.html#garden-bench"><img src="https://raw.githubusercontent.com/limo-cad/Limo-CAD/v0.2.0/docs/assets/showcase/bench.png" width="800" height="520" alt="由带尺寸的木构件和重复的弧顶靠背板条组成的花园长椅"></a>
+          <figcaption>在砺模 CAD 中从空白文档构建，使用与智能体相同的命令。<a href="./showcase.html#garden-bench">观看建模过程并探索配方（英文）</a>。</figcaption>
+        </figure>
+      </div>
+      <section id="download">
+        <h2>一个桌面应用。工具由你选择。</h2>
+        <p><strong>Bevy rc.2 预览版 &middot; 应用版本 0.2.2。</strong>原生参数化建模、关联装配体、关联工程图以及本地 MCP 控制。这是早期预览软件，请备份重要设计。</p>
+        <div class="actions">
+          <a class="button" href="https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS-CAD-0.2.2-windows-x64.zip">Windows x64</a>
+          <a class="button" href="https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS.CAD_0.2.2_amd64.deb">Ubuntu 26.04</a>
+        </div>
+        <p class="muted">Windows x64 便携 ZIP &middot; Ubuntu x64 DEB。已发布的文件名保留原产品名称 noBS CAD。<a href="https://github.com/limo-cad/Limo-CAD/blob/feat/bevy-interface/docs/INSTALL.md">系统要求、安装与更新（英文）</a>。</p>
+        <details>
+          <summary>构建信息和待验证的平台</summary>
+          <p><a href="https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1">预览版说明、源码版本与校验和（英文）</a>。Windows ARM64、macOS 和 AppImage 软件包仍待验证。Bevy 浏览器应用尚在开发中。这些公开软件包未包含后续集成修复。可在 File &rarr; Settings &rarr; About Limo CAD 中查看已安装的构建信息。</p>
+        </details>
+      </section>
+      <p class="muted">本入口为简体中文。链接的指南、教程、视频和知识库为英文，教程中的控件名称按界面原文保留。<a href="https://github.com/limo-cad/Limo-CAD/blob/feat/bevy-interface/README.zh-CN.md">阅读中文项目介绍</a>。</p>
+      <section id="first-part" class="card">
+        <p class="eyebrow">从这里开始</p>
+        <h2>一个可以修改的零件。</h2>
+        <p>打开 <strong>Scripts</strong>，选择 <strong>Sketch, extrude, ease the edges</strong>，再选择 <strong>Run in new design</strong>。观看带尺寸的方块变成边缘倒圆的实体。</p>
+        <p>双击特征历史中的拉伸，将尺寸从 <strong>12 改为 18 mm</strong>，保存为 <code>first-part.nbcad</code>，然后重新打开。可编辑的特征历史随零件一起保存。已发布的预览版使用 <code>.nbcad</code>；当前源码构建保存为 <code>.limo</code>。</p>
+        <div class="actions">
+          <a class="button" href="./open.html#fillet-basics">在 CAD 中打开教程（英文页面）</a>
+          <a href="https://github.com/limo-cad/Limo-CAD/blob/feat/bevy-interface/docs/INSTALL.md#make-your-first-part">按指南制作第一个零件（英文）</a>
+        </div>
+      </section>
+      <section>
+        <h2>探索完整设计。</h2>
+        <p>建模过程、装配关系和工程图都是可编辑设计的一部分。示例已经过数字检查，实体配合和承载能力仍待验证。</p>
+        <div class="grid">
+          <article class="card">
+            <a href="./showcase.html#d-screw-vise"><img loading="lazy" src="https://raw.githubusercontent.com/limo-cad/Limo-CAD/v0.2.0/docs/assets/showcase/vise.png" width="800" height="520" alt="带有受约束滑动钳口和紧凑 D 形丝杠手柄的 3D 打印台虎钳"></a>
+            <h3>3D 打印台虎钳</h3>
+            <p>100 mm 钳口、90 mm 行程、六个打印零件和标准件。探索受约束的滑动钳口、D 形丝杠和制造工程图。</p>
+            <a href="./showcase.html#d-screw-vise">观看、检查或重建台虎钳（英文）</a>
+          </article>
+          <article class="card">
+            <a href="./showcase.html#vertical-axis-turbine"><img loading="lazy" src="https://raw.githubusercontent.com/limo-cad/Limo-CAD/v0.2.0/docs/assets/showcase/turbine.png" width="800" height="520" alt="带有发电机传动机构的两级垂直轴风力涡轮"></a>
+            <h3>风力涡轮</h3>
+            <p>两级 Savonius 叶轮、轴承支撑轴，以及 4:1 发电机传动。探索可打印零件和关联转动。</p>
+            <a href="./showcase.html#vertical-axis-turbine">观看、检查或重建涡轮（英文）</a>
+          </article>
+        </div>
+      </section>
+      <section>
+        <h2>自己设计。或带上智能体。</h2>
+        <p>手动建模和 MCP 使用同一套分组接口。智能体可以在运行中的应用里检查、创建、编辑并展示设计。配方重放这些操作，无需另一套建模语言。</p>
+        <div class="actions">
+          <a href="https://github.com/limo-cad/Limo-CAD/blob/feat/bevy-interface/docs/INSTALL.md#connect-an-mcp-agent">连接你的智能体（英文）</a>
+          <a href="https://github.com/limo-cad/Limo-CAD/blob/main/examples/scripts/README.md">探索全部配方（英文）</a>
+        </div>
+        <p class="muted">功能范围与限制见<a href="https://github.com/limo-cad/Limo-CAD/blob/main/docs/INDEX.md">建模、工程图和导出指南（英文）</a>。</p>
+      </section>
+    </main>
+    <footer>
+      <p>免费、开源、本地运行。基于 <a href="https://dev.opencascade.org/">Open CASCADE</a>、<a href="https://bevy.org/">Bevy</a> 和众多开源贡献者的工作。<a href="https://github.com/limo-cad/Limo-CAD/blob/main/THIRD_PARTY_NOTICES.md">致谢与许可证（英文）</a>。</p>
+      <p><a href="https://github.com/limo-cad/Limo-CAD/blob/main/knowledge/index.md">面向人与智能体的工程知识（英文）</a> &middot; <a href="https://github.com/limo-cad/Limo-CAD/blob/main/CONTRIBUTING.md">参与贡献（英文）</a></p>
+    </footer>
+  </body>
+</html>

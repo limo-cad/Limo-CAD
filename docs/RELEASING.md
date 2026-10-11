@@ -111,9 +111,10 @@ carriers disagree with `VERSION`.
    release: fix `main`, then tag again with a new version rather than reusing the
    number.
 
-5. **Repoint the download links.** `README.md` and `knowledge/home.html` name a
-   specific release tag, so update them in a follow-up PR after the release is
-   published.
+5. **Repoint the download links.** The four `README*.md` entrances and
+   `knowledge/home*.html` pages name a specific release tag. Update every language
+   in a follow-up PR after the release is published; keep their filenames,
+   platform availability and source-build distinction in agreement.
 
 ## What CI does not decide
 
