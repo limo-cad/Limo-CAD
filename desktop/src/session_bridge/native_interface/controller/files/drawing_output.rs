@@ -1,6 +1,5 @@
 //! Active-sheet output through the existing exact projection/export command.
 use super::*;
-use crate::session_bridge::parse_engine_envelope;
 use limo_cad_occt::drawing_export::{DrawingExportFormat, DrawingExportRequest};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -137,29 +136,34 @@ pub(super) fn export(
         world,
         format!("export_drawing_{}", intent.format.extension()),
         move |services, guard| {
-            services.bridge.with_native_document_receipt(
+            let prepared = services.bridge.with_native_document_receipt(
                 &services.engine,
                 &receipt.owner,
                 |revision| {
                     check_revision(&receipt, revision)?;
                     guard.validate_preparation()?;
-                    let payload = serde_json::to_string(&DrawingExportRequest {
-                        sheet_id: intent.sheet_id,
-                        format: intent.format.shared(),
-                    })
-                    .map_err(|error| error.to_string())?;
-                    let result = parse_engine_envelope(services.engine.drawing_export(&payload))?;
-                    let content = result["content"]
-                        .as_str()
-                        .ok_or("Drawing export returned no content")?;
-                    let page = (intent.format == Format::Pdf)
-                        .then(|| {
-                            crate::native_print::Page::prepare(intent.sheet_name.clone(), content)
+                    services
+                        .engine
+                        .prepare_drawing_export(&DrawingExportRequest {
+                            sheet_id: intent.sheet_id,
+                            format: intent.format.shared(),
                         })
-                        .transpose()?;
-                    let bytes = page
-                        .as_ref()
-                        .map_or(content.as_bytes(), |page| page.pdf.as_slice());
+                },
+            )?;
+            // The owned selected shapes and sheet intent no longer need the
+            // live engine or publisher while projection/font/PDF work runs.
+            let content = prepared.content()?;
+            let page = (intent.format == Format::Pdf)
+                .then(|| crate::native_print::Page::prepare(prepared.title().into(), &content))
+                .transpose()?;
+            let bytes = page
+                .as_ref()
+                .map_or(content.as_bytes(), |page| page.pdf.as_slice());
+            services.bridge.with_native_document_receipt(
+                &services.engine,
+                &receipt.owner,
+                |revision| {
+                    check_revision(&receipt, revision)?;
                     guard.validate()?;
                     if overwrite {
                         limo_cad_project_file::write_binary_file_atomic(&path, bytes)

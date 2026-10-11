@@ -92,8 +92,10 @@ physical sheet dimensions. **Export Drawing PDF…** uses the CAD-owned native
 Save dialog without requiring an installed printer or the OS print dialog.
 It is separate from **Print**, whose printer selection and cancellation remain
 OS-owned. The picker selects a destination;
-the existing ordered worker verifies document ownership and revision again
-before projecting and atomically writing it. Cancellation does nothing, and
+the existing ordered worker verifies document ownership and revision while
+capturing an owned selected-shape snapshot. Projection and PDF preparation run
+without the live engine or publisher lock; the worker verifies the exact owner,
+revision and I/O guard again immediately before writing. Cancellation does nothing, and
 unsupported annotations or stale topology fail before touching the destination.
 Export leaves document history and the project's `.limo` save path unchanged.
 Attached automation uses `cad_interface` with `action: "file"`, command
