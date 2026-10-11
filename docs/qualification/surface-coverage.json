@@ -1,4 +1,39 @@
 {
+  "detached_swept_contact_source_checkpoint": {
+    "source_revision": "1472b342147215201ed1594662ecdb7241a3570a",
+    "swept_qualified_source_revision": "f2c47dd94a78777f6371effb6e65c812b2e1b706",
+    "strict_integration_source_revision": "39ca1a1e055caa64ddfcb826b4cc0cdd5f21f118",
+    "recorded_utc": "2026-10-11T15:29:22.2164346Z",
+    "evidence": "docs/qualification/detached-swept-contact-20261011.json",
+    "strict_windows_packages": [
+      "desktop",
+      "native-engine",
+      "OCCT"
+    ],
+    "new_swept_regressions_passed_once": 3,
+    "new_contact_regressions_passed_once": 3,
+    "new_exact_filters": [
+      "session_bridge::native_interface::controller::assembly::inspect::tests::ordered_swept_review_releases_live_guards_and_rejects_stale_motion_reports",
+      "session_bridge::native_control::tests::native_swept_query_releases_live_guards_and_fences_original_completion_once",
+      "host::swept_snapshot::tests::detached_swept_motion_preserves_physical_events_and_rejects_stale_inputs",
+      "session_bridge::native_interface::controller::assembly::studies::tests::ordered_contact_motion_evaluation_releases_live_guards_and_rejects_stale_preview",
+      "session_bridge::native_control::tests::native_contact_motion_query_releases_live_guards_and_fences_original_completion_once",
+      "host::motion_evaluation_snapshot::tests::detached_contact_motion_preserves_physical_stop_and_rejects_stale_inputs"
+    ],
+    "passing_regressions_repeated": 0,
+    "existing_ui_mcp_leaves_and_receipts_changed": false,
+    "additional_human_recheck_leaves": 0,
+    "new_live_passes": 0,
+    "fresh_live_pair_claimed": false,
+    "new_source_ci_claimed": false,
+    "preserved_incoming_bevy_revisions": [
+      "2074f7a388cb14781157dd00f9a07e4f5fcb202d",
+      "9d32116ff745d301b846dd9f9c94f87812c2c56a",
+      "9ea6295b56852d441c73446347ffd1513e42f31f",
+      "f96e9b322b5395a8cf0c91b4d5689824850dca93"
+    ],
+    "scope": "Detached swept/contact evaluation and borrowed mechanism eligibility. Original once-admitted ownership, genuine physical/native/source proofs and stale UI preview retirement. Broad coverage stays paused; incoming renderer rechecks/receipts retained."
+  },
   "detached_section_interference_source_checkpoint": {
     "source_revision": "67cb9e15c70823837c37f95c4eb6484b7c2d6d01",
     "recorded_utc": "2026-10-11T14:13:15.3528345Z",
@@ -62,7 +97,7 @@
     "canonical_build_revision": "25f1cffe"
   },
   "schema_version": 1,
-  "updated_utc":"2026-10-11T14:13:15.3528345Z",
+  "updated_utc":"2026-10-11T15:29:22.2164346Z",
   "source_validation_checkpoint": {"source_revision":"35bd6aaed9eea6d06961cf2d62033b4372401f11","base_revision":"5d46045c19c83f03cd7784196583c1dc3a488fac","local_commit_count":14,"qualification":"focused_source_checks_passed_live_acceptance_pending","unique_retained_passes":20,"pass_groups":[{"revision":"6421c910","count":1,"scope":"bounded atomic storage claim and no-overwrite publication"},{"revision":"02cdc031","count":2,"scope":"caption proof rejection and coordinate safety"},{"revision":"94b70da7","count":1,"scope":"late original-ticket broker completion and timeout retention"},{"revision":"94b70da7","count":7,"scope":"attached camera, completion categories, raw shortcut privacy, native admission and presentation retention"},{"revision":"962624c4","count":2,"scope":"shared drawing invalidation and tab/cold-retirement lifetimes"},{"revision":"35bd6aae","count":1,"scope":"same-document stale121/current9 explicit reviewed native baseline and subsequent strict refresh"},{"revision":"35bd6aae","count":6,"scope":"shared native editor, exact owned query, two retained delivery/shutdown paths, explicit baseline UI guard and order-independent preview/write"}],"unrun_desktop_filters":[],"historical_fixture_failures":[{"scope":"broker explicit-session argument","correction":"94b70da7","corrected_focused_result":"passed","production_change":false},{"scope":"result collision before query admission","correction":"962624c4","corrected_focused_result":"passed_at35bd6aae","production_change":false}],"partial_issue_333":"engine-owned DrawingArc sharing; broader architecture and performance remain unqualified","pending_issue_315_source":"Integrated b4be248c and35bd6aae: all three new backend/UI checks passed; actual native UI acceptance remains pending.","installed_source":"5d46045c","fresh_live_pair_claimed":false,"new_source_ci_claimed":false,"retained_5d_ci":{"workflows_successful":12,"checks_successful":35,"optional_skips":8,"failed_or_pending":0},"broad_ui_phase":"paused","manual_mcp_mutation_phase":"paused","existing_catalog_statuses_and_counts_changed":false,"original_failure_receipts_preserved":true,"passing_cases_repeated":false,"compile_failures":[{"revision":"962624c4","exit_code":101,"detail":"MSVC164 anonymous LLVM symbols unresolved in sketch dependency; four queued desktop tests did not run","cause":"unestablished","evidence":"shared-drawing-962624c4-limo_cad-resume-compile.jsonl + bounded linker-failure-summary.txt","recovery":"Fresh sketch-package incremental=false compilation and desktop link succeeded; all four earlier-unrun desktop filters and both new print filters passed at35bd6aae. Old generated cache remains preserved and will be set aside before production regeneration."}],"actual_receipts":["completion-storage-6421c910-test.log","completion-caption-02cdc031-tests.json","completion-caption-94b70da7-tests.json","shared-drawing-962624c4-tests.json","coherent-repairs-35bd6aae-tests.json"]},
   "run_state": "paused",
   "run_state_reason": "Broad exploratory UI and manual MCP mutations remain paused. Root owns finite known-defect acceptance only. Canonical EB GUI is saved and closed after complete unchanged model/archive preservation; private Vita paths and all saved/recovery/session data are preserved. Reviewed9e export ownership checks passed once and Print-to-File source pass9cdf is retained. Fresh deployment/matched pair and direct PDF/cold-paper acceptance remain pending; physical Print and positive singleplate Bambu CAD placement are unqualified. This checkpoint does not authorize broad coverage, another GUI operator, stale-session reuse or manual model mutations.",

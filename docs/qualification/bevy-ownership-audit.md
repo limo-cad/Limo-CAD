@@ -186,8 +186,11 @@ The following changes preserve those fences while separating owned computation:
   Cancel, replacement and relevant choices, including changes without a model
   revision. Final publisher -> lease -> engine proof/registration -> atomic
   write preserves private host/session, exact model and selected native geometry
-  identities. The subsequent detached CAD-layout source (`8c8c9ff0`) uses those
-  same captured meshes and bed; its new validation is still pending here.
+  identities. Detached CAD-layout source (`8c8c9ff0`) uses the same captured
+  meshes and bed. Its refusal-before-consent and explicit-consent/cancellation
+  source checks passed at `9e16fade`, recorded in the export receipt. The authentic
+  template has four plates; positive single-plate ResolvedScene/native service
+  acceptance remains separate in #316.
 - Portable STL/3MF (`ecfe0aef`, integrated as `fd774bfe`) captures selected genuine
   B-reps and coherent units, solved placements, names and required appearance,
   component and bed intent. Existing writers and layout analysis run detached.
@@ -284,16 +287,63 @@ report generation plus native proof before adoption. Clearance changes, source
 refresh, another Check, hide/reopen and tab changes retire that generation.
 Genuinely admitted MCP static queries release both process-lease and publisher
 guards for computation/serialization; original proof, ticket retention and
-liveness/delivery-only retry remain required. Swept native motion keeps its
-existing guarded computation path. The three new native/UI/attached-ticket
+liveness/delivery-only retry remain required. Swept motion at that historical
+checkpoint remained guarded; the following qualified motion work supersedes
+that disposition. The three new native/UI/attached-ticket
 regressions passed once at `67cb9e15`, including independent overlap/clearance,
 zero-pair native replacement, unchanged-render-stamp pose changes, hide/reopen
 and original-ticket delivery-only retry. This does not qualify live UI, memory
 or deployed performance.
 
-Keep #333 open for deployed behavior, memory pressure, background-holder
-acceptance and the wider service/transport lock graph. Knowledge resources are
-static bundled data. A shared Arc, detached snapshot or source test alone does
-not prove process memory containment, physical GPU release, universal cache
-retirement, FPS or reduced UI stutter. Broad UI and manual MCP mutation coverage
-remain paused; existing targeted passes are retained.
+The source gate for #333 now rests on its explicit ownership, independent
+invalidation, asset/history retirement and stale human/agent fence criteria.
+The remaining concrete CSV repair is recorded below. Knowledge resources are
+static bundled data. Shared Arcs and source tests do not establish universal
+process memory containment, physical GPU release or FPS/stutter results; those
+are limits rather than additional closure gates. Broad UI and manual MCP
+mutation coverage remain paused, with existing targeted passes retained.
+
+### Swept collision and contact-aware playback: source checks passed
+
+The next bounded native and desktop slices detach unchanged swept and contact
+algorithms from live document guards. They own required authored Assembly sampler
+intent, share the immutable Scene input and copy only genuine selected native
+sources. Swept work retains visible first-sample definitions; contacts retain
+enabled pair definitions even when hidden. No all-frame array, complete model,
+SketchManager or history clone is captured. Authored Assembly cloning and
+per-frame solver work remain intentional scaling-dependent boundaries.
+
+Private finished proof retains exact owner/session, Weak Scene, independent
+revisions, authored input equality and all dependent native identities including
+absent noncandidate shapes. This catches raw study/contact/placement/native
+replacement even without a render stamp. Existing UI receipt/one admission and
+MCP original ticket/completion/liveness rules remain authoritative. Swept-only
+inputs retire their own generation without invalidating static reports; late
+playback results require current serial, selected study and enabled Motion tab.
+Pause, Stop, Seek, draft/hide/tab and source replacement therefore retire stale
+preview adoption. Cancellation and original source models remain intact.
+
+Three new source regressions passed once at `f2c47dd9`, and three at `1472b342`.
+The original fixture compiler failure remains recorded before zero executed
+regressions. Physical oracles independently cover five/full versus three/early
+swept samples and a 0.5 mm contact stop at time 0.3/Z3.5 with zero overlap.
+All older passing filters remain recorded without reruns. The combined direct
+Bevy merge `39ca1a1e` receives strict Windows compilation checks after incoming
+section-worker replacement, not another execution of those passed cases.
+[Source and exact receipts](detached-swept-contact-20261011.json) distinguish each
+revision and retain separately authored macOS renderer/section evidence.
+
+Mechanism startup also removes a full assembly wire round trip (`1fb5c668`):
+the original receipt now wraps a borrowed eligibility callback, which returns
+one bool before drag setup. `can_drag_occurrence` still clones required authored
+projection/graph inputs; this is not a no-copy or constant-time claim.
+
+These are isolated production worker/native/ticket checks, not visible human
+input, physical GPU, deployed responsiveness or memory containment. Every
+existing UI/MCP leaf and receipt remains intact, broad coverage stays paused,
+and the incoming renderer/section rechecks remain visible. The separate motion
+CSV source repair is the remaining identified qualification gate for #333.
+Broader human cutover/display/drawing/slicer acceptance remains separate; a
+universal benchmark or exhaustive unrelated service graph is not added to the
+original issue criteria. Main and Jack's PRs remain untouched; all work is
+retained in PR124/both Bevy aliases.

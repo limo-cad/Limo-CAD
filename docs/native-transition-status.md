@@ -1,6 +1,42 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: reviewed source `67cb9e15` passes
+Current checkpoint, **2026-10-11 UTC**: swept source `f2c47dd9` and
+contact-aware motion source `1472b342` each pass strict Windows desktop/native-
+engine/OCCT checks and three new native/UI-worker/admitted-MCP regressions once.
+The combined normal merge `39ca1a1e` passes two fresh strict compilation checks
+after incoming `9ea6295b` replaces the former section worker with a live panel.
+No old passing regression is repeated. Actual source, artifacts and original
+test-helper compiler failure/correction are recorded in
+`docs/qualification/detached-swept-contact-20261011.json`.
+
+Swept collision and contact-aware playback compute from genuine detached native
+stock outside live engine/publisher guards, then validate original UI receipts
+or admitted MCP tickets plus private authored/native source proof. Independent
+physical oracles cover full/early-stop sampling and the 0.5 mm contact stop at
+time 0.3/Z3.5. Late previews after Pause, Stop, Seek, draft, hide/tab or source
+replacement are rejected. Swept-only options preserve unrelated static reports.
+
+Mechanism eligibility now borrows the assembly and returns a bool before drag
+setup. Its full wire copy is removed; required authored graph cloning remains.
+Assembly capture, selected native copies, first solve and final validation still
+scale with their inputs. These source results establish no deployed timing,
+FPS, memory-pressure, physical GPU release or human interaction pass.
+
+Incoming direct Bevy `2074f7a3`, `9d32116f`, `9ea6295b` and `f96e9b32` are
+preserved normally, including separately authored macOS renderer/section
+evidence and selective renderer rechecks. Every existing UI/MCP receipt,
+status and paused phase is preserved by this checkpoint; no additional human
+recheck or live pair is claimed. Work stays in PR124/both Bevy aliases, with
+main and Jack's PRs untouched. Hosted CI for the new push remains pending.
+
+The saved/closed installed `eb71c32d` GUI and independent headless documents
+remain preserved. Fresh deployment and finite PDF/cold-paper/Bambu/affected
+section acceptance remain pending. Motion CSV export has a separately reviewed
+source repair in progress; its results are not claimed here. Keep #333 open until
+that remaining CSV source gate passes. Universal FPS/GPU/memory benchmarks and
+an exhaustive unrelated service lock graph are limits, not added closure gates.
+
+Historical checkpoint, **2026-10-11 UTC**: reviewed source `67cb9e15` passes
 strict Windows desktop/native-engine/OCCT checks, three new static-interference
 regressions and the corrected native section regression. The two section
 UI-worker/admitted-MCP source passes at `3013d119` are retained without repetition.
