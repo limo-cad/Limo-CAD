@@ -906,3 +906,256 @@ fn template_inspection_runs_outside_publisher_and_rejects_changed_source_receipt
     .unwrap_err();
     assert_eq!(error, "Original I/O ownership rejected");
 }
+
+#[test]
+fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
+    use super::super::tests::{path, setup};
+    use crate::session_bridge::native_interface::tests::Fixture;
+    use sha2::{Digest, Sha256};
+    use std::cell::{Cell, RefCell};
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let archive = include_bytes!("../../../../../../fixtures/bambu-owned-template.3mf");
+    assert_eq!(
+        format!("{:x}", Sha256::digest(archive)),
+        "bc256381139337ea5f6dde0dc78c353dad0cfeafce6567a3b53c4e2594b199b6"
+    );
+    let summary = inspect_bambu_template(archive).unwrap();
+    let targets: Vec<_> = summary
+        .objects
+        .iter()
+        .flat_map(|object| {
+            (0..object.instance_count).flat_map(move |instance| {
+                object
+                    .parts
+                    .iter()
+                    .map(move |part| (object.object_id, instance as u32, part.part_id))
+            })
+        })
+        .collect();
+    assert_eq!(targets.len(), 5);
+    for index in 0..targets.len() {
+        let x = index as f64 * 12.;
+        for (operation, arguments) in [
+            (
+                "sketch_begin",
+                json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+            ),
+            (
+                "sketch_add_rectangle",
+                json!({"mode":"two_point","p1":{"x":x,"y":0.},"p2":{"x":x+8.,"y":8.},"ctrl_held":true}),
+            ),
+            ("sketch_finish", json!({})),
+            (
+                "solid_extrude",
+                json!({"sketch_name":format!("Sketch{}",index+1),"profile_indices":[0],"extent":{"type":"distance","distance":6.}}),
+            ),
+        ] {
+            fixture
+                .bridge
+                .apply_native_mutation(
+                    &fixture.engine,
+                    &fixture.owner(),
+                    operation,
+                    &arguments,
+                    || Ok(()),
+                )
+                .unwrap();
+        }
+    }
+    fixture.bridge.apply_native_mutation(&fixture.engine, &fixture.owner(), "print_intent_set_document", &json!({"document":PrintIntentDocumentDto::default(),"expected_model_json":parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap()}), || Ok(())).unwrap();
+    let model =
+        || parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap();
+    let before = model();
+    let document: PrintIntentDocumentDto = serde_json::from_value(
+        parse_engine_envelope(fixture.engine.engine_call("print_intent_get", "")).unwrap(),
+    )
+    .unwrap();
+    let solution: limo_cad_sketch::AssemblySolutionDto = serde_json::from_value(
+        parse_engine_envelope(fixture.engine.engine_call("assembly_solution", "")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(solution.instance_body_poses.len(), targets.len());
+    let mut source = intent();
+    source.body_ids = solution
+        .instance_body_poses
+        .iter()
+        .map(|p| p.body_id)
+        .collect();
+    source.bambu.document = Some(document);
+    source.bambu.model = before.as_str().unwrap().into();
+    source.bambu.template = Some(Template {
+        path: path("read-only-input.3mf"),
+        encoded: Arc::new(STANDARD.encode(archive)),
+        summary,
+    });
+    source.bambu.allow_appearance = true;
+    source.bambu.start_reviewed_baseline = true;
+    source.bambu.placement = BambuPlacementMode::Template;
+    source.bambu.bindings = solution
+        .instance_body_poses
+        .iter()
+        .zip(&targets)
+        .map(
+            |(pose, &(object_id, instance_id, part_id))| BambuPartBinding {
+                body_id: pose.body_id,
+                occurrence_id: pose.occurrence_id.0,
+                object_id,
+                instance_id,
+                part_id,
+            },
+        )
+        .collect();
+    let req = request(&source).unwrap();
+    let key = review_key(&req, &source.bambu.template().unwrap().summary);
+    let report = fixture
+        .engine
+        .prepare_bambu_export(req)
+        .unwrap()
+        .build()
+        .unwrap()
+        .report()
+        .clone();
+    accept_preview(&mut source, key, report);
+    check_review(&source).unwrap();
+    let (mut app, services, handle) = setup(&fixture);
+    for case in [
+        "valid",
+        "overwrite",
+        "cancel",
+        "choices",
+        "dialog",
+        "owner",
+        "model",
+    ] {
+        let owner = fixture.owner();
+        let receipt = current(app.world(), &services, &owner).unwrap();
+        let source = Arc::new(source.clone());
+        show_dialog(
+            app.world_mut(),
+            receipt.clone(),
+            DialogKind::Export(source.clone()),
+        )
+        .unwrap();
+        let token = app
+            .world()
+            .resource::<Files>()
+            .dialog
+            .as_ref()
+            .unwrap()
+            .token;
+        let operation = export_operation::begin(app.world(), &receipt, &source).unwrap();
+        let destination = path(&format!("native-bambu-write-{case}.3mf"));
+        assert!(!destination.exists());
+        if case == "overwrite" {
+            std::fs::write(&destination, b"Existing explicitly replaceable output").unwrap();
+        }
+        let admitted = Cell::new(0);
+        let expected = RefCell::new(Vec::new());
+        let outcome = io::bambu_write_snapshot(
+            &services,
+            &receipt,
+            &source,
+            &operation,
+            (&destination, case == "overwrite"),
+            || {
+                assert_eq!(
+                    admitted.replace(admitted.get() + 1),
+                    0,
+                    "Busy control must never be admitted twice"
+                );
+                Ok(())
+            },
+            |prepared| {
+                // Real native meshing/archive construction while both original live
+                // locks are held proves the detached builder cannot reenter them.
+                let finished = services.bridge.with_native_document_receipt(
+                    &services.engine,
+                    &owner,
+                    |_| fixture.engine.with_drawing(|_| prepared.build()),
+                )?;
+                expected.replace(finished.bytes().to_vec());
+                match case {
+                    "cancel" => {
+                        execute(
+                            app.world_mut(),
+                            &handle,
+                            &services,
+                            &owner,
+                            FileCommand::Cancel(token),
+                        )?;
+                        assert_eq!(current(app.world(), &services, &owner)?, receipt);
+                    }
+                    "choices" => {
+                        reduce(
+                            app.world_mut(),
+                            &handle,
+                            (&services, &owner),
+                            token,
+                            source.bambu.generation,
+                            Command::AcceptNativeChanges,
+                            &ControlInput::Click,
+                        )?;
+                        assert_eq!(current(app.world(), &services, &owner)?, receipt);
+                    }
+                    "dialog" => {
+                        show_dialog(
+                            app.world_mut(),
+                            receipt.clone(),
+                            DialogKind::Rename("Replacement".into()),
+                        )?;
+                    }
+                    "owner" => {
+                        services.bridge.apply_native_mutation(
+                            &services.engine,
+                            &owner,
+                            "cad_load_project_model",
+                            &json!({"model_json":before}),
+                            || Ok(()),
+                        )?;
+                    }
+                    "model" => {
+                        fixture.rename(&owner, "Changed during detached Bambu write")?;
+                    }
+                    "valid" | "overwrite" => {}
+                    _ => unreachable!(),
+                }
+                Ok(finished)
+            },
+        );
+        assert_eq!(admitted.get(), 1);
+        if matches!(case, "valid" | "overwrite") {
+            let (mut result, bytes) = outcome.unwrap();
+            assert_eq!(bytes, *expected.borrow());
+            assert_eq!(std::fs::read(&destination).unwrap(), bytes);
+            assert_eq!(result.value["exported"], true);
+            io::prepare_written_template(&mut result, bytes).unwrap();
+            assert!(result.value["written_template"]["summary"].is_object());
+            assert!(operation
+                .commit::<()>(|| panic!("Completed operation cannot write twice"))
+                .is_err());
+        } else {
+            let error = outcome.unwrap_err();
+            let expected_refusal = match case {
+                "cancel" | "choices" | "dialog" => "cancelled or its choices were replaced",
+                "owner" => "replaced",
+                "model" => "changed",
+                _ => unreachable!(),
+            };
+            assert!(error.contains(expected_refusal), "{case}: {error}");
+            assert!(
+                !destination.exists(),
+                "Revoked operation must materialize no output"
+            );
+        }
+        if case == "model" {
+            assert_ne!(model(), before);
+        } else {
+            assert_eq!(model(), before);
+        }
+    }
+    assert_eq!(
+        format!("{:x}", Sha256::digest(archive)),
+        "bc256381139337ea5f6dde0dc78c353dad0cfeafce6567a3b53c4e2594b199b6"
+    );
+}

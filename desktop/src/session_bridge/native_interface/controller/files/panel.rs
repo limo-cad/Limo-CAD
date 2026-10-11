@@ -301,7 +301,7 @@ pub(crate) fn synchronize(
         .as_ref()
         .is_some_and(|d| &d.receipt.owner != owner)
     {
-        world.resource_mut::<Files>().dialog = None;
+        world.resource_mut::<Files>().replace_dialog(None);
     }
     let dialog = world.resource::<Files>().dialog.clone();
     bambu::verification::observe(world, services, owner);
