@@ -17,6 +17,10 @@ use crate::params::{ParamId, ParamKind};
 use crate::session::{SessionError, SketchSession};
 use crate::sketch::DimensionMode;
 
+#[cfg(test)]
+#[path = "dimension_edit_tests.rs"]
+mod edit_tests;
+
 impl From<ExprError> for SessionError {
     fn from(e: ExprError) -> Self {
         SessionError::Expression(e.to_string())
