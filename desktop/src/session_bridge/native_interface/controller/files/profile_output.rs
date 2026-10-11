@@ -138,11 +138,11 @@ pub(super) fn choose(
         })
         .map_err(|e| format!("Cannot open file chooser: {e}"))?;
     world.resource_mut::<Files>().replace_dialog(None);
-    world.resource_mut::<Files>().picker = Some(Picker {
+    world.resource_mut::<Files>().replace_picker(Some(Picker {
         receipt,
         kind: PickerKind::Profile(intent),
         result: Mutex::new(receive),
-    });
+    }));
     Ok(json!({"awaiting_input":true}))
 }
 pub(super) fn export(

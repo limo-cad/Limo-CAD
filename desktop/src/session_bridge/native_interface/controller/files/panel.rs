@@ -285,6 +285,10 @@ pub(crate) fn synchronize(
     width: f32,
     height: f32,
 ) -> Result<(), String> {
+    world
+        .resource::<Files>()
+        .portable_operation
+        .revoke_other_owner(owner);
     let tabs = super::tabs(world, services, owner)?;
     let mut cameras = world.query_filtered::<Entity, With<InterfaceCamera>>();
     let camera = cameras

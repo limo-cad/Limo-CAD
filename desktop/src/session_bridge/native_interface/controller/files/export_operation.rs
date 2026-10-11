@@ -32,6 +32,18 @@ impl Authority {
         }
     }
 
+    pub(super) fn revoke_other_owner(&self, owner: &DocumentContext) {
+        if let Ok(mut state) = self.0.lock() {
+            if state
+                .active
+                .as_ref()
+                .is_some_and(|(_, _, receipt)| &receipt.owner != owner)
+            {
+                state.active = None;
+            }
+        }
+    }
+
     fn begin(
         &self,
         token: u64,
@@ -78,7 +90,7 @@ impl Lease {
                         && receipt == &self.receipt
                 })
         {
-            return Err("The Bambu export was cancelled or its choices were replaced".into());
+            return Err("The export was cancelled or its choices were replaced".into());
         }
         // Consume before committing: a failed write cannot replay registration.
         state.active = None;
@@ -109,4 +121,18 @@ pub(super) fn begin(
         .bambu
         .operation
         .begin(dialog.token, intent.bambu.generation, receipt)
+}
+
+// Issued by genuine portable picker completion/direct export enqueue. Options
+// are already closed here, so this authority is independent of Bambu dialogs.
+pub(super) fn begin_portable(
+    world: &mut World,
+    receipt: &DocumentReceipt,
+) -> Result<Lease, String> {
+    let mut files = world.resource_mut::<Files>();
+    files.next_token = files
+        .next_token
+        .checked_add(1)
+        .ok_or("Export operation token exhausted")?;
+    files.portable_operation.begin(files.next_token, 0, receipt)
 }

@@ -128,10 +128,20 @@ pub(super) struct Files {
     picker: Option<Picker>,
     views: HashMap<String, (u64, native_viewport::ViewportCamera)>,
     verification: bambu::verification::Jobs,
+    portable_operation: export_operation::Authority,
 }
 
 impl Files {
+    fn replace_picker(&mut self, picker: Option<Picker>) {
+        self.portable_operation.revoke();
+        self.picker = picker;
+    }
+    fn take_picker(&mut self) -> Option<Picker> {
+        self.portable_operation.revoke();
+        self.picker.take()
+    }
     fn replace_dialog_kind(&mut self, kind: DialogKind) {
+        self.portable_operation.revoke();
         if let Some(dialog) = &mut self.dialog {
             if let DialogKind::Export(intent) = &dialog.kind {
                 intent.bambu.operation.revoke();
@@ -140,6 +150,7 @@ impl Files {
         }
     }
     fn replace_dialog(&mut self, dialog: Option<Dialog>) {
+        self.portable_operation.revoke();
         if let Some(Dialog {
             kind: DialogKind::Export(intent),
             ..
@@ -784,6 +795,7 @@ fn execute(
         return Err("File dialog was replaced".into());
     }
     if command == FileCommand::Exit {
+        world.resource::<Files>().portable_operation.revoke();
         world.resource_mut::<Files>().menu = false;
         return Ok(json!({"request_exit":true}));
     }
@@ -812,6 +824,7 @@ fn execute(
             | FileCommand::Exit
             | FileCommand::SaveAllAndExit
     ) {
+        world.resource::<Files>().portable_operation.revoke();
         invalidate_clean_sketch(world, owner);
     }
     match command {
@@ -1396,11 +1409,11 @@ fn choose_path(
             handle.request_redraw();
         })
         .map_err(|e| format!("Cannot open file chooser: {e}"))?;
-    world.resource_mut::<Files>().picker = Some(Picker {
+    world.resource_mut::<Files>().replace_picker(Some(Picker {
         receipt,
         kind: PickerKind::Project { save, continuation },
         result: Mutex::new(receive),
-    });
+    }));
     Ok(json!({"awaiting_input":true}))
 }
 pub(super) fn poll(world: &mut World, services: &NativeServices) -> Result<(), String> {
@@ -1423,11 +1436,11 @@ pub(super) fn poll(world: &mut World, services: &NativeServices) -> Result<(), S
         None | Some(Ok(None)) => return Ok(()),
         Some(Ok(Some(path))) => path,
         Some(Err(error)) => {
-            world.resource_mut::<Files>().picker = None;
+            world.resource_mut::<Files>().replace_picker(None);
             return Err(error);
         }
     };
-    let picker = world.resource_mut::<Files>().picker.take().unwrap();
+    let picker = world.resource_mut::<Files>().take_picker().unwrap();
     let Some(path) = path else {
         return Ok(());
     };

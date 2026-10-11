@@ -817,11 +817,11 @@ fn browse(
             wake.request_redraw();
         })
         .map_err(|e| e.to_string())?;
-    world.resource_mut::<Files>().picker = Some(Picker {
+    world.resource_mut::<Files>().replace_picker(Some(Picker {
         receipt,
         kind: PickerKind::BambuTemplate { token, generation },
         result: Mutex::new(receive),
-    });
+    }));
     Ok(json!({"awaiting_input":true}))
 }
 pub(super) fn selected_path(

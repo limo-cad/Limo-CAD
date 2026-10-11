@@ -237,11 +237,11 @@ pub(super) fn choose(
             wake.request_redraw();
         })
         .map_err(|error| format!("Cannot open script chooser: {error}"))?;
-    world.resource_mut::<Files>().picker = Some(Picker {
+    world.resource_mut::<Files>().replace_picker(Some(Picker {
         receipt,
         kind: PickerKind::Script,
         result: Mutex::new(receive),
-    });
+    }));
     Ok(json!({"awaiting_input":true}))
 }
 

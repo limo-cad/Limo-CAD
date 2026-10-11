@@ -141,7 +141,12 @@ pub struct NativeViewportFrame {
 mod local_slicer;
 #[path = "manufacturing.rs"]
 mod manufacturing;
+#[path = "portable_export.rs"]
+mod portable_export;
 pub use manufacturing::{FinishedBambuExport, PreparedBambuExport, PreparedBambuPreview};
+pub use portable_export::{
+    FinishedPortableMeshExport, PortableMeshFormat, PreparedPortableMeshExport,
+};
 #[path = "retention.rs"]
 mod retention;
 use retention::NativeProject;
