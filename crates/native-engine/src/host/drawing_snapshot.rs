@@ -15,6 +15,7 @@ pub struct PreparedDrawingExport {
     request: limo_cad_occt::drawing_export::DrawingExportRequest,
     units: limo_cad_core::UnitSystem,
     title: String,
+    geometry_revision: u64,
 }
 
 impl PreparedDrawingExport {
@@ -25,6 +26,12 @@ impl PreparedDrawingExport {
         self.request.sheet_id
     }
     pub fn content(&self) -> Result<String, String> {
+        self.content_observing(|_, _| {})
+    }
+    pub fn content_observing(
+        &self,
+        mut completed: impl FnMut(&DrawingProjectionRequest, &limo_cad_occt::DrawingProjectionDto),
+    ) -> Result<String, String> {
         limo_cad_occt::drawing_export::export_sheet_with_units(
             &self.drawing,
             &self.snapshot.scene,
@@ -45,9 +52,9 @@ impl PreparedDrawingExport {
                     .find(|(_, captured)| *captured == resolved)
                     .map(|(id, _)| *id)
                     .ok_or("Export projection differs from captured intent")?;
-                self.snapshot
-                    .project_captured(id, &resolved)
-                    .map(|result| (*result.projection).clone())
+                let result = self.snapshot.project_captured(id, &resolved)?;
+                completed(request, &result.projection);
+                Ok((*result.projection).clone())
             },
         )
     }
@@ -189,7 +196,44 @@ impl NativeEngineHost {
             request: request.clone(),
             units: inner.manager.document().settings().units,
             title,
+            geometry_revision: inner.geometry_revision,
         })
+    }
+    /// Read-only proof check. Attached callers must separately retain their
+    /// original publisher/ticket receipt through final response publication.
+    pub fn validate_drawing_export(&self, prepared: &PreparedDrawingExport) -> Result<(), String> {
+        let workspace = self.inner.lock().map_err(|_| "engine lock poisoned")?;
+        if workspace.verification_owner_key() != prepared.snapshot.owner {
+            return Err("The owning drawing document was replaced during export".into());
+        }
+        let inner = workspace.active();
+        if inner.geometry_revision != prepared.geometry_revision
+            || !Arc::ptr_eq(
+                &prepared.drawing,
+                &inner.manager.drawing_document_snapshot(),
+            )
+            || !Arc::ptr_eq(
+                &prepared.snapshot.scene,
+                &inner.manager.solid_scene_snapshot(),
+            )
+            || &prepared.snapshot.assembly != inner.manager.assembly_document_ref()
+            || prepared.units != inner.manager.document().settings().units
+        {
+            return Err("The drawing or its source changed during export".into());
+        }
+        let identities = inner
+            .kernel
+            .body_geometry_identities()
+            .map_err(|e| e.to_string())?;
+        if prepared
+            .snapshot
+            .identities
+            .iter()
+            .any(|(id, identity)| identities.get(id) != Some(identity))
+        {
+            return Err("The native geometry changed or was replaced during drawing export".into());
+        }
+        Ok(())
     }
     pub fn drawing_presentation_snapshot(
         &self,
