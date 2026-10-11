@@ -1676,7 +1676,7 @@
     ]
   },
   "parallel_repairs_checkpoint": {
-    "source_revision": "5a4ecc8e21329ca1dbd649a54f0e900e1a29e9cd",
+    "source_revision": "04551840189895d83fb95123f91968f12c063ba5",
     "base_revision": "4859c8bd",
     "commits": [
       "090efe6a",
@@ -1729,14 +1729,33 @@
       "90acec1b045ca15caf396cf240869f3fd7c769f6",
       "3eb0cd0d22ad918f6bf330c3e30e5c691088a0c5",
       "e0e0a7524f65d373cbc4bdd0cc48d8f06e6869ab",
-      "5a4ecc8e21329ca1dbd649a54f0e900e1a29e9cd"
+      "5a4ecc8e21329ca1dbd649a54f0e900e1a29e9cd",
+      "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+      "04551840189895d83fb95123f91968f12c063ba5"
     ],
-    "qualification": "reviewed_repairs_targeted_checks_passed_qualified_sdk_ready_to_deploy",
+    "qualification": "reviewed_repairs_targeted_checks_passed_clean_live_pair_matched_split_redo_pending",
     "new_focused_checks_unrun": [],
-    "installed_revision": "4859c8bdc5575fe8858bfb3c0153c48569f8e6eb",
-    "installed_payload_verified": 70,
-    "installed_executable_sha256": "94c5e541db3b9a05f22c75560c8e31f89c7ee45590f513e32bee144771c2e856",
+    "installed_revision": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+    "installed_payload_verified": 63,
+    "installed_executable_sha256": "effaac9acf3e044a75bb4d4f13edf0ca8c9dd49bf92cfbfd092f4f59d81a829b",
     "fresh_live_pair": {
+      "revision": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+      "foreground_observed": true,
+      "status": "matched",
+      "desktop_pid": 28600,
+      "mcp_pid": 14480,
+      "source_modified": false,
+      "latest_foreground_observed": true,
+      "focus_request": "guarded_focus_succeeded_fresh_observation",
+      "latest_observation_utc": "2026-10-11T05:54:14.312Z",
+      "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/live-pair-a3145e2c-focused-observation.json"
+    },
+    "previous_installed_runtime": {
+      "revision": "4859c8bdc5575fe8858bfb3c0153c48569f8e6eb",
+      "payload_verified": 70,
+      "executable_sha256": "94c5e541db3b9a05f22c75560c8e31f89c7ee45590f513e32bee144771c2e856"
+    },
+    "previous_live_pair": {
       "foreground_observed": true,
       "status": "matched",
       "desktop_pid": 22412,
@@ -1945,8 +1964,25 @@
         "receipt": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\package-concurrency-5a4ecc8e-results.json"
       }
     },
-    "new_checkpoint_counts_note": "The prior 36 distinct passes remain retained. New batches are counted separately; specifically affected existing checks are not added to a deduplicated total.",
-    "source_deployment_status": "pending_qualified_sdk_rebuild",
+    "new_checkpoint_counts_note": "The prior 36 distinct passes remain retained. The latest 21 new/affected batch passes remain separate, and the one deployment diagnostic pass is separate post-push validation; no combined deduplicated count is claimed.",
+    "post_push_diagnostic_validation": {
+      "tested_revision": "e23e43b0b6b0bb9d5bbce3257d0051257414dbb1",
+      "integrated_revision": "04551840189895d83fb95123f91968f12c063ba5",
+      "new_passed": 1,
+      "failed": 0,
+      "filter": "deployment_qualification_preserves_missing_tool_cause_without_diagnosing_sdk_damage",
+      "strict_xtask_clippy": "passed",
+      "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/deployment-diagnostic-e23e43b0-results.json"
+    },
+    "source_deployment_status": "clean_a314_deployed_qualified_sdk_source_045_diagnostic_only",
+    "installed_runtime_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/runtime-a3145e2c-payload-verified.json",
+    "installed_qualified_sdk": "D:/limo-cad-maintenance/checked-occt-sdk",
+    "targeted_root_ui_acceptance": {
+      "new_document_split_redo": "under_targeted_check_not_yet_passed",
+      "broad_ui_mcp_coverage": "paused",
+      "canonical_source_pinned_during_ui": true,
+      "native_application_revision": "a3145e2c04902c47fc4ce269dc71dc69567f5110"
+    },
     "saved_scratch_document_preservation_receipt": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\pre-deployment-split-document-preserved.json",
     "native_application_check_revision": "3eb0cd0d22ad918f6bf330c3e30e5c691088a0c5"
   }
