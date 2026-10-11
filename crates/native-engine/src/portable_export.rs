@@ -265,3 +265,104 @@ impl NativeEngineHost {
         Ok(())
     }
 }
+
+/// Exact exchange uses the same owned B-rep snapshot and private publication
+/// proof, without introducing a display-mesh prerequisite.
+pub struct PreparedStepExport {
+    kernel: limo_cad_occt::DetachedMeshKernel,
+    request: StepExportRequest,
+    owner_key: String,
+    identities: BTreeMap<limo_cad_core::BodyId, limo_cad_occt::KernelBodyGeometryIdentity>,
+}
+pub struct FinishedStepExport(FinishedPortableMeshExport);
+impl PreparedStepExport {
+    pub fn build(mut self) -> Result<FinishedStepExport, String> {
+        let bytes = self
+            .kernel
+            .export_step(&self.request)
+            .map_err(|e| e.to_string())?;
+        Ok(FinishedStepExport(FinishedPortableMeshExport {
+            bytes,
+            layout_has_issues: false,
+            model: self
+                .request
+                .expected_model_json
+                .take()
+                .ok_or("STEP export omitted its validated model")?,
+            owner_key: self.owner_key,
+            identities: self.identities,
+        }))
+    }
+}
+impl FinishedStepExport {
+    pub fn bytes(&self) -> &[u8] {
+        self.0.bytes()
+    }
+}
+impl NativeEngineHost {
+    pub fn prepare_step_export(
+        &self,
+        request: StepExportRequest,
+    ) -> Result<PreparedStepExport, String> {
+        if request.expected_model_json.is_none() {
+            return Err("An owned STEP export requires its original model snapshot".into());
+        }
+        let workspace = self.inner.lock().map_err(|_| "Engine lock poisoned")?;
+        let inner = workspace.active();
+        limo_cad_solid::check_export_model_snapshot(
+            request.expected_model_json.as_deref(),
+            &inner
+                .manager
+                .export_project_model()
+                .map_err(|e| e.to_string())?,
+        )?;
+        if !inner.manager.solid_scene_ref().errors.is_empty() {
+            return Err("Resolve timeline errors before exporting STEP.".into());
+        }
+        // Preserve the exact writer's effective selection: placed occurrences
+        // override requested_body_ids; otherwise an empty list means all bodies.
+        let available = inner.kernel.active_body_ids().map_err(|e| e.to_string())?;
+        let mut selected: Vec<_> = if !request.occurrences.is_empty() {
+            request.occurrences.iter().map(|o| o.body_id).collect()
+        } else if request.body_ids.is_empty() {
+            available.clone()
+        } else {
+            request.body_ids.clone()
+        };
+        selected.sort_unstable();
+        selected.dedup();
+        if selected.is_empty() {
+            return Err("There are no active bodies to export.".into());
+        }
+        let current = inner
+            .kernel
+            .body_geometry_identities()
+            .map_err(|e| e.to_string())?;
+        let mut identities = BTreeMap::new();
+        for id in &selected {
+            if !available.contains(id) {
+                return Err(format!("Selected body {} is not active.", id.0));
+            }
+            identities.insert(
+                *id,
+                *current
+                    .get(id)
+                    .ok_or("Export body has no live geometry identity")?,
+            );
+        }
+        let kernel = inner
+            .kernel
+            .detached_mesh_snapshot(&selected)
+            .map_err(|e| e.to_string())?;
+        Ok(PreparedStepExport {
+            kernel,
+            request,
+            owner_key: workspace.verification_owner_key(),
+            identities,
+        })
+    }
+    /// Retain the original publisher receipt and job lease through the write.
+    pub fn validate_step_export(&self, finished: &FinishedStepExport) -> Result<(), String> {
+        self.validate_portable_mesh_export(&finished.0)
+    }
+}

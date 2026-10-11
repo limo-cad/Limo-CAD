@@ -146,6 +146,7 @@
 #include <cstdio>
 #include <cstring>
 #include <map>
+#include <mutex>
 #include <limits>
 #include <set>
 #include <sstream>
@@ -159,6 +160,10 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kTau = kPi * 2.0;
+
+// OCCT STEP exchange initializes and reads mutable process-global
+// Interface_Static parameters. Independent B-reps do not isolate that state.
+std::mutex step_exchange_mutex;
 
 class SectionProgress final : public Message_ProgressIndicator {
  public:
@@ -2234,6 +2239,7 @@ void Kernel::apply_job_impl(const FfiJob& job) {
       content.push_back(static_cast<char>(byte));
     }
     std::istringstream stream(content);
+    const std::lock_guard<std::mutex> exchange_guard(step_exchange_mutex);
     STEPControl_Reader reader;
     if (reader.ReadStream("import.step", stream) != IFSelect_RetDone) {
       throw std::runtime_error("OCCT could not read the STEP stream");
@@ -10808,6 +10814,7 @@ rust::Vec<std::uint8_t> Kernel::export_step(
   if (impl_->bodies.empty()) {
     throw std::runtime_error("there are no active bodies to export");
   }
+  const std::lock_guard<std::mutex> exchange_guard(step_exchange_mutex);
   STEPControl_Writer writer;
   if (!Interface_Static::SetIVal("write.step.schema", 5)) {
     throw std::runtime_error("OCCT does not expose the AP242 STEP schema");

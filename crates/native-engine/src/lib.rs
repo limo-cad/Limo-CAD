@@ -10,9 +10,9 @@ mod host;
 #[cfg(feature = "native-occt")]
 pub use host::{
     DetachedDrawingSnapshot, DrawingProjectionBasis, FinishedBambuExport,
-    FinishedDrawingProjections, FinishedPortableMeshExport, NativeBodyGeometryKey,
-    NativeBodyGeometryProof, NativeEngineHost, NativeViewportDocument, NativeViewportFrame,
-    NativeViewportSnapshot, PortableMeshFormat, PreparedBambuExport, PreparedBambuPreview,
-    PreparedDrawingExport, PreparedPortableMeshExport, ResolvedDrawingProjection,
-    SharedDrawingProjection, BOOTSTRAP_SESSION_ID,
+    FinishedDrawingProjections, FinishedPortableMeshExport, FinishedStepExport,
+    NativeBodyGeometryKey, NativeBodyGeometryProof, NativeEngineHost, NativeViewportDocument,
+    NativeViewportFrame, NativeViewportSnapshot, PortableMeshFormat, PreparedBambuExport,
+    PreparedBambuPreview, PreparedDrawingExport, PreparedPortableMeshExport, PreparedStepExport,
+    ResolvedDrawingProjection, SharedDrawingProjection, BOOTSTRAP_SESSION_ID,
 };

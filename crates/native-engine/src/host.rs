@@ -145,7 +145,8 @@ mod manufacturing;
 mod portable_export;
 pub use manufacturing::{FinishedBambuExport, PreparedBambuExport, PreparedBambuPreview};
 pub use portable_export::{
-    FinishedPortableMeshExport, PortableMeshFormat, PreparedPortableMeshExport,
+    FinishedPortableMeshExport, FinishedStepExport, PortableMeshFormat, PreparedPortableMeshExport,
+    PreparedStepExport,
 };
 #[path = "retention.rs"]
 mod retention;
