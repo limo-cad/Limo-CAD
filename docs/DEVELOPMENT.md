@@ -15,6 +15,9 @@ cd Limo-CAD
 
 ## Build the desktop package
 
+For a separate macOS release copy with a fresh Metal shader cache on each launch,
+see [the shader-cold startup test](native-cold-start.md).
+
 `rust-toolchain.toml` pins the compiler and formatting/lint components.
 `cargo xtask doctor --scope desktop` checks the compiler and OCCT headers/link
 libraries without building or opening a CAD window. An explicit SDK override

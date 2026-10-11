@@ -6,6 +6,7 @@
 //! ```
 
 mod build_tools;
+mod cold_start;
 mod deploy_native;
 mod desktop_changes;
 mod icon_audit;
@@ -106,6 +107,7 @@ fn run() -> Result<()> {
         "check" => build_tools::check(args),
         "deps" => build_tools::deps(args),
         "package" => package::run(args),
+        "prepare-cold-start" => cold_start::run(args),
         "ci" => repository_ci::run(args),
         "build-occt" => occt_sdk::run(args),
         "verify-occt-storage" => occt_storage::run(args),
@@ -178,6 +180,9 @@ Commands:
                 Require a v<VERSION> tag on a commit already merged into main.
   package       Build and audit the host desktop package entirely through Rust.
                 Use --help for prerequisites and optional Windows target selection.
+  prepare-cold-start
+                Prepare a separate macOS app with fresh settings and a new Metal cache per launch:
+                --app RELEASE.app --out NEW_ABSOLUTE_DIRECTORY [--verify]. Does not launch CAD.
   verify-linux-recipe-handler
                 Verify the owned packaged recipe association; used by Linux package checks.
   run-script    Run a .limo.jsonc file or --recipe ID using the Rust MCP client. Use --server PATH,
