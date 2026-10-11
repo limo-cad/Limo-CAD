@@ -2092,6 +2092,7 @@ dependencies = [
  "flate2",
  "limo-cad-core",
  "limo-cad-export",
+ "limo-cad-recipes",
  "limo-cad-session-storage",
  "regex",
  "semver",
