@@ -56,24 +56,29 @@ impl NativeEngineHost {
         let scene = inner.manager.solid_scene_snapshot();
         limo_cad_occt::section_review::validate_source(&scene, &request)
             .map_err(|e| e.to_string())?;
+        let kernel_error = |source| {
+            limo_cad_occt::section_review::SectionReviewError::Kernel {
+                body_id: request.body_id,
+                plane: request.plane,
+                offset_mm: request.offset_mm,
+                source,
+            }
+            .to_string()
+        };
         let identity = *inner
             .kernel
             .body_geometry_identities()
-            .map_err(|e| e.to_string())?
+            .map_err(kernel_error)?
             .get(&request.body_id)
-            .ok_or("Section body has no live native geometry identity")?;
+            .ok_or_else(|| {
+                kernel_error(limo_cad_occt::OcctError(
+                    "Section body has no live native geometry identity".into(),
+                ))
+            })?;
         let kernel = inner
             .kernel
             .detached_section_snapshot(request.body_id)
-            .map_err(|source| {
-                limo_cad_occt::section_review::SectionReviewError::Kernel {
-                    body_id: request.body_id,
-                    plane: request.plane,
-                    offset_mm: request.offset_mm,
-                    source,
-                }
-                .to_string()
-            })?;
+            .map_err(kernel_error)?;
         let source = SourceProof {
             owner: workspace.verification_owner_key(),
             scene: Arc::downgrade(&scene),
