@@ -93,6 +93,10 @@ pub(super) fn escape(world: &mut World) {
 fn close(state: &mut State) {
     state.serial = state.serial.wrapping_add(1);
     state.receipt = None;
+    // The project snapshot belongs to the open dialog's document receipt.
+    // Keep the reusable central collection, but retire the hidden document copy.
+    state.project = CamDocumentDto::default();
+    state.project_tool = None;
     state.draft = None;
     state.creating = false;
     state.copied_from = None;

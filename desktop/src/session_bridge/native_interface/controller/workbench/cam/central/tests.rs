@@ -204,6 +204,93 @@ fn native_central_clearing_a_chamfer_removes_the_omitted_canonical_field() {
 }
 
 struct StorageFixture(std::path::PathBuf);
+
+#[test]
+fn native_central_inactive_and_replaced_owner_retire_project_snapshot_without_editing_documents() {
+    use super::State;
+    use crate::session_bridge::native_interface::{controller::NativeServices, tests::Fixture};
+    use std::sync::Arc;
+
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    for replace_owner in [false, true] {
+        let fixture = Fixture::new();
+        let original_owner = fixture.owner();
+        let project = CamDocumentDto {
+            tools: vec![cutter(5, 1)],
+            next_tool_id: 6,
+            ..Default::default()
+        };
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &original_owner,
+                "cam_set_document",
+                &serde_json::to_value(&project).unwrap(),
+                || Ok(()),
+            )
+            .unwrap();
+        let receipt = fixture
+            .bridge
+            .native_document_receipt(&fixture.engine, &original_owner)
+            .unwrap();
+        let collection = Arc::new(collection());
+        let mut world = bevy::prelude::World::new();
+        let camera = world.spawn_empty().id();
+        world.insert_resource(State {
+            receipt: Some(receipt),
+            serial: 11,
+            project: fixture.engine.cam_document_snapshot(),
+            project_tool: Some(5),
+            snapshot: Some(Arc::clone(&collection)),
+            ..Default::default()
+        });
+        assert_eq!(world.resource::<State>().project, project);
+        if replace_owner {
+            fixture
+                .bridge
+                .apply_native_mutation(
+                    &fixture.engine,
+                    &original_owner,
+                    "cad_new_project",
+                    &json!({}),
+                    || Ok(()),
+                )
+                .unwrap();
+            assert_ne!(fixture.owner(), original_owner);
+        }
+        let before = fixture.engine.engine_call("project_export_model", "");
+        let services = NativeServices {
+            engine: fixture.engine.clone(),
+            bridge: fixture.bridge.clone(),
+        };
+        super::synchronize(
+            &mut world,
+            camera,
+            &services,
+            &fixture.owner(),
+            800.,
+            600.,
+            replace_owner,
+        )
+        .unwrap();
+        let state = world.resource::<State>();
+        assert!(state.receipt.is_none());
+        assert_eq!(
+            state.serial, 12,
+            "retirement rejects late dialog completions"
+        );
+        assert_eq!(state.project, CamDocumentDto::default());
+        assert_eq!(state.project.tools.capacity(), 0);
+        assert!(state.project_tool.is_none());
+        assert!(Arc::ptr_eq(state.snapshot.as_ref().unwrap(), &collection));
+        assert_eq!(
+            fixture.engine.engine_call("project_export_model", ""),
+            before
+        );
+    }
+}
+
 impl StorageFixture {
     fn new() -> Self {
         let path = std::env::temp_dir().join(format!("native-central-{}", uuid::Uuid::new_v4()));
