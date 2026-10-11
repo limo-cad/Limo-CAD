@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use bevy::{
-    app::SubApps,
+    app::{AppLabel, SubApps},
     asset::RenderAssetUsages,
     camera::RenderTarget,
     image::Image,
@@ -63,6 +63,7 @@ pub fn run(output: PathBuf) {
         DefaultPlugins
             .build()
             .disable::<bevy::winit::WinitPlugin>()
+            .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
             .set(bevy::log::LogPlugin {
                 filter: "info,wgpu_core=warn,wgpu_hal=warn".to_string(),
                 ..default()
@@ -78,7 +79,12 @@ pub fn run(output: PathBuf) {
                 ..default()
             }),
     );
-    if std::env::var_os("LIMO_CAD_FEATURE_LAB_MODEL").is_some() {
+    if std::env::var_os("LIMO_CAD_SECTION_LAB_MODEL").is_some() {
+        super::platform::install_native_scene(&mut app);
+        super::interface_shell::install_visual_lab(&mut app);
+        super::interface_shell::ranges::install(&mut app);
+        app.add_systems(PostStartup, setup_section_lab);
+    } else if std::env::var_os("LIMO_CAD_FEATURE_LAB_MODEL").is_some() {
         super::interface_shell::install_visual_lab(&mut app);
         app.add_systems(Startup, (ui::load_system_font, setup_feature_lab).chain());
     } else if std::env::var_os("LIMO_CAD_RIBBON_LAB").is_some() {
@@ -99,6 +105,30 @@ pub fn run(output: PathBuf) {
     let mut sub_apps = std::mem::take(app.sub_apps_mut());
 
     update_and_wait(&mut sub_apps);
+    if std::env::var_os("LIMO_CAD_SECTION_LAB_MODEL").is_some() {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            let cache = sub_apps.sub_apps[&bevy::render::RenderApp.intern()]
+                .world()
+                .resource::<bevy::render::render_resource::PipelineCache>();
+            let count = cache.pipelines().count();
+            let pending = cache.waiting_pipelines().next().is_some();
+            update_and_wait(&mut sub_apps);
+            let cache = sub_apps.sub_apps[&bevy::render::RenderApp.intern()]
+                .world()
+                .resource::<bevy::render::render_resource::PipelineCache>();
+            if !pending
+                && cache.waiting_pipelines().next().is_none()
+                && count == cache.pipelines().count()
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Section capture pipelines did not settle"
+            );
+        }
+    }
     let target = sub_apps.main.world().resource::<LabTarget>().0.clone();
     sub_apps
         .main
@@ -110,6 +140,75 @@ pub fn run(output: PathBuf) {
         Ok(sub_apps.main.world().resource::<CaptureComplete>().0)
     })
     .expect("Bevy UI lab screenshot did not complete");
+}
+
+/// Capture the production section panel and cutaway renderer from a saved
+/// model. This is a pixel fixture, not a claim of human input acceptance.
+fn setup_section_lab(world: &mut World) {
+    use crate::{session_bridge::parse_engine_envelope, state::AppState};
+    let path = std::env::var_os("LIMO_CAD_SECTION_LAB_MODEL").expect("section capture model");
+    let engine = AppState::new();
+    let model = std::fs::read_to_string(path).expect("read model");
+    parse_engine_envelope(engine.project_load(&serde_json::to_string(&model).unwrap()))
+        .expect("load section capture model");
+    let mut image = Image::new_uninit(
+        Extent3d {
+            width: 1280,
+            height: 800,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    image.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT;
+    let target = world.resource_mut::<Assets<Image>>().add(image);
+    world.insert_resource(LabTarget(target.clone()));
+    let cameras = world
+        .query_filtered::<Entity, With<Camera>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for camera in cameras {
+        world
+            .entity_mut(camera)
+            .insert(RenderTarget::Image(target.clone().into()));
+    }
+    let ui_camera = world
+        .query_filtered::<Entity, With<IsDefaultUiCamera>>()
+        .single(world)
+        .unwrap();
+    world.entity_mut(ui_camera).remove::<IsDefaultUiCamera>();
+    let camera = world
+        .spawn((
+            Camera2d,
+            bevy::camera::visibility::RenderLayers::none(),
+            super::interface_shell::InterfaceCamera,
+            IsDefaultUiCamera,
+            Camera {
+                order: 10,
+                clear_color: bevy::camera::ClearColorConfig::None,
+                ..default()
+            },
+            RenderTarget::Image(target.into()),
+        ))
+        .id();
+    super::apply_interface_model(world, engine.viewport_frame()).expect("present section source");
+    super::apply_interface_palette(world, ui::light_reference_palette());
+    super::apply_interface_viewport(
+        world,
+        limo_cad_interface::Rect {
+            x: 0.,
+            y: 0.,
+            width: 1280.,
+            height: 800.,
+        },
+        1.,
+    )
+    .expect("section capture canvas");
+    crate::session_bridge::native_interface::controller::section_review::paint_capture(
+        world, camera, &engine, 1280., 800.,
+    )
+    .expect("paint production section controls and cutaway");
 }
 
 /// GPU capture of the production feature panel against a saved workflow model.

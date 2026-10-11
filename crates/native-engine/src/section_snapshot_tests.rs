@@ -21,6 +21,45 @@ fn stock() -> NativeEngineHost {
     state
 }
 #[test]
+fn cached_section_source_supports_live_offsets_and_keeps_publication_proof() {
+    let state = stock();
+    let scene = state.solid_scene_snapshot();
+    let body = scene.bodies[0].id;
+    let before = value(state.engine_call("project_export_model", ""));
+    let mut request: SectionReviewRequest = serde_json::from_value(
+        json!({"body_id":body,"plane":"xy","offset_mm":2.,"include_cutaway":true}),
+    )
+    .unwrap();
+    let source = state
+        .prepare_section_review(&serde_json::to_string(&request).unwrap())
+        .unwrap();
+    for z in [2., 4., 6.] {
+        request.offset_mm = z;
+        let finished = {
+            let _live = state.inner.lock().unwrap();
+            source.inspect_at(&request).unwrap()
+        };
+        state.validate_section_review(&finished).unwrap();
+        assert_eq!(finished.report().request.offset_mm, z);
+        assert_eq!(finished.report().outcome, SectionOutcome::MaterialSection);
+        assert!(finished.report().cutaway.is_some());
+    }
+    request.body_id = BodyId(body.0 + 1);
+    assert!(source.inspect_at(&request).is_err());
+    request.body_id = body;
+    request.offset_mm = f64::NAN;
+    assert!(source.inspect_at(&request).is_err());
+    assert!(Arc::ptr_eq(&scene, &state.solid_scene_snapshot()));
+    assert_eq!(value(state.engine_call("project_export_model", "")), before);
+    request.offset_mm = 4.;
+    let finished = source.inspect_at(&request).unwrap();
+    value(state.project_load(&serde_json::to_string(before.as_str().unwrap()).unwrap()));
+    assert!(state.validate_section_review(&finished).is_err());
+    assert!(state
+        .validate_section_review(&source.inspect_at(&request).unwrap())
+        .is_err());
+}
+#[test]
 fn detached_section_preserves_real_geometry_and_rejects_uncommitted_native_sources() {
     let state = stock();
     let body = state.solid_scene_snapshot().bodies[0].id;

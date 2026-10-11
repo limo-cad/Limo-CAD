@@ -1,5 +1,5 @@
 //! Disposable geometric section review. Source definitions, never exploded poses.
-//! Kernel work uses the ordered query worker; results are owner/revision fenced.
+//! Copied-body preview work stays off the live engine; results are draft fenced.
 use super::*;
 use crate::native_forms::{DimensionKind, MeasurementInput};
 use bevy::{
@@ -11,12 +11,14 @@ use limo_cad_interface::{ChoiceOption, Field as ControlField, KeyChord};
 use limo_cad_occt::section_review::{
     SectionOutcome, SectionPlane, SectionReview, SectionReviewRequest,
 };
+mod preview;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Field {
     Body,
     Plane,
     Offset,
+    Position,
     Probe,
     Side,
 }
@@ -24,7 +26,6 @@ pub(crate) enum Field {
 pub(crate) enum Command {
     Open,
     Field(Field),
-    Inspect,
     CopySvg,
     Close,
     ToggleView,
@@ -48,6 +49,11 @@ struct State {
     cutaway: Option<Arc<native_viewport::section_view::PreparedCutaway>>,
     report: Option<SectionReview>,
     image: Option<Handle<Image>>,
+    prepared_image: Option<Image>,
+    finished_generation: Option<u64>,
+    preview: Option<preview::Worker>,
+    bounds: Option<([f64; 3], [f64; 3])>,
+    units: UnitSystem,
     message: String,
     widgets: chrome::Widgets,
 }
@@ -56,7 +62,9 @@ impl State {
         self.generation = self.generation.saturating_add(1);
         self.report = None;
         self.image = None;
+        self.prepared_image = None;
         self.cutaway = None;
+        self.finished_generation = None;
         self.message = message.into();
     }
     fn reset_controls(&mut self, message: &str) {
@@ -76,14 +84,26 @@ impl State {
             && self.generation == generation
     }
     fn set_value(&mut self, field: Field, value: String) {
+        if self.value(field) == value {
+            return;
+        }
         match field {
             Field::Body => self.body = value,
             Field::Plane => self.plane = value,
-            Field::Offset => self.offset = value,
+            Field::Offset | Field::Position => self.offset = value,
             Field::Probe => self.probe = value,
             Field::Side => self.side = value,
         }
-        self.invalidate("Section inputs changed. Inspect to refresh.");
+        if matches!(field, Field::Body | Field::Plane) {
+            self.invalidate("Updating section…");
+        } else {
+            // Keep the last completed view during a drag. It cannot be copied
+            // as the new draft. Compatible intermediate previews can update
+            // the viewport while the latest position is still computing.
+            self.generation = self.generation.saturating_add(1);
+            self.finished_generation = None;
+            self.message = "Updating section…".into();
+        }
     }
     fn toggle_view(&mut self) {
         self.in_3d = !self.in_3d;
@@ -91,15 +111,87 @@ impl State {
         // Existing geometry is still useful in the other view, but an older
         // query must not complete into the replacement presentation scope.
         self.generation = self.generation.saturating_add(1);
+        self.finished_generation = None;
     }
     fn value(&self, field: Field) -> &str {
         match field {
             Field::Body => &self.body,
             Field::Plane => &self.plane,
-            Field::Offset => &self.offset,
+            Field::Offset | Field::Position => &self.offset,
             Field::Probe => &self.probe,
             Field::Side => &self.side,
         }
+    }
+    fn plane_axis(&self) -> usize {
+        match self.plane.as_str() {
+            "xy" => 2,
+            "xz" => 1,
+            _ => 0,
+        }
+    }
+    fn range(&self) -> Option<(f64, f64)> {
+        let (min, max) = self.bounds?;
+        let axis = self.plane_axis();
+        (min[axis].is_finite() && max[axis].is_finite() && min[axis] < max[axis])
+            .then_some((min[axis], max[axis]))
+    }
+    fn source(&mut self, scene: &limo_cad_solid::SolidSceneDto, recenter: bool) {
+        self.bounds = scene
+            .bodies
+            .iter()
+            .find(|body| body.id.0.to_string() == self.body)
+            .and_then(|body| {
+                let mut min = [f64::INFINITY; 3];
+                let mut max = [f64::NEG_INFINITY; 3];
+                for point in body.mesh.positions.as_chunks::<3>().0 {
+                    for axis in 0..3 {
+                        min[axis] = min[axis].min(f64::from(point[axis]));
+                        max[axis] = max[axis].max(f64::from(point[axis]));
+                    }
+                }
+                min.iter()
+                    .chain(&max)
+                    .all(|v| v.is_finite())
+                    .then_some((min, max))
+            });
+        if recenter {
+            if let Some((min, max)) = self.range() {
+                self.offset =
+                    MeasurementInput::new(DimensionKind::Length, (min + max) * 0.5, self.units)
+                        .text()
+                        .into();
+            }
+        }
+    }
+    fn report_current(&self) -> bool {
+        self.report.is_some() && self.finished_generation == Some(self.generation)
+    }
+    fn set_position(&mut self, mm: f64) -> Result<(), String> {
+        if !mm.is_finite() {
+            return Err("Choose a finite section position".into());
+        }
+        let (min, max) = self.range().ok_or("Section body has no usable range")?;
+        let value = MeasurementInput::new(DimensionKind::Length, mm.clamp(min, max), self.units)
+            .text()
+            .into();
+        self.set_value(Field::Position, value);
+        Ok(())
+    }
+    fn accepts_preview(
+        &self,
+        owner: &DocumentContext,
+        revision: u64,
+        request: &SectionReviewRequest,
+    ) -> bool {
+        if !self.visible || self.owner.as_ref() != Some(owner) || self.revision != revision {
+            return false;
+        }
+        self.request(self.units).is_ok_and(|current| {
+            current.body_id == request.body_id
+                && current.plane == request.plane
+                && current.keep_positive == request.keep_positive
+                && current.include_cutaway == request.include_cutaway
+        })
     }
     fn choices(&self, field: Field) -> Option<Vec<ChoiceOption>> {
         let items = match field {
@@ -187,16 +279,9 @@ pub(crate) fn reduce(
             .find(|b| selected.contains(&b.id.0))
             .or(scene.bodies.first())
             .ok_or("Create a solid body first")?;
-        let center = native_viewport::interface_body_local_center(
-            world,
-            &receipt.owner.document_id,
-            &scene,
-            body.id.0,
-        )
-        .map(|center| f64::from(center[0]))
-        .unwrap_or(0.);
         let mut state = world.remove_resource::<State>().unwrap_or_default();
-        state.reset_controls("Choose the plane and coordinate, then Inspect. Probe is optional.");
+        state.preview = None;
+        state.reset_controls("Updating section…");
         state.owner = Some(receipt.owner);
         state.revision = receipt.revision;
         state.visible = true;
@@ -208,14 +293,10 @@ pub(crate) fn reduce(
         state.body = body.id.0.to_string();
         state.plane = "yz".into();
         state.side = "negative".into();
-        state.in_3d = false;
-        state.offset = MeasurementInput::new(
-            DimensionKind::Length,
-            if center.is_finite() { center } else { 0. },
-            engine.document_units(),
-        )
-        .text()
-        .into();
+        state.in_3d = true;
+        state.units = engine.document_units();
+        state.offset = "0".into();
+        state.source(&scene, true);
         state.probe.clear();
         world.insert_resource(state);
         workbench::execute(world, &workbench::Command::Dismiss)?;
@@ -243,7 +324,17 @@ pub(crate) fn reduce(
                 return Err("Choose a current section option".into());
             }
         }
-        world.resource_mut::<State>().set_value(*field, value);
+        if *field == Field::Position {
+            let mm = coordinate(&value, UnitSystem::Mm)?;
+            world.resource_mut::<State>().set_position(mm)?;
+            return Ok(json!({"handled":true}));
+        }
+        let mut state = world.resource_mut::<State>();
+        let recenter = matches!(field, Field::Body | Field::Plane) && state.value(*field) != value;
+        state.set_value(*field, value);
+        if recenter {
+            state.source(&engine.solid_scene_snapshot(), true);
+        }
         return Ok(json!({"handled":true}));
     }
     if !super::super::is_activation(&action.control.input) {
@@ -253,29 +344,22 @@ pub(crate) fn reduce(
         let mut state = world.resource_mut::<State>();
         state.visible = false;
         state.reset_controls("");
+        state.preview = None;
         native_viewport::section_view::clear(world);
         return Ok(json!({"closed":true}));
     }
     if *command == Command::ToggleView {
         let mut state = world.resource_mut::<State>();
         state.toggle_view();
-        if !state.in_3d
-            || state.cutaway.is_some()
-            || state
-                .report
-                .as_ref()
-                .is_some_and(|report| report.outcome != SectionOutcome::MaterialSection)
-        {
-            return Ok(json!({"view":if state.in_3d {"cutaway"} else {"diagram"}}));
-        }
+        return Ok(json!({"view":if state.in_3d {"cutaway"} else {"diagram"}}));
     }
     if *command == Command::CopySvg {
-        let svg = world
-            .resource::<State>()
+        let state = world.resource::<State>();
+        let svg = state
             .report
             .as_ref()
-            .filter(|r| !r.svg.is_empty())
-            .ok_or("Inspect a nonempty section first")?
+            .filter(|r| state.report_current() && !r.svg.is_empty())
+            .ok_or("Wait for a current nonempty section first")?
             .svg
             .clone();
         world
@@ -287,95 +371,7 @@ pub(crate) fn reduce(
             "SVG copied. Paste into an SVG file to save this diagram.".into();
         return Ok(json!({"copied":true,"format":"svg"}));
     }
-    let req = match world.resource::<State>().request(engine.document_units()) {
-        Ok(req) => req,
-        Err(error) => {
-            world.resource_mut::<State>().message = error.clone();
-            return Err(error);
-        }
-    };
-    let owner = receipt.owner.clone();
-    let revision = receipt.revision;
-    let report_generation = world.resource::<State>().generation;
-    worker::enqueue_section_review(
-        world,
-        receipt.owner,
-        revision,
-        serde_json::to_value(req).map_err(|e| e.to_string())?,
-        prepare_section_presentation,
-        move |world, services, result| {
-            adopt_section_presentation(world, services, &owner, revision, report_generation, result)
-        },
-    )
-}
-
-type SectionPresentation = (
-    Option<Image>,
-    Option<Arc<native_viewport::section_view::PreparedCutaway>>,
-);
-type PreparedSectionPresentation = (
-    limo_cad_native_engine::FinishedSectionReview,
-    SectionPresentation,
-);
-
-fn prepare_section_presentation(
-    mut finished: limo_cad_native_engine::FinishedSectionReview,
-) -> Result<PreparedSectionPresentation, String> {
-    let report = finished.report_mut();
-    let image = if report.svg.is_empty() {
-        None
-    } else {
-        Some(rasterize(&report.svg)?)
-    };
-    let cutaway = report
-        .cutaway
-        .take()
-        .map(|body| Arc::new(native_viewport::section_view::PreparedCutaway::new(body)));
-    Ok((finished, (image, cutaway)))
-}
-fn adopt_section_presentation(
-    world: &mut World,
-    services: &NativeServices,
-    owner: &DocumentContext,
-    revision: u64,
-    report_generation: u64,
-    result: Result<PreparedSectionPresentation, String>,
-) -> Result<Value, String> {
-    services.bridge.with_native_document_receipt(
-                &services.engine, owner, |current| {
-                    if current != revision || !world.get_resource::<State>()
-                        .is_some_and(|s| s.current(owner, current, report_generation)) {
-                        return Err("The section review changed before the result arrived".into());
-                    }
-                    let (finished,(image,cutaway))=match result {
-                        Ok(prepared)=>prepared,
-                        Err(error)=> {
-                            world.resource_mut::<State>().message=error.clone();
-                            return Err(error);
-                        }
-                    };
-                    services.engine.validate_section_review(&finished)?;
-                    let report = finished.into_report();
-                    world.init_resource::<Assets<Image>>();
-                    let image=image.map(|image|world.resource_mut::<Assets<Image>>().add(image));
-                    let response=json!({"inspected":true,"source_revision":revision,
-                        "body_id":report.request.body_id,"outcome":report.outcome,
-                        "bounds_mm":report.bounds_mm,"probe_spans":report.probe_spans});
-                    let mut state=world.resource_mut::<State>();
-                    state.message=if report.outcome == SectionOutcome::NoIntersection {
-                        "Plane does not intersect this body".into()
-                    } else if report.outcome == SectionOutcome::BoundaryContact {
-                        "Plane touches the boundary. Choose an interior coordinate for material spans and a 3D cutaway.".into()
-                    } else if report.request.probe_mm.is_some() {
-                        format!("{} material {}. Diagram and distances are in mm; source-body coordinates.",report.probe_spans.len(),if report.probe_spans.len()==1 {"span"} else {"spans"})
-                    } else {
-                        "Source-body section in mm. Enter a probe height to measure material spans.".into()
-                    };
-                    state.cutaway=cutaway;
-                    state.report=Some(report);state.image=image;
-                    Ok(response)
-                },
-            )
+    Err("Unsupported section control".into())
 }
 
 fn rasterize(svg: &str) -> Result<Image, String> {
@@ -451,13 +447,15 @@ pub(crate) fn synchronize(
         if state.owner.as_ref() != Some(owner) {
             state.visible = false;
             state.reset_controls("");
+            state.preview = None;
             state.owner = Some(owner.clone());
         }
-        if state.in_3d && workbench::workspace(world) == workbench::Workspace::Drawing {
+        if workbench::workspace(world) != workbench::Workspace::Solid {
             state.visible = false;
             state.reset_controls("");
         }
         if !state.visible {
+            state.preview = None;
             native_viewport::section_view::clear(world);
             return Ok(());
         }
@@ -467,25 +465,35 @@ pub(crate) fn synchronize(
             .revision;
         if state.revision != revision {
             state.revision = revision;
-            state.reset_controls("Source model changed. Inspect to refresh.");
-            state.bodies = services
-                .engine
-                .solid_scene_snapshot()
+            state.reset_controls("Updating section…");
+            state.units = services.engine.document_units();
+            let scene = services.engine.solid_scene_snapshot();
+            state.bodies = scene
                 .bodies
                 .iter()
                 .map(|b| (b.id.0, b.name.clone()))
                 .collect();
-            if !state
+            let missing = !state
                 .bodies
                 .iter()
-                .any(|(id, _)| id.to_string() == state.body)
-            {
+                .any(|(id, _)| id.to_string() == state.body);
+            if missing {
                 state.body = state
                     .bodies
                     .first()
                     .map(|(id, _)| id.to_string())
                     .unwrap_or_default();
             }
+            state.source(&scene, missing);
+        }
+        if let Err(error) = preview::synchronize(world, &mut state, services, owner) {
+            state.invalidate(&error);
+            state.finished_generation = Some(state.generation);
+            state.preview = None;
+        }
+        if let Some(image) = state.prepared_image.take() {
+            world.init_resource::<Assets<Image>>();
+            state.image = Some(world.resource_mut::<Assets<Image>>().add(image));
         }
         if state.in_3d {
             if let Some(report) = &state.report {
@@ -512,6 +520,7 @@ pub(crate) fn escape(world: &mut World) -> bool {
     if let Some(mut state) = world.get_resource_mut::<State>().filter(|s| s.visible) {
         state.visible = false;
         state.reset_controls("");
+        state.preview = None;
         native_viewport::section_view::clear(world);
         true
     } else {
@@ -519,22 +528,21 @@ pub(crate) fn escape(world: &mut World) -> bool {
     }
 }
 
-pub(crate) fn modal(world: &World) -> Option<&'static str> {
-    world
-        .get_resource::<State>()
-        .filter(|s| s.visible && !s.in_3d)
-        .map(|_| "section-review")
+pub(crate) fn modal(_world: &World) -> Option<&'static str> {
+    None
 }
-pub(crate) fn in_3d(world: &World) -> bool {
+pub(crate) fn active(world: &World) -> bool {
+    world.get_resource::<State>().is_some_and(|s| s.visible)
+}
+#[cfg(test)]
+fn in_3d(world: &World) -> bool {
     world
         .get_resource::<State>()
         .is_some_and(|s| s.visible && s.in_3d)
 }
 
-fn control(label: &str, in_3d: bool) -> InterfaceControl {
-    let mut control = InterfaceControl::button("document/section", label);
-    control.modal_scope = (!in_3d).then(|| "section-review".into());
-    control
+fn control(label: &str, _in_3d: bool) -> InterfaceControl {
+    InterfaceControl::button("document/section", label)
 }
 
 fn paint(
@@ -544,14 +552,20 @@ fn paint(
     width: f32,
     height: f32,
 ) -> Result<(), String> {
-    let w = (width - 32.).clamp(280., if state.in_3d { 480. } else { 760. });
-    let x = if state.in_3d { 16. } else { (width - w) / 2. };
+    let w = (width - 24.).clamp(240., 312.);
+    let x = (width - w - 16.).max(12.);
     let y = 130.;
-    let h = if state.in_3d {
-        280.
+    let preview_height = if !state.in_3d && state.image.is_some() {
+        ((w - 24.) * 0.75).min((height - y - 16. - 368.).max(0.))
     } else {
-        (height - y - 24.).max(280.)
+        0.
     };
+    let h = 356.
+        + if preview_height > 20. {
+            preview_height + 12.
+        } else {
+            0.
+        };
     let theme = native_viewport::ui::theme(world);
     state.widgets.panel(
         world,
@@ -565,74 +579,65 @@ fn paint(
         world,
         camera,
         "section-title",
-        chrome::rect(x + 12., y + 8., w - 200., 20.),
-        "Section Analysis - source body",
+        chrome::rect(x + 12., y + 9., w - 62., 22.),
+        "Section Analysis",
         14.,
         72,
     );
-    let close = control("Close section analysis", state.in_3d);
     state.widgets.button(
         world,
         camera,
         "section-close",
-        close,
-        Some("Close"),
+        control("Close section analysis", state.in_3d),
+        Some("×"),
         NativeCommand::SectionReview(state.controls_generation, Command::Close),
-        chrome::rect(x + w - 72., y + 6., 60., 24.),
+        chrome::rect(x + w - 38., y + 8., 26., 24.),
         None,
         72,
     )?;
-    let mut copy = control("Copy section SVG", state.in_3d);
-    copy.disabled = state.report.as_ref().is_none_or(|r| r.svg.is_empty()) || worker::busy(world);
-    state.widgets.button(
-        world,
-        camera,
-        "section-copy",
-        copy,
-        Some("Copy SVG"),
-        NativeCommand::SectionReview(state.controls_generation, Command::CopySvg),
-        chrome::rect(x + w - 174., y + 6., 94., 24.),
-        None,
-        72,
-    )?;
-    let col = (w - 36.) / 2.;
-    let plane = match state.plane.as_str() {
-        "xy" => SectionPlane::Xy,
-        "xz" => SectionPlane::Xz,
-        _ => SectionPlane::Yz,
+    let labels = match state.plane.as_str() {
+        "xy" => ["X", "Y", "Z"],
+        "xz" => ["X", "Z", "Y"],
+        _ => ["Y", "Z", "X"],
     };
-    let labels = plane.labels();
-    for (index, field, label) in [
-        (0, Field::Body, "Source body".into()),
-        (1, Field::Plane, "Section plane".into()),
+    for (index, field, label, caption, row_y) in [
+        (0, Field::Body, "Source body".into(), "Body".into(), 44.),
+        (1, Field::Plane, "Section plane".into(), "Plane".into(), 80.),
         (
             2,
             Field::Offset,
             format!("{} offset (document units or explicit mm/in)", labels[2]),
+            format!("Offset {}", labels[2]),
+            116.,
+        ),
+        (
+            4,
+            Field::Side,
+            "Retained side".into(),
+            "Keep side".into(),
+            200.,
         ),
         (
             3,
             Field::Probe,
             format!("Probe {} coordinate (optional)", labels[1]),
+            format!("Probe {}", labels[1]),
+            236.,
         ),
-        (4, Field::Side, "Retained side".into()),
     ] {
-        let fx = x + 12. + (index % 2) as f32 * (col + 12.);
-        let fy = y + 38. + (index / 2) as f32 * 51.;
         state.widgets.text(
             world,
             camera,
             &format!("section-label-{index}"),
-            chrome::rect(fx, fy, col, 16.),
-            &label,
-            10.,
+            chrome::rect(x + 12., y + row_y, 72., 28.),
+            &caption,
+            11.,
             72,
         );
         let mut control = control(&label, state.in_3d);
-        control.disabled = worker::busy(world);
-        let mut caption = None;
+        let mut choice_caption = None;
         if let Some(options) = state.choices(field) {
-            caption = options
+            choice_caption = options
                 .iter()
                 .find(|o| o.value == state.value(field))
                 .map(|o| o.label.clone());
@@ -663,34 +668,94 @@ fn paint(
             camera,
             &format!("section-field-{index}"),
             control,
-            caption.as_deref(),
+            choice_caption.as_deref(),
             NativeCommand::SectionReview(state.controls_generation, Command::Field(field)),
-            chrome::rect(fx, fy + 17., col, 28.),
+            chrome::rect(x + 88., y + row_y, w - 100., 28.),
             None,
             72,
         )?;
     }
+    let range = state.range();
+    let (min, max) = range.unwrap_or((-1., 1.));
+    let mut slider = control(
+        &format!("Section {} position slider (mm)", labels[2]),
+        state.in_3d,
+    );
+    slider.disabled = range.is_none();
+    slider.field = ControlField::Range {
+        value: coordinate(&state.offset, state.units)
+            .unwrap_or((min + max) * 0.5)
+            .clamp(min, max),
+        min,
+        max,
+        step: (max - min) / 400.,
+    };
+    state.widgets.button(
+        world,
+        camera,
+        "section-slider",
+        slider,
+        None,
+        NativeCommand::SectionReview(state.controls_generation, Command::Field(Field::Position)),
+        chrome::rect(x + 12., y + 148., w - 24., 26.),
+        None,
+        72,
+    )?;
+    for (key, value, left) in [
+        ("section-min", min, x + 12.),
+        ("section-max", max, x + w * 0.5),
+    ] {
+        let text = if range.is_some() {
+            let value = MeasurementInput::new(DimensionKind::Length, value, state.units);
+            format!(
+                "{} {}",
+                value.text(),
+                match state.units {
+                    UnitSystem::Mm => "mm",
+                    UnitSystem::Cm => "cm",
+                    UnitSystem::In => "in",
+                }
+            )
+        } else {
+            "".into()
+        };
+        state.widgets.text(
+            world,
+            camera,
+            key,
+            chrome::rect(left, y + 174., w * 0.5 - 12., 16.),
+            &text,
+            9.,
+            72,
+        );
+    }
+    let half = (w - 30.) * 0.5;
     state.widgets.button(
         world,
         camera,
         "section-mode",
         control("Switch section view", state.in_3d),
-        Some(if state.in_3d { "Diagram" } else { "3D cutaway" }),
+        Some(if state.in_3d {
+            "2D diagram"
+        } else {
+            "3D cutaway"
+        }),
         NativeCommand::SectionReview(state.controls_generation, Command::ToggleView),
-        chrome::rect(x + col + 24., y + 157., col, 28.),
+        chrome::rect(x + 12., y + 274., half, 28.),
         None,
         72,
     )?;
-    let mut inspect = control("Inspect section", state.in_3d);
-    inspect.disabled = worker::busy(world) || state.bodies.is_empty();
+    let mut copy = control("Copy section SVG", state.in_3d);
+    copy.disabled =
+        !state.report_current() || state.report.as_ref().is_none_or(|r| r.svg.is_empty());
     state.widgets.button(
         world,
         camera,
-        "section-inspect",
-        inspect,
-        Some("Inspect"),
-        NativeCommand::SectionReview(state.controls_generation, Command::Inspect),
-        chrome::rect(x + 12., y + 195., 92., 28.),
+        "section-copy",
+        copy,
+        Some("Copy SVG"),
+        NativeCommand::SectionReview(state.controls_generation, Command::CopySvg),
+        chrome::rect(x + 18. + half, y + 274., half, 28.),
         None,
         72,
     )?;
@@ -698,30 +763,19 @@ fn paint(
         world,
         camera,
         "section-message",
-        chrome::rect(x + 116., y + 194., w - 128., 46.),
+        chrome::rect(x + 12., y + 310., w - 24., 34.),
         &state.message,
         10.,
         72,
     );
-    if state.in_3d {
-        state.widgets.text(
-            world,
-            camera,
-            "section-3d-hint",
-            chrome::rect(x + 12., y + 247., w - 24., 25.),
-            "Source body only. Orange = cut face. Orbit / pan / zoom; close to restore.",
-            10.,
-            72,
-        );
-    } else if let Some(image) = &state.image {
-        let iw = (w - 24.).min((h - 250.).max(0.) * 4. / 3.);
-        let ih = iw * 3. / 4.;
-        if ih > 20. {
+    if preview_height > 20. {
+        if let Some(image) = &state.image {
+            let iw = preview_height * 4. / 3.;
             state.widgets.panel(
                 world,
                 camera,
                 "section-preview",
-                chrome::rect(x + (w - iw) / 2., y + 244., iw, ih),
+                chrome::rect(x + (w - iw) / 2., y + 354., iw, preview_height),
                 Color::WHITE,
                 71,
             );
@@ -735,155 +789,209 @@ fn paint(
     Ok(())
 }
 
+#[cfg(feature = "dev-ui-lab")]
+pub(crate) fn paint_capture(
+    world: &mut World,
+    camera: Entity,
+    engine: &AppState,
+    width: f32,
+    height: f32,
+) -> Result<(), String> {
+    let scene = engine.solid_scene_snapshot();
+    let body = scene
+        .bodies
+        .first()
+        .ok_or("Section capture needs a saved solid")?;
+    let session = engine.viewport_frame().session_id;
+    let owner = DocumentContext {
+        window_id: "section-lab".into(),
+        document_id: session.clone(),
+        epoch: 1,
+    };
+    let mut state = State {
+        owner: Some(owner.clone()),
+        visible: true,
+        body: body.id.0.to_string(),
+        bodies: scene
+            .bodies
+            .iter()
+            .map(|body| (body.id.0, body.name.clone()))
+            .collect(),
+        plane: std::env::var("LIMO_CAD_SECTION_LAB_PLANE").unwrap_or_else(|_| "xy".into()),
+        side: "negative".into(),
+        units: engine.document_units(),
+        in_3d: std::env::var_os("LIMO_CAD_SECTION_LAB_DIAGRAM").is_none(),
+        ..Default::default()
+    };
+    state.source(&scene, true);
+    if let Ok(offset) = std::env::var("LIMO_CAD_SECTION_LAB_OFFSET") {
+        state.offset = offset;
+    }
+    let request = state.request(state.units)?;
+    let finished = engine
+        .prepare_section_review(&serde_json::to_string(&request).map_err(|e| e.to_string())?)?
+        .inspect()?;
+    engine.validate_section_review(&finished)?;
+    let mut report = finished.into_report();
+    state.cutaway = report
+        .cutaway
+        .take()
+        .map(|body| Arc::new(native_viewport::section_view::PreparedCutaway::new(body)));
+    if state.in_3d {
+        native_viewport::section_view::show(world, &session, &request, state.cutaway.clone())?;
+    } else if !report.svg.is_empty() {
+        state.image = Some(
+            world
+                .resource_mut::<Assets<Image>>()
+                .add(rasterize(&report.svg)?),
+        );
+    }
+    state.report = Some(report);
+    state.finished_generation = Some(state.generation);
+    state.message = if state.in_3d {
+        "Drag the bar to move the cut. Orange faces show the section."
+    } else {
+        "Drag the bar to move the section. Copy SVG for the full diagram."
+    }
+    .into();
+    let bounds = InterfaceRect {
+        x: 0.,
+        y: 0.,
+        width: f64::from(width),
+        height: f64::from(height),
+    };
+    world
+        .resource::<NativeInterfaceHandle>()
+        .present(InterfaceFrame {
+            context: owner,
+            client: bounds,
+            surface: bounds,
+            canvases: Vec::new(),
+            surfaces: Vec::new(),
+            modal_stack: Vec::new(),
+            document_visible: true,
+        })?;
+    if let Some((min, max)) = state.bounds {
+        let center = Vec3::from_array(min.map(|v| v as f32))
+            .lerp(Vec3::from_array(max.map(|v| v as f32)), 0.5);
+        let span =
+            Vec3::from_array(max.map(|v| v as f32)) - Vec3::from_array(min.map(|v| v as f32));
+        let mut view = native_viewport::interface_view_snapshot(world).1;
+        let distance = span.length().max(1.)
+            / (2. * (view.vertical_fov_degrees.to_radians() * 0.5).sin())
+            * 1.15;
+        view.target = center.to_array();
+        view.position = (center + Vec3::new(0.7, -1., 0.8).normalize() * distance).to_array();
+        view.up = [0., 0., 1.];
+        native_viewport::apply_interface_view(world, &session, Some(view), None)?;
+    }
+    state.widgets.begin();
+    paint(world, camera, &mut state, width, height)?;
+    state.widgets.finish(world);
+    world.insert_resource(state);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn ordered_section_inspection_releases_live_guards_and_rejects_stale_presentation() {
-        use crate::session_bridge::native_interface::tests::Fixture;
-        let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
-        for case in ["live", "draft", "close", "edit", "replace", "native"] {
-            let fixture = Fixture::new();
-            let owner = fixture.owner();
-            for (operation, arguments) in [
-                (
-                    "sketch_begin",
-                    json!({"name":"Section stock","plane":{"type":"origin_plane","plane":"xy"}}),
-                ),
-                (
-                    "sketch_add_rectangle",
-                    json!({"mode":"two_point","p1":{"x":0.,"y":0.},"p2":{"x":18.,"y":12.},"ctrl_held":true}),
-                ),
-                ("sketch_finish", json!({})),
-                (
-                    "solid_extrude",
-                    json!({"sketch_name":"Section stock","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":8.}}),
-                ),
-            ] {
-                fixture
-                    .bridge
-                    .apply_native_mutation(
-                        &fixture.engine,
-                        &owner,
-                        operation,
-                        &arguments,
-                        || Ok(()),
-                    )
-                    .unwrap();
-            }
-            let body = fixture.engine.solid_scene_snapshot().bodies[0].id;
-            let before = fixture.engine.engine_call("project_export_model", "");
-            let receipt = fixture
-                .bridge
-                .native_document_receipt(&fixture.engine, &owner)
-                .unwrap();
-            let services = NativeServices {
-                engine: fixture.engine.clone(),
-                bridge: fixture.bridge.clone(),
-            };
-            let mut world = World::new();
-            worker::install(
-                &mut world,
-                services.clone(),
-                NativeInterfaceHandle::new(|| {}),
-            )
+    fn compact_right_panel_has_a_live_slider_and_preserves_inch_offset_precision() {
+        let mut world = World::new();
+        world.init_resource::<ViewportUiAssets>();
+        let camera = world.spawn_empty().id();
+        let mut state = State {
+            visible: true,
+            in_3d: true,
+            body: "1".into(),
+            plane: "xy".into(),
+            side: "negative".into(),
+            bodies: vec![(1, "Fixture".into())],
+            units: UnitSystem::In,
+            offset: "1".into(),
+            bounds: Some(([-20., -10., 0.], [20., 10., 50.8])),
+            ..Default::default()
+        };
+        state.widgets.begin();
+        paint(&mut world, camera, &mut state, 1200., 800.).unwrap();
+        state.widgets.finish(&mut world);
+        let card = world
+            .get::<Node>(state.widgets.entity("section-card").unwrap())
             .unwrap();
-            world.insert_resource(State {
-                owner: Some(owner.clone()),
-                revision: receipt.revision,
-                visible: true,
-                in_3d: true,
-                ..Default::default()
-            });
-            world.init_resource::<Assets<Image>>();
-            let (sent, ready) = std::sync::mpsc::sync_channel(1);
-            let capture_services = services.clone();
-            let capture_owner = owner.clone();
-            let adoption_owner = owner.clone();
-            worker::enqueue_section_review(&mut world, owner.clone(), receipt.revision,
-                json!({"body_id":body,"plane":"xy","offset_mm":4.,"probe_mm":6.,"include_cutaway":true}),
-                move |finished| {
-                    // Real ordered Inspect computation has finished with both
-                    // live guards available before its CPU presentation stage.
-                    capture_services.bridge.with_native_document_receipt(&capture_services.engine, &capture_owner,
-                        |_| { capture_services.engine.with_drawing(|_| ()); Ok(()) }).unwrap();
-                    assert_eq!(finished.report().bounds_mm.unwrap(), [0.,0.,18.,12.]);
-                    assert!(finished.report().cutaway.is_some());
-                    let prepared = prepare_section_presentation(finished)?;
-                    assert!(prepared.1.0.is_some() && prepared.1.1.is_some());
-                    sent.send(()).unwrap();
-                    Ok(prepared)
-                },
-                move |world, services, result| adopt_section_presentation(world, services,
-                    &adoption_owner, receipt.revision, 0, result)).unwrap();
-            ready.recv_timeout(Duration::from_secs(10)).unwrap();
-            match case {
-                "close" => {
-                    assert!(escape(&mut world));
-                }
-                "draft" => world
-                    .resource_mut::<State>()
-                    .set_value(Field::Offset, "3".into()),
-                "edit" => {
-                    fixture.rename(&owner, "Changed during Inspect").unwrap();
-                }
-                "replace" => {
-                    fixture
-                        .bridge
-                        .apply_native_mutation(
-                            &fixture.engine,
-                            &owner,
-                            "cad_new_project",
-                            &json!({}),
-                            || Ok(()),
-                        )
-                        .unwrap();
-                }
-                "native" => {
-                    let model =
-                        crate::session_bridge::parse_engine_envelope(before.clone()).unwrap();
-                    crate::session_bridge::parse_engine_envelope(
-                        fixture
-                            .engine
-                            .project_load(&serde_json::to_string(model.as_str().unwrap()).unwrap()),
-                    )
-                    .unwrap();
-                }
-                _ => {}
-            }
-            let deadline = std::time::Instant::now() + Duration::from_secs(10);
-            loop {
-                if let Some(outcome) = worker::poll(&mut world, &services) {
-                    let state = world.resource::<State>();
-                    if case == "live" {
-                        assert_eq!(outcome.value.unwrap()["inspected"], true);
-                        assert!(
-                            state.report.is_some()
-                                && state.image.is_some()
-                                && state.cutaway.is_some()
-                        );
-                        assert_eq!(world.resource::<Assets<Image>>().len(), 1);
-                    } else {
-                        assert!(outcome.value.is_err());
-                        assert!(
-                            state.report.is_none()
-                                && state.image.is_none()
-                                && state.cutaway.is_none()
-                        );
-                        assert!(world.resource::<Assets<Image>>().is_empty());
-                    }
-                    break;
-                }
-                assert!(std::time::Instant::now() < deadline);
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            if matches!(case, "live" | "draft" | "close" | "native") {
-                assert!(
-                    fixture.engine.engine_call("project_export_model", "") == before,
-                    "Section inspection must preserve the complete authored model"
-                );
-            }
+        assert_eq!(card.left, px(872.));
+        assert_eq!(card.width, px(312.));
+        assert_eq!(card.height, px(356.));
+        let slider = state.widgets.entity("section-slider").unwrap();
+        let offset = state.widgets.entity("section-field-2").unwrap();
+        let binding = world.get::<InterfaceControl>(offset).unwrap().binding;
+        assert!(
+            matches!(world.get::<InterfaceControl>(slider).unwrap().field,
+            ControlField::Range { value, min: 0., max: 50.8, .. } if value == 25.4)
+        );
+        assert!(!world.get::<InterfaceControl>(slider).unwrap().disabled);
+        state.set_position(38.1).unwrap();
+        assert!((state.request(UnitSystem::In).unwrap().offset_mm - 38.1).abs() < 1e-10);
+        state.widgets.begin();
+        paint(&mut world, camera, &mut state, 1200., 800.).unwrap();
+        state.widgets.finish(&mut world);
+        assert_eq!(state.widgets.entity("section-slider"), Some(slider));
+        assert_eq!(
+            world.get::<InterfaceControl>(offset).unwrap().binding,
+            binding
+        );
+        assert!(!world.get::<InterfaceControl>(offset).unwrap().disabled);
+        state.plane = "xz".into();
+        assert_eq!(state.range(), Some((-10., 10.)));
+        state.plane = "yz".into();
+        assert_eq!(state.range(), Some((-20., 20.)));
+        state.set_position(-50.).unwrap();
+        assert!((state.request(UnitSystem::In).unwrap().offset_mm + 20.).abs() < 1e-10);
+        assert!(state.set_position(f64::NAN).is_err());
+    }
+
+    #[test]
+    fn intermediate_drag_preview_cannot_cross_body_plane_side_mode_revision_or_owner() {
+        let owner = DocumentContext {
+            window_id: "w".into(),
+            document_id: "d".into(),
+            epoch: 1,
+        };
+        let mut state = State {
+            owner: Some(owner.clone()),
+            revision: 8,
+            visible: true,
+            in_3d: true,
+            body: "1".into(),
+            bodies: vec![(1, "Fixture".into())],
+            plane: "xy".into(),
+            offset: "5".into(),
+            side: "negative".into(),
+            ..Default::default()
+        };
+        let request = state.request(UnitSystem::Mm).unwrap();
+        state.set_value(Field::Offset, "6".into());
+        assert!(state.accepts_preview(&owner, 8, &request));
+        assert!(!state.report_current());
+        assert!(!state.accepts_preview(&owner, 9, &request));
+        let mut other = owner.clone();
+        other.epoch += 1;
+        assert!(!state.accepts_preview(&other, 8, &request));
+        for change in [Field::Body, Field::Plane, Field::Side] {
+            let old = state.value(change).to_owned();
+            let changed = match change {
+                Field::Body => "2",
+                Field::Plane => "xz",
+                _ => "positive",
+            };
+            state.set_value(change, changed.into());
+            assert!(!state.accepts_preview(&owner, 8, &request));
+            state.set_value(change, old);
         }
+        state.toggle_view();
+        assert!(!state.accepts_preview(&owner, 8, &request));
+        state.toggle_view();
+        state.visible = false;
+        assert!(!state.accepts_preview(&owner, 8, &request));
     }
     #[test]
     fn three_d_inspection_keeps_camera_navigation_available_and_escape_closes() {
@@ -900,11 +1008,11 @@ mod tests {
         assert!(!in_3d(&world));
         world.resource_mut::<State>().visible = true;
         world.resource_mut::<State>().in_3d = false;
-        assert_eq!(modal(&world), Some("section-review"));
-        assert_eq!(
-            control("Inspect", false).modal_scope.as_deref(),
-            Some("section-review")
-        );
+        assert_eq!(modal(&world), None);
+        assert!(active(&world));
+        assert!(control("Inspect", false).modal_scope.is_none());
+        assert!(escape(&mut world));
+        assert!(!active(&world));
     }
     #[test]
     fn prepared_query_runs_off_thread_without_replacing_scene_or_advancing_history() {
@@ -1040,7 +1148,7 @@ mod tests {
         fields::install(&mut app);
         let camera = app.world_mut().spawn_empty().id();
         let mut frame = handle.frame().unwrap();
-        frame.modal_stack = vec!["section-review".into()];
+        frame.modal_stack.clear();
         frame.surfaces.push(limo_cad_interface::Surface {
             name: "document/section".into(),
             text: None,

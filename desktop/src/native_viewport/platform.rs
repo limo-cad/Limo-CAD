@@ -4692,7 +4692,7 @@ fn apply_model_state(world: &mut World, next: ViewportModel, update: InstanceUpd
 
 /// Install the same renderer/picker state for a Winit-owned window. The CAD
 /// systems and retained geometry cache are shared with headless fixtures.
-#[cfg(test)]
+#[cfg(any(test, feature = "dev-ui-lab"))]
 pub(super) fn install_native_scene(app: &mut bevy::app::App) {
     install_cad_scene(app);
     app.insert_resource(SharedPickState(Arc::new(Mutex::new(PickState::default()))));
@@ -5094,7 +5094,8 @@ pub(crate) fn interface_geometry(world: &World) -> super::ViewportGeometry<'_> {
 
 /// Borrow cached source-definition bounds without scanning or cloning geometry.
 /// A cache from another document or scene cannot supply an inspection default.
-pub(crate) fn interface_body_local_center(
+#[cfg(test)]
+fn interface_body_local_center(
     world: &World,
     session_id: &str,
     scene: &Arc<SolidSceneDto>,

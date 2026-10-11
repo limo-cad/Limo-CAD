@@ -310,7 +310,7 @@
           "id": "ui/feature-forms/section-analysis-exact180",
           "case": "Section Analysis exact Body 46 XZ at Y180 signed probe, two retained halves, hatch and Close recovery",
           "status": "needs_recheck",
-          "recheck_reason": "Section computation/adoption now crosses detached worker and private-source fences (3013d119/67cb9e15); incoming ec010757 also changes section viewport submission. Recheck the recorded signed probe, exact diagram, Above/Below cutaway and Close recovery once on a fresh matched deployed pair. The original 9cfa76a7 receipt remains historical.",
+          "recheck_reason": "Section computation/adoption now crosses detached worker and private-source fences (3013d119/67cb9e15), and the live-section change replaces the modal/Inspect flow with a compact nonmodal panel and automatic slider previews. Recheck signed field switching, exact diagram, Above/Below cutaway, sustained dragging, camera access and Close recovery once on a fresh matched deployed pair. Focused source tests/native render captures are recorded separately in docs/qualification/section-live-panel-20261011.json. The original 9cfa76a7 receipt remains historical.",
           "affected_source_revision": "67cb9e15c70823837c37f95c4eb6484b7c2d6d01",
           "checks": [
             "signed_field_switch",

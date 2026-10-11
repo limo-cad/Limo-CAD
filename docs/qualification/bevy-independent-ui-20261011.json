@@ -346,6 +346,13 @@
       "path": "/private/tmp/limo-bevy-independent-ui-20261011/swift-cache",
       "bytes": 259330392,
       "reason": "owned rejected/redundant package, completed baseline copy or observer compiler cache; source, hashes, logs and frames retained"
+    },
+    {
+      "path": "/Users/jack/Code/noBS-CAD/.worktrees/bevy-startup-footprint/desktop/target",
+      "logical_bytes_released": 8072694998,
+      "file_count": 14665,
+      "reason": "No active build/test uses the owned target directory. Selected DMG, extracted app, source and all validation evidence are retained outside it. Compiled intermediates and redundant staged bundles are disposable.",
+      "selected_app_and_dmg_verified_before_cleanup": true
     }
   ],
   "qualification": {
