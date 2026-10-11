@@ -4567,8 +4567,8 @@ fn bind_document_geometry(world: &mut World) {
 fn apply_model_state(world: &mut World, next: ViewportModel, update: InstanceUpdate) {
     let mut resource = world.resource_mut::<ModelResource>();
     resource.bind_instance_state(&next.session_id, &next.instance_body_poses, update);
-    let reset_sketch =
-        resource.session_id != next.session_id || next.document.active_sketch.is_none();
+    let session_changed = resource.session_id != next.session_id;
+    let reset_sketch = session_changed || next.document.active_sketch.is_none();
     resource.session_id = next.session_id;
     resource.geometry_revision = next.geometry_revision;
     resource.document = next.document;
@@ -4576,6 +4576,21 @@ fn apply_model_state(world: &mut World, next: ViewportModel, update: InstanceUpd
     resource.instance_body_poses = next.instance_body_poses;
     resource.revision = resource.revision.wrapping_add(1);
     bind_document_geometry(world);
+    // Transient preview/stock buffers are installed under the active document
+    // guard. Its former operator cannot restore them after owner replacement.
+    // Retire them here before the successor can render those unowned buffers.
+    if session_changed {
+        if world.contains_resource::<PreviewResource>() {
+            apply_preview_state(world, Arc::default());
+        }
+        if let Some(mut stock) = world
+            .get_resource_mut::<CamStockResource>()
+            .filter(|stock| stock.value.is_some())
+        {
+            stock.value = None;
+            stock.revision = stock.revision.wrapping_add(1);
+        }
+    }
     if reset_sketch {
         if let Some(mut preview) = world.get_resource_mut::<PreviewResource>() {
             preview.sketch_lines.clear();
@@ -7783,6 +7798,106 @@ mod tests {
                 ..Default::default()
             }),
         }
+    }
+
+    #[test]
+    fn document_replacement_retires_transient_preview_and_cam_stock_before_render() {
+        let mut app = interface_scene_fixture();
+        let first = instance_cache_model("stock-owner", &[41]);
+        let successor = instance_cache_model("successor", &[73]);
+        apply_interface_model(app.world_mut(), first.clone()).unwrap();
+        let preview = Arc::new(ViewportPreview {
+            lines: vec![super::super::ViewportLineLayer {
+                color: [0.2, 0.7, 0.3, 1.],
+                width: 1.,
+                segments: vec![0., 0., 0., 1., 0., 0.].into(),
+                ..default()
+            }],
+            ..default()
+        });
+        let positions = Arc::new(vec![0., 0., 0., 1., 0., 0., 0., 1., 0.]);
+        let retired_positions = Arc::downgrade(&positions);
+        let retired_preview = Arc::downgrade(&preview);
+        apply_interface_preview(app.world_mut(), "stock-owner", preview).unwrap();
+        apply_interface_cam_stock(
+            app.world_mut(),
+            "stock-owner",
+            Some(ViewportCamStock {
+                positions,
+                normals: Arc::default(),
+                time_seconds: Some(2.),
+            }),
+        )
+        .unwrap();
+        let held_preview = interface_preview_snapshot(app.world());
+        let (stock_revision, held_stock) = interface_cam_stock_snapshot(app.world());
+        let held_stock = held_stock.unwrap();
+        let preview_revision = interface_preview_revision(app.world());
+
+        // Same-owner refreshes and isolated feature frames retain active inputs.
+        apply_interface_model(app.world_mut(), first.clone()).unwrap();
+        apply_interface_edit_model(app.world_mut(), first.clone()).unwrap();
+        assert!(Arc::ptr_eq(
+            &held_preview,
+            &interface_preview_snapshot(app.world())
+        ));
+        assert_eq!(interface_preview_revision(app.world()), preview_revision);
+        assert_eq!(interface_cam_stock_snapshot(app.world()).0, stock_revision);
+        assert!(Arc::ptr_eq(
+            &held_stock.positions,
+            &interface_cam_stock_snapshot(app.world())
+                .1
+                .unwrap()
+                .positions
+        ));
+
+        apply_interface_model(app.world_mut(), successor.clone()).unwrap();
+        assert!(interface_cam_stock_snapshot(app.world()).1.is_none());
+        assert!(interface_cam_stock_snapshot(app.world()).0 > stock_revision);
+        assert!(interface_preview_snapshot(app.world()).lines.is_empty());
+        assert!(interface_preview_revision(app.world()) > preview_revision);
+        assert!(Arc::ptr_eq(
+            &app.world().resource::<ModelResource>().document,
+            &successor.document
+        ));
+        assert_eq!(held_preview.lines[0].segments.len(), 6);
+        assert_eq!(held_stock.positions.len(), 9);
+        drop(held_preview);
+        drop(held_stock);
+        assert!(retired_preview.upgrade().is_none());
+        assert!(retired_positions.upgrade().is_none());
+
+        let successor_stock = ViewportCamStock {
+            positions: Arc::new(vec![2., 0., 0., 3., 0., 0., 2., 1., 0.]),
+            normals: Arc::default(),
+            time_seconds: None,
+        };
+        apply_interface_cam_stock(app.world_mut(), "successor", Some(successor_stock.clone()))
+            .unwrap();
+        let current_revision = interface_cam_stock_snapshot(app.world()).0;
+        assert!(apply_interface_cam_stock(app.world_mut(), "stock-owner", None).is_err());
+        assert!(apply_interface_preview(
+            app.world_mut(),
+            "stock-owner",
+            ViewportPreview::default()
+        )
+        .is_err());
+        assert_eq!(
+            interface_cam_stock_snapshot(app.world()).0,
+            current_revision
+        );
+        assert!(Arc::ptr_eq(
+            &successor_stock.positions,
+            &interface_cam_stock_snapshot(app.world())
+                .1
+                .unwrap()
+                .positions
+        ));
+        apply_interface_model(app.world_mut(), successor).unwrap();
+        assert_eq!(
+            interface_cam_stock_snapshot(app.world()).0,
+            current_revision
+        );
     }
 
     #[test]
