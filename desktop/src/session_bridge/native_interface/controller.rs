@@ -2951,6 +2951,9 @@ fn complete_control(world: &mut World) {
         if let Some(mut pending) = state.pending.take() {
             if pending.delivery_only {
                 deliver_control(&services, &mut state, pending);
+                // A durable close retry must exit in this frame: the reactive
+                // host need not receive another event after acknowledging it.
+                finish_close_after_receipt(world, &services, &state);
                 return;
             }
             if let Some(id) = pending.response["value"]["camera_pending"].as_u64() {
@@ -3101,15 +3104,19 @@ fn complete_control(world: &mut World) {
             }
             deliver_control(&services, &mut state, pending);
         }
-        if state.exit_after_receipt
-            && state.pending.is_none()
-            && !native_control::has_pending(&services.bridge, &state.window_id).unwrap_or(true)
-        {
-            state.stop_watcher.store(true, Ordering::Release);
-            services.bridge.drop_window(&state.window_id);
-            world.write_message(AppExit::Success);
-        }
+        finish_close_after_receipt(world, &services, &state);
     });
+}
+
+fn finish_close_after_receipt(world: &mut World, services: &NativeServices, state: &Controller) {
+    if state.exit_after_receipt
+        && state.pending.is_none()
+        && !native_control::has_pending(&services.bridge, &state.window_id).unwrap_or(true)
+    {
+        state.stop_watcher.store(true, Ordering::Release);
+        services.bridge.drop_window(&state.window_id);
+        world.write_message(AppExit::Success);
+    }
 }
 
 #[cfg(test)]

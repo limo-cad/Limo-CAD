@@ -90,6 +90,138 @@ pub(super) fn finish_polled_control_fixture(
 }
 
 #[test]
+fn retained_close_receipt_retry_exits_in_the_same_frame_without_replaying_close() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let (mut app, handle, _) = prepare(&fixture);
+        app.add_message::<AppExit>();
+        let services = app.world().resource::<NativeServices>().clone();
+        let owner = fixture.owner();
+        let session = fixture
+            .bridge
+            .session_id_for_window("main")
+            .unwrap()
+            .unwrap();
+        let controls = crate::session_bridge::session_root()
+            .join(&session)
+            .join("controls");
+        fs::create_dir_all(&controls).unwrap();
+        let id = "701-1";
+        fs::write(
+            controls.join(format!("{id}.request.json")),
+            json!({"id":id,"expires_ms":now_ms()+30_000,
+                "ui":{"action":"window","mode":"close"}})
+            .to_string(),
+        )
+        .unwrap();
+        let request = crate::session_bridge::control_for_window_owned(
+            &fixture.bridge,
+            "main",
+            &fixture.engine,
+            None,
+            Some((&owner, id)),
+        )
+        .unwrap();
+        let ticket = native_control::ticket_for(&fixture.bridge, &owner, &session, id).unwrap();
+        let before = serde_json::to_string(&fixture.engine.document_snapshot()).unwrap();
+        app.world_mut()
+            .resource_scope(|world, mut state: Mut<Controller>| {
+                files::initialize(world, state.workspace.clone());
+                start_control_with_ticket(
+                    world,
+                    &handle,
+                    &services,
+                    &mut state,
+                    &owner,
+                    &request,
+                    Some(ticket),
+                )
+                .unwrap();
+                assert!(state.exit_after_receipt);
+                assert!(!state.close_pending);
+            });
+        let result_path = controls.join(format!("{id}.result.json"));
+        fs::create_dir(&result_path).unwrap();
+        complete_control(app.world_mut());
+        let mut original = {
+            let state = app.world().resource::<Controller>();
+            let pending = state
+                .pending
+                .as_ref()
+                .expect("failed publication retains close outcome");
+            assert!(pending.delivery_only);
+            assert!(!state.stop_watcher.load(Ordering::Acquire));
+            pending.response.clone()
+        };
+        let first_publication_ms = original
+            .as_object_mut()
+            .unwrap()
+            .remove("receipt_published_ms");
+        assert!(first_publication_ms.unwrap().as_u64().is_some());
+        assert!(app.should_exit().is_none());
+        assert!(native_control::has_pending(&fixture.bridge, "main").unwrap());
+        assert!(fixture
+            .bridge
+            .session_id_for_window("main")
+            .unwrap()
+            .is_some());
+        // A second failed delivery also retains the original close, not a new dispatch.
+        complete_control(app.world_mut());
+        let mut retained = app
+            .world()
+            .resource::<Controller>()
+            .pending
+            .as_ref()
+            .unwrap()
+            .response
+            .clone();
+        assert!(retained
+            .as_object_mut()
+            .unwrap()
+            .remove("receipt_published_ms")
+            .unwrap()
+            .as_u64()
+            .is_some());
+        assert_eq!(retained, original);
+        assert!(app.should_exit().is_none());
+        fs::remove_dir(&result_path).unwrap();
+        complete_control(app.world_mut());
+        // No app.update or additional event is permitted between delivery and exit.
+        assert_eq!(app.should_exit(), Some(AppExit::Success));
+        assert!(app.world().resource::<Controller>().pending.is_none());
+        assert!(app
+            .world()
+            .resource::<Controller>()
+            .stop_watcher
+            .load(Ordering::Acquire));
+        assert!(!native_control::has_pending(&fixture.bridge, "main").unwrap());
+        assert!(fixture
+            .bridge
+            .session_id_for_window("main")
+            .unwrap()
+            .is_none());
+        let mut response: Value =
+            serde_json::from_str(&fs::read_to_string(&result_path).unwrap()).unwrap();
+        assert!(response
+            .as_object_mut()
+            .unwrap()
+            .remove("receipt_published_ms")
+            .unwrap()
+            .as_u64()
+            .is_some());
+        assert_eq!(response, original);
+        assert_eq!(response["status"], "applied");
+        assert_eq!(response["awaiting_input"], false);
+        assert_eq!(response["control_admission"]["request_id"], id);
+        assert!(!controls.join(format!("{id}.admitted.json")).exists());
+        assert_eq!(
+            serde_json::to_string(&fixture.engine.document_snapshot()).unwrap(),
+            before
+        );
+    });
+}
+
+#[test]
 fn rejected_native_receipt_retries_on_frame_and_prevents_early_shutdown() {
     crate::session_bridge::tests::with_isolated_session_test(|| {
         let fixture = Fixture::new();
