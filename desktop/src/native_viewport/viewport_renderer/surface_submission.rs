@@ -133,8 +133,7 @@ fn configure_surfaces(
     render_instance: Res<RenderInstance>,
     render_adapter: Res<RenderAdapter>,
     render_device: Res<RenderDevice>,
-    submission: Res<SharedSubmission>,
-    _queue_exclusion: ResMut<RenderQueue>,
+    (submission, _queue_exclusion): (Res<SharedSubmission>, ResMut<RenderQueue>),
 ) {
     // A normal system keeps macOS's NonSendMarker/main-thread routing. Mutable
     // queue access also excludes same-world GPU-copy submission systems.
