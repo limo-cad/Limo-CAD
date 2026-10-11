@@ -655,15 +655,15 @@ fn exact_step_write_detaches_shapes_and_preserves_metadata_and_job_fences() {
                     let mut min = [f32::INFINITY; 3];
                     let mut max = [f32::NEG_INFINITY; 3];
                     for body in &imported.bodies {
-                        for point in body.positions.chunks_exact(3) {
+                        for point in body.positions.as_chunks::<3>().0 {
                             for axis in 0..3 {
                                 min[axis] = min[axis].min(point[axis]);
                                 max[axis] = max[axis].max(point[axis]);
                             }
                         }
                     }
-                    for axis in 0..3 {
-                        assert!(min[axis].abs() < 1e-3);
+                    for coordinate in min {
+                        assert!(coordinate.abs() < 1e-3);
                     }
                     for (actual, expected) in max.into_iter().zip([100., 25., 6.]) {
                         assert!((actual - expected).abs() < 1e-3);
