@@ -227,19 +227,20 @@ pub(super) fn issue_message(engine: &AppState, issue: &Value) -> Result<String, 
         .as_array()
         .filter(|ids| !ids.is_empty())
     {
-        let structure = read_assembly(engine)?.component_structure;
-        let names: Vec<_> = ids
-            .iter()
-            .filter_map(Value::as_u64)
-            .map(|id| {
-                structure
-                    .occurrences
-                    .iter()
-                    .find(|o| o.id.0 == id)
-                    .map(|o| format!("{} (occurrence {id})", o.name))
-                    .unwrap_or_else(|| format!("Occurrence {id}"))
-            })
-            .collect();
+        let names: Vec<_> = engine.with_assembly(|assembly| {
+            ids.iter()
+                .filter_map(Value::as_u64)
+                .map(|id| {
+                    assembly
+                        .component_structure
+                        .occurrences
+                        .iter()
+                        .find(|o| o.id.0 == id)
+                        .map(|o| format!("{} (occurrence {id})", o.name))
+                        .unwrap_or_else(|| format!("Occurrence {id}"))
+                })
+                .collect()
+        });
         message.push_str(&format!(" — {}", names.join(", ")));
     }
     Ok(message)
