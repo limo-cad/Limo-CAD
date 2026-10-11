@@ -415,6 +415,172 @@ fn native_owned_query_retains_outcome_until_liveness_and_delivery_succeed() {
 }
 
 #[test]
+fn native_drawing_query_releases_live_guards_and_fences_original_completion_once() {
+    super::super::tests::with_isolated_session_test(|| {
+        for case in ["live", "edit", "replace", "liveness", "capture_failure"] {
+            let f = Fixture::new();
+            let mutate = |operation: &str, arguments: Value| {
+                f.state
+                    .apply_native_mutation(&f.engine, &f.owner, operation, &arguments, || Ok(()))
+                    .unwrap()
+                    .value
+            };
+            mutate(
+                "sketch_begin",
+                json!({"name":"Query box","plane":{"type":"origin_plane","plane":"xy"}}),
+            );
+            mutate(
+                "sketch_add_rectangle",
+                json!({"mode":"two_point","p1":{"x":0.,"y":0.},"p2":{"x":40.,"y":30.},"ctrl_held":true}),
+            );
+            mutate("sketch_finish", json!({}));
+            mutate(
+                "solid_extrude",
+                json!({"sketch_name":"Query box","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":6.}}),
+            );
+            let scene = f.engine.solid_scene_snapshot();
+            assert_eq!(scene.bodies.len(), 1);
+            let body = scene.bodies[0].id;
+            mutate(
+                "drawing_create_sheet",
+                json!({"name":"Native query","format":"a4","orientation":"landscape"}),
+            );
+            mutate(
+                "drawing_add_view",
+                json!({"sheet_id":1,"view":{"name":"Top","kind":"top","body_ids":[body],"direction":[0.,0.,1.],"up":[0.,1.,0.],"position":[100.,75.],"scale":1.}}),
+            );
+            let revision = f
+                .state
+                .native_document_receipt(&f.engine, &f.owner)
+                .unwrap()
+                .revision;
+            let before =
+                parse_engine_envelope(f.engine.engine_call("project_export_model", "")).unwrap();
+            let id = "620-1";
+            let controls = f.root.join(&f.session).join("controls");
+            let request_path = controls.join(format!("{id}.request.json"));
+            let result_path = controls.join(format!("{id}.result.json"));
+            let payload =
+                json!({"sheet_id":if case == "capture_failure" {999} else {1},"format":"svg"})
+                    .to_string();
+            atomic_write(&request_path, &json!({"id":id,"expires_ms":now_ms()+30_000,
+                "owner":{"session_id":f.session,"window_id":"main","document_id":f.owner.document_id,"process_instance_id":f.state.process_instance_id,"base_generation":revision},
+                "sketch_query":{"method":"drawing_export","payload":payload}}).to_string()).unwrap();
+            f.state.refresh_query_liveness("main").unwrap();
+            let heartbeat = f.root.join(&f.session).join("heartbeat.json");
+            let saved_heartbeat = fs::read(&heartbeat).unwrap();
+            let mut observed = 0;
+            let mut original_ticket = None;
+            let mut actual_projection = None;
+            let outcome = control_for_window_owned_observing(
+                &f.state,
+                "main",
+                &f.engine,
+                None,
+                Some((&f.owner, id)),
+                |request, projection| {
+                    observed += 1;
+                    assert_eq!(observed, 1);
+                    assert!(!projection.visible.is_empty());
+                    actual_projection = Some(json!({"request":request,"projection":projection}));
+                    // These are the actual production locks while the real
+                    // exporter invokes its actual completed-projection observer.
+                    let _lease = f.state.process_lease_path.try_lock().unwrap();
+                    let publishers = f.state.publishers.try_lock().unwrap();
+                    let admission = publishers["main"].native_control.as_ref().unwrap();
+                    assert!(admission.started && admission.pending_receipt.is_none());
+                    original_ticket = Some(admission.ticket.clone());
+                    f.engine
+                        .with_drawing(|drawing| assert_eq!(drawing.sheets.len(), 1));
+                    drop(publishers);
+                    drop(_lease);
+                    match case {
+                        "edit" => {
+                            let mut drawing = (*f.engine.shared_drawing_snapshot()).clone();
+                            drawing.sheets[0].name = "Changed during native query".into();
+                            mutate(
+                                "drawing_set_document",
+                                serde_json::to_value(drawing).unwrap(),
+                            );
+                        }
+                        "replace" => {
+                            mutate("cad_new_project", json!({}));
+                        }
+                        "liveness" => {
+                            fs::remove_file(&heartbeat).unwrap();
+                            fs::create_dir(&heartbeat).unwrap();
+                        }
+                        _ => {}
+                    }
+                },
+            );
+            assert!(!request_path.exists());
+            if case == "liveness" {
+                assert!(outcome.is_err() && !result_path.exists());
+                let publishers = f.state.publishers.lock().unwrap();
+                let admission = publishers["main"].native_control.as_ref().unwrap();
+                assert_eq!(Some(&admission.ticket), original_ticket.as_ref());
+                assert!(
+                    admission.started
+                        && admission.pending_receipt.is_some()
+                        && admission.query_liveness
+                );
+                drop(publishers);
+                fs::remove_dir(&heartbeat).unwrap();
+                atomic_write(&heartbeat, std::str::from_utf8(&saved_heartbeat).unwrap()).unwrap();
+                retry_pending(&f.state, &f.engine, "main").unwrap();
+                assert_eq!(
+                    observed, 1,
+                    "Delivery retry must not export or observe again"
+                );
+            } else {
+                let handoff = outcome.unwrap();
+                if case == "live" {
+                    assert_eq!(handoff["document_id"], f.owner.document_id);
+                    assert_eq!(handoff["engine_revision"], revision);
+                    assert_eq!(
+                        handoff["drawing_projections"][0],
+                        actual_projection.unwrap()
+                    );
+                } else {
+                    assert!(
+                        handoff.is_null(),
+                        "Stale or failed geometry cannot enter presentation"
+                    );
+                }
+            }
+            let response = f.read_result(id);
+            let delivered =
+                NativeControlAdmission::decode(&response["control_admission"].to_string()).unwrap();
+            assert_eq!(delivered.document_id, f.owner.document_id);
+            assert_eq!(delivered.epoch, f.owner.epoch);
+            assert_eq!(delivered.revision, revision);
+            if let Some(ticket) = original_ticket {
+                assert_eq!(delivered, ticket.marker);
+            }
+            if matches!(case, "live" | "liveness") {
+                assert_eq!(response["status"], "applied");
+                assert!(!response["value"]["content"].as_str().unwrap().is_empty());
+                assert_eq!(
+                    parse_engine_envelope(f.engine.engine_call("project_export_model", ""))
+                        .unwrap(),
+                    before
+                );
+            } else {
+                assert_eq!(response["status"], "failed");
+                assert!(response["value"].is_null());
+                if case != "capture_failure" {
+                    assert_eq!(response["render_status"], "owner_changed");
+                }
+            }
+            assert_eq!(observed, usize::from(case != "capture_failure"));
+            assert!(!has_pending(&f.state, "main").unwrap());
+            assert!(!controls.join(format!("{id}.admitted.json")).exists());
+        }
+    });
+}
+
+#[test]
 fn native_rejected_completion_retries_transport_without_restarting_action() {
     super::super::tests::with_isolated_session_test(|| {
         let f = Fixture::new();

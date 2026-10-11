@@ -1717,6 +1717,20 @@ fn control_for_window_owned(
     response: Option<Value>,
     expected: Option<(&limo_cad_interface::DocumentContext, &str)>,
 ) -> Result<Value, String> {
+    control_for_window_owned_observing(state, window_label, engine, response, expected, |_, _| {})
+}
+
+fn control_for_window_owned_observing(
+    state: &SessionBridgeState,
+    window_label: &str,
+    engine: &AppState,
+    response: Option<Value>,
+    expected: Option<(&limo_cad_interface::DocumentContext, &str)>,
+    mut observed: impl FnMut(
+        &limo_cad_occt::DrawingProjectionRequest,
+        &limo_cad_occt::DrawingProjectionDto,
+    ),
+) -> Result<Value, String> {
     let mut lease_path = state
         .process_lease_path
         .lock()
@@ -1834,6 +1848,7 @@ fn control_for_window_owned(
             None
         };
         if let Some(query) = request.get("sketch_query") {
+            let source_document_id = publisher.active_project_session_id.clone();
             let method = query.get("method").and_then(Value::as_str).unwrap_or("");
             let payload = query.get("payload").and_then(Value::as_str).unwrap_or("");
             let mut projections = std::collections::VecDeque::new();
@@ -1841,6 +1856,7 @@ fn control_for_window_owned(
             let mut completed =
                 |request: &limo_cad_occt::DrawingProjectionRequest,
                  projection: &limo_cad_occt::DrawingProjectionDto| {
+                    observed(request, projection);
                     let value = json!({"request": request, "projection": projection});
                     let bytes = value.to_string().len();
                     projections.push_back((value, bytes));
@@ -1863,6 +1879,41 @@ fn control_for_window_owned(
                 .transpose();
             let result = if let Err(error) = start {
                 Err(error)
+            } else if supported && method == "drawing_export" && native_ticket.is_some() {
+                let export_request = serde_json::from_str::<
+                    limo_cad_occt::drawing_export::DrawingExportRequest,
+                >(payload)
+                .map_err(|error| format!("bad request payload: {error}"));
+                let prepared = export_request
+                    .as_ref()
+                    .map_err(Clone::clone)
+                    .and_then(|request| engine.prepare_drawing_export(request));
+                // The original private admission remains live while independent
+                // geometry owns HLR. Neither publisher nor process lease may be
+                // retained across the real exporter or its completion observer.
+                drop(publishers);
+                drop(lease_path);
+                let content = prepared
+                    .as_ref()
+                    .map_err(Clone::clone)
+                    .and_then(|prepared| prepared.content_observing(&mut completed));
+                lease_path = state
+                    .process_lease_path
+                    .lock()
+                    .map_err(|_| "session process lease lock poisoned")?;
+                publishers = state
+                    .publishers
+                    .lock()
+                    .map_err(|_| "publisher lock poisoned")?;
+                match prepared {
+                    Ok(prepared) => engine.validate_drawing_export(&prepared).and_then(|()| {
+                        let request = export_request.expect("prepared export has parsed intent");
+                        content.map(|content| {
+                            json!({"format":request.format,"encoding":"utf8","content":content,"sheet_id":request.sheet_id})
+                        })
+                    }),
+                    Err(error) => Err(error),
+                }
             } else if supported {
                 if method == "drawing_export" {
                     parse_engine_envelope(engine.drawing_export_observing(payload, &mut completed))
@@ -1872,6 +1923,9 @@ fn control_for_window_owned(
             } else {
                 Err("unsupported live engine query".into())
             };
+            let publisher = publishers
+                .get_mut(window_label)
+                .ok_or("The query publisher is unavailable before completion")?;
             let mut response = match result {
                 Ok(value) => json!({"status":"applied","value":value}),
                 Err(error) => json!({"status":"failed","error":error}),
@@ -1887,17 +1941,6 @@ fn control_for_window_owned(
                     0,
                 ));
             }
-            let handoff = if response["status"] == "applied" && !projections.is_empty() {
-                json!({
-                    "session_id": session_id,
-                    "document_id": publisher.active_project_session_id,
-                    "engine_revision": publisher.active_mut().engine_revision,
-                    "drawing_projections": projections.into_iter().map(|(value, _)| value).collect::<Vec<_>>(),
-                })
-            } else {
-                Value::Null
-            };
-
             let id = request["id"].as_str().unwrap();
             let presentation = expected.map(|(owner, _)| (owner, generation));
             if let Some(ticket) = native_ticket.as_ref().filter(|_| supported) {
@@ -1915,7 +1958,7 @@ fn control_for_window_owned(
             }
             // A consumer may submit its next query or Stop as soon as the
             // receipt is visible. Publish both liveness files first, while
-            // retaining the same owner/revision and process-lease locks.
+            // retaining the reacquired owner/revision and process-lease locks.
             if supported {
                 state.refresh_query_liveness_locked(
                     window_label,
@@ -1946,7 +1989,21 @@ fn control_for_window_owned(
                 )?;
                 let _ = fs::remove_file(path);
             }
-            return Ok(handoff);
+            // Completion validates the original admission and exact owner before
+            // any projected result can enter presentation. Never relabel a stale
+            // source with the window's newly active document or generation.
+            return Ok(
+                if response["status"] == "applied" && !projections.is_empty() {
+                    json!({
+                        "session_id": session_id,
+                        "document_id": source_document_id,
+                        "engine_revision": generation,
+                        "drawing_projections": projections.into_iter().map(|(value, _)| value).collect::<Vec<_>>(),
+                    })
+                } else {
+                    Value::Null
+                },
+            );
         }
         if native_ticket.is_some() {
             return Ok(request);
