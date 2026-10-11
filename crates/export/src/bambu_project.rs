@@ -1473,7 +1473,7 @@ fn resolved_reference_binding(
                     })
             })
             .collect();
-        return Err(err(format!("CAD body {} occurrence {} expected volume UUID {} with identify_id {}; target identity is missing or ambiguous after native save. Native candidate bindings: [{}]. Inspect and explicitly review each binding; clearing the old reference adopts a new inherited baseline, without name/order matching",part.binding.body_id.0,part.binding.occurrence_id,part.target_uuid,part.instance_identify_id,candidates.join("; "))));
+        return Err(err(format!("CAD body {} occurrence {} expected volume UUID {} with identify_id {}; target identity is missing or ambiguous after native save. Native candidate bindings: [{}]. Inspect and explicitly review complete bindings for every intended repeated instance and normal multipart sibling. Clear the old refresh reference and explicitly select Start reviewed native baseline to adopt the inspected native settings; clearing a handoff alone does not replace a stale embedded reference. No name/order matching or automatic adoption is performed",part.binding.body_id.0,part.binding.occurrence_id,part.target_uuid,part.instance_identify_id,candidates.join("; "))));
     }
     Ok(matches.remove(0))
 }
