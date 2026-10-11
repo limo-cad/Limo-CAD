@@ -1,6 +1,7 @@
 use super::*;
 use crate::native_viewport::ui::HudAxisMark;
 use crate::session_bridge::native_interface::tests::Fixture;
+mod grid;
 mod workspace;
 
 #[test]

@@ -469,6 +469,7 @@
     "fit": "Ajustar",
     "displaySettings": "Configuración de visualización",
     "gridSettings": "Configuración de cuadrícula",
+    "showGrid": "Mostrar cuadrícula",
     "undo": "Deshacer",
     "redo": "Rehacer",
     "lookAtSketch": "Volver a la vista plana del croquis",

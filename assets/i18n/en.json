@@ -469,6 +469,7 @@
     "fit": "Fit",
     "displaySettings": "Display Settings",
     "gridSettings": "Grid Settings",
+    "showGrid": "Show Grid",
     "undo": "Undo",
     "redo": "Redo",
     "lookAtSketch": "Return to Flat Sketch View",

@@ -2823,13 +2823,8 @@ fn draw_cad_gizmos(
     keep_gizmo_asset_resident(&mut direct_pick_feedback);
     keep_gizmo_asset_resident(&mut profile_borders);
 
-    if state.mode == ViewportMode::Sketch {
-        if let Some(sketch) = model
-            .document
-            .active_sketch
-            .as_ref()
-            .filter(|_| !state.hide_sketch_grid)
-        {
+    if state.grid_visible() && state.mode == ViewportMode::Sketch {
+        if let Some(sketch) = model.document.active_sketch.as_ref() {
             let layout = grid_layout(camera.camera, *viewport, &sketch.basis);
             draw_grid_on_basis(
                 &mut gizmos,
@@ -2841,7 +2836,7 @@ fn draw_cad_gizmos(
                 major,
             );
         }
-    } else {
+    } else if state.grid_visible() {
         let [(_, ground, _), ..] = origin_plane_bases();
         let layout = grid_layout(camera.camera, *viewport, &ground);
         draw_grid_on_basis(
@@ -5961,6 +5956,66 @@ pub(crate) fn apply_interface_gpu_stock_preference(world: &mut World, enabled: b
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn viewport_grid_visibility_removes_and_restores_rendered_grid_lines() {
+        use bevy_gizmos::{config::DefaultGizmoConfigGroup, GizmoAsset, GizmoHandles};
+        let engine = crate::state::AppState::new();
+        let created: serde_json::Value = serde_json::from_str(
+            &engine.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#),
+        )
+        .unwrap();
+        assert_eq!(created["ok"], true, "{created}");
+        let mut app = interface_scene_fixture();
+        app.init_asset::<GizmoAsset>()
+            .init_gizmo_group::<DefaultGizmoConfigGroup>();
+        apply_interface_model(
+            app.world_mut(),
+            crate::session_bridge::native_interface::model_snapshot(&engine),
+        )
+        .unwrap();
+        let vertices = |world: &mut World| {
+            world.run_system_cached(draw_cad_gizmos).unwrap();
+            world.run_schedule(bevy::app::Last);
+            world
+                .resource::<GizmoHandles>()
+                .handles()
+                .get(&std::any::TypeId::of::<DefaultGizmoConfigGroup>())
+                .and_then(Option::as_ref)
+                .and_then(|handle| world.resource::<Assets<GizmoAsset>>().get(handle))
+                .map_or(0, |asset| asset.buffer().list_positions.len())
+        };
+        for mode in [
+            ViewportMode::Solid,
+            ViewportMode::Sketch,
+            ViewportMode::PickPlane,
+        ] {
+            app.world_mut()
+                .resource_mut::<PresentationResource>()
+                .0
+                .mode = mode;
+            let showing = vertices(app.world_mut());
+            assert!(showing > 0, "{mode:?} must draw its grid by default");
+            app.world_mut()
+                .resource_mut::<PresentationResource>()
+                .0
+                .toggle_grid();
+            let hidden = vertices(app.world_mut());
+            assert!(
+                hidden < showing,
+                "Hiding the {mode:?} grid must remove its rendered lines"
+            );
+            app.world_mut()
+                .resource_mut::<PresentationResource>()
+                .0
+                .toggle_grid();
+            assert_eq!(
+                vertices(app.world_mut()),
+                showing,
+                "Showing the {mode:?} grid must restore its lines"
+            );
+        }
+    }
 
     fn native_cache_value(response: String) -> serde_json::Value {
         let response: serde_json::Value = serde_json::from_str(&response).unwrap();

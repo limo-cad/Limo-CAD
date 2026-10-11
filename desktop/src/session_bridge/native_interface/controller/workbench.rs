@@ -60,6 +60,7 @@ pub(crate) enum Command {
     Menu(String),
     Dismiss,
     Navigation(NavigationTool),
+    ToggleGrid,
     Workspace(Workspace),
     DrawingFit,
     DrawingZoom(i8),
@@ -272,6 +273,13 @@ pub(crate) fn execute(world: &mut World, command: &Command) -> Result<Value, Str
     if let Command::CamView(command) = command {
         return cam_view::execute(world, command);
     }
+    if matches!(command, Command::ToggleGrid) {
+        let (document, _, mut presentation, _) = native_viewport::interface_view_snapshot(world);
+        presentation.toggle_grid();
+        let visible = presentation.grid_visible();
+        native_viewport::apply_interface_view(world, &document, None, Some(presentation))?;
+        return Ok(json!({"grid_visible":visible}));
+    }
     world.init_resource::<Workbench>();
     let mut state = world.resource_mut::<Workbench>();
     match command {
@@ -292,6 +300,7 @@ pub(crate) fn execute(world: &mut World, command: &Command) -> Result<Value, Str
             state.menu = None;
         }
         Command::CamView(_) => unreachable!(),
+        Command::ToggleGrid => unreachable!(),
         Command::DrawingFit | Command::DrawingZoom(_) => unreachable!(),
         Command::CamExport(_) => return Err("Post controls require their document receipt".into()),
     }

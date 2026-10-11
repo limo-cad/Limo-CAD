@@ -1,0 +1,7 @@
+running 4 tests
+test native_editor::snapping::tests::midpoint_commit_keeps_the_viewport_grid_instead_of_the_script_default ... ok
+test native_viewport::platform::tests::viewport_grid_visibility_removes_and_restores_rendered_grid_lines ... ok
+test session_bridge::native_interface::controller::workbench::tests::grid::viewport_grid_and_sketch_palette_share_visibility_without_changing_snap_or_geometry ... ok
+test session_bridge::native_interface::controller::workbench::tests::grid::viewport_grid_button_activates_and_rejects_a_mismatched_rendered_document ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1052 filtered out; finished in 0.08s

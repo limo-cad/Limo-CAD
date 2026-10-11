@@ -23,7 +23,6 @@ pub(crate) enum PaletteCommand {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct Visibility {
-    pub hide_grid: bool,
     pub hide_points: bool,
     pub hide_dimensions: bool,
     pub hide_constraints: bool,
@@ -66,6 +65,16 @@ pub(super) fn execute(
             state.scroll = (state.scroll + f32::from(direction) * 120.).clamp(0., state.max_scroll);
         }
         PaletteCommand::LookAt => look_at_sketch(world, engine, bridge, owner, false)?,
+        PaletteCommand::Grid => {
+            let (_, _, mut presentation, _) = native_viewport::interface_view_snapshot(world);
+            presentation.hide_sketch_grid = !presentation.hide_sketch_grid;
+            native_viewport::apply_interface_view(
+                world,
+                &owner.document_id,
+                None,
+                Some(presentation),
+            )?;
+        }
         PaletteCommand::Snap | PaletteCommand::Iso => {
             let (operation, arguments) = match command {
                 PaletteCommand::Snap => {
@@ -88,7 +97,6 @@ pub(super) fn execute(
             let mut state = world.resource_mut::<Palette>();
             let value = match command {
                 PaletteCommand::Collapse => &mut state.collapsed,
-                PaletteCommand::Grid => &mut state.visibility.hide_grid,
                 PaletteCommand::Points => &mut state.visibility.hide_points,
                 PaletteCommand::Dimensions => &mut state.visibility.hide_dimensions,
                 PaletteCommand::Constraints => &mut state.visibility.hide_constraints,
@@ -115,10 +123,8 @@ pub(super) fn synchronize(
             state.stamp = editor.stamp.clone();
         }
         let (_, _, mut presentation, _) = native_viewport::interface_view_snapshot(world);
-        if presentation.hide_sketch_grid != state.visibility.hide_grid
-            || presentation.hide_sketch_points != state.visibility.hide_points
-        {
-            presentation.hide_sketch_grid = state.visibility.hide_grid;
+        let grid_visible = !presentation.hide_sketch_grid;
+        if presentation.hide_sketch_points != state.visibility.hide_points {
             presentation.hide_sketch_points = state.visibility.hide_points;
             native_viewport::apply_interface_view(
                 world,
@@ -223,11 +229,7 @@ pub(super) fn synchronize(
                 let rows = [
                     ("Linetype", None, false),
                     ("Return to Flat View", Some(PaletteCommand::LookAt), false),
-                    (
-                        "Sketch Grid",
-                        Some(PaletteCommand::Grid),
-                        !state.visibility.hide_grid,
-                    ),
+                    ("Sketch Grid", Some(PaletteCommand::Grid), grid_visible),
                     ("Snap", Some(PaletteCommand::Snap), sketch.grid_snap),
                     ("Slice", None, false),
                     ("Profile", None, false),
