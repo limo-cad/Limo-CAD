@@ -213,31 +213,6 @@ unsafe fn submit(dc: HDC, page: &Page, flags: PRINTDLGEX_FLAGS) -> Result<(), St
     result
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn returned_print_to_file_option_sets_spooler_output_without_changing_title() {
-        let title: Vec<u16> = "Drawing sheet".encode_utf16().chain(Some(0)).collect();
-        let ordinary = document_info(&title, PD_RETURNDC | PD_USEDEVMODECOPIESANDCOLLATE);
-        assert!(ordinary.lpszOutput.is_null());
-        assert_eq!(ordinary.lpszDocName.0, title.as_ptr());
-        assert_eq!(ordinary.cbSize as usize, std::mem::size_of::<DOCINFOW>());
-
-        let to_file = document_info(
-            &title,
-            PD_RETURNDC | PD_USEDEVMODECOPIESANDCOLLATE | PD_PRINTTOFILE,
-        );
-        assert_eq!(to_file.lpszDocName.0, title.as_ptr());
-        // Read the actual StartDocW argument, including its UTF-16 terminator.
-        assert_eq!(
-            unsafe { std::slice::from_raw_parts(to_file.lpszOutput.0, 6) },
-            &[70, 73, 76, 69, 58, 0]
-        );
-    }
-}
-
 unsafe fn raster_tiles(dc: HDC, page: &Page, dpi: [i32; 2]) -> Result<(), String> {
     let sample = [dpi[0].min(600), dpi[1].min(600)];
     let pixels = [
@@ -320,4 +295,29 @@ unsafe fn raster_tiles(dc: HDC, page: &Page, dpi: [i32; 2]) -> Result<(), String
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn returned_print_to_file_option_sets_spooler_output_without_changing_title() {
+        let title: Vec<u16> = "Drawing sheet".encode_utf16().chain(Some(0)).collect();
+        let ordinary = document_info(&title, PD_RETURNDC | PD_USEDEVMODECOPIESANDCOLLATE);
+        assert!(ordinary.lpszOutput.is_null());
+        assert_eq!(ordinary.lpszDocName.0, title.as_ptr());
+        assert_eq!(ordinary.cbSize as usize, std::mem::size_of::<DOCINFOW>());
+
+        let to_file = document_info(
+            &title,
+            PD_RETURNDC | PD_USEDEVMODECOPIESANDCOLLATE | PD_PRINTTOFILE,
+        );
+        assert_eq!(to_file.lpszDocName.0, title.as_ptr());
+        // Read the actual StartDocW argument, including its UTF-16 terminator.
+        assert_eq!(
+            unsafe { std::slice::from_raw_parts(to_file.lpszOutput.0, 6) },
+            &[70, 73, 76, 69, 58, 0]
+        );
+    }
 }
