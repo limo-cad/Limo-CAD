@@ -10,7 +10,7 @@ pub struct PreparedBambuPreview {
     request: BambuExportRequest,
     names: std::collections::BTreeMap<limo_cad_core::BodyId, String>,
     appearances: Vec<BodyAppearance>,
-    structure: limo_cad_assembly::ComponentStructureDto,
+    structure: limo_cad_sketch::ComponentStructureDto,
     intent: limo_cad_core::PrintIntentDocumentDto,
     solution: limo_cad_sketch::AssemblySolutionDto,
     session_id: String,
