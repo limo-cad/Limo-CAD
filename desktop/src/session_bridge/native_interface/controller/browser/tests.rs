@@ -2,6 +2,196 @@ use super::*;
 use crate::session_bridge::native_interface::tests::Fixture;
 
 #[test]
+fn browser_projection_excludes_history_and_invalidates_only_consumed_inputs() {
+    let mut document = Document::new("Stock");
+    let original = BrowserDocument::retain(&document, None);
+    document.add_feature("Unrelated history", limo_cad_core::FeatureKind::Extrude);
+    document.settings_mut().dimension_style = limo_cad_core::DimensionStyle::Iso;
+    let history_changed = BrowserDocument::retain(&document, Some(&original));
+    assert!(Arc::ptr_eq(&original, &history_changed));
+
+    document.settings_mut().units = UnitSystem::In;
+    let units_changed = BrowserDocument::retain(&document, Some(&history_changed));
+    assert!(!Arc::ptr_eq(&original, &units_changed));
+    assert_eq!(original.units, UnitSystem::Mm);
+    assert_eq!(units_changed.units, UnitSystem::In);
+
+    document.set_named_view_children(&["Front".to_owned()]);
+    let tree_changed = BrowserDocument::retain(&document, Some(&units_changed));
+    assert!(!Arc::ptr_eq(&units_changed, &tree_changed));
+    assert_ne!(units_changed.browser, tree_changed.browser);
+    let retired = Arc::downgrade(&tree_changed);
+    let reader = Arc::clone(&tree_changed);
+    drop(tree_changed);
+    assert!(retired.upgrade().is_some());
+    drop(reader);
+    assert!(retired.upgrade().is_none());
+}
+
+#[test]
+fn browser_sync_reuses_projection_across_sketch_edits_and_retires_owner() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let owner = fixture.owner();
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &owner,
+                "sketch_begin",
+                &json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+                || Ok(()),
+            )
+            .unwrap();
+        let services = NativeServices {
+            engine: fixture.engine.clone(),
+            bridge: fixture.bridge.clone(),
+        };
+        let mut app = native_viewport::interface_scene_fixture();
+        let world = app.world_mut();
+        world.init_resource::<Assets<Image>>();
+        world.init_resource::<ViewportUiAssets>();
+        world.spawn(InterfaceCamera);
+        let bounds = InterfaceRect {
+            x: 0.,
+            y: 120.,
+            width: 232.,
+            height: 700.,
+        };
+        let mut scroll = 0.;
+        let revision = fixture
+            .bridge
+            .native_document_receipt(&fixture.engine, &owner)
+            .unwrap()
+            .revision;
+        synchronize(world, &services, &owner, revision, bounds, &mut scroll).unwrap();
+        let initial = Arc::clone(world.resource::<Browser>().document.as_ref().unwrap());
+        let folder = initial
+            .browser
+            .iter()
+            .find(|node| node.kind == Kind::SketchesFolder)
+            .unwrap()
+            .id
+            .0;
+        world.resource_mut::<Browser>().collapsed.insert(folder);
+        world.resource_mut::<Browser>().selected = Some(folder);
+        let edited = fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &owner,
+                "sketch_add_point",
+                &json!({"position":{"x":20.,"y":30.}}),
+                || Ok(()),
+            )
+            .unwrap();
+        assert!(edited.engine_revision > revision);
+        let model_before_read = fixture.engine.engine_call("project_export_model", "");
+        synchronize(
+            world,
+            &services,
+            &owner,
+            edited.engine_revision,
+            bounds,
+            &mut scroll,
+        )
+        .unwrap();
+        assert!(Arc::ptr_eq(
+            &initial,
+            world.resource::<Browser>().document.as_ref().unwrap()
+        ));
+        assert!(world.resource::<Browser>().collapsed.contains(&folder));
+        assert_eq!(world.resource::<Browser>().selected, Some(folder));
+        assert_eq!(
+            model_before_read,
+            fixture.engine.engine_call("project_export_model", "")
+        );
+
+        let renamed = fixture.rename(&owner, "Bench stock").unwrap();
+        synchronize(
+            world,
+            &services,
+            &owner,
+            renamed.engine_revision,
+            bounds,
+            &mut scroll,
+        )
+        .unwrap();
+        let renamed_snapshot = Arc::clone(world.resource::<Browser>().document.as_ref().unwrap());
+        assert!(!Arc::ptr_eq(&initial, &renamed_snapshot));
+        assert_eq!(initial.name, "Untitled");
+        assert_eq!(renamed_snapshot.name, "Bench stock");
+        assert!(world
+            .query::<&Text>()
+            .iter(world)
+            .any(|text| text.0 == "Bench stock"));
+        let retired = Arc::downgrade(&renamed_snapshot);
+
+        let successor = fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &owner,
+                "cad_new_project",
+                &json!({}),
+                || Ok(()),
+            )
+            .unwrap();
+        assert_ne!(owner, successor.context);
+        synchronize(
+            world,
+            &services,
+            &successor.context,
+            successor.engine_revision,
+            bounds,
+            &mut scroll,
+        )
+        .unwrap();
+        assert_eq!(world.resource::<Browser>().selected, None);
+        assert_eq!(
+            world.resource::<Browser>().document.as_ref().unwrap().name,
+            "Untitled"
+        );
+        assert!(!Arc::ptr_eq(
+            &renamed_snapshot,
+            world.resource::<Browser>().document.as_ref().unwrap()
+        ));
+        assert!(retired.upgrade().is_some());
+        drop(renamed_snapshot);
+        assert!(retired.upgrade().is_none());
+
+        // Equal-looking documents still belong to distinct owners. Reusing the
+        // predecessor here would retain its lifetime across document replacement.
+        let empty = Arc::clone(world.resource::<Browser>().document.as_ref().unwrap());
+        let next = fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &successor.context,
+                "cad_new_project",
+                &json!({}),
+                || Ok(()),
+            )
+            .unwrap();
+        assert_ne!(successor.context, next.context);
+        synchronize(
+            world,
+            &services,
+            &next.context,
+            next.engine_revision,
+            bounds,
+            &mut scroll,
+        )
+        .unwrap();
+        let current = world.resource::<Browser>().document.as_ref().unwrap();
+        assert_eq!(empty.name, current.name);
+        assert_eq!(empty.units, current.units);
+        assert_eq!(empty.browser, current.browser);
+        assert!(!Arc::ptr_eq(&empty, current));
+    });
+}
+
+#[test]
 fn long_browser_names_clip_before_actions_at_multiple_scales() {
     use bevy::camera::{ComputedCameraValues, RenderTargetInfo, Viewport};
     use bevy::ecs::system::RunSystemOnce;
