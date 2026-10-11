@@ -148,6 +148,10 @@ pub use portable_export::{
     FinishedPortableMeshExport, FinishedStepExport, PortableMeshFormat, PreparedPortableMeshExport,
     PreparedStepExport,
 };
+#[path = "motion_path_snapshot.rs"]
+mod motion_path_snapshot;
+pub use motion_path_snapshot::{FinishedMotionPathExport, PreparedMotionPathExport};
+
 #[path = "motion_evaluation_snapshot.rs"]
 mod motion_evaluation_snapshot;
 pub use motion_evaluation_snapshot::{FinishedMotionEvaluation, PreparedMotionEvaluation};
@@ -656,6 +660,9 @@ impl NativeEngineHost {
     pub fn engine_call(&self, method: &str, payload: &str) -> String {
         match method {
             "assembly_interference_check" => return self.assembly_interference_check(payload),
+            "assembly_export_motion_path_csv" => {
+                return self.assembly_export_motion_path_csv(payload)
+            }
             "assembly_evaluate_motion_study" => {
                 return self.assembly_evaluate_motion_study(payload)
             }
