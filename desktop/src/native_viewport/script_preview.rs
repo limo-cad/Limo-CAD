@@ -476,7 +476,8 @@ impl PreviewRenderer {
                 close_when_requested: false,
                 ..default()
             })
-            .set(cad_render_plugin());
+            .set(cad_render_plugin())
+            .set(cad_pbr_plugin());
 
         let plugins = plugins.disable::<PipelinedRenderingPlugin>();
         let plugins = plugins.disable::<bevy::winit::WinitPlugin>();
@@ -806,6 +807,44 @@ mod tests {
             deadline: Instant::now() + REQUEST_LIFETIME,
         });
         assert!(cancelled.load(Ordering::Acquire));
+    }
+
+    #[test]
+    #[ignore = "requires a GPU; run explicitly when validating CAD startup pipelines"]
+    fn native_preview_startup_does_not_compile_unused_compute_pipelines() {
+        let mut renderer = PreviewRenderer::new().unwrap();
+        renderer
+            .prepare_image(&AtomicBool::new(false), Instant::now() + REQUEST_LIFETIME)
+            .unwrap();
+        let render_world = renderer.app.sub_app(RenderApp).world();
+        assert!(matches!(
+            render_world.resource::<bevy::pbr::RenderMeshInstances>(),
+            bevy::pbr::RenderMeshInstances::CpuBuilding(_)
+        ));
+        assert!(renderer
+            .app
+            .world()
+            .resource::<bevy::light::cluster::GlobalClusterSettings>()
+            .gpu_clustering
+            .is_none());
+        let cache = render_world.resource::<PipelineCache>();
+        assert!(
+            cache.pipelines().next().is_some(),
+            "render real scene pipelines"
+        );
+        assert_eq!(
+            cache
+                .pipelines()
+                .filter(|pipeline| matches!(
+                    &pipeline.state,
+                    CachedPipelineState::Ok(
+                        bevy::render::render_resource::Pipeline::ComputePipeline(_)
+                    )
+                ))
+                .count(),
+            0,
+            "an empty CAD scene must not compile GPU instance, light-cluster or stock-removal kernels"
+        );
     }
 
     #[test]

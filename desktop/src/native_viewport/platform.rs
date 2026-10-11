@@ -17,7 +17,10 @@ use bevy::render::settings::{RenderCreation, WgpuFeatures, WgpuSettings, WgpuSet
 use bevy::{
     asset::RenderAssetUsages,
     camera::{visibility::RenderLayers, ClearColorConfig},
-    light::{NotShadowCaster, NotShadowReceiver},
+    light::{
+        cluster::{ClusterConfig, GlobalClusterSettings},
+        NotShadowCaster, NotShadowReceiver,
+    },
     mesh::Indices,
     prelude::*,
     render::{render_resource::PrimitiveTopology, RenderPlugin},
@@ -680,6 +683,16 @@ pub(super) fn cad_render_plugin() -> RenderPlugin {
     render_plugin
 }
 
+pub(super) fn cad_pbr_plugin() -> bevy::pbr::PbrPlugin {
+    // CAD presents retained, individually editable bodies. CPU instance
+    // preparation avoids compiling and dispatching GPU batch-building passes
+    // before the first menu frame, while keeping the same mesh/material renderer.
+    bevy::pbr::PbrPlugin {
+        use_gpu_instance_buffer_builder: false,
+        ..default()
+    }
+}
+
 /// The application viewport and immutable script previews run these exact systems
 /// in separate worlds. A preview never replaces the live model or camera.
 pub(super) fn install_cad_scene(app: &mut bevy::app::App) {
@@ -753,7 +766,13 @@ fn setup_scene(
     mut materials: ResMut<Assets<ReferencePlaneMaterial>>,
     mut gizmo_config: ResMut<GizmoConfigStore>,
     target: Option<Res<SceneImageTarget>>,
+    cluster_settings: Option<ResMut<GlobalClusterSettings>>,
 ) {
+    // The scene uses ambient and two directional lights, which do not belong
+    // to light clusters. Disable their otherwise eager GPU clustering passes.
+    if let Some(mut settings) = cluster_settings {
+        settings.gpu_clustering = None;
+    }
     configure_viewport_line_widths(
         &mut gizmo_config,
         VIEWPORT_LINE_REFERENCE_DIAGONAL * 0.8,
@@ -793,6 +812,7 @@ fn setup_scene(
             NativeViewportCamera,
             NativeCadCamera,
             Camera3d::default(),
+            ClusterConfig::None,
             VIEWPORT_MSAA,
             BoxShadowSamples(6),
             Projection::Perspective(PerspectiveProjection {
@@ -812,6 +832,7 @@ fn setup_scene(
             NativeOverlayCamera,
             IsDefaultUiCamera,
             Camera3d::default(),
+            ClusterConfig::None,
             VIEWPORT_MSAA,
             Camera {
                 order: 1,
@@ -6307,6 +6328,14 @@ mod tests {
             vec![Msaa::Sample4; 2],
             "both CAD and overlay cameras must use portable 4x multisampling"
         );
+        let mut cameras = world.query_filtered::<&ClusterConfig, With<NativeViewportCamera>>();
+        assert_eq!(cameras.iter(world).count(), 2);
+        assert!(cameras
+            .iter(world)
+            .all(|config| matches!(config, ClusterConfig::None)));
+        assert_eq!(world.query::<&DirectionalLight>().iter(world).count(), 2);
+        assert_eq!(world.query::<&PointLight>().iter(world).count(), 0);
+        assert_eq!(world.query::<&SpotLight>().iter(world).count(), 0);
     }
 
     #[test]
