@@ -32,7 +32,7 @@ impl Options {
                 "--bundle" if result.bundle.is_none() => {
                     result.bundle = Some(
                         args.next()
-                            .context("--bundle requires portable, deb, appimage or dmg")?,
+                            .context("--bundle requires portable, deb, appimage, app or dmg")?,
                     )
                 }
                 "--occt-root" if result.occt_root.is_none() => {
@@ -88,8 +88,10 @@ impl Options {
                     "unsupported macOS architecture {arch}"
                 );
                 ensure!(
-                    self.bundle.as_deref().is_none_or(|v| v == "dmg"),
-                    "macOS supports --bundle dmg"
+                    self.bundle
+                        .as_deref()
+                        .is_none_or(|v| matches!(v, "app" | "dmg")),
+                    "macOS supports --bundle app or dmg"
                 );
                 ensure!(
                     !self.stage_licenses,
@@ -104,7 +106,7 @@ impl Options {
 pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     let options = Options::parse(args)?;
     if options.help {
-        println!("Native Rust packaging; no Node, npm or PowerShell bundler.\nUsage: cargo xtask package [--bundle portable|deb|appimage|dmg] [--target WINDOWS_TARGET]\n       [--occt-root SDK_DIRECTORY] [--stage-licenses] [--computer-control]\nDefaults: Windows portable ZIP, Linux DEB + AppImage, macOS app + DMG.\nWindows targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc.\nWindows --computer-control enables guarded OS input for packaged keyboard qualification; default builds leave it disabled.\nInstall the host SDK and packaging/signing tools in docs/DEVELOPMENT.md.\nOCCT_ROOT, CARGO_TARGET_DIR and existing signing variables remain supported.");
+        println!("Native Rust packaging; no Node, npm or PowerShell bundler.\nUsage: cargo xtask package [--bundle portable|deb|appimage|app|dmg] [--target WINDOWS_TARGET]\n       [--occt-root SDK_DIRECTORY] [--stage-licenses] [--computer-control]\nDefaults: Windows portable ZIP, Linux DEB + AppImage, macOS app + DMG.\nmacOS --bundle app produces the signed app without a disk image.\nWindows targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc.\nWindows --computer-control enables guarded OS input for packaged keyboard qualification; default builds leave it disabled.\nInstall the host SDK and packaging/signing tools in docs/DEVELOPMENT.md.\nOCCT_ROOT, CARGO_TARGET_DIR and existing signing variables remain supported.");
         return Ok(());
     }
     options.validate(env::consts::OS, env::consts::ARCH)?;
@@ -197,6 +199,13 @@ mod tests {
             Options::default().validate(os, arch).unwrap();
         }
         assert!(parse(&["--help"]).unwrap().help);
+        let app_only = parse(&["--bundle", "app"]).unwrap();
+        for arch in ["x86_64", "aarch64"] {
+            app_only.validate("macos", arch).unwrap();
+        }
+        for (os, arch) in [("linux", "x86_64"), ("windows", "aarch64")] {
+            assert!(app_only.validate(os, arch).is_err());
+        }
         let controlled = parse(&["--computer-control"]).unwrap();
         for arch in ["x86_64", "aarch64"] {
             controlled.validate("windows", arch).unwrap();
