@@ -551,6 +551,87 @@ fn review_identity_includes_model_bindings_and_deliberate_confirmations() {
 }
 
 #[test]
+fn read_only_review_preserves_exact_model_and_key_shape_without_owned_model_input() {
+    let mut intent = intent();
+    intent.bambu.model = "large immutable saved model ".repeat(32_768);
+    let original = request(&intent).unwrap();
+    let key = review_key(&original, &intent.bambu.template().unwrap().summary);
+    let report: BambuProjectReport = serde_json::from_value(json!({
+        "template":intent.bambu.template().unwrap().summary,
+        "source_document_id":original.project.source_document_id,
+        "output_sha256":"b".repeat(64),"placement":"template","parts":[],"modifiers":[],
+        "invalidated_entries":[],"warnings":[],"metadata_readback_verified":true,
+        "installed_slicer_imported":false,"toolpaths_generated":false,
+        "refresh_reference":{
+            "version":1,"source_document_id":original.project.source_document_id,
+            "original_template_sha256":"a".repeat(64),"profile_sha256":"b".repeat(64),
+            "profile_identity_sha256":"c".repeat(64),"baseline_project_settings":{},
+            "written_project_settings":{},"parts":[],"modifiers":[],"height_objects":[]
+        }
+    }))
+    .unwrap();
+    // Exercise the same preview adoption and gate used by panel layout and Write.
+    accept_preview(&mut intent, key.clone(), report);
+    let choices = request_fields(&intent, false, false).unwrap();
+    assert!(choices.export.expected_model_json.is_none());
+    assert!(choices.template_base64.is_empty());
+    for _ in 0..3 {
+        check_review(&intent).unwrap();
+    }
+    for pointer in ["", "/export", "/project"] {
+        let mut malformed = key.clone();
+        malformed
+            .pointer_mut(pointer)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("unexpected_field".into(), Value::Null);
+        intent.bambu.reviewed.as_mut().unwrap().0 = malformed;
+        assert!(check_review(&intent).is_err());
+    }
+    for pointer in ["/export", "/project"] {
+        let mut malformed = key.clone();
+        *malformed.pointer_mut(pointer).unwrap() = Value::Null;
+        intent.bambu.reviewed.as_mut().unwrap().0 = malformed;
+        assert!(check_review(&intent).is_err());
+    }
+    for field in key["export"].as_object().unwrap().keys() {
+        let mut malformed = key.clone();
+        malformed["export"].as_object_mut().unwrap().remove(field);
+        intent.bambu.reviewed.as_mut().unwrap().0 = malformed;
+        assert!(check_review(&intent).is_err());
+    }
+    for field in key.as_object().unwrap().keys() {
+        let mut malformed = key.clone();
+        malformed.as_object_mut().unwrap().remove(field);
+        intent.bambu.reviewed.as_mut().unwrap().0 = malformed;
+        assert!(check_review(&intent).is_err());
+    }
+    for value in [Value::Null, json!(true), json!("different saved model")] {
+        let mut malformed = key.clone();
+        malformed["export"]["expected_model_json"] = value;
+        intent.bambu.reviewed.as_mut().unwrap().0 = malformed;
+        assert!(check_review(&intent).is_err());
+    }
+    intent.bambu.reviewed.as_mut().unwrap().0 = key;
+    intent.bambu.model.push('!');
+    assert!(check_review(&intent).is_err());
+    intent.bambu.model.pop();
+    check_review(&intent).unwrap();
+    intent.bambu.allow_appearance = true;
+    assert!(check_review(&intent).is_err());
+    intent.bambu.allow_appearance = false;
+    intent
+        .bambu
+        .template
+        .as_mut()
+        .unwrap()
+        .summary
+        .template_sha256 = "c".repeat(64);
+    assert!(check_review(&intent).is_err());
+}
+
+#[test]
 fn saved_native_identity_does_not_resubmit_obsolete_object_numbers() {
     let mut intent = intent();
     intent.bambu.bindings.push(BambuPartBinding {

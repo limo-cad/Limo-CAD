@@ -289,6 +289,13 @@ fn request_with_template(
     intent: &io::ExportIntent,
     include_bytes: bool,
 ) -> Result<BambuExportRequest, String> {
+    request_fields(intent, include_bytes, true)
+}
+fn request_fields(
+    intent: &io::ExportIntent,
+    include_bytes: bool,
+    include_model: bool,
+) -> Result<BambuExportRequest, String> {
     let s = &intent.bambu;
     let template = s.template()?;
     if intent.scope != limo_cad_export::MeshExportScope::Assembly {
@@ -312,7 +319,7 @@ fn request_with_template(
     bindings.sort();
     Ok(BambuExportRequest {
         export: MeshExportRequest {
-            expected_model_json: Some(s.model.clone()),
+            expected_model_json: include_model.then(|| s.model.clone()),
             body_ids: intent.body_ids.clone(),
             scope: intent.scope,
             slicer_target: limo_cad_export::SlicerTarget::BambuStudio,
@@ -346,11 +353,39 @@ pub(super) fn check_review(intent: &io::ExportIntent) -> Result<(), String> {
     if !intent.bambu.enabled {
         return Ok(());
     }
-    let request = request_with_template(intent, false)?;
     let (reviewed, _) = intent.bambu.reviewed.as_ref().ok_or(
         "Preview the Bambu project with its current bindings and confirmations before writing",
     )?;
-    if reviewed != &review_key(&request, &intent.bambu.template()?.summary) {
+    // Panel layout checks this gate repeatedly. Borrow the model for its exact
+    // comparison; only actual export jobs need an owned model/template payload.
+    let request = request_fields(intent, false, false)?;
+    let choices = review_key(&request, &intent.bambu.template()?.summary);
+    let matches = (|| {
+        let reviewed = reviewed.as_object()?;
+        let choices = choices.as_object()?;
+        if reviewed.len() != choices.len() {
+            return None;
+        }
+        for (name, expected) in choices {
+            let actual = reviewed.get(name)?;
+            if name == "export" {
+                let actual = actual.as_object()?;
+                let expected = expected.as_object()?;
+                if actual.len() != expected.len()
+                    || actual.get("expected_model_json")?.as_str()? != intent.bambu.model.as_str()
+                    || !expected.iter().all(|(field, value)| {
+                        field == "expected_model_json" || actual.get(field) == Some(value)
+                    })
+                {
+                    return None;
+                }
+            } else if actual != expected {
+                return None;
+            }
+        }
+        Some(())
+    })();
+    if matches.is_none() {
         return Err("Bambu project choices changed; preview them again before writing".into());
     }
     Ok(())
