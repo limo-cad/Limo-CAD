@@ -2140,14 +2140,20 @@ impl CadServer {
 fn parse_engine_envelope(raw: String) -> Result<Value, String> {
     let envelope: Value =
         serde_json::from_str(&raw).map_err(|error| format!("invalid engine response: {error}"))?;
+    engine_envelope_value(envelope)
+}
+
+fn engine_envelope_value(mut envelope: Value) -> Result<Value, String> {
     if envelope.get("ok").and_then(Value::as_bool) == Some(true) {
-        Ok(envelope.get("value").cloned().unwrap_or(Value::Null))
+        Ok(envelope
+            .get_mut("value")
+            .map(Value::take)
+            .unwrap_or(Value::Null))
     } else {
-        Err(envelope
-            .get("error")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown Limo CAD engine error")
-            .to_string())
+        Err(match envelope.get_mut("error").map(Value::take) {
+            Some(Value::String(error)) => error,
+            _ => "unknown Limo CAD engine error".into(),
+        })
     }
 }
 
@@ -5274,32 +5280,35 @@ fn tool_list_result(disclosure: &mut DisclosureState) -> Value {
     )]))
 }
 
-fn success_result(value: Value) -> Value {
-    let mut value = value;
-    let image = value
-        .pointer("/image/png_base64")
-        .and_then(Value::as_str)
-        .map(str::to_owned);
-    if image.is_some() {
-        value["image"]["png_base64"] = json!("(attached as image content)");
-    }
-    let structured = if value.is_object() {
-        value.clone()
-    } else {
-        json!({ "value": value.clone() })
+fn success_result(mut value: Value) -> Value {
+    let image = match value.pointer_mut("/image/png_base64") {
+        Some(Value::String(png)) => {
+            Some(std::mem::replace(png, "(attached as image content)".into()))
+        }
+        _ => None,
     };
-    let mut content = vec![json!({
-        "type": "text",
-        "text": serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string())
-    })];
+    let text = serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string());
+    let structured = if value.is_object() {
+        value
+    } else {
+        Value::Object(Map::from_iter([("value".into(), value)]))
+    };
+    let mut content = vec![Value::Object(Map::from_iter([
+        ("type".into(), Value::String("text".into())),
+        ("text".into(), Value::String(text)),
+    ]))];
     if let Some(png) = image {
-        content.push(json!({"type": "image", "data": png, "mimeType": "image/png"}));
+        content.push(Value::Object(Map::from_iter([
+            ("type".into(), Value::String("image".into())),
+            ("data".into(), Value::String(png)),
+            ("mimeType".into(), Value::String("image/png".into())),
+        ])));
     }
-    json!({
-        "content": content,
-        "structuredContent": structured,
-        "isError": false
-    })
+    Value::Object(Map::from_iter([
+        ("content".into(), Value::Array(content)),
+        ("structuredContent".into(), structured),
+        ("isError".into(), Value::Bool(false)),
+    ]))
 }
 
 fn tool_error(message: String) -> Value {
@@ -5310,7 +5319,11 @@ fn tool_error(message: String) -> Value {
 }
 
 fn response(id: Value, result: Value) -> Value {
-    json!({ "jsonrpc": "2.0", "id": id, "result": result })
+    Value::Object(Map::from_iter([
+        ("jsonrpc".into(), Value::String("2.0".into())),
+        ("id".into(), id),
+        ("result".into(), result),
+    ]))
 }
 
 fn error_response(id: Value, code: i64, message: impl Into<String>) -> Value {
@@ -5551,6 +5564,133 @@ mod tests {
     mod print_intent;
     use super::*;
     mod cam_query_effects;
+
+    #[test]
+    fn mcp_response_transfers_owned_engine_payload_through_text_and_structured_output() {
+        let mut manager = SketchManager::new();
+        let before = host::handle(&mut manager, "project_export_model", "");
+        let envelope: Value =
+            serde_json::from_str(&host::handle(&mut manager, "document", "")).unwrap();
+        let rows = envelope["value"]["browser"].as_array().unwrap();
+        assert!(!rows.is_empty());
+        let original_rows = rows.as_ptr();
+        let expected = envelope["value"].clone();
+        let output = response(
+            json!(17),
+            success_result(engine_envelope_value(envelope).unwrap()),
+        );
+        assert_eq!(output["jsonrpc"], "2.0");
+        assert_eq!(output["id"], 17);
+        assert_eq!(output["result"]["isError"], false);
+        assert_eq!(output["result"]["structuredContent"], expected);
+        assert_eq!(
+            output["result"]["structuredContent"]["browser"]
+                .as_array()
+                .unwrap()
+                .as_ptr(),
+            original_rows
+        );
+        assert_eq!(
+            output["result"]["content"][0]["text"],
+            serde_json::to_string_pretty(&expected).unwrap()
+        );
+
+        let envelope: Value = serde_json::from_str(&before).unwrap();
+        let original_model = envelope["value"].as_str().unwrap().as_ptr();
+        let output = response(
+            Value::Null,
+            success_result(engine_envelope_value(envelope).unwrap()),
+        );
+        let model = output["result"]["structuredContent"]["value"]
+            .as_str()
+            .unwrap();
+        assert_eq!(model.as_ptr(), original_model);
+        assert!(serde_json::from_str::<Value>(model).is_ok());
+        assert_eq!(
+            output["result"]["content"][0]["text"],
+            serde_json::to_string_pretty(&Value::String(model.into())).unwrap()
+        );
+        assert_eq!(
+            before,
+            host::handle(&mut manager, "project_export_model", "")
+        );
+    }
+
+    #[test]
+    fn mcp_response_preserves_scalar_image_and_error_contracts() {
+        for value in [
+            Value::Null,
+            json!(true),
+            json!(42),
+            json!("model"),
+            json!([1, 2]),
+        ] {
+            let expected = value.clone();
+            let output = success_result(value);
+            assert_eq!(output["structuredContent"], json!({"value":expected}));
+            assert_eq!(output["content"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                output["content"][0]["text"],
+                serde_json::to_string_pretty(&expected).unwrap()
+            );
+        }
+        let value = json!({"image":{
+            "png_base64":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMxkAAAAASUVORK5CYII=",
+            "width":1,"height":1},"source":"bevy_window"});
+        let original_png = value["image"]["png_base64"].as_str().unwrap().as_ptr();
+        let output = response(json!("capture"), success_result(value));
+        let result = &output["result"];
+        assert_eq!(result["content"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            result["content"][1]["data"].as_str().unwrap().as_ptr(),
+            original_png
+        );
+        assert_eq!(result["content"][1]["type"], "image");
+        assert_eq!(result["content"][1]["mimeType"], "image/png");
+        assert_eq!(
+            result["structuredContent"]["image"]["png_base64"],
+            "(attached as image content)"
+        );
+        assert_eq!(result["structuredContent"]["image"]["width"], 1);
+        assert_eq!(result["structuredContent"]["source"], "bevy_window");
+        assert_eq!(
+            serde_json::from_str::<Value>(result["content"][0]["text"].as_str().unwrap()).unwrap(),
+            result["structuredContent"]
+        );
+        for value in [json!({}), json!({"image":{"png_base64":42}})] {
+            let expected = value.clone();
+            let result = success_result(value);
+            assert_eq!(result["structuredContent"], expected);
+            assert_eq!(result["content"].as_array().unwrap().len(), 1);
+        }
+        let envelope = json!({"ok":false,"error":"Kernel rejected extent"});
+        let original_error = envelope["error"].as_str().unwrap().as_ptr();
+        let error = engine_envelope_value(envelope).unwrap_err();
+        assert_eq!(error, "Kernel rejected extent");
+        assert_eq!(error.as_ptr(), original_error);
+        for envelope in [
+            Value::Null,
+            json!({}),
+            json!({"ok":"true"}),
+            json!({"ok":false,"error":42}),
+        ] {
+            assert_eq!(
+                engine_envelope_value(envelope).unwrap_err(),
+                "unknown Limo CAD engine error"
+            );
+        }
+        assert_eq!(
+            engine_envelope_value(json!({"ok":true})).unwrap(),
+            Value::Null
+        );
+        assert_eq!(
+            parse_engine_envelope(r#"{"ok":true,"value":42}"#.into()).unwrap(),
+            json!(42)
+        );
+        assert!(parse_engine_envelope("invalid json".into())
+            .unwrap_err()
+            .starts_with("invalid engine response:"));
+    }
 
     #[test]
     fn dimensioned_rectangle_rejects_misspelled_drivers_without_mutating_the_sketch() {
