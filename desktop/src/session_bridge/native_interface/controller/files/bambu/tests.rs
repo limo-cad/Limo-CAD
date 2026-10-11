@@ -1,6 +1,175 @@
 use super::*;
 
 #[test]
+fn native_bambu_preview_runs_detached_and_rejects_changed_or_replaced_receipts() {
+    use super::super::tests::setup;
+    use crate::session_bridge::native_interface::tests::Fixture;
+    use std::cell::Cell;
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let mutate = |operation, arguments| {
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &fixture.owner(),
+                operation,
+                &arguments,
+                || Ok(()),
+            )
+            .unwrap()
+    };
+    for (x, name) in [(0., "Sketch1"), (60., "Sketch2")] {
+        mutate(
+            "sketch_begin",
+            json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+        );
+        mutate(
+            "sketch_add_rectangle",
+            json!({"mode":"two_point","p1":{"x":x,"y":0.},"p2":{"x":x+40.,"y":25.},"ctrl_held":true}),
+        );
+        mutate("sketch_finish", json!({}));
+        mutate(
+            "solid_extrude",
+            json!({"sketch_name":name,"profile_indices":[0],"extent":{"type":"distance","distance":6.}}),
+        );
+    }
+    let model =
+        || parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap();
+    // Obtain the real persistent source namespace through normal metadata edit.
+    mutate(
+        "print_intent_set_document",
+        json!({"document":PrintIntentDocumentDto::default(),"expected_model_json":model()}),
+    );
+    let document: PrintIntentDocumentDto = serde_json::from_value(
+        parse_engine_envelope(fixture.engine.engine_call("print_intent_get", "")).unwrap(),
+    )
+    .unwrap();
+    let before = model();
+    let make_request = |body_ids| BambuExportRequest {
+        export: MeshExportRequest {
+            expected_model_json: Some(before.as_str().unwrap().into()),
+            body_ids,
+            ..default()
+        },
+        project: BambuProjectRequest {
+            source_document_id: document.source_document_id.clone().unwrap(),
+            ..default()
+        },
+        // Preserve an authentic generic archive's refusal, not a fabricated
+        // native profile or a claim of successful Bambu compatibility.
+        template_base64: STANDARD.encode(include_bytes!(
+            "../../../../../../../crates/export/fixtures/smoke/cube_bambu_studio.3mf"
+        )),
+    };
+    let (app, services, _) = setup(&fixture);
+    let owner = fixture.owner();
+    let receipt = current(app.world(), &services, &owner).unwrap();
+    let expected = parse_engine_envelope(fixture.engine.engine_call(
+        "bambu_project_preview",
+        &serde_json::to_string(&make_request(vec![])).unwrap(),
+    ))
+    .unwrap_err();
+    let validations = Cell::new(0);
+    let error = preview_snapshot(
+        &services,
+        &receipt,
+        make_request(vec![]),
+        || {
+            validations.set(validations.get() + 1);
+            Ok(())
+        },
+        |prepared| {
+            // Both real guards are held during native export meshing and ZIP work.
+            // The owned preview must not reenter either publisher or live engine.
+            services
+                .bridge
+                .with_native_document_receipt(&services.engine, &owner, |_| {
+                    fixture.engine.with_drawing(|_| prepared.preview())
+                })
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error, expected);
+    assert_eq!(validations.get(), 1);
+    assert_eq!(model(), before);
+    assert_eq!(current(app.world(), &services, &owner).unwrap(), receipt);
+    let ids: Vec<_> = fixture
+        .engine
+        .solid_scene_snapshot()
+        .bodies
+        .iter()
+        .map(|body| body.id)
+        .collect();
+    assert_eq!(ids.len(), 2);
+    let duplicate = vec![ids[1], ids[0], ids[0]];
+    assert_eq!(
+        fixture
+            .engine
+            .prepare_bambu_preview(make_request(duplicate))
+            .unwrap()
+            .preview()
+            .unwrap_err(),
+        expected
+    );
+    let error = preview_snapshot(
+        &services,
+        &receipt,
+        make_request(vec![ids[0]]),
+        || Ok(()),
+        |prepared| {
+            let outcome = prepared.preview();
+            fixture
+                .rename(&owner, "Changed during detached preview")
+                .unwrap();
+            outcome
+        },
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("document changed during Bambu preview"),
+        "{error}"
+    );
+    preview_snapshot(
+        &services,
+        &receipt,
+        make_request(vec![]),
+        || Ok(()),
+        |_| panic!("Stale receipt must reject before meshing"),
+    )
+    .unwrap_err();
+    let receipt = current(app.world(), &services, &owner).unwrap();
+    let changed = model();
+    let mut request = make_request(vec![]);
+    request.export.expected_model_json = Some(changed.as_str().unwrap().into());
+    let error = preview_snapshot(
+        &services,
+        &receipt,
+        request,
+        || Ok(()),
+        |prepared| {
+            services
+                .bridge
+                .apply_native_mutation(
+                    &services.engine,
+                    &owner,
+                    "cad_load_project_model",
+                    &json!({"model_json":changed}),
+                    || Ok(()),
+                )
+                .unwrap();
+            // The original independent native shapes survive actual replacement.
+            assert_eq!(prepared.preview().unwrap_err(), expected);
+            Err("Original preview refusal".into())
+        },
+    )
+    .unwrap_err();
+    assert!(error.contains("replaced"), "{error}");
+    assert_ne!(fixture.owner().epoch, owner.epoch);
+    assert_eq!(model(), changed);
+}
+
+#[test]
 fn scrolling_export_options_edits_the_owned_state_without_copying_the_model() {
     use super::super::tests::setup;
     use crate::session_bridge::native_interface::tests::Fixture;

@@ -492,6 +492,19 @@ pub struct OcctKernel;
 #[cfg(not(feature = "native-occt"))]
 pub struct DetachedDrawingKernel;
 #[cfg(not(feature = "native-occt"))]
+pub struct DetachedMeshKernel;
+#[cfg(not(feature = "native-occt"))]
+impl DetachedMeshKernel {
+    pub fn tessellate(
+        &self,
+        _request: &limo_cad_export::MeshExportRequest,
+    ) -> Result<Vec<limo_cad_export::TriangleMesh>, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
+}
+#[cfg(not(feature = "native-occt"))]
 impl DetachedDrawingKernel {
     pub fn project(
         &self,
@@ -507,6 +520,16 @@ impl DetachedDrawingKernel {
 
 #[cfg(not(feature = "native-occt"))]
 impl OcctKernel {
+    pub fn active_body_ids(&self) -> Result<Vec<BodyId>, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
+    pub fn detached_mesh_snapshot(&self, _ids: &[BodyId]) -> Result<DetachedMeshKernel, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
     pub fn detached_drawing_snapshot(
         &self,
         _ids: &[BodyId],
@@ -580,7 +603,7 @@ impl OcctKernel {
 #[cfg(feature = "native-occt")]
 mod native;
 #[cfg(feature = "native-occt")]
-pub use native::{DetachedDrawingKernel, OcctKernel};
+pub use native::{DetachedDrawingKernel, DetachedMeshKernel, OcctKernel};
 
 #[cfg(test)]
 mod drawing_anchor_tests {

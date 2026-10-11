@@ -1017,6 +1017,41 @@ fn accept_preview(intent: &mut io::ExportIntent, key: Value, report: BambuProjec
     intent.bambu.generation = intent.bambu.generation.saturating_add(1);
 }
 
+fn preview_snapshot(
+    services: &NativeServices,
+    receipt: &DocumentReceipt,
+    request: BambuExportRequest,
+    mut validate_io: impl FnMut() -> Result<(), String>,
+    preview: impl FnOnce(limo_cad_native_engine::PreparedBambuPreview) -> Result<Value, String>,
+) -> Result<NativeMutationResult, String> {
+    let prepared = services.bridge.with_native_document_receipt(
+        &services.engine,
+        &receipt.owner,
+        |revision| {
+            if revision != receipt.revision {
+                return Err("The model changed before the preview could run".into());
+            }
+            validate_io()?;
+            services.engine.prepare_bambu_preview(request)
+        },
+    )?;
+    let outcome = preview(prepared);
+    // The original dispatch was admitted before busy presentation disabled
+    // its control. Read-only completion grants no new dispatch/write authority.
+    services
+        .bridge
+        .with_native_document_receipt(&services.engine, &receipt.owner, |revision| {
+            if revision != receipt.revision {
+                return Err("The document changed during Bambu preview".into());
+            }
+            Ok(NativeMutationResult {
+                context: receipt.owner.clone(),
+                engine_revision: revision,
+                value: outcome?,
+            })
+        })
+}
+
 fn preview(
     world: &mut World,
     services: &NativeServices,
@@ -1031,12 +1066,19 @@ fn preview(
     let key = review_key(&request, &intent.bambu.template()?.summary);
     let generation = intent.bambu.generation;
     let callback_owner = owner.clone();
-    worker::enqueue_query(
+    let receipt = dialog.receipt;
+    worker::enqueue_document_io(
         world,
-        dialog.receipt.owner,
-        dialog.receipt.revision,
         "bambu_project_preview".into(),
-        serde_json::to_value(request).map_err(|e| e.to_string())?,
+        move |services, guard| {
+            preview_snapshot(
+                services,
+                &receipt,
+                request,
+                || guard.validate(),
+                |prepared| prepared.preview(),
+            )
+        },
         move |world, services, result| {
             let result = result?;
             services.bridge.with_native_document_receipt(
