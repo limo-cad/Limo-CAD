@@ -395,10 +395,10 @@ pub(in super::super) fn repaint(world: &mut World, state: &mut Workbench) -> Res
 }
 
 fn show_error(world: &mut World, state: &mut Workbench, error: &str) {
-    if let Some(entity) = state.widgets.entity("drawing-paper") {
-        if let Some(mut node) = world.get_mut::<Node>(entity) {
-            node.display = Display::None;
-        }
+    // Retire stale art without destroying the retained paper or its ancestor.
+    // Keeping only paper would still let ancestor despawn recursively remove it.
+    for key in ["drawing-content-clip", "drawing-paper"] {
+        state.widgets.retain_hidden_panel(world, key);
     }
     if let Some(view) = &state.paper_view {
         state.widgets.text(
