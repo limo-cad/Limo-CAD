@@ -2297,3 +2297,28 @@ prior geometry and persistence passes remain intact. Only this local guidance
 issue changes to passed. A separate selected/coplanar-body striping observation
 in the tool-selection capture is under bounded source investigation; this prompt
 pass does not qualify that rendering behavior. Broad UI/MCP coverage stays paused.
+
+The local sketch form Tab-order repair `148d9f0e` has finite human UI acceptance
+on clean matched `a3145e2c`. In Move/Copy, the actual focused-control IDs map to
+X distance with typed `12.5`, then Y distance after Tab while X retains exactly
+`12.5`, then X after Shift+Tab. A further Shift+Tab leaves the form for the
+noneditable Named Views control without wrapping. Independent review of the
+saved captures and observations is recorded in `form-tab-a3145e2c-comparison.json`.
+Fresh accepted Cancel removes the form; Finish exits Sketch mode. The complete
+before/after model text remains exactly 4,754 characters, and the original fixture
+SHA256 remains `c92f65e0f34e040e9146c7ca93a436cda149537423cfdcaffdbb3399b718cede`.
+An earlier Cancel attempt returned a tool error whose original reason was
+overwritten; neither its exact cause nor a successful input is inferred. No Apply,
+geometry replay, other-form, clipped-target or form/document-switch acceptance
+is claimed. Only this local Tab-order issue changes to passed; broad UI/MCP
+coverage stays paused.
+
+The separate Q9 coplanar kept-body striping observation is now tracked as
+`selected-coplanar-kept-body-striping`, pending recheck. Reviewed source repair
+`e1a9169a`, integrated at `52ad36b1`, gives selected opaque per-occurrence body
+materials integer depth bias 1 and restores 0 on clearing, ghosts and face-overlay
+modes. Strict Windows desktop Clippy passed at `52ad36b1`; the new production
+styling regression and a clean matched GPU visual recheck remain pending at this
+checkpoint. Multiple selected coplanar bodies still share equal bias; preserving
+hovered/selected-face priority does not qualify all overlaps. The original Q9
+guidance pass and all geometry/persistence evidence remain unchanged.
