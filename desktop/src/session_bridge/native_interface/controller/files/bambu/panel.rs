@@ -209,8 +209,11 @@ pub(in super::super) fn paint(
                 format!("{value} · read-only process metadata"),
             );
         }
-        for warning in &t.process_capability_warnings {
-            info("Template process capability", warning.clone());
+        for (index, warning) in t.process_capability_warnings.iter().enumerate() {
+            info(
+                &format!("Template process capability {}", index + 1),
+                warning.clone(),
+            );
         }
     }
     info(

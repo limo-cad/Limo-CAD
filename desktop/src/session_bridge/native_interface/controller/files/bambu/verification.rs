@@ -264,6 +264,63 @@ pub(in super::super) fn observe(
 }
 
 use super::panel::{information, Row};
+
+fn native_readback_rows(rows: &mut Vec<Row>, label: &str, values: &Value) {
+    let Some(effective) = values["effective"].as_object() else {
+        return;
+    };
+    if let Some(settings) = effective
+        .get("native_process_settings")
+        .and_then(Value::as_object)
+    {
+        for (field, value) in settings {
+            information(
+                rows,
+                format!("{label} native Global {field}"),
+                format!("{value}; saved native process metadata, not a toolpath measurement"),
+            );
+        }
+    }
+    if let Some(warnings) = effective
+        .get("process_capability_warnings")
+        .and_then(Value::as_array)
+    {
+        for (index, warning) in warnings.iter().filter_map(Value::as_str).enumerate() {
+            information(
+                rows,
+                format!("{label} native process capability {}", index + 1),
+                warning,
+            );
+        }
+    }
+    for (identity, value) in effective
+        .iter()
+        .filter(|(key, _)| key.starts_with("volume:"))
+    {
+        // Older retained reports contain only the five managed settings. Keep
+        // those visible without inventing their missing source information.
+        let Some(settings) = value["native_settings"]
+            .as_object()
+            .or_else(|| value["settings"].as_object())
+        else {
+            continue;
+        };
+        for (field, setting) in settings {
+            let source = match value["native_sources"][field].as_str() {
+                Some("template_process") => "native Global",
+                Some("template_object") => "native object override",
+                Some("template_volume") => "native volume override",
+                _ => "source unavailable",
+            };
+            information(
+                rows,
+                format!("{label} native {identity} {field}"),
+                format!("{setting}; effective metadata request from {source}, not a toolpath measurement"),
+            );
+        }
+    }
+}
+
 pub(super) fn rows(world: &World, intent: &io::ExportIntent, rows: &mut Vec<Row>) {
     information(
         rows,
@@ -421,18 +478,7 @@ pub(super) fn rows(world: &World, intent: &io::ExportIntent, rows: &mut Vec<Row>
             information(rows, format!("{label} issue {}", index + 1), issue);
         }
         if let Some(values) = &plate.native_effective_settings {
-            if let Some(effective) = values["effective"].as_object() {
-                for (identity, value) in effective
-                    .iter()
-                    .filter(|(key, _)| key.starts_with("volume:"))
-                {
-                    information(
-                        rows,
-                        format!("{label} native {identity}"),
-                        value["settings"].to_string(),
-                    );
-                }
-            }
+            native_readback_rows(rows, &label, values);
         }
         if let Some(native) = &plate.native_result {
             if let Some(seconds) = native["total_predication"].as_f64() {
@@ -492,6 +538,103 @@ mod tests {
             physical_qualification: "not run".into(),
             warnings: vec![],
         }
+    }
+
+    #[test]
+    fn native_readback_exposes_actual_global_overrides_and_capability_without_qualifying_failed_slice(
+    ) {
+        let owner = DocumentContext {
+            window_id: "main".into(),
+            document_id: "one".into(),
+            epoch: 1,
+        };
+        let intent = super::super::tests::intent();
+        let source = intent
+            .bambu
+            .document
+            .as_ref()
+            .unwrap()
+            .source_document_id
+            .as_deref()
+            .unwrap();
+        let original_model = intent.bambu.model.clone();
+        let mut captured = report(source);
+        captured.state = VerificationState::Failed;
+        captured.plates.push(serde_json::from_value(json!({
+            "plate":1,"state":"failed","exit_status":0,"elapsed_milliseconds":12,
+            "slicer_version":"02.08.02.61","toolpath_sha256":"generated-gcode-hash",
+            "native_result":null,"native_effective_settings":{"effective":{
+                "native_process_settings":{"wall_loops":"2","sparse_infill_pattern":"rectilinear",
+                    "layer_height":"0.28","enable_support":"1"},
+                "process_capability_warnings":["Raw rectilinear is read-only","No typed pattern replacement"],
+                "volume:actual":{"settings":{"wall_loops":"6"},
+                    "native_settings":{"wall_loops":"6","layer_height":"0.28",
+                        "line_width":["0.50","0.45"],"enable_support":"1"},
+                    "native_sources":{"wall_loops":"template_object","layer_height":"template_process",
+                        "line_width":"template_volume","enable_support":"template_process"}},
+                "volume:legacy":{"settings":{"wall_loops":"4"}}
+            }},
+            "toolpaths_generated":true,"native_project_read_back":true,
+            "compatibility_issues":["Instance identity changed; explicit rebind required"],
+            "setting_changes":[],"stdout":"","stderr":"","message":"Unqualified native handoff"
+        })).unwrap());
+        let mut world = World::new();
+        world.insert_resource(Files::default());
+        world.resource_mut::<Files>().dialog = Some(Dialog {
+            token: 17,
+            receipt: super::super::super::DocumentReceipt {
+                owner: owner.clone(),
+                revision: 1,
+            },
+            kind: DialogKind::Export(Arc::new(intent.clone())),
+            error: None,
+        });
+        save(&mut world, owner, 1, key(&intent).unwrap(), captured);
+        let mut values = vec![];
+        rows(&world, &intent, &mut values);
+        let text = |label: &str| {
+            values
+                .iter()
+                .find(|row| row.0 == label)
+                .and_then(|row| row.3.as_deref())
+                .unwrap()
+        };
+        assert!(text("Local verification state").contains("Failed"));
+        assert!(text("Verified plate 1 issue 1").contains("explicit rebind"));
+        assert_eq!(
+            text("Verified plate 1 G-code SHA256"),
+            "generated-gcode-hash"
+        );
+        assert!(text("Verified plate 1 native Global wall_loops").contains("\"2\""));
+        assert!(
+            text("Verified plate 1 native Global sparse_infill_pattern").contains("rectilinear")
+        );
+        let walls = text("Verified plate 1 native volume:actual wall_loops");
+        assert!(walls.contains("\"6\"") && walls.contains("native object override"));
+        let width = text("Verified plate 1 native volume:actual line_width");
+        assert!(width.contains("0.50") && width.contains("native volume override"));
+        let support = text("Verified plate 1 native volume:actual enable_support");
+        assert!(
+            support.contains("native Global") && support.contains("not a toolpath measurement")
+        );
+        assert!(
+            text("Verified plate 1 native volume:legacy wall_loops").contains("source unavailable")
+        );
+        assert_eq!(
+            text("Verified plate 1 native process capability 1"),
+            "Raw rectilinear is read-only"
+        );
+        assert_eq!(
+            text("Verified plate 1 native process capability 2"),
+            "No typed pattern replacement"
+        );
+        let mut labels = std::collections::BTreeSet::new();
+        assert!(
+            values.iter().all(|row| labels.insert(&row.0)),
+            "Each readback field must retain a distinct native control identity"
+        );
+        assert_eq!(intent.bambu.model, original_model);
+        assert_eq!(job(&world).unwrap().report.state, VerificationState::Failed);
     }
 
     #[test]
