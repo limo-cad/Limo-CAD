@@ -25,6 +25,7 @@ use super::capture;
 use crate::{build_pair, session};
 
 mod caption_focus;
+mod modal_diagnostics;
 
 const OBSERVATION_MS: u64 = 60_000;
 // Conservative queue pacing/stability sampling, not text-consumption proof
@@ -673,9 +674,7 @@ fn target_window(owner: &Value, published_main: usize) -> Result<Target, String>
         }
     }
     if unsafe { IsWindowEnabled(main) } == 0 {
-        return Err(
-            "CAD is blocked by a modal window without a qualified same-process owner chain".into(),
-        );
+        return Err(blocked_modal_diagnostics(main, foreground, popup));
     }
     Ok(Target {
         main,
@@ -711,6 +710,69 @@ fn owned_dialog(main: HWND, window: HWND) -> bool {
         cursor = owner;
     }
     false
+}
+
+// These facts explain a refusal only. They never select a target, publish an
+// observation token or relax the foreground/owner checks used for input.
+fn blocked_modal_diagnostics(main: HWND, foreground: HWND, popup: HWND) -> String {
+    use modal_diagnostics::{blocked, CandidateFacts, MAX_WINDOWS};
+    fn facts(main: HWND, window: HWND, main_pid: u32) -> CandidateFacts {
+        let mut pid = 0;
+        unsafe { GetWindowThreadProcessId(window, &mut pid) };
+        let own = pid != 0 && pid == main_pid;
+        CandidateFacts {
+            hwnd: window as usize,
+            pid,
+            owner_hwnd: own.then(|| unsafe { GetWindow(window, GW_OWNER) } as usize),
+            class: own.then(|| window_class(window).ok()).flatten(),
+            valid: unsafe { IsWindow(window) } != 0,
+            owned_dialog: own && owned_dialog(main, window),
+            visible: own && unsafe { IsWindowVisible(window) } != 0,
+            enabled: own && unsafe { IsWindowEnabled(window) } != 0,
+            iconic: own && unsafe { IsIconic(window) } != 0,
+        }
+    }
+    struct Search {
+        main: HWND,
+        pid: u32,
+        windows: Vec<CandidateFacts>,
+        truncated: bool,
+    }
+    unsafe extern "system" fn visit(window: HWND, pointer: LPARAM) -> i32 {
+        let search = &mut *(pointer as *mut Search);
+        let mut pid = 0;
+        GetWindowThreadProcessId(window, &mut pid);
+        if pid == search.pid {
+            search.windows.push(facts(search.main, window, search.pid));
+            if search.windows.len() == MAX_WINDOWS {
+                search.truncated = true;
+                return 0;
+            }
+        }
+        1
+    }
+    let mut pid = 0;
+    unsafe { GetWindowThreadProcessId(main, &mut pid) };
+    let mut search = Search {
+        main,
+        pid,
+        windows: Vec::with_capacity(MAX_WINDOWS),
+        truncated: false,
+    };
+    let enumerated = unsafe { EnumWindows(Some(visit), &mut search as *mut Search as LPARAM) };
+    let error =
+        (enumerated == 0 && !search.truncated).then(|| std::io::Error::last_os_error().to_string());
+    blocked(
+        main as usize,
+        pid,
+        &[
+            ("foreground_root", facts(main, foreground, pid)),
+            ("last_active_popup", facts(main, popup, pid)),
+        ],
+        &search.windows,
+        search.truncated,
+        error,
+    )
 }
 
 fn window_diagnostics(pid: u32) -> Value {
