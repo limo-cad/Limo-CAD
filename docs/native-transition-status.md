@@ -1,6 +1,21 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: source `8b6825c6` repairs
+Current checkpoint, **2026-10-11 UTC**: source `ab1de731` also repairs
+the genuine `c11a51cd` macOS strict-Clippy failure in `configure_surfaces`. Grouping
+the existing gate/queue guard parameters brings its Apple signature to seven
+arguments while preserving the main-thread marker, queue exclusion and original
+system identity. Independent pinned-API review and one strict changed-desktop
+Windows compiler check pass; the unchanged scheduling regression is retained.
+Actual Apple compilation and packaged GPU acceptance remain normal repaired-head
+CI gates. The same source includes the independently qualified **#377** receipt-only
+status repair; all four qualified MCP source blobs remain unchanged from
+`8b6825c6`, so its passing check and exact regression are retained without repetition.
+Broad UI/MCP coverage remains paused. No deployed pair, runtime change or main merge
+is claimed. Original failure, exact commands, hashes and scope:
+`docs/qualification/apple-surface-signature-20261011.json` and
+`docs/qualification/receipt-only-status-20261011.json`.
+
+Historical checkpoint, **2026-10-11 UTC**: source `8b6825c6` repairs
 receipt-only routed completion for **#377**. Public `cad_route` status now accepts
 `include_values:false`; inbox polling skips the full result read before allocation,
 and receipt-only batches use the same boundary. Full values remain the default.
