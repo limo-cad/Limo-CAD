@@ -113,7 +113,7 @@ fn sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action
     let file = control(world, &file_command);
     let click = |world: &mut World, key| {
         let action = pointer_action(&handle, key);
-        reduce_control_input(world, &handle, &services.engine, &services.bridge, &action).unwrap()
+        reduce_control_input(&services.engine, &services.bridge, world, &handle, &action).unwrap()
     };
 
     click(world, build);
@@ -158,10 +158,10 @@ fn sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action
     );
     assert_eq!(handle.frame().unwrap().modal_stack, vec!["file-menu"]);
     assert!(reduce_control_input(
-        world,
-        &handle,
         &services.engine,
         &services.bridge,
+        world,
+        &handle,
         &old_build_row
     )
     .is_err());
@@ -175,10 +175,10 @@ fn sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action
     assert_eq!(handle.frame().unwrap().modal_stack, vec!["workbench-menu"]);
     assert_eq!(files::modal(world), None);
     assert!(reduce_control_input(
-        world,
-        &handle,
         &services.engine,
         &services.bridge,
+        world,
+        &handle,
         &old_file_row
     )
     .is_err());
@@ -208,7 +208,7 @@ fn sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action
     );
     let client = handle.frame().unwrap().client;
     let outside = pointer_action_at(&handle, dismiss, [client.width - 4., client.height - 4.]);
-    reduce_control_input(world, &handle, &services.engine, &services.bridge, &outside).unwrap();
+    reduce_control_input(&services.engine, &services.bridge, world, &handle, &outside).unwrap();
     publish(world, &handle, &services, &mut state);
     assert!(handle.frame().unwrap().modal_stack.is_empty());
     click(world, file);
@@ -238,10 +238,10 @@ fn sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action
         assert!(handle.resolve_retained(key).is_err());
     }
     assert!(reduce_control_input(
-        world,
-        &handle,
         &services.engine,
         &services.bridge,
+        world,
+        &handle,
         &stale_file_anchor
     )
     .is_err());
