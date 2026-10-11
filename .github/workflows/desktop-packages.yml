@@ -812,6 +812,7 @@ jobs:
           name: Limo-CAD-macos-mcp-diagnostics
           path: |
             ${{ runner.temp }}/limo-cad-mcp-macos.json
+            ${{ runner.temp }}/limo-cad-mcp-macos.json.lifecycle
             ${{ runner.temp }}/limo-cad-macos-uri.json
           if-no-files-found: warn
           retention-days: 7
