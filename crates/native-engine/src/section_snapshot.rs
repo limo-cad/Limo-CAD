@@ -4,6 +4,7 @@ use limo_cad_core::BodyId;
 use limo_cad_occt::section_review::{SectionReview, SectionReviewRequest};
 use std::sync::Weak;
 
+#[derive(Clone)]
 struct SourceProof {
     owner: String,
     scene: Weak<SolidSceneDto>,
@@ -25,12 +26,21 @@ pub struct FinishedSectionReview {
 }
 impl PreparedSectionReview {
     pub fn inspect(self) -> Result<FinishedSectionReview, String> {
+        self.inspect_at(&self.request)
+    }
+    /// Reuse one selected-body copy while a live inspection moves its plane.
+    /// Every result retains the original private source proof for adoption.
+    pub fn inspect_at(
+        &self,
+        request: &SectionReviewRequest,
+    ) -> Result<FinishedSectionReview, String> {
+        request.validate()?;
+        if request.body_id != self.source.body {
+            return Err("The section request does not match its copied source body".into());
+        }
         Ok(FinishedSectionReview {
-            report: self
-                .kernel
-                .inspect(&self.request)
-                .map_err(|e| e.to_string())?,
-            source: self.source,
+            report: self.kernel.inspect(request).map_err(|e| e.to_string())?,
+            source: self.source.clone(),
         })
     }
 }
