@@ -211,15 +211,31 @@ pub(crate) fn inspect_kernel(
     kernel: &crate::OcctKernel,
     request: &SectionReviewRequest,
 ) -> Result<SectionReview, SectionReviewError> {
-    let geometry =
-        kernel
-            .section_geometry(request)
-            .map_err(|source| SectionReviewError::Kernel {
-                body_id: request.body_id,
-                plane: request.plane,
-                offset_mm: request.offset_mm,
-                source,
-            })?;
+    inspect_kernel_mode(kernel, request, false)
+}
+#[cfg(feature = "native-occt")]
+pub(crate) fn inspect_retained_kernel(
+    kernel: &crate::OcctKernel,
+    request: &SectionReviewRequest,
+) -> Result<SectionReview, SectionReviewError> {
+    inspect_kernel_mode(kernel, request, true)
+}
+fn inspect_kernel_mode(
+    kernel: &crate::OcctKernel,
+    request: &SectionReviewRequest,
+    retain_unintersected: bool,
+) -> Result<SectionReview, SectionReviewError> {
+    let geometry = if retain_unintersected {
+        kernel.section_geometry_retained(request, true)
+    } else {
+        kernel.section_geometry(request)
+    }
+    .map_err(|source| SectionReviewError::Kernel {
+        body_id: request.body_id,
+        plane: request.plane,
+        offset_mm: request.offset_mm,
+        source,
+    })?;
     let projection = DrawingProjectionDto {
         topology_signatures: Default::default(),
         visible: vec![],
@@ -231,7 +247,7 @@ pub(crate) fn inspect_kernel(
     };
     let mut report =
         present(request, projection, geometry.outcome).map_err(SectionReviewError::Presentation)?;
-    if report.outcome == SectionOutcome::MaterialSection {
+    if report.outcome == SectionOutcome::MaterialSection || retain_unintersected {
         report.cutaway = geometry.cutaway;
     }
     Ok(report)
@@ -286,26 +302,7 @@ pub fn present(
     outcome: SectionOutcome,
 ) -> Result<SectionReview, String> {
     request.validate()?;
-    let count: usize = projection.section.iter().map(|l| l.points.len()).sum();
-    if count > 100_000 {
-        return Err("Section diagram exceeds 100,000 contour points".into());
-    }
-    let mut bounds = [
-        f64::INFINITY,
-        f64::INFINITY,
-        f64::NEG_INFINITY,
-        f64::NEG_INFINITY,
-    ];
-    for p in projection.section.iter().flat_map(|l| &l.points) {
-        if !p.iter().all(|v| v.is_finite()) {
-            return Err("Section contains non-finite coordinates".into());
-        }
-        bounds[0] = bounds[0].min(p[0]);
-        bounds[1] = bounds[1].min(p[1]);
-        bounds[2] = bounds[2].max(p[0]);
-        bounds[3] = bounds[3].max(p[1]);
-    }
-    if count == 0 {
+    let Some(bounds) = section_bounds(&projection.section)? else {
         return Ok(SectionReview {
             request: request.clone(),
             outcome,
@@ -316,7 +313,7 @@ pub fn present(
             source_errors: Vec::new(),
             cutaway: None,
         });
-    }
+    };
     if bounds[2] - bounds[0] < 1e-8 || bounds[3] - bounds[1] < 1e-8 {
         return Ok(SectionReview {
             request: request.clone(),
@@ -336,7 +333,15 @@ pub fn present(
         .transpose()?
         .unwrap_or_default();
     projection.bounds = bounds;
-    let svg = diagram(request, &projection, bounds, &spans, outcome)?;
+    let svg = diagram(
+        request,
+        &projection,
+        bounds,
+        &spans,
+        outcome,
+        None,
+        &[request.body_id],
+    )?;
     Ok(SectionReview {
         request: request.clone(),
         outcome,
@@ -349,12 +354,142 @@ pub fn present(
     })
 }
 
+fn section_bounds(section: &[DrawingPolylineDto]) -> Result<Option<[f64; 4]>, String> {
+    let count: usize = section.iter().map(|l| l.points.len()).sum();
+    if count > 100_000 {
+        return Err("Section diagram exceeds 100,000 contour points".into());
+    }
+    let mut bounds = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    for p in section.iter().flat_map(|l| &l.points) {
+        if !p.iter().all(|v| v.is_finite()) {
+            return Err("Section contains non-finite coordinates".into());
+        }
+        bounds[0] = bounds[0].min(p[0]);
+        bounds[1] = bounds[1].min(p[1]);
+        bounds[2] = bounds[2].max(p[0]);
+        bounds[3] = bounds[3].max(p[1]);
+    }
+    Ok((count > 0).then_some(bounds))
+}
+
+/// Compose selected source-body sections on one coordinate system. Each body's
+/// holes are hatched independently; overlapping bodies do not cancel material.
+pub fn combine(reports: &[SectionReview]) -> Result<SectionReview, String> {
+    let first = reports.first().ok_or("Choose a section body")?;
+    let request = &first.request;
+    if reports.len() > 128
+        || reports.iter().any(|r| {
+            r.request.plane != request.plane
+                || r.request.offset_mm != request.offset_mm
+                || r.request.probe_mm != request.probe_mm
+                || r.request.keep_positive != request.keep_positive
+                || r.request.deflection_mm != request.deflection_mm
+        })
+    {
+        return Err("Section bodies must share one plane, position and probe".into());
+    }
+    let outcome = if reports
+        .iter()
+        .any(|r| r.outcome == SectionOutcome::MaterialSection)
+    {
+        SectionOutcome::MaterialSection
+    } else if reports
+        .iter()
+        .any(|r| r.outcome == SectionOutcome::BoundaryContact)
+    {
+        SectionOutcome::BoundaryContact
+    } else {
+        SectionOutcome::NoIntersection
+    };
+    let mut projection = DrawingProjectionDto {
+        topology_signatures: Default::default(),
+        visible: vec![],
+        hidden: vec![],
+        anchors: vec![],
+        circles: vec![],
+        bounds: [0.; 4],
+        section: vec![],
+    };
+    projection.section = reports
+        .iter()
+        .flat_map(|r| r.section.iter().cloned())
+        .collect();
+    request.validate()?;
+    let mut report = SectionReview {
+        request: request.clone(),
+        outcome,
+        bounds_mm: section_bounds(&projection.section)?,
+        section: projection.section.clone(),
+        probe_spans: vec![],
+        svg: String::new(),
+        source_errors: Vec::new(),
+        cutaway: None,
+    };
+    let mut spans: Vec<_> = reports
+        .iter()
+        .flat_map(|r| r.probe_spans.iter().cloned())
+        .collect();
+    spans.sort_by(|a, b| a.start_mm.total_cmp(&b.start_mm));
+    for span in spans {
+        if let Some(last) = report
+            .probe_spans
+            .last_mut()
+            .filter(|s| span.start_mm <= s.end_mm + 1e-8)
+        {
+            last.end_mm = last.end_mm.max(span.end_mm);
+            last.length_mm = last.end_mm - last.start_mm;
+        } else {
+            report.probe_spans.push(span);
+        }
+    }
+    if report.probe_spans.len() > 128 {
+        return Err("Section probe exceeds 128 material intervals".into());
+    }
+    if let Some(bounds) = report
+        .bounds_mm
+        .filter(|b| b[2] - b[0] >= 1e-8 && b[3] - b[1] >= 1e-8)
+    {
+        projection.bounds = bounds;
+        let material: Vec<_> = reports
+            .iter()
+            .filter(|r| r.outcome == SectionOutcome::MaterialSection)
+            .map(|r| DrawingProjectionDto {
+                section: r.section.clone(),
+                bounds,
+                topology_signatures: Default::default(),
+                visible: vec![],
+                hidden: vec![],
+                anchors: vec![],
+                circles: vec![],
+            })
+            .collect();
+        let bodies: Vec<_> = reports.iter().map(|r| r.request.body_id).collect();
+        report.svg = diagram(
+            request,
+            &projection,
+            bounds,
+            &report.probe_spans,
+            outcome,
+            Some(&material),
+            &bodies,
+        )?;
+    }
+    Ok(report.with_source_errors(first.source_errors.clone()))
+}
+
 fn diagram(
     req: &SectionReviewRequest,
     projection: &DrawingProjectionDto,
     b: [f64; 4],
     spans: &[SectionSpan],
     outcome: SectionOutcome,
+    material: Option<&[DrawingProjectionDto]>,
+    bodies: &[BodyId],
 ) -> Result<String, String> {
     let w = b[2] - b[0];
     let h = b[3] - b[1];
@@ -369,8 +504,14 @@ fn diagram(
     );
     write!(
         svg,
-        r#"<text x="30" y="30" font-size="18">Body {} · {} = {:.4} mm section</text>"#,
-        req.body_id.0, labels[2], req.offset_mm
+        r#"<text x="30" y="30" font-size="18">{} · {} = {:.4} mm section</text>"#,
+        if bodies.len() == 1 {
+            format!("Body {}", bodies[0].0)
+        } else {
+            format!("{} bodies", bodies.len())
+        },
+        labels[2],
+        req.offset_mm
     )
     .unwrap();
     let (direction, up) = req.plane.basis();
@@ -398,26 +539,28 @@ fn diagram(
         width_mm: 0.15,
         dash_mm: vec![],
     };
-    let hatch = if outcome == SectionOutcome::MaterialSection {
-        section_hatch(
-            &view,
-            projection,
-            &style,
-            HatchPattern {
-                angle_deg: 45.,
-                spacing_mm: (w.max(h) / 55.).max(req.deflection_mm * 4.),
-            },
-            &mut PaperGraphicsBudget::new(PaperGraphicsLimits {
-                primitives: 20_000,
-                points: 100_000,
-                retained_bytes: 8 * 1024 * 1024,
-                scratch_bytes: 8 * 1024 * 1024,
-                work: 10_000_000,
-            }),
-        )?
-    } else {
-        vec![]
-    };
+    let mut hatch = Vec::new();
+    if outcome == SectionOutcome::MaterialSection {
+        let mut budget = PaperGraphicsBudget::new(PaperGraphicsLimits {
+            primitives: 20_000,
+            points: 100_000,
+            retained_bytes: 8 * 1024 * 1024,
+            scratch_bytes: 8 * 1024 * 1024,
+            work: 10_000_000,
+        });
+        for projection in material.unwrap_or(std::slice::from_ref(projection)) {
+            hatch.extend(section_hatch(
+                &view,
+                projection,
+                &style,
+                HatchPattern {
+                    angle_deg: 45.,
+                    spacing_mm: (w.max(h) / 55.).max(req.deflection_mm * 4.),
+                },
+                &mut budget,
+            )?);
+        }
+    }
     svg.push_str(r##"<g fill="none" stroke="#b6c4ce" stroke-width="0.7">"##);
     for primitive in hatch {
         if let PaperPrimitive::Line { points, .. } = primitive {
@@ -463,6 +606,60 @@ mod tests {
         DrawingPolylineDto {
             points: vec![[a, a], [b, a], [b, b], [a, b], [a, a]],
         }
+    }
+    #[test]
+    fn combined_sections_preserve_body_holes_and_union_overlapping_probe_spans() {
+        let request = |id| SectionReviewRequest {
+            body_id: BodyId(id),
+            plane: SectionPlane::Xy,
+            offset_mm: 5.,
+            probe_mm: Some(5.),
+            deflection_mm: 0.01,
+            include_cutaway: true,
+            keep_positive: false,
+        };
+        let projection = |section| DrawingProjectionDto {
+            topology_signatures: Default::default(),
+            visible: vec![],
+            hidden: vec![],
+            anchors: vec![],
+            circles: vec![],
+            section,
+            bounds: [0.; 4],
+        };
+        let a = present(
+            &request(1),
+            projection(vec![square(0., 10.), square(3., 7.)]),
+            SectionOutcome::MaterialSection,
+        )
+        .unwrap();
+        let b = present(
+            &request(2),
+            projection(vec![square(4., 12.)]),
+            SectionOutcome::MaterialSection,
+        )
+        .unwrap();
+        let result = combine(&[a.clone(), b.clone()]).unwrap();
+        assert_eq!(result.bounds_mm, Some([0., 0., 12., 12.]));
+        assert_eq!(
+            result.probe_spans,
+            vec![
+                SectionSpan {
+                    start_mm: 0.,
+                    end_mm: 3.,
+                    length_mm: 3.
+                },
+                SectionSpan {
+                    start_mm: 4.,
+                    end_mm: 12.,
+                    length_mm: 8.
+                }
+            ]
+        );
+        assert!(result.svg.contains("2 bodies"));
+        let mut incompatible = b;
+        incompatible.request.offset_mm = 6.;
+        assert!(combine(&[a, incompatible]).is_err());
     }
     #[test]
     fn probe_excludes_voids_and_preserves_disconnected_material() {

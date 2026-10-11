@@ -5,21 +5,36 @@ use limo_cad_solid::KernelBodyDto;
 
 /// Prepared on the query worker, including the bounds used by camera Fit.
 pub(crate) struct PreparedCutaway {
-    body: KernelBodyDto,
+    bodies: Vec<KernelBodyDto>,
+    body_ids: Vec<u64>,
+    cap_body_ids: Vec<u64>,
     bounds: Option<([f32; 3], [f32; 3])>,
 }
 impl PreparedCutaway {
+    #[cfg(test)]
     pub(crate) fn new(body: KernelBodyDto) -> Self {
+        Self::collection(vec![body.body_id.0], vec![body.body_id.0], vec![body])
+    }
+    pub(crate) fn collection(
+        body_ids: Vec<u64>,
+        cap_body_ids: Vec<u64>,
+        bodies: Vec<KernelBodyDto>,
+    ) -> Self {
         let mut min = Vec3::splat(f32::INFINITY);
         let mut max = Vec3::splat(f32::NEG_INFINITY);
-        for p in body.positions.as_chunks::<3>().0 {
+        for p in bodies.iter().flat_map(|b| b.positions.as_chunks::<3>().0) {
             let p = Vec3::from_array(*p);
             min = min.min(p);
             max = max.max(p);
         }
         let bounds =
             (min.is_finite() && max.is_finite()).then_some((min.to_array(), max.to_array()));
-        Self { body, bounds }
+        Self {
+            bodies,
+            body_ids,
+            cap_body_ids,
+            bounds,
+        }
     }
 }
 
@@ -47,6 +62,13 @@ impl State {
                 e.session == model.session_id && e.revision == model.geometry_revision
             })
     }
+    pub(super) fn replaces(&self, model: &ModelResource, body_id: u64) -> bool {
+        self.active(model)
+            && self
+                .entry
+                .as_ref()
+                .is_some_and(|e| e.cutaway.body_ids.contains(&body_id))
+    }
 }
 
 #[cfg(test)]
@@ -70,21 +92,27 @@ mod tests {
         let material = world
             .resource_mut::<Assets<StandardMaterial>>()
             .add(StandardMaterial::default());
-        let source = world
-            .spawn((
-                NativeCadBody {
-                    body_id: 1,
-                    occurrence_id: None,
-                },
-                NativeModelGeometry {
-                    session_id: "section-test".into(),
-                    geometry_revision: 7,
-                    instance_revision: 0,
-                },
-                MeshMaterial3d(material),
-                Visibility::Inherited,
-            ))
-            .id();
+        let mut sources = Vec::new();
+        for body_id in [1, 2, 3] {
+            sources.push(
+                world
+                    .spawn((
+                        NativeCadBody {
+                            body_id,
+                            occurrence_id: None,
+                        },
+                        NativeModelGeometry {
+                            session_id: "section-test".into(),
+                            geometry_revision: 7,
+                            instance_revision: 0,
+                        },
+                        MeshMaterial3d(material.clone()),
+                        Visibility::Inherited,
+                    ))
+                    .id(),
+            );
+        }
+        let source = sources[0];
         let request: SectionReviewRequest =
             serde_json::from_value(serde_json::json!({"body_id":1,"plane":"xy","offset_mm":0}))
                 .unwrap();
@@ -115,6 +143,17 @@ mod tests {
             }],
             edges: vec![],
         }));
+        let mut lower = body.bodies[0].clone();
+        lower.body_id = limo_cad_core::BodyId(2);
+        for point in lower.positions.as_chunks_mut::<3>().0 {
+            point[2] -= 2.;
+        }
+        lower.faces[0].plane.as_mut().unwrap().origin[2] = -2.;
+        let body = Arc::new(PreparedCutaway::collection(
+            vec![1, 2],
+            vec![1],
+            vec![body.bodies[0].clone(), lower],
+        ));
         assert!(show(&mut world, "wrong-document", &request, Some(body.clone())).is_err());
         show(&mut world, "section-test", &request, Some(body.clone())).unwrap();
         world.run_system_once(rebuild).unwrap();
@@ -125,8 +164,16 @@ mod tests {
             *world.get::<Visibility>(source).unwrap(),
             Visibility::Hidden
         );
+        assert_eq!(
+            *world.get::<Visibility>(sources[1]).unwrap(),
+            Visibility::Hidden
+        );
+        assert_eq!(
+            *world.get::<Visibility>(sources[2]).unwrap(),
+            Visibility::Inherited
+        );
         let count = world.resource::<Assets<Mesh>>().len();
-        assert_eq!(count, 1);
+        assert_eq!(count, 2);
         world.clear_trackers();
         show(&mut world, "section-test", &request, Some(body)).unwrap();
         assert!(!world.get_resource_ref::<State>().unwrap().is_changed());
@@ -136,7 +183,22 @@ mod tests {
             .is_changed());
         world.run_system_once(rebuild).unwrap();
         assert_eq!(world.resource::<Assets<Mesh>>().len(), count);
-        assert_eq!(bounds(&world), Some(([0., 0., 0.], [1., 1., 0.])));
+        assert_eq!(bounds(&world), Some(([0., 0., -2.], [1., 1., 0.])));
+        world
+            .resource_mut::<PresentationResource>()
+            .0
+            .hidden_body_ids
+            .push(2);
+        world.run_system_once(rebuild).unwrap();
+        let mut query = world.query::<(&SectionMesh, &Visibility)>();
+        assert!(query
+            .iter(&world)
+            .any(|(body, visibility)| body.0 == 2 && *visibility == Visibility::Hidden));
+        world
+            .resource_mut::<PresentationResource>()
+            .0
+            .hidden_body_ids
+            .clear();
         world.resource_mut::<ModelResource>().geometry_revision = 8;
         assert!(!active(&world));
         world.run_system_once(rebuild).unwrap();
@@ -161,10 +223,38 @@ mod tests {
             .0
             .hidden_body_ids
             .is_empty());
+        let empty = Arc::new(PreparedCutaway::collection(vec![1, 2], vec![], vec![]));
+        show(&mut world, "section-test", &request, Some(empty)).unwrap();
+        world.run_system_once(rebuild).unwrap();
+        world
+            .run_system_once(apply_native_presentation_styles)
+            .unwrap();
+        assert!(active(&world));
+        assert_eq!(bounds(&world), None);
+        assert_eq!(
+            *world.get::<Visibility>(sources[0]).unwrap(),
+            Visibility::Hidden
+        );
+        assert_eq!(
+            *world.get::<Visibility>(sources[1]).unwrap(),
+            Visibility::Hidden
+        );
+        assert_eq!(
+            *world.get::<Visibility>(sources[2]).unwrap(),
+            Visibility::Inherited
+        );
+        clear(&mut world);
+        world.run_system_once(rebuild).unwrap();
+        world
+            .run_system_once(apply_native_presentation_styles)
+            .unwrap();
+        assert!(sources
+            .iter()
+            .all(|e| *world.get::<Visibility>(*e).unwrap() == Visibility::Inherited));
     }
 }
 #[derive(Component)]
-pub(super) struct SectionMesh;
+pub(super) struct SectionMesh(u64);
 
 pub(crate) fn show(
     world: &mut World,
@@ -179,7 +269,6 @@ pub(crate) fn show(
         return Err("Section belongs to another document".into());
     }
     let revision = model.geometry_revision;
-    let cutaway = cutaway.filter(|cut| !cut.body.indices.is_empty());
     world.init_resource::<State>();
     let state = world.resource::<State>();
     if state.entry.as_ref().is_some_and(|e| {
@@ -234,17 +323,33 @@ pub(super) fn rebuild(
     mut state: ResMut<State>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    existing: Query<(Entity, &Mesh3d, &MeshMaterial3d<StandardMaterial>), With<SectionMesh>>,
+    presentation: Res<PresentationResource>,
+    mut existing: Query<(
+        Entity,
+        &Mesh3d,
+        &MeshMaterial3d<StandardMaterial>,
+        &SectionMesh,
+        &mut Visibility,
+    )>,
 ) {
     if state.entry.is_some() && !state.active(&model) {
         state.entry = None;
         state.generation = state.generation.wrapping_add(1);
     }
     if state.rendered == state.generation {
+        if presentation.is_changed() {
+            for (_, _, _, body, mut visibility) in &mut existing {
+                visibility.set_if_neq(if presentation.0.hidden_body_ids.contains(&body.0) {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Inherited
+                });
+            }
+        }
         return;
     }
     state.rendered = state.generation;
-    for (e, m, s) in &existing {
+    for (e, m, s, _, _) in &mut existing {
         meshes.remove(m.0.id());
         materials.remove(s.0.id());
         commands.entity(e).despawn();
@@ -253,77 +358,108 @@ pub(super) fn rebuild(
         return;
     };
     let axis = e.request.plane.axis();
-    let body = &e.cutaway.body;
-    let mut surfaces = Vec::new();
-    let mut caps = Vec::new();
-    for face in &body.faces {
-        let cap = face.plane.is_some_and(|p| {
-            p.normal[axis].abs() > 0.999999 && (p.origin[axis] - e.request.offset_mm).abs() < 1e-6
-        });
-        let indices = &body.indices
-            [face.first_index as usize..(face.first_index + face.index_count) as usize];
-        if cap {
-            caps.extend_from_slice(indices);
-        } else {
-            surfaces.extend_from_slice(indices);
+    for body in &e.cutaway.bodies {
+        let mut surfaces = Vec::new();
+        let mut caps = Vec::new();
+        for face in &body.faces {
+            let cap = e.cutaway.cap_body_ids.contains(&body.body_id.0)
+                && face.plane.is_some_and(|p| {
+                    p.normal[axis].abs() > 0.999999
+                        && (p.origin[axis] - e.request.offset_mm).abs() < 1e-6
+                });
+            let indices = &body.indices
+                [face.first_index as usize..(face.first_index + face.index_count) as usize];
+            if cap {
+                caps.extend_from_slice(indices);
+            } else {
+                surfaces.extend_from_slice(indices);
+            }
         }
-    }
-    for (indices, color, name) in [
-        (
-            surfaces,
-            Color::srgb(0.64, 0.74, 0.82),
-            "OCCT section solid",
-        ),
-        (caps, Color::srgb(0.96, 0.57, 0.17), "OCCT section cap"),
-    ] {
-        if indices.is_empty() {
-            continue;
+        for (indices, color, name) in [
+            (
+                surfaces,
+                Color::srgb(0.64, 0.74, 0.82),
+                "OCCT section solid",
+            ),
+            (caps, Color::srgb(0.96, 0.57, 0.17), "OCCT section cap"),
+        ] {
+            if indices.is_empty() {
+                continue;
+            }
+            let mut mesh = Mesh::new(
+                PrimitiveTopology::TriangleList,
+                RenderAssetUsages::default(),
+            );
+            mesh.insert_attribute(
+                Mesh::ATTRIBUTE_POSITION,
+                body.positions.as_chunks::<3>().0.to_vec(),
+            );
+            mesh.insert_attribute(
+                Mesh::ATTRIBUTE_NORMAL,
+                body.normals.as_chunks::<3>().0.to_vec(),
+            );
+            mesh.insert_indices(Indices::U32(indices));
+            commands.spawn((
+                Name::new(name),
+                SectionMesh(body.body_id.0),
+                if presentation.0.hidden_body_ids.contains(&body.body_id.0) {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Inherited
+                },
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: color,
+                    double_sided: true,
+                    cull_mode: None,
+                    perceptual_roughness: 0.8,
+                    ..default()
+                })),
+                NotShadowCaster,
+                NotShadowReceiver,
+            ));
         }
-        let mut mesh = Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::default(),
-        );
-        mesh.insert_attribute(
-            Mesh::ATTRIBUTE_POSITION,
-            body.positions.as_chunks::<3>().0.to_vec(),
-        );
-        mesh.insert_attribute(
-            Mesh::ATTRIBUTE_NORMAL,
-            body.normals.as_chunks::<3>().0.to_vec(),
-        );
-        mesh.insert_indices(Indices::U32(indices));
-        commands.spawn((
-            Name::new(name),
-            SectionMesh,
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: color,
-                double_sided: true,
-                cull_mode: None,
-                perceptual_roughness: 0.8,
-                ..default()
-            })),
-            NotShadowCaster,
-            NotShadowReceiver,
-        ));
     }
 }
 pub(super) fn draw(
     model: Res<ModelResource>,
     state: Res<State>,
+    presentation: Res<PresentationResource>,
     mut gizmos: Gizmos<CadModelEdgeGizmos>,
 ) {
     if !state.active(&model) {
         return;
     }
     let e = state.entry.as_ref().unwrap();
-    for edge in &e.cutaway.body.edges {
-        for p in edge.points.windows(2) {
-            gizmos.line(
-                Vec3::new(p[0].x as f32, p[0].y as f32, p[0].z as f32),
-                Vec3::new(p[1].x as f32, p[1].y as f32, p[1].z as f32),
-                Color::srgb(0.16, 0.20, 0.24),
-            );
+    // Unselected bodies retain their source geometry and outlines.
+    for body in &model.document.scene.bodies {
+        if e.cutaway.body_ids.contains(&body.id.0)
+            || presentation.0.hidden_body_ids.contains(&body.id.0)
+        {
+            continue;
+        }
+        for edge in &body.edges {
+            for p in edge.points.windows(2) {
+                gizmos.line(
+                    Vec3::new(p[0].x as f32, p[0].y as f32, p[0].z as f32),
+                    Vec3::new(p[1].x as f32, p[1].y as f32, p[1].z as f32),
+                    Color::srgb(0.16, 0.20, 0.24),
+                );
+            }
+        }
+    }
+    for body in &e.cutaway.bodies {
+        if presentation.0.hidden_body_ids.contains(&body.body_id.0) {
+            continue;
+        }
+        for edge in &body.edges {
+            for p in edge.points.windows(2) {
+                gizmos.line(
+                    Vec3::new(p[0].x as f32, p[0].y as f32, p[0].z as f32),
+                    Vec3::new(p[1].x as f32, p[1].y as f32, p[1].z as f32),
+                    Color::srgb(0.16, 0.20, 0.24),
+                );
+            }
         }
     }
 }

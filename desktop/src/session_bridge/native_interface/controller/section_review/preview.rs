@@ -4,17 +4,84 @@ use super::*;
 use limo_cad_native_engine::{FinishedSectionReview, PreparedSectionReview};
 use std::sync::mpsc;
 
-type SourceKey = (DocumentContext, u64, BodyId);
-type PreparedPreview = (
-    FinishedSectionReview,
-    Option<Image>,
-    Option<Arc<native_viewport::section_view::PreparedCutaway>>,
-);
+type SourceKey = (DocumentContext, u64, Vec<BodyId>);
+pub(super) struct PreparedPreview {
+    pub(super) finished: Vec<FinishedSectionReview>,
+    pub(super) report: SectionReview,
+    pub(super) image: Option<Image>,
+    pub(super) cutaway: Option<Arc<native_viewport::section_view::PreparedCutaway>>,
+}
+pub(super) fn prepare(
+    source: &[PreparedSectionReview],
+    requests: &[SectionReviewRequest],
+    diagram: bool,
+) -> Result<PreparedPreview, String> {
+    if source.len() != requests.len() || source.is_empty() {
+        return Err("Section source was released".into());
+    }
+    let mut finished = Vec::new();
+    let mut bodies = Vec::new();
+    let (mut vertices, mut triangles, mut edge_points, mut contour_points) = (0, 0, 0, 0);
+    for (source, request) in source.iter().zip(requests) {
+        let mut result = source.inspect_retained_at(request)?;
+        contour_points += result
+            .report()
+            .section
+            .iter()
+            .map(|line| line.points.len())
+            .sum::<usize>();
+        if let Some(body) = result.report_mut().cutaway.take() {
+            vertices += body.positions.len() / 3;
+            triangles += body.indices.len() / 3;
+            edge_points += body
+                .edges
+                .iter()
+                .map(|edge| edge.points.len())
+                .sum::<usize>();
+            bodies.push(body);
+        }
+        if vertices > 1_000_000
+            || triangles > 1_000_000
+            || edge_points > 100_000
+            || contour_points > 100_000
+        {
+            return Err(
+                "Selected section bodies exceed the preview geometry budget; select fewer bodies"
+                    .into(),
+            );
+        }
+        finished.push(result);
+    }
+    let reports: Vec<_> = finished.iter().map(|r| r.report().clone()).collect();
+    let report = limo_cad_occt::section_review::combine(&reports)?;
+    let image = if diagram && !report.svg.is_empty() {
+        Some(rasterize(&report.svg)?)
+    } else {
+        None
+    };
+    let cutaway = Some(Arc::new(
+        native_viewport::section_view::PreparedCutaway::collection(
+            requests.iter().map(|r| r.body_id.0).collect(),
+            finished
+                .iter()
+                .filter(|r| r.report().outcome == SectionOutcome::MaterialSection)
+                .map(|r| r.report().request.body_id.0)
+                .collect(),
+            bodies,
+        ),
+    ));
+    Ok(PreparedPreview {
+        finished,
+        report,
+        image,
+        cutaway,
+    })
+}
 struct Job {
     key: SourceKey,
     generation: u64,
-    source: Option<PreparedSectionReview>,
-    request: SectionReviewRequest,
+    source: Option<Vec<PreparedSectionReview>>,
+    requests: Vec<SectionReviewRequest>,
     diagram: bool,
 }
 struct Completed {
@@ -48,20 +115,11 @@ impl Worker {
                         source = job.source;
                     }
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        let mut finished = source
-                            .as_ref()
-                            .ok_or("Section source was released")?
-                            .inspect_at(&job.request)?;
-                        let report = finished.report_mut();
-                        let image = if !job.diagram || report.svg.is_empty() {
-                            None
-                        } else {
-                            Some(rasterize(&report.svg)?)
-                        };
-                        let cutaway = report.cutaway.take().map(|body| {
-                            Arc::new(native_viewport::section_view::PreparedCutaway::new(body))
-                        });
-                        Ok((finished, image, cutaway))
+                        prepare(
+                            source.as_deref().ok_or("Section source was released")?,
+                            &job.requests,
+                            job.diagram,
+                        )
                     }))
                     .unwrap_or_else(|_| {
                         Err("Section preview failed; adjust the plane to retry".into())
@@ -100,13 +158,18 @@ fn adopt(
     services: &NativeServices,
     completed: Completed,
 ) -> Result<bool, String> {
-    if state.show_diagram != completed.diagram
+    if state.body_ids().ok().as_ref() != Some(&completed.key.2)
+        || state.show_diagram != completed.diagram
         || (!state.current(&completed.key.0, completed.key.1, completed.generation)
-            && !completed.result.as_ref().is_ok_and(|(finished, _, _)| {
+            && !completed.result.as_ref().is_ok_and(|preview| {
                 state.accepts_preview(
                     &completed.key.0,
                     completed.key.1,
-                    &finished.report().request,
+                    &preview
+                        .finished
+                        .iter()
+                        .map(|r| r.report().request.clone())
+                        .collect::<Vec<_>>(),
                     completed.diagram,
                 )
             }))
@@ -119,16 +182,22 @@ fn adopt(
             if current != completed.key.1 {
                 return Err("The section source model changed".into());
             }
-            let (finished, image, cutaway) = completed.result?;
-            services.engine.validate_section_review(&finished)?;
-            let report = finished.into_report();
+            let PreparedPreview {
+                finished,
+                report,
+                image,
+                cutaway,
+            } = completed.result?;
+            services.engine.validate_section_reviews(&finished)?;
             // Intermediate positions keep a sustained drag moving. Only the
             // completed current draft enables export.
             state.finished_generation = Some(completed.generation);
             state.message = match report.outcome {
-                SectionOutcome::NoIntersection => "Plane does not intersect this body.".into(),
+                SectionOutcome::NoIntersection => {
+                    "Plane does not intersect the selected bodies.".into()
+                }
                 SectionOutcome::BoundaryContact => {
-                    "Plane touches the boundary. Move inside the body to reveal a section.".into()
+                    "Plane touches a boundary. Move inside to reveal a section.".into()
                 }
                 SectionOutcome::MaterialSection if report.request.probe_mm.is_some() => {
                     if report.probe_spans.is_empty() {
@@ -190,7 +259,7 @@ pub(super) fn synchronize(
     {
         return Ok(());
     }
-    let request = match state.request(services.engine.document_units()) {
+    let requests = match state.requests(services.engine.document_units()) {
         Ok(request) => request,
         Err(error) => {
             state.finished_generation = Some(state.generation);
@@ -206,7 +275,11 @@ pub(super) fn synchronize(
             world.resource::<NativeInterfaceHandle>().clone(),
         )?);
     }
-    let key = (owner.clone(), state.revision, request.body_id);
+    let key = (
+        owner.clone(),
+        state.revision,
+        requests.iter().map(|r| r.body_id).collect(),
+    );
     let preview = state.preview.as_mut().unwrap();
     let source = if preview.key.as_ref() != Some(&key) {
         let captured =
@@ -216,9 +289,7 @@ pub(super) fn synchronize(
                     if current != state.revision {
                         return Err("The section source model changed".into());
                     }
-                    services.engine.prepare_section_review(
-                        &serde_json::to_string(&request).map_err(|error| error.to_string())?,
-                    )
+                    services.engine.prepare_section_reviews(&requests)
                 });
         match captured {
             Ok(source) => Some(source),
@@ -237,7 +308,7 @@ pub(super) fn synchronize(
             key: key.clone(),
             generation: state.generation,
             source,
-            request,
+            requests,
             diagram: state.show_diagram,
         })
         .map_err(|error| format!("Cannot update section preview: {error}"))?;
@@ -257,7 +328,16 @@ mod tests {
         use crate::session_bridge::native_interface::tests::Fixture;
         let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
         for case in [
-            "live", "drag", "side", "diagram", "close", "edit", "replace", "native", "owner",
+            "live",
+            "drag",
+            "selection",
+            "side",
+            "diagram",
+            "close",
+            "edit",
+            "replace",
+            "native",
+            "owner",
         ] {
             let fixture = Fixture::new();
             let owner = fixture.owner();
@@ -335,6 +415,10 @@ mod tests {
                 });
             match case {
                 "drag" => state.set_value(Field::Offset, "3".into()),
+                "selection" => {
+                    state.bodies.push((body.0 + 1, "Another body".into()));
+                    state.toggle_body(body.0 + 1).unwrap();
+                }
                 "side" => state.set_value(Field::Side, "positive".into()),
                 "diagram" => state.toggle_view(),
                 "close" => {
@@ -375,10 +459,15 @@ mod tests {
                 &mut state,
                 &services,
                 Completed {
-                    key: (owner.clone(), receipt.revision, body),
+                    key: (owner.clone(), receipt.revision, vec![body]),
                     generation: 0,
                     diagram: false,
-                    result: Ok((finished, None, cutaway)),
+                    result: Ok(PreparedPreview {
+                        report: finished.report().clone(),
+                        finished: vec![finished],
+                        image: None,
+                        cutaway,
+                    }),
                 },
             );
             if matches!(case, "live" | "drag") {
@@ -395,7 +484,7 @@ mod tests {
             }
             if matches!(
                 case,
-                "live" | "drag" | "side" | "diagram" | "close" | "owner" | "native"
+                "live" | "drag" | "selection" | "side" | "diagram" | "close" | "owner" | "native"
             ) {
                 assert_eq!(
                     fixture.engine.engine_call("project_export_model", ""),

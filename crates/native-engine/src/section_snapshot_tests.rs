@@ -21,6 +21,104 @@ fn stock() -> NativeEngineHost {
     state
 }
 #[test]
+fn multi_body_retained_section_cuts_the_whole_selection_and_preserves_outside_solids() {
+    let state = stock();
+    value(state.solid_extrude(r#"{"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":12.0},"flip":true}"#));
+    value(state.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#));
+    value(state.engine_call(
+        "add_rectangle",
+        r#"{"mode":"two_point","p1":{"x":24.0,"y":0.0},"p2":{"x":30.0,"y":12.0},"ctrl_held":true}"#,
+    ));
+    value(state.engine_call("end_sketch", ""));
+    value(state.solid_extrude(r#"{"sketch_name":"Sketch2","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":8.0}}"#));
+    let scene = state.solid_scene_snapshot();
+    assert_eq!(scene.bodies.len(), 3);
+    let before = value(state.engine_call("project_export_model", ""));
+    let revision = state.geometry_revision();
+    let mut requests: Vec<SectionReviewRequest> = scene
+        .bodies
+        .iter()
+        .map(|body| {
+            serde_json::from_value(
+                json!({"body_id":body.id,"plane":"yz","offset_mm":5.,"include_cutaway":true}),
+            )
+            .unwrap()
+        })
+        .collect();
+    let source = state.prepare_section_reviews(&requests).unwrap();
+    for (offset, positive, expected_cutaways) in [
+        (5., false, [true, true, false]),
+        (28., false, [true, true, true]),
+        (28., true, [false, false, true]),
+    ] {
+        for request in &mut requests {
+            request.offset_mm = offset;
+            request.keep_positive = positive;
+        }
+        let finished: Vec<_> = {
+            let _live = state.inner.lock().unwrap();
+            source
+                .iter()
+                .zip(&requests)
+                .map(|(source, request)| source.inspect_retained_at(request).unwrap())
+                .collect()
+        };
+        state.validate_section_reviews(&finished).unwrap();
+        for (result, retained) in finished.iter().zip(expected_cutaways) {
+            assert_eq!(result.report().cutaway.is_some(), retained);
+            if let Some(mesh) = &result.report().cutaway {
+                assert!(!mesh.indices.is_empty());
+                assert!(mesh
+                    .positions
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .all(|p| if positive {
+                        f64::from(p[0]) >= offset - 1e-5
+                    } else {
+                        f64::from(p[0]) <= offset + 1e-5
+                    }));
+            }
+        }
+        if offset == 5. {
+            assert!(finished[..2]
+                .iter()
+                .all(|r| r.report().outcome == SectionOutcome::MaterialSection));
+            assert_eq!(finished[2].report().outcome, SectionOutcome::NoIntersection);
+            let lower = finished[1].report().cutaway.as_ref().unwrap();
+            assert!(lower
+                .positions
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .any(|p| p[2] < -11.9));
+        }
+    }
+    for request in &mut requests {
+        request.plane = limo_cad_occt::section_review::SectionPlane::Xy;
+        request.offset_mm = 0.;
+        request.keep_positive = false;
+    }
+    let contact: Vec<_> = source
+        .iter()
+        .zip(&requests)
+        .map(|(s, r)| s.inspect_retained_at(r).unwrap())
+        .collect();
+    assert!(contact[0].report().cutaway.is_none());
+    assert!(contact[1].report().cutaway.is_some());
+    assert!(contact[2].report().cutaway.is_none());
+    state.validate_section_reviews(&contact).unwrap();
+    assert!(state.prepare_section_reviews(&[]).is_err());
+    assert!(state
+        .prepare_section_reviews(&[requests[0].clone(), requests[0].clone()])
+        .is_err());
+    assert_eq!(state.geometry_revision(), revision);
+    assert!(Arc::ptr_eq(&scene, &state.solid_scene_snapshot()));
+    assert_eq!(value(state.engine_call("project_export_model", "")), before);
+    value(state.project_load(&serde_json::to_string(before.as_str().unwrap()).unwrap()));
+    assert!(state.validate_section_reviews(&contact).is_err());
+}
+#[test]
 fn failed_chamfer_keeps_available_body_inspectable_and_preserves_source_proof() {
     let state = stock();
     let scene = state.solid_scene_snapshot();
