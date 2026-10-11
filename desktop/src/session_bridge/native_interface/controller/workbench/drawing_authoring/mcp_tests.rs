@@ -37,7 +37,7 @@ fn setup(fixture: &Fixture) -> (App, NativeInterfaceHandle, NativeServices) {
     state.refresh_owner(&owner);
     state.workspace = Workspace::Drawing;
     state.widgets.begin();
-    drawing_paper::paint(
+    drawing_paper::paint_until_settled(
         world,
         camera,
         &services,

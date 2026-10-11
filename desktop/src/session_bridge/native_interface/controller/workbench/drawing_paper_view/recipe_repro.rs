@@ -66,7 +66,7 @@ fn turbine_assembly_sheet_binds_placed_linework_to_the_bevy_paper_image() {
     let mut state = Workbench::default();
     state.refresh_owner(&fixture.owner());
     state.workspace = Workspace::Drawing;
-    paint(
+    paint_until_settled(
         world,
         camera,
         &services,
@@ -155,7 +155,7 @@ fn turbine_assembly_sheet_binds_placed_linework_to_the_bevy_paper_image() {
     }
     let document = state.paper_document.as_ref().unwrap().1.clone();
     let assets = world.resource::<Assets<Image>>().len();
-    paint(
+    paint_until_settled(
         world,
         camera,
         &services,

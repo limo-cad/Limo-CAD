@@ -103,6 +103,23 @@ fn resolve_request(
     Ok(resolved)
 }
 
+/// Resolve the same definition/occurrence selection used by exact projection.
+/// Repeated occurrences share a single copied body definition in a worker.
+pub fn drawing_required_body_ids(
+    scene: &SolidSceneDto,
+    assembly: &AssemblyDocumentDto,
+    request: &DrawingProjectionRequest,
+) -> Result<Vec<BodyId>, OcctError> {
+    let request = resolve_request(scene, assembly, request)?;
+    let mut ids = drawing_bodies(scene, &request)?
+        .into_iter()
+        .map(|(body, _)| body.id)
+        .collect::<Vec<_>>();
+    ids.sort();
+    ids.dedup();
+    Ok(ids)
+}
+
 pub(super) fn drawing_bodies<'a>(
     scene: &'a SolidSceneDto,
     request: &DrawingProjectionRequest,
