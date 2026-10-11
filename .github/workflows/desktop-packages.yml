@@ -243,15 +243,14 @@ jobs:
         uses: ./.github/actions/setup-unix-occt
 
       - name: Restore Rust build cache
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            desktop/target
-          key: linux-ubuntu-26.04-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'desktop/Cargo.lock', 'desktop/Cargo.toml', 'crates/**/Cargo.toml', 'vcpkg.json') }}
-          restore-keys: |
-            linux-ubuntu-26.04-${{ runner.arch }}-
+          workspaces: |
+            . -> target
+            desktop -> target
+          key: linux-ubuntu-26.04
+          # Reuse compiled dependencies without archiving executable/package output.
+          cache-workspace-crates: false
 
       - name: Fetch and verify embedded material catalog
         run: cargo xtask materials --fetch --check
@@ -403,16 +402,14 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Restore Rust build cache
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target/debug
-            desktop/target
-          key: linux-appimage-ubuntu-22.04-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock', 'xtask/Cargo.toml', 'desktop/Cargo.lock', 'desktop/Cargo.toml', 'crates/**/Cargo.toml') }}
-          restore-keys: |
-            linux-appimage-ubuntu-22.04-${{ runner.arch }}-
+          workspaces: |
+            . -> target
+            desktop -> target
+          key: linux-appimage-ubuntu-22.04
+          # Keep this older-glibc container separate from host/package builds.
+          cache-workspace-crates: false
 
       - name: Fingerprint the OCCT compiler and FreeType SDK
         id: occt_key
