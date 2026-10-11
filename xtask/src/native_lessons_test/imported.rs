@@ -266,7 +266,7 @@ pub(super) fn exercise(c: &mut Client, out: &Path) -> Result<Value> {
     )
 }
 
-fn wait_source(c: &mut Client, contains: &str) -> Result<Value> {
+pub(super) fn wait_source(c: &mut Client, contains: &str) -> Result<Value> {
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         let state = ui(c, json!({"action":"inspect"}))?;

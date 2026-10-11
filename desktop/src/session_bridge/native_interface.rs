@@ -1042,3 +1042,5 @@ pub(crate) fn finish_mutation(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(super) use tests::{assert_contact_stop, assert_motion_csv, contact_stock, swept_stock};

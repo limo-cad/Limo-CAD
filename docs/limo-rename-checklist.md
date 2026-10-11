@@ -31,6 +31,10 @@ before merging into `main`.
       and read-only execution pass without changing the open document.
 - [x] Current download links use the published release's actual asset names;
       showcase anchors and native source-build commands use the renamed targets.
+- [x] The public-site entrance is authored in English, Spanish, German and
+      Simplified Chinese, with reciprocal language links and localized product
+      names. The translated pages identify English guides and preserve the
+      published preview's source, filenames and withheld-platform boundaries.
 
 ## Remaining release and cleanup work
 
@@ -44,8 +48,9 @@ before merging into `main`.
 - [ ] Coordinate the required-check context rename with the active GitHub
       ruleset. Keep `frontend_regressions / Frontend regression tests` until
       protection and reporting change together; its implementation is Rust.
-- [ ] Finish translated public-site entrances and contributor review of localized
-      copy and identity assets. The English concept banner remains a proposal.
+- [ ] Finish contributor review of localized public-site copy and identity assets.
+      The English concept banner remains a proposal. The authored entrance pages
+      do not establish native-speaker, release or external-listing approval.
 - [ ] Coordinate external listings and separately owned plugin identities.
       This repository does not rename `dsh-nobs-cad-step` in another project.
 - [ ] Finish the separately deferred physical deletion of retired local payloads.

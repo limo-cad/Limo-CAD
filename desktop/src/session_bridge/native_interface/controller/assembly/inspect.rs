@@ -37,6 +37,8 @@ struct ContactDraft {
     clearance: MeasurementInput,
 }
 pub(super) struct State {
+    report_generation: u64,
+    swept_generation: u64,
     clearance: MeasurementInput,
     sample_rate: String,
     first: Option<(u64, u64)>,
@@ -52,6 +54,8 @@ pub(super) struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
+            report_generation: 0,
+            swept_generation: 0,
             clearance: MeasurementInput::new(DimensionKind::Length, 0., UnitSystem::Mm),
             sample_rate: "120".into(),
             first: None,
@@ -67,9 +71,22 @@ impl Default for State {
     }
 }
 impl State {
-    pub(super) fn changed(&mut self) {
+    pub(super) fn invalidate_report(&mut self) {
+        self.report_generation = self.report_generation.wrapping_add(1);
         self.report = None;
+        self.error = None;
+    }
+    pub(super) fn invalidate_swept(&mut self) {
+        self.swept_generation = self.swept_generation.wrapping_add(1);
         self.swept = None;
+        self.error = None;
+    }
+    pub(super) fn invalidate_reviews(&mut self) {
+        self.invalidate_report();
+        self.invalidate_swept();
+    }
+    pub(super) fn changed(&mut self) {
+        self.invalidate_reviews();
         self.contacts.clear();
         self.error = None;
     }
@@ -98,7 +115,11 @@ impl State {
             self.second = placed.iter().copied().find(|key| Some(*key) != self.first);
         }
         if !a.motion_studies.iter().any(|s| Some(s.id.0) == self.study) {
-            self.study = a.motion_studies.first().map(|s| s.id.0);
+            let study = a.motion_studies.first().map(|s| s.id.0);
+            if self.study != study {
+                self.invalidate_swept();
+            }
+            self.study = study;
         }
         for c in &a.contact_sets {
             self.contacts.entry(c.id.0).or_insert_with(|| ContactDraft {
@@ -164,8 +185,14 @@ pub(super) fn reduce(
     if let Action::Field(field) = action {
         if let ControlInput::SetValue(value) = input {
             match field {
-                Edit::Clearance => state.clearance.set_text(value.clone()),
-                Edit::SampleRate => state.sample_rate = value.clone(),
+                Edit::Clearance => {
+                    state.clearance.set_text(value.clone());
+                    state.invalidate_reviews();
+                }
+                Edit::SampleRate => {
+                    state.sample_rate = value.clone();
+                    state.invalidate_swept();
+                }
                 Edit::ContactName(id) => {
                     state
                         .contacts
@@ -216,7 +243,10 @@ pub(super) fn reduce(
             return Err("Choose an available body instance or study".into());
         }
         match kind {
-            Choice::Study => state.study = value.parse().ok(),
+            Choice::Study => {
+                state.study = value.parse().ok();
+                state.invalidate_swept();
+            }
             Choice::First | Choice::Second => {
                 let (o, b) = value.split_once(':').ok_or("Choose a placed body")?;
                 let key = Some((
@@ -245,70 +275,46 @@ pub(super) fn reduce(
                 Some(*kind)
             }
         }
-        Action::StopFirst => state.stop_first = !state.stop_first,
+        Action::StopFirst => {
+            state.stop_first = !state.stop_first;
+            state.invalidate_swept();
+        }
         Action::Check | Action::Swept => {
             let clearance = state.clearance(units)?;
-            let swept = matches!(action, Action::Swept);
-            let (operation, args) = if swept {
-                (
-                    "assembly_swept_collision_check",
-                    json!({"study_id":state.study.ok_or("Create a motion study first")?,"sample_rate_hz":state.sample_rate()?,"clearance_threshold_mm":clearance,"stop_at_first":state.stop_first}),
-                )
-            } else {
-                (
-                    "assembly_interference_check",
-                    json!({"occurrence_ids":[],"clearance_threshold_mm":clearance}),
-                )
-            };
-            state.error = None;
             let query_owner = owner.clone();
-            return worker::enqueue_query(
+            if matches!(action, Action::Check) {
+                let args = json!({"occurrence_ids":[],"clearance_threshold_mm":clearance});
+                state.invalidate_report();
+                let generation = state.report_generation;
+                return worker::enqueue_interference_review(
+                    world,
+                    owner.clone(),
+                    revision,
+                    args,
+                    prepare_interference_report,
+                    move |world, services, result| {
+                        adopt_interference_report(
+                            world,
+                            services,
+                            &query_owner,
+                            revision,
+                            generation,
+                            result,
+                        )
+                    },
+                );
+            }
+            let args = json!({"study_id":state.study.ok_or("Create a motion study first")?,"sample_rate_hz":state.sample_rate()?,"clearance_threshold_mm":clearance,"stop_at_first":state.stop_first});
+            state.invalidate_swept();
+            let generation = state.swept_generation;
+            return worker::enqueue_swept_collision_review(
                 world,
                 owner.clone(),
                 revision,
-                operation.into(),
                 args,
+                prepare_swept_report,
                 move |world, services, result| {
-                    services.bridge.with_native_document_receipt(
-                        &services.engine,
-                        &query_owner,
-                        |current| {
-                            if current != revision {
-                                return Err(
-                                    "The assembly changed during inspection; run the check again"
-                                        .into(),
-                                );
-                            }
-                            let mut browser = world
-                                .get_resource_mut::<Browser>()
-                                .ok_or("Assembly inspector closed")?;
-                            if browser.owner.as_ref() != Some(&query_owner)
-                                || browser.revision != revision
-                            {
-                                return Err("Assembly inspector changed".into());
-                            }
-                            match result {
-                                Ok(result) => {
-                                    if swept {
-                                        browser.inspect.swept = Some(
-                                            serde_json::from_value(result.value.clone())
-                                                .map_err(|e| e.to_string())?,
-                                        );
-                                    } else {
-                                        browser.inspect.report = Some(
-                                            serde_json::from_value(result.value.clone())
-                                                .map_err(|e| e.to_string())?,
-                                        );
-                                    }
-                                    Ok(result.value)
-                                }
-                                Err(error) => {
-                                    browser.inspect.error = Some(error.clone());
-                                    Err(error)
-                                }
-                            }
-                        },
-                    )
+                    adopt_swept_report(world, services, &query_owner, revision, generation, result)
                 },
             );
         }
@@ -359,4 +365,94 @@ pub(super) fn reduce(
     } else {
         Ok(json!({"changed":true}))
     }
+}
+
+type PreparedInterferenceReport = (limo_cad_native_engine::FinishedInterferenceReview, Value);
+fn prepare_interference_report(
+    finished: limo_cad_native_engine::FinishedInterferenceReview,
+) -> Result<PreparedInterferenceReport, String> {
+    let value = serde_json::to_value(finished.report()).map_err(|error| error.to_string())?;
+    Ok((finished, value))
+}
+fn adopt_interference_report(
+    world: &mut World,
+    services: &NativeServices,
+    owner: &DocumentContext,
+    revision: u64,
+    generation: u64,
+    result: Result<PreparedInterferenceReport, String>,
+) -> Result<Value, String> {
+    services
+        .bridge
+        .with_native_document_receipt(&services.engine, owner, |current| {
+            if current != revision {
+                return Err("The assembly changed during inspection; run the check again".into());
+            }
+            let browser = world
+                .get_resource::<Browser>()
+                .ok_or("Assembly inspector closed")?;
+            if browser.owner.as_ref() != Some(owner)
+                || browser.revision != revision
+                || !browser.enabled
+                || browser.tab != Tab::Inspect
+                || browser.inspect.report_generation != generation
+            {
+                return Err("Assembly inspector changed".into());
+            }
+            let (finished, value) = match result {
+                Ok(result) => result,
+                Err(error) => {
+                    world.resource_mut::<Browser>().inspect.error = Some(error.clone());
+                    return Err(error);
+                }
+            };
+            services.engine.validate_interference_review(&finished)?;
+            world.resource_mut::<Browser>().inspect.report = Some(finished.into_report());
+            Ok(value)
+        })
+}
+
+type PreparedSweptReport = (limo_cad_native_engine::FinishedSweptCollisionReview, Value);
+fn prepare_swept_report(
+    finished: limo_cad_native_engine::FinishedSweptCollisionReview,
+) -> Result<PreparedSweptReport, String> {
+    let value = serde_json::to_value(finished.report()).map_err(|error| error.to_string())?;
+    Ok((finished, value))
+}
+fn adopt_swept_report(
+    world: &mut World,
+    services: &NativeServices,
+    owner: &DocumentContext,
+    revision: u64,
+    generation: u64,
+    result: Result<PreparedSweptReport, String>,
+) -> Result<Value, String> {
+    services
+        .bridge
+        .with_native_document_receipt(&services.engine, owner, |current| {
+            if current != revision {
+                return Err("The assembly changed during inspection; run the check again".into());
+            }
+            let browser = world
+                .get_resource::<Browser>()
+                .ok_or("Assembly inspector closed")?;
+            if browser.owner.as_ref() != Some(owner)
+                || browser.revision != revision
+                || !browser.enabled
+                || browser.tab != Tab::Inspect
+                || browser.inspect.swept_generation != generation
+            {
+                return Err("Assembly inspector changed".into());
+            }
+            let (finished, value) = match result {
+                Ok(result) => result,
+                Err(error) => {
+                    world.resource_mut::<Browser>().inspect.error = Some(error.clone());
+                    return Err(error);
+                }
+            };
+            services.engine.validate_swept_collision_review(&finished)?;
+            world.resource_mut::<Browser>().inspect.swept = Some(finished.into_report());
+            Ok(value)
+        })
 }

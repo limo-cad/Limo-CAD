@@ -48,6 +48,59 @@ fn wrapped(text: &str, width: usize) -> String {
     output.trim_end().into()
 }
 
+fn bore_heading(bore: &Value, source_steps: &[Value]) -> String {
+    let matches: Vec<_> = source_steps
+        .iter()
+        .filter_map(|step| {
+            let call = &step["call"];
+            let args = &call["arguments"];
+            (call["operation"] == "solid_hole"
+                && args["body_id"] == bore["body_id"]
+                && args["diameter"] == bore["diameter"]
+                && args["extent"]["depth"] == bore["depth"]
+                && args["positions"].as_array().is_some_and(|positions| {
+                    let points: Vec<_> = positions
+                        .iter()
+                        .map(|position| &position["position"]["$project"]["point"])
+                        .collect();
+                    bore["points"].as_array().is_some_and(|expected| {
+                        points.len() == expected.len()
+                            && points
+                                .iter()
+                                .zip(expected)
+                                .all(|(point, expected)| *point == expected)
+                    })
+                }))
+            .then_some(args)
+        })
+        .collect();
+    assert_eq!(
+        matches.len(),
+        1,
+        "Bore notes require one exact authored hole operation"
+    );
+    let args = matches[0];
+    let mut heading = format!(
+        "D{} / depth {} along {}:\n",
+        bore["diameter"],
+        bore["depth"],
+        ["X", "Y", "Z"][bore["axis"].as_u64().unwrap() as usize]
+    );
+    match args["style"].as_str() {
+        Some("simple") => {}
+        Some("countersink") => {
+            writeln!(
+                heading,
+                "Countersink D{} x {} deg at entry face.",
+                args["countersink_diameter"], args["countersink_angle_deg"]
+            )
+            .unwrap();
+        }
+        _ => panic!("Unsupported authored hole style in bench machining notes"),
+    }
+    heading
+}
+
 struct Author {
     groups: BTreeMap<String, String>,
     steps: Vec<Value>,
@@ -227,14 +280,7 @@ impl Author {
         );
         let mut machining = String::from("MACHINING COORDINATES / X,Y,Z mm\n");
         for bore in bores.iter().filter(|b| b["body_id"] == part["body_id"]) {
-            writeln!(
-                machining,
-                "D{} / depth {} along {}:",
-                bore["diameter"],
-                bore["depth"],
-                ["X", "Y", "Z"][bore["axis"].as_u64().unwrap() as usize]
-            )
-            .unwrap();
+            machining.push_str(&bore_heading(bore, source_steps));
             for point in bore["points"].as_array().unwrap() {
                 writeln!(machining, "  {}, {}, {}", point[0], point[1], point[2]).unwrap();
             }
@@ -406,4 +452,64 @@ fn main() {
     output.push_str("\n}\n");
     limo_cad_script::Script::parse(&output).unwrap();
     fs::write(path, output).unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bench_part_notes_preserve_authored_countersinks_and_match_saved_recipe() {
+        let recipe: Value = serde_json::from_str(include_str!(
+            "../../../examples/scripts/garden-bench.limo.jsonc"
+        ))
+        .unwrap();
+        let inputs = &recipe["exports"]["verification_inputs"];
+        let source_steps = recipe["steps"].as_array().unwrap();
+        let countersunk = [
+            "seat_front",
+            "seat_second",
+            "seat_middle",
+            "seat_rear",
+            "arm_left",
+            "arm_right",
+        ];
+        let parts = inputs["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 20);
+        for (index, part) in parts.iter().enumerate() {
+            let name = part["body_id"]["$ref"]
+                .as_str()
+                .unwrap()
+                .strip_suffix("_body")
+                .unwrap();
+            let mut author = Author::new();
+            author.part(
+                part,
+                inputs["bores"].as_array().unwrap(),
+                source_steps,
+                index + 1,
+            );
+            let note_id = format!("bench_drawing_{name}_machining");
+            let generated = author
+                .steps
+                .iter()
+                .find(|step| step["id"] == note_id)
+                .unwrap();
+            let saved = source_steps
+                .iter()
+                .find(|step| step["id"] == note_id)
+                .unwrap();
+            assert!(
+                generated["call"]["arguments"]["text"] == saved["call"]["arguments"]["text"],
+                "Generated machining notes must match the authored drawing source"
+            );
+            let text = generated["call"]["arguments"]["text"].as_str().unwrap();
+            if countersunk.contains(&name) {
+                assert!(text.contains("Countersink D10 x 90 deg at entry face."));
+                assert!(text.contains("D5.5 / depth 35 along Z:"));
+            } else {
+                assert!(!text.contains("Countersink"));
+            }
+        }
+    }
 }

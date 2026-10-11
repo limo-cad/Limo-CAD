@@ -13,11 +13,15 @@ pub use drawing_instances::{
     resolve_drawing_request,
 };
 mod interference;
-pub use interference::{exact_interference_report, exact_pair_result};
+pub use interference::{
+    exact_interference_report, exact_pair_result, validate_source as validate_interference_source,
+};
 mod motion_evaluation;
-pub use motion_evaluation::evaluate_motion_study;
+pub use motion_evaluation::{evaluate_motion_study, evaluate_motion_study_document};
 mod motion_inspection;
-pub use motion_inspection::exact_swept_collision_check;
+pub use motion_inspection::{
+    exact_swept_collision_check, exact_swept_collision_document, validate_swept_source,
+};
 
 use std::collections::HashSet;
 
@@ -494,6 +498,53 @@ pub struct DetachedDrawingKernel;
 #[cfg(not(feature = "native-occt"))]
 pub struct DetachedMeshKernel;
 #[cfg(not(feature = "native-occt"))]
+pub struct DetachedSectionKernel;
+#[cfg(not(feature = "native-occt"))]
+pub struct DetachedInterferenceKernel;
+#[cfg(not(feature = "native-occt"))]
+impl DetachedInterferenceKernel {
+    pub fn evaluate_motion(
+        &self,
+        _assembly: &limo_cad_sketch::AssemblyDocumentDto,
+        _scene: &SolidSceneDto,
+        _request: &limo_cad_sketch::EvaluateMotionStudyRequestDto,
+    ) -> Result<limo_cad_sketch::MotionStudyEvaluationDto, String> {
+        Err("native OCCT support was not enabled at compile time".into())
+    }
+
+    pub fn inspect_swept(
+        &self,
+        _assembly: &limo_cad_sketch::AssemblyDocumentDto,
+        _scene: &SolidSceneDto,
+        _request: &limo_cad_sketch::SweptCollisionRequestDto,
+    ) -> Result<limo_cad_sketch::SweptCollisionReportDto, String> {
+        Err("native OCCT support was not enabled at compile time".into())
+    }
+
+    pub fn inspect(
+        &self,
+        _scene: &SolidSceneDto,
+        _poses: &[limo_cad_assembly::InstanceBodyPoseDto],
+        _request: &limo_cad_assembly::InterferenceCheckRequestDto,
+    ) -> Result<limo_cad_assembly::InterferenceReportDto, String> {
+        Err("native OCCT support was not enabled at compile time".into())
+    }
+}
+#[cfg(not(feature = "native-occt"))]
+impl DetachedSectionKernel {
+    pub fn inspect(
+        &self,
+        request: &section_review::SectionReviewRequest,
+    ) -> Result<section_review::SectionReview, section_review::SectionReviewError> {
+        Err(section_review::SectionReviewError::Kernel {
+            body_id: request.body_id,
+            plane: request.plane,
+            offset_mm: request.offset_mm,
+            source: OcctError("native OCCT support was not enabled at compile time".into()),
+        })
+    }
+}
+#[cfg(not(feature = "native-occt"))]
 impl DetachedMeshKernel {
     pub fn tessellate(
         &self,
@@ -521,6 +572,22 @@ impl DetachedDrawingKernel {
 #[cfg(not(feature = "native-occt"))]
 impl OcctKernel {
     pub fn active_body_ids(&self) -> Result<Vec<BodyId>, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
+    pub fn detached_interference_snapshot(
+        &self,
+        _ids: &[BodyId],
+    ) -> Result<DetachedInterferenceKernel, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
+    pub fn detached_section_snapshot(
+        &self,
+        _id: BodyId,
+    ) -> Result<DetachedSectionKernel, OcctError> {
         Err(OcctError(
             "native OCCT support was not enabled at compile time".into(),
         ))
@@ -603,7 +670,10 @@ impl OcctKernel {
 #[cfg(feature = "native-occt")]
 mod native;
 #[cfg(feature = "native-occt")]
-pub use native::{DetachedDrawingKernel, DetachedMeshKernel, OcctKernel};
+pub use native::{
+    DetachedDrawingKernel, DetachedInterferenceKernel, DetachedMeshKernel, DetachedSectionKernel,
+    OcctKernel,
+};
 
 #[cfg(test)]
 mod drawing_anchor_tests {

@@ -1,6 +1,155 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: clean reviewed source `fd85a556`
+Current checkpoint, **2026-10-11 UTC**: source `70eba71a` combines compact
+native File Open completion with original load diagnostics retained, localized
+English/Spanish/German/Simplified Chinese product entrances, and three practical
+edit/recovery lesson guides with authored catalog and UTF-16 harness repairs.
+Independent source review is clear. Three package Clippy checks and five exact
+tests pass once: one scratch-only native File regression at `abdfb8cf`, three new
+pure/bundled-guide lesson checks and one affected existing knowledge corpus check
+at `70eba71a`. Four-page/88-link static validation also passes. Hosted CI is still
+running on the preceding published head; the combined batch will be checked on
+PR124 after one push. Issues **#16 and #21 remain open** for native lesson
+presentation/learning, localized layout/review and release/publication,
+administrator and approval criteria. No live desktop or large-document retry,
+nonempty diagnostic fixture, native lesson replay, deployed pair or human UI/MCP
+pass is claimed. Broad coverage stays paused and its complete ledger is unchanged.
+PR124 remains the integration destination. Exact scope and receipts:
+`docs/qualification/file-open-lessons-localized-20261011.json`.
+
+Historical checkpoint, **2026-10-11 UTC**: motion CSV source `e224021b`
+passes strict Windows desktop/native-engine/OCCT compilation and its three new
+native, ordered-UI worker and admitted-MCP regressions once. The preceding six
+swept/contact passes remain at their original revisions and are not repeated.
+Exact source, artifacts, independent physical CSV oracles and scope limits are
+recorded in `docs/qualification/detached-motion-csv-20261011.json`.
+
+CSV sampling and formatting now run outside live publisher/engine/process-lease
+guards using required owned authored Assembly and immutable Scene inputs. Its
+private owner/session/revision/Weak Scene/authored proof rejects stale results;
+pure CSV does not require a native B-rep. The Motion file picker owns a revocable
+operation lease: Cancel, draft changes, hide/tab changes, replacement and State
+drop revoke publication. Final publisher -> file lease -> native source proof ->
+atomic write preserves admission and cancellation authority. MCP transfers the
+owned CSV once and retains the original outcome for delivery-only retry.
+
+The original #333 criteria now have an explicit seven-item evidence disposition
+in that receipt. Concrete copy boundaries, independent invalidation, exact asset
+reuse, retirement/history and stale UI/MCP fences are qualified within their
+recorded scope. Issue closure follows publication of this checkpoint; unrelated
+universal FPS/GPU/process-memory benchmarks are not added acceptance gates.
+Required authored capture, solver input clones, source comparison, output and
+final atomic write still scale. Whole-kernel tessellation remains unchanged.
+
+Every existing UI/MCP leaf, receipt, incoming renderer recheck and prior section
+needs_recheck remains intact. Broad qualification stays paused. No new human
+pass, fresh live pair, deployment, restart or physical GPU/printing qualification
+is claimed. Saved GUI/recovery data and independent headless documents remain
+preserved. The complete historical digital 22-sheet bench review found six
+missing countersink specifications; the author/source repair passes strict
+example compilation and its one new pure author regression. Exact inputs and
+layout bounds are recorded in `qualification/garden-bench-sheet-review-20261011.json`.
+Keep #93 open: the old native bench log failed on an obsolete `$len` assertion
+before reopen/export checks; current source already uses supported `$count`.
+Later logs mark that exact case ignored, and no final successful full-package/
+reopen/upstream receipt is retained. The current bench checkpoint has no drawings;
+22 SVGs plus 22 PNGs are historical review inputs, not 44 retained SVG/DXF files.
+Genuine Bambu external qualification (#316), display/cutover work and the genuine
+#369 witness remain separate open work. Main and Jack's PRs are untouched; changes stay in PR124 and
+both Bevy aliases. Hosted CI for this checkpoint is not yet claimed green.
+
+Historical checkpoint, **2026-10-11 UTC**: swept source `f2c47dd9` and
+contact-aware motion source `1472b342` each pass strict Windows desktop/native-
+engine/OCCT checks and three new native/UI-worker/admitted-MCP regressions once.
+The combined normal merge `39ca1a1e` passes two fresh strict compilation checks
+after incoming `9ea6295b` replaces the former section worker with a live panel.
+No old passing regression is repeated. Actual source, artifacts and original
+test-helper compiler failure/correction are recorded in
+`docs/qualification/detached-swept-contact-20261011.json`.
+
+Swept collision and contact-aware playback compute from genuine detached native
+stock outside live engine/publisher guards, then validate original UI receipts
+or admitted MCP tickets plus private authored/native source proof. Independent
+physical oracles cover full/early-stop sampling and the 0.5 mm contact stop at
+time 0.3/Z3.5. Late previews after Pause, Stop, Seek, draft, hide/tab or source
+replacement are rejected. Swept-only options preserve unrelated static reports.
+
+Mechanism eligibility now borrows the assembly and returns a bool before drag
+setup. Its full wire copy is removed; required authored graph cloning remains.
+Assembly capture, selected native copies, first solve and final validation still
+scale with their inputs. These source results establish no deployed timing,
+FPS, memory-pressure, physical GPU release or human interaction pass.
+
+Incoming direct Bevy `2074f7a3`, `9d32116f`, `9ea6295b` and `f96e9b32` are
+preserved normally, including separately authored macOS renderer/section
+evidence and selective renderer rechecks. Every existing UI/MCP receipt,
+status and paused phase is preserved by this checkpoint; no additional human
+recheck or live pair is claimed. Work stays in PR124/both Bevy aliases, with
+main and Jack's PRs untouched. Hosted CI for the new push remains pending.
+
+The saved/closed installed `eb71c32d` GUI and independent headless documents
+remain preserved. Fresh deployment and finite PDF/cold-paper/Bambu/affected
+section acceptance remain pending. Motion CSV export has a separately reviewed
+source repair in progress; its results are not claimed here. Keep #333 open until
+that remaining CSV source gate passes. Universal FPS/GPU/memory benchmarks and
+an exhaustive unrelated service lock graph are limits, not added closure gates.
+
+Historical checkpoint, **2026-10-11 UTC**: reviewed source `67cb9e15` passes
+strict Windows desktop/native-engine/OCCT checks, three new static-interference
+regressions and the corrected native section regression. The two section
+UI-worker/admitted-MCP source passes at `3013d119` are retained without repetition.
+The original native fixture failure remains recorded: BoundaryContact retains
+its outline, while NoIntersection is empty. Independent boundary bounds and
+perimeter checks now distinguish them without weakening material geometry or
+native ownership assertions. Exact receipts and artifact hashes are in
+`docs/qualification/detached-section-interference-20261011.json`.
+
+Section and current static interference compute from genuine detached B-reps
+outside live engine/publisher guards. Adoption checks original UI receipts or
+admitted MCP tickets plus private native source. Static proof also checks exact
+solved placements and every visible request-selected native body, including
+zero-pair reports. UI generation retires stale draft, Close/hide-reopen and tab
+results; MCP liveness retries deliver the original retained outcome.
+Capture, copy, assembly solve/broadphase and source validation still have
+scaling-dependent live work. No deployed FPS, latency or memory claim is made.
+Swept native motion retains its existing guarded path.
+
+The one prior human `section-analysis-exact180` pass is marked `needs_recheck`;
+its complete original receipt remains historical. All other UI leaves, manual
+MCP entries and the paused phase are preserved. No new human pass, live pair,
+runtime restart, deployment or installed operator replacement is claimed.
+
+Incoming Bevy menu work `ec010757` is preserved by a normal merge. Work stays
+in PR124 on both Bevy aliases; main and Jack's PRs are untouched. Hosted CI for
+this checkpoint is pending. The installed `eb71c32d` GUI remains saved and
+closed; canonical headless models are preserved pending owner handoff.
+Direct PDF/cold-paper/Bambu and the selective section acceptance require fresh
+deployment and a matched pair. The wider #333 deliverables remain open.
+
+Historical checkpoint, **2026-10-11 13:17 UTC**: reviewed source `bc3a9af1`
+passes strict Windows xtask all-target/all-feature checks and its one new restart
+regression. Deployment now preflights all selected canonical processes before
+terminating any GUI; a headless worker or unavailable launch arguments rejects
+the entire stop pass. PID-only diagnostics preserve private command lines.
+Exact qualification and limits are in
+`docs/qualification/runtime-worker-restart-20261011.json`.
+
+CAD source paths are unchanged from the qualified `fd85a556` checkpoint below;
+its five passes and earlier export/drawing/input evidence are retained. The
+restart regression uses the production selection seam with injected termination.
+No live process was stopped and no deployment or installed operator replacement
+was performed. Headless owners must preserve their models and pause new worker
+launches during promotion; the snapshot guard does not prevent later launches.
+
+Work remains in PR124 on both Bevy aliases. Main and Jack's PRs are untouched.
+CodeQL at the preserved `6c897699` revision completed successfully, including the
+two prior Rust findings reported fixed by analysis. CI for this new source remains
+pending. The installed `eb71c32d` GUI is saved and closed, headless models remain
+preserved pending handoff, and direct PDF/cold-paper/Bambu acceptance remains
+pending a fresh deployment and matched pair. Broad UI/manual MCP coverage stays
+paused; the wider #9/#333 deliverables remain open.
+
+Historical checkpoint, **2026-10-11 UTC**: clean reviewed source `fd85a556`
 passes strict Windows desktop/native-engine/sketch/OCCT/export checks and exactly
 five targeted regressions: three new STEP/native/attached drawing checks and two
 specifically affected history/busy Save checks. Earlier export, drawing, Print-to-File

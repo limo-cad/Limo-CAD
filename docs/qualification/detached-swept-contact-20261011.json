@@ -1,0 +1,328 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-10-11T15:29:22.2164346Z",
+  "source_revision": "1472b342147215201ed1594662ecdb7241a3570a",
+  "swept_qualified_source_revision": "f2c47dd94a78777f6371effb6e65c812b2e1b706",
+  "strict_integration_source_revision": "39ca1a1e055caa64ddfcb826b4cc0cdd5f21f118",
+  "issues": [
+    333
+  ],
+  "source_changes": [
+    "crates/native-engine/src/host.rs",
+    "crates/native-engine/src/lib.rs",
+    "crates/native-engine/src/motion_evaluation_snapshot.rs",
+    "crates/native-engine/src/motion_evaluation_snapshot_tests.rs",
+    "crates/native-engine/src/swept_snapshot.rs",
+    "crates/native-engine/src/swept_snapshot_tests.rs",
+    "crates/occt/src/lib.rs",
+    "crates/occt/src/motion_evaluation.rs",
+    "crates/occt/src/motion_inspection.rs",
+    "crates/occt/src/native.rs",
+    "desktop/Cargo.lock",
+    "desktop/Cargo.toml",
+    "desktop/src/native_editor/mechanism.rs",
+    "desktop/src/native_viewport/viewport_renderer/tests.rs",
+    "desktop/src/session_bridge.rs",
+    "desktop/src/session_bridge/native_control/tests.rs",
+    "desktop/src/session_bridge/native_interface.rs",
+    "desktop/src/session_bridge/native_interface/controller/assembly.rs",
+    "desktop/src/session_bridge/native_interface/controller/assembly/inspect.rs",
+    "desktop/src/session_bridge/native_interface/controller/assembly/inspect/tests.rs",
+    "desktop/src/session_bridge/native_interface/controller/assembly/studies.rs",
+    "desktop/src/session_bridge/native_interface/controller/assembly/studies/tests.rs",
+    "desktop/src/session_bridge/native_interface/controller/worker.rs",
+    "desktop/src/session_bridge/native_interface/tests.rs"
+  ],
+  "source_commits": {
+    "borrowed_mechanism_eligibility": "1fb5c668",
+    "native_swept": "76fb01db",
+    "desktop_swept": "78fbda68",
+    "test_helper_compiler_correction": "f2c47dd94a78777f6371effb6e65c812b2e1b706",
+    "native_contact": "3a8f5d8f",
+    "desktop_contact": "1472b342147215201ed1594662ecdb7241a3570a"
+  },
+  "preserved_incoming_bevy_revisions": [
+    "2074f7a388cb14781157dd00f9a07e4f5fcb202d",
+    "9d32116ff745d301b846dd9f9c94f87812c2c56a",
+    "9ea6295b56852d441c73446347ffd1513e42f31f",
+    "f96e9b322b5395a8cf0c91b4d5689824850dca93"
+  ],
+  "incoming_source_scope": "Direct Bevy work preserved by normal merges. The new wgpu std dependency is compiled; no physical GPU pass is claimed by this receipt. Metadata-only9d321/f96 include separately authored macOS release evidence and selective renderer rechecks. Source9ea adds a live-section panel and replaces the former section worker; its macOS source/pixel receipt is preserved, and combined39ca receives two fresh strict Windows compile checks with no old regressions repeated. No incoming record is reinterpreted as this Windows session human/GPU acceptance.",
+  "swept_qualification": {
+    "revision": "f2c47dd94a78777f6371effb6e65c812b2e1b706",
+    "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+    "desktop_filters": [
+      "session_bridge::native_interface::controller::assembly::inspect::tests::ordered_swept_review_releases_live_guards_and_rejects_stale_motion_reports",
+      "session_bridge::native_control::tests::native_swept_query_releases_live_guards_and_fences_original_completion_once"
+    ],
+    "native_filters": [
+      "host::swept_snapshot::tests::detached_swept_motion_preserves_physical_events_and_rejects_stale_inputs"
+    ],
+    "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+    "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
+    "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+    "msvc": "14.44.35207",
+    "windows_sdk": "10.0.26100.0\\",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "recorded_utc": "2026-10-11T15:00:06.4784841Z",
+    "artifacts": [
+      {
+        "kind": "desktop",
+        "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-9b90afe074be23da.exe",
+        "sha256": "4866a022de1164d6042245318829a5d6ba17f13cfe4d89b2dc2865fa41449566"
+      },
+      {
+        "kind": "native-engine",
+        "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_native_engine-ff1a5f47721e5df5.exe",
+        "sha256": "6785ac4ac8780fbf53998d209b1d11fb634f0aa76fd010f05b6401c1bedeb5aa"
+      }
+    ],
+    "results": [
+      {
+        "kind": "strict-desktop",
+        "exit_code": 0,
+        "elapsed_seconds": 31.360146999999998,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-swept-f2c47dd9-strict-desktop.log"
+      },
+      {
+        "kind": "strict-native-engine-occt",
+        "exit_code": 0,
+        "elapsed_seconds": 29.076155999999997,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-swept-f2c47dd9-strict-native-engine-occt.log"
+      },
+      {
+        "kind": "desktop_artifact_compile",
+        "exit_code": 0,
+        "elapsed_seconds": 704.9723305,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-swept-f2c47dd9-desktop-compile.jsonl",
+        "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-swept-f2c47dd9-desktop-compile.stderr.log"
+      },
+      {
+        "kind": "desktop_regression",
+        "filter": "session_bridge::native_interface::controller::assembly::inspect::tests::ordered_swept_review_releases_live_guards_and_rejects_stale_motion_reports",
+        "exit_code": 0,
+        "exact_one_pass": true,
+        "elapsed_seconds": 0.7155956,
+        "binary_sha256": "4866a022de1164d6042245318829a5d6ba17f13cfe4d89b2dc2865fa41449566",
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-swept-f2c47dd9-desktop-test-0.log"
+      },
+      {
+        "kind": "desktop_regression",
+        "filter": "session_bridge::native_control::tests::native_swept_query_releases_live_guards_and_fences_original_completion_once",
+        "exit_code": 0,
+        "exact_one_pass": true,
+        "elapsed_seconds": 0.5836749999999999,
+        "binary_sha256": "4866a022de1164d6042245318829a5d6ba17f13cfe4d89b2dc2865fa41449566",
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-swept-f2c47dd9-desktop-test-1.log"
+      },
+      {
+        "kind": "native-engine_artifact_compile",
+        "exit_code": 0,
+        "elapsed_seconds": 60.758466199999994,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-swept-f2c47dd9-native-engine-compile.jsonl",
+        "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-swept-f2c47dd9-native-engine-compile.stderr.log"
+      },
+      {
+        "kind": "native-engine_regression",
+        "filter": "host::swept_snapshot::tests::detached_swept_motion_preserves_physical_events_and_rejects_stale_inputs",
+        "exit_code": 0,
+        "exact_one_pass": true,
+        "elapsed_seconds": 0.2377085,
+        "binary_sha256": "6785ac4ac8780fbf53998d209b1d11fb634f0aa76fd010f05b6401c1bedeb5aa",
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-swept-f2c47dd9-native-engine-test-0.log"
+      }
+    ],
+    "scope": "Strict changed-package Windows desktop and native-engine/OCCT checks on reviewed detached swept-collision and borrowed mechanism eligibility source. One artifact per package; exactly three NEW native/ordered-UI/admitted-MCP swept regressions, no old passing filters repeated. Genuine repeated native stock/slider/motor, independent physical time/volume/sample-count oracles, full and early-stop behavior, missing noncandidate native-source compatibility, original guard reentry, authored motion/native/source/owner fences, swept draft/hide/tab generation, original ticket and delivery-only completion. No suites, recipe replay, live UI/MCP inputs, runtime restart, deployment, measured performance or parent epic closure. The mechanism caller removes a full assembly JSON round trip; its existing scene-projection authored clone/graph work remains scaling-dependent."
+  },
+  "contact_qualification": {
+    "revision": "1472b342147215201ed1594662ecdb7241a3570a",
+    "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+    "desktop_filters": [
+      "session_bridge::native_interface::controller::assembly::studies::tests::ordered_contact_motion_evaluation_releases_live_guards_and_rejects_stale_preview",
+      "session_bridge::native_control::tests::native_contact_motion_query_releases_live_guards_and_fences_original_completion_once"
+    ],
+    "native_filters": [
+      "host::motion_evaluation_snapshot::tests::detached_contact_motion_preserves_physical_stop_and_rejects_stale_inputs"
+    ],
+    "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+    "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
+    "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+    "msvc": "14.44.35207",
+    "windows_sdk": "10.0.26100.0\\",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "recorded_utc": "2026-10-11T15:27:37.6137954Z",
+    "artifacts": [
+      {
+        "kind": "desktop",
+        "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
+        "sha256": "c26ca0b177ee96c93f0c16d701025b4ff8a7f00fe1c1bb66e2d154fbb4e07058"
+      },
+      {
+        "kind": "native-engine",
+        "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_native_engine-ff1a5f47721e5df5.exe",
+        "sha256": "7a311aa2d365656c58701441191b59a9fd0b787b1e3bde1b86e8c22d3249e3be"
+      }
+    ],
+    "results": [
+      {
+        "kind": "strict-desktop",
+        "exit_code": 0,
+        "elapsed_seconds": 113.59573789999999,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-contact-1472b342-strict-desktop.log"
+      },
+      {
+        "kind": "strict-native-engine-occt",
+        "exit_code": 0,
+        "elapsed_seconds": 23.369997599999998,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-contact-1472b342-strict-native-engine-occt.log"
+      },
+      {
+        "kind": "desktop_artifact_compile",
+        "exit_code": 0,
+        "elapsed_seconds": 1408.4677339999998,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-contact-1472b342-desktop-compile.jsonl",
+        "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-contact-1472b342-desktop-compile.stderr.log"
+      },
+      {
+        "kind": "desktop_regression",
+        "filter": "session_bridge::native_interface::controller::assembly::studies::tests::ordered_contact_motion_evaluation_releases_live_guards_and_rejects_stale_preview",
+        "exit_code": 0,
+        "exact_one_pass": true,
+        "elapsed_seconds": 1.2034323999999998,
+        "binary_sha256": "c26ca0b177ee96c93f0c16d701025b4ff8a7f00fe1c1bb66e2d154fbb4e07058",
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-contact-1472b342-desktop-test-0.log"
+      },
+      {
+        "kind": "desktop_regression",
+        "filter": "session_bridge::native_control::tests::native_contact_motion_query_releases_live_guards_and_fences_original_completion_once",
+        "exit_code": 0,
+        "exact_one_pass": true,
+        "elapsed_seconds": 0.9975584,
+        "binary_sha256": "c26ca0b177ee96c93f0c16d701025b4ff8a7f00fe1c1bb66e2d154fbb4e07058",
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-contact-1472b342-desktop-test-1.log"
+      },
+      {
+        "kind": "native-engine_artifact_compile",
+        "exit_code": 0,
+        "elapsed_seconds": 56.121306,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-contact-1472b342-native-engine-compile.jsonl",
+        "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-contact-1472b342-native-engine-compile.stderr.log"
+      },
+      {
+        "kind": "native-engine_regression",
+        "filter": "host::motion_evaluation_snapshot::tests::detached_contact_motion_preserves_physical_stop_and_rejects_stale_inputs",
+        "exit_code": 0,
+        "exact_one_pass": true,
+        "elapsed_seconds": 0.5608053,
+        "binary_sha256": "7a311aa2d365656c58701441191b59a9fd0b787b1e3bde1b86e8c22d3249e3be",
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-contact-1472b342-native-engine-test-0.log"
+      }
+    ],
+    "scope": "Strict changed-package Windows desktop and native-engine/OCCT checks on reviewed detached contact-aware motion evaluation and stale playback preview source. Incoming direct Bevy commit2074f7a3 is preserved through a normal merge; its new wgpu std feature dependency is compiled, not physically GPU-qualified here. One artifact per package; exactly three NEW native/ordered-UI/admitted-MCP contact regressions, no passing sweep/section/static filters repeated. Genuine repeated native stock/slider/motor/contact geometry with independent time0.3, Z3.5, clearance0.5 and zero-overlap oracles; unchanged requested-final-sample priority, 8 probes and 18 bisections. Enabled contact source shape copies, missing noncandidate native-source compatibility, original guard reentry, authored motion/contact/native/source/owner fences, pause/stop/seek/draft/hide/tab serial retirement, original ticket and delivery-only completion. Required authored Assembly capture, validation and selected native copies remain scaling-dependent; no full model/history clone or retained frame array. No suites, recipe replay, live UI/MCP inputs, runtime restart, deployment, measured performance or parent epic closure."
+  },
+  "strict_integration_qualification": {
+    "revision": "39ca1a1e055caa64ddfcb826b4cc0cdd5f21f118",
+    "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+    "desktop_filters": [],
+    "native_filters": [],
+    "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+    "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
+    "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+    "msvc": "14.44.35207",
+    "windows_sdk": "10.0.26100.0\\",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "recorded_utc": "2026-10-11T15:29:22.2164346Z",
+    "artifacts": [],
+    "results": [
+      {
+        "kind": "strict-desktop",
+        "exit_code": 0,
+        "elapsed_seconds": 46.608254599999995,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\preserved-section-merge-39ca1a1e-strict-desktop.log"
+      },
+      {
+        "kind": "strict-native-engine-occt",
+        "exit_code": 0,
+        "elapsed_seconds": 1.6494841999999998,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\preserved-section-merge-39ca1a1e-strict-native-engine-occt.log"
+      }
+    ],
+    "scope": "Strict Windows desktop/native-engine/OCCT integration compilation only on the exact clean normal merge of our qualified swept/contact source and incoming own-Bevy2074/9d321/9ea6295b/f96e9b32. Incoming live-section controller replaces the former section-worker helper, so the merged production and test call sites require these fresh strict checks. No artifact build or regression execution is requested here; all passed contact/swept/section/static filters are retained at their exact original source. Incoming section-live-panel-20261011 source/pixel receipt is preserved as separately authored macOS evidence, not this Windows session human/GPU acceptance. No suites, live input, runtime action, performance claim, main/Jack PR action or parent issue closure."
+  },
+  "original_compiler_failure": {
+    "receipt": {
+      "revision": "78fbda681f7d54f8efb1993d4be15f51f4181a3e",
+      "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+      "desktop_filters": [
+        "session_bridge::native_interface::controller::assembly::inspect::tests::ordered_swept_review_releases_live_guards_and_rejects_stale_motion_reports",
+        "session_bridge::native_control::tests::native_swept_query_releases_live_guards_and_fences_original_completion_once"
+      ],
+      "native_filters": [
+        "host::swept_snapshot::tests::detached_swept_motion_preserves_physical_events_and_rejects_stale_inputs"
+      ],
+      "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+      "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
+      "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+      "msvc": "14.44.35207",
+      "windows_sdk": "10.0.26100.0\\",
+      "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+      "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+      "recorded_utc": "2026-10-11T14:42:25.2079737Z",
+      "artifacts": [],
+      "results": [
+        {
+          "kind": "strict-desktop",
+          "exit_code": 101,
+          "elapsed_seconds": 67.4300873,
+          "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-swept-78fbda68-strict-desktop.log"
+        }
+      ],
+      "scope": "Strict changed-package Windows desktop and native-engine/OCCT checks on reviewed detached swept-collision and borrowed mechanism eligibility source. One artifact per package; exactly three NEW native/ordered-UI/admitted-MCP swept regressions, no old passing filters repeated. Genuine repeated native stock/slider/motor, independent physical time/volume/sample-count oracles, full and early-stop behavior, missing noncandidate native-source compatibility, original guard reentry, authored motion/native/source/owner fences, swept draft/hide/tab generation, original ticket and delivery-only completion. No suites, recipe replay, live UI/MCP inputs, runtime restart, deployment, measured performance or parent epic closure. The mechanism caller removes a full assembly JSON round trip; its existing scene-projection authored clone/graph work remains scaling-dependent."
+    },
+    "log_sha256": "a7a0638dde88094efdc386fa324af2355e687396ed7ad0c06bc674017116f941",
+    "diagnostics": [
+      "E0425: unqualified parse_engine_envelope in test helper",
+      "E0603: sibling test accessed private native_interface::tests"
+    ],
+    "correction": "Test-only qualified function and narrow parent helper reexport in f2c47dd9; private tests module remains private. No production path or regression oracle weakened.",
+    "regressions_run_before_correction": 0
+  },
+  "verified_behavior": [
+    "Swept computation runs on genuinely detached native stock outside the original engine/publisher guards; unchanged full5 and early-stop3 sample behavior has independent first-time0.5, last-time1/0.5 and overlap180/30mm3 oracles.",
+    "Contact evaluation preserves final-requested-sample validation priority and unchanged8 probes/18 bisections. Genuine0.5mm stop occurs independently at time0.3/Z3.5 with zero overlap; disabled enforcement reaches time1/Z0 and180mm3 overlap.",
+    "Private native proof retains exact required authored Assembly, original host/session, Weak scene, revisions and all dependent present-or-absent native identities. Raw contact/study/placement changes and same-model native replacement reject stale reports.",
+    "Ordered UI uses one original dispatch admission and releases live guards for evaluation; sweep-specific generation changes preserve unrelated static reports. Actual motion reducers retire late preview after Pause/Stop/Seek/draft/hide/tab or source/owner changes.",
+    "Admitted MCP computation and report encoding release publisher/process lease, then validate private source and original ticket authority. The genuine original outcome survives failed liveness publication for delivery-only retry without recompute or readmission.",
+    "Mechanism eligibility borrows the authored assembly under the existing receipt and returns a bool before drag setup. The full assembly wire round trip is removed; the predicate still clones required authored graph/scene-projection input."
+  ],
+  "retained_evidence": [
+    "detached-section-interference-20261011.json",
+    "runtime-worker-restart-20261011.json",
+    "detached-step-drawing-20261011.json",
+    "detached-export-ownership-20261011.json",
+    "detached-drawing-output-20261011.json",
+    "bevy-independent-ui-20261011.json",
+    "section-live-panel-20261011.json"
+  ],
+  "source_reviews": "Root plus independent native/desktop peer review of each slice and helper. Meaningful fixture errors were corrected before contact compilation: genuine contact creation and missing-study capture failure; negative finite time validly clamps and is not a failure oracle.",
+  "coverage_preservation": {
+    "base_revision": "39ca1a1e055caa64ddfcb826b4cc0cdd5f21f118",
+    "ui_and_mcp_leaves_unchanged": true,
+    "all_prior_receipts_unchanged": true,
+    "broad_run_state": "paused",
+    "additional_human_recheck_leaves": 0,
+    "new_live_passes": 0,
+    "incoming_renderer_rechecks_preserved": true
+  },
+  "limits": [
+    "Required authored Assembly capture, selected native shape copies, first solve, source comparison and mechanism graph work remain scaling-dependent. No full model/history clone or retained all-frame array is introduced.",
+    "Six NEW isolated source regressions passed once. Old sweep passes remain at their f2c revision; contact changes do not repeat them. All earlier section/static/drawing/export/input passes remain historical and unrepeated.",
+    "Source reducers/worker/ticket checks do not qualify visible human interaction, actual event routing, deployed responsiveness, timing/FPS, memory pressure, physical GPU release or a fresh live pair.",
+    "No suites, recipe replay, live UI/MCP input, runtime restart, deployment or installed operator replacement occurred. Saved GUI and unknown independent headless documents remain preserved.",
+    "Motion CSV export live holds are a separately identified reviewed source repair, not yet qualified by this checkpoint. It is the remaining concrete source gate for333; universal FPS/GPU/total-process-memory benchmarks and an exhaustive unrelated service lock graph were not original acceptance requirements.",
+    "Hosted CI for the new push is not claimed green. Main and Jack PRs are untouched. Work remains inPR124/both Bevy aliases; no parent issue closure is claimed."
+  ]
+}

@@ -635,6 +635,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn practical_lesson_guides_are_bundled_and_findable_for_edit_recovery() {
+        let store = HelpStore::bundled();
+        for (id, recipe, query) in [
+            (
+                "concepts.mounting-plate-lesson",
+                "mounting-plate",
+                "mounting plate thickness edit hole recovery",
+            ),
+            (
+                "concepts.revolved-spacer-lesson",
+                "revolved-spacer",
+                "revolved spacer radial section length edit",
+            ),
+            (
+                "concepts.angle-bracket-lesson",
+                "angle-bracket",
+                "angle bracket driving dimension constraint recovery",
+            ),
+        ] {
+            let page = store.get(id).expect("bundled practical lesson guide");
+            assert!(
+                !page.truncated,
+                "lesson guide must fit the offline Help response"
+            );
+            assert!(page.related_recipes.iter().any(|related| related == recipe));
+            let hits = store.search(query, Some(5));
+            assert!(
+                hits.iter().any(|hit| hit.id == id),
+                "practical guide missing for {query:?}: {:?}",
+                hits.iter().map(|hit| &hit.id).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
     fn clearance_fit_hits_fits_page() {
         let store = HelpStore::bundled();
         let hits = store.search("clearance fit", Some(5));
