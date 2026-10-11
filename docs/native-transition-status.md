@@ -2178,9 +2178,9 @@ Receipts are `sdk-runtime-closure-f52aa609-results.json`,
 The earlier 36 distinct passes remain retained; affected existing checks are
 listed per batch rather than added again to a deduplicated total.
 
-The old clean `4859c8bd` GUI is still installed. Its freshly attached Split scratch
-snapshot matches the saved archive's complete model content. Deployment and
-finite visible acceptance remain pending; broad UI/MCP qualification stays
+Before deployment, the old clean `4859c8bd` GUI's freshly attached Split scratch
+snapshot matched the saved archive's complete model content. Deployment and
+finite visible acceptance were pending; broad UI/MCP qualification stays
 paused. No new manual pass or issue closure is claimed. GitHub still has 18 open
 issues; main remains unchanged pending Jack's approval.
 
@@ -2194,3 +2194,25 @@ stale-check/trigger contract both passed at `5a4ecc8e`, with strict xtask Clippy
 The other workflows retain their prior cancellation and trigger checks; no
 check was removed or disabled. The receipt is
 `package-concurrency-5a4ecc8e-results.json`.
+
+The clean `a3145e2c` native application is now deployed with the qualified
+`D:/limo-cad-maintenance/checked-occt-sdk`. All 63 runtime payload hashes were
+verified; the executable SHA256 is
+`effaac9acf3e044a75bb4d4f13edf0ca8c9dd49bf92cfbfd092f4f59d81a829b`.
+Fresh guarded observation confirms a clean matched desktop/MCP pair (desktop
+PID 28600, MCP PID 14480) and foreground ownership after guarded focus. This
+supersedes the old-runtime deployment status, not any pending functional check.
+The canonical checkout remains pinned during root's targeted UI acceptance;
+source `04551840` adds only the deployment diagnostic after the native build.
+
+That diagnostic's one new regression and strict xtask Clippy passed separately
+at isolated `e23e43b0`; no qualification gate or SDK assertion was weakened.
+Retain the latest 21 new/affected batch passes separately from the earlier 36
+distinct passes, and this one diagnostic pass as post-push validation; no
+combined deduplicated count is claimed. Evidence is
+`runtime-a3145e2c-payload-verified.json`,
+`live-pair-a3145e2c-focused-observation.json` and
+`deployment-diagnostic-e23e43b0-results.json` under the evidence directory above.
+The missing new-document Split Redo check is under targeted root inspection,
+not passed. Broad UI/MCP coverage remains paused with every prior leaf retained;
+live pair verification alone does not close an issue or qualify the full UI.
