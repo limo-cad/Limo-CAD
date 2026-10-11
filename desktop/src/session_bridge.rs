@@ -2608,6 +2608,10 @@ mod tests {
             let original_model = fs::read(dir.join(session).join("model.json")).unwrap();
             let original_heartbeat: Value =
                 serde_json::from_slice(&fs::read(&heartbeat).unwrap()).unwrap();
+            // The broker receives engine method names, not public tool operations.
+            let method = "active_sketch";
+            assert!(limo_cad_mcp_mutate::is_live_engine_query(method));
+            let expected_query = parse_engine_envelope(engine.engine_call(method, "")).unwrap();
             for (index, blocked) in [&heartbeat, &lease].into_iter().enumerate() {
                 for path in [&heartbeat, &lease] {
                     let mut stale: Value =
@@ -2621,7 +2625,7 @@ mod tests {
                 atomic_write(
                     &request,
                     &json!({"id":id,"expires_ms":now_ms()+30_000,
-                    "sketch_query":{"method":"sketch_active","payload":""}})
+                    "sketch_query":{"method":method,"payload":""}})
                     .to_string(),
                 )
                 .unwrap();
@@ -2644,6 +2648,7 @@ mod tests {
                 control_for_window(&state, "main", &engine, None).unwrap();
                 let result: Value = serde_json::from_slice(&fs::read(&receipt).unwrap()).unwrap();
                 assert_eq!(result["status"], "applied");
+                assert_eq!(result["value"], expected_query);
                 assert!(!request.exists());
                 let completed: Value =
                     serde_json::from_slice(&fs::read(&heartbeat).unwrap()).unwrap();
