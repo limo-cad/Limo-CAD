@@ -426,6 +426,11 @@ impl SketchSession {
         }
 
         self.sketch.sync_dimension_constraint_values();
+        if let Err(error) = self.validate_chamfer_dimensions() {
+            self.sketch.restore(before);
+            self.recompute();
+            return Err(error);
+        }
 
         let changed_dimensions = self
             .sketch

@@ -962,6 +962,10 @@ pub struct ChamferRequest {
     pub l1: EntityId,
     pub l2: EntityId,
     pub distance_text: String,
+    /// Angle in degrees from the first selected line. Older requests retain
+    /// their equal-setback construction when this field is omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle_text: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
