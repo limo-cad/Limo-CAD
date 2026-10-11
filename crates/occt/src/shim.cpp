@@ -2033,6 +2033,83 @@ std::string format_millimetres(double value) {
   return text.str();
 }
 
+std::optional<std::string> circular_chamfer_wall_error(
+    const TopoDS_Edge& edge,
+    const TopTools_IndexedDataMapOfShapeListOfShape& edge_faces,
+    double distance, double angle_deg) {
+  if (!edge_faces.Contains(edge) || edge_faces.FindFromKey(edge).Extent() != 2) {
+    return std::nullopt;
+  }
+  const double tau = 2.0 * std::acos(-1.0);
+  const BRepAdaptor_Curve curve(edge);
+  if (curve.GetType() != GeomAbs_Circle ||
+      std::abs(curve.LastParameter() - curve.FirstParameter() - tau) > 1.0e-7) {
+    return std::nullopt;
+  }
+  const gp_Circ circle = curve.Circle();
+  const double tolerance = std::max(BRep_Tool::Tolerance(edge), 1.0e-7);
+  const TopTools_ListOfShape& adjacent = edge_faces.FindFromKey(edge);
+  const TopoDS_Face first = TopoDS::Face(adjacent.First());
+  const TopoDS_Face second = TopoDS::Face(adjacent.Last());
+  const BRepAdaptor_Surface first_surface(first, true);
+  const BRepAdaptor_Surface second_surface(second, true);
+  const bool reference_is_plane = first_surface.GetType() == GeomAbs_Plane;
+  if (!((reference_is_plane && second_surface.GetType() == GeomAbs_Cylinder) ||
+        (first_surface.GetType() == GeomAbs_Cylinder &&
+         second_surface.GetType() == GeomAbs_Plane))) {
+    return std::nullopt;
+  }
+  const gp_Cylinder cylinder = reference_is_plane ? second_surface.Cylinder()
+                                                : first_surface.Cylinder();
+  const gp_Pln plane = reference_is_plane ? first_surface.Plane() : second_surface.Plane();
+  if (std::abs(circle.Axis().Direction().Dot(cylinder.Axis().Direction())) < 1.0 - 1.0e-7 ||
+      std::abs(circle.Axis().Direction().Dot(plane.Axis().Direction())) < 1.0 - 1.0e-7 ||
+      std::abs(circle.Radius() - cylinder.Radius()) > tolerance) {
+    return std::nullopt;
+  }
+
+  // Only diagnose a proven concentric disk/annulus. Irregular planar faces
+  // retain the kernel's general failure instead of an inferred wall width.
+  TopTools_IndexedMapOfShape boundaries;
+  TopExp::MapShapes(reference_is_plane ? first : second, TopAbs_EDGE, boundaries);
+  if (boundaries.Extent() < 1 || boundaries.Extent() > 2) {
+    return std::nullopt;
+  }
+  double inner = circle.Radius();
+  double outer = circle.Radius();
+  for (int index = 1; index <= boundaries.Extent(); ++index) {
+    const BRepAdaptor_Curve boundary(TopoDS::Edge(boundaries.FindKey(index)));
+    if (boundary.GetType() != GeomAbs_Circle ||
+        std::abs(boundary.LastParameter() - boundary.FirstParameter() - tau) > 1.0e-7) {
+      return std::nullopt;
+    }
+    const gp_Circ ring = boundary.Circle();
+    if (ring.Location().Distance(circle.Location()) > tolerance ||
+        std::abs(ring.Axis().Direction().Dot(circle.Axis().Direction())) < 1.0 - 1.0e-7) {
+      return std::nullopt;
+    }
+    inner = std::min(inner, ring.Radius());
+    outer = std::max(outer, ring.Radius());
+  }
+  if (boundaries.Extent() == 1) {
+    inner = 0.0;
+  }
+  const double available = std::abs(circle.Radius() - inner) <= tolerance
+                               ? outer - circle.Radius()
+                               : circle.Radius() - inner;
+  const double required = reference_is_plane
+                              ? distance
+                              : distance * std::tan(angle_deg * std::acos(-1.0) / 180.0);
+  if (!std::isfinite(required) || required <= available + tolerance) {
+    return std::nullopt;
+  }
+  return format_millimetres(angle_deg) + " degree chamfer at " +
+         format_millimetres(distance) + " mm needs " + format_millimetres(required) +
+         " mm across the planar face, but only " + format_millimetres(available) +
+         " mm is available beside the selected rim. " +
+         (reference_is_plane ? "Reduce the distance." : "Reduce the distance or angle.");
+}
+
 TopoDS_Shape blend_prismatic_corners(const TopoDS_Shape& shape,
                                      const std::vector<TopoDS_Edge>& edges, double size,
                                      bool chamfer, const char* generic_failure,
@@ -2328,6 +2405,14 @@ void Kernel::apply_job_impl(const FfiJob& job) {
         }
       }
       chamfer.Build(Message_ProgressRange());
+      if (!chamfer.IsDone() && job.has_chamfer_angle) {
+        for (const TopoDS_Edge& edge : selected) {
+          if (const auto error = circular_chamfer_wall_error(
+                  edge, edge_faces, job.radius, job.chamfer_angle_deg)) {
+            throw std::runtime_error(*error);
+          }
+        }
+      }
       found->second = chamfer.IsDone()
                           ? chamfer.Shape()
                           : blend_prismatic_corners(

@@ -1841,6 +1841,7 @@ fn from_ffi_mesh(raw: ffi::FfiMesh) -> Result<KernelBodyDto, OcctError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use limo_cad_core::{BodyId, FaceId, FeatureId};
     use limo_cad_solid::{
         iso_metric_grade6_envelope, CylindricalSurfaceDto, HoleBottomStyle, HoleExtent, HoleStyle,
@@ -5183,6 +5184,179 @@ mod tests {
                 jobs: vec![notched_plate_job(), job],
             })
             .unwrap()
+    }
+
+    fn annular_chamfer_plan(reference_is_plane: bool) -> RecomputePlanDto {
+        // Rotating the same rectangular profile changes the adjacent-face order,
+        // letting both distance/angle reference conventions exercise a 2 mm rim.
+        let points = if reference_is_plane {
+            [(3.4, 11.), (5.4, 11.), (5.4, 0.), (3.4, 0.)]
+        } else {
+            [(5.4, 0.), (3.4, 0.), (3.4, 11.), (5.4, 11.)]
+        };
+        RecomputePlanDto {
+            transaction_id: 1,
+            errors: Vec::new(),
+            jobs: vec![KernelJobDto::Revolve(KernelRevolveJobDto {
+                feature_id: FeatureId(2),
+                operation: ExtrudeOperation::NewBody,
+                profiles: vec![KernelProfileDto {
+                    profile_index: 0,
+                    points: points
+                        .into_iter()
+                        .map(|(x, y)| Point3Dto { x, y, z: 0. })
+                        .collect(),
+                    curves: Vec::new(),
+                    holes: Vec::new(),
+                }],
+                axis_origin: Point3Dto {
+                    x: 0.,
+                    y: 0.,
+                    z: 0.,
+                },
+                axis_direction: Point3Dto {
+                    x: 0.,
+                    y: 1.,
+                    z: 0.,
+                },
+                angle_rad: std::f64::consts::TAU,
+                target_body_ids: Vec::new(),
+                result_body_ids: vec![BodyId(1)],
+            })],
+        }
+    }
+
+    fn annular_top_inner_edge(scene: &KernelSceneDto, reference_is_plane: bool) -> String {
+        let body = &scene.bodies[0];
+        let edge = body
+            .edges
+            .iter()
+            .find(|edge| {
+                edge.circle.is_some_and(|circle| {
+                    (circle.radius - 3.4).abs() < 1e-7 && (circle.center.y - 11.).abs() < 1e-7
+                })
+            })
+            .unwrap();
+        let reference = body
+            .faces
+            .iter()
+            .find(|face| face.edge_keys.contains(&edge.key))
+            .unwrap();
+        assert_eq!(reference.plane.is_some(), reference_is_plane);
+        assert_eq!(reference.cylinder.is_some(), !reference_is_plane);
+        edge.key.clone()
+    }
+
+    fn annular_chamfer(
+        base: &RecomputePlanDto,
+        key: &str,
+        distance: f64,
+        angle_deg: Option<f64>,
+    ) -> RecomputePlanDto {
+        let mut plan = base.clone();
+        plan.jobs.push(KernelJobDto::Chamfer(KernelChamferJobDto {
+            feature_id: FeatureId(3),
+            target_body_id: BodyId(1),
+            edge_keys: vec![key.to_owned()],
+            distance,
+            angle_deg,
+            tangent_chain: false,
+        }));
+        plan
+    }
+
+    #[test]
+    fn circular_chamfers_explain_insufficient_wall_and_allow_smaller_sixty_degree_cuts() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let plan = annular_chamfer_plan(false);
+        let base = kernel.recompute(&plan).unwrap();
+        assert!(base.errors.is_empty(), "{:?}", base.errors);
+        let key = annular_top_inner_edge(&base, false);
+        for (distance, angle) in [
+            (1.5, None),
+            (1.5, Some(45.)),
+            (1.5, Some(30.)),
+            (1.15, Some(60.)),
+        ] {
+            let scene = kernel
+                .recompute(&annular_chamfer(&plan, &key, distance, angle))
+                .unwrap();
+            assert!(
+                scene.errors.is_empty(),
+                "{distance} mm at {angle:?}: {:?}",
+                scene.errors
+            );
+        }
+        for (distance, required) in [(1.16, "2.009"), (1.5, "2.598")] {
+            let scene = kernel
+                .recompute(&annular_chamfer(&plan, &key, distance, Some(60.)))
+                .unwrap();
+            assert_eq!(scene.errors.len(), 1, "{:?}", scene.errors);
+            assert_eq!(scene.errors[0].feature_id, FeatureId(3));
+            let message = &scene.errors[0].message;
+            assert!(
+                message.contains(&format!("needs {required} mm across the planar face")),
+                "{message}"
+            );
+            assert!(message.contains("only 2 mm is available"), "{message}");
+            assert!(
+                message.ends_with("Reduce the distance or angle."),
+                "{message}"
+            );
+            assert_eq!(
+                scene.bodies, base.bodies,
+                "failed chamfer preserves the body"
+            );
+        }
+        // A valid retry on the same kernel must still build the requested angle
+        // and radial setback, rather than clamp the rejected chamfer.
+        let scene = kernel
+            .recompute(&annular_chamfer(&plan, &key, 1., Some(60.)))
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        let body = &scene.bodies[0];
+        let cone = body.faces.iter().find_map(|face| face.cone).unwrap();
+        assert!((cone.semi_angle.abs() - 60_f64.to_radians()).abs() < 1e-7);
+        let expected_radius = 3.4 + 60_f64.to_radians().tan();
+        assert!(body
+            .edges
+            .iter()
+            .filter_map(|edge| edge.circle)
+            .any(|circle| {
+                (circle.center.y - 11.).abs() < 1e-7
+                    && (circle.radius - expected_radius).abs() < 1e-7
+            }));
+    }
+
+    #[test]
+    fn circular_chamfers_measure_radial_distance_from_the_planar_reference_face() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let plan = annular_chamfer_plan(true);
+        let base = kernel.recompute(&plan).unwrap();
+        assert!(base.errors.is_empty(), "{:?}", base.errors);
+        let key = annular_top_inner_edge(&base, true);
+        let scene = kernel
+            .recompute(&annular_chamfer(&plan, &key, 1.5, Some(60.)))
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        let cone = scene.bodies[0]
+            .faces
+            .iter()
+            .find_map(|face| face.cone)
+            .unwrap();
+        assert!((cone.semi_angle.abs() - 30_f64.to_radians()).abs() < 1e-7);
+        let rejected = kernel
+            .recompute(&annular_chamfer(&plan, &key, 2.1, Some(60.)))
+            .unwrap();
+        assert_eq!(rejected.errors.len(), 1, "{:?}", rejected.errors);
+        let message = &rejected.errors[0].message;
+        assert!(
+            message.contains("needs 2.1 mm across the planar face"),
+            "{message}"
+        );
+        assert!(message.contains("only 2 mm is available"), "{message}");
+        assert!(message.ends_with("Reduce the distance."), "{message}");
+        assert_eq!(rejected.bodies, base.bodies);
     }
 
     #[test]
