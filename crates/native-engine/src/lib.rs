@@ -10,11 +10,12 @@ mod host;
 #[cfg(feature = "native-occt")]
 pub use host::{
     DetachedDrawingSnapshot, DrawingProjectionBasis, FinishedBambuExport,
-    FinishedDrawingProjections, FinishedInterferenceReview, FinishedPortableMeshExport,
-    FinishedSectionReview, FinishedStepExport, FinishedSweptCollisionReview, NativeBodyGeometryKey,
-    NativeBodyGeometryProof, NativeEngineHost, NativeViewportDocument, NativeViewportFrame,
-    NativeViewportSnapshot, PortableMeshFormat, PreparedBambuExport, PreparedBambuPreview,
-    PreparedDrawingExport, PreparedInterferenceReview, PreparedPortableMeshExport,
-    PreparedSectionReview, PreparedStepExport, PreparedSweptCollisionReview,
-    ResolvedDrawingProjection, SharedDrawingProjection, BOOTSTRAP_SESSION_ID,
+    FinishedDrawingProjections, FinishedInterferenceReview, FinishedMotionEvaluation,
+    FinishedPortableMeshExport, FinishedSectionReview, FinishedStepExport,
+    FinishedSweptCollisionReview, NativeBodyGeometryKey, NativeBodyGeometryProof, NativeEngineHost,
+    NativeViewportDocument, NativeViewportFrame, NativeViewportSnapshot, PortableMeshFormat,
+    PreparedBambuExport, PreparedBambuPreview, PreparedDrawingExport, PreparedInterferenceReview,
+    PreparedMotionEvaluation, PreparedPortableMeshExport, PreparedSectionReview,
+    PreparedStepExport, PreparedSweptCollisionReview, ResolvedDrawingProjection,
+    SharedDrawingProjection, BOOTSTRAP_SESSION_ID,
 };

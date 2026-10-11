@@ -17,7 +17,7 @@ pub use interference::{
     exact_interference_report, exact_pair_result, validate_source as validate_interference_source,
 };
 mod motion_evaluation;
-pub use motion_evaluation::evaluate_motion_study;
+pub use motion_evaluation::{evaluate_motion_study, evaluate_motion_study_document};
 mod motion_inspection;
 pub use motion_inspection::{
     exact_swept_collision_check, exact_swept_collision_document, validate_swept_source,
@@ -503,6 +503,15 @@ pub struct DetachedSectionKernel;
 pub struct DetachedInterferenceKernel;
 #[cfg(not(feature = "native-occt"))]
 impl DetachedInterferenceKernel {
+    pub fn evaluate_motion(
+        &self,
+        _assembly: &limo_cad_sketch::AssemblyDocumentDto,
+        _scene: &SolidSceneDto,
+        _request: &limo_cad_sketch::EvaluateMotionStudyRequestDto,
+    ) -> Result<limo_cad_sketch::MotionStudyEvaluationDto, String> {
+        Err("native OCCT support was not enabled at compile time".into())
+    }
+
     pub fn inspect_swept(
         &self,
         _assembly: &limo_cad_sketch::AssemblyDocumentDto,
