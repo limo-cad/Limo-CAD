@@ -434,9 +434,8 @@ fn apply_requested_focus(world: &mut World) {
             || control.modal_scope != *modal_scope
             || !control.visible
             || control.disabled
-    }) || handle.frame().is_none_or(|frame| {
-        frame.context != *owner || frame.modal_stack.last() != modal_scope.as_ref()
-    }) {
+    }) || !handle.presented_focus_matches(owner, modal_scope.as_deref())
+    {
         return;
     }
     // Newly spawned editors can need another text/layout pass before their

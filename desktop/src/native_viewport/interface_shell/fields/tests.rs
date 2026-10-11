@@ -508,6 +508,101 @@ fn drawing_autofocus_rejects_rebound_fields_and_replaced_documents() {
 }
 
 #[test]
+fn requested_editor_focus_waits_for_presented_modal_scope_without_changing_text() {
+    let (mut app, handle, entity) = editor_fixture();
+    handle.blur();
+    after_window_input(app.world_mut(), &handle).unwrap();
+    let original = handle.frame().unwrap();
+    let value = app
+        .world()
+        .get::<EditableText>(entity)
+        .unwrap()
+        .value()
+        .to_string();
+    let selection = app
+        .world()
+        .get::<EditableText>(entity)
+        .unwrap()
+        .editor()
+        .raw_selection()
+        .text_range();
+    request_focus(app.world_mut(), entity, &original.context);
+
+    let mut modal = original.clone();
+    for name in ["export-dialog", "profile-dialog"] {
+        modal.surfaces.push(limo_cad_interface::Surface {
+            name: name.into(),
+            text: None,
+        });
+        modal.modal_stack.push(name.into());
+    }
+    handle.present(modal).unwrap();
+    // The desired modal is not the presented focus scope. The original request
+    // survives this pending layout, while ordinary activation still refuses it.
+    apply_requested_focus(app.world_mut());
+    assert!(app.world().resource::<RequestedFocus>().0.is_some());
+    assert_eq!(handle.focused_key(), None);
+    assert!(handle.take_actions().unwrap().is_empty());
+    assert_eq!(
+        app.world().get::<EditableText>(entity).unwrap().value(),
+        value.as_str()
+    );
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(entity)
+            .unwrap()
+            .editor()
+            .raw_selection()
+            .text_range(),
+        selection
+    );
+
+    app.update();
+    apply_requested_focus(app.world_mut());
+    assert!(app.world().resource::<RequestedFocus>().0.is_none());
+    assert_eq!(handle.focused_key(), None);
+    assert!(app.world().resource::<EditorSession>().active.is_none());
+    assert_eq!(
+        app.world().get::<EditableText>(entity).unwrap().value(),
+        value.as_str()
+    );
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(entity)
+            .unwrap()
+            .editor()
+            .raw_selection()
+            .text_range(),
+        selection
+    );
+    assert!(handle.take_actions().unwrap().is_empty());
+
+    handle.present(original).unwrap();
+    app.update();
+    request_focus(
+        app.world_mut(),
+        entity,
+        &handle.presented_context().unwrap(),
+    );
+    apply_requested_focus(app.world_mut());
+    assert_eq!(handle.focused_key(), Some(ControlKey(entity.to_bits())));
+    assert_eq!(
+        app.world().get::<EditableText>(entity).unwrap().value(),
+        value.as_str()
+    );
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(entity)
+            .unwrap()
+            .editor()
+            .raw_selection()
+            .text_range(),
+        0..value.len()
+    );
+    assert!(handle.take_actions().unwrap().is_empty());
+}
+
+#[test]
 fn drawing_tab_commits_then_cycles_dimensions_without_visiting_toolbar_controls() {
     let (mut app, handle, first) = editor_fixture();
     drawing_field(&mut app, first, 0);

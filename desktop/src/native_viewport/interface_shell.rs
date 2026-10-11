@@ -885,6 +885,21 @@ impl NativeInterfaceHandle {
             .map(|frame| frame.context.clone())
     }
 
+    /// Requested editor focus belongs to the original presented owner and top
+    /// modal scope. Compare both under one lock without copying surface text.
+    pub(crate) fn presented_focus_matches(
+        &self,
+        owner: &DocumentContext,
+        modal_scope: Option<&str>,
+    ) -> bool {
+        self.shared.lock().is_ok_and(|shared| {
+            shared.presented_frame.as_ref().is_some_and(|frame| {
+                frame.context == *owner
+                    && frame.modal_stack.last().map(String::as_str) == modal_scope
+            })
+        })
+    }
+
     /// Atomically capture the presented pointer fence without cloning surface
     /// text, canvas metadata or modal labels on every deferred cursor sample.
     pub(crate) fn presented_pointer_context(
