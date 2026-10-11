@@ -76,19 +76,18 @@ fn retained_document(
     Arc::new(engine.cam_document_snapshot())
 }
 
+type DocumentInputs = (
+    Arc<CamDocumentDto>,
+    Option<u64>,
+    Option<u64>,
+    Option<String>,
+);
+
 fn document_inputs(
     services: &NativeServices,
     key: &Key,
     previous: Option<(&Key, &Arc<CamDocumentDto>)>,
-) -> Result<
-    (
-        Arc<CamDocumentDto>,
-        Option<u64>,
-        Option<u64>,
-        Option<String>,
-    ),
-    String,
-> {
+) -> Result<DocumentInputs, String> {
     services
         .bridge
         .with_native_document_receipt(&services.engine, &key.owner, |revision| {
