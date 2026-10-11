@@ -156,14 +156,14 @@ unsafe fn selected_device_name(devnames: HGLOBAL) -> String {
     String::from_utf16_lossy(&units)
 }
 
-fn document_info(title: &[u16], flags: u32) -> DOCINFOW {
+fn document_info(title: &[u16], flags: PRINTDLGEX_FLAGS) -> DOCINFOW {
     DOCINFOW {
         cbSize: std::mem::size_of::<DOCINFOW>() as i32,
         lpszDocName: PCWSTR(title.as_ptr()),
         // PrintDlgEx returns PD_PRINTTOFILE when the user requests the spooler's
         // output-name prompt. FILE: has static UTF-16 storage through StartDocW.
         // https://learn.microsoft.com/en-us/windows/win32/api/commdlg/ns-commdlg-printdlgexw
-        lpszOutput: if flags & PD_PRINTTOFILE != 0 {
+        lpszOutput: if flags.contains(PD_PRINTTOFILE) {
             w!("FILE:")
         } else {
             PCWSTR::null()
@@ -172,7 +172,7 @@ fn document_info(title: &[u16], flags: u32) -> DOCINFOW {
     }
 }
 
-unsafe fn submit(dc: HDC, page: &Page, flags: u32) -> Result<(), String> {
+unsafe fn submit(dc: HDC, page: &Page, flags: PRINTDLGEX_FLAGS) -> Result<(), String> {
     let dpi = [
         GetDeviceCaps(Some(dc), LOGPIXELSX),
         GetDeviceCaps(Some(dc), LOGPIXELSY),
