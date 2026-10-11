@@ -23,19 +23,24 @@ impl PreparedCutaway {
     }
 }
 
+#[derive(Clone)]
 struct Entry {
     session: String,
     revision: u64,
     request: SectionReviewRequest,
     cutaway: Arc<PreparedCutaway>,
 }
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub(super) struct State {
     entry: Option<Entry>,
     generation: u64,
     rendered: u64,
 }
 impl State {
+    pub(super) fn apply_snapshot(&mut self, mut snapshot: Self) {
+        snapshot.rendered = self.rendered;
+        *self = snapshot;
+    }
     pub(super) fn active(&self, model: &ModelResource) -> bool {
         !model.transient_model
             && self.entry.as_ref().is_some_and(|e| {
