@@ -612,8 +612,8 @@ fn commit_active(
         .get::<NativeTextField>(active_entity(&action))
         .is_none_or(|field| field.binding != action.control.binding())
         || handle
-            .frame()
-            .is_none_or(|frame| frame.context != action.context)
+            .presented_context()
+            .is_none_or(|owner| owner != action.context)
     {
         world.resource_mut::<EditorSession>().active = None;
         return Ok(None);
