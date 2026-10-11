@@ -63,6 +63,9 @@ fn main() -> std::process::ExitCode {
         _ => (None, None),
     };
     let exit = limo_cad::native_viewport::winit_host::run_with_startup(recipe, project);
+    // Keep lifecycle stages on stderr: stdout belongs to the MCP transport.
+    eprintln!("Limo CAD shutdown stage: bevy_run_returned");
     let _ = limo_cad_mcp::shutdown_desktop_stdio(std::time::Duration::from_secs(3));
+    eprintln!("Limo CAD shutdown stage: stdio_shutdown_returned");
     exit
 }

@@ -3116,6 +3116,7 @@ fn finish_close_after_receipt(world: &mut World, services: &NativeServices, stat
         state.stop_watcher.store(true, Ordering::Release);
         services.bridge.drop_window(&state.window_id);
         world.write_message(AppExit::Success);
+        eprintln!("Limo CAD shutdown stage: native_close_receipts_finalized");
     }
 }
 
