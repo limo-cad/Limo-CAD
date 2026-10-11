@@ -466,7 +466,7 @@ impl DocumentWorkspace {
             limo_cad_project_file::read_binary_file(&path).map_err(|error| error.to_string())?,
         )
         .map_err(|error| error.to_string())?;
-        let result = bridge.apply_native_mutation_at(
+        let mut result = bridge.apply_native_mutation_at(
             engine,
             &expected.owner,
             expected.revision,
@@ -486,6 +486,29 @@ impl DocumentWorkspace {
             owner: result.context.clone(),
             revision: result.engine_revision,
         });
+        // File Open acknowledges a document transition. The renderer reads
+        // its prepared native scene separately; returning the load operation's
+        // tessellated scene here duplicates it in the MCP completion envelope
+        // and can make a successful large-project open exceed transport caps.
+        // Preserve diagnostics from this exact load, rather than querying a
+        // possibly newer engine revision or hiding partial display failures.
+        // Explicit modeling/scene queries retain their existing full results.
+        let errors = result.value["scene"]["errors"].take();
+        let bodies = result.value["scene"]["bodies"].as_array_mut();
+        let body_count = bodies.as_ref().map(|bodies| bodies.len());
+        let display_warnings: Vec<_> = bodies
+            .into_iter()
+            .flatten()
+            .filter_map(|body| {
+                let warnings = body["display_warnings"].take();
+                warnings
+                    .as_array()
+                    .filter(|warnings| !warnings.is_empty())?;
+                Some(json!({"body_id":body["id"],"warnings":warnings}))
+            })
+            .collect();
+        result.value = json!({"opened":true,"body_count":body_count,
+            "errors":errors,"display_warnings":display_warnings});
         Ok(result)
     }
 
