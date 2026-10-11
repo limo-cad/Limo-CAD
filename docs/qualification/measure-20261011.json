@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-10-11T15:20:52.628070+00:00",
+  "source_revision": "1e4155585e402e62c0493ce62a13d758a85ba619",
+  "initial_pr124_base_revision": "8dc163623b31ff371136189eb61cb9d2e85d4116",
+  "integrated_pr124_base_revision": "f96e9b322b5395a8cf0c91b4d5689824850dca93",
+  "branch": "feat/fusion-measure",
+  "reference": [
+    "https://help.autodesk.com/cloudhelp/ENU/Fusion-Model/files/GUID-D070A3CB-729F-410F-9DA4-D9DF7F4D55B5.htm",
+    "https://help.autodesk.com/view/fusion360/ENU/?contextId=SLD-MEASURE"
+  ],
+  "source_file_sha256": {
+    "crates/native-engine/src/host.rs": "7bedc46857be83c80ab33cfd326c3c4b47b73ce8feb4338e770bdc8f8286cd9e",
+    "crates/native-engine/src/lib.rs": "2e2e4afaaeacce5db8b26a1cfb492b1ba503e1ddee51293beec9e26e495ff3d2",
+    "crates/native-engine/src/measurement_snapshot.rs": "d94f436d001ab6cb7ee1c41979578712d41b9f43bcfc5d5dff7598921443416e",
+    "crates/native-engine/src/measurement_snapshot_tests.rs": "e31f08e6ffa390ab8ef09ac0c537974e54f66aa801072d0bde309be4f3aef6d3",
+    "crates/occt/include/shim.hpp": "a98485723265f1beb7259d54272e6fad401fc55fe1cf8d8be35201f1cfd8a36a",
+    "crates/occt/src/lib.rs": "44ff8eb384cb726a7e4a9231f84f1b3e91cd47bca794384bc7e28803e2375833",
+    "crates/occt/src/measurement.rs": "5fc31d40c47b00db2f0e33db0bd03598d8360b453be4e60ec83a21fb29fa40d7",
+    "crates/occt/src/native.rs": "95c6f241c7055a47ab8cc75fa4b9af1961eff2d9fba8036420d0a0b6191e7f27",
+    "crates/occt/src/shim.cpp": "7a84316e89f947ead6bc06b1a97bca6abef02d3e8d9a3e2ce519089ce6baade1",
+    "desktop/src/native_editor/mod.rs": "bb639675f70aa03d5ca8a219bdb0d838cedf6ab95bc1bac4c8e96551e27e53d4",
+    "desktop/src/native_viewport/mod.rs": "649054b151353dbaf09f756d529b4b557beb1e9ac6470ac1d9c455c1625e95de",
+    "desktop/src/native_viewport/platform.rs": "1bc1a0dba36e101bd52e01a2210a7ffccef08e1e771fb7f04a20b5ba2a76b96b",
+    "desktop/src/native_viewport/platform/edge_picking.rs": "0702ae1e784e4cc94329f12ee7eeae8685ebf088fdbd4609c174a5f532bd5185",
+    "desktop/src/session_bridge/native_interface.rs": "6a13553ea4e1fc8fe7562763548d28eeb57043e359332b5ef1fb974e2b8d8529",
+    "desktop/src/session_bridge/native_interface/controller.rs": "8fd493de4ec0f3360880a706027b026c4ba278541f5e14a202b6e4f1c0a7c5b5",
+    "desktop/src/session_bridge/native_interface/controller/measure.rs": "3a56584cc3f3b24352c752791fe51b120c6c8933e483ea04e15cfaf48a614a58",
+    "desktop/src/session_bridge/native_interface/controller/measure/overlay.rs": "ac203245e46e42575db9518bfbaf47b26e4ab8dbe188e66a268a31bfe535f297",
+    "desktop/src/session_bridge/native_interface/controller/measure/panel.rs": "5dcd8b20a0380bdf7d9b5a4fde8ffea451d4c925a13d7ec3dd9fdcde170048f7",
+    "desktop/src/session_bridge/native_interface/controller/measure/readout.rs": "1d10f8579885b608647b1bbd283c784f6fba3da5e7971753b769befc2afeec4f",
+    "desktop/src/session_bridge/native_interface/controller/measure/tests.rs": "a87d0b1b35313098e36319d635fef3b6462bbddb487443b9fd81575f51473d16",
+    "desktop/src/session_bridge/native_interface/controller/workbench/ribbon_menu.rs": "28a63c7a4bc3b62c6ec6624e2ee81f398c9e27cf7013df272615dc672af30ba5",
+    "desktop/src/session_bridge/native_interface/controller/worker.rs": "5d25383a8156b34efaf4147790f196a3e9742f73507abd06294a756e4f8107ba"
+  },
+  "receipt": "docs/qualification/measure-20261011-receipt.txt",
+  "new_unique_regressions_passed": 9,
+  "regressions": [
+    "host::measurement_snapshot::tests::measure_native_box_properties_face_distances_and_angles_are_read_only",
+    "host::measurement_snapshot::tests::measure_native_circles_report_exact_curves_centers_and_parallel_extrema",
+    "host::measurement_snapshot::tests::measure_native_edge_and_vertex_use_exact_topology_without_parent_body_totals",
+    "host::measurement_snapshot::tests::measure_native_repeated_occurrences_preserve_placements_and_reject_stale_results",
+    "native_viewport::platform::edge_picking::tests::measurement_circle_centers_snap_in_pixels_without_picking_hidden_references",
+    "session_bridge::native_interface::controller::measure::tests::measure_overlay_highlights_the_correct_extremum_reuses_idle_guides_and_preserves_preview",
+    "session_bridge::native_interface::controller::measure::tests::measure_panel_retains_controls_exposes_copy_values_and_scrolls_within_its_card",
+    "session_bridge::native_interface::controller::measure::tests::measure_selections_do_not_count_parent_bodies_or_alias_repeated_occurrences",
+    "session_bridge::native_interface::controller::measure::tests::measure_units_scale_area_volume_and_signed_deltas_without_rounding_source_values"
+  ],
+  "results": [
+    {
+      "kind": "geometry",
+      "exit_code": 0,
+      "passing_tests": 4,
+      "local_log_name": "fusion-measure-geometry-tests.log",
+      "local_log_sha256": "91942ce70815c4ca671ea84e565725393e5c69e812f9334a6b3e93959a4962f9"
+    },
+    {
+      "kind": "circle-properties-and-extrema",
+      "exit_code": 0,
+      "passing_tests": 1,
+      "local_log_name": "fusion-measure-circle-final-tests.log",
+      "local_log_sha256": "71f8e0169dd9e30dc7fdc4fde08eb7b81b26b7d9b36b819693ec101ed610cd51"
+    },
+    {
+      "kind": "panel",
+      "exit_code": 0,
+      "passing_tests": 4,
+      "local_log_name": "fusion-measure-panel-tests.log",
+      "local_log_sha256": "89fc8985d7dab4936adaf0ee9cb04d5b8512da96effc4479d36f35e298c21ece"
+    },
+    {
+      "kind": "clear-close-and-placement-retirement",
+      "exit_code": 0,
+      "passing_tests": 1,
+      "local_log_name": "fusion-measure-overlay-final-tests.log",
+      "local_log_sha256": "e920976bd0759a12f417b2ac41d63abe3550165c02d9bed182a8b994f0752eae"
+    },
+    {
+      "kind": "center-pixel-picking",
+      "exit_code": 0,
+      "passing_tests": 1,
+      "local_log_name": "fusion-measure-center-snap-tests.log",
+      "local_log_sha256": "9db79840ec3fa1f5a3423cf03e618af3fa17bd18e18088f0bbd180aeba3455cd"
+    },
+    {
+      "kind": "integrated-panel",
+      "exit_code": 0,
+      "passing_tests": 1,
+      "local_log_name": "fusion-measure-panel-integrated-tests.log",
+      "local_log_sha256": "0cbbbbb0384ef7507182a9084e58db83a3c8b906beb8c9b0d1420cd95453d099"
+    },
+    {
+      "kind": "integrated-guides-and-close",
+      "exit_code": 0,
+      "passing_tests": 1,
+      "local_log_name": "fusion-measure-overlay-integrated-tests.log",
+      "local_log_sha256": "f31465e7b5b17f65aa03ca0eaa36a2557098d432cd6c4eb872ee44b852c512b8"
+    },
+    {
+      "kind": "native-engine-strict-clippy",
+      "exit_code": 0,
+      "passing_tests": null,
+      "local_log_name": "fusion-measure-engine-clippy.log",
+      "local_log_sha256": "622bac7d7632f911edc92aab2d89f166b9cf518bf8a13adadf806c7a5b39b416"
+    },
+    {
+      "kind": "desktop-strict-clippy",
+      "exit_code": 0,
+      "passing_tests": null,
+      "local_log_name": "fusion-measure-desktop-final-clippy.log",
+      "local_log_sha256": "18ea6c965550e931d5f4adb25b3085cd898cd28b6dd9516f2cb39519775a63af"
+    },
+    {
+      "kind": "integrated-desktop-strict-clippy",
+      "exit_code": 0,
+      "passing_tests": null,
+      "local_log_name": "fusion-measure-desktop-integrated-clippy.log",
+      "local_log_sha256": "a6a253f17f3c6c04eea78f770095dd9fc80d203ea38f32e583f302d18ced1fbe"
+    },
+    {
+      "kind": "workspace-format",
+      "exit_code": 0
+    },
+    {
+      "kind": "desktop-format",
+      "exit_code": 0
+    },
+    {
+      "kind": "diff-whitespace",
+      "exit_code": 0
+    }
+  ],
+  "retained_pass_policy": "Initial native geometry and formatting/selection/center-picking passes retained. Only specifically extended circle and clear/close cases were rerun. PR124 integration changed controller/section-panel availability and native renderer dependencies; panel and guide cases plus strict desktop checks were rerun for that concrete change. No unrelated passing cases were repeated.",
+  "compile_repairs": [
+    "Declare the native host measurement module path and convert SessionError to the public string error contract.",
+    "Correct test comparison syntax and use Bevy 0.20 Hovered for value highlighting.",
+    "Import Point3Dto for the new circle-center pick fixture; the initial diagnostic is retained in the receipt."
+  ],
+  "integration_build_repair": {
+    "failure": "Test executable linking exhausted disk space (errno=28).",
+    "correction": "Removed only this task's inactive native-engine incremental cache and retried the two affected desktop filters.",
+    "original_local_log_name": "fusion-measure-integrated-link-space-repair.log",
+    "original_log_sha256": "93f03e0659c65a7b3722929efe90d2bd342f9c63bafbd9532878334045582f76"
+  },
+  "live_ui_passes": 0,
+  "manual_mcp_passes": 0,
+  "broader_run_state": "paused",
+  "pending_live_leaf_cases": [
+    {
+      "id": "ui/measure/open-and-preselection",
+      "case": "Open through toolbar and Inspect menu; seed face/edge preselection without counting its parent body; inspect empty and invalid selections.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/body-properties",
+      "case": "Inspect native body surface area, solid volume and world-axis bounds; preserve model history, Undo/Redo state and saved geometry.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/face-properties",
+      "case": "Inspect face area and loop length, including seams; inspect cylindrical and circular planar radius/diameter.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/edge-and-point-properties",
+      "case": "Inspect line/arc length, circular radius/diameter/center and vertex or center coordinates; omit unavailable properties.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/minimum-distance-and-angles",
+      "case": "Measure face, edge, body and point distances with closest-point guides; inspect line/plane angles and intersecting selections.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/circle-relationships",
+      "case": "Inspect circle center distance and parallel complete-circle maximum distance; verify each result highlights its own points.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/filters-and-snaps",
+      "case": "Exercise geometry/body/vertex filters, snap toggle, Ctrl or Command snap restriction and Shift hiding; reject hidden references with pixel-sized picking.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/repeated-occurrences",
+      "case": "Measure two occurrences of one body independently; verify current placed geometry and hidden-occurrence refusal.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/precision-and-secondary-units",
+      "case": "Exercise zero through six decimals and mm/cm/in primary and secondary units for length, area and volume without rounding canonical values.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/xyz-deltas",
+      "case": "Inspect signed closest-point deltas in global and either selection placement axes; match red/green/blue guides.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/copy-highlight-and-scroll",
+      "case": "Copy displayed values to the physical clipboard; hover objects and each result; inspect scrolling, clipping, labels and focus at supported window sizes.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    },
+    {
+      "id": "ui/measure/clear-close-and-source-retirement",
+      "case": "Clear through the panel and ribbon; close and Escape with panel focus; restore current preselection and retire results after model, placement or document replacement.",
+      "status": "not_run",
+      "functional": "not_run",
+      "polish": "not_run",
+      "checks": [
+        "visible_result",
+        "labels_clipping_focus_feedback",
+        "owner_and_source_fencing",
+        "cancel_or_clear_when_applicable"
+      ]
+    }
+  ],
+  "limits": [
+    "Native solid topology only; sketch curves/profiles, midpoint snaps and whole-component measurements are outside this implementation.",
+    "Maximum circle distance is available for parallel complete circles; nonlinear surface angles and oblique-circle maxima are omitted.",
+    "Source/headless checks do not qualify packaged GPU appearance, physical clipboard operation or live pointer input.",
+    "Capture, native shape copying and source validation still require scaling-dependent work under the live host guard.",
+    "No runtime deployment, broad qualification, manual MCP mutation or new CI pass is claimed."
+  ]
+}
