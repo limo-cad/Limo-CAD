@@ -92,6 +92,10 @@ Full seeded/planned table: **[taxonomy](machine-design/taxonomy.md)**.
 
 ## Concepts
 
+- [Mounting plate lesson](concepts/mounting-plate-lesson.md) - Locate four through holes, edit thickness and recover current face references.
+- [Revolved spacer lesson](concepts/revolved-spacer-lesson.md) - Read radial dimensions, choose the revolution axis and edit length.
+- [Angle bracket lesson](concepts/angle-bracket-lesson.md) - Separate sketch location, driving dimensions and extrusion width; recover a conflicting edit.
+- [Shared component edit and recovery](concepts/component-edit-recovery.md) - Edit a placed repeat, undo a wrong dimension and preserve the shared definition.
 - [Product stance](concepts/product-stance.md) - Local-first mechanical CAD priorities.
 - [Architecture](concepts/architecture.md) - Kernel, shell, and project-file boundaries.
 - [MCP harness](concepts/mcp-harness.md) - Headless/live routing and engineering resources.
