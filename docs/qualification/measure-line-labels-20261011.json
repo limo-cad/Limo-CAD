@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-10-11T23:19:11.550561+00:00",
+  "source_revision": "ceeec0d4e9b9b18e16db2cf3a24b63c18836d438",
+  "integrated_pr124_base_revision": "02fea4810040c419241031d4564eb63d5e893a1e",
+  "test_checkout_revision": "8e87cc80",
+  "tests_ran_on_uncommitted_equivalent_source": true,
+  "source_file_sha256": {
+    "desktop/src/native_viewport/measurement_labels.rs": "60bc1eac093580a4f046df65c679e10d680d3df5e78f206f39e11fc7faeca699",
+    "desktop/src/native_viewport/measurement_labels/tests.rs": "f8891daf9e60715cc221007f7409de04a3ed905dd5ae24cc404770b4a37de922",
+    "desktop/src/native_viewport/mod.rs": "35ce398831109edf58d2eea1a9cc70d64817f9d6125e20c66fec6189b867e7b0",
+    "desktop/src/native_viewport/platform.rs": "89c0abdae064af51f9747d72faa19c811ca688a8451204f58e8112f6d4415557",
+    "desktop/src/native_viewport/platform/edge_picking.rs": "ad3bf1ab5873c272bb085bcc98792a5a24192a63172bac26850aaa34cae0b48d",
+    "desktop/src/native_viewport/viewport_renderer.rs": "bb60c7807d916037509fc87fe7107c540bd490ceee895e5fdf4b6daac72deab3",
+    "desktop/src/native_viewport/viewport_renderer/tests.rs": "3270acb5c35e50f07e1a0caa889217390ffaea03a647f383b64e603ac6dab136",
+    "desktop/src/session_bridge/native_interface/controller/measure.rs": "67b25eb6721e911aed161bd9f1f87d1357b997513571eca020dd9612c77109eb",
+    "desktop/src/session_bridge/native_interface/controller/measure/overlay.rs": "3a3c65b7cad65e7d460592956e4c378410fc6784585c15aef59358bb854430fa",
+    "desktop/src/session_bridge/native_interface/controller/measure/panel.rs": "ff9fb17dec4c3d877202c3b9a033b45c8fdf43a23e16ab16da7fabcc9796eb11",
+    "desktop/src/session_bridge/native_interface/controller/measure/tests.rs": "89eade9aa58421d0018e2ed2b7d29c9f95f802fb3474e3528b04a7ff30cc32d4"
+  },
+  "behavior": [
+    "Connection guides carry values formatted from canonical native measurements, including document/secondary units and panel precision.",
+    "Minimum, center and maximum distances label their corresponding segment; signed deltas use the chosen global or placement axes.",
+    "Labels project onto the visible segment, avoid coincident readouts, follow camera/resize, allow picks through and retire independently of preview annotations.",
+    "Idle overlays and UI label entities retain their storage."
+  ],
+  "results": {
+    "focused_source_regressions_passed": 6,
+    "new_unique_label_regressions_passed": 3,
+    "affected_measure_hover_regressions_passed": 1,
+    "integrated_render_coordination_and_shutdown_regressions_passed": 2,
+    "final_affected_label_source_regressions_passed": 4,
+    "windowless_gpu_regressions_passed": 1,
+    "desktop_all_targets_strict_clippy": "passed",
+    "workspace_and_desktop_format": "passed",
+    "diff_whitespace": "passed"
+  },
+  "receipt": "docs/qualification/measure-line-labels-20261011-receipt.txt",
+  "local_logs": [
+    {
+      "path": "/private/tmp/measure-line-focused-tests.log",
+      "sha256": "9e8116da96c045c321552c362487c587dc368dbbfc844eba63dbd93940214002"
+    },
+    {
+      "path": "/private/tmp/measure-line-render-tests.log",
+      "sha256": "5789c94e20c86737863bef8a14eb3809a341f9950995727fe7a8f79319ec4ee3"
+    },
+    {
+      "path": "/private/tmp/measure-line-desktop-clippy.log",
+      "sha256": "0be443182b20e3ace13654c1efffd4ffac29b922652001437778a897e2fa21ca"
+    }
+  ],
+  "windowless_gpu_evidence": {
+    "files": [
+      {
+        "path": "/private/tmp/measure-line-gpu-proofs/measurement-value-before-3d.png",
+        "sha256": "3f5a8c0977d1957639c586be951548c731d5235f19f44fea0369cee5afc410a9"
+      },
+      {
+        "path": "/private/tmp/measure-line-gpu-proofs/measurement-value-camera-moved.png",
+        "sha256": "d4e8bb62f2223af72707c97e67a9613c919600f816113599bea5f30f6a8d8acf"
+      },
+      {
+        "path": "/private/tmp/measure-line-gpu-proofs/measurement-value-cleared.png",
+        "sha256": "6e0f2130a7646825d5a5e41c6de671a32ca338ddacaa6fe2fb8d73dd561a054f"
+      }
+    ],
+    "viewed": [
+      "measurement-value-before-3d.png",
+      "measurement-value-camera-moved.png"
+    ],
+    "observed": "Readable 2.000 mm badge rendered by the native adapter before CAD compilation; camera movement changes its pixels and clear restores its region."
+  },
+  "renderer_integration": {
+    "supersedes_original_gpu_queue_guard": true,
+    "uses_pr124_surface_submission_guard": true,
+    "independent_duplicate_guard_removed": true,
+    "main_thread_shutdown_service_and_regression_preserved": true
+  },
+  "new_live_ui_passes": 0,
+  "new_manual_mcp_passes": 0,
+  "prior_leaf_statuses_preserved": true,
+  "broader_run_state": "paused",
+  "limits": [
+    "Windowless source rendering does not establish packaged appearance, physical pointer/clipboard acceptance or the broad UI/MCP gate.",
+    "Fresh hosted package CI is pending."
+  ]
+}

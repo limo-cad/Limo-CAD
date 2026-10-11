@@ -1,4 +1,5 @@
 {
+  "measure_line_label_source_checkpoint": {"source_revision":"ceeec0d4e9b9b18e16db2cf3a24b63c18836d438","evidence":"docs/qualification/measure-line-labels-20261011.json","new_unique_source_regressions_passed":3,"affected_windowless_gpu_regressions_passed":1,"new_live_ui_passes":0,"new_manual_mcp_passes":0,"prior_ui_mcp_leaf_statuses_preserved":true,"broader_run_state":"paused"},
   "measure_ci_source_checkpoint": {"source_revision":"ef1792ac5367467944e003c3ff1ebe7c5f21372f","evidence":"docs/qualification/measure-ci-repair-20261011.json","new_headless_regressions_passed":3,"affected_windowless_gpu_regressions_passed":1,"new_live_ui_passes":0,"new_manual_mcp_passes":0,"existing_ui_mcp_leaf_statuses_preserved":true,"broader_run_state":"paused","new_ci_status":"pending fresh run"},
   "section_slider_viewport_repair_checkpoint": {
     "base_revision": "c11a51cd41239ad4e8f5a7ce2e32e3d971fa8ea8",
