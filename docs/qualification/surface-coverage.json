@@ -1674,5 +1674,63 @@
       {"id":"mcp/bambu_local_verification_poll","group":"document/export","mutates":false,"execution":"direct","status":"not_run"},
       {"id":"mcp/bambu_local_verification_cancel","group":"document/export","mutates":false,"execution":"direct","status":"not_run"}
     ]
-  }
+  },
+    "parallel_repairs_checkpoint":  {
+                                        "source_revision":  "db1aa006",
+                                        "base_revision":  "4859c8bd",
+                                        "commits":  [
+                                                        "090efe6a",
+                                                        "28edcada",
+                                                        "3181443d",
+                                                        "88a69218",
+                                                        "db1aa006"
+                                                    ],
+                                        "qualification":  "source_reviewed_hosted_execution_pending",
+                                        "new_focused_checks_unrun":  [
+                                                                         "native_readback_exposes_actual_global_overrides_and_capability_without_qualifying_failed_slice",
+                                                                         "bounds_warnings_keep_body_face_provenance_and_do_not_certify_cut_volume",
+                                                                         "blind_extent_remains_unknown_for_ambiguous_ring_face_ownership",
+                                                                         "browser_projection_excludes_history_and_invalidates_only_consumed_inputs",
+                                                                         "browser_sync_reuses_projection_across_sketch_edits_and_retires_owner",
+                                                                         "history_panel_reuses_only_unchanged_history_and_retires_replaced_owners",
+                                                                         "history_drag_shares_current_panel_and_rejects_stale_shared_history"
+                                                                     ],
+                                        "installed_revision":  "4859c8bdc5575fe8858bfb3c0153c48569f8e6eb",
+                                        "installed_payload_verified":  70,
+                                        "installed_executable_sha256":  "94c5e541db3b9a05f22c75560c8e31f89c7ee45590f513e32bee144771c2e856",
+                                        "fresh_live_pair":  {
+                                                                "foreground_observed":  true,
+                                                                "status":  "matched",
+                                                                "desktop_pid":  22412,
+                                                                "mcp_pid":  15380,
+                                                                "source_modified":  false
+                                                            },
+                                        "prior_hosted_native":  {
+                                                                    "revision":  "4859c8bd",
+                                                                    "ubuntu":  {
+                                                                                   "ignored":  10,
+                                                                                   "failed":  0,
+                                                                                   "passed":  983
+                                                                               },
+                                                                    "macos":  {
+                                                                                  "ignored":  10,
+                                                                                  "failed":  0,
+                                                                                  "passed":  988
+                                                                              },
+                                                                    "windows":  "pending"
+                                                                },
+                                        "closed_issues":  [
+                                                              12,
+                                                              94,
+                                                              231,
+                                                              312,
+                                                              313,
+                                                              314,
+                                                              315,
+                                                              360
+                                                          ],
+                                        "remaining_open_at_reconciliation":  18,
+                                        "new_manual_passes_claimed":  false,
+                                        "broad_catalog_statuses_changed":  false
+                                    }
 }
