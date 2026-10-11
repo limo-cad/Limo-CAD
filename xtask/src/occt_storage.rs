@@ -1,6 +1,11 @@
 //! Qualify checked matrix allocation/copy behavior in the actual OCCT runtime.
-use anyhow::{ensure, Context, Result};
-use std::{env, fs, path::Path, process::Command};
+use anyhow::{bail, ensure, Context, Result};
+use std::{
+    env, fs,
+    path::Path,
+    process::Command,
+    time::{Duration, Instant},
+};
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     ensure!(
@@ -23,6 +28,16 @@ pub fn verify(prefix: &Path) -> Result<()> {
         None,
     )
     .map_err(anyhow::Error::msg)?;
+    verify_resolved(prefix, &sdk, None)
+}
+
+/// Verify exactly the include/import-library pair selected by a consumer.
+/// Runtime lookup uses the same prefix whose DLLs deployment will stage.
+pub(crate) fn verify_resolved(
+    prefix: &Path,
+    sdk: &crate::build_tools::sdk::Sdk,
+    runtime: Option<&Path>,
+) -> Result<()> {
     verify_header(&sdk.include)?;
     let staging = tempfile::tempdir()?;
     let source = staging.path().join("source");
@@ -55,6 +70,11 @@ pub fn verify(prefix: &Path) -> Result<()> {
     select_msvc(&mut configure, &mut compile)?;
     crate::build_tools::run(&mut configure)?;
     crate::build_tools::run(&mut compile)?;
+    if let Some(runtime) = runtime {
+        // Windows resolves these exact SDK DLLs beside the executable before
+        // consulting the current directory or unrelated inherited PATH entries.
+        stage_probe_runtime(runtime, &build)?;
+    }
     let mut probe = Command::new(build.join(if cfg!(windows) {
         "limo_occt_storage_check.exe"
     } else {
@@ -70,13 +90,63 @@ pub fn verify(prefix: &Path) -> Result<()> {
     let mut search = vec![
         prefix.join("bin"),
         sdk.lib.parent().context("OCCT library parent")?.join("bin"),
-        sdk.lib,
+        sdk.lib.clone(),
     ];
+    if let Some(runtime) = runtime {
+        search.insert(0, runtime.to_path_buf());
+    }
     if let Some(existing) = env::var_os(variable) {
         search.extend(env::split_paths(&existing));
     }
     probe.env(variable, env::join_paths(search)?);
-    crate::build_tools::run(&mut probe)
+    run_probe(&mut probe, Duration::from_secs(30))
+}
+
+fn stage_probe_runtime(runtime: &Path, build: &Path) -> Result<()> {
+    let names = ["TKernel.dll", "TKMath.dll"];
+    for name in names {
+        ensure!(
+            runtime.join(name).is_file(),
+            "Selected deployment runtime {} lacks {name}",
+            runtime.display()
+        );
+    }
+    for name in names {
+        fs::copy(runtime.join(name), build.join(name))
+            .with_context(|| format!("stage exact deployment runtime {name}"))?;
+    }
+    Ok(())
+}
+
+fn run_probe(command: &mut Command, timeout: Duration) -> Result<()> {
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("start {command:?}"))?;
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                ensure!(status.success(), "OCCT storage probe failed ({status})");
+                return Ok(());
+            }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error).context("observe OCCT storage probe");
+            }
+            Ok(None) => {}
+        }
+        if started.elapsed() >= timeout {
+            let stopped = child.kill();
+            let _ = child.wait();
+            stopped.context("stop timed-out OCCT storage probe")?;
+            bail!(
+                "OCCT storage probe exceeded its {} second deadline",
+                timeout.as_secs()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 #[cfg(windows)]
@@ -111,6 +181,39 @@ pub fn verify_header(include: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deployment_probe_stages_exact_selected_runtime_and_rejects_missing_math() {
+        let fixture = tempfile::tempdir().unwrap();
+        let prefix = fixture.path().join("sdk");
+        let runtime = prefix.join("win64/vc17/bin");
+        let decoy = fixture.path().join("override/bin");
+        let build = fixture.path().join("probe");
+        for directory in [&runtime, &decoy, &build] {
+            fs::create_dir_all(directory).unwrap();
+        }
+        fs::write(runtime.join("TKernel.dll"), b"selected kernel").unwrap();
+        for name in ["TKernel.dll", "TKMath.dll"] {
+            fs::write(decoy.join(name), b"unrelated override runtime").unwrap();
+        }
+        let selected = crate::package::runtime_bin(&prefix).unwrap();
+        assert_eq!(selected, runtime);
+        assert!(stage_probe_runtime(&selected, &build)
+            .unwrap_err()
+            .to_string()
+            .contains("lacks TKMath.dll"));
+        assert!(!build.join("TKernel.dll").exists());
+        fs::write(runtime.join("TKMath.dll"), b"selected math").unwrap();
+        stage_probe_runtime(&selected, &build).unwrap();
+        assert_eq!(
+            fs::read(build.join("TKernel.dll")).unwrap(),
+            b"selected kernel"
+        );
+        assert_eq!(
+            fs::read(build.join("TKMath.dll")).unwrap(),
+            b"selected math"
+        );
+    }
 
     #[cfg(windows)]
     #[test]
