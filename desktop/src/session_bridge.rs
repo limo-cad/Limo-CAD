@@ -1817,6 +1817,37 @@ fn control_for_window_owned_with_contact_observer(
     engine: &AppState,
     response: Option<Value>,
     expected: Option<(&limo_cad_interface::DocumentContext, &str)>,
+    observed: impl FnMut(&limo_cad_occt::DrawingProjectionRequest, &limo_cad_occt::DrawingProjectionDto),
+    detached_finished: (
+        impl FnMut(&limo_cad_native_engine::FinishedSectionReview),
+        impl FnMut(&limo_cad_native_engine::FinishedInterferenceReview),
+        impl FnMut(&limo_cad_native_engine::FinishedSweptCollisionReview),
+        impl FnMut(&limo_cad_native_engine::FinishedMotionEvaluation),
+    ),
+) -> Result<Value, String> {
+    control_for_window_owned_with_csv_observer(
+        state,
+        window_label,
+        engine,
+        response,
+        expected,
+        observed,
+        (
+            detached_finished.0,
+            detached_finished.1,
+            detached_finished.2,
+            detached_finished.3,
+            |_| {},
+        ),
+    )
+}
+
+fn control_for_window_owned_with_csv_observer(
+    state: &SessionBridgeState,
+    window_label: &str,
+    engine: &AppState,
+    response: Option<Value>,
+    expected: Option<(&limo_cad_interface::DocumentContext, &str)>,
     mut observed: impl FnMut(
         &limo_cad_occt::DrawingProjectionRequest,
         &limo_cad_occt::DrawingProjectionDto,
@@ -1826,6 +1857,7 @@ fn control_for_window_owned_with_contact_observer(
         impl FnMut(&limo_cad_native_engine::FinishedInterferenceReview),
         impl FnMut(&limo_cad_native_engine::FinishedSweptCollisionReview),
         impl FnMut(&limo_cad_native_engine::FinishedMotionEvaluation),
+        impl FnMut(&limo_cad_native_engine::FinishedMotionPathExport),
     ),
 ) -> Result<Value, String> {
     let mut lease_path = state
@@ -2114,6 +2146,33 @@ fn control_for_window_owned_with_contact_observer(
                     .map_err(|_| "publisher lock poisoned")?;
                 match finished {
                     Ok(finished) => engine.validate_motion_evaluation(&finished).and(value),
+                    Err(error) => Err(error),
+                }
+            } else if supported
+                && method == "assembly_export_motion_path_csv"
+                && native_ticket.is_some()
+            {
+                let prepared = engine.prepare_motion_path_export(payload);
+                drop(publishers);
+                drop(lease_path);
+                let mut finished = prepared.and_then(|prepared| prepared.export());
+                let value = finished
+                    .as_mut()
+                    .map_err(|error| error.clone())
+                    .map(|finished| {
+                        detached_finished.4(finished);
+                        Value::String(finished.take_csv())
+                    });
+                lease_path = state
+                    .process_lease_path
+                    .lock()
+                    .map_err(|_| "session process lease lock poisoned")?;
+                publishers = state
+                    .publishers
+                    .lock()
+                    .map_err(|_| "publisher lock poisoned")?;
+                match finished {
+                    Ok(finished) => engine.validate_motion_path_export(&finished).and(value),
                     Err(error) => Err(error),
                 }
             } else if supported {

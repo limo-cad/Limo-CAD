@@ -191,6 +191,7 @@ impl Default for Browser {
 impl Browser {
     fn set_enabled(&mut self, enabled: bool) {
         if !enabled {
+            self.studies.cancel_export();
             self.inspect.invalidate_reviews();
         }
         self.enabled = enabled;
