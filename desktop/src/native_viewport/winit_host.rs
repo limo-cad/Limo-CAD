@@ -235,27 +235,25 @@ pub(crate) fn cancel_native_pointer(world: &mut World, handle: &NativeInterfaceH
 /// controller tests without initializing an OS event loop or GPU.
 pub(crate) fn build(configure: impl FnOnce(&mut App, NativeInterfaceHandle)) -> App {
     let mut app = App::new();
-    let plugins = DefaultPlugins
-        .set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Limo CAD".into(),
-                name: Some("limo-cad".into()),
-                resolution: WindowResolution::new(1360, 860),
-                resize_constraints: bevy::window::WindowResizeConstraints {
-                    min_width: 1200.,
-                    min_height: 760.,
-                    ..default()
-                },
-                present_mode: bevy::window::PresentMode::Fifo,
-                desired_maximum_frame_latency: NonZeroU32::new(2),
-                ime_enabled: false,
+    let plugins = platform::viewport_renderer::interface_plugins().set(WindowPlugin {
+        primary_window: Some(Window {
+            title: "Limo CAD".into(),
+            name: Some("limo-cad".into()),
+            resolution: WindowResolution::new(1360, 860),
+            resize_constraints: bevy::window::WindowResizeConstraints {
+                min_width: 1200.,
+                min_height: 760.,
                 ..default()
-            }),
-            exit_condition: ExitCondition::DontExit,
-            close_when_requested: false,
+            },
+            present_mode: bevy::window::PresentMode::Fifo,
+            desired_maximum_frame_latency: NonZeroU32::new(2),
+            ime_enabled: false,
             ..default()
-        })
-        .set(platform::cad_render_plugin());
+        }),
+        exit_condition: ExitCondition::DontExit,
+        close_when_requested: false,
+        ..default()
+    });
     #[cfg(target_os = "linux")]
     let plugins = plugins.disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>();
     #[cfg(feature = "dev-native-ime-trace")]
@@ -276,7 +274,7 @@ pub(crate) fn build(configure: impl FnOnce(&mut App, NativeInterfaceHandle)) -> 
         focused_mode: UpdateMode::reactive_low_power(Duration::MAX),
         unfocused_mode: UpdateMode::reactive_low_power(Duration::MAX),
     });
-    platform::install_native_scene(&mut app);
+    platform::viewport_renderer::install(&mut app);
     app.init_resource::<HostInputState>()
         .init_resource::<HostCaptureState>()
         .init_resource::<NativeRenderAvailability>()

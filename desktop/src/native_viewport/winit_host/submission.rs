@@ -18,6 +18,7 @@ use bevy::{
 struct ExtractedReceipt {
     handle: NativeInterfaceHandle,
     revision: u64,
+    viewport_ready: bool,
 }
 
 pub(super) fn install(app: &mut App) {
@@ -27,12 +28,17 @@ pub(super) fn install(app: &mut App) {
         .add_systems(RenderGraph, submitted.in_set(RenderGraphSystems::Finish));
 }
 
-fn extract(mut commands: Commands, handle: Extract<Option<Res<NativeInterfaceHandle>>>) {
+fn extract(
+    mut commands: Commands,
+    handle: Extract<Option<Res<NativeInterfaceHandle>>>,
+    viewport: Extract<Option<Res<super::super::platform::viewport_renderer::ViewportReady>>>,
+) {
     if let Some(handle) = handle.as_ref() {
         if let Some(receipt) = handle.render_receipt() {
             commands.insert_resource(ExtractedReceipt {
                 handle: (*handle).clone(),
                 revision: receipt.laid_out_revision,
+                viewport_ready: viewport.as_ref().is_none_or(|ready| ready.0),
             });
         }
     }
@@ -59,7 +65,7 @@ fn submitted(
             receipt.handle.request_redraw();
         }
         *compiling = pending;
-        if pending {
+        if pending || !receipt.viewport_ready {
             return;
         }
         if let Err(error) = receipt.handle.submitted_revision(receipt.revision) {

@@ -155,6 +155,8 @@ type BodyPoseQuery<'w, 's> = Query<
 pub(crate) mod script_preview;
 #[path = "section_view.rs"]
 pub(crate) mod section_view;
+#[path = "viewport_renderer.rs"]
+pub(super) mod viewport_renderer;
 
 pub(super) const VIEWPORT_MSAA: Msaa = Msaa::Sample4;
 /// Base mesh size; a camera-aware transform keeps its screen footprint stable.
@@ -392,7 +394,7 @@ struct DocumentGeometryIndex(HashMap<String, Entity>);
 
 /// Local geometry metadata belongs to its document and survives tab switches.
 /// Rigid placements and occurrence layout do not change this data.
-#[derive(Component, Default)]
+#[derive(Component, Default, Clone)]
 struct ModelEdgeCache {
     scene: std::sync::Weak<SolidSceneDto>,
     bodies: HashMap<u64, Arc<BodyEdgeMetadata>>,
@@ -465,13 +467,13 @@ impl ModelEdgeCache {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Clone, Copy)]
 struct CameraResource {
     camera: ViewportCamera,
     revision: u64,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 struct PreviewResource {
     value: Arc<ViewportPreview>,
     /// Native sketch dimensions persist while transient creation/tool guides
@@ -484,7 +486,7 @@ struct PreviewResource {
     mesh_revision: u64,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 struct CamStockResource {
     value: Option<ViewportCamStock>,
     revision: u64,
@@ -493,7 +495,7 @@ struct CamStockResource {
 #[derive(Resource, Clone, Copy, Default)]
 struct PaletteResource(ViewportPalette);
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 struct HudResource {
     hud: ViewportHud,
     revision: u64,
@@ -514,7 +516,7 @@ impl Default for ViewportSizeResource {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 struct PresentationResource(ViewportPresentation);
 
 impl Default for HudResource {
@@ -690,6 +692,10 @@ pub(super) fn cad_render_plugin() -> RenderPlugin {
 /// The application viewport and immutable script previews run these exact systems
 /// in separate worlds. A preview never replaces the live model or camera.
 pub(super) fn install_cad_scene(app: &mut bevy::app::App) {
+    install_cad_renderer(app, true);
+}
+
+fn init_cad_state(app: &mut bevy::app::App) {
     app.init_gizmo_group::<CadHighlightGizmos>()
         .init_gizmo_group::<CadModelEdgeGizmos>()
         .init_gizmo_group::<CamCompletedPathGizmos>()
@@ -718,12 +724,12 @@ pub(super) fn install_cad_scene(app: &mut bevy::app::App) {
         .init_resource::<ViewportSizeResource>()
         .init_resource::<PresentationResource>()
         .init_resource::<RenderedRevisions>()
-        .init_resource::<ViewportUiAssets>()
-        .add_plugins((GpuStockPlugin, ReferencePlanePlugin))
-        .add_systems(
-            Startup,
-            (ui::load_system_font, setup_gpu_stock, setup_scene).chain(),
-        )
+        .init_resource::<ViewportUiAssets>();
+}
+
+fn install_cad_renderer(app: &mut bevy::app::App, viewport_ui: bool) {
+    init_cad_state(app);
+    app.add_plugins((GpuStockPlugin, ReferencePlanePlugin))
         .add_systems(
             Update,
             (
@@ -740,15 +746,31 @@ pub(super) fn install_cad_scene(app: &mut bevy::app::App) {
                 update_native_cam_tool,
                 update_gpu_stock,
                 update_native_preview_arrows,
-                rebuild_native_annotations,
-                rebuild_native_hud,
-                update_native_hud_orientation,
                 draw_cad_gizmos,
                 section_view::draw,
             )
                 .chain()
                 .after(interface_shell::InterfaceReduction),
         );
+    if viewport_ui {
+        app.add_systems(
+            Startup,
+            (ui::load_system_font, setup_gpu_stock, setup_scene).chain(),
+        )
+        .add_systems(
+            Update,
+            (
+                rebuild_native_annotations,
+                rebuild_native_hud,
+                update_native_hud_orientation,
+            )
+                .chain()
+                .after(update_native_preview_arrows)
+                .before(draw_cad_gizmos),
+        );
+    } else {
+        app.add_systems(Startup, (setup_gpu_stock, setup_scene).chain());
+    }
 }
 
 #[derive(Resource)]
@@ -4670,6 +4692,7 @@ fn apply_model_state(world: &mut World, next: ViewportModel, update: InstanceUpd
 
 /// Install the same renderer/picker state for a Winit-owned window. The CAD
 /// systems and retained geometry cache are shared with headless fixtures.
+#[cfg(test)]
 pub(super) fn install_native_scene(app: &mut bevy::app::App) {
     install_cad_scene(app);
     app.insert_resource(SharedPickState(Arc::new(Mutex::new(PickState::default()))));
