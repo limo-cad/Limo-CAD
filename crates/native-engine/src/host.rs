@@ -1029,26 +1029,16 @@ impl NativeEngineHost {
                 Ok(request) => request,
                 Err(error) => return err_json(format!("bad request payload: {error}")),
             };
-        let workspace = match self.inner.lock() {
-            Ok(workspace) => workspace,
-            Err(_) => return err_json("engine lock poisoned"),
+        let prepared = match self.prepare_drawing_export(&request) {
+            Ok(prepared) => prepared,
+            Err(error) => return err_json(error),
         };
-        let inner = workspace.active();
-        let scene = inner.manager.solid_scene_ref();
-        let assembly = inner.manager.assembly_document_ref();
-        let content = limo_cad_occt::drawing_export::export_sheet_with_units(
-            inner.manager.drawing_document_ref(),
-            scene,
-            assembly,
-            &request,
-            inner.manager.document().settings().units,
-            |r| {
-                let projection = limo_cad_occt::project_drawing(&inner.kernel, scene, assembly, r)
-                    .map_err(|e| e.to_string())?;
-                completed(r, &projection);
-                Ok(projection)
-            },
-        );
+        // The captured selected B-reps own HLR independently of the live engine.
+        // Callers retaining an outer publisher guard must release it separately.
+        let content = prepared.content_observing(&mut completed);
+        if let Err(error) = self.validate_drawing_export(&prepared) {
+            return err_json(error);
+        }
         match content {
             Ok(content) => ok_json(
                 serde_json::json!({"format":request.format,"encoding":"utf8","content":content,"sheet_id":request.sheet_id}),
