@@ -114,6 +114,152 @@ fn drawing_files_match_engine_output_without_changing_history_or_project_destina
 }
 
 #[test]
+fn drawing_pdf_export_preserves_page_intent_and_rejects_stale_or_replaced_owners() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    seed(&fixture);
+    let (mut app, services, handle) = setup(&fixture);
+    refresh_native_model(&fixture.engine, app.world_mut(), true).unwrap();
+    let project = path("drawing-pdf-project.limo");
+    request(
+        app.world_mut(),
+        &handle,
+        &services,
+        &fixture.owner(),
+        &json!({"command":"save","path":project}),
+    )
+    .unwrap();
+    drain(app.world_mut(), &services).unwrap();
+    let archive_before = std::fs::read(&project).unwrap();
+    let before = model(&fixture);
+    let receipt = current(app.world(), &services, &fixture.owner()).unwrap();
+    let intent = capture(&services, &receipt, Format::Pdf).unwrap();
+
+    // Supply only the existing native picker's reply boundary; Cancel must not
+    // start export or write a PDF, even with a real populated drawing sheet.
+    let (send, receive) = mpsc::channel();
+    app.world_mut().resource_mut::<Files>().picker = Some(Picker {
+        receipt: receipt.clone(),
+        kind: PickerKind::Drawing(intent.clone()),
+        result: Mutex::new(receive),
+    });
+    send.send(None).unwrap();
+    poll(app.world_mut(), &services).unwrap();
+    assert!(!awaiting(app.world()));
+    assert!(!worker::busy(app.world()));
+    assert_eq!(model(&fixture), before);
+
+    let destination = path("real-sheet.pdf");
+    request(
+        app.world_mut(),
+        &handle,
+        &services,
+        &fixture.owner(),
+        &json!({"command":"export_drawing_pdf","path":destination}),
+    )
+    .unwrap();
+    let result = drain(app.world_mut(), &services).unwrap();
+    let pdf = std::fs::read(&destination).unwrap();
+    assert_eq!(result["format"], "pdf");
+    assert_eq!(result["sheet_id"], 1);
+    assert_eq!(result["bytes"], pdf.len());
+    assert!(pdf.starts_with(b"%PDF-"));
+    // Read the actual pinned writer's page dictionary. Independent A4 landscape
+    // constants verify physical page intent, rather than trusting reported size.
+    let text = String::from_utf8_lossy(&pdf);
+    let page = text.split_once("/MediaBox").unwrap().1.trim_start();
+    let dimensions: Vec<f64> = page
+        .strip_prefix('[')
+        .unwrap()
+        .split_once(']')
+        .unwrap()
+        .0
+        .split_whitespace()
+        .map(|value| value.parse().unwrap())
+        .collect();
+    assert_eq!(dimensions.len(), 4);
+    for (actual, expected) in
+        dimensions
+            .into_iter()
+            .zip([0., 0., 297. * 72. / 25.4, 210. * 72. / 25.4])
+    {
+        assert!(
+            (actual - expected).abs() < 0.01,
+            "Actual page differs from A4 landscape: {actual} vs {expected}"
+        );
+    }
+    assert_eq!(model(&fixture), before);
+    assert_eq!(
+        current(app.world(), &services, &fixture.owner()).unwrap(),
+        receipt
+    );
+    let tab = tabs(app.world(), &services, &fixture.owner())
+        .unwrap()
+        .remove(0);
+    assert_eq!(tab.path, Some(project.clone()));
+    assert!(!tab.dirty);
+    assert_eq!(std::fs::read(&project).unwrap(), archive_before);
+
+    // Existing output requires affirmative overwrite and survives a refused
+    // new-file write. PDF uses the same actual atomic/new binary writer paths.
+    export(
+        app.world_mut(),
+        receipt.clone(),
+        intent.clone(),
+        destination.clone(),
+        false,
+    )
+    .unwrap();
+    assert!(drain(app.world_mut(), &services).is_err());
+    assert_eq!(std::fs::read(&destination).unwrap(), pdf);
+    export(
+        app.world_mut(),
+        receipt.clone(),
+        intent.clone(),
+        destination.clone(),
+        true,
+    )
+    .unwrap();
+    assert_eq!(drain(app.world_mut(), &services).unwrap()["exported"], true);
+    let reviewed_pdf = std::fs::read(&destination).unwrap();
+    assert!(reviewed_pdf.starts_with(b"%PDF-"));
+
+    fixture
+        .rename(&fixture.owner(), "Changed during PDF selection")
+        .unwrap();
+    let changed = model(&fixture);
+    export(app.world_mut(), receipt, intent, destination.clone(), true).unwrap();
+    assert!(drain(app.world_mut(), &services)
+        .unwrap_err()
+        .contains("document changed"));
+    assert_eq!(std::fs::read(&destination).unwrap(), reviewed_pdf);
+    assert_eq!(model(&fixture), changed);
+
+    let owner = fixture.owner();
+    let receipt = current(app.world(), &services, &owner).unwrap();
+    let intent = capture(&services, &receipt, Format::Pdf).unwrap();
+    mutate(
+        &fixture,
+        "cad_load_project_model",
+        json!({"model_json":changed}),
+    );
+    let replacement = fixture.owner();
+    assert_eq!(replacement.document_id, owner.document_id);
+    assert_ne!(replacement.epoch, owner.epoch);
+    assert_eq!(
+        model(&fixture),
+        changed,
+        "Replacement changes ownership only"
+    );
+    export(app.world_mut(), receipt, intent, destination.clone(), true).unwrap();
+    let error = drain(app.world_mut(), &services).unwrap_err();
+    assert!(error.contains("replaced"), "{error}");
+    assert_eq!(std::fs::read(&destination).unwrap(), reviewed_pdf);
+    assert_eq!(model(&fixture), changed);
+    assert_eq!(std::fs::read(project).unwrap(), archive_before);
+}
+
+#[test]
 fn drawing_picker_cancellation_and_stale_receipts_preserve_files() {
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
     let fixture = Fixture::new();

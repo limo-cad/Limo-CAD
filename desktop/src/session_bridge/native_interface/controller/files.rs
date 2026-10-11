@@ -1483,11 +1483,11 @@ pub(super) fn request(
                     .ok_or("Import requires an absolute STEP/STP path")?,
             ),
         ),
-        "export_drawing_svg" | "export_drawing_dxf" => {
-            let format = if ui["command"] == "export_drawing_svg" {
-                drawing_output::Format::Svg
-            } else {
-                drawing_output::Format::Dxf
+        "export_drawing_svg" | "export_drawing_dxf" | "export_drawing_pdf" => {
+            let format = match ui["command"].as_str().unwrap() {
+                "export_drawing_svg" => drawing_output::Format::Svg,
+                "export_drawing_dxf" => drawing_output::Format::Dxf,
+                _ => drawing_output::Format::Pdf,
             };
             let intent = drawing_output::capture(services, &receipt, format)?;
             let path = PathBuf::from(

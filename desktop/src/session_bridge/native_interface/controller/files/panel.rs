@@ -387,8 +387,8 @@ pub(crate) fn synchronize(
                 40,
             );
             if menu {
-                let row_height = ((height - 132.) / 18.).clamp(24., 32.);
-                let mut menu_bounds = node(6., 28., 256., 90. + 18. * row_height);
+                let row_height = ((height - 132.) / 19.).clamp(24., 32.);
+                let mut menu_bounds = node(6., 28., 256., 90. + 19. * row_height);
                 menu_bounds.border = UiRect::all(px(1.));
                 rectangle(
                     world,
@@ -702,7 +702,7 @@ pub(crate) fn synchronize(
                     .iter()
                     .any(|sheet| Some(sheet.id) == drawing.active_sheet_id)
             }) || !geometry.scene.errors.is_empty();
-            let row_height = ((height - 132.) / 18.).clamp(24., 32.);
+            let row_height = ((height - 132.) / 19.).clamp(24., 32.);
             let primary = if cfg!(target_os = "macos") {
                 "⌘"
             } else {
@@ -818,6 +818,13 @@ pub(crate) fn synchronize(
                 (
                     "file.exportDrawingSvg",
                     FileCommand::ExportDrawing(drawing_output::Format::Svg),
+                    Icon::Export,
+                    String::new(),
+                    drawing_disabled,
+                ),
+                (
+                    "file.exportDrawingPdf",
+                    FileCommand::ExportDrawing(drawing_output::Format::Pdf),
                     Icon::Export,
                     String::new(),
                     drawing_disabled,
