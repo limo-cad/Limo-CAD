@@ -858,13 +858,22 @@ fn blind_depth(
     // with a reversed cap must not masquerade as a one-ended blind bore.
     let disk_cap = |index: usize| {
         let (edge, _) = rings[index];
-        body.faces.iter().find_map(|cap| {
-            (cap.id != face.id && cap.edge_keys.len() == 1 && cap.edge_keys[0] == edge.key)
-                .then_some(cap.plane)
-                .flatten()
-        })
+        let mut adjacent = body
+            .faces
+            .iter()
+            .filter(|cap| cap.id != face.id && cap.edge_keys.contains(&edge.key));
+        let Some(cap) = adjacent.next() else {
+            return Some(None);
+        };
+        // Touching/nonmanifold faces can share a ring with a disk. Choosing
+        // the first disk would invent a unique terminal face and its depth.
+        // Keep the cavity candidate, but reject ambiguous ring ownership.
+        if adjacent.next().is_some() {
+            return None;
+        }
+        Some((cap.edge_keys.len() == 1).then_some(cap.plane).flatten())
     };
-    let (cap, plane) = match (disk_cap(0), disk_cap(1)) {
+    let (cap, plane) = match (disk_cap(0)?, disk_cap(1)?) {
         (Some(plane), None) => (0, plane),
         (None, Some(plane)) => (1, plane),
         _ => return None,
@@ -1474,6 +1483,69 @@ mod tests {
         // An annular shoulder is not a blind bottom.
         scene.bodies[0].faces[1].edge_keys.push("inner_ring".into());
         assert!(holes_from_scene(&scene)[0].depth.is_none());
+    }
+
+    #[test]
+    fn blind_extent_remains_unknown_for_ambiguous_ring_face_ownership() {
+        let mut baseline = cylinder_scene();
+        let mut cap = baseline.bodies[0].faces[0].clone();
+        cap.id = limo_cad_core::FaceId(2);
+        cap.key = "terminal_disk".into();
+        cap.cylinder = None;
+        cap.edge_keys = vec!["ring1".into()];
+        cap.plane = Some(PlaneBasis {
+            origin: [0., 0., 8.],
+            u: [1., 0., 0.],
+            v: [0., 1., 0.],
+            normal: [0., 0., -1.],
+        });
+        baseline.bodies[0].faces.push(cap.clone());
+        let known = summarize(&baseline, &[]).json(true);
+        assert_eq!(known["holes"][0]["diameter"], 4.);
+        assert_eq!(known["holes"][0]["depth"], 8.);
+        assert_eq!(known["holes"][0]["through"], false);
+
+        for scenario in [
+            "duplicate_disk",
+            "disk_and_touching_face",
+            "ambiguous_mouth",
+        ] {
+            let mut scene = baseline.clone();
+            let mut touching = cap.clone();
+            touching.id = limo_cad_core::FaceId(3);
+            touching.key = scenario.into();
+            // A second terminal disk remains ambiguous even if its orientation
+            // disagrees with the first. Face order cannot choose the result.
+            touching.plane.as_mut().unwrap().normal = [0., 0., 1.];
+            if scenario == "disk_and_touching_face" {
+                touching.edge_keys.push("unrelated_boundary".into());
+            } else if scenario == "ambiguous_mouth" {
+                touching.edge_keys = vec!["ring0".into(), "outer_mouth".into()];
+                touching.plane.as_mut().unwrap().origin[2] = 0.;
+                let mut other = touching.clone();
+                other.id = limo_cad_core::FaceId(4);
+                other.key = "second_mouth_owner".into();
+                scene.bodies[0].faces.push(other);
+            }
+            scene.bodies[0].faces.push(touching);
+            for reversed in [false, true] {
+                if reversed {
+                    scene.bodies[0].faces.reverse();
+                }
+                let original_scene = serde_json::to_value(&scene).unwrap();
+                let report = summarize(&scene, &[]).json(true);
+                assert_eq!(report["hole_count"], 1, "{scenario}");
+                let candidate = &report["holes"][0];
+                assert_eq!(candidate["body_id"], 1);
+                assert_eq!(candidate["face_ids"], json!([1]));
+                assert_eq!(candidate["diameter"], 4.);
+                assert_eq!(candidate["confidence"], "candidate");
+                assert!(candidate["depth"].is_null(), "{scenario}");
+                assert!(candidate["through"].is_null(), "{scenario}");
+                assert!(candidate["depth_evidence"].is_null());
+                assert_eq!(serde_json::to_value(&scene).unwrap(), original_scene);
+            }
+        }
     }
 
     fn annular_through_scene() -> SolidSceneDto {
