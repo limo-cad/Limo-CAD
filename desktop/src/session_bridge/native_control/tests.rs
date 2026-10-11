@@ -635,9 +635,8 @@ fn native_swept_query_releases_live_guards_and_fences_original_completion_once()
                     .unwrap()
                     .value
             };
-            let study = crate::session_bridge::native_interface::tests::swept_stock(
-                &f.engine, &f.state, &f.owner,
-            );
+            let study =
+                crate::session_bridge::native_interface::swept_stock(&f.engine, &f.state, &f.owner);
             let revision = f
                 .state
                 .native_document_receipt(&f.engine, &f.owner)

@@ -669,7 +669,7 @@ pub(crate) fn swept_stock(
     );
     for (time, z) in [(0., 5.), (1., 0.)] {
         let sample: MotionStudySampleDto = serde_json::from_value(
-            parse_engine_envelope(engine.engine_call(
+            crate::session_bridge::parse_engine_envelope(engine.engine_call(
                 "assembly_sample_motion_study",
                 &json!({"study_id":study.id,"time_seconds":time}).to_string(),
             ))

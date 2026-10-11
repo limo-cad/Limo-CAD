@@ -1005,3 +1005,5 @@ pub(crate) fn finish_mutation(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(super) use tests::swept_stock;
