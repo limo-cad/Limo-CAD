@@ -7,7 +7,7 @@ use std::time::Instant;
 pub(super) struct Drag {
     receipt: DocumentReceipt,
     action: NativeInterfaceAction,
-    document: Arc<DocumentDto>,
+    pub(super) document: Arc<FeatureTree>,
     feature_id: Option<u64>,
     start: Vec2,
     cursor: Option<Vec2>,
@@ -122,7 +122,7 @@ pub(super) fn tick_at(
 fn slots(
     world: &World,
     handle: &NativeInterfaceHandle,
-    document: &DocumentDto,
+    document: &FeatureTree,
 ) -> Result<Vec<(usize, Rect)>, String> {
     handle.read_surface(|_, frame| {
         let mut slots = frame
@@ -166,7 +166,7 @@ fn target_slot(slots: &[(usize, Rect)], cursor: Vec2) -> Option<usize> {
 }
 
 fn operation(
-    document: &DocumentDto,
+    document: &FeatureTree,
     feature_id: Option<u64>,
     target: usize,
 ) -> Option<(&'static str, Value)> {
@@ -300,18 +300,38 @@ pub(crate) fn pointer(
     if event.context.as_ref() != Some(&action.context) {
         return Ok(false);
     }
-    let document = services.engine.document_snapshot();
+    let (receipt, document) = services.bridge.with_native_document_receipt(
+        &services.engine,
+        &action.context,
+        |revision| {
+            let receipt = DocumentReceipt {
+                owner: action.context.clone(),
+                revision,
+            };
+            // Reuse exactly the rendered history when its owner/revision is
+            // current. A stale or missing panel still takes a narrow snapshot
+            // under the same publisher -> engine fence as the receipt.
+            let document = world
+                .get_resource::<History>()
+                .and_then(|state| state.snapshot.as_ref())
+                .filter(|(prior, _)| *prior == receipt)
+                .map(|(_, document)| Arc::clone(document))
+                .unwrap_or_else(|| {
+                    services
+                        .engine
+                        .with_document(|document| retain_history(document, None))
+                });
+            Ok((receipt, document))
+        },
+    )?;
     if feature_id.is_some() && document.rollback_index != document.features.len() {
         return Ok(false);
     }
-    let receipt = services
-        .bridge
-        .native_document_receipt(&services.engine, &action.context)?;
     world.init_resource::<History>();
     world.resource_mut::<History>().drag = Some(Drag {
         receipt,
         action,
-        document: Arc::new(document),
+        document,
         feature_id,
         start: cursor,
         cursor: Some(cursor),

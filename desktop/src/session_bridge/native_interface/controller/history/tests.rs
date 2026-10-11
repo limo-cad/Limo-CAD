@@ -1,6 +1,7 @@
 use super::*;
 use crate::session_bridge::native_interface::tests::Fixture;
 use crate::session_bridge::parse_engine_envelope;
+use limo_cad_core::DocumentDto;
 
 fn solid(fixture: &Fixture) -> DocumentContext {
     let owner = fixture.owner();
@@ -45,6 +46,265 @@ fn export_model(fixture: &Fixture) -> Value {
             .unwrap(),
     )
     .unwrap()
+}
+
+#[test]
+fn history_panel_reuses_only_unchanged_history_and_retires_replaced_owners() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let owner = solid(&fixture);
+        let services = NativeServices {
+            engine: fixture.engine.clone(),
+            bridge: fixture.bridge.clone(),
+        };
+        let mut app = native_viewport::interface_scene_fixture();
+        let world = app.world_mut();
+        world.init_resource::<Assets<Image>>();
+        world.init_resource::<ViewportUiAssets>();
+        world.spawn(InterfaceCamera);
+        let receipt = fixture
+            .bridge
+            .native_document_receipt(&fixture.engine, &owner)
+            .unwrap();
+        let before = export_model(&fixture);
+        synchronize(world, &services, &owner, receipt.revision, 1200., 860.).unwrap();
+        let initial = Arc::clone(&world.resource::<History>().snapshot.as_ref().unwrap().1);
+        world.resource_mut::<History>().selected = Some(initial.features[1].id.0);
+        assert_eq!(before, export_model(&fixture));
+
+        let title = fixture.rename(&owner, "Browser-only title").unwrap();
+        synchronize(world, &services, &owner, title.engine_revision, 1200., 860.).unwrap();
+        assert!(Arc::ptr_eq(
+            &initial,
+            &world.resource::<History>().snapshot.as_ref().unwrap().1
+        ));
+        assert_eq!(
+            world
+                .resource::<History>()
+                .snapshot
+                .as_ref()
+                .unwrap()
+                .0
+                .revision,
+            title.engine_revision
+        );
+        assert_eq!(
+            world.resource::<History>().selected,
+            Some(initial.features[1].id.0)
+        );
+        assert!(
+            synchronize(world, &services, &owner, receipt.revision, 1200., 860.)
+                .unwrap_err()
+                .contains("design changed")
+        );
+        assert!(Arc::ptr_eq(
+            &initial,
+            &world.resource::<History>().snapshot.as_ref().unwrap().1
+        ));
+
+        let renamed = fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &owner,
+                "solid_rename_feature",
+                &json!({"feature_id":initial.features[1].id.0,"name":"Lower rail"}),
+                || Ok(()),
+            )
+            .unwrap();
+        synchronize(
+            world,
+            &services,
+            &owner,
+            renamed.engine_revision,
+            1200.,
+            860.,
+        )
+        .unwrap();
+        let changed = Arc::clone(&world.resource::<History>().snapshot.as_ref().unwrap().1);
+        assert!(!Arc::ptr_eq(&initial, &changed));
+        assert_ne!(initial.features[1].name, changed.features[1].name);
+        assert_eq!(changed.features[1].name, "Lower rail");
+        assert!(world
+            .query::<&InterfaceControl>()
+            .iter(world)
+            .any(|control| control.label == "Lower rail"));
+
+        let rollback = fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &owner,
+                "solid_set_rollback",
+                &json!({"rollback_index":1}),
+                || Ok(()),
+            )
+            .unwrap();
+        synchronize(
+            world,
+            &services,
+            &owner,
+            rollback.engine_revision,
+            1200.,
+            860.,
+        )
+        .unwrap();
+        let rolled_back = Arc::clone(&world.resource::<History>().snapshot.as_ref().unwrap().1);
+        assert!(!Arc::ptr_eq(&changed, &rolled_back));
+        assert_eq!(changed.rollback_index, 2);
+        assert_eq!(rolled_back.rollback_index, 1);
+        let retired = Arc::downgrade(&rolled_back);
+        let successor = fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &owner,
+                "cad_new_project",
+                &json!({}),
+                || Ok(()),
+            )
+            .unwrap();
+        synchronize(
+            world,
+            &services,
+            &successor.context,
+            successor.engine_revision,
+            1200.,
+            860.,
+        )
+        .unwrap();
+        assert_eq!(world.resource::<History>().selected, None);
+        assert!(world
+            .resource::<History>()
+            .snapshot
+            .as_ref()
+            .unwrap()
+            .1
+            .features
+            .is_empty());
+        assert!(retired.upgrade().is_some());
+        drop(rolled_back);
+        assert!(retired.upgrade().is_none());
+
+        let empty = Arc::clone(&world.resource::<History>().snapshot.as_ref().unwrap().1);
+        let next = fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &successor.context,
+                "cad_new_project",
+                &json!({}),
+                || Ok(()),
+            )
+            .unwrap();
+        synchronize(
+            world,
+            &services,
+            &next.context,
+            next.engine_revision,
+            1200.,
+            860.,
+        )
+        .unwrap();
+        let current = &world.resource::<History>().snapshot.as_ref().unwrap().1;
+        assert_eq!(empty.as_ref(), current.as_ref());
+        assert!(!Arc::ptr_eq(&empty, current));
+    });
+}
+
+#[test]
+fn history_drag_shares_current_panel_and_rejects_stale_shared_history() {
+    use bevy::input::ButtonState::{Pressed, Released};
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let owner = solid(&fixture);
+        let services = NativeServices {
+            engine: fixture.engine.clone(),
+            bridge: fixture.bridge.clone(),
+        };
+        let mut app = native_viewport::interface_scene_fixture();
+        let world = app.world_mut();
+        world.init_resource::<Assets<Image>>();
+        world.init_resource::<ViewportUiAssets>();
+        world.spawn(InterfaceCamera);
+        let receipt = fixture
+            .bridge
+            .native_document_receipt(&fixture.engine, &owner)
+            .unwrap();
+        synchronize(world, &services, &owner, receipt.revision, 1200., 860.).unwrap();
+        let panel = Arc::clone(&world.resource::<History>().snapshot.as_ref().unwrap().1);
+        let handle = NativeInterfaceHandle::new(|| {});
+        publish_history(world, &handle, &owner, &fixture.engine.document_snapshot());
+        let before = export_model(&fixture);
+        pointer(
+            world,
+            &handle,
+            &services,
+            &gesture(&owner, 360., 830., Some(Pressed)),
+        )
+        .unwrap();
+        assert!(Arc::ptr_eq(
+            &panel,
+            &world.resource::<History>().drag.as_ref().unwrap().document
+        ));
+        pointer(
+            world,
+            &handle,
+            &services,
+            &gesture(&owner, 460., 830., None),
+        )
+        .unwrap();
+        assert_eq!(before, export_model(&fixture));
+        assert!(!worker::busy(world));
+        cancel_drag(world);
+        assert_eq!(
+            Arc::strong_count(&panel),
+            2,
+            "Only the panel and test reader remain"
+        );
+
+        // An unrelated model revision may keep the same features, but must
+        // invalidate the in-progress drag's exact receipt nonetheless.
+        pointer(
+            world,
+            &handle,
+            &services,
+            &gesture(&owner, 360., 830., Some(Pressed)),
+        )
+        .unwrap();
+        fixture
+            .rename(&owner, "Changed during shared drag")
+            .unwrap();
+        let after_rename = export_model(&fixture);
+        assert!(pointer(
+            world,
+            &handle,
+            &services,
+            &gesture(&owner, 460., 830., Some(Released))
+        )
+        .is_err());
+        assert!(world.resource::<History>().drag.is_none());
+        assert_eq!(after_rename, export_model(&fixture));
+        assert!(!worker::busy(world));
+
+        // A stale panel cannot lend its Arc to a new press; the fallback owns
+        // only the authoritative history acquired with the new receipt.
+        publish_history(world, &handle, &owner, &fixture.engine.document_snapshot());
+        pointer(
+            world,
+            &handle,
+            &services,
+            &gesture(&owner, 360., 830., Some(Pressed)),
+        )
+        .unwrap();
+        let fallback = &world.resource::<History>().drag.as_ref().unwrap().document;
+        assert_eq!(panel.as_ref(), fallback.as_ref());
+        assert!(!Arc::ptr_eq(&panel, fallback));
+        let retired = Arc::downgrade(fallback);
+        cancel_drag(world);
+        assert!(retired.upgrade().is_none());
+        assert_eq!(after_rename, export_model(&fixture));
+    });
 }
 
 #[test]
