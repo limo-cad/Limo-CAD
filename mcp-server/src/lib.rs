@@ -1719,8 +1719,7 @@ impl CadServer {
         let plan_value = parse_engine_envelope(host::handle(
             &mut self.manager,
             "project_prepare_load",
-            &serde_json::to_string(&Value::String(model_json.clone()))
-                .map_err(|e| e.to_string())?,
+            &serde_json::to_string(&model_json).map_err(|e| e.to_string())?,
         ))?;
         let plan: RecomputePlanDto = serde_json::from_value(plan_value)
             .map_err(|error| format!("invalid model.json / recompute plan: {error}"))?;
