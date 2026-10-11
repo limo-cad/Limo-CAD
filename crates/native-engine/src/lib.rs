@@ -11,9 +11,10 @@ mod host;
 pub use host::{
     DetachedDrawingSnapshot, DrawingProjectionBasis, FinishedBambuExport,
     FinishedDrawingProjections, FinishedInterferenceReview, FinishedPortableMeshExport,
-    FinishedSectionReview, FinishedStepExport, NativeBodyGeometryKey, NativeBodyGeometryProof,
-    NativeEngineHost, NativeViewportDocument, NativeViewportFrame, NativeViewportSnapshot,
-    PortableMeshFormat, PreparedBambuExport, PreparedBambuPreview, PreparedDrawingExport,
-    PreparedInterferenceReview, PreparedPortableMeshExport, PreparedSectionReview,
-    PreparedStepExport, ResolvedDrawingProjection, SharedDrawingProjection, BOOTSTRAP_SESSION_ID,
+    FinishedSectionReview, FinishedStepExport, FinishedSweptCollisionReview, NativeBodyGeometryKey,
+    NativeBodyGeometryProof, NativeEngineHost, NativeViewportDocument, NativeViewportFrame,
+    NativeViewportSnapshot, PortableMeshFormat, PreparedBambuExport, PreparedBambuPreview,
+    PreparedDrawingExport, PreparedInterferenceReview, PreparedPortableMeshExport,
+    PreparedSectionReview, PreparedStepExport, PreparedSweptCollisionReview,
+    ResolvedDrawingProjection, SharedDrawingProjection, BOOTSTRAP_SESSION_ID,
 };
