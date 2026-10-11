@@ -4,6 +4,168 @@ use crate::native_viewport::interface_shell::tests::fixture;
 mod window_focus;
 
 #[test]
+fn accepted_signed_zero_caption_preserves_owned_text_and_nonzero_literals() {
+    let (mut app, handle, entity) = editor_fixture();
+    app.world_mut()
+        .run_system_cached(crate::native_viewport::ui::load_system_font)
+        .unwrap();
+    app.world_mut().flush();
+    app.init_resource::<bevy::ui::ui_surface::UiSurface>();
+    app.update();
+    let assets = app.world().resource::<ViewportUiAssets>().clone();
+    let theme = ViewportUiTheme::from_palette(&default());
+    compact_number_caption(app.world_mut(), entity, theme, &assets);
+    let caption = app.world().get::<CompactNumberCaption>(entity).unwrap().0;
+    handle.blur();
+    for raw in [
+        "-0.0000000000000008881784197001252",
+        "-1e-9999",
+        "-0 + 1",
+        "-0.0",
+        "-0e3",
+        "-0",
+    ] {
+        app.world_mut()
+            .get_mut::<NativeTextField>(entity)
+            .unwrap()
+            .baseline = raw.into();
+        app.world_mut()
+            .entity_mut(entity)
+            .insert(EditableText::new(raw));
+        app.world_mut()
+            .get_mut::<InterfaceControl>(entity)
+            .unwrap()
+            .field = Field::Text {
+            value: raw.into(),
+            read_only: false,
+            selection: None,
+        };
+        app.update();
+        {
+            let mut node = app.world_mut().get_mut::<ComputedNode>(entity).unwrap();
+            node.size.x = 86.;
+            node.inverse_scale_factor = 1.;
+        }
+        let revision = app.world().get::<InterfaceTextRevision>(entity).unwrap().0;
+        let selection = app
+            .world()
+            .get::<EditableText>(entity)
+            .unwrap()
+            .editor()
+            .raw_selection()
+            .text_range();
+        update_compact_numbers(app.world_mut());
+        let display = app.world().get::<Text>(caption).unwrap().0.as_str();
+        let visible = app.world().get::<Node>(caption).unwrap().display;
+        match raw {
+            "-0" | "-0.0" | "-0e3" => {
+                assert_eq!(display, "0");
+                assert_eq!(visible, Display::Flex);
+            }
+            "-1e-9999" | "-0 + 1" => assert_eq!(visible, Display::None),
+            _ => {
+                assert_eq!(visible, Display::Flex);
+                assert!(display.parse::<f64>().unwrap() < 0.);
+            }
+        }
+        assert_eq!(
+            app.world().get::<EditableText>(entity).unwrap().value(),
+            raw
+        );
+        assert_eq!(
+            app.world().get::<NativeTextField>(entity).unwrap().baseline,
+            raw
+        );
+        assert_eq!(
+            app.world().get::<InterfaceTextRevision>(entity).unwrap().0,
+            revision
+        );
+        assert_eq!(
+            app.world()
+                .get::<EditableText>(entity)
+                .unwrap()
+                .editor()
+                .raw_selection()
+                .text_range(),
+            selection
+        );
+        let Field::Text { value, .. } = &app.world().get::<InterfaceControl>(entity).unwrap().field
+        else {
+            panic!("text field")
+        };
+        assert_eq!(value, raw);
+        assert!(handle.take_actions().unwrap().is_empty());
+    }
+    let action = handle
+        .resolve_retained(ControlKey(entity.to_bits()))
+        .unwrap();
+    handle.prepare_activation(&action).unwrap();
+    update_compact_numbers(app.world_mut());
+    assert_eq!(
+        app.world().get::<Node>(caption).unwrap().display,
+        Display::None
+    );
+    assert_eq!(app.world().get::<TextColor>(entity).unwrap().0, theme.ink);
+    assert_eq!(
+        app.world().get::<EditableText>(entity).unwrap().value(),
+        "-0"
+    );
+    handle.blur();
+    apply_edit(app.world_mut(), entity, TextEdit::SelectAll).unwrap();
+    apply_edit(app.world_mut(), entity, TextEdit::Insert("-0 + 2".into())).unwrap();
+    update_compact_numbers(app.world_mut());
+    assert_eq!(
+        app.world().get::<Node>(caption).unwrap().display,
+        Display::None
+    );
+    assert_eq!(
+        app.world().get::<EditableText>(entity).unwrap().value(),
+        "-0 + 2"
+    );
+    app.world_mut()
+        .entity_mut(entity)
+        .insert(EditableText::new("-0"));
+    app.world_mut()
+        .get_mut::<NativeTextField>(entity)
+        .unwrap()
+        .queued = Some("-0".into());
+    update_compact_numbers(app.world_mut());
+    assert_eq!(
+        app.world().get::<Node>(caption).unwrap().display,
+        Display::None
+    );
+    app.world_mut()
+        .get_mut::<NativeTextField>(entity)
+        .unwrap()
+        .queued = None;
+    update_compact_numbers(app.world_mut());
+    assert_eq!(app.world().get::<Text>(caption).unwrap().0, "0");
+    assert_eq!(
+        app.world().get::<Node>(caption).unwrap().display,
+        Display::Flex
+    );
+    apply_edit(
+        app.world_mut(),
+        entity,
+        TextEdit::ImeSetCompose {
+            value: "1".into(),
+            cursor: None,
+        },
+    )
+    .unwrap();
+    update_compact_numbers(app.world_mut());
+    assert_eq!(
+        app.world().get::<Node>(caption).unwrap().display,
+        Display::None
+    );
+    assert_eq!(
+        app.world().get::<NativeTextField>(entity).unwrap().baseline,
+        "-0"
+    );
+    assert!(handle.take_actions().unwrap().is_empty());
+}
+
+#[test]
 fn accepted_number_caption_fits_narrow_field_without_changing_owned_edit_text() {
     use bevy::text::ComputedTextBlock;
     let (mut app, handle, entity) = editor_fixture();
