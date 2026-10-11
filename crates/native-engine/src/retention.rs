@@ -26,7 +26,7 @@ impl NativeProject {
             Self::Cold { .. } => panic!("active project is cold"),
         }
     }
-    pub(super) fn thaw(&mut self) -> Result<(), String> {
+    pub(super) fn thaw(&mut self, session_id: &str) -> Result<(), String> {
         let Self::Cold {
             model,
             geometry_revision,
@@ -78,6 +78,7 @@ impl NativeProject {
             .map_err(|error| error.to_string())?;
         next.geometry_revision = next_revision;
         next.viewport_revision = viewport_revision.wrapping_add(1);
+        next.record_geometry_commit(session_id);
         *self = Self::Warm(Box::new(next));
         Ok(())
     }
