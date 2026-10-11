@@ -4,13 +4,15 @@ use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    env, fs,
+    env,
+    ffi::OsString,
+    fs,
     io::{BufRead, BufReader},
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 const MANIFEST: &str = "runtime-manifest.json";
 const EXECUTABLE: &str = if cfg!(windows) {
@@ -214,7 +216,7 @@ fn verify_payload(manifest: &RuntimeManifest) -> Result<PathBuf> {
 }
 
 /// Build first and promote the compiler-reported artifact, without configuring clients.
-/// A live installed runtime blocks promotion unless `restart` explicitly discards its work.
+/// Restart may discard GUI work, but never independent headless worker documents.
 pub(crate) fn prepare_runtime(repo_root: &Path, options: &BuildOptions) -> Result<PathBuf> {
     ensure!(
         cfg!(windows),
@@ -396,7 +398,7 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 )
             }
             "--help" | "-h" => {
-                println!("cargo xtask deploy-native [--restart] [--release] [--computer-control | --no-computer-control] [--occt-root PATH] [--jobs N] [--clients LIST] [--launch]\n\nBuilds and installs one Windows GUI/MCP executable. Default: incremental local crates opt1, third-party dependencies opt3.\nNative computer control defaults off for initial deployments; later builds preserve the installed mode unless explicitly toggled.\n--restart terminates only the canonical installed runtime, discarding unsaved work.\nClient registration defaults to codex,cursor,vscode,claude,opencode. Launch occurs after verification and registration.");
+                println!("cargo xtask deploy-native [--restart] [--release] [--computer-control | --no-computer-control] [--occt-root PATH] [--jobs N] [--clients LIST] [--launch]\n\nBuilds and installs one Windows GUI/MCP executable. Default: incremental local crates opt1, third-party dependencies opt3.\nNative computer control defaults off for initial deployments; later builds preserve the installed mode unless explicitly toggled.\n--restart terminates only canonical GUI processes, discarding their unsaved work. Canonical headless workers or unavailable launch arguments block promotion; their owners must save and close them first.\nClient registration defaults to codex,cursor,vscode,claude,opencode. Launch occurs after verification and registration.");
                 return Ok(());
             }
             _ => bail!("Unknown or duplicate deploy-native option {arg}"),
@@ -943,6 +945,43 @@ fn replace_file(source: &Path, destination: &Path) -> Result<()> {
     xtask::file_replacement::replace_file(source, destination)
 }
 
+struct RuntimeProcess {
+    pid: Pid,
+    start: u64,
+    command: Vec<OsString>,
+}
+
+fn stop_selected_runtime(
+    processes: &[RuntimeProcess],
+    restart: bool,
+    mut terminate: impl FnMut(&RuntimeProcess) -> Result<()>,
+) -> Result<()> {
+    ensure!(
+        processes.is_empty() || restart,
+        "Installed CAD/MCP is running; close it or pass --restart to discard GUI unsaved work"
+    );
+    // Preflight the entire exact-executable set before stopping even one GUI.
+    // Headless stdio can own an independent unsaved model without a window.
+    for process in processes {
+        ensure!(
+            process.command.first().is_some_and(|arg| !arg.is_empty()),
+            "Cannot verify launch arguments for installed runtime PID {}; its owner must save and close it before deployment",
+            process.pid
+        );
+        // Match the actual OsString flag, not a substring of a project path.
+        // Invalid extra arguments containing this flag are also protected.
+        ensure!(
+            !process.command.iter().skip(1).any(|arg| arg == "--headless"),
+            "Installed headless worker PID {} may own unsaved work; its owner must save and close it before deployment",
+            process.pid
+        );
+    }
+    for process in processes {
+        terminate(process)?;
+    }
+    Ok(())
+}
+
 fn stop_runtime(executable: &Path, restart: bool) -> Result<()> {
     let Ok(canonical) = executable.canonicalize() else {
         return Ok(());
@@ -951,7 +990,9 @@ fn stop_runtime(executable: &Path, restart: bool) -> Result<()> {
     system.refresh_processes_specifics(
         ProcessesToUpdate::All,
         true,
-        ProcessRefreshKind::nothing().with_exe(UpdateKind::Always),
+        ProcessRefreshKind::nothing()
+            .with_exe(UpdateKind::Always)
+            .with_cmd(UpdateKind::Always),
     );
     let processes = system
         .processes()
@@ -962,28 +1003,28 @@ fn stop_runtime(executable: &Path, restart: bool) -> Result<()> {
                 .and_then(|path| path.canonicalize().ok())
                 .is_some_and(|path| path == canonical)
         })
-        .map(|(pid, process)| (*pid, process.start_time()))
+        .map(|(pid, process)| RuntimeProcess {
+            pid: *pid,
+            start: process.start_time(),
+            command: process.cmd().to_vec(),
+        })
         .collect::<Vec<_>>();
-    ensure!(
-        processes.is_empty() || restart,
-        "Installed CAD/MCP is running; close it or pass --restart to discard unsaved work"
-    );
-    for (pid, start) in &processes {
-        let process = system
-            .process(*pid)
-            .context("Runtime process disappeared")?;
+    stop_selected_runtime(&processes, restart, |selected| {
+        let pid = selected.pid;
+        let process = system.process(pid).context("Runtime process disappeared")?;
         ensure!(
-            process.start_time() == *start && process.kill(),
+            process.start_time() == selected.start && process.kill(),
             "Could not stop installed runtime PID {pid}"
         );
-    }
+        Ok(())
+    })?;
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         system.refresh_processes(ProcessesToUpdate::All, true);
-        if processes.iter().all(|(pid, start)| {
+        if processes.iter().all(|selected| {
             system
-                .process(*pid)
-                .is_none_or(|process| process.start_time() != *start)
+                .process(selected.pid)
+                .is_none_or(|process| process.start_time() != selected.start)
         }) {
             return Ok(());
         }
@@ -999,6 +1040,53 @@ fn stop_runtime(executable: &Path, restart: bool) -> Result<()> {
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn restart_preflights_all_workers_before_terminating_any_gui() {
+        let process = |pid: usize, args: &[&str]| RuntimeProcess {
+            pid: Pid::from(pid),
+            start: 17,
+            command: args.iter().map(|arg| OsString::from(*arg)).collect(),
+        };
+        for blocked in [
+            process(2, &["private-runtime-path", "--headless"]),
+            process(2, &[]),
+            process(2, &[""]),
+        ] {
+            // A GUI encountered first must survive a protected later worker.
+            let candidates = [process(1, &["private-runtime-path"]), blocked];
+            let terminated = Cell::new(0);
+            let error = stop_selected_runtime(&candidates, true, |_| {
+                terminated.set(terminated.get() + 1);
+                Ok(())
+            })
+            .unwrap_err()
+            .to_string();
+            assert_eq!(terminated.get(), 0);
+            assert!(error.contains("PID 2"));
+            assert!(!error.contains("private-runtime-path"));
+        }
+        let gui = [
+            process(1, &["private-runtime-path"]),
+            process(3, &["private-runtime-path", "C:/designs/--headless.limo"]),
+        ];
+        let mut terminated = Vec::new();
+        assert!(stop_selected_runtime(&gui, false, |candidate| {
+            terminated.push((candidate.pid, candidate.start));
+            Ok(())
+        })
+        .is_err());
+        assert!(terminated.is_empty());
+        stop_selected_runtime(&gui, true, |candidate| {
+            terminated.push((candidate.pid, candidate.start));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            terminated,
+            vec![(Pid::from(1usize), 17), (Pid::from(3usize), 17)]
+        );
+    }
 
     #[test]
     fn deployment_qualification_preserves_missing_tool_cause_without_diagnosing_sdk_damage() {
