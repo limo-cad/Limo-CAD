@@ -11,6 +11,6 @@ mod host;
 pub use host::{
     DetachedDrawingSnapshot, DrawingProjectionBasis, FinishedDrawingProjections,
     NativeBodyGeometryKey, NativeBodyGeometryProof, NativeEngineHost, NativeViewportDocument,
-    NativeViewportFrame, NativeViewportSnapshot, ResolvedDrawingProjection,
+    NativeViewportFrame, NativeViewportSnapshot, PreparedDrawingExport, ResolvedDrawingProjection,
     SharedDrawingProjection, BOOTSTRAP_SESSION_ID,
 };

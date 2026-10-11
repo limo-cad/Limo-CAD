@@ -7,6 +7,52 @@ use limo_cad_sketch::{AssemblyDocumentDto, DrawingDocumentDto, DrawingSheetDto, 
 use std::collections::BTreeMap;
 use std::sync::Weak;
 
+/// Owned export input. Only capture locks the live workspace; HLR, paper
+/// markup and downstream PDF preparation happen after that guard drops.
+pub struct PreparedDrawingExport {
+    drawing: Arc<DrawingDocumentDto>,
+    snapshot: DetachedDrawingSnapshot,
+    request: limo_cad_occt::drawing_export::DrawingExportRequest,
+    units: limo_cad_core::UnitSystem,
+    title: String,
+}
+
+impl PreparedDrawingExport {
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+    pub fn sheet_id(&self) -> u64 {
+        self.request.sheet_id
+    }
+    pub fn content(&self) -> Result<String, String> {
+        limo_cad_occt::drawing_export::export_sheet_with_units(
+            &self.drawing,
+            &self.snapshot.scene,
+            &self.snapshot.assembly,
+            &self.request,
+            self.units,
+            |request| {
+                let resolved = limo_cad_occt::resolve_drawing_request(
+                    &self.snapshot.scene,
+                    &self.snapshot.assembly,
+                    request,
+                )
+                .map_err(|e| e.to_string())?;
+                let id = self
+                    .snapshot
+                    .requests
+                    .iter()
+                    .find(|(_, captured)| *captured == resolved)
+                    .map(|(id, _)| *id)
+                    .ok_or("Export projection differs from captured intent")?;
+                self.snapshot
+                    .project_captured(id, &resolved)
+                    .map(|result| (*result.projection).clone())
+            },
+        )
+    }
+}
+
 #[derive(Clone)]
 pub struct SharedDrawingProjection {
     pub projection: Arc<limo_cad_occt::DrawingProjectionDto>,
@@ -115,6 +161,36 @@ pub struct DetachedDrawingSnapshot {
 }
 
 impl NativeEngineHost {
+    pub fn prepare_drawing_export(
+        &self,
+        request: &limo_cad_occt::drawing_export::DrawingExportRequest,
+    ) -> Result<PreparedDrawingExport, String> {
+        let workspace = self.inner.lock().map_err(|_| "engine lock poisoned")?;
+        let inner = workspace.active();
+        let drawing = inner.manager.drawing_document_snapshot();
+        drawing.validate()?;
+        let sheet = drawing
+            .sheets
+            .iter()
+            .find(|sheet| sheet.id == request.sheet_id)
+            .ok_or("Drawing sheet does not exist")?;
+        let title = format!("{} — {}", inner.manager.document().name(), sheet.name);
+        let snapshot = capture_snapshot(
+            inner,
+            workspace.verification_owner_key(),
+            (&drawing, inner.geometry_revision),
+            sheet,
+            (&sheet.views, false),
+            None,
+        )?;
+        Ok(PreparedDrawingExport {
+            drawing,
+            snapshot,
+            request: request.clone(),
+            units: inner.manager.document().settings().units,
+            title,
+        })
+    }
     pub fn drawing_presentation_snapshot(
         &self,
     ) -> (Arc<DrawingDocumentDto>, u64, limo_cad_core::UnitSystem) {
@@ -151,96 +227,114 @@ impl NativeEngineHost {
         intent: (&[DrawingViewDto], bool),
         previous: Option<&Arc<FinishedDrawingProjections>>,
     ) -> Result<DetachedDrawingSnapshot, String> {
-        let (original_views, repairing) = intent;
         let workspace = self.inner.lock().map_err(|_| "engine lock poisoned")?;
-        let inner = workspace.active();
-        if inner.geometry_revision != geometry_revision
-            || !Arc::ptr_eq(expected, &inner.manager.drawing_document_snapshot())
-        {
-            return Err("The drawing changed before projection capture".into());
-        }
-        let scene = inner.manager.solid_scene_snapshot();
-        if !scene.errors.is_empty() {
-            return Err("Resolve timeline errors before generating a drawing view.".into());
-        }
-        let assembly = inner.manager.assembly_document_ref().clone();
-        let owner = workspace.verification_owner_key();
-        let mut bodies = BTreeSet::new();
-        let mut requests = Vec::new();
-        // Derived planes resolve against full saved intent, but only projected
-        // views' selected definitions need an independent native shape.
-        for view in &sheet.views {
-            let (views, view) = if repairing {
-                (
-                    original_views,
-                    original_views
-                        .iter()
-                        .find(|saved| saved.id == view.id)
-                        .ok_or("Repair view was removed")?,
-                )
-            } else {
-                (sheet.views.as_slice(), view)
-            };
-            let request =
-                limo_cad_occt::drawing_export::projection_request(view, views, &scene, &assembly)?;
-            let request = limo_cad_occt::resolve_drawing_request(&scene, &assembly, &request)
-                .map_err(|e| e.to_string())?;
-            bodies.extend(
-                limo_cad_occt::drawing_required_body_ids(&scene, &assembly, &request)
-                    .map_err(|e| e.to_string())?,
-            );
-            if requests.iter().any(|(id, _)| *id == view.id) {
-                return Err("Drawing sheet contains duplicate view identities".into());
-            }
-            requests.push((view.id, request));
-        }
-        let live_identities = inner
-            .kernel
-            .body_geometry_identities()
-            .map_err(|e| e.to_string())?;
-        let identities = bodies
-            .iter()
-            .map(|id| {
-                live_identities
-                    .get(id)
-                    .copied()
-                    .map(|identity| (*id, identity))
-                    .ok_or_else(|| "Drawing body geometry identity is unavailable".to_string())
-            })
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
-        let reused = previous
-            .filter(|previous| {
-                previous.owner == owner
-                    && previous
-                        .scene
-                        .upgrade()
-                        .is_some_and(|old| Arc::ptr_eq(&old, &scene))
-                    && previous.identities == identities
-                    && previous.requests == requests
-                    && previous.projections.len() == requests.len()
-            })
-            .cloned();
-        let kernel = if reused.is_none() {
-            Some(
-                inner
-                    .kernel
-                    .detached_drawing_snapshot(&bodies.into_iter().collect::<Vec<_>>())
-                    .map_err(|e| e.to_string())?,
+        capture_snapshot(
+            workspace.active(),
+            workspace.verification_owner_key(),
+            (expected, geometry_revision),
+            sheet,
+            intent,
+            previous,
+        )
+    }
+}
+
+fn capture_snapshot(
+    inner: &NativeEngine,
+    owner: String,
+    expected: (&Arc<DrawingDocumentDto>, u64),
+    sheet: &DrawingSheetDto,
+    intent: (&[DrawingViewDto], bool),
+    previous: Option<&Arc<FinishedDrawingProjections>>,
+) -> Result<DetachedDrawingSnapshot, String> {
+    let (expected, geometry_revision) = expected;
+    let (original_views, repairing) = intent;
+    if inner.geometry_revision != geometry_revision
+        || !Arc::ptr_eq(expected, &inner.manager.drawing_document_snapshot())
+    {
+        return Err("The drawing changed before projection capture".into());
+    }
+    let scene = inner.manager.solid_scene_snapshot();
+    if !scene.errors.is_empty() {
+        return Err("Resolve timeline errors before generating a drawing view.".into());
+    }
+    let assembly = inner.manager.assembly_document_ref().clone();
+
+    let mut bodies = BTreeSet::new();
+    let mut requests = Vec::new();
+    // Derived planes resolve against full saved intent, but only projected
+    // views' selected definitions need an independent native shape.
+    for view in &sheet.views {
+        let (views, view) = if repairing {
+            (
+                original_views,
+                original_views
+                    .iter()
+                    .find(|saved| saved.id == view.id)
+                    .ok_or("Repair view was removed")?,
             )
         } else {
-            None
+            (sheet.views.as_slice(), view)
         };
-        Ok(DetachedDrawingSnapshot {
-            kernel,
-            scene,
-            assembly,
-            identities,
-            requests,
-            projections: Mutex::new(BTreeMap::new()),
-            reused,
-            owner,
-        })
+        let request =
+            limo_cad_occt::drawing_export::projection_request(view, views, &scene, &assembly)?;
+        let request = limo_cad_occt::resolve_drawing_request(&scene, &assembly, &request)
+            .map_err(|e| e.to_string())?;
+        bodies.extend(
+            limo_cad_occt::drawing_required_body_ids(&scene, &assembly, &request)
+                .map_err(|e| e.to_string())?,
+        );
+        if requests.iter().any(|(id, _)| *id == view.id) {
+            return Err("Drawing sheet contains duplicate view identities".into());
+        }
+        requests.push((view.id, request));
     }
+    let live_identities = inner
+        .kernel
+        .body_geometry_identities()
+        .map_err(|e| e.to_string())?;
+    let identities = bodies
+        .iter()
+        .map(|id| {
+            live_identities
+                .get(id)
+                .copied()
+                .map(|identity| (*id, identity))
+                .ok_or_else(|| "Drawing body geometry identity is unavailable".to_string())
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    let reused = previous
+        .filter(|previous| {
+            previous.owner == owner
+                && previous
+                    .scene
+                    .upgrade()
+                    .is_some_and(|old| Arc::ptr_eq(&old, &scene))
+                && previous.identities == identities
+                && previous.requests == requests
+                && previous.projections.len() == requests.len()
+        })
+        .cloned();
+    let kernel = if reused.is_none() {
+        Some(
+            inner
+                .kernel
+                .detached_drawing_snapshot(&bodies.into_iter().collect::<Vec<_>>())
+                .map_err(|e| e.to_string())?,
+        )
+    } else {
+        None
+    };
+    Ok(DetachedDrawingSnapshot {
+        kernel,
+        scene,
+        assembly,
+        identities,
+        requests,
+        projections: Mutex::new(BTreeMap::new()),
+        reused,
+        owner,
+    })
 }
 
 impl DetachedDrawingSnapshot {
@@ -276,10 +370,18 @@ impl DetachedDrawingSnapshot {
         {
             return Err("Drawing projection differs from its captured intent".into());
         }
+        self.project_captured(view.id, &request)
+    }
+
+    fn project_captured(
+        &self,
+        id: u64,
+        request: &DrawingProjectionRequest,
+    ) -> Result<SharedDrawingProjection, String> {
         if let Some(reused) = &self.reused {
             return reused
                 .projections
-                .get(&view.id)
+                .get(&id)
                 .cloned()
                 .ok_or_else(|| "Drawing projection bundle is incomplete".into());
         }
@@ -287,7 +389,7 @@ impl DetachedDrawingSnapshot {
             .projections
             .lock()
             .map_err(|_| "Drawing projection cache poisoned")?
-            .get(&view.id)
+            .get(&id)
         {
             return Ok(projected.clone());
         }
@@ -297,7 +399,7 @@ impl DetachedDrawingSnapshot {
             .kernel
             .as_ref()
             .ok_or("Drawing projection kernel is unavailable")?
-            .project(&self.scene, &self.assembly, &request)
+            .project(&self.scene, &self.assembly, request)
             .map_err(|e| e.to_string())?;
         let resolved = SharedDrawingProjection {
             projection: Arc::new(projection),
@@ -306,7 +408,7 @@ impl DetachedDrawingSnapshot {
         self.projections
             .lock()
             .map_err(|_| "Drawing projection cache poisoned")?
-            .insert(view.id, resolved.clone());
+            .insert(id, resolved.clone());
         Ok(resolved)
     }
 

@@ -63,6 +63,19 @@ fn native_detached_paper_job_preserves_selected_geometry_and_rejects_retired_she
     let [min_x, min_y, max_x, max_y] = original.projection.bounds;
     assert!((max_x - min_x - 40.).abs() < 1e-7);
     assert!((max_y - min_y - 6.).abs() < 1e-7);
+    let export = fixture
+        .engine
+        .prepare_drawing_export(&limo_cad_occt::drawing_export::DrawingExportRequest {
+            sheet_id: 1,
+            format: limo_cad_occt::drawing_export::DrawingExportFormat::Svg,
+        })
+        .unwrap();
+    assert_eq!(export.sheet_id(), 1);
+    assert!(export.title().ends_with("Selected only"));
+    // Actual export/HLR can run while the live engine read is held. Its owned
+    // captured inputs must never try to reacquire that workspace mutex.
+    let exported = fixture.engine.with_drawing(|_| export.content().unwrap());
+    assert!(exported.contains("<svg"));
     let mut unselected = sheet.views[0].clone();
     unselected.body_ids = vec![limo_cad_core::BodyId(2)];
     assert!(
@@ -309,6 +322,11 @@ fn native_detached_paper_job_preserves_selected_geometry_and_rejects_retired_she
         serde_json::to_value(&retained.projection).unwrap(),
         serde_json::to_value(&original.projection).unwrap(),
         "Detached exact shapes survive live-kernel replacement without replay"
+    );
+    assert_eq!(
+        export.content().unwrap(),
+        exported,
+        "Prepared export keeps the original drawing/units/exact shapes after replacement"
     );
     assert!(fixture
         .engine
