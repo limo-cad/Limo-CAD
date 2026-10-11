@@ -1,6 +1,30 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: PR124 remains open, and main is unchanged
+Current checkpoint, **2026-10-11 12:04 UTC**: reviewed source `9e16fade` passes
+strict Windows desktop/native-engine/OCCT/export lint and its three necessary
+export checks. Bambu WRITE and portable STL/3MF prepare native geometry/output
+outside the live publisher and engine, then require the original source proof
+and current dialog/export-job lease before atomic publication. The Bambu panel
+borrows the saved model during repeated review checks. The authentic template's
+layout-warning refusal was correct: its new fixture now checks refusal without
+consent before deliberately consenting for the original write/cancellation cases.
+All original byte, ownership, cancellation and input-preservation assertions remain.
+
+The Print-to-File option check passed once at `9cdf863d` and is retained without
+repetition. CodeQL's prior aggregate failed at `9ae0090d` on two sensitive assertion
+report dumps; the new source keeps both assertions and uses fixed failure messages.
+All prior package jobs succeeded. New hosted CI remains pending. Exact receipts
+and limits are in `docs/qualification/detached-export-ownership-20261011.json`.
+The separate STEP and attached drawing-export repairs are not qualified by this
+checkpoint. Main is unchanged; Jack's PRs remain outside the current work.
+
+The installed payload remains clean `eb71c32d`; its canonical GUI is saved and
+closed. Final complete model/archive preservation passed. A fresh deployment and
+matched live pair are still required for direct PDF/cold-paper acceptance.
+Positive single-plate CAD-placement Bambu acceptance and physical printing remain
+unqualified. Broad UI and manual MCP mutation coverage remain paused.
+
+Historical checkpoint, **2026-10-11 UTC**: PR124 remains open, and main is unchanged
 at `54dcab7f`. Reviewed code `1c0dc76e` follows the published `32b11c53`
 checkpoint. Strict Windows desktop, native-engine/OCCT and MCP Clippy
 passed on that source. All six necessary drawing/Bambu/modal checks passed once;

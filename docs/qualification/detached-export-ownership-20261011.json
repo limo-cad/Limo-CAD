@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "source_revision": "9e16fade4a683c59c9c18e7cf4e4f8109ca50128",
+  "recorded_utc": "2026-10-11T12:04:36.0501777Z",
+  "qualification": "focused_source_checks_passed_live_acceptance_pending",
+  "integration": "PR124; both Bevy aliases; main unchanged",
+  "results_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/export-ownership-9e16fade-results.json",
+  "strict_windows_packages": ["desktop", "native-engine", "OCCT", "export"],
+  "desktop_artifact_sha256": "7a4f6789ff0597d48668246cebc932fab8705678182cc255bdd101b740289d4a",
+  "exact_checks_passed_once": [
+    "session_bridge::native_interface::controller::files::bambu::tests::native_bambu_write_detaches_build_and_requires_current_dialog_operation",
+    "session_bridge::native_interface::controller::files::io::tests::portable_mesh_write_detaches_build_and_requires_current_export_job",
+    "session_bridge::native_interface::controller::files::bambu::tests::read_only_review_preserves_exact_model_and_key_shape_without_owned_model_input"
+  ],
+  "source_scope": {
+    "bambu_write": "Real native build while both original live locks are held; current dialog-operation lease, owner/model/geometry proof and atomic new/overwrite; actual template warnings refuse without separate layout consent; Cancel/choice/dialog/owner/model replacement produce no output",
+    "portable_mesh": "Real STL/3MF and solved repeated occurrence geometry; independent existing-writer byte oracle; source layout refusal/consent; picker/dialog/owner/model/Cancel guards and single-use Files export-job lease",
+    "borrowed_review": "Synthetic typed review-contract fixture only; repeated production review gate borrows exact saved-model content and rejects changed/malformed/unknown/missing key fields without weakening worker payload ownership",
+    "cad_layout": "Reviewed source analyzes captured bed and the same detached meshes; authentic four-plate Template fixture is not positive single-plate ResolvedScene qualification",
+    "codeql": "Both native readback assertion predicates preserved; fixed failure messages replace sensitive report dumps. New hosted CodeQL result remains pending"
+  },
+  "retained_without_repetition": [
+    {
+      "revision": "9cdf863daec924c67e90bd28d4bd7fc4a863eb98",
+      "filter": "native_print::windows::tests::returned_print_to_file_option_sets_spooler_output_without_changing_title",
+      "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/bambu-write-print-9cdf863d-unrun-print-results.json",
+      "scope": "Actual returned Print-to-File flag sets DOCINFOW output FILE: while preserving title; no OS dialog/spooler/physical print qualification"
+    },
+    {"receipt":"docs/qualification/detached-drawing-output-20261011.json","new_exact_passes":6,"earlier_exact_passes":3,"scope":"Retain original revisions and scopes; no passing filter repeated"}
+  ],
+  "preserved_failure": {
+    "revision": "9cdf863daec924c67e90bd28d4bd7fc4a863eb98",
+    "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/bambu-write-print-9cdf863d-results.json",
+    "cause": "New authentic-template write fixture omitted explicit consent for its actual reported layout warnings; production correctly refused before native build",
+    "correction": "2e237dce retains all original assertions and adds explicit no-consent refusal/build-zero/no-output coverage before deliberately consenting for the existing write/cancellation cases",
+    "production_guards_weakened": false
+  },
+  "prior_hosted_ci": {
+    "revision": "9ae0090dd73aa5332d8026aa502f5680408b9b80",
+    "success": 34,
+    "skipped": 8,
+    "failure": 1,
+    "failure_scope": "CodeQL aggregate alerts 190/191 from assertion report dumps; all analyzers and package jobs succeeded",
+    "new_source_ci_claimed": false
+  },
+  "limits": {
+    "installed_revision": "eb71c32dba4b15aea7973d2511466d3325dc0ff2",
+    "canonical_gui": "Saved and closed; full final model and archive preservation verified",
+    "new_live_pair_claimed": false,
+    "human_direct_pdf_and_cold_paper_acceptance": "Pending fresh deployment and matched GUI/MCP pair",
+    "single_plate_resolved_scene": "Pending authentic positive qualification",
+    "native_slicer_toolpaths_physical_print_gpu_latency": "Unqualified by these source checks",
+    "step_and_attached_drawing_export": "Separate reviewed source batch; new checks not included here",
+    "suites_recipe_replay_live_model_mutations": false,
+    "broad_ui_and_manual_mcp_mutation": "Paused; all prior statuses and counts preserved"
+  }
+}
