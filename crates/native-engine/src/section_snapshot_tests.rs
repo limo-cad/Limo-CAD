@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 
 fn value(reply: String) -> Value {
     let reply: Value = serde_json::from_str(&reply).unwrap();
-    assert_eq!(reply["ok"], true, "{reply}");
+    assert_eq!(reply["ok"], true, "Native fixture operation must succeed");
     reply["value"].clone()
 }
 fn stock() -> NativeEngineHost {
@@ -91,7 +91,10 @@ fn detached_section_preserves_real_geometry_and_rejects_uncommitted_native_sourc
             assert!(report.cutaway.is_none());
         }
     }
-    assert_eq!(value(state.engine_call("project_export_model", "")), before);
+    assert!(
+        value(state.engine_call("project_export_model", "")) == before,
+        "Section fixture must preserve the complete authored model"
+    );
     assert!(Arc::ptr_eq(&scene, &state.solid_scene_snapshot()));
     assert_eq!(state.geometry_revision(), geometry_revision);
 
@@ -125,7 +128,10 @@ fn detached_section_preserves_real_geometry_and_rejects_uncommitted_native_sourc
             .unwrap();
         assert!(inner.kernel.recompute(&plan).unwrap().errors.is_empty());
     }
-    assert_eq!(value(state.engine_call("project_export_model", "")), before);
+    assert!(
+        value(state.engine_call("project_export_model", "")) == before,
+        "Section fixture must preserve the complete authored model"
+    );
     assert!(Arc::ptr_eq(&scene, &state.solid_scene_snapshot()));
     assert!(state
         .validate_section_review(&finished)
@@ -172,7 +178,10 @@ fn detached_section_preserves_real_geometry_and_rejects_uncommitted_native_sourc
             "first target must actually change before missing second target fails"
         );
     }
-    assert_eq!(value(state.engine_call("project_export_model", "")), before);
+    assert!(
+        value(state.engine_call("project_export_model", "")) == before,
+        "Section fixture must preserve the complete authored model"
+    );
     assert!(state
         .validate_section_review(&partial)
         .unwrap_err()
@@ -184,6 +193,9 @@ fn detached_section_preserves_real_geometry_and_rejects_uncommitted_native_sourc
         .inspect()
         .unwrap();
     value(state.project_load(&serde_json::to_string(before.as_str().unwrap()).unwrap()));
-    assert_eq!(value(state.engine_call("project_export_model", "")), before);
+    assert!(
+        value(state.engine_call("project_export_model", "")) == before,
+        "Section fixture must preserve the complete authored model"
+    );
     assert!(state.validate_section_review(&replacement).is_err());
 }
