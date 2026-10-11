@@ -2,6 +2,94 @@ use super::*;
 use crate::native_viewport::interface_shell::{PointerButton, PointerPhase};
 use limo_cad_interface::ControlKey;
 
+fn paint_order(world: &mut World) -> Vec<Entity> {
+    use bevy::ui::experimental::{UiChildren, UiRootNodes};
+
+    fn visit(entity: Entity, children: &HashMap<Entity, Vec<Entity>>, order: &mut Vec<Entity>) {
+        order.push(entity);
+        if let Some(children) = children.get(&entity) {
+            for child in children {
+                visit(*child, children, order);
+            }
+        }
+    }
+
+    // The pinned stack system assigns a unique rank to each UI node, traverses
+    // local-Z siblings, and treats GlobalZ nodes as separate stack roots.
+    // It does not promise a fixed order for newly created equal-Z roots.
+    let nodes: Vec<_> = world
+        .query_filtered::<Entity, With<Node>>()
+        .iter(world)
+        .collect();
+    let mut params = SystemState::<(UiRootNodes, UiChildren)>::new(world);
+    let (ui_roots, ui_children) = params.get(world).unwrap();
+    let mut roots: Vec<_> = ui_roots.iter().collect();
+    let mut children = HashMap::new();
+    for entity in &nodes {
+        if world.get::<bevy::ui::GlobalZIndex>(*entity).is_some() && !roots.contains(entity) {
+            roots.push(*entity);
+        }
+        let mut entries: Vec<_> = ui_children
+            .iter_ui_children(*entity)
+            .filter(|child| {
+                world.get::<bevy::ui::ComputedStackIndex>(*child).is_some()
+                    && world.get::<bevy::ui::GlobalZIndex>(*child).is_none()
+            })
+            .collect();
+        entries.sort_by_key(|child| world.get::<ZIndex>(*child).map_or(0, |z| z.0));
+        children.insert(*entity, entries);
+    }
+    roots.sort_by_key(|entity| {
+        (
+            world
+                .get::<bevy::ui::GlobalZIndex>(*entity)
+                .map_or(0, |z| z.0),
+            world.get::<ZIndex>(*entity).map_or(0, |z| z.0),
+        )
+    });
+    let mut order = Vec::new();
+    for root in roots {
+        visit(root, &children, &mut order);
+    }
+    order
+}
+
+fn absolute_layout(world: &World, entity: Entity) -> (Vec2, Vec2, bool) {
+    let mut current = Some(entity);
+    let mut origin = Vec2::ZERO;
+    let mut displayed = true;
+    let mut visible = None;
+    let mut size = Vec2::ZERO;
+    while let Some(parent) = current {
+        if let Some(node) = world.get::<Node>(parent) {
+            displayed &=
+                node.display != Display::None && node.position_type == PositionType::Absolute;
+            match (node.left, node.top) {
+                (Val::Px(x), Val::Px(y)) => origin += Vec2::new(x, y),
+                _ => displayed = false, // Flow/right-anchored layout is not supplied by this adapter.
+            }
+            if parent == entity {
+                if let (Val::Px(width), Val::Px(height)) = (node.width, node.height) {
+                    size = Vec2::new(width.max(0.), height.max(0.));
+                }
+            }
+        }
+        if visible.is_none() {
+            visible = match world.get::<Visibility>(parent) {
+                Some(Visibility::Visible) => Some(true),
+                Some(Visibility::Hidden) => Some(false),
+                _ => None,
+            };
+        }
+        current = world.get::<ChildOf>(parent).map(ChildOf::parent);
+    }
+    let visible = displayed && visible.unwrap_or(true);
+    if !visible {
+        size = Vec2::ZERO;
+    }
+    (size, origin + size / 2., visible)
+}
+
 fn publish(
     world: &mut World,
     handle: &NativeInterfaceHandle,
@@ -9,28 +97,12 @@ fn publish(
     state: &mut Controller,
 ) {
     synchronize(world, handle, services, state).unwrap();
-    // Use the production-generated absolute UI bounds with the established
-    // headless layout adapter. This exercises hit/occlusion and authorization,
-    // without qualifying native GPU rendering or platform pointer behavior.
-    let nodes: Vec<_> = world
-        .query::<(Entity, &Node, Option<&ZIndex>)>()
-        .iter(world)
-        .filter_map(|(entity, node, z)| {
-            let (Val::Px(x), Val::Px(y), Val::Px(width), Val::Px(height)) =
-                (node.left, node.top, node.width, node.height)
-            else {
-                return None;
-            };
-            (width > 0. && height > 0.).then_some((
-                entity,
-                Vec2::new(width, height),
-                Vec2::new(x + width / 2., y + height / 2.),
-                z.map_or(0, |z| z.0),
-            ))
-        })
-        .collect();
-    let minimum_z = nodes.iter().map(|(_, _, _, z)| *z).min().unwrap_or(0);
-    for (entity, size, center, z) in nodes {
+    // Supply a bounded headless absolute-layout/paint-order adapter for the
+    // production-generated UI. The established publication hook exercises
+    // hit/occlusion and authorization; this does not qualify native GPU layout
+    // or platform pointer behavior.
+    for (index, entity) in paint_order(world).into_iter().enumerate() {
+        let (size, center, visible) = absolute_layout(world, entity);
         world.entity_mut(entity).insert((
             ComputedNode {
                 size,
@@ -38,8 +110,12 @@ fn publish(
                 ..default()
             },
             bevy::ui::UiGlobalTransform::from_translation(center),
-            bevy::ui::ComputedStackIndex((i64::from(z) - i64::from(minimum_z)).try_into().unwrap()),
-            InheritedVisibility::VISIBLE,
+            bevy::ui::ComputedStackIndex(index.try_into().unwrap()),
+            if visible {
+                InheritedVisibility::VISIBLE
+            } else {
+                InheritedVisibility::HIDDEN
+            },
         ));
     }
     interface_shell::tests::publish_layout_once(world, handle.clone());
@@ -70,7 +146,24 @@ fn pointer_action_at(
     key: ControlKey,
     point: [f64; 2],
 ) -> NativeInterfaceAction {
-    assert_eq!(handle.hit_key(point), Some(key));
+    let (target, modal) = handle
+        .read_surface(|_, frame| {
+            (
+                frame
+                    .controls
+                    .iter()
+                    .find(|c| c.key == key)
+                    .unwrap()
+                    .clone(),
+                frame.modal_stack.clone(),
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        handle.hit_key(point),
+        Some(key),
+        "target {target:?}, point {point:?}, modal {modal:?}"
+    );
     assert!(handle
         .pointer(PointerPhase::Down, point, PointerButton::Primary)
         .unwrap());
@@ -111,6 +204,18 @@ fn sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action
     let build = control(world, &build_command);
     let refine = control(world, &refine_command);
     let file = control(world, &file_command);
+    let file_expanded = || {
+        handle
+            .read_surface(|_, frame| {
+                frame
+                    .controls
+                    .iter()
+                    .find(|c| c.key == file)
+                    .unwrap()
+                    .expanded
+            })
+            .unwrap()
+    };
     let click = |world: &mut World, key| {
         let action = pointer_action(&handle, key);
         reduce_control_input(&services.engine, &services.bridge, world, &handle, &action).unwrap()
@@ -119,6 +224,7 @@ fn sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action
     click(world, build);
     publish(world, &handle, &services, &mut state);
     assert_eq!(handle.frame().unwrap().modal_stack, vec!["workbench-menu"]);
+    assert_eq!(file_expanded(), Some(false));
     let old_build_row = handle
         .read_surface(|_, frame| {
             frame
@@ -133,6 +239,7 @@ fn sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action
     click(world, file);
     publish(world, &handle, &services, &mut state);
     assert_eq!(handle.frame().unwrap().modal_stack, vec!["file-menu"]);
+    assert_eq!(file_expanded(), Some(true));
     assert_eq!(workbench::modal(world), None);
     let workspace = control(
         world,
@@ -145,13 +252,16 @@ fn sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action
                 .iter()
                 .find(|c| c.key == workspace)
                 .unwrap()
-                .bounds
+                .clone()
         })
         .unwrap();
+    assert!(covered.visible && !covered.disabled);
+    assert!(covered.bounds.width > 0. && covered.bounds.height > 0.);
+    assert!(handle.resolve_retained(workspace).is_ok());
     assert_ne!(
         handle.hit_key([
-            covered.x + covered.width / 2.,
-            covered.y + covered.height / 2.
+            covered.bounds.x + covered.bounds.width / 2.,
+            covered.bounds.y + covered.bounds.height / 2.
         ]),
         Some(workspace),
         "File's card/entries must still cover the workspace anchor"
@@ -198,6 +308,7 @@ fn sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action
     click(world, file);
     publish(world, &handle, &services, &mut state);
     assert!(handle.frame().unwrap().modal_stack.is_empty());
+    assert_eq!(file_expanded(), Some(false));
     assert_eq!(workbench::modal(world), None);
 
     click(world, build);

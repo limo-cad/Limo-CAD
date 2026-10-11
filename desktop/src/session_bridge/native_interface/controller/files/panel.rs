@@ -169,7 +169,7 @@ fn button(
     control.modal_scope = scope.map(str::to_owned);
     control.selected = selected;
     control.disabled = disabled;
-    control.expanded = (key == "file").then_some(scope.is_some());
+    control.expanded = (key == "file").then(|| world.resource::<Files>().menu);
     control.role = if key.starts_with("tab-") {
         "tab"
     } else if key.starts_with("file-item-") {
