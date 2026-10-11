@@ -15,10 +15,12 @@ pub struct PreparedBambuPreview {
     solution: limo_cad_sketch::AssemblySolutionDto,
     session_id: String,
     geometry_revision: u64,
+    // Export-only CAD placement check; preview retains its existing contract.
+    source_layout_bed: Option<limo_cad_core::PrintBedDto>,
 }
 
 impl PreparedBambuPreview {
-    fn build_export(&self) -> Result<bambu_project::BambuProjectExport, String> {
+    fn build_export(&self) -> Result<(bambu_project::BambuProjectExport, bool), String> {
         let template = BASE64
             .decode(&self.request.template_base64)
             .map_err(|e| format!("Invalid template base64: {e}"))?;
@@ -31,6 +33,16 @@ impl PreparedBambuPreview {
                 mesh.name.clone_from(name);
             }
         }
+        let source_layout_has_issues = self
+            .source_layout_bed
+            .as_ref()
+            .map(|bed| {
+                limo_cad_export::analyze_print_layout(&meshes, &self.structure, &self.solution, bed)
+                    .map(|report| !report.issues.is_empty())
+                    .map_err(|e| e.to_string())
+            })
+            .transpose()?
+            .unwrap_or(false);
         let instances: Vec<_> = self
             .solution
             .instance_body_poses
@@ -43,7 +55,7 @@ impl PreparedBambuPreview {
                 visible: pose.visible,
             })
             .collect();
-        bambu_project::write_bambu_project(
+        let export = bambu_project::write_bambu_project(
             &template,
             &meshes,
             &self.appearances,
@@ -52,11 +64,12 @@ impl PreparedBambuPreview {
             &self.intent,
             &self.request.project,
         )
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+        Ok((export, source_layout_has_issues))
     }
 
     pub fn preview(self) -> Result<serde_json::Value, String> {
-        let exported = self.build_export()?;
+        let (exported, _) = self.build_export()?;
         Ok(
             json!({"format":"3mf","export_mode":"bambu_project","byte_length":exported.bytes.len(),"report":exported.report,"preview":true,"requires_reslicing":true,"source_layout":self.solution,"source_session_id":self.session_id,"source_geometry_revision":self.geometry_revision}),
         )
@@ -76,6 +89,7 @@ pub struct PreparedBambuExport {
 
 pub struct FinishedBambuExport {
     export: bambu_project::BambuProjectExport,
+    source_layout_has_issues: bool,
     owner_key: String,
     model: String,
     identities: std::collections::BTreeMap<
@@ -85,7 +99,7 @@ pub struct FinishedBambuExport {
 }
 impl PreparedBambuExport {
     pub fn build(mut self) -> Result<FinishedBambuExport, String> {
-        let export = self.prepared.build_export()?;
+        let (export, source_layout_has_issues) = self.prepared.build_export()?;
         let model = self
             .prepared
             .request
@@ -95,6 +109,7 @@ impl PreparedBambuExport {
             .ok_or("Bambu export omitted its validated model")?;
         Ok(FinishedBambuExport {
             export,
+            source_layout_has_issues,
             owner_key: self.owner_key,
             model,
             identities: self.identities,
@@ -102,6 +117,9 @@ impl PreparedBambuExport {
     }
 }
 impl FinishedBambuExport {
+    pub fn source_layout_has_issues(&self) -> bool {
+        self.source_layout_has_issues
+    }
     pub fn bytes(&self) -> &[u8] {
         &self.export.bytes
     }
@@ -191,6 +209,7 @@ fn capture_bambu_preview(
         solution,
         session_id: session_id.into(),
         geometry_revision: inner.geometry_revision,
+        source_layout_bed: None,
     })
 }
 
@@ -237,7 +256,16 @@ impl NativeEngineHost {
         validate_payload_size(&request)?;
         let workspace = self.inner.lock().map_err(|_| "Engine lock poisoned")?;
         let inner = workspace.active();
-        let prepared = capture_bambu_preview(inner, &workspace.active_session_id, request)?;
+        let mut prepared = capture_bambu_preview(inner, &workspace.active_session_id, request)?;
+        if prepared.request.project.placement == bambu_project::BambuPlacementMode::ResolvedScene {
+            prepared.source_layout_bed = Some(match &prepared.request.export.print_bed {
+                Some(bed) => bed.clone(),
+                None => inner
+                    .manager
+                    .export_print_bed(prepared.request.export.named_view.as_deref())
+                    .map_err(|e| e.to_string())?,
+            });
+        }
         let current = inner
             .kernel
             .body_geometry_identities()
