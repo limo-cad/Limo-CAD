@@ -106,11 +106,11 @@ pub(super) fn choose(
             wake.request_redraw();
         })
         .map_err(|error| format!("Cannot open file chooser: {error}"))?;
-    world.resource_mut::<Files>().picker = Some(Picker {
+    world.resource_mut::<Files>().replace_picker(Some(Picker {
         receipt,
         kind: PickerKind::Drawing(intent),
         result: Mutex::new(receive),
-    });
+    }));
     Ok(json!({"awaiting_input":true}))
 }
 

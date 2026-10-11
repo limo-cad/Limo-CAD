@@ -244,11 +244,11 @@ pub(crate) fn save_as(
             wake.request_redraw();
         })
         .map_err(|error| format!("Cannot open script save chooser: {error}"))?;
-    world.resource_mut::<Files>().picker = Some(Picker {
+    world.resource_mut::<Files>().replace_picker(Some(Picker {
         receipt,
         kind: PickerKind::ScriptSave(generation),
         result: Mutex::new(receive),
-    });
+    }));
     Ok(json!({"awaiting_input":true}))
 }
 
