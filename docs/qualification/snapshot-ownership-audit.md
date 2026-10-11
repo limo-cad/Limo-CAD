@@ -441,7 +441,7 @@ checked kernel owner/body generations and exact committed scene proof; body
 IDs/topology/pointers still cannot authorize it. Broader deployed behavior and
 unrelated service observations remain limits/future work. The issue's original
 source acceptance requires concrete ownership and focused retirement/fence
-checks; the remaining identified CSV gate is recorded below.
+checks; the final identified CSV gate is qualified below.
 
 Browser/history/CAM, native identities/body Assets and earlier transport/input
 passes are retained in [the Bevy ownership audit](bevy-ownership-audit.md).
@@ -518,8 +518,37 @@ All existing UI/MCP leaves and original receipts, including incoming renderer
 rechecks and prior section needs_recheck, remain unchanged by this follow-up.
 No additional human pass, deployed pair, runtime restart, installed operator
 replacement, latency/FPS or memory-pressure result is claimed. Motion CSV export
-is a separate concrete read-hold repair in progress; it is not qualified here.
-The remaining identified source gate for #333 is the reviewed CSV qualification.
+was the separate concrete read-hold gate at that checkpoint; its qualified
+follow-up below completes that source repair.
 Universal deployed timing/GPU/process-memory measurements and a complete
 unrelated service graph are not added acceptance requirements. Fresh human
 cutover/display/drawing/slicer acceptance remains tracked separately.
+
+### Motion CSV: source qualification completes the identified ownership gate
+
+At `e224021b`, the existing sampler owns only required authored Assembly and
+shares its coherent Scene input. It runs outside the original live guard and
+does not need native B-reps. Completed proof releases the strong Scene input,
+retaining Weak Scene identity, private host/session, independent revisions and
+exact authored intent. Same-model Scene/native recompute, raw study changes,
+document replacement and foreign owner reject stale CSV. Output ownership
+transfers once through the admitted MCP response, preserving its original
+completion and delivery-only retry.
+
+The UI picker owns a real private revocable authority. Actual draft/cancel/hide/
+tab/drop/retired-picker transitions invalidate it. Computation runs without that
+lease; final publisher -> lease -> source proof -> atomic publication does not
+reverse the lock order or grant new admission. Strict Windows package checks
+and three NEW native/UI-worker/admitted-MCP regressions passed once with genuine
+physical CSV rows, atomic new/overwrite, unchanged models and liveness retry.
+[Exact qualification and seven-criterion disposition](detached-motion-csv-20261011.json)
+retain all older evidence without reruns and distinguish historical foundation
+passes from this new work. The original #333 source criteria are complete;
+closing it after push does not certify every application surface or deploy.
+
+Owned editable/cancel/recovery inputs, required sampler/solver snapshots,
+in-flight readers, output bytes and final source equality/write remain real
+scaling boundaries. Whole-kernel tessellation remains unchanged. No universal
+FPS, latency, total memory, GPU release or human interaction claim is made.
+All UI/MCP leaves, prior receipts, incoming renderer rechecks, section recheck,
+paused phase, saved documents and recovery data remain unchanged.

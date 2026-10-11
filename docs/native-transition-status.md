@@ -1,6 +1,39 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: swept source `f2c47dd9` and
+Current checkpoint, **2026-10-11 UTC**: motion CSV source `e224021b`
+passes strict Windows desktop/native-engine/OCCT compilation and its three new
+native, ordered-UI worker and admitted-MCP regressions once. The preceding six
+swept/contact passes remain at their original revisions and are not repeated.
+Exact source, artifacts, independent physical CSV oracles and scope limits are
+recorded in `docs/qualification/detached-motion-csv-20261011.json`.
+
+CSV sampling and formatting now run outside live publisher/engine/process-lease
+guards using required owned authored Assembly and immutable Scene inputs. Its
+private owner/session/revision/Weak Scene/authored proof rejects stale results;
+pure CSV does not require a native B-rep. The Motion file picker owns a revocable
+operation lease: Cancel, draft changes, hide/tab changes, replacement and State
+drop revoke publication. Final publisher -> file lease -> native source proof ->
+atomic write preserves admission and cancellation authority. MCP transfers the
+owned CSV once and retains the original outcome for delivery-only retry.
+
+The original #333 criteria now have an explicit seven-item evidence disposition
+in that receipt. Concrete copy boundaries, independent invalidation, exact asset
+reuse, retirement/history and stale UI/MCP fences are qualified within their
+recorded scope. Issue closure follows publication of this checkpoint; unrelated
+universal FPS/GPU/process-memory benchmarks are not added acceptance gates.
+Required authored capture, solver input clones, source comparison, output and
+final atomic write still scale. Whole-kernel tessellation remains unchanged.
+
+Every existing UI/MCP leaf, receipt, incoming renderer recheck and prior section
+needs_recheck remains intact. Broad qualification stays paused. No new human
+pass, fresh live pair, deployment, restart or physical GPU/printing qualification
+is claimed. Saved GUI/recovery data and independent headless documents remain
+preserved. Finite digital bench-sheet review (#93), genuine Bambu external
+qualification (#316), display/cutover work and the genuine #369 witness remain
+separate open work. Main and Jack's PRs are untouched; changes stay in PR124 and
+both Bevy aliases. Hosted CI for this checkpoint is not yet claimed green.
+
+Historical checkpoint, **2026-10-11 UTC**: swept source `f2c47dd9` and
 contact-aware motion source `1472b342` each pass strict Windows desktop/native-
 engine/OCCT checks and three new native/UI-worker/admitted-MCP regressions once.
 The combined normal merge `39ca1a1e` passes two fresh strict compilation checks

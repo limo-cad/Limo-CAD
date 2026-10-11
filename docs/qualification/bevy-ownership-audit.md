@@ -297,7 +297,7 @@ or deployed performance.
 
 The source gate for #333 now rests on its explicit ownership, independent
 invalidation, asset/history retirement and stale human/agent fence criteria.
-The remaining concrete CSV repair is recorded below. Knowledge resources are
+The final concrete CSV repair is qualified below. Knowledge resources are
 static bundled data. Shared Arcs and source tests do not establish universal
 process memory containment, physical GPU release or FPS/stutter results; those
 are limits rather than additional closure gates. Broad UI and manual MCP
@@ -341,9 +341,48 @@ projection/graph inputs; this is not a no-copy or constant-time claim.
 These are isolated production worker/native/ticket checks, not visible human
 input, physical GPU, deployed responsiveness or memory containment. Every
 existing UI/MCP leaf and receipt remains intact, broad coverage stays paused,
-and the incoming renderer/section rechecks remain visible. The separate motion
-CSV source repair is the remaining identified qualification gate for #333.
+and the incoming renderer/section rechecks remain visible. At that checkpoint
+motion CSV remained the identified source gate; the qualification below completes
+that concrete repair.
 Broader human cutover/display/drawing/slicer acceptance remains separate; a
 universal benchmark or exhaustive unrelated service graph is not added to the
 original issue criteria. Main and Jack's PRs remain untouched; all work is
 retained in PR124/both Bevy aliases.
+
+### Motion CSV and original #333 acceptance disposition
+
+Native `37a76655` and desktop `e224021b` capture the required authored Assembly
+and immutable Scene under the original admission. The existing pure sampler
+and 14-column CSV formatter run outside engine/publisher/process-lease guards;
+there is no native geometry dependency or added B-rep copy. Finished private
+proof drops the strong Scene input and retains Weak Scene identity, original
+host/session, independent revisions and exact authored intent. Required owned
+assembly/solver inputs and output bytes remain scaling-dependent boundaries.
+
+The actual Motion state owns a private revocable file-operation authority from
+picker creation through atomic publication. Cancel, changed draft, hide/tab,
+replacement, retired picker and State drop revoke it. Final lock order is
+publisher -> operation lease -> engine source proof -> atomic write. Detached
+computation holds no file lease. Admitted MCP transfers CSV ownership rather
+than cloning the wire output; private source validation and original ticket
+completion/liveness rules still retain the result for delivery-only retry.
+
+Strict changed-package Windows compilation and exactly three new regressions
+passed once. A genuine repeated stock/slider has independent times
+0/0.25/0.5/0.75/1 and Z positions 5/3.75/2.5/1.25/0, speed 5 after its initial
+zero and the existing finite-difference acceleration 20 at the first step.
+Actual worker/MCP reentry, overwrite, cancellation/retirement, raw study,
+same-model Scene replacement, owner changes and unchanged model checks pass.
+[CSV receipt and original seven criteria](detached-motion-csv-20261011.json)
+map this evidence plus retained foundation/asset/history/input and detached
+drawing/export/section/static/swept/contact evidence. Historical passes are
+identified as retained, not fresh executions. No concrete listed source
+acceptance gap remains; closure is scoped to that original contract after push.
+
+The kernel still tessellates the whole live scene after solid recompute.
+Authoritative body generations allow checked reuse of unchanged renderer assets;
+body IDs, pointers and topology alone do not. Legitimate in-flight readers retain
+their owned input until completion. Source qualification is not a claim of
+universal memory containment, GPU release, timing, human routing or full-app
+completion. Existing deployment, affected renderer/section and other open-issue
+acceptance remains tracked without repeating passing cases or extending #333.
