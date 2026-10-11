@@ -70,6 +70,7 @@ mod showcase_media;
 mod switching_comparison;
 mod test_mcp;
 mod wasm_build;
+mod windows_runtime;
 #[cfg(test)]
 mod workflow_contracts;
 
