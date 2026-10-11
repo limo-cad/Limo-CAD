@@ -10,6 +10,9 @@ use std::{
     time::Duration,
 };
 #[cfg(any(windows, test))]
+#[path = "occt_includes.rs"]
+mod includes;
+#[cfg(any(windows, test))]
 #[path = "occt_runtime.rs"]
 mod runtime;
 
@@ -269,6 +272,11 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     #[cfg(windows)]
     let runtime_plan = runtime::Plan::from_compiler_identity(&compiler)?;
     run_command(&mut configure(&options, &source, &build))?;
+    #[cfg(windows)]
+    println!(
+        "Verified {} package-relative private-header fallbacks",
+        includes::prepare(&source, &build, &source_inventory)?
+    );
     run_command(
         Command::new("cmake")
             .arg("--build")
@@ -491,12 +499,8 @@ fn verify_windows_compiler_paths(
         }
         let relative = Path::new(relative);
         let extension = relative.extension().and_then(|value| value.to_str());
-        // OCCT's COLLECT_AND_INSTALL_OCCT_HEADER_FILES uses this extension set
-        // and places each selected header basename in build/inc.
-        let forwarding_header = matches!(
-            extension,
-            Some("h" | "g" | "p" | "hpp" | "hxx" | "lxx" | "gxx" | "pxx")
-        );
+        // OCCT's registered include directory is build/include/opencascade.
+        let forwarding_header = forwarding_header(relative);
         if !forwarding_header && !matches!(extension, Some("c" | "cpp" | "cxx" | "ixx")) {
             continue;
         }
@@ -504,10 +508,23 @@ fn verify_windows_compiler_paths(
             require_windows_compiler_path(&source.join(relative))?;
         }
         if let Some(build) = build.as_ref().filter(|_| forwarding_header) {
-            require_windows_compiler_path(&build.join("inc").join(relative.file_name().unwrap()))?;
+            require_windows_compiler_path(
+                &build
+                    .join("include/opencascade")
+                    .join(relative.file_name().unwrap()),
+            )?;
         }
     }
     Ok(())
+}
+
+#[cfg(any(windows, test))]
+fn forwarding_header(path: &Path) -> bool {
+    // Same extension set as COLLECT_AND_INSTALL_OCCT_HEADER_FILES.
+    matches!(
+        path.extension().and_then(|value| value.to_str()),
+        Some("h" | "g" | "p" | "hpp" | "hxx" | "lxx" | "gxx" | "pxx")
+    )
 }
 
 fn apply_overrides(source: &Path, overrides: &[SourceOverride<'_>]) -> Result<()> {
