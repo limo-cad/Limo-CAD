@@ -5,8 +5,7 @@ use crate::native_viewport::{NativePickPurpose, ViewportCamera, ViewportPresenta
 use crate::session_bridge::native_interface::controller::assembly::{motion, studies};
 use bevy::math::{DQuat, DVec3};
 use limo_cad_sketch::{
-    AssemblyDocumentDto, BodyPoseDto, JointMotionStateDto, MechanismDragRequestDto,
-    MechanismPreviewDto,
+    BodyPoseDto, JointMotionStateDto, MechanismDragRequestDto, MechanismPreviewDto,
 };
 
 #[derive(Resource, Default)]
@@ -234,16 +233,14 @@ pub(super) fn pointer(
                 let Some(occurrence) = hit.occurrence_id.map(limo_cad_sketch::OccurrenceId) else {
                     return Ok(false);
                 };
-                let a: AssemblyDocumentDto =
-                    serde_json::from_value(crate::session_bridge::parse_engine_envelope(
-                        services.engine.engine_call("assembly_document", ""),
-                    )?)
-                    .map_err(|e| e.to_string())?;
-                if !a.can_drag_occurrence(
-                    limo_cad_core::BodyId(hit.body_id),
-                    occurrence,
-                    native_viewport::interface_geometry(world).scene,
-                ) {
+                let can_drag = services.engine.with_assembly(|assembly| {
+                    assembly.can_drag_occurrence(
+                        limo_cad_core::BodyId(hit.body_id),
+                        occurrence,
+                        native_viewport::interface_geometry(world).scene,
+                    )
+                });
+                if !can_drag {
                     return Ok(false);
                 }
                 let (_, camera, view, _) = native_viewport::interface_view(world);
