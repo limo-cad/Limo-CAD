@@ -3,7 +3,8 @@
 This is a source inventory, not an FPS, latency, memory-pressure or deployed
 application qualification. It covers the native browser/history/CAM snapshots,
 presented input/window projections, MCP response/request ownership and committed
-body render consumers inspected on 2026-10-10. Other UI/MCP call sites still require audit.
+body render consumers inspected on 2026-10-10, with the bounded native/export
+follow-up below reviewed on 2026-10-11. This is not an exhaustive allocation graph.
 Previously integrated shared scene, pose, metadata and immutable drawing work is
 not reimplemented here.
 
@@ -68,6 +69,14 @@ not reimplemented here.
   presented frame before filtering keyboard events. The same presented frame,
   missing/poisoned-frame behavior, modal and awaiting guards and their ordering
   remain authoritative. Richer frame consumers are unchanged.
+- Field commit and requested-focus checks (`452ba807`, `0320098d`) borrow
+  the exact presented owner/top modal instead of copying full surface text.
+  Their missing/poisoned frame, pending presentation, queued/IME and owned text
+  behavior stays unchanged; the requested-focus regression passed at `115bc19a`
+  in `signed-zero-focus-115bc19a-results.json`. Bambu panel review's separate
+  `9e16fade` follow-up compares the retained full model by borrow while keeping
+  actual worker request payloads owned; its focused source check passed once
+  in the export receipt below.
 - Native body mutation identities (`1671a574`) provide conservative dependency
   invalidation and a checked kernel owner. Exact private commit proofs let the
   renderer reuse same-document mesh handles and edge metadata across unchanged
@@ -83,13 +92,16 @@ not reimplemented here.
   baseline. `Draft::apply` and record/duplicate/delete helpers produce a complete
   validated CAM replacement while preserving untouched setups, tools and
   operations. These mutable copy-on-apply values are not read-only waste. The
-  baseline scales with the complete CAM document; independent CAM revisions or
-  shared editor baselines remain potential future work, not completed here.
+  baseline scales with the complete CAM document; independent CAM revision
+  tracking is not claimed by the selection-only reuse change.
 - `workbench/cam/central.rs::reduce` captures a receipt-bound project baseline
   when opening the tool library. `central/model.rs::import` clones that baseline
   to replace/add one tool and preserve unrelated project records and identities.
   Publishing also needs the selected project tool. Narrowing the saved baseline
   to tools alone would change the existing whole-document import contract.
+  `0bd892bc` retires this project snapshot when the library becomes inactive or
+  its owner changes; active drafts and background readers keep their required
+  lifetime. Its focused source regression passed once (receipt below).
 - `cam_view.rs::State.document` is immutable owned input for background preview
   jobs and stock simulation, after the UI/engine read ends. New input costs scale
   with the full CAM document. Selection-only reuse avoids repeated allocation;
@@ -137,10 +149,79 @@ and exact scene proofs described above. Body IDs, pointers and topology
 signatures alone are not geometry revisions. Both new native/Assets checks
 passed; this does not qualify deployed rendering or physical GPU memory.
 
-This does not close #333. Remaining work includes broader menu/window/MCP and
-document-cache behavior under memory pressure and deployed render acceptance.
-The bounded drawing/mesh background-export inspection found an existing exact
-publisher-to-engine receipt fence, single pending job, final owner/revision check
-and atomic publication; no additional defect was established there. Knowledge
-resources are static bundled data. Other consumers remain unaudited. A shared
-Arc alone does not prove worker retirement or reduced stutter across the application.
+## Detached native work and final publication
+
+The later bounded investigation supersedes the earlier background-export
+no-defect finding: the existing receipt fences were correct, but expensive native
+projection, mesh/ZIP preparation and archive parsing still held live locks.
+The following changes preserve those fences while separating owned computation:
+
+- Cold paper preparation captures selected independent B-reps plus coherent
+  scene/assembly and resolved sheet intent. Native projection runs on the worker;
+  exact source keys reject retired results. Finished projection reuse is bounded
+  to matching selected geometry and intent, never body IDs alone. Pending/error
+  painting retains hidden paper/clip parents while retiring stale children.
+- `PreparedDrawingExport` captures selected native shapes and drawing intent
+  under a short engine read. File SVG/DXF/PDF and native Print release publisher
+  and engine locks before HLR, output encoding, font work and `Page::prepare`.
+  Files validate the original owner/revision and I/O guard immediately before
+  atomic publication. Print revalidates before its separate native dialog.
+  PDF page and content use the parser's 96 DPI; physical page size is covered by
+  the retained independent page oracle, not inferred from a filename.
+- Bambu template inspection captures exact source context before detached
+  parsing; post-write template inspection also runs after the actual atomic
+  write. The initiating busy control is admitted once. PREVIEW owns selected
+  native shapes, poses, appearances, component structure and validated intent;
+  computation grants no later adoption authority. The original receipt and
+  callback token/generation remain required.
+- Prepared Bambu WRITE (`2f31f813`, `5527b23b`) separates native mesh/ZIP build
+  from registration/publication. A real dialog-operation lease is revoked by
+  Cancel, replacement and relevant choices, including changes without a model
+  revision. Final publisher -> lease -> engine proof/registration -> atomic
+  write preserves private host/session, exact model and selected native geometry
+  identities. The subsequent detached CAD-layout source (`8c8c9ff0`) uses those
+  same captured meshes and bed; its new validation is still pending here.
+- Portable STL/3MF (`ecfe0aef`, integrated as `fd774bfe`) captures selected genuine
+  B-reps and coherent units, solved placements, names and required appearance,
+  component and bed intent. Existing writers and layout analysis run detached.
+  A distinct Files export-job lease covers actual picker/direct enqueue and
+  Cancel/replacement/transitions/drop. Final exact publisher -> job lease ->
+  native owner/model/geometry proof -> atomic write is required.
+- Exact STEP (`d493f04e`) uses that export-job lifecycle and independent selected
+  B-reps, preserving AP242, thread metadata, units and occurrence transfer.
+  Occurrences retain their original priority over requested body IDs. It adds
+  no display-mesh prerequisite. OCCT's mutable process-global STEP parameters
+  require one native exchange mutex around reader/writer construction, transfer
+  and serialization; independent shapes alone cannot isolate that state.
+  Detached export takes no live document locks, but concurrent STEP exchanges
+  serialize and an actual import may wait for that gate.
+
+Deep native copies above are required isolation boundaries, not avoidable
+read-only duplication. Editable drafts, saved/recovery baselines, selected output
+bytes and in-flight worker inputs still need owned lifetimes. No lock is retained
+across a user event. Cancellation before final publication grants no file write;
+errors after an actual write remain explicit about the file already written.
+
+The source checkpoint at `1c0dc76e` passed six exact focused checks once plus
+strict Windows desktop/native/MCP checks, retaining three earlier passes without
+repetition: [detached drawing receipt](detached-drawing-output-20261011.json).
+The CAM retirement receipt is
+`D:/limo-cad-maintenance/backlog-autonomous-20261010/cam-retirement-0bd892bc-results.json`.
+At clean `9e16fade`, strict Windows desktop/native-engine/OCCT/export checks
+and exactly three new focused filters passed once: real native Bambu WRITE
+operation ownership, portable STL/3MF job ownership and the borrowed panel review
+contract. [Export ownership receipt](detached-export-ownership-20261011.json)
+retains the exact artifact and the original no-consent fixture failure. It also
+retains the `9cdf863d` Print-to-File DOCINFOW option check without repetition;
+that check does not qualify the OS dialog/spooler or physical print. The real
+four-plate template is not positive single-plate ResolvedScene qualification.
+STEP `d493f04e`, native drawing-export `27ec6551` and desktop/CI repair `4382a5a8`
+remain reviewed source with their new qualification pending here. No final
+combined-source, new live-pair or GPU/latency pass follows from these receipts.
+
+Keep #333 open for deployed behavior, memory pressure, background-holder
+acceptance and the wider service/transport lock graph. Knowledge resources are
+static bundled data. A shared Arc, detached snapshot or source test alone does
+not prove process memory containment, physical GPU release, universal cache
+retirement, FPS or reduced UI stutter. Broad UI and manual MCP mutation coverage
+remain paused; existing targeted passes are retained.
