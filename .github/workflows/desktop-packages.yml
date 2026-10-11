@@ -48,6 +48,8 @@ jobs:
         with:
           key: desktop-input-classifier
       - name: Inspect changed paths
+        # Classify this event's immutable base/head; newer PR heads must not
+        # fail retained SDK runs or substitute a different changed-file list.
         id: classify
         env:
           GITHUB_TOKEN: ${{ github.token }}
