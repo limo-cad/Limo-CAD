@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use limo_cad_cam::CamDocumentDto;
 use limo_cad_core::{BodyAppearance, DocumentDto};
-use limo_cad_occt::{exact_interference_report, DrawingProjectionRequest, OcctKernel};
+use limo_cad_occt::{DrawingProjectionRequest, OcctKernel};
 use limo_cad_sketch::{
     err_json, host, ok_json, BodyPoseDto, InstanceBodyPoseDto, InterferenceCheckRequestDto,
     SketchDto, SketchManager, SweptCollisionRequestDto,
@@ -148,6 +148,10 @@ pub use portable_export::{
     FinishedPortableMeshExport, FinishedStepExport, PortableMeshFormat, PreparedPortableMeshExport,
     PreparedStepExport,
 };
+#[path = "interference_snapshot.rs"]
+mod interference_snapshot;
+pub use interference_snapshot::{FinishedInterferenceReview, PreparedInterferenceReview};
+
 #[path = "section_snapshot.rs"]
 mod section_snapshot;
 pub use section_snapshot::{FinishedSectionReview, PreparedSectionReview};
@@ -950,25 +954,13 @@ impl NativeEngineHost {
     }
 
     pub fn assembly_interference_check(&self, payload: &str) -> String {
-        let request: InterferenceCheckRequestDto = match serde_json::from_str(payload) {
-            Ok(request) => request,
-            Err(error) => return err_json(format!("bad request payload: {error}")),
-        };
-        let workspace = match self.inner.lock() {
-            Ok(workspace) => workspace,
-            Err(_) => return err_json("engine lock poisoned"),
-        };
-        let inner = workspace.active();
-        let solution = inner.manager.assembly_solution();
-        if !solution.solved {
-            return err_json("Cannot inspect interference in an unsolved assembly");
-        }
-        match exact_interference_report(
-            &inner.kernel,
-            inner.manager.solid_scene_ref(),
-            &solution.instance_body_poses,
-            &request,
-        ) {
+        match self
+            .prepare_interference_review(payload)
+            .and_then(|prepared| prepared.inspect())
+            .and_then(|finished| {
+                self.validate_interference_review(&finished)?;
+                Ok(finished.into_report())
+            }) {
             Ok(report) => ok_json(report),
             Err(error) => err_json(error),
         }

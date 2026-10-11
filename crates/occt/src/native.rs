@@ -268,6 +268,18 @@ pub struct DetachedDrawingKernel(OcctKernel);
 pub struct DetachedMeshKernel(OcctKernel);
 /// Independent selected-body sections, without live document authority.
 pub struct DetachedSectionKernel(OcctKernel);
+/// Independent selected shapes for static occurrence interference only.
+pub struct DetachedInterferenceKernel(OcctKernel);
+impl DetachedInterferenceKernel {
+    pub fn inspect(
+        &self,
+        scene: &limo_cad_solid::SolidSceneDto,
+        poses: &[limo_cad_assembly::InstanceBodyPoseDto],
+        request: &limo_cad_assembly::InterferenceCheckRequestDto,
+    ) -> Result<limo_cad_assembly::InterferenceReportDto, String> {
+        crate::exact_interference_report(&self.0, scene, poses, request)
+    }
+}
 impl DetachedSectionKernel {
     pub fn inspect(
         &self,
@@ -388,6 +400,14 @@ impl OcctKernel {
         let mut result = Self::new()?;
         result.inner = inner;
         Ok(DetachedDrawingKernel(result))
+    }
+
+    pub fn detached_interference_snapshot(
+        &self,
+        ids: &[limo_cad_core::BodyId],
+    ) -> Result<DetachedInterferenceKernel, OcctError> {
+        self.detached_drawing_snapshot(ids)
+            .map(|snapshot| DetachedInterferenceKernel(snapshot.0))
     }
 
     pub fn detached_section_snapshot(
