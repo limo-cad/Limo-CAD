@@ -1676,14 +1676,15 @@
     ]
   },
     "parallel_repairs_checkpoint":  {
-                                        "source_revision":  "db1aa006",
+                                        "source_revision":  "4d7cb0ac",
                                         "base_revision":  "4859c8bd",
                                         "commits":  [
                                                         "090efe6a",
                                                         "28edcada",
                                                         "3181443d",
                                                         "88a69218",
-                                                        "db1aa006"
+                                                        "db1aa006",
+                                                        "4d7cb0ac"
                                                     ],
                                         "qualification":  "source_reviewed_hosted_execution_pending",
                                         "new_focused_checks_unrun":  [
@@ -1693,7 +1694,8 @@
                                                                          "browser_projection_excludes_history_and_invalidates_only_consumed_inputs",
                                                                          "browser_sync_reuses_projection_across_sketch_edits_and_retires_owner",
                                                                          "history_panel_reuses_only_unchanged_history_and_retires_replaced_owners",
-                                                                         "history_drag_shares_current_panel_and_rejects_stale_shared_history"
+                                                                         "history_drag_shares_current_panel_and_rejects_stale_shared_history",
+                                                                         "cam_preview_selection_reuses_document_but_source_and_owner_changes_retire_it"
                                                                      ],
                                         "installed_revision":  "4859c8bdc5575fe8858bfb3c0153c48569f8e6eb",
                                         "installed_payload_verified":  70,
