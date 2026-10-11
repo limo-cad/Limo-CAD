@@ -19,8 +19,11 @@ selects the executable reported by Cargo, stages its SDK runtime and verifies
 source and payload hashes before promotion.
 The default keeps local crates at optimization level 1 and third-party dependencies
 at level 3 with incremental compilation. `--release` selects full optimization.
-`--restart` explicitly terminates the installed GUI/MCP workers without saving;
-without it, a changed build cannot replace a running installation.
+`--restart` explicitly terminates canonical GUI processes without saving. Before
+stopping any GUI, deployment checks every selected canonical process. A headless
+worker or unavailable launch arguments blocks that whole stop pass; the owning
+client must preserve its document and close the worker first. Without `--restart`,
+a changed build cannot replace a running installation.
 `--jobs N` controls build concurrency and `CARGO_TARGET_DIR` retains the shared cache.
 
 The managed installation's `runtime-manifest.json` binds the executable to its
@@ -153,8 +156,10 @@ If both profiles exist, startup reports the conflict without overwriting either.
 
 New desktop leases and inboxes use the private `limo-cad-sessions` registry
 (with the effective user ID appended on Unix). During deployment, save and close
-old desktop windows before restarting all MCP workers. Existing recovery files
-and snapshots are preserved; new windows publish only to the new registry.
+old desktop windows. Each headless worker's owning client must preserve its model,
+close that transport and pause automatic worker respawn during promotion. Reconnect
+MCP after the verified deployment. Existing recovery files and snapshots are
+preserved; new windows publish only to the new registry.
 
 Packages use `Limo-CAD-<version>-windows-<arch>.zip`,
 `Limo.CAD_<version>_amd64.deb`, `Limo.CAD_<version>_amd64.AppImage` and

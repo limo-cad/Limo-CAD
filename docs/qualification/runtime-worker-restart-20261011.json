@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-10-11T13:17:17.9864272Z",
+  "source_revision": "bc3a9af141db6a6f604d9fdca07808c5e59d1d6a",
+  "issues": [
+    9,
+    333
+  ],
+  "source_changes": [
+    "xtask/src/deploy_native.rs"
+  ],
+  "qualification": {
+    "revision": "bc3a9af141db6a6f604d9fdca07808c5e59d1d6a",
+    "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+    "filter": "deploy_native::tests::restart_preflights_all_workers_before_terminating_any_gui",
+    "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+    "features": "native-control-harness",
+    "msvc": "14.44.35207",
+    "windows_sdk": "10.0.26100.0\\",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "recorded_utc": "2026-10-11T13:17:17.9864272Z",
+    "artifacts": [
+      {
+        "kind": "xtask",
+        "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\xtask-d64955d07aac8b9d.exe",
+        "sha256": "d5943690f5d9c253911143ffcd068b376088ce63c6b22353288f9be519a848fc"
+      }
+    ],
+    "results": [
+      {
+        "kind": "strict-xtask",
+        "exit_code": 0,
+        "elapsed_seconds": 33.219800299999996,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\runtime-worker-guard-bc3a9af1-strict-xtask.log"
+      },
+      {
+        "kind": "xtask-artifact-compile",
+        "exit_code": 0,
+        "elapsed_seconds": 110.6588372,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\runtime-worker-guard-bc3a9af1-compile.jsonl",
+        "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\runtime-worker-guard-bc3a9af1-compile.stderr.log"
+      },
+      {
+        "kind": "xtask-regression",
+        "filter": "deploy_native::tests::restart_preflights_all_workers_before_terminating_any_gui",
+        "exit_code": 0,
+        "exact_one_pass": true,
+        "elapsed_seconds": 0.019804199999999998,
+        "binary_sha256": "d5943690f5d9c253911143ffcd068b376088ce63c6b22353288f9be519a848fc",
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\runtime-worker-guard-bc3a9af1-regression.log"
+      }
+    ],
+    "scope": "Strict changed-package xtask Windows all-target/all-feature check; one xtask test artifact and exactly one new production shutdown-selection regression. Mixed GUI/headless or unavailable launch arguments reject before any injected termination; GUI-only restart and no-restart behavior preserved; PID-only diagnostics. No actual process enumeration/termination/deployment, live CAD/MCP input, test suite, recipe replay, OS printing or closure of the parent #9/#333 epics. Earlier STEP/drawing/export/history/input passes retained without repetition."
+  },
+  "verified_behavior": [
+    "Every selected exact-executable process is preflighted before any termination callback.",
+    "Headless workers and unavailable or empty launch arguments reject a mixed GUI-first restart with zero termination callbacks.",
+    "Diagnostics identify the protected PID without exposing command lines or project paths.",
+    "Explicit GUI-only restart preserves PID/start ordering; no-restart refuses running processes.",
+    "Exact --headless argument matching does not mistake a project filename substring for worker mode."
+  ],
+  "retained_cad_source_revision": "fd85a5567a39486376177c0f62c8b96a4cafb21d",
+  "retained_cad_source_paths_unchanged": true,
+  "retained_evidence": [
+    "detached-step-drawing-20261011.json",
+    "detached-export-ownership-20261011.json",
+    "detached-drawing-output-20261011.json"
+  ],
+  "limits": [
+    "The new regression uses the actual production shutdown-selection seam with injected termination; no real CAD process was terminated.",
+    "No runtime deployment or installed operator replacement was performed.",
+    "The preflight protects its selected process snapshot; owners must still pause new worker launches during promotion.",
+    "The wider #9/#333 deliverables and live acceptance remain open; broad UI/manual MCP coverage stays paused."
+  ]
+}

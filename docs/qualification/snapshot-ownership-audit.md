@@ -219,8 +219,8 @@ below and in the later export-isolation section:
   `controller/named_views.rs`, `named_views/panel.rs` and `section_review.rs`.
   Assembly state retains an Arc per exact receipt; joints/studies/inspection
   borrow that retained intent. Named-view choices own IDs/names/placements and
-  section/body selection shares scene Arcs. The assembly decode used only for
-  occurrence names in named-view diagnostics remains a projection candidate.
+  section/body selection shares scene Arcs. Named-view/export diagnostics now
+  borrow assembly intent only to own the requested occurrence labels (`fd85a556`).
   Section query/output buffers are derived owned results, not copied source
   scenes, and stale worker results remain owner/revision fenced.
 

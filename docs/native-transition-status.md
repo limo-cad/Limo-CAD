@@ -1,6 +1,29 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: clean reviewed source `fd85a556`
+Current checkpoint, **2026-10-11 13:17 UTC**: reviewed source `bc3a9af1`
+passes strict Windows xtask all-target/all-feature checks and its one new restart
+regression. Deployment now preflights all selected canonical processes before
+terminating any GUI; a headless worker or unavailable launch arguments rejects
+the entire stop pass. PID-only diagnostics preserve private command lines.
+Exact qualification and limits are in
+`docs/qualification/runtime-worker-restart-20261011.json`.
+
+CAD source paths are unchanged from the qualified `fd85a556` checkpoint below;
+its five passes and earlier export/drawing/input evidence are retained. The
+restart regression uses the production selection seam with injected termination.
+No live process was stopped and no deployment or installed operator replacement
+was performed. Headless owners must preserve their models and pause new worker
+launches during promotion; the snapshot guard does not prevent later launches.
+
+Work remains in PR124 on both Bevy aliases. Main and Jack's PRs are untouched.
+CodeQL at the preserved `6c897699` revision completed successfully, including the
+two prior Rust findings reported fixed by analysis. CI for this new source remains
+pending. The installed `eb71c32d` GUI is saved and closed, headless models remain
+preserved pending handoff, and direct PDF/cold-paper/Bambu acceptance remains
+pending a fresh deployment and matched pair. Broad UI/manual MCP coverage stays
+paused; the wider #9/#333 deliverables remain open.
+
+Historical checkpoint, **2026-10-11 UTC**: clean reviewed source `fd85a556`
 passes strict Windows desktop/native-engine/sketch/OCCT/export checks and exactly
 five targeted regressions: three new STEP/native/attached drawing checks and two
 specifically affected history/busy Save checks. Earlier export, drawing, Print-to-File
