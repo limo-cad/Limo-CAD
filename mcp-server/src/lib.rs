@@ -10679,6 +10679,194 @@ mod tests {
     }
 
     #[test]
+    fn native_intersecting_counterbore_recesses_keep_local_stems_and_ambiguous_outer_walls() {
+        fn assert_geometry(server: &CadServer) {
+            let scene = server.manager.solid_scene_ref();
+            assert!(scene.errors.is_empty());
+            assert_eq!(scene.bodies.len(), 1);
+            let body = &scene.bodies[0];
+            let mut stems = std::collections::BTreeSet::new();
+            let mut outer_walls = std::collections::BTreeSet::new();
+            for wall in body.faces.iter().filter(|face| face.cylinder.is_some()) {
+                let cylinder = wall.cylinder.unwrap();
+                assert!((cylinder.origin.x.abs() - 3.25).abs() < 1e-6);
+                assert!(cylinder.origin.y.abs() < 1e-6 && cylinder.axis.z.abs() > 0.999999);
+                let stem = (cylinder.radius - 2.0).abs() < 1e-6;
+                assert!(stem || (cylinder.radius - 4.0).abs() < 1e-6);
+                let identity = (body.id.0, wall.id.0);
+                if stem {
+                    stems.insert(identity);
+                } else {
+                    outer_walls.insert(identity);
+                }
+                let mut heights = Vec::new();
+                for key in &wall.edge_keys {
+                    let edge = body.edges.iter().find(|edge| &edge.key == key).unwrap();
+                    let Some(circle) = edge.circle else {
+                        continue;
+                    };
+                    assert!((circle.radius - cylinder.radius).abs() < 1e-6);
+                    assert!((circle.center.x - cylinder.origin.x).abs() < 1e-6);
+                    assert!(circle.center.y.abs() < 1e-6 && circle.normal.z.abs() > 0.999999);
+                    heights.push(circle.center.z);
+                    if stem {
+                        assert!(circle.closed, "Both independent stem rings remain complete");
+                        let adjacent = body
+                            .faces
+                            .iter()
+                            .filter(|face| face.id != wall.id && face.edge_keys.contains(key))
+                            .collect::<Vec<_>>();
+                        assert_eq!(adjacent.len(), 1);
+                        let plane = adjacent[0].plane.unwrap();
+                        assert!((plane.origin[2] - circle.center.z).abs() < 1e-6);
+                        assert!(plane.normal[2] > 0.999999);
+                        if (circle.center.z - 4.0).abs() < 1e-6 {
+                            assert_eq!(
+                                adjacent[0].edge_keys.len(),
+                                1,
+                                "A unique terminal disk bounds each stem"
+                            );
+                        } else {
+                            assert!((circle.center.z - 8.0).abs() < 1e-6);
+                            assert!(
+                                adjacent[0].edge_keys.len() > 2,
+                                "Intersecting recesses lack a complete two-ring shoulder"
+                            );
+                        }
+                    } else {
+                        assert!(
+                            !circle.closed,
+                            "Intersecting outer recesses have open circular spans"
+                        );
+                        let first = edge.points.first().unwrap();
+                        let last = edge.points.last().unwrap();
+                        assert!(
+                            (first.x - last.x)
+                                .hypot(first.y - last.y)
+                                .hypot(first.z - last.z)
+                                > 1e-6
+                        );
+                    }
+                }
+                heights.sort_by(f64::total_cmp);
+                heights.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+                assert_eq!(heights.len(), 2);
+                assert!((heights[0] - if stem { 4.0 } else { 8.0 }).abs() < 1e-6);
+                assert!((heights[1] - if stem { 8.0 } else { 10.0 }).abs() < 1e-6);
+            }
+            assert_eq!(stems.len(), 2);
+            assert!(
+                outer_walls.len() >= 2,
+                "Native seams may subdivide the partial outer walls"
+            );
+            let summary = summary::summarize(scene, &[]).json(true);
+            let mut reported_stems = std::collections::BTreeSet::new();
+            for hole in summary["holes"].as_array().unwrap() {
+                let ids = hole["face_ids"].as_array().unwrap();
+                assert_eq!(ids.len(), 1);
+                assert!(reported_stems
+                    .insert((hole["body_id"].as_u64().unwrap(), ids[0].as_u64().unwrap())));
+                assert_eq!(hole["style"], "simple");
+                assert_eq!(hole["source"], "geometry");
+                assert_eq!(hole["confidence"], "candidate");
+                assert_eq!(
+                    hole["inference_method"],
+                    "closed_analytic_circle_and_inward_display_normals"
+                );
+                assert!(hole["feature_id"].is_null());
+                assert_eq!(hole["diameter"], 4.0);
+                assert_eq!(
+                    hole["depth"], 4.0,
+                    "Geometry depth is the local stem span, not the authored total6"
+                );
+                assert_eq!(hole["z"], 8.0);
+                assert_eq!(hole["through"], false);
+                assert_eq!(
+                    hole["depth_evidence"],
+                    "two_analytic_rings_and_one_planar_disk"
+                );
+                assert!(
+                    hole["counterbore_diameter"].is_null() && hole["counterbore_depth"].is_null()
+                );
+            }
+            assert_eq!(reported_stems, stems);
+            let mut reported_outer = std::collections::BTreeSet::new();
+            for candidate in summary["ambiguous_hole_candidates"].as_array().unwrap() {
+                let ids = candidate["face_ids"].as_array().unwrap();
+                assert_eq!(ids.len(), 1);
+                assert!(reported_outer.insert((
+                    candidate["body_id"].as_u64().unwrap(),
+                    ids[0].as_u64().unwrap()
+                )));
+                assert_eq!(candidate["reason"], "open_or_split_circular_boundary");
+                assert_eq!(candidate["source"], "geometry");
+                assert_eq!(candidate["confidence"], "ambiguous");
+                assert_eq!(
+                    candidate["inference_method"],
+                    "analytic_cylinder_boundary_and_display_normals"
+                );
+                assert_eq!(candidate["diameter"], 8.0);
+                assert!(candidate["depth"].is_null() && candidate["through"].is_null());
+            }
+            assert_eq!(reported_outer, outer_walls);
+        }
+
+        let (mut donor, _) = mcp_box();
+        // 6.5mm separation intersects R4 recesses but keeps them clear of the
+        // other R2 stem. 6mm would also introduce an unrelated exact tangency.
+        for x in [-3.25, 3.25] {
+            let body = &donor.manager.solid_scene_ref().bodies[0];
+            let cap = body
+                .faces
+                .iter()
+                .find(|face| {
+                    face.plane.is_some_and(|plane| {
+                        plane.normal[2] > 0.9 && (plane.origin[2] - 10.0).abs() < 1e-6
+                    })
+                })
+                .unwrap();
+            let plane = cap.plane.unwrap();
+            let delta = [
+                x - plane.origin[0],
+                -plane.origin[1],
+                10.0 - plane.origin[2],
+            ];
+            let project = |axis: [f64; 3]| delta.iter().zip(axis).map(|(a, b)| a * b).sum::<f64>();
+            donor
+                .call_tool(
+                    "solid_hole",
+                    json!({"body_id":body.id.0,"face_id":cap.id.0,
+                "position":{"x":project(plane.u),"y":project(plane.v)},"diameter":4.0,
+                "extent":{"type":"distance","depth":6.0},"style":"counterbore",
+                "counterbore_diameter":8.0,"counterbore_depth":2.0,"countersink_diameter":0.0,
+                "countersink_angle_deg":90.0,"thread":null,"flip":false}),
+                )
+                .unwrap();
+        }
+        let definitions = donor.manager.hole_definitions();
+        assert_eq!(definitions.len(), 2);
+        let authored = summary::summarize(donor.manager.solid_scene_ref(), &definitions).json(true);
+        assert_eq!(authored["authored_hole_count"], 2);
+        assert_eq!(authored["holes"].as_array().unwrap().len(), 2);
+        for hole in authored["holes"].as_array().unwrap() {
+            assert_eq!(hole["confidence"], "authored");
+            assert_eq!(hole["style"], "counterbore");
+            assert_eq!(hole["depth"], 6.0);
+            assert_eq!(hole["counterbore_depth"], 2.0);
+        }
+        let before = donor.manager.export_project_model().unwrap();
+        assert_geometry(&donor);
+        assert_eq!(donor.manager.export_project_model().unwrap(), before);
+        let exported = donor.call_tool("solid_export_step", json!({})).unwrap();
+        let mut imported = CadServer::new().unwrap();
+        imported.call_tool("solid_import_step",json!({"file_name":"intersecting-recesses.step","data_base64":exported["bytes_base64"].as_str().unwrap()})).unwrap();
+        assert!(imported.manager.hole_definitions().is_empty());
+        let before = imported.manager.export_project_model().unwrap();
+        assert_geometry(&imported);
+        assert_eq!(imported.manager.export_project_model().unwrap(), before);
+    }
+
+    #[test]
     fn native_bore_tangent_to_stock_boundary_has_no_inner_wire_through_proof() {
         let (mut server, _) = mcp_box();
         let body = &server.manager.solid_scene_ref().bodies[0];
