@@ -483,11 +483,24 @@ fn preflight_sdk(root: &Path) -> Result<String> {
             .map(Path::new),
     )
     .map_err(anyhow::Error::msg)?;
-    qualify_sdk_inputs(&sdk.include, || sdk_inputs_sha256(root), || {
-        let runtime = crate::package::runtime_bin(root)?;
-        crate::occt_storage::verify_resolved(root, &sdk, Some(&runtime))
-    }).with_context(|| format!(
-        "Selected OCCT SDK {} is not qualified for deployment. Preserve this SDK and build OCCT 7.9.3 with the reviewed overlay in a separate prefix; then use deploy-native --occt-root PATH. Header-only replacement is insufficient", root.display()
+    deployment_qualification(root, || {
+        qualify_sdk_inputs(
+            &sdk.include,
+            || sdk_inputs_sha256(root),
+            || {
+                let runtime = crate::package::runtime_bin(root)?;
+                crate::occt_storage::verify_resolved(root, &sdk, Some(&runtime))
+            },
+        )
+    })
+}
+
+fn deployment_qualification(
+    root: &Path,
+    qualify: impl FnOnce() -> Result<String>,
+) -> Result<String> {
+    qualify().with_context(|| format!(
+        "Could not complete required deployment qualification for OCCT SDK {}. Inspect the underlying error before rebuilding: the native probe requires CMake and Ninja on PATH, MSVC and the Windows SDK. If the error identifies an SDK header/runtime defect, preserve this SDK and build OCCT 7.9.3 with the reviewed overlay in a separate prefix; then use deploy-native --occt-root PATH. Header-only replacement is insufficient", root.display()
     ))
 }
 
@@ -986,6 +999,45 @@ fn stop_runtime(executable: &Path, restart: bool) -> Result<()> {
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn deployment_qualification_preserves_missing_tool_cause_without_diagnosing_sdk_damage() {
+        let fixture = tempfile::tempdir().unwrap();
+        fs::write(
+            fixture.path().join("math_DoubleTab.lxx"),
+            include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.lxx"),
+        )
+        .unwrap();
+        let calls = Cell::new(0);
+        let result = deployment_qualification(fixture.path(), || {
+            qualify_sdk_inputs(
+                fixture.path(),
+                || {
+                    calls.set(calls.get() + 1);
+                    Ok("checked-sdk".into())
+                },
+                || Err(std::io::Error::from(std::io::ErrorKind::NotFound)).context("start cmake"),
+            )
+        });
+        let error = result.unwrap_err();
+        assert_eq!(
+            calls.get(),
+            1,
+            "a failed probe cannot return a qualified digest"
+        );
+        assert!(error.to_string().contains("CMake and Ninja on PATH"));
+        assert!(error
+            .to_string()
+            .contains("Inspect the underlying error before rebuilding"));
+        assert!(error
+            .to_string()
+            .contains("If the error identifies an SDK header/runtime defect"));
+        assert!(format!("{error:#}").contains("start cmake"));
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::NotFound
+        );
+    }
 
     #[test]
     fn sdk_preflight_rejects_legacy_header_before_digest_or_native_qualification() {
