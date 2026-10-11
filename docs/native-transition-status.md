@@ -1,6 +1,38 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 13:17 UTC**: reviewed source `bc3a9af1`
+Current checkpoint, **2026-10-11 UTC**: reviewed source `67cb9e15` passes
+strict Windows desktop/native-engine/OCCT checks, three new static-interference
+regressions and the corrected native section regression. The two section
+UI-worker/admitted-MCP source passes at `3013d119` are retained without repetition.
+The original native fixture failure remains recorded: BoundaryContact retains
+its outline, while NoIntersection is empty. Independent boundary bounds and
+perimeter checks now distinguish them without weakening material geometry or
+native ownership assertions. Exact receipts and artifact hashes are in
+`docs/qualification/detached-section-interference-20261011.json`.
+
+Section and current static interference compute from genuine detached B-reps
+outside live engine/publisher guards. Adoption checks original UI receipts or
+admitted MCP tickets plus private native source. Static proof also checks exact
+solved placements and every visible request-selected native body, including
+zero-pair reports. UI generation retires stale draft, Close/hide-reopen and tab
+results; MCP liveness retries deliver the original retained outcome.
+Capture, copy, assembly solve/broadphase and source validation still have
+scaling-dependent live work. No deployed FPS, latency or memory claim is made.
+Swept native motion retains its existing guarded path.
+
+The one prior human `section-analysis-exact180` pass is marked `needs_recheck`;
+its complete original receipt remains historical. All other UI leaves, manual
+MCP entries and the paused phase are preserved. No new human pass, live pair,
+runtime restart, deployment or installed operator replacement is claimed.
+
+Incoming Bevy menu work `ec010757` is preserved by a normal merge. Work stays
+in PR124 on both Bevy aliases; main and Jack's PRs are untouched. Hosted CI for
+this checkpoint is pending. The installed `eb71c32d` GUI remains saved and
+closed; canonical headless models are preserved pending owner handoff.
+Direct PDF/cold-paper/Bambu and the selective section acceptance require fresh
+deployment and a matched pair. The wider #333 deliverables remain open.
+
+Historical checkpoint, **2026-10-11 13:17 UTC**: reviewed source `bc3a9af1`
 passes strict Windows xtask all-target/all-feature checks and its one new restart
 regression. Deployment now preflights all selected canonical processes before
 terminating any GUI; a headless worker or unavailable launch arguments rejects

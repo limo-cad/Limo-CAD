@@ -232,6 +232,65 @@ correction. Earlier passing export/drawing/Print-to-File and generic pointer
 filters were retained. This is combined-source qualification of the stated
 paths, with no new live-pair, GPU, memory-pressure or latency claim.
 
+### Selected-body section detachment: source checks passed, live acceptance pending
+
+Native section capture (`b11a727b`, `f9ce64e1`) copies the selected genuine B-rep
+under the live engine guard after the existing request/source checks. This is a
+required owned isolation copy limited to that body. Detached native
+section/probe/cutaway computation releases that guard. The finished report keeps
+private host/session ownership, a Weak scene stamp, captured geometry/metadata
+revisions and the selected body's actual kernel identity through presentation.
+
+Desktop `3013d119` captures under the original ordered UI receipt and admits its
+DispatchGuard once; section computation and CPU raster/cutaway preparation run
+outside publisher/engine guards. Before adding assets or adopting the report,
+the original owner/revision, visible overlay generation and private native proof
+must still match. Close, draft changes, edits and document/kernel replacement
+reject prepared output. The worker retains its existing single pending slot.
+Genuinely admitted attached MCP section queries also release process-lease and
+publisher guards during computation/serialization, then reacquire the original
+guards and validate native proof before retaining/delivering the original ticket's
+outcome. Liveness publication failures retain that outcome for delivery-only
+retry; they do not dispatch section work again. No-ticket compatibility and
+other query paths retain their prior routing.
+
+The ordered UI and attached-ticket regressions passed once at `3013d119`;
+the native section regression passed at `67cb9e15` after correcting its
+BoundaryContact-versus-NoIntersection fixture expectation. Strict Windows checks
+and exact receipts are recorded in
+`docs/qualification/detached-section-interference-20261011.json`.
+The one prior human exact180 section pass is selectively marked needs_recheck;
+its original receipt is retained. These source checks do not qualify live UI,
+memory, FPS or latency. Capture
+and deep copy still briefly hold live guards; their cost depends on the selected
+geometry. Required edit/cancel and in-flight presentation ownership is unchanged.
+
+### Static interference detachment: source checks passed, live acceptance pending
+
+The bounded static interference seam captures the authoritative solved
+occurrence poses and scene coherently. It copies genuine B-reps only for the
+candidate bodies used by the unchanged exact distance/Common algorithm, sharing
+one copied definition across repeated occurrences. Private finished proof uses
+host/session ownership, a Weak scene stamp, geometry/metadata revisions, exact
+current solved-pose equality and native identities for every visible requested
+source body, including bodies outside candidate pairs. A zero-pair report cannot
+skip native source invalidation; absent non-candidate identities are retained as
+absence rather than adding a new shape-presence admission requirement.
+
+Native `2045da06`/`b52d9a5b` and desktop `67cb9e15` release live
+publisher/engine guards after original ordered
+capture, then checks the original owner/revision, enabled Inspect tab and static
+report generation plus native proof before adoption. Clearance changes, source
+refresh, another Check, hide/reopen and tab changes retire that generation.
+Genuinely admitted MCP static queries release both process-lease and publisher
+guards for computation/serialization; original proof, ticket retention and
+liveness/delivery-only retry remain required. Swept native motion keeps its
+existing guarded computation path. The three new native/UI/attached-ticket
+regressions passed once at `67cb9e15`, including independent overlap/clearance,
+zero-pair native replacement, unchanged-render-stamp pose changes, hide/reopen
+and original-ticket delivery-only retry. This does not qualify live UI, memory
+or deployed performance.
+
 Keep #333 open for deployed behavior, memory pressure, background-holder
 acceptance and the wider service/transport lock graph. Knowledge resources are
 static bundled data. A shared Arc, detached snapshot or source test alone does

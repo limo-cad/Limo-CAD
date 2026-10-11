@@ -4,7 +4,9 @@ Source review for [#333](https://github.com/limo-cad/Limo-CAD/issues/333), based
 the historical `278025a52247c7316c8553fd2a390f9179150733` census and the
 bounded source follow-up through clean `fd85a556` on 2026-10-11. Scoped STEP,
 native/attached drawing and affected history/input qualification is recorded
-below. This is a concrete inventory
+below. The finite section/static-interference follow-up at `67cb9e15` is recorded
+in the later isolation section and its exact qualification receipt.
+This is a concrete inventory
 of production snapshot APIs and their desktop consumers, shared host/MCP read
 contracts, and the document caches they feed. It is not a census of every clone
 in the repository, a benchmark, or live UI qualification. Test fixtures and
@@ -373,6 +375,62 @@ required. Final job locking is publisher -> operation lease -> native validation
 and atomic write, never long meshing/HLR/ZIP under that lease. UI revocation has
 no inverse lease-to-publisher callback. Bambu metadata preparation after an actual
 write cannot retroactively claim the file was not written.
+
+### Selected-body section computation: source checks passed, live acceptance pending
+
+`NativeEngineHost::prepare_section_review` captures one selected genuine B-rep
+after the existing request/source validation (`b11a727b`, `f9ce64e1`). The owned
+copy is required for native thread isolation. Capture remains a live engine
+read with geometry-dependent copy cost; native section/probe/cutaway computation
+then runs detached. Private finished provenance retains host/session ownership,
+a Weak scene stamp, geometry/metadata revisions and actual selected-body kernel
+identity. The weak stamp alone does not pin a retired scene's buffers.
+
+Desktop `3013d119` uses the existing single ordered worker slot and one original
+dispatch admission. UI receipt capture ends before computation and CPU raster/
+cutaway preparation. Adoption checks the original owner/revision, visible panel
+generation and opaque native proof before adding image assets or adopting the
+report. Close, changed draft, edits and document/kernel replacement reject
+prepared data. Attached MCP queries with genuine native tickets release both
+process-lease and publisher guards for computation/serialization, then recheck
+private native proof under the original completion guards. The genuine outcome
+is retained before fallible liveness publication; delivery-only retry does not
+run section work again. No-ticket compatibility and other query routing remain
+unchanged. Required editor/recovery snapshots retain their existing lifetimes.
+
+The ordered UI and attached-ticket filters passed once at `3013d119`; the native
+section filter passed at `67cb9e15` after correcting its boundary-versus-outside
+fixture assertion. Strict Windows source checks and exact artifacts are in
+`docs/qualification/detached-section-interference-20261011.json`.
+The original human exact180 section pass is selectively marked needs_recheck
+with its receipt retained. These focused source checks do not establish live UI behavior,
+whole-application ownership, memory containment, FPS or latency.
+
+### Static interference computation: source checks passed, live acceptance pending
+
+Static interference captures coherent solved occurrence poses and the current
+scene, then deep-copies only candidate native bodies for exact distance/Common
+work. Repeated occurrences share a copied body definition. The immutable scene
+is a legitimate in-flight broadphase input; finished provenance keeps only its
+Weak stamp. Capture/copy and final validation retain their bounded live guard
+scope, with geometry/pose-dependent cost.
+
+Private source proof includes exact host/session ownership, scene/revision
+stamps, current solved poses and native identities for all visible request-selected
+body sources, not just candidate pairs. Empty reports still reject native source
+changes; absent non-candidate shapes retain absence without a new admission gate.
+Native `2045da06`/`b52d9a5b` and desktop `67cb9e15` separate computation
+from original ordered UI and genuine
+MCP-ticket guards. UI adoption additionally checks the enabled Inspect tab and
+static generation; clearance/source/new Check/hide-reopen/tab changes retire it.
+MCP retains the original once-started outcome before liveness publication and
+retries delivery only. Swept native motion keeps its existing guarded path.
+The native and two desktop regressions passed once at `67cb9e15`; the same
+receipt records genuine repeated-body overlap/clearance, zero-pair replacement,
+pose changes without render-stamp changes and original worker/ticket rejection.
+Required
+draft/recovery/output ownership and earlier evidence remain intact; source review
+does not qualify deployed responsiveness or memory/performance behavior.
 
 Keep #333 open. Historical census counts/excerpts remain historical, not an
 updated whole-repository clone count. Per-body upload reuse is now implemented
