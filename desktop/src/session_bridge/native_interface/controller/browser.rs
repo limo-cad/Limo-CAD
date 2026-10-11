@@ -7,7 +7,7 @@ use crate::native_viewport::interface_shell::{
     ribbon::{compact_glyph, Icon},
     InterfaceCaption,
 };
-use limo_cad_core::{BrowserNode, BrowserNodeKind as Kind, DocumentDto};
+use limo_cad_core::{BrowserNode, BrowserNodeKind as Kind, Document, UnitSystem};
 use limo_cad_interface::{ControlInput, KeyChord};
 use std::collections::HashSet;
 
@@ -23,13 +23,39 @@ pub(crate) enum BrowserCommand {
 struct Browser {
     owner: Option<DocumentContext>,
     revision: u64,
-    document: Option<Arc<DocumentDto>>,
+    document: Option<Arc<BrowserDocument>>,
     collapsed: HashSet<u64>,
     selected: Option<u64>,
     active_sketch: Option<String>,
     widgets: HashMap<String, (Entity, BrowserCommand, Icon)>,
     labels: HashMap<String, Entity>,
     text_boxes: HashMap<String, Entity>,
+}
+
+/// Retained browser inputs exclude feature history and unused document settings.
+/// They must outlive the short engine read because widgets borrow rows while
+/// painting; retaining them never retains evaluated geometry or the engine.
+struct BrowserDocument {
+    name: String,
+    units: UnitSystem,
+    browser: Vec<BrowserNode>,
+}
+
+impl BrowserDocument {
+    fn retain(document: &Document, previous: Option<&Arc<Self>>) -> Arc<Self> {
+        if let Some(previous) = previous.filter(|previous| {
+            previous.name == document.name()
+                && previous.units == document.settings().units
+                && previous.browser == document.browser()
+        }) {
+            return Arc::clone(previous);
+        }
+        Arc::new(Self {
+            name: document.name().to_owned(),
+            units: document.settings().units,
+            browser: document.browser().to_vec(),
+        })
+    }
 }
 
 fn find(nodes: &[BrowserNode], id: u64) -> Option<&BrowserNode> {
@@ -554,7 +580,9 @@ pub(crate) fn synchronize(
             state.active_sketch = None;
         }
         if state.document.is_none() || state.revision != revision {
-            let doc = services.engine.document_snapshot();
+            let doc = services.engine.with_document(|document| {
+                BrowserDocument::retain(document, state.document.as_ref())
+            });
             if state.document.is_none() {
                 for n in &doc.browser {
                     if n.kind != Kind::BodiesFolder {
@@ -579,7 +607,7 @@ pub(crate) fn synchronize(
             {
                 state.selected = None;
             }
-            state.document = Some(Arc::new(doc));
+            state.document = Some(doc);
             state.revision = revision;
         }
         let document = state.document.as_ref().unwrap().clone();
@@ -662,7 +690,7 @@ pub(crate) fn synchronize(
             &assets,
             theme,
             "units",
-            format!("{:?}", document.settings.units).to_uppercase(),
+            format!("{:?}", document.units).to_uppercase(),
             node(x + width - 34., y + 35., 28., 20.),
             10.,
         );
