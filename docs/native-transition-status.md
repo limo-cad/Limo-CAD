@@ -2322,3 +2322,35 @@ styling regression and a clean matched GPU visual recheck remain pending at this
 checkpoint. Multiple selected coplanar bodies still share equal bias; preserving
 hovered/selected-face priority does not qualify all overlaps. The original Q9
 guidance pass and all geometry/persistence evidence remain unchanged.
+
+Both new native input/selection source checks are now complete. Strict Windows
+desktop Clippy and only the new bounded key-trace regression passed at
+`92ddcb65`; strict Windows desktop Clippy and only the new production styling
+regression passed at `52ad36b1`. The initial Windows must-use BOOL errors and
+their two-line correction remain recorded. No prior passing filter was rerun.
+The qualified D-drive SDK, pinned MSVC/Windows SDK, test artifacts and logs are
+retained in `native-key-92ddcb65-results.json` and
+`selected-depth-52ad36b1-results.json`. Material ownership, ghost/face-mode guards,
+selection clearing and unchanged geometry/model are verified in the actual
+styling path. The installed GUI remains clean matched `a3145e2c`; the new
+selection raster result and native shortcut message witness await deployment.
+
+The key witness is opt-in via `LIMO_CAD_FILE_SHORTCUT_DIAGNOSTICS=1`, confined
+to CAD's own UI-thread window and bounded to 32 selected key/modifier message
+records. It records no character-message payloads and forwards messages unchanged.
+Compilation and the pure callback-observation regression do not qualify live
+subclass forwarding, shortcut dispatch or physical keyboard behavior. The earlier
+missing Ctrl+Shift+S press remains unattributed until fresh native/Winit evidence.
+
+Jack's incoming normal-startup changes and measurement record are preserved.
+Independent source correctness/security review found no blocking production
+finding; two historical-pass annotations were corrected without changing raw
+measurements. Physical Windows/Linux cold startup, large models and degraded
+rendering are not implied passes. The preserved `2da8cbd0` macOS and Windows ARM
+package jobs completed successfully with real clean-close/stdout lifecycle
+evidence; latest `500e5eda` checks are ongoing. Broad UI/MCP coverage stays paused.
+
+A separate no-op sketch Edit/Cancel/Finish observation produced an Unsaved
+changes prompt despite an exactly unchanged complete persisted model. A scoped
+source repair is underway; engine revision and readiness fences remain intact.
+The Q5 Tab traversal pass does not qualify this separate dirty-state behavior.
