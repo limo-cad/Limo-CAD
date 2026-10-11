@@ -744,3 +744,31 @@ pub(crate) fn assert_contact_stop(
         "Authored slider position must agree with physical clearance"
     );
 }
+
+// Independent physical row oracle for the actual repeated-stock slider fixture.
+pub(crate) fn assert_motion_csv(csv: &str, rate: usize) {
+    assert!(csv.starts_with("time_seconds,occurrence_id,component_id,x_mm,y_mm,z_mm,"));
+    let rows: Vec<Vec<&str>> = csv
+        .lines()
+        .skip(1)
+        .map(|line| line.split(',').collect())
+        .collect();
+    assert!(rows.iter().all(|row| row.len() == 14));
+    let first = rows
+        .iter()
+        .find(|row| {
+            row[0].parse::<f64>().unwrap().abs() < 1e-9
+                && (row[5].parse::<f64>().unwrap() - 5.).abs() < 1e-6
+        })
+        .unwrap();
+    let moving: Vec<_> = rows.iter().filter(|row| row[1] == first[1]).collect();
+    assert_eq!(moving.len(), rate + 1);
+    for (index, row) in moving.iter().enumerate() {
+        let time = index as f64 / rate as f64;
+        assert!((row[0].parse::<f64>().unwrap() - time).abs() < 1e-8);
+        assert!((row[5].parse::<f64>().unwrap() - (5. - 5. * time)).abs() < 1e-6);
+        if index > 0 {
+            assert!((row[10].parse::<f64>().unwrap() - 5.).abs() < 1e-6);
+        }
+    }
+}
