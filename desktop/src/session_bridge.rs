@@ -1726,10 +1726,30 @@ fn control_for_window_owned_observing(
     engine: &AppState,
     response: Option<Value>,
     expected: Option<(&limo_cad_interface::DocumentContext, &str)>,
+    observed: impl FnMut(&limo_cad_occt::DrawingProjectionRequest, &limo_cad_occt::DrawingProjectionDto),
+) -> Result<Value, String> {
+    control_for_window_owned_with_observers(
+        state,
+        window_label,
+        engine,
+        response,
+        expected,
+        observed,
+        |_| {},
+    )
+}
+
+fn control_for_window_owned_with_observers(
+    state: &SessionBridgeState,
+    window_label: &str,
+    engine: &AppState,
+    response: Option<Value>,
+    expected: Option<(&limo_cad_interface::DocumentContext, &str)>,
     mut observed: impl FnMut(
         &limo_cad_occt::DrawingProjectionRequest,
         &limo_cad_occt::DrawingProjectionDto,
     ),
+    mut section_finished: impl FnMut(&limo_cad_native_engine::FinishedSectionReview),
 ) -> Result<Value, String> {
     let mut lease_path = state
         .process_lease_path
@@ -1912,6 +1932,30 @@ fn control_for_window_owned_observing(
                             json!({"format":request.format,"encoding":"utf8","content":content,"sheet_id":request.sheet_id})
                         })
                     }),
+                    Err(error) => Err(error),
+                }
+            } else if supported && method == "solid_section_review" && native_ticket.is_some() {
+                let prepared = engine.prepare_section_review(payload);
+                drop(publishers);
+                drop(lease_path);
+                let finished = prepared.and_then(|prepared| prepared.inspect());
+                let value = finished
+                    .as_ref()
+                    .map_err(Clone::clone)
+                    .and_then(|finished| {
+                        section_finished(finished);
+                        serde_json::to_value(finished.report()).map_err(|error| error.to_string())
+                    });
+                lease_path = state
+                    .process_lease_path
+                    .lock()
+                    .map_err(|_| "session process lease lock poisoned")?;
+                publishers = state
+                    .publishers
+                    .lock()
+                    .map_err(|_| "publisher lock poisoned")?;
+                match finished {
+                    Ok(finished) => engine.validate_section_review(&finished).and(value),
                     Err(error) => Err(error),
                 }
             } else if supported {

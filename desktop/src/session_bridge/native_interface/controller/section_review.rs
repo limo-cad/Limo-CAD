@@ -297,40 +297,65 @@ pub(crate) fn reduce(
     let owner = receipt.owner.clone();
     let revision = receipt.revision;
     let report_generation = world.resource::<State>().generation;
-    worker::enqueue_prepared_query(
+    worker::enqueue_section_review(
         world,
         receipt.owner,
         revision,
-        "solid_section_review".into(),
         serde_json::to_value(req).map_err(|e| e.to_string())?,
-        |value| {
-            let mut report: SectionReview =
-                serde_json::from_value(value).map_err(|e| e.to_string())?;
-            let image = if report.svg.is_empty() {
-                None
-            } else {
-                Some(rasterize(&report.svg)?)
-            };
-            let cutaway = report
-                .cutaway
-                .take()
-                .map(|body| Arc::new(native_viewport::section_view::PreparedCutaway::new(body)));
-            Ok((report, image, cutaway))
-        },
+        prepare_section_presentation,
         move |world, services, result| {
-            services.bridge.with_native_document_receipt(
-                &services.engine, &owner, |current| {
+            adopt_section_presentation(world, services, &owner, revision, report_generation, result)
+        },
+    )
+}
+
+type SectionPresentation = (
+    Option<Image>,
+    Option<Arc<native_viewport::section_view::PreparedCutaway>>,
+);
+type PreparedSectionPresentation = (
+    limo_cad_native_engine::FinishedSectionReview,
+    SectionPresentation,
+);
+
+fn prepare_section_presentation(
+    mut finished: limo_cad_native_engine::FinishedSectionReview,
+) -> Result<PreparedSectionPresentation, String> {
+    let report = finished.report_mut();
+    let image = if report.svg.is_empty() {
+        None
+    } else {
+        Some(rasterize(&report.svg)?)
+    };
+    let cutaway = report
+        .cutaway
+        .take()
+        .map(|body| Arc::new(native_viewport::section_view::PreparedCutaway::new(body)));
+    Ok((finished, (image, cutaway)))
+}
+fn adopt_section_presentation(
+    world: &mut World,
+    services: &NativeServices,
+    owner: &DocumentContext,
+    revision: u64,
+    report_generation: u64,
+    result: Result<PreparedSectionPresentation, String>,
+) -> Result<Value, String> {
+    services.bridge.with_native_document_receipt(
+                &services.engine, owner, |current| {
                     if current != revision || !world.get_resource::<State>()
-                        .is_some_and(|s| s.current(&owner, current, report_generation)) {
+                        .is_some_and(|s| s.current(owner, current, report_generation)) {
                         return Err("The section review changed before the result arrived".into());
                     }
-                    let (report,image,cutaway)=match result {
-                        Ok((_,prepared))=>prepared,
+                    let (finished,(image,cutaway))=match result {
+                        Ok(prepared)=>prepared,
                         Err(error)=> {
                             world.resource_mut::<State>().message=error.clone();
                             return Err(error);
                         }
                     };
+                    services.engine.validate_section_review(&finished)?;
+                    let report = finished.into_report();
                     world.init_resource::<Assets<Image>>();
                     let image=image.map(|image|world.resource_mut::<Assets<Image>>().add(image));
                     let response=json!({"inspected":true,"source_revision":revision,
@@ -351,8 +376,6 @@ pub(crate) fn reduce(
                     Ok(response)
                 },
             )
-        },
-    )
 }
 
 fn rasterize(svg: &str) -> Result<Image, String> {
@@ -715,6 +738,153 @@ fn paint(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ordered_section_inspection_releases_live_guards_and_rejects_stale_presentation() {
+        use crate::session_bridge::native_interface::tests::Fixture;
+        let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+        for case in ["live", "draft", "close", "edit", "replace", "native"] {
+            let fixture = Fixture::new();
+            let owner = fixture.owner();
+            for (operation, arguments) in [
+                (
+                    "sketch_begin",
+                    json!({"name":"Section stock","plane":{"type":"origin_plane","plane":"xy"}}),
+                ),
+                (
+                    "sketch_add_rectangle",
+                    json!({"mode":"two_point","p1":{"x":0.,"y":0.},"p2":{"x":18.,"y":12.},"ctrl_held":true}),
+                ),
+                ("sketch_finish", json!({})),
+                (
+                    "solid_extrude",
+                    json!({"sketch_name":"Section stock","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":8.}}),
+                ),
+            ] {
+                fixture
+                    .bridge
+                    .apply_native_mutation(
+                        &fixture.engine,
+                        &owner,
+                        operation,
+                        &arguments,
+                        || Ok(()),
+                    )
+                    .unwrap();
+            }
+            let body = fixture.engine.solid_scene_snapshot().bodies[0].id;
+            let before = fixture.engine.engine_call("project_export_model", "");
+            let receipt = fixture
+                .bridge
+                .native_document_receipt(&fixture.engine, &owner)
+                .unwrap();
+            let services = NativeServices {
+                engine: fixture.engine.clone(),
+                bridge: fixture.bridge.clone(),
+            };
+            let mut world = World::new();
+            worker::install(
+                &mut world,
+                services.clone(),
+                NativeInterfaceHandle::new(|| {}),
+            )
+            .unwrap();
+            world.insert_resource(State {
+                owner: Some(owner.clone()),
+                revision: receipt.revision,
+                visible: true,
+                in_3d: true,
+                ..Default::default()
+            });
+            world.init_resource::<Assets<Image>>();
+            let (sent, ready) = std::sync::mpsc::sync_channel(1);
+            let capture_services = services.clone();
+            let capture_owner = owner.clone();
+            let adoption_owner = owner.clone();
+            worker::enqueue_section_review(&mut world, owner.clone(), receipt.revision,
+                json!({"body_id":body,"plane":"xy","offset_mm":4.,"probe_mm":6.,"include_cutaway":true}),
+                move |finished| {
+                    // Real ordered Inspect computation has finished with both
+                    // live guards available before its CPU presentation stage.
+                    capture_services.bridge.with_native_document_receipt(&capture_services.engine, &capture_owner,
+                        |_| { capture_services.engine.with_drawing(|_| ()); Ok(()) }).unwrap();
+                    assert_eq!(finished.report().bounds_mm.unwrap(), [0.,0.,18.,12.]);
+                    assert!(finished.report().cutaway.is_some());
+                    let prepared = prepare_section_presentation(finished)?;
+                    assert!(prepared.1.0.is_some() && prepared.1.1.is_some());
+                    sent.send(()).unwrap();
+                    Ok(prepared)
+                },
+                move |world, services, result| adopt_section_presentation(world, services,
+                    &adoption_owner, receipt.revision, 0, result)).unwrap();
+            ready.recv_timeout(Duration::from_secs(10)).unwrap();
+            match case {
+                "close" => {
+                    assert!(escape(&mut world));
+                }
+                "draft" => world
+                    .resource_mut::<State>()
+                    .set_value(Field::Offset, "3".into()),
+                "edit" => {
+                    fixture.rename(&owner, "Changed during Inspect").unwrap();
+                }
+                "replace" => {
+                    fixture
+                        .bridge
+                        .apply_native_mutation(
+                            &fixture.engine,
+                            &owner,
+                            "cad_new_project",
+                            &json!({}),
+                            || Ok(()),
+                        )
+                        .unwrap();
+                }
+                "native" => {
+                    let model =
+                        crate::session_bridge::parse_engine_envelope(before.clone()).unwrap();
+                    crate::session_bridge::parse_engine_envelope(
+                        fixture
+                            .engine
+                            .project_load(&serde_json::to_string(model.as_str().unwrap()).unwrap()),
+                    )
+                    .unwrap();
+                }
+                _ => {}
+            }
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            loop {
+                if let Some(outcome) = worker::poll(&mut world, &services) {
+                    let state = world.resource::<State>();
+                    if case == "live" {
+                        assert_eq!(outcome.value.unwrap()["inspected"], true);
+                        assert!(
+                            state.report.is_some()
+                                && state.image.is_some()
+                                && state.cutaway.is_some()
+                        );
+                        assert_eq!(world.resource::<Assets<Image>>().len(), 1);
+                    } else {
+                        assert!(outcome.value.is_err());
+                        assert!(
+                            state.report.is_none()
+                                && state.image.is_none()
+                                && state.cutaway.is_none()
+                        );
+                        assert!(world.resource::<Assets<Image>>().is_empty());
+                    }
+                    break;
+                }
+                assert!(std::time::Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if matches!(case, "live" | "draft" | "close" | "native") {
+                assert!(
+                    fixture.engine.engine_call("project_export_model", "") == before,
+                    "Section inspection must preserve the complete authored model"
+                );
+            }
+        }
+    }
     #[test]
     fn three_d_inspection_keeps_camera_navigation_available_and_escape_closes() {
         let mut world = World::new();
