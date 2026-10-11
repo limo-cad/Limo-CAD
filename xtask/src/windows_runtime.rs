@@ -168,7 +168,7 @@ pub(crate) fn inspect_bytes(bytes: &[u8]) -> Result<ImageImports> {
         "PE section table exceeds declared headers"
     );
     let mut sections = Vec::with_capacity(count);
-    for entry in span(bytes, table, count * 40)?.chunks_exact(40) {
+    for entry in span(bytes, table, count * 40)?.as_chunks::<40>().0 {
         let section = Section {
             address: u32_at(entry, 12)?,
             raw: u32_at(entry, 20)?,
