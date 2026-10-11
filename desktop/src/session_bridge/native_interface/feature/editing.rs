@@ -27,10 +27,10 @@ impl Stage {
                 .map(|index| (index, features.rollback_index))
                 .ok_or("The feature no longer exists")
         })?;
-        let source = parse_engine_envelope(engine.engine_call("project_export_model", ""))?
-            .as_str()
-            .ok_or("Engine omitted the edit snapshot")?
-            .to_owned();
+        let source = crate::session_bridge::engine_text(
+            parse_engine_envelope(engine.engine_call("project_export_model", ""))?,
+            "Engine omitted the edit snapshot",
+        )?;
         let stage = Self {
             engine: AppState::new(),
             source,
@@ -51,10 +51,10 @@ impl Stage {
     }
     fn new_split(engine: &AppState, receipt: DocumentReceipt) -> Result<Self, String> {
         let live_errors = engine.solid_scene_snapshot().errors.clone();
-        let source = parse_engine_envelope(engine.engine_call("project_export_model", ""))?
-            .as_str()
-            .ok_or("Engine omitted the Split Body snapshot")?
-            .to_owned();
+        let source = crate::session_bridge::engine_text(
+            parse_engine_envelope(engine.engine_call("project_export_model", ""))?,
+            "Engine omitted the Split Body snapshot",
+        )?;
         let stage = Self {
             engine: AppState::new(),
             source,
