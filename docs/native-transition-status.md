@@ -1,6 +1,38 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: PR124 remains open. Main advanced to
+Current checkpoint, **2026-10-11 UTC**: PR124 remains open, and main is unchanged
+at `54dcab7f`. Reviewed code `1c0dc76e` follows the published `32b11c53`
+checkpoint. Strict Windows desktop, native-engine/OCCT and MCP Clippy
+passed on that source. All six necessary drawing/Bambu/modal checks passed once;
+the three exact passing drawing/File checks from `de62fa52` are retained without
+repetition. This checkpoint does not claim the new source is deployed or that its
+CI has run. Exact results and limits are recorded in
+`docs/qualification/detached-drawing-output-20261011.json`. Historical checkpoints
+below retain their original revision, failures
+and scope; their installed/live identities are not current runtime identities.
+
+The new source moves cold drawing projection and drawing-file/print preparation
+off the live publisher and engine, with independent native copies, exact owner
+and projection-intent guards, and bounded completed-result reuse. It adds direct
+Drawing PDF export through CAD's owned Save dialog. Necessary regression checks
+found and led to repairs for PDF pages being 4/3 too large and paper-container
+identity being lost during pending repaint. Original assertions and failure
+receipts remain intact. Bambu template inspection, preview meshing/ZIP work and
+post-write inspection move off the publisher; the actual write's preparation and
+cancellation ownership are being repaired separately. Native modal refusals gain
+bounded class/owner diagnostics without broadening input authority.
+
+The installed GUI remains clean `eb71c32d`. Its turbine document is fully saved
+at `D:/limo-cad-maintenance/ui-models/Turbine assembly - native window acceptance.limo`;
+complete model and archive preservation are recorded in
+`turbine-eb71-print-dialog-document-preservation.json`. Physical Print presented an
+Explorer-owned `ProxyModalWindow`, which the guarded operator correctly refused.
+No physical print job or Print-dialog cancellation is qualified. Targeted direct
+PDF acceptance and the repaired cold-paper response require a fresh deployment
+and matched GUI/MCP pair. Broad exploratory UI and manual MCP mutation coverage
+remain paused. Saved/recovery data and other executable paths remain preserved.
+
+Historical checkpoint, **2026-10-11 UTC**: PR124 remains open. Main advanced to
 54dcab7f after PR338 merged; Bevy includes that history through merge `08cdd6b9`.
 Incoming research/license corrections were preserved. No Bevy merge into main
 has occurred. The user approved known-defect completion and targeted repaired
