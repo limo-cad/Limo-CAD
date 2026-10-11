@@ -2124,3 +2124,73 @@ directory. Exact binary import inspection confirms the dependency. Runtime
 assembly and license-notice handling are being repaired in parallel. The legacy
 C: SDK, current GUI and private Vita runtime remain preserved; no new SDK or GUI
 qualification is claimed by the started compile.
+
+### Qualified SDK and query/close delivery checkpoint
+
+Reviewed repairs through clean `3eb0cd0d` close the direct Windows SDK runtime
+gap with the exact selected FreeType/compression DLLs and their five license
+notices (`a3c6d1ed`, `8fae444c`). Bounded PE normal/delay-import validation rejects
+missing transitive dependencies and mixed machine types before packaging;
+Windows/API-set/VC prerequisites remain explicit. Actual installed imports
+required the exact Windows builtin `wsock32.dll` (`8135b1ad`). No ambient PATH
+lookup or arbitrary system DLL exception was added.
+
+`560c2f82` adds verified package-relative private-header forwarding paths without
+changing the OCCT source, recipe, key or completed objects. Both previously
+failing STEP translation units compiled; all remaining C++ work and installation
+finished. All 3,153 retained objects had unchanged paths, lengths and timestamps.
+The final supported resume reported `ninja: no work to do`, verified runtime
+closure, passed the actual installed checked-matrix probe with layout bytes 160,
+and published the owned inventory of 7,455 files. The qualified prefix is
+`D:/limo-cad-maintenance/checked-occt-sdk`, key `db1f66e6`.
+Its complete receipt SHA256 is
+`2bc69f3ed9c26327036c867e9d7c3d9363487a59095fd8d5587d4934468fbbfa`.
+The legacy C: SDK, original caches and private Vita runtime remain preserved.
+
+Nine new SDK/runtime/include checks and two specifically affected existing
+checks passed at `f52aa609`, with strict xtask Clippy and the native harness build.
+The two affected snapshot/CAM wire checks and strict MCP Clippy passed at
+`8352889c`. File shortcut admission also uses the narrow coherent modal projection
+instead of copying the presented frame (`cf5cae14`); its guards are unchanged.
+
+Windows CI at `3288ec99` exposed a real result-publication race. `d0267058`
+publishes heartbeat and process lease before the query result becomes visible,
+retains guarded produced outcomes on publication failure, and retries delivery
+without replaying the action. The original failing MCP sequence and two other
+new/affected native checks passed. A fourth new fault fixture initially used a
+public operation name instead of the engine method; `90acec1b` corrects that
+fixture and adds an exact recovered-value assertion without weakening its
+publication, freshness or model fences. Its corrected check passed at `3eb0cd0d`.
+
+`7733f8f2` repairs a separate concrete close-retry early return: successful durable
+receipt delivery now reaches guarded shutdown in the same frame. The new actual
+blocked-publication/retry shutdown check and affected existing rejection check
+passed at `3eb0cd0d`, with strict desktop Clippy. The macOS packaged process timeout
+is not yet causally attributed to this defect. Fixed stderr stage markers
+(`84db2bba`) and retained owned lifecycle artifacts (`cf1fd18b`) preserve evidence
+for the next normal hosted run; no timeout or assertion was relaxed.
+
+Receipts are `sdk-runtime-closure-f52aa609-results.json`,
+`mcp-read-borrows-8352889c-results.json`,
+`native-query-liveness-d0267058-remaining-results.json`,
+`close-and-query-finalization-3eb0cd0d-results.json` and
+`checked-sdk-finalization-3eb0cd0d.json` under the evidence directory above.
+The earlier 36 distinct passes remain retained; affected existing checks are
+listed per batch rather than added again to a deduplicated total.
+
+The old clean `4859c8bd` GUI is still installed. Its freshly attached Split scratch
+snapshot matches the saved archive's complete model content. Deployment and
+finite visible acceptance remain pending; broad UI/MCP qualification stays
+paused. No new manual pass or issue closure is claimed. GitHub still has 18 open
+issues; main remains unchanged pending Jack's approval.
+
+Desktop packaging keeps its existing concurrency group but lets running jobs
+finish before a pending revision runs. The active Windows ARM SDK build has no
+restorable PR124/main cache yet; cancelling it would discard that cold build
+before qualification and cache publication. Pending pushes still consolidate,
+and every package matrix entry and acceptance command remains enabled.
+The revised executable-YAML policy contract and specifically affected existing
+stale-check/trigger contract both passed at `5a4ecc8e`, with strict xtask Clippy.
+The other workflows retain their prior cancellation and trigger checks; no
+check was removed or disabled. The receipt is
+`package-concurrency-5a4ecc8e-results.json`.
