@@ -383,6 +383,66 @@ pub(crate) fn enqueue_prepared_query<P: Send + 'static>(
     )
 }
 
+/// Section geometry and CPU presentation own detached shapes after the single
+/// original admission. The opaque native proof survives until UI adoption.
+pub(crate) fn enqueue_section_review<P: Send + 'static>(
+    world: &mut World,
+    owner: DocumentContext,
+    revision: u64,
+    arguments: Value,
+    prepare: impl FnOnce(
+            limo_cad_native_engine::FinishedSectionReview,
+        ) -> Result<(limo_cad_native_engine::FinishedSectionReview, P), String>
+        + Send
+        + 'static,
+    complete: impl FnOnce(
+            &mut World,
+            &NativeServices,
+            Result<(limo_cad_native_engine::FinishedSectionReview, P), String>,
+        ) -> Result<Value, String>
+        + Send
+        + 'static,
+) -> Result<Value, String> {
+    let (output, prepared) = mpsc::sync_channel(1);
+    enqueue(
+        world,
+        "solid_section_review".into(),
+        move |services, guard| {
+            let snapshot = services.bridge.with_native_document_receipt(
+                &services.engine,
+                &owner,
+                |current| {
+                    if current != revision {
+                        return Err("The model changed before the preview could run".into());
+                    }
+                    guard.validate()?;
+                    services
+                        .engine
+                        .prepare_section_review(&arguments.to_string())
+                },
+            )?;
+            let data = prepare(snapshot.inspect()?)?;
+            output
+                .send(data)
+                .map_err(|_| "Section preparation receiver retired")?;
+            Ok(NativeMutationResult {
+                context: owner,
+                engine_revision: revision,
+                value: Value::Null,
+            })
+        },
+        move |world, services, result| {
+            let result = result.and_then(|_| {
+                prepared
+                    .try_recv()
+                    .map_err(|_| "Section returned no prepared data".into())
+            });
+            complete(world, services, result)
+        },
+        |_| false,
+    )
+}
+
 fn enqueue(
     world: &mut World,
     operation: String,
