@@ -43,6 +43,13 @@ not reimplemented here.
   serialized before the structured payload moves. Incoming stdio tool arguments
   and names also move into dispatch (`1ea5a165`); error-response ID copying stays
   outside this change. Missing/null/error and notification contracts are retained.
+- MCP `load_snapshot_model` serializes the borrowed model string instead of
+  cloning it into a temporary JSON Value (`8352889c`). The retained model text
+  still supplies attach/refresh and script baselines; JSON string encoding and
+  generation, recompute, cancellation and publication fences are unchanged.
+  `crates/sketch/src/host.rs` also serializes `cam_document_ref()` synchronously
+  under the same manager read instead of cloning the complete CAM document.
+  Mutable CAM editor and import baselines retain their required owned copies.
 - Deferred pointer and lesson-preview guards consume one narrow presented
   owner/modal/canvas projection (`b498e6a4`, `94df968d`), without retaining surface
   text. Window fallback consumes paired presented bounds/scale (`676751ff`),
@@ -55,6 +62,12 @@ not reimplemented here.
   meaning. Validated canvas names are unique. Strict affected desktop Clippy
   passed at `0c2e30b4`; repeating pure gesture tests would not measure this
   allocation removal, so those earlier passes remain retained.
+- File shortcut admission checks presented modal emptiness through the existing
+  atomic pointer-context projection (`cf5cae14`). The shortcut entry runs for
+  unhandled native input, including cursor moves; it formerly copied the whole
+  presented frame before filtering keyboard events. The same presented frame,
+  missing/poisoned-frame behavior, modal and awaiting guards and their ordering
+  remain authoritative. Richer frame consumers are unchanged.
 - Native body mutation identities (`1671a574`) provide conservative dependency
   invalidation and a checked kernel owner. Exact private commit proofs let the
   renderer reuse same-document mesh handles and edge metadata across unchanged
@@ -104,6 +117,16 @@ filters). Incoming stdio and all five presented pointer/lesson/window and body
 Assets reuse checks passed at clean `42ec4d2f`. Source
 review, formatting and diff checks passed; no runtime latency or physical
 GPU-memory qualification follows.
+
+At clean `8352889c`, strict MCP Clippy and the specifically affected existing
+`read_only_snapshot_attach_refresh_detach` and
+`advertised_document_contract_round_trips_empty_and_populated_documents` checks
+passed once. The receipt is
+`D:/limo-cad-maintenance/backlog-autonomous-20261010/mcp-read-borrows-8352889c-results.json`.
+These cover real snapshot attachment/refresh/detachment and populated CAM wire
+behavior; they do not qualify deployed UI or measure allocation/latency savings.
+The File shortcut projection received source review and diff/format checks;
+no additional GUI or gesture pass is claimed for that caller change.
 
 Further source inspection confirms exact closed-document retirement, cold-owner
 cleanup after worker errors, weak scene stamps and document-specific mesh/entity
