@@ -54,8 +54,8 @@ where
     fn combine<T>(
         _: (),
         data: &mut T,
-        _: impl FnOnce(SystemIn<'_, A>, &mut T) -> Result<(), RunSystemError>,
-        guarded: impl FnOnce(SystemIn<'_, B>, &mut T) -> Result<(), RunSystemError>,
+        guarded: impl FnOnce(SystemIn<'_, A>, &mut T) -> Result<(), RunSystemError>,
+        _: impl FnOnce(SystemIn<'_, B>, &mut T) -> Result<(), RunSystemError>,
     ) -> Result<(), RunSystemError> {
         // The guarded system calls the original function with its parameters.
         // Running the other closure as well would duplicate surface operations.
@@ -76,7 +76,9 @@ where
     // Function-type sets cannot be assigned with in_set. The original system
     // contributes identity and metadata, and has no commands to apply because
     // only the guarded closure runs.
-    CombinatorSystem::<RunGuardedWindow, _, _>::new(original, guarded, name)
+    // CombinatorSystem reports the first system's last-run tick. Put the system
+    // that actually executes first so change/error metadata stays accurate.
+    CombinatorSystem::<RunGuardedWindow, _, _>::new(guarded, original, name)
 }
 
 pub(super) fn install_interface(render: &mut SubApp) -> SharedSubmission {
@@ -378,6 +380,7 @@ fn install_worker_schedule(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::ecs::{change_detection::Tick, system::SystemChangeTick};
     use bevy::render::RenderStartup;
     use std::{sync::mpsc, thread, time::Duration};
 
@@ -388,15 +391,19 @@ mod tests {
     struct SurfaceOrder(Vec<&'static str>);
 
     #[derive(Resource)]
-    struct PreparedSurface;
+    struct PreparedSurface(Tick);
 
     fn original_cpu_surface(mut order: ResMut<SurfaceOrder>) {
         order.0.push("unguarded");
     }
 
-    fn guarded_cpu_surface(mut commands: Commands, mut order: ResMut<SurfaceOrder>) {
+    fn guarded_cpu_surface(
+        mut commands: Commands,
+        mut order: ResMut<SurfaceOrder>,
+        tick: SystemChangeTick,
+    ) {
         order.0.push("guarded");
-        commands.insert_resource(PreparedSurface);
+        commands.insert_resource(PreparedSurface(tick.this_run()));
     }
 
     #[derive(Clone, Default, Resource)]
@@ -490,6 +497,22 @@ mod tests {
             identity.resource::<SurfaceOrder>().0,
             ["guarded", "prepared"],
             "original identity must order deferred work without duplicate execution"
+        );
+        let original_set = original_cpu_surface.into_system_set().intern();
+        let (_, guarded) = identity_schedule
+            .systems_with_access()
+            .unwrap()
+            .find(|(_, system)| {
+                system
+                    .system()
+                    .default_system_sets()
+                    .contains(&original_set)
+            })
+            .unwrap();
+        assert_eq!(
+            guarded.system().get_last_run(),
+            identity.resource::<PreparedSurface>().0,
+            "reported last-run tick must belong to the executed guarded system"
         );
 
         let mut interface = SubApp::new();
