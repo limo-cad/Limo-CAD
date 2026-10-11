@@ -11007,10 +11007,16 @@ mod tests {
             "counterbore_depth":0.0, "countersink_diameter":0.0, "countersink_angle_deg":90.0,
             "thread":null, "flip":false});
         server.call_tool("solid_hole", request).unwrap();
+        // Retain the authentic native STEP witness in this bounded fixture's
+        // captured output, including when a stricter ownership assertion fails.
+        let exported = server.call_tool("solid_export_step", json!({})).unwrap();
+        println!(
+            "native exact-tangent STEP source: {}",
+            exported["bytes_base64"].as_str().unwrap()
+        );
         let (_, _, donor_evidence) = inspect_native(server.manager.solid_scene_ref());
         // STEP removes authored Hole metadata, so the actual public full reader
         // cannot substitute the request's through-all extent for native evidence.
-        let exported = server.call_tool("solid_export_step", json!({})).unwrap();
         let mut imported = CadServer::new().unwrap();
         imported
             .call_tool(
@@ -11081,8 +11087,9 @@ mod tests {
         assert_eq!(imported.manager.solid_scene_ref(), &before_scene);
         println!("native exact-tangent donor: {donor_evidence}");
         println!("native exact-tangent STEP: {imported_evidence}; full summary: {full}");
-        // This source contract does not supply a persistent witness artifact or
-        // a clean matched desktop/MCP pair; those original #369 criteria remain.
+        // Captured STEP bytes can preserve the authentic witness independently.
+        // This source contract does not establish a clean matched desktop/MCP
+        // pair; that original #369 criterion remains.
     }
 
     #[test]
