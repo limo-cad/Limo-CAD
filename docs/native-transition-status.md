@@ -2178,9 +2178,9 @@ Receipts are `sdk-runtime-closure-f52aa609-results.json`,
 The earlier 36 distinct passes remain retained; affected existing checks are
 listed per batch rather than added again to a deduplicated total.
 
-The old clean `4859c8bd` GUI is still installed. Its freshly attached Split scratch
-snapshot matches the saved archive's complete model content. Deployment and
-finite visible acceptance remain pending; broad UI/MCP qualification stays
+Before deployment, the old clean `4859c8bd` GUI's freshly attached Split scratch
+snapshot matched the saved archive's complete model content. Deployment and
+finite visible acceptance were pending; broad UI/MCP qualification stays
 paused. No new manual pass or issue closure is claimed. GitHub still has 18 open
 issues; main remains unchanged pending Jack's approval.
 
@@ -2194,3 +2194,90 @@ stale-check/trigger contract both passed at `5a4ecc8e`, with strict xtask Clippy
 The other workflows retain their prior cancellation and trigger checks; no
 check was removed or disabled. The receipt is
 `package-concurrency-5a4ecc8e-results.json`.
+
+The clean `a3145e2c` native application is now deployed with the qualified
+`D:/limo-cad-maintenance/checked-occt-sdk`. All 63 runtime payload hashes were
+verified; the executable SHA256 is
+`effaac9acf3e044a75bb4d4f13edf0ca8c9dd49bf92cfbfd092f4f59d81a829b`.
+Fresh guarded observation confirms a clean matched desktop/MCP pair (desktop
+PID 28600, MCP PID 14480) and foreground ownership after guarded focus. This
+supersedes the old-runtime deployment status, not any pending functional check.
+The canonical checkout remains pinned during root's targeted UI acceptance;
+source `04551840` adds only the deployment diagnostic after the native build.
+
+That diagnostic's one new regression and strict xtask Clippy passed separately
+at isolated `e23e43b0`; no qualification gate or SDK assertion was weakened.
+Retain the latest 21 new/affected batch passes separately from the earlier 36
+distinct passes, and this one diagnostic pass as post-push validation; no
+combined deduplicated count is claimed. Evidence is
+`runtime-a3145e2c-payload-verified.json`,
+`live-pair-a3145e2c-focused-observation.json` and
+`deployment-diagnostic-e23e43b0-results.json` under the evidence directory above.
+The targeted new-document Split Redo check now passed through guarded human UI
+input on clean matched `a3145e2c`. Fresh creation produced healthy bodies 1/2,
+each 10×10×8; Undo restored the entire 20×10×8 baseline model except the documented
+monotonic `assembly/component_structure/next_occurrence_id` floor 11→12. Redo
+exactly restored the complete created model and entire native scene. Fresh
+active sessions were followed after each history transition. UI SaveAs to
+`repair-acceptance-batch/Split Redo accepted a3145e2c.limo` matches the published
+Redo model, and the original fixture archive SHA256 remains unchanged.
+Evidence is `split-redo-a3145e2c-comparison.json`, the corresponding
+`split-redo-a3145e2c-{unsplit,created,undo,redo}` captures/model/scene receipts,
+and `split-redo-a3145e2c-saved-archive-verified.json` under the evidence directory.
+Only local issue `split-body-invalid-new-creation` is marked passed. The earlier
+clean `5d46045c` boundary rejection, corrected creation and Undo qualification
+remains intact. This is a fresh transaction, not recovery of the original lost
+Undo stack or broad Split coverage. All unrelated leaves and MCP statuses remain
+unchanged; broad UI/MCP qualification stays paused.
+
+The remaining packaged boundary/source-restoration gate for #339 passed on
+clean matched `a3145e2c`. On the preserved 18x12x8 `part-a.nbcad` fixture, actual
+human UI XY0 Below and XY8 Above, both with Probe 6 and 3D cutaway mode, show
+readable boundary-contact feedback while retaining the full source block:
+neither a blank viewport nor a false orange cap. Matching read-only
+`solid_section_review` reports return `boundary_contact`, empty probe spans and
+no cutaway field; these reports are not represented as the UI ingress response.
+Close removes the section panel. Physical selection of the source top face
+produces an orange face with a white outline, retained after idle with Body1
+selected and the camera unchanged. Whole before/after models match exactly;
+the lower-boundary and after-Close native scenes match exactly. The original
+fixture SHA256 remains `3fd9de9ea88e4fb1e8e9e18c918224161be32c3be296197b90dad8d07ad457c2`.
+
+`issue339-a3145e2c-comparison.json` records independent saved-image/receipt review;
+the corresponding `issue339-a3145e2c-*` reports, observations and captures retain
+the evidence. The prior 14 targeted source checks and hosted `f7aacc2c` acceptance
+remain retained; all three native desktop hosts passed at `a3145e2c`, while
+`2da8cbd0` CI is ongoing at this checkpoint. This completes the finite #339
+closure evidence, not broad Section/drawing qualification or a GPU performance
+claim. Native cooperative limits still do not provide hard worker-process
+memory/deadline containment. No existing broad coverage leaf changed; the root
+UI/MCP run state remains paused.
+
+The original #347 silent named-camera failure now has finite human UI evidence
+on clean matched `a3145e2c`. The authentic garden-auger assembly archive SHA256
+is `32cd9fa180c96b102c22beaadd02f7eeb0797f21e10ba8c4b04609914475ec60`.
+Physical Recall followed by Close applied **Assembly - exploded**, **Fit
+inspection - mating surfaces** and **Assembly - open housing**. Each actual
+camera, visible-body list and occurrence-offset list exactly matches its saved
+view. The first two views have distinct cameras and visibly different framing;
+open housing clears offsets and hides Body26. All have no part offsets.
+
+Independent saved capture/model/observation review is recorded in
+`issue347-a3145e2c-comparison.json`. Exploded and Fit preserve the entire post-open
+model exactly. Open housing changes only `/visibility/hidden_body_ids` from
+`[213]` to `[26,213]`, the intended saved visibility; mechanical assembly poses,
+history, saved-view definitions and every other field remain unchanged. The
+preliminary `exploded-observation.png` predates Recall and is excluded as pass
+evidence. File-menu SaveAs to `repair-acceptance-batch/Named views accepted
+a3145e2c.limo` preserves the published open-housing model exactly; the original
+archive remains unchanged. `issue347-a3145e2c-saved-archive-verified.json` records
+this SaveAs preservation, not a repeated full persistence qualification. The
+independent Ctrl+Shift+S missing-dialog observation is not counted as a pass.
+
+The explicit contract repair `75883438` rejects unsupported
+`cad_interface action=view` plus `named_view` and directs callers to
+`recall_named_view`; its focused MCP regression remains retained. This closes
+the concrete silent-ignore defect scope, not the original full qualification
+matrix. Live MCP mutations, animated recall/readiness, stale-session/replacement,
+tab-switch and missing-viewport acceptance remain unclaimed. No broad UI/MCP
+leaf changes or repeated test passes follow from this targeted recall evidence.
