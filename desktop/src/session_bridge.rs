@@ -671,14 +671,29 @@ fn generation_conflict(session_id: &str, base: u64, current: Option<u64>) -> Str
 pub(crate) fn parse_engine_envelope(raw: String) -> Result<Value, String> {
     let envelope: Value =
         serde_json::from_str(&raw).map_err(|error| format!("invalid engine response: {error}"))?;
+    engine_envelope_value(envelope)
+}
+
+/// The parsed response is already owned. Transfer its payload instead of
+/// cloning model-sized strings, geometry arrays or document hierarchies.
+fn engine_envelope_value(mut envelope: Value) -> Result<Value, String> {
     if envelope.get("ok").and_then(Value::as_bool) == Some(true) {
-        Ok(envelope.get("value").cloned().unwrap_or(Value::Null))
+        Ok(envelope
+            .get_mut("value")
+            .map(Value::take)
+            .unwrap_or(Value::Null))
     } else {
-        Err(envelope
-            .get("error")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown Limo CAD engine error")
-            .to_string())
+        Err(match envelope.get_mut("error").map(Value::take) {
+            Some(Value::String(error)) => error,
+            _ => "unknown Limo CAD engine error".into(),
+        })
+    }
+}
+
+pub(crate) fn engine_text(value: Value, missing: &str) -> Result<String, String> {
+    match value {
+        Value::String(text) => Ok(text),
+        _ => Err(missing.into()),
     }
 }
 
@@ -1981,6 +1996,75 @@ fn reject_busy_controls(session: &str, except_id: Option<&str>) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn engine_response_transfers_owned_model_and_nested_document_payloads() {
+        let engine = AppState::new();
+        let before = engine.engine_call("project_export_model", "");
+        let response: Value = serde_json::from_str(&before).unwrap();
+        let original_model_allocation = response["value"].as_str().unwrap().as_ptr();
+        let model = engine_text(engine_envelope_value(response).unwrap(), "missing model").unwrap();
+        assert_eq!(model.as_ptr(), original_model_allocation);
+        assert!(serde_json::from_str::<Value>(&model).is_ok());
+        assert_eq!(
+            parse_engine_envelope(before.clone()).unwrap(),
+            Value::String(model)
+        );
+
+        // A real document hierarchy exercises an owned nonempty nested array,
+        // not merely a scalar response or an empty vector's dangling pointer.
+        let document = serde_json::to_value(engine.document_snapshot()).unwrap();
+        let response = json!({"ok":true,"value":document});
+        let rows = response["value"]["browser"].as_array().unwrap();
+        assert!(!rows.is_empty());
+        let original_rows_allocation = rows.as_ptr();
+        let expected = response["value"].clone();
+        let actual = engine_envelope_value(response).unwrap();
+        assert_eq!(
+            actual["browser"].as_array().unwrap().as_ptr(),
+            original_rows_allocation
+        );
+        assert_eq!(actual, expected);
+        assert_eq!(before, engine.engine_call("project_export_model", ""));
+    }
+
+    #[test]
+    fn engine_response_ownership_preserves_envelope_and_text_error_contracts() {
+        let response = json!({"ok":false,"error":"Kernel rejected the requested extent"});
+        let original_error_allocation = response["error"].as_str().unwrap().as_ptr();
+        let error = engine_envelope_value(response).unwrap_err();
+        assert_eq!(error, "Kernel rejected the requested extent");
+        assert_eq!(error.as_ptr(), original_error_allocation);
+        for response in [
+            json!({}),
+            json!({"ok":false,"error":42}),
+            json!({"ok":"true"}),
+            Value::Null,
+        ] {
+            assert_eq!(
+                engine_envelope_value(response).unwrap_err(),
+                "unknown Limo CAD engine error"
+            );
+        }
+        for response in [json!({"ok":true}), json!({"ok":true,"value":null})] {
+            assert_eq!(engine_envelope_value(response).unwrap(), Value::Null);
+        }
+        assert_eq!(
+            parse_engine_envelope(r#"{"ok":true,"value":42}"#.into()).unwrap(),
+            json!(42)
+        );
+        assert!(parse_engine_envelope("invalid JSON".into())
+            .unwrap_err()
+            .starts_with("invalid engine response:"));
+        for missing in [
+            "Save requires a completed project model",
+            "Project export was not text",
+            "Engine omitted the edit snapshot",
+            "Engine omitted the Split Body snapshot",
+        ] {
+            assert_eq!(engine_text(Value::Null, missing).unwrap_err(), missing);
+        }
+    }
 
     /// Serialize bridge tests because they share `LIMO_CAD_SESSION_DIR`.
     pub(super) static TEST_LOCK: Mutex<()> = Mutex::new(());

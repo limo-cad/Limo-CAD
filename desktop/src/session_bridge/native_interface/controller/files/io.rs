@@ -1,6 +1,6 @@
 //! Native File controls use the existing exchange DTOs, kernel and file writer.
 use super::*;
-use crate::session_bridge::parse_engine_envelope;
+use crate::session_bridge::{engine_text, parse_engine_envelope};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use limo_cad_core::BodyId;
 use limo_cad_export::MeshExportScope;
@@ -576,12 +576,10 @@ pub(super) fn export(
                     if intent.bambu.enabled { super::bambu::check_output(&intent, &path)?; }
                     let layout_report = fresh_layout_report(&services.engine, &intent)?;
                     check_report_confirmation(layout_report.as_ref(), super::bambu::target_layout_has_issues(&intent), intent.allow_layout_issues)?;
-                    let model = parse_engine_envelope(
-                        services.engine.engine_call("project_export_model", ""),
-                    )?
-                    .as_str()
-                    .ok_or("Project export was not text")?
-                    .to_owned();
+                    let model = engine_text(
+                        parse_engine_envelope(services.engine.engine_call("project_export_model", ""))?,
+                        "Project export was not text",
+                    )?;
                     let mut project_report = None;
                     let bytes = if intent.bambu.enabled {
                         let (bytes, report) = super::bambu::export_bytes(&services.engine, &intent, &model)?;

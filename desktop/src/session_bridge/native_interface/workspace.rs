@@ -3,7 +3,7 @@
 
 use super::{check_owner, context, NativeMutationResult};
 use crate::{
-    session_bridge::{parse_engine_envelope, SessionBridgeState},
+    session_bridge::{engine_text, parse_engine_envelope, SessionBridgeState},
     state::AppState,
 };
 use limo_cad_interface::DocumentContext;
@@ -358,10 +358,10 @@ impl DocumentWorkspace {
                 return Err("The document changed before Save was prepared".into());
             }
             validate()?;
-            parse_engine_envelope(engine.engine_call("project_export_model", ""))?
-                .as_str()
-                .ok_or("Save requires a completed project model")?
-                .to_owned()
+            engine_text(
+                parse_engine_envelope(engine.engine_call("project_export_model", ""))?,
+                "Save requires a completed project model",
+            )?
         };
         let bytes = if let Some(archive) = &tab.archive {
             let mut archive = archive
