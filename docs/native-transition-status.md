@@ -2281,3 +2281,19 @@ the concrete silent-ignore defect scope, not the original full qualification
 matrix. Live MCP mutations, animated recall/readiness, stale-session/replacement,
 tab-switch and missing-viewport acceptance remain unclaimed. No broad UI/MCP
 leaf changes or repeated test passes follow from this targeted recall evidence.
+
+The local Combine picker-guidance repair `7f6d25ec` now passed on the same
+clean matched `a3145e2c` pair. Physical input shows the singular **Click the
+target body** banner, then selects Body1 and activates the enabled Tool Bodies
+card with the plural **Click one or more tool bodies** banner. Cancel removes
+the form and preserves the complete 27,326-character published model exactly.
+The original fixture archive SHA256 remains
+`9cdf0c9ae714e2c49f90c1c058714263a2c8a60079c7e39dc392c5d557a1a846`.
+`combine-guidance-a3145e2c-comparison.json`, the target/tools-selected captures
+and observations, and before/after model receipts retain the evidence.
+The preliminary attempt to activate a disabled tool card before selecting a
+target is excluded from the pass. No Apply or Boolean transaction was repeated;
+prior geometry and persistence passes remain intact. Only this local guidance
+issue changes to passed. A separate selected/coplanar-body striping observation
+in the tool-selection capture is under bounded source investigation; this prompt
+pass does not qualify that rendering behavior. Broad UI/MCP coverage stays paused.
