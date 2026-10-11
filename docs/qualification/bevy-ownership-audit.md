@@ -9,14 +9,14 @@ not reimplemented here.
 ## Avoidable ownership removed
 
 - `controller/browser.rs::synchronize` previously cloned all of `DocumentDto`
-  at each aggregate revision. Commit `f3c0357e` retains only the browser's title,
+  at each aggregate revision. Commit `3181443d` retains only the browser's title,
   units and hierarchy. A short `with_document` read compares these inputs; an
   unchanged projection reuses its Arc. Owned rows are necessary after the engine
   guard ends. Cost scales with the browser hierarchy, excluding feature history.
   Owner replacement clears the predecessor before considering reuse. Hiding the
   panel intentionally preserves this bounded projection and collapse state.
 - `controller/history/panel.rs::synchronize` and `history/drag.rs::pointer`
-  previously retained full `DocumentDto` values. Commit `a9a24bc1` owns only
+  previously retained full `DocumentDto` values. Commit `db1aa006` owns only
   `FeatureTree`: ordered IDs, names, kinds, suppression/status and rollback cursor.
   The panel reuses unchanged history across aggregate revisions; exact owner and
   revision receipts remain independent of Arc identity. Drag startup shares the
@@ -25,10 +25,18 @@ not reimplemented here.
   order/cursor inputs until drop or cancellation. Comparison/copy cost scales with
   feature count and names/status text; browser hierarchy is excluded.
 - `controller/workbench/cam_view.rs::synchronize` previously copied the entire
-  CAM document on a selection-only preview-key change. Commit `a85c78d3` reuses
+  CAM document on a selection-only preview-key change. Commit `4d7cb0ac` reuses
   the retained document at the same owner/revision. Selected setup/operation and
   warnings are still recomputed; job key, cancellation and generation remain
   selection-sensitive. A changed revision or owner requires a new snapshot.
+- `session_bridge.rs` engine envelopes and save/export/edit text consumers now
+  transfer owned JSON payloads and strings instead of cloning the complete model
+  response (`0c587b12`). Required edit/cancel baselines remain owned. Envelope,
+  null/error and missing-text contracts are unchanged.
+- `native_viewport/platform.rs::apply_model_state` retires transient preview and
+  CAM stock inputs on document replacement before successor rendering
+  (`479665c7`). Existing readers can retain immutable old snapshots; clearing
+  stock advances its revision so downstream CPU/GPU refresh paths see retirement.
 
 ## Required ownership retained
 
@@ -55,13 +63,21 @@ not reimplemented here.
 
 ## Evidence and remaining acceptance
 
-The three commits add production-path regressions for relevant invalidation,
-owner replacement, retained-reader retirement and read-only model preservation.
-The CAM regression exercises the same guarded input acquisition used by
-`synchronize`, without starting simulation threads. Formatting and diff checks
-passed in the isolated source worktree. No builds, tests or live UI acceptance
-were run by the source worker; retained CI/manual receipts belong in the primary
-status/coverage records.
+Browser/history/CAM production-path regressions passed at clean `ff6b635c`,
+including the specifically affected existing history drag/rollback case. The CAM
+regression uses the same guarded input acquisition as `synchronize`, without
+starting simulation threads. New owned-envelope and replacement-stock checks are
+pending. Source review, formatting and diff checks passed; no runtime latency or
+physical GPU-memory qualification follows from those results.
+
+Further source inspection confirms exact closed-document retirement, cold-owner
+cleanup after worker errors, weak scene stamps and document-specific mesh/entity
+removal. Existing close/low-memory regressions were not rerun. The actual kernel
+still meshes every live body after solid recompute, and successor whole-scene
+identity invalidates all derived body/edge assets. Body IDs, pointers and topology
+signatures are not geometry revisions. Finer reuse needs authoritative
+document-scoped kernel body generations covering mutation, deletion, replay,
+reset and failed operations before render consumers may trust them.
 
 This does not close #333. Remaining work includes broader menu/window/MCP and
 background-export lifetime/lock-order inspection, document-cache behavior under

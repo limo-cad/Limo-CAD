@@ -1675,64 +1675,86 @@
       {"id":"mcp/bambu_local_verification_cancel","group":"document/export","mutates":false,"execution":"direct","status":"not_run"}
     ]
   },
-    "parallel_repairs_checkpoint":  {
-                                        "source_revision":  "4d7cb0ac",
-                                        "base_revision":  "4859c8bd",
-                                        "commits":  [
-                                                        "090efe6a",
-                                                        "28edcada",
-                                                        "3181443d",
-                                                        "88a69218",
-                                                        "db1aa006",
-                                                        "4d7cb0ac"
-                                                    ],
-                                        "qualification":  "source_reviewed_hosted_execution_pending",
-                                        "new_focused_checks_unrun":  [
-                                                                         "native_readback_exposes_actual_global_overrides_and_capability_without_qualifying_failed_slice",
-                                                                         "bounds_warnings_keep_body_face_provenance_and_do_not_certify_cut_volume",
-                                                                         "blind_extent_remains_unknown_for_ambiguous_ring_face_ownership",
-                                                                         "browser_projection_excludes_history_and_invalidates_only_consumed_inputs",
-                                                                         "browser_sync_reuses_projection_across_sketch_edits_and_retires_owner",
-                                                                         "history_panel_reuses_only_unchanged_history_and_retires_replaced_owners",
-                                                                         "history_drag_shares_current_panel_and_rejects_stale_shared_history",
-                                                                         "cam_preview_selection_reuses_document_but_source_and_owner_changes_retire_it"
-                                                                     ],
-                                        "installed_revision":  "4859c8bdc5575fe8858bfb3c0153c48569f8e6eb",
-                                        "installed_payload_verified":  70,
-                                        "installed_executable_sha256":  "94c5e541db3b9a05f22c75560c8e31f89c7ee45590f513e32bee144771c2e856",
-                                        "fresh_live_pair":  {
-                                                                "foreground_observed":  true,
-                                                                "status":  "matched",
-                                                                "desktop_pid":  22412,
-                                                                "mcp_pid":  15380,
-                                                                "source_modified":  false
-                                                            },
-                                        "prior_hosted_native":  {
-                                                                    "revision":  "4859c8bd",
-                                                                    "ubuntu":  {
-                                                                                   "ignored":  10,
-                                                                                   "failed":  0,
-                                                                                   "passed":  983
-                                                                               },
-                                                                    "macos":  {
-                                                                                  "ignored":  10,
-                                                                                  "failed":  0,
-                                                                                  "passed":  988
-                                                                              },
-                                                                    "windows":  "pending"
-                                                                },
-                                        "closed_issues":  [
-                                                              12,
-                                                              94,
-                                                              231,
-                                                              312,
-                                                              313,
-                                                              314,
-                                                              315,
-                                                              360
-                                                          ],
-                                        "remaining_open_at_reconciliation":  18,
-                                        "new_manual_passes_claimed":  false,
-                                        "broad_catalog_statuses_changed":  false
-                                    }
+  "parallel_repairs_checkpoint": {
+    "source_revision":  "418e8931d98fd509b50239096f8b18f831ff9cd4",
+    "base_revision":  "4859c8bd",
+    "commits":  [
+                    "090efe6a",
+                    "28edcada",
+                    "3181443d",
+                    "88a69218",
+                    "db1aa006",
+                    "4d7cb0ac",
+                    "e3d4021f",
+                    "0c587b12",
+                    "479665c7",
+                    "ea78f812",
+                    "3b48378d",
+                    "30864843",
+                    "418e8931"
+                ],
+    "qualification":  "source_reviewed_nine_focused_checks_passed_five_new_checks_and_native_acceptance_pending",
+    "new_focused_checks_unrun":  [
+                                     "engine_response_transfers_owned_model_and_nested_document_payloads",
+                                     "engine_response_ownership_preserves_envelope_and_text_error_contracts",
+                                     "document_replacement_retires_transient_preview_and_cam_stock_before_render",
+                                     "center_arc_overshoot_backtrack_final_click_preserves_a_true_full_turn",
+                                     "queued_or_refused_exposure_never_certifies_focus_or_input"
+                                 ],
+    "installed_revision":  "4859c8bdc5575fe8858bfb3c0153c48569f8e6eb",
+    "installed_payload_verified":  70,
+    "installed_executable_sha256":  "94c5e541db3b9a05f22c75560c8e31f89c7ee45590f513e32bee144771c2e856",
+    "fresh_live_pair":  {
+                            "foreground_observed":  true,
+                            "status":  "matched",
+                            "desktop_pid":  22412,
+                            "mcp_pid":  15380,
+                            "source_modified":  false,
+                            "latest_foreground_observed":  false,
+                            "focus_request":  "refused_without_input"
+                        },
+    "prior_hosted_native":  {
+                                "revision":  "4859c8bd",
+                                "ubuntu":  {
+                                               "ignored":  10,
+                                               "failed":  0,
+                                               "passed":  983
+                                           },
+                                "macos":  {
+                                              "ignored":  10,
+                                              "failed":  0,
+                                              "passed":  988
+                                          },
+                                "windows":  "pending"
+                            },
+    "closed_issues":  [
+                          12,
+                          94,
+                          231,
+                          312,
+                          313,
+                          314,
+                          315,
+                          360
+                      ],
+    "remaining_open_at_reconciliation":  18,
+    "new_manual_passes_claimed":  false,
+    "broad_catalog_statuses_changed":  false,
+    "completed_focused_checks":  {
+                                     "revision":  "ff6b635cdcdd4dc5830dbafa61201500f2ee5ea4",
+                                     "passed":  9,
+                                     "failed":  0,
+                                     "new":  8,
+                                     "specifically_affected_existing":  1,
+                                     "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/parallel-repairs-ff6b635c-tests.json"
+                                 },
+    "compatible_windows_sdk_cache":  {
+                                         "scope":  "refs/pull/124/merge",
+                                         "installed_id":  8785316823,
+                                         "binary_id":  8785314732,
+                                         "inputs_key":  "82943b69",
+                                         "saved_after_qualification":  true,
+                                         "receipt":  "D:/limo-cad-maintenance/backlog-autonomous-20261010/ci-4859c8bd-qualified-windows-sdk-cache-saved.json"
+                                     }
+}
 }
