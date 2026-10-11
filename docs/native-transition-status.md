@@ -1,6 +1,25 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: source `70eba71a` combines compact
+Current checkpoint, **2026-10-11 UTC**: source `35c2a8bf` integrates
+the reviewed shared GPU surface/submission repair for **#374**, retained owned-child
+exit diagnostics, executable slicer-toolpath evidence for **#316**, and the
+strengthened authentic native tangent/full-reader test for **#369**. Strict changed
+desktop/export/MCP checks and their three exact affected regressions pass once on
+clean code source `b1ffcde3`, whose qualified code blobs remain unchanged; the previously qualified xtask check and single owned-child
+regression are retained without repetition. Native fixture source is preserved as
+the committed STEP witness, with four real native face owners on its tangent edge
+and two ambiguous reader candidates whose depth/extent remain unknown. Source
+review is clear; actual repaired-head Windows ARM64/x64/macOS packaged GPU acceptance is pending the next normal PR124 checks.
+The earlier compile errors and pre-correction renderer pass remain recorded.
+Three practical lesson captions now explain the completed dimensions and retained
+edit drivers; operation, chapter, camera and timing source is unchanged. Original
+teaching/learning review remains open. Issues #316 and #369 retain their original
+live/native handoff criteria. Broad
+UI/MCP coverage stays paused, and its complete ledger and live runtime/data remain
+unchanged. Exact receipts, source bindings, authentic failures and scope limits:
+`docs/qualification/surface-toolpath-tangent-20261011.json`.
+
+Historical checkpoint, **2026-10-11 UTC**: source `70eba71a` combines compact
 native File Open completion with original load diagnostics retained, localized
 English/Spanish/German/Simplified Chinese product entrances, and three practical
 edit/recovery lesson guides with authored catalog and UTF-16 harness repairs.
