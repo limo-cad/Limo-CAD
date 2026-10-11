@@ -77,6 +77,13 @@ not reimplemented here.
   `9e16fade` follow-up compares the retained full model by borrow while keeping
   actual worker request payloads owned; its focused source check passed once
   in the export receipt below.
+- Active sketch availability, history dispatch and fallback publication focus
+  (`8d4acaea`) read the active-session flags directly instead of building and
+  serializing sketch geometry. Public/editor DTOs and the existing poisoned-lock
+  behavior remain unchanged. Wheel and busy Save/Escape routing (`d20d62b1`) use
+  narrow presented projections at each original read position. Layout warning
+  labels (`fd85a556`) borrow assembly intent and own only requested strings,
+  preserving order, duplicates, first match and unknown-ID fallbacks.
 - Native body mutation identities (`1671a574`) provide conservative dependency
   invalidation and a checked kernel owner. Exact private commit proofs let the
   renderer reuse same-document mesh handles and edge metadata across unchanged
@@ -216,8 +223,14 @@ retains the `9cdf863d` Print-to-File DOCINFOW option check without repetition;
 that check does not qualify the OS dialog/spooler or physical print. The real
 four-plate template is not positive single-plate ResolvedScene qualification.
 STEP `d493f04e`, native drawing-export `27ec6551` and desktop/CI repair `4382a5a8`
-remain reviewed source with their new qualification pending here. No final
-combined-source, new live-pair or GPU/latency pass follows from these receipts.
+are integrated and qualified at clean `fd85a556`: strict changed-package Windows
+checks and their three new regressions passed once. The specifically affected
+real sketch-history and busy Save regressions also passed once after the narrow
+read changes. [STEP/drawing receipt](detached-step-drawing-20261011.json) records
+both artifacts and the original strict-lint failure with its assertion-preserving
+correction. Earlier passing export/drawing/Print-to-File and generic pointer
+filters were retained. This is combined-source qualification of the stated
+paths, with no new live-pair, GPU, memory-pressure or latency claim.
 
 Keep #333 open for deployed behavior, memory pressure, background-holder
 acceptance and the wider service/transport lock graph. Knowledge resources are

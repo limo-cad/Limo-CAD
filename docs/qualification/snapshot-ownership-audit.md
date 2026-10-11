@@ -2,8 +2,9 @@
 
 Source review for [#333](https://github.com/limo-cad/Limo-CAD/issues/333), based on
 the historical `278025a52247c7316c8553fd2a390f9179150733` census and the
-bounded source follow-up through `d493f04e` on 2026-10-11. The separate native
-drawing-export follow-up `27ec6551` is identified as pending qualification below. This is a concrete inventory
+bounded source follow-up through clean `fd85a556` on 2026-10-11. Scoped STEP,
+native/attached drawing and affected history/input qualification is recorded
+below. This is a concrete inventory
 of production snapshot APIs and their desktop consumers, shared host/MCP read
 contracts, and the document caches they feed. It is not a census of every clone
 in the repository, a benchmark, or live UI qualification. Test fixtures and
@@ -186,11 +187,12 @@ below and in the later export-isolation section:
   owned across broker/write/mutation/recovery boundaries. Publication uses the
   existing reservation/owner fence and releases engine reads before publishing.
   Published snapshot reads are not instantaneous live-engine snapshots. The
-  model-frame alias shares `viewport_frame` Arcs. Active-sketch nullness and
-  Active-sketch nullness and Undo/Redo-availability scalar reads remain audit
-  pending: the historical census serialized a whole sketch for those scalars,
-  and this follow-up has not checked their current production read paths.
-  This is an unverified projection lead, not a claimed current defect.
+  model-frame alias shares `viewport_frame` Arcs. Active-sketch presence and
+  Undo/Redo availability now use the borrowed session scalars (`8d4acaea`),
+  removing the historical whole-sketch serialization from history decisions
+  and fallback publication focus. Public/editor sketch DTOs remain owned where
+  their full content is required. Original owner/history ordering and the
+  poisoned host-lock behavior are preserved.
 
 - **Sketch and mechanism input**: `native_editor/mod.rs`, `support.rs` and
   `mechanism.rs`, plus the `active` helper consumers in `palette.rs`,
@@ -393,9 +395,19 @@ Print-to-File option check is retained without repetition; it is not an OS
 print acceptance. The panel comparison preserves exact choices/model equality
 and real worker-owned payloads, removing only a repeated temporary model copy.
 The authentic four-plate template does not positively qualify single-plate
-ResolvedScene layout. STEP `d493f04e`, native drawing-export `27ec6551` and desktop
-integration/CI repair `4382a5a8` are reviewed source with their new checks still
-unrun here; this document claims no final combined-source or deployed pass. Installed EB and retained UI passes are separate from these
-newer source revisions. No compilation, test, benchmark or live GUI/MCP action
-was performed for this documentation update. No universal latency/FPS, physical
-GPU release or final #333 closure is claimed.
+ResolvedScene layout. At clean `fd85a556`, integrated STEP `d493f04e`, native
+drawing-export `27ec6551` and desktop `4382a5a8` passed their three new regressions
+once, plus strict Windows desktop/native-engine/sketch/OCCT/export checks.
+[The STEP/drawing receipt](detached-step-drawing-20261011.json) records exact
+artifacts, stale-source/lock/ticket/job cases and the initial strict-lint failure
+corrected without weakening the independent bounds oracle.
+
+The same source also removes full frame copies from sidebar wheel and busy
+Save/Escape routing at each original separate read (`d20d62b1`), and borrows
+assembly data solely for requested named-view/export warning labels (`fd85a556`).
+The specifically affected real history and busy Save checks passed once;
+unrelated earlier passes and the generic pointer projection check were retained.
+No mirror test was added for label formatting. Installed EB and retained UI
+passes remain separate from these source revisions. This census update ran no
+additional tests or live UI/MCP actions. No deployed, universal latency/FPS,
+memory-pressure, physical GPU release or final #333 closure is claimed.

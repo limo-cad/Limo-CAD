@@ -1,6 +1,29 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 12:04 UTC**: reviewed source `9e16fade` passes
+Current checkpoint, **2026-10-11 UTC**: clean reviewed source `fd85a556`
+passes strict Windows desktop/native-engine/sketch/OCCT/export checks and exactly
+five targeted regressions: three new STEP/native/attached drawing checks and two
+specifically affected history/busy Save checks. Earlier export, drawing, Print-to-File
+and generic pointer passes remain recorded without repetition. Exact artifact hashes,
+original strict-lint failure and qualification limits are in
+`docs/qualification/detached-step-drawing-20261011.json`.
+
+STEP and attached/native drawing output release live guards during expensive work,
+then validate the original native source and job/ticket authority before publication.
+STEP exchanges share a gate for OCCT's mutable global exchange state. Active-sketch
+availability/focus, wheel/busy input and occurrence warning labels now use narrow reads.
+Full editable/public transport data, ownership checks and geometry assertions remain.
+Incoming Bevy documentation at `6c897699` is preserved. Work stays in PR124; main and
+Jack's PRs are untouched. New hosted CI is pending.
+
+The canonical GUI remains saved and closed at installed `eb71c32d`; a new live pair
+is not claimed. Other canonical headless transports can contain independent unsaved
+models and are preserved pending ownership handoff. Direct PDF/cold-paper and the
+reported Bambu repeat-service acceptance remain pending fresh deployment. The observed
+Explorer-owned Print proxy remains outside current guarded input authority; no physical
+Print/cancel pass is claimed. Broad UI and manual MCP mutation coverage remain paused.
+
+Historical checkpoint, **2026-10-11 12:04 UTC**: reviewed source `9e16fade` passes
 strict Windows desktop/native-engine/OCCT/export lint and its three necessary
 export checks. Bambu WRITE and portable STL/3MF prepare native geometry/output
 outside the live publisher and engine, then require the original source proof
