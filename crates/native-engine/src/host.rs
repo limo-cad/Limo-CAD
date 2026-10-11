@@ -148,6 +148,10 @@ pub use portable_export::{
     FinishedPortableMeshExport, FinishedStepExport, PortableMeshFormat, PreparedPortableMeshExport,
     PreparedStepExport,
 };
+#[path = "swept_snapshot.rs"]
+mod swept_snapshot;
+pub use swept_snapshot::{FinishedSweptCollisionReview, PreparedSweptCollisionReview};
+
 #[path = "interference_snapshot.rs"]
 mod interference_snapshot;
 pub use interference_snapshot::{FinishedInterferenceReview, PreparedInterferenceReview};
@@ -983,16 +987,13 @@ impl NativeEngineHost {
     }
 
     pub fn assembly_swept_collision_check(&self, payload: &str) -> String {
-        let request: SweptCollisionRequestDto = match serde_json::from_str(payload) {
-            Ok(request) => request,
-            Err(error) => return err_json(format!("bad request payload: {error}")),
-        };
-        let workspace = match self.inner.lock() {
-            Ok(workspace) => workspace,
-            Err(_) => return err_json("engine lock poisoned"),
-        };
-        let inner = workspace.active();
-        match limo_cad_occt::exact_swept_collision_check(&inner.manager, &inner.kernel, &request) {
+        match self
+            .prepare_swept_collision_review(payload)
+            .and_then(|prepared| prepared.inspect())
+            .and_then(|finished| {
+                self.validate_swept_collision_review(&finished)?;
+                Ok(finished.into_report())
+            }) {
             Ok(report) => ok_json(report),
             Err(error) => err_json(error),
         }

@@ -1,7 +1,7 @@
 //! One exact swept-interference implementation for desktop and headless MCP.
 use crate::{exact_interference_report, OcctKernel};
 use limo_cad_sketch::{
-    InterferenceCheckRequestDto, SampleMotionStudyRequestDto, SketchManager,
+    AssemblyDocumentDto, InterferenceCheckRequestDto, SampleMotionStudyRequestDto, SketchManager,
     SweptCollisionEventDto, SweptCollisionReportDto, SweptCollisionRequestDto,
 };
 use std::collections::BTreeMap;
@@ -11,36 +11,33 @@ pub fn exact_swept_collision_check(
     kernel: &OcctKernel,
     request: &SweptCollisionRequestDto,
 ) -> Result<SweptCollisionReportDto, String> {
-    if !request.sample_rate_hz.is_finite() || !(1. ..=240.).contains(&request.sample_rate_hz) {
-        return Err("swept collision sample rate must be between 1 and 240 Hz".into());
-    }
-    if !request.clearance_threshold_mm.is_finite() || request.clearance_threshold_mm < 0. {
-        return Err("swept collision clearance must be finite and non-negative".into());
-    }
-    let document = manager.assembly_document_ref();
-    let study = document
-        .motion_studies
-        .iter()
-        .find(|s| s.id == request.study_id)
-        .ok_or_else(|| format!("motion study {} does not exist", request.study_id.0))?;
-    let steps = (study.duration_seconds * request.sample_rate_hz).ceil();
-    if !steps.is_finite() || !(0. ..=100_000.).contains(&steps) {
-        return Err("swept collision study exceeds 100,001 samples".into());
-    }
-    let count = steps as u32 + 1;
-    // The manager is immutably borrowed throughout inspection; retaining an
-    // owned scene here would duplicate all mesh buffers without isolation gain.
-    let scene = manager.solid_scene_ref();
+    exact_swept_collision_document(
+        manager.assembly_document_ref(),
+        manager.solid_scene_ref(),
+        kernel,
+        request,
+    )
+}
+
+/// Same exact sampler, with only its actual authored assembly and scene inputs.
+pub fn exact_swept_collision_document(
+    document: &AssemblyDocumentDto,
+    scene: &limo_cad_solid::SolidSceneDto,
+    kernel: &OcctKernel,
+    request: &SweptCollisionRequestDto,
+) -> Result<SweptCollisionReportDto, String> {
+    let (count, duration) = validate_swept_source(document, request)?;
     let mut events = BTreeMap::<(u64, u64, u64, u64), SweptCollisionEventDto>::new();
     let mut sample_count = 0;
     for index in 0..count {
-        let time = (index as f64 / request.sample_rate_hz).min(study.duration_seconds);
-        let sample = manager
-            .sample_motion_study(SampleMotionStudyRequestDto {
+        let time = (index as f64 / request.sample_rate_hz).min(duration);
+        let sample = document.sample_motion_study(
+            SampleMotionStudyRequestDto {
                 study_id: request.study_id,
                 time_seconds: time,
-            })
-            .map_err(|e| e.to_string())?;
+            },
+            scene,
+        )?;
         if !sample.solution.solved {
             return Err("Cannot inspect interference in an unsolved motion sample".into());
         }
@@ -95,4 +92,27 @@ pub fn exact_swept_collision_check(
         sample_count,
         events,
     })
+}
+
+/// Original request checks, in their original order, before the first sample.
+pub fn validate_swept_source(
+    document: &AssemblyDocumentDto,
+    request: &SweptCollisionRequestDto,
+) -> Result<(u32, f64), String> {
+    if !request.sample_rate_hz.is_finite() || !(1. ..=240.).contains(&request.sample_rate_hz) {
+        return Err("swept collision sample rate must be between 1 and 240 Hz".into());
+    }
+    if !request.clearance_threshold_mm.is_finite() || request.clearance_threshold_mm < 0. {
+        return Err("swept collision clearance must be finite and non-negative".into());
+    }
+    let study = document
+        .motion_studies
+        .iter()
+        .find(|s| s.id == request.study_id)
+        .ok_or_else(|| format!("motion study {} does not exist", request.study_id.0))?;
+    let steps = (study.duration_seconds * request.sample_rate_hz).ceil();
+    if !steps.is_finite() || !(0. ..=100_000.).contains(&steps) {
+        return Err("swept collision study exceeds 100,001 samples".into());
+    }
+    Ok((steps as u32 + 1, study.duration_seconds))
 }

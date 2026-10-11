@@ -268,9 +268,18 @@ pub struct DetachedDrawingKernel(OcctKernel);
 pub struct DetachedMeshKernel(OcctKernel);
 /// Independent selected-body sections, without live document authority.
 pub struct DetachedSectionKernel(OcctKernel);
-/// Independent selected shapes for static occurrence interference only.
+/// Independent selected shapes for static and sampled occurrence interference.
 pub struct DetachedInterferenceKernel(OcctKernel);
 impl DetachedInterferenceKernel {
+    pub fn inspect_swept(
+        &self,
+        assembly: &limo_cad_sketch::AssemblyDocumentDto,
+        scene: &limo_cad_solid::SolidSceneDto,
+        request: &limo_cad_sketch::SweptCollisionRequestDto,
+    ) -> Result<limo_cad_sketch::SweptCollisionReportDto, String> {
+        crate::exact_swept_collision_document(assembly, scene, &self.0, request)
+    }
+
     pub fn inspect(
         &self,
         scene: &limo_cad_solid::SolidSceneDto,
