@@ -98,3 +98,47 @@ fn shared_gpu_queue_prevents_concurrent_submissions_and_releases_on_world_teardo
     completion.recv_timeout(Duration::from_secs(5)).unwrap();
     worker.join().unwrap();
 }
+
+#[test]
+fn shared_gpu_queue_worker_shutdown_services_pending_main_thread_surface_work() {
+    bevy::tasks::ComputeTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+    let (done, completed) = mpsc::channel();
+    let main = std::thread::spawn(move || {
+        let executor = bevy::ecs::schedule::MainThreadExecutor::new();
+        let main_thread = std::thread::current().id();
+        let queue = SharedQueue::default();
+        let surface = queue.acquire();
+        let render_executor = executor.clone();
+        let (queued, pending) = mpsc::channel();
+        let render = std::thread::spawn(move || {
+            let task = render_executor.0.spawn(async move {
+                assert_eq!(std::thread::current().id(), main_thread);
+                drop(surface);
+            });
+            queued.send(()).unwrap();
+            bevy::tasks::block_on(task);
+        });
+        pending.recv_timeout(Duration::from_secs(5)).unwrap();
+        let cad = std::thread::spawn(move || {
+            let _lease = queue.acquire();
+        });
+        // A plain join would deadlock: CAD awaits the surface lease, whose
+        // release is already queued exclusively on this synthetic main thread.
+        drop(super::super::Worker {
+            requests: None,
+            frames: Mutex::new(None),
+            thread: Some(cad),
+            sent: None,
+            in_flight: false,
+            stopped: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            main_thread_executor: Some(executor),
+            gate_release: None,
+        });
+        render.join().unwrap();
+        done.send(()).unwrap();
+    });
+    completed
+        .recv_timeout(Duration::from_secs(5))
+        .expect("CAD shutdown did not service the pending surface work");
+    main.join().unwrap();
+}

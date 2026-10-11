@@ -9,6 +9,7 @@ use super::*;
 use bevy::{
     app::AppExit,
     asset::AssetId,
+    ecs::schedule::MainThreadExecutor,
     render::{
         render_asset::{prepare_assets, RenderAssets},
         render_resource::{
@@ -185,6 +186,7 @@ struct Worker {
     sent: Option<Stamp>,
     in_flight: bool,
     stopped: Arc<AtomicBool>,
+    main_thread_executor: Option<MainThreadExecutor>,
     #[cfg(test)]
     gate_release: Option<mpsc::SyncSender<()>>,
 }
@@ -201,7 +203,25 @@ impl Drop for Worker {
         }
         self.frames.get_mut().unwrap().take();
         if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
+            if let Some(executor) = &self.main_thread_executor {
+                // A pipelined interface frame can hold the queue lease while
+                // waiting to configure its surface on the main thread. Keep
+                // servicing that work until the CAD worker can finish.
+                bevy::tasks::ComputeTaskPool::get().scope_with_executor(
+                    true,
+                    Some(&executor.0),
+                    |scope| {
+                        scope.spawn(async move {
+                            while !thread.is_finished() {
+                                bevy::tasks::futures_lite::future::yield_now().await;
+                            }
+                            let _ = thread.join();
+                        });
+                    },
+                );
+            } else {
+                let _ = thread.join();
+            }
         }
     }
 }
@@ -308,6 +328,7 @@ impl Plugin for ViewportRendererPlugin {
             .single(app.world())
             .expect("primary CAD window");
         let image = app.world().resource::<Assets<Image>>().reserve_handle();
+        let main_thread_executor = app.world().get_resource::<MainThreadExecutor>().cloned();
         app.insert_resource(HostSurface {
             window,
             image,
@@ -321,6 +342,7 @@ impl Plugin for ViewportRendererPlugin {
             sent: None,
             in_flight: false,
             stopped,
+            main_thread_executor,
             #[cfg(test)]
             gate_release,
         });
