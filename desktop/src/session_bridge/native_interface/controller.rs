@@ -1780,7 +1780,8 @@ fn inspect_native_window(world: &World, window_id: &str) -> Result<Value, String
             return Err("The CAD native window does not have a Win32 handle".into());
         };
         Ok(json!({"hwnd":handle.hwnd.get() as usize,
-            "pid":std::process::id(),"window_id":window_id}))
+            "pid":std::process::id(),"window_id":window_id,
+            "native_key_diagnostics":crate::native_viewport::native_key_diagnostics::snapshot(handle.hwnd.get() as usize)}))
     })
 }
 
