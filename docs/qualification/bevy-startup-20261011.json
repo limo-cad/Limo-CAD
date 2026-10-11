@@ -443,12 +443,12 @@
       },
       {
         "name": "viewport_cameras_use_portable_msaa",
-        "result": "retained pass; scene setup unchanged",
+        "result": "historical contract pass retained; changed scene setup was not rerun by this retained check",
         "log": "tests/camera-policy.log"
       },
       {
         "name": "scene_only_changes_require_a_new_submission_without_rebinding_controls",
-        "result": "retained pass; receipt guard unchanged",
+        "result": "historical contract pass retained; changed pipeline-pending receipt guard was not rerun by this retained check",
         "log": "tests/submission-revision.log"
       }
     ],
