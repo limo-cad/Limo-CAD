@@ -5575,10 +5575,20 @@ mod tests {
         assert!(!rows.is_empty());
         let original_rows = rows.as_ptr();
         let expected = envelope["value"].clone();
-        let output = response(
-            json!(17),
-            success_result(engine_envelope_value(envelope).unwrap()),
+        let payload = engine_envelope_value(envelope).unwrap();
+        assert_eq!(
+            payload["browser"].as_array().unwrap().as_ptr(),
+            original_rows
         );
+        let result = success_result(payload);
+        assert_eq!(
+            result["structuredContent"]["browser"]
+                .as_array()
+                .unwrap()
+                .as_ptr(),
+            original_rows
+        );
+        let output = response(json!(17), result);
         assert_eq!(output["jsonrpc"], "2.0");
         assert_eq!(output["id"], 17);
         assert_eq!(output["result"]["isError"], false);
@@ -5597,10 +5607,17 @@ mod tests {
 
         let envelope: Value = serde_json::from_str(&before).unwrap();
         let original_model = envelope["value"].as_str().unwrap().as_ptr();
-        let output = response(
-            Value::Null,
-            success_result(engine_envelope_value(envelope).unwrap()),
+        let payload = engine_envelope_value(envelope).unwrap();
+        assert_eq!(payload.as_str().unwrap().as_ptr(), original_model);
+        let result = success_result(payload);
+        assert_eq!(
+            result["structuredContent"]["value"]
+                .as_str()
+                .unwrap()
+                .as_ptr(),
+            original_model
         );
+        let output = response(Value::Null, result);
         let model = output["result"]["structuredContent"]["value"]
             .as_str()
             .unwrap();
@@ -5634,11 +5651,21 @@ mod tests {
                 serde_json::to_string_pretty(&expected).unwrap()
             );
         }
-        let value = json!({"image":{
-            "png_base64":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMxkAAAAASUVORK5CYII=",
-            "width":1,"height":1},"source":"bevy_window"});
+        let mut value = json!({"image":{"width":1,"height":1},"source":"bevy_window"});
+        // Retaining spare capacity distinguishes ownership transfer from an
+        // allocator coincidentally reusing a freed clone's former address.
+        let mut png = String::with_capacity(4096);
+        png.push_str("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMxkAAAAASUVORK5CYII=");
+        let original_capacity = png.capacity();
+        value["image"]["png_base64"] = Value::String(png);
         let original_png = value["image"]["png_base64"].as_str().unwrap().as_ptr();
-        let output = response(json!("capture"), success_result(value));
+        let result = success_result(value);
+        let Value::String(png) = &result["content"][1]["data"] else {
+            panic!("Image content must retain the PNG string");
+        };
+        assert_eq!(png.as_ptr(), original_png);
+        assert_eq!(png.capacity(), original_capacity);
+        let output = response(json!("capture"), result);
         let result = &output["result"];
         assert_eq!(result["content"].as_array().unwrap().len(), 2);
         assert_eq!(
