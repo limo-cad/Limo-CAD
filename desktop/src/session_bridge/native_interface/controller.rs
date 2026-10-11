@@ -1142,10 +1142,11 @@ fn defer_pointer_input(
         cancel_deferred_pointer_input(world, handle, state);
         return;
     };
+    let presented = handle.presented_pointer_context();
     if event.context.as_ref() != Some(owner)
-        || handle
-            .frame()
-            .is_none_or(|frame| frame.context != *owner || !frame.modal_stack.is_empty())
+        || presented
+            .as_ref()
+            .is_none_or(|(context, modal_empty, _)| context != owner || !*modal_empty)
     {
         cancel_deferred_pointer_input(world, handle, state);
         return;
@@ -1168,13 +1169,7 @@ fn defer_pointer_input(
             receipt,
             camera: workbench::cam::geometry_pick::active(world)
                 .then(|| native_viewport::interface_camera_snapshot(world)),
-            canvas: handle.frame().and_then(|frame| {
-                frame
-                    .canvases
-                    .iter()
-                    .find(|canvas| canvas.name == "viewport")
-                    .map(|canvas| canvas.bounds)
-            }),
+            canvas: presented.and_then(|(_, _, canvas)| canvas),
             events: VecDeque::new(),
         });
     if matches!(event.event, WindowEvent::CursorMoved(_))
@@ -1209,16 +1204,11 @@ fn take_deferred_pointer_input(
         && !state.close_pending
         && !state.close_after_worker
         && !state.exit_after_receipt
-        && handle.frame().is_some_and(|frame| {
-            frame.context == deferred.receipt.owner
-                && frame.modal_stack.is_empty()
-                && frame
-                    .canvases
-                    .iter()
-                    .find(|canvas| canvas.name == "viewport")
-                    .map(|canvas| canvas.bounds)
-                    == deferred.canvas
-        })
+        && handle
+            .presented_pointer_context()
+            .is_some_and(|(owner, modal_empty, canvas)| {
+                owner == deferred.receipt.owner && modal_empty && canvas == deferred.canvas
+            })
         && deferred
             .camera
             .as_ref()
