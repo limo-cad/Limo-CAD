@@ -727,6 +727,13 @@ impl SketchManager {
         self.active.is_some()
     }
 
+    /// Read Undo/Redo availability without constructing active sketch geometry.
+    pub fn active_sketch_history(&self) -> Option<(bool, bool)> {
+        self.active
+            .as_ref()
+            .map(|session| (session.can_undo(), session.can_redo()))
+    }
+
     pub fn profile_catalog(&self) -> Vec<ProfileCatalogItemDto> {
         self.profile_catalog_at(self.document.features().rollback_index)
     }

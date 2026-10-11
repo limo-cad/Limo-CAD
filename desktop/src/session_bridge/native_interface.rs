@@ -986,9 +986,7 @@ pub(crate) fn finish_mutation(
         Ok(())
     });
     let publication = prepared_publication.unwrap_or_else(|| {
-        let focus = if super::parse_engine_envelope(engine.engine_call("active_sketch", ""))
-            .is_ok_and(|value| !value.is_null())
-        {
+        let focus = if engine.active_sketch_history().is_some() {
             "sketch"
         } else {
             "solid"
