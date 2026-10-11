@@ -2213,6 +2213,19 @@ combined deduplicated count is claimed. Evidence is
 `runtime-a3145e2c-payload-verified.json`,
 `live-pair-a3145e2c-focused-observation.json` and
 `deployment-diagnostic-e23e43b0-results.json` under the evidence directory above.
-The missing new-document Split Redo check is under targeted root inspection,
-not passed. Broad UI/MCP coverage remains paused with every prior leaf retained;
-live pair verification alone does not close an issue or qualify the full UI.
+The targeted new-document Split Redo check now passed through guarded human UI
+input on clean matched `a3145e2c`. Fresh creation produced healthy bodies 1/2,
+each 10×10×8; Undo restored the entire 20×10×8 baseline model except the documented
+monotonic `assembly/component_structure/next_occurrence_id` floor 11→12. Redo
+exactly restored the complete created model and entire native scene. Fresh
+active sessions were followed after each history transition. UI SaveAs to
+`repair-acceptance-batch/Split Redo accepted a3145e2c.limo` matches the published
+Redo model, and the original fixture archive SHA256 remains unchanged.
+Evidence is `split-redo-a3145e2c-comparison.json`, the corresponding
+`split-redo-a3145e2c-{unsplit,created,undo,redo}` captures/model/scene receipts,
+and `split-redo-a3145e2c-saved-archive-verified.json` under the evidence directory.
+Only local issue `split-body-invalid-new-creation` is marked passed. The earlier
+clean `5d46045c` boundary rejection, corrected creation and Undo qualification
+remains intact. This is a fresh transaction, not recovery of the original lost
+Undo stack or broad Split coverage. All unrelated leaves and MCP statuses remain
+unchanged; broad UI/MCP qualification stays paused.
