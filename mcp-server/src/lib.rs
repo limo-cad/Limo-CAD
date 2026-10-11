@@ -10364,6 +10364,178 @@ mod tests {
     }
 
     #[test]
+    fn native_blind_and_counterbore_depths_survive_step_without_authored_provenance() {
+        fn assert_geometry(server: &CadServer, counterbore: bool) {
+            let scene = server.manager.solid_scene_ref();
+            assert!(scene.errors.is_empty());
+            let body = &scene.bodies[0];
+            let expected_depth = if counterbore { 6.0 } else { 4.0 };
+            let bottom_z = 10.0 - expected_depth;
+            let cylinders = body
+                .faces
+                .iter()
+                .filter(|face| face.cylinder.is_some())
+                .collect::<Vec<_>>();
+            assert_eq!(cylinders.len(), if counterbore { 2 } else { 1 });
+            for wall in &cylinders {
+                let cylinder = wall.cylinder.unwrap();
+                assert!(wall.outer_shell == Some(true));
+                let mut ring_heights = wall
+                    .edge_keys
+                    .iter()
+                    .filter_map(|key| {
+                        body.edges
+                            .iter()
+                            .find(|edge| &edge.key == key)
+                            .and_then(|edge| {
+                                edge.circle.map(|circle| {
+                                    assert!(circle.closed);
+                                    assert!((circle.radius - cylinder.radius).abs() < 1e-6);
+                                    assert!(
+                                        circle.center.x.abs() < 1e-6
+                                            && circle.center.y.abs() < 1e-6
+                                    );
+                                    assert!(circle.normal.z.abs() > 0.999999);
+                                    let adjacent = body
+                                        .faces
+                                        .iter()
+                                        .filter(|face| {
+                                            face.id != wall.id && face.edge_keys.contains(key)
+                                        })
+                                        .collect::<Vec<_>>();
+                                    assert_eq!(
+                                        adjacent.len(),
+                                        1,
+                                        "Every actual ring has exactly one non-wall owner"
+                                    );
+                                    assert!(adjacent[0].plane.is_some());
+                                    circle.center.z
+                                })
+                            })
+                    })
+                    .collect::<Vec<_>>();
+                ring_heights.sort_by(f64::total_cmp);
+                let expected = if counterbore && (cylinder.radius - 4.0).abs() < 1e-6 {
+                    [8.0, 10.0]
+                } else {
+                    assert!((cylinder.radius - 2.0).abs() < 1e-6);
+                    [bottom_z, if counterbore { 8.0 } else { 10.0 }]
+                };
+                assert_eq!(ring_heights.len(), 2);
+                for (actual, expected) in ring_heights.into_iter().zip(expected) {
+                    assert!((actual - expected).abs() < 1e-6);
+                }
+            }
+            let disk = body
+                .faces
+                .iter()
+                .filter(|face| {
+                    face.edge_keys.len() == 1
+                        && face
+                            .plane
+                            .is_some_and(|plane| (plane.origin[2] - bottom_z).abs() < 1e-6)
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                disk.len(),
+                1,
+                "Native blind depth needs a unique terminal disk"
+            );
+            assert!(disk[0].plane.unwrap().normal[2] > 0.999999);
+            if counterbore {
+                let shoulder = body
+                    .faces
+                    .iter()
+                    .filter(|face| {
+                        face.edge_keys.len() == 2
+                            && face
+                                .plane
+                                .is_some_and(|plane| (plane.origin[2] - 8.0).abs() < 1e-6)
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(shoulder.len(), 1);
+                assert!(cylinders.iter().all(|wall| shoulder[0]
+                    .edge_keys
+                    .iter()
+                    .any(|key| wall.edge_keys.contains(key))));
+            }
+            let inferred = summary::summarize(scene, &[]).json(true);
+            assert_eq!(inferred["hole_candidate_count"], 1);
+            assert_eq!(inferred["authored_hole_count"], 0);
+            let hole = &inferred["holes"][0];
+            assert_eq!(hole["body_id"], body.id.0);
+            assert_eq!(hole["confidence"], "candidate");
+            assert_eq!(hole["source"], "geometry");
+            assert!(hole["feature_id"].is_null());
+            assert_eq!(hole["diameter"], 4.0);
+            assert_eq!(hole["depth"], expected_depth);
+            assert_eq!(hole["through"], false);
+            assert_eq!(hole["through_evidence"], "analytic_terminal_disk");
+            let mut reported_faces = hole["face_ids"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|id| id.as_u64().unwrap())
+                .collect::<Vec<_>>();
+            let mut native_faces = cylinders.iter().map(|wall| wall.id.0).collect::<Vec<_>>();
+            reported_faces.sort_unstable();
+            native_faces.sort_unstable();
+            assert_eq!(reported_faces, native_faces);
+            if counterbore {
+                assert_eq!(hole["style"], "counterbore");
+                assert_eq!(hole["counterbore_diameter"], 8.0);
+                assert_eq!(hole["counterbore_depth"], 2.0);
+                assert_eq!(
+                    hole["depth_evidence"],
+                    "analytic_counterbore_rings_shoulder_and_terminal_disk"
+                );
+            } else {
+                assert_eq!(hole["style"], "simple");
+                assert!(hole["counterbore_depth"].is_null());
+                assert_eq!(
+                    hole["depth_evidence"],
+                    "two_analytic_rings_and_one_planar_disk"
+                );
+            }
+        }
+
+        for counterbore in [false, true] {
+            let (mut donor, _) = mcp_box();
+            let body = &donor.manager.solid_scene_ref().bodies[0];
+            let cap = body
+                .faces
+                .iter()
+                .find(|face| face.plane.is_some_and(|plane| plane.normal[2] > 0.9))
+                .unwrap();
+            let plane = cap.plane.unwrap();
+            let delta = [-plane.origin[0], -plane.origin[1], 10.0 - plane.origin[2]];
+            let project = |axis: [f64; 3]| delta.iter().zip(axis).map(|(a, b)| a * b).sum::<f64>();
+            donor.call_tool("solid_hole", json!({"body_id":body.id.0, "face_id":cap.id.0,
+                "position":{"x":project(plane.u),"y":project(plane.v)}, "diameter":4.0,
+                "extent":{"type":"distance","depth":if counterbore {6.0} else {4.0}},
+                "style":if counterbore {"counterbore"} else {"simple"},
+                "counterbore_diameter":if counterbore {8.0} else {0.0},
+                "counterbore_depth":if counterbore {2.0} else {0.0},
+                "countersink_diameter":0.0, "countersink_angle_deg":90.0, "thread":null, "flip":false})).unwrap();
+            let definitions = donor.manager.hole_definitions();
+            assert_eq!(definitions.len(), 1);
+            let authored =
+                summary::summarize(donor.manager.solid_scene_ref(), &definitions).json(true);
+            assert_eq!(authored["authored_hole_count"], 1);
+            assert_eq!(authored["holes"][0]["confidence"], "authored");
+            assert!(authored["holes"][0]["feature_id"].as_u64().is_some());
+            assert_geometry(&donor, counterbore);
+            let exported = donor.call_tool("solid_export_step", json!({})).unwrap();
+            let mut imported = CadServer::new().unwrap();
+            imported.call_tool("solid_import_step", json!({"file_name":"blind-depth-contract.step", "data_base64":exported["bytes_base64"].as_str().unwrap()})).unwrap();
+            assert!(imported.manager.hole_definitions().is_empty());
+            let before = imported.manager.export_project_model().unwrap();
+            assert_geometry(&imported, counterbore);
+            assert_eq!(imported.manager.export_project_model().unwrap(), before);
+        }
+    }
+
+    #[test]
     fn native_bore_tangent_to_stock_boundary_has_no_inner_wire_through_proof() {
         let (mut server, _) = mcp_box();
         let body = &server.manager.solid_scene_ref().bodies[0];
