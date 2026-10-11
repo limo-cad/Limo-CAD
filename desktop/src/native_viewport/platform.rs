@@ -667,10 +667,9 @@ struct CadSketchPointOutlineGizmos;
 struct CadSketchPointGizmos;
 
 pub(super) fn cad_render_plugin() -> RenderPlugin {
-    let render_plugin = RenderPlugin {
-        synchronous_pipeline_compilation: true,
-        ..default()
-    };
+    // Let Bevy prepare independent pipelines in parallel. The native host's
+    // existing submission path requests frames until pending shaders are ready.
+    let render_plugin = RenderPlugin::default();
     #[cfg(target_os = "linux")]
     let render_plugin = RenderPlugin {
         render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
