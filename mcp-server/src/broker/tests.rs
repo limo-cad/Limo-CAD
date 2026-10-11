@@ -193,7 +193,8 @@ fn receipt_only_status_preserves_fences_without_reading_operation_values() {
         serde_json::to_value(&failed_ticket).unwrap()
     );
 
-    let expiry = session::now_ms().saturating_add(1000);
+    let admitted_ms = session::now_ms();
+    let expiry = admitted_ms.saturating_add(1000);
     let control = Ticket {
         route: route.clone(),
         operation: Pending::Control {
@@ -236,7 +237,7 @@ fn receipt_only_status_preserves_fences_without_reading_operation_values() {
         epoch: 1,
         revision: 1,
         expires_ms: expiry,
-        admitted_ms: session::now_ms(),
+        admitted_ms,
     };
     session::write_session(
         &route.session_id,
