@@ -772,7 +772,7 @@ jobs:
           wait "$pid" || true
           cat "$log"
 
-      - name: Verify packaged MCP without GUI initialization
+      - name: Verify default packaged desktop stdio
         shell: bash
         run: |
           set -euo pipefail
