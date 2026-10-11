@@ -326,7 +326,7 @@ pub(in super::super) fn paint(
 /// Fixtures drive real asynchronous preparation to a completed source/error;
 /// they never replace the production worker with synchronous projection.
 #[cfg(test)]
-pub(super) fn paint_until_settled(
+pub(in super::super) fn paint_until_settled(
     world: &mut World,
     camera: Entity,
     services: &NativeServices,
