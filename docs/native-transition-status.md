@@ -2252,3 +2252,32 @@ closure evidence, not broad Section/drawing qualification or a GPU performance
 claim. Native cooperative limits still do not provide hard worker-process
 memory/deadline containment. No existing broad coverage leaf changed; the root
 UI/MCP run state remains paused.
+
+The original #347 silent named-camera failure now has finite human UI evidence
+on clean matched `a3145e2c`. The authentic garden-auger assembly archive SHA256
+is `32cd9fa180c96b102c22beaadd02f7eeb0797f21e10ba8c4b04609914475ec60`.
+Physical Recall followed by Close applied **Assembly - exploded**, **Fit
+inspection - mating surfaces** and **Assembly - open housing**. Each actual
+camera, visible-body list and occurrence-offset list exactly matches its saved
+view. The first two views have distinct cameras and visibly different framing;
+open housing clears offsets and hides Body26. All have no part offsets.
+
+Independent saved capture/model/observation review is recorded in
+`issue347-a3145e2c-comparison.json`. Exploded and Fit preserve the entire post-open
+model exactly. Open housing changes only `/visibility/hidden_body_ids` from
+`[213]` to `[26,213]`, the intended saved visibility; mechanical assembly poses,
+history, saved-view definitions and every other field remain unchanged. The
+preliminary `exploded-observation.png` predates Recall and is excluded as pass
+evidence. File-menu SaveAs to `repair-acceptance-batch/Named views accepted
+a3145e2c.limo` preserves the published open-housing model exactly; the original
+archive remains unchanged. `issue347-a3145e2c-saved-archive-verified.json` records
+this SaveAs preservation, not a repeated full persistence qualification. The
+independent Ctrl+Shift+S missing-dialog observation is not counted as a pass.
+
+The explicit contract repair `75883438` rejects unsupported
+`cad_interface action=view` plus `named_view` and directs callers to
+`recall_named_view`; its focused MCP regression remains retained. This closes
+the concrete silent-ignore defect scope, not the original full qualification
+matrix. Live MCP mutations, animated recall/readiness, stale-session/replacement,
+tab-switch and missing-viewport acceptance remain unclaimed. No broad UI/MCP
+leaf changes or repeated test passes follow from this targeted recall evidence.

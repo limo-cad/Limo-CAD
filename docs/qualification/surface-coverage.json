@@ -1978,6 +1978,26 @@
     "installed_runtime_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/runtime-a3145e2c-payload-verified.json",
     "installed_qualified_sdk": "D:/limo-cad-maintenance/checked-occt-sdk",
     "targeted_root_ui_acceptance": {
+      "named_view_issue347": {
+        "status": "passed_scoped_human_ui_saved_camera_visibility_and_occurrence_offsets",
+        "revision": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+        "build_pair": "matched",
+        "fixture": "C:/Users/jeffg/dev/garden-auger-technic/experiments/garden-auger-assembly-review.limo",
+        "fixture_sha256": "32cd9fa180c96b102c22beaadd02f7eeb0797f21e10ba8c4b04609914475ec60",
+        "views": ["Assembly - exploded", "Fit inspection - mating surfaces", "Assembly - open housing"],
+        "actual_camera_visibility_offsets_exactly_match_saved_views": true,
+        "exploded_and_fit_whole_models_equal_post_open_baseline": true,
+        "open_housing_only_model_delta": "/visibility/hidden_body_ids [213] to [26,213]",
+        "mechanical_assembly_history_and_saved_view_definitions_unchanged": true,
+        "fixture_preserved": true,
+        "comparison_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/issue347-a3145e2c-comparison.json",
+        "saved_archive_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/issue347-a3145e2c-saved-archive-verified.json",
+        "save_scope": "File-menu SaveAs preserves published open-housing model and original archive; not full persistence requalification or a CtrlShiftS pass",
+        "evidence_prefix": "D:/limo-cad-maintenance/backlog-autonomous-20261010/issue347-a3145e2c-",
+        "preliminary_exploded_observation_capture": "pre_Recall_excluded_from_pass_evidence",
+        "retained_contract_repair": "75883438 rejects unsupported view plus named_view and directs recall_named_view",
+        "scope": "Concrete silent-ignore defect and targeted human UI recall only; no live MCP mutation, animated readiness, stale-session/replacement, tab-switch, missing-viewport or broad coverage qualification"
+      },
       "section_boundary_issue339": {
         "status": "passed_scoped_packaged_boundary_and_source_restoration_gate",
         "closure_evidence_ready": true,
