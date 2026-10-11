@@ -1745,11 +1745,34 @@ fn control_for_window_owned_with_observers(
     engine: &AppState,
     response: Option<Value>,
     expected: Option<(&limo_cad_interface::DocumentContext, &str)>,
+    observed: impl FnMut(&limo_cad_occt::DrawingProjectionRequest, &limo_cad_occt::DrawingProjectionDto),
+    section_finished: impl FnMut(&limo_cad_native_engine::FinishedSectionReview),
+) -> Result<Value, String> {
+    control_for_window_owned_with_detached_observers(
+        state,
+        window_label,
+        engine,
+        response,
+        expected,
+        observed,
+        (section_finished, |_| {}),
+    )
+}
+
+fn control_for_window_owned_with_detached_observers(
+    state: &SessionBridgeState,
+    window_label: &str,
+    engine: &AppState,
+    response: Option<Value>,
+    expected: Option<(&limo_cad_interface::DocumentContext, &str)>,
     mut observed: impl FnMut(
         &limo_cad_occt::DrawingProjectionRequest,
         &limo_cad_occt::DrawingProjectionDto,
     ),
-    mut section_finished: impl FnMut(&limo_cad_native_engine::FinishedSectionReview),
+    mut detached_finished: (
+        impl FnMut(&limo_cad_native_engine::FinishedSectionReview),
+        impl FnMut(&limo_cad_native_engine::FinishedInterferenceReview),
+    ),
 ) -> Result<Value, String> {
     let mut lease_path = state
         .process_lease_path
@@ -1943,7 +1966,7 @@ fn control_for_window_owned_with_observers(
                     .as_ref()
                     .map_err(Clone::clone)
                     .and_then(|finished| {
-                        section_finished(finished);
+                        detached_finished.0(finished);
                         serde_json::to_value(finished.report()).map_err(|error| error.to_string())
                     });
                 lease_path = state
@@ -1956,6 +1979,33 @@ fn control_for_window_owned_with_observers(
                     .map_err(|_| "publisher lock poisoned")?;
                 match finished {
                     Ok(finished) => engine.validate_section_review(&finished).and(value),
+                    Err(error) => Err(error),
+                }
+            } else if supported
+                && method == "assembly_interference_check"
+                && native_ticket.is_some()
+            {
+                let prepared = engine.prepare_interference_review(payload);
+                drop(publishers);
+                drop(lease_path);
+                let finished = prepared.and_then(|prepared| prepared.inspect());
+                let value = finished
+                    .as_ref()
+                    .map_err(Clone::clone)
+                    .and_then(|finished| {
+                        detached_finished.1(finished);
+                        serde_json::to_value(finished.report()).map_err(|error| error.to_string())
+                    });
+                lease_path = state
+                    .process_lease_path
+                    .lock()
+                    .map_err(|_| "session process lease lock poisoned")?;
+                publishers = state
+                    .publishers
+                    .lock()
+                    .map_err(|_| "publisher lock poisoned")?;
+                match finished {
+                    Ok(finished) => engine.validate_interference_review(&finished).and(value),
                     Err(error) => Err(error),
                 }
             } else if supported {

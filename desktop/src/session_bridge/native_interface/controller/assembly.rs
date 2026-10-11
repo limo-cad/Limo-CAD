@@ -188,6 +188,14 @@ impl Default for Browser {
         }
     }
 }
+impl Browser {
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.inspect.invalidate_report();
+        }
+        self.enabled = enabled;
+    }
+}
 pub(crate) fn active(world: &World) -> bool {
     world.get_resource::<Browser>().is_some_and(|s| s.enabled)
 }
@@ -327,7 +335,7 @@ pub(crate) fn reduce(
             studies::cancel(world, &action.context, receipt.revision)?;
         }
         world.init_resource::<Browser>();
-        world.resource_mut::<Browser>().enabled = *enabled;
+        world.resource_mut::<Browser>().set_enabled(*enabled);
         return Ok(json!({"assembly_browser":enabled}));
     }
     let mut state = world
@@ -513,6 +521,7 @@ pub(crate) fn reduce(
         match *command {
             Command::Tab(tab) => {
                 if tab != state.tab {
+                    state.inspect.invalidate_report();
                     studies::restore(world, &mut state.studies, &receipt.owner)?;
                     motion::restore(world, &mut state.motion, &receipt.owner)?;
                     state.motion.changed(&a);
