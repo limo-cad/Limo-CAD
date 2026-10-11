@@ -183,10 +183,17 @@ pub(super) fn observe(hwnd: HWND, pid: u32) -> Result<Proof, String> {
 
 fn scope(observed: &Observation, target: Target, proof: &Proof) -> Result<(), String> {
     owner_scope(observed, target, proof)?;
+    main_scope(observed, target, proof.geometry)
+}
+
+fn main_scope(observed: &Observation, target: Target, expected: Geometry) -> Result<(), String> {
+    observed.process.verify()?;
     let session_id = observed.owner["session_id"]
         .as_str()
         .ok_or("Observation has no session")?;
     if observed.native_dialog
+        || observed.main_hwnd != target.main as usize
+        || observed.hwnd != target.window as usize
         || observed.bounds.is_none()
         || observed.layout.is_none()
         || target.native_dialog
@@ -201,13 +208,76 @@ fn scope(observed: &Observation, target: Target, proof: &Proof) -> Result<(), St
     if target_window(&observed.owner, main)? != target
         || Some(client_bounds(target.window)?) != observed.bounds
         || observed.layout.as_ref() != Some(&layout(&current))
-        || geometry(target.window)? != proof.geometry
+        || geometry(target.window)? != expected
         || session::computer_control_owner(session_id)? != observed.owner
         || session::now_ms() > observed.expires_ms
     {
         return Err("CAD owner, modal, layout or native caption changed; observe again".into());
     }
     Ok(())
+}
+
+// Exposure is not activation or input. Windows may still refuse the Z-order
+// request; the consumed observation never qualifies a click after this change.
+fn expose(observed: &Observation, target: Target) -> Result<Value, String> {
+    let expected = geometry(target.window)?;
+    let pid = observed.owner["pid"]
+        .as_u64()
+        .and_then(|pid| u32::try_from(pid).ok())
+        .ok_or("Owner has no PID")?;
+    main_scope(observed, target, expected)?;
+    let foreground = input_ownership(target.window, pid, false, std::ptr::null_mut())?;
+    main_scope(observed, target, expected)?;
+    if input_ownership(target.window, pid, false, std::ptr::null_mut())? != foreground {
+        return Err("Foreground changed before CAD exposure; observe again".into());
+    }
+    main_scope(observed, target, expected)?;
+    if unsafe { GetForegroundWindow() } != foreground {
+        return Err("Foreground changed immediately before CAD exposure; observe again".into());
+    }
+    // ASYNC avoids waiting indefinitely on the owning GUI thread. NOACTIVATE
+    // keeps foreground ownership unchanged; never use TOPMOST or attach queues.
+    // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setwindowpos
+    let requested = unsafe {
+        SetWindowPos(
+            target.window,
+            HWND_TOP,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_ASYNCWINDOWPOS,
+        ) != 0
+    };
+    Ok(exposure_response(&observed.owner, requested))
+}
+
+fn exposure_response(owner: &Value, requested: bool) -> Value {
+    json!({"status":"not_focused","action":"focus","method":"nonactivating_window_exposure",
+        "owner":owner,"exposure_requested":requested,"input_sent":false,
+        "foreground_verified":false,"observation_consumed":true,
+        "hint":"A best-effort nonactivating CAD exposure request was attempted. It may be refused or still queued. Observe again; only a fresh qualified exposed native caption can permit the existing focus click. Ordinary background input remains refused."})
+}
+
+#[cfg(test)]
+mod exposure_tests {
+    use super::*;
+
+    #[test]
+    fn queued_or_refused_exposure_never_certifies_focus_or_input() {
+        let owner = json!({"pid":42,"session_id":"current-document","epoch":9});
+        for requested in [true, false] {
+            let receipt = exposure_response(&owner, requested);
+            assert_eq!(receipt["owner"], owner);
+            assert_eq!(receipt["exposure_requested"], requested);
+            assert_eq!(receipt["status"], "not_focused");
+            assert_eq!(receipt["foreground_verified"], false);
+            assert_eq!(receipt["input_sent"], false);
+            assert_eq!(receipt["observation_consumed"], true);
+            assert!(receipt.get("native_caption_focus").is_none());
+            assert!(receipt.get("completed_primitives").is_none());
+        }
+    }
 }
 
 fn owner_scope(observed: &Observation, target: Target, proof: &Proof) -> Result<(), String> {
@@ -355,14 +425,10 @@ pub(super) fn recover(
             acknowledged,
         ));
     }
-    let proof = observed.caption.as_ref().ok_or_else(|| {
-        denied(
-            observed,
-            "Observation has no qualified exposed native caption; observe again".into(),
-            accepted,
-            acknowledged,
-        )
-    })?;
+    let Some(proof) = observed.caption.as_ref() else {
+        return expose(observed, target)
+            .map_err(|error| denied(observed, error, accepted, acknowledged));
+    };
     let pid = observed.owner["pid"]
         .as_u64()
         .and_then(|pid| u32::try_from(pid).ok())
