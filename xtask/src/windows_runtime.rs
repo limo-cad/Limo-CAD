@@ -232,6 +232,7 @@ pub(crate) fn is_system_import(name: &str) -> bool {
                 | "secur32.dll"
                 | "security.dll"
                 | "ws2_32.dll"
+                | "wsock32.dll"
                 | "iphlpapi.dll"
                 | "dnsapi.dll"
                 | "winhttp.dll"
