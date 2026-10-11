@@ -4,6 +4,7 @@ use crate::native_forms::motion_study::{self as form, Edit, Form};
 use crate::native_viewport::ViewportPresentation;
 use limo_cad_sketch::{JointMotionStateDto, MotionStudyEvaluationDto};
 use std::time::{Duration, Instant};
+mod csv_operation;
 pub(super) mod panel;
 #[cfg(test)]
 mod tests;
@@ -42,6 +43,7 @@ pub(crate) enum Action {
     Export,
 }
 struct Picker {
+    operation: csv_operation::Lease,
     revision: u64,
     study: u64,
     receive: Mutex<std::sync::mpsc::Receiver<Option<std::path::PathBuf>>>,
@@ -61,9 +63,11 @@ pub(super) struct State {
     serial: u64,
     error: Option<String>,
     picker: Option<Picker>,
+    csv_operation: csv_operation::Authority,
 }
 impl State {
     pub(super) fn changed(&mut self, a: &AssemblyDocumentDto) {
+        self.cancel_export();
         self.validation = None;
         self.started = None;
         self.next_frame = None;
@@ -86,12 +90,18 @@ impl State {
         self.selected = study.map(|s| s.id.0);
         self.form = study.cloned().map(Form::new);
     }
+
+    pub(super) fn cancel_export(&mut self) {
+        self.csv_operation.revoke();
+        self.picker = None;
+    }
 }
 pub(super) fn restore(
     world: &mut World,
     s: &mut State,
     owner: &DocumentContext,
 ) -> Result<(), String> {
+    s.cancel_export();
     if let Some(original) = s.original.take() {
         let (id, _, mut view, _) = native_viewport::interface_view_snapshot(world);
         if id == owner.document_id {
@@ -140,39 +150,65 @@ fn evaluate(
         s.original = Some(native_viewport::interface_view_snapshot(world).2);
     }
     let previous = s.evaluation.as_ref().map(|e| e.sample.time_seconds);
+    s.serial = s.serial.wrapping_add(1);
     let serial = s.serial;
     let query_owner = owner.clone();
     s.error = None;
-    worker::enqueue_query(
+    worker::enqueue_motion_evaluation(
         world,
         owner.clone(),
         revision,
-        "assembly_evaluate_motion_study".into(),
         json!({"study_id":study,"time_seconds":time,"previous_time_seconds":previous,"enforce_contacts":true}),
+        |finished| Ok((finished, ())),
         move |world, services, result| {
-            services.bridge.with_native_document_receipt(&services.engine,&query_owner,|current|{
-            if current!=revision {return Err("Motion study changed during playback".into());}
-            let mut b=world.remove_resource::<Browser>().ok_or("Assembly browser closed")?;
-            let result=(||{
-                if b.owner.as_ref()!=Some(&query_owner)||b.revision!=revision||b.studies.serial!=serial||b.studies.selected!=Some(study){return Err("Motion preview was superseded".into());}
-                let s=&mut b.studies;
-                match result {
-                    Ok(result)=>{
-                        let e:MotionStudyEvaluationDto=serde_json::from_value(result.value).map_err(|e|e.to_string())?;
-                        if !e.sample.solution.solved {return Err("Motion study has an unsolved position".into());}
-                        let (_,_,mut view,_)=native_viewport::interface_view_snapshot(world);
-                        view.body_poses=e.sample.solution.body_poses.clone().into();view.instance_body_poses=e.sample.solution.instance_body_poses.clone().into();
-                        native_viewport::apply_interface_view(world,&query_owner.document_id,None,Some(view))?;
-                        s.time=e.sample.time_seconds;if e.stopped_by_contact.is_some(){s.started=None;}
-                        let result=json!({"time_seconds":s.time,"stopped_by_contact":e.stopped_by_contact,"preview":true});s.evaluation=Some(e);Ok(result)
-                    }
-                    Err(e)=>{restore(world,s,&query_owner)?;s.error=Some(e.clone());Err(e)}
-                }
-            })();world.insert_resource(b);result
-        })
+            adopt_evaluation(
+                world,
+                services,
+                &query_owner,
+                revision,
+                serial,
+                study,
+                result.map(|(finished, ())| finished),
+            )
         },
     )
 }
+fn adopt_evaluation(
+    world: &mut World,
+    services: &NativeServices,
+    owner: &DocumentContext,
+    revision: u64,
+    serial: u64,
+    study: u64,
+    result: Result<limo_cad_native_engine::FinishedMotionEvaluation, String>,
+) -> Result<Value, String> {
+    services.bridge.with_native_document_receipt(&services.engine,owner,|current| {
+        if current!=revision { return Err("Motion study changed during playback".into()); }
+        let mut b=world.remove_resource::<Browser>().ok_or("Assembly browser closed")?;
+        let result=(|| {
+            if b.owner.as_ref()!=Some(owner)||b.revision!=revision||!b.enabled||b.tab!=Tab::Motion||b.studies.serial!=serial||b.studies.selected!=Some(study) { return Err("Motion preview was superseded".into()); }
+            let s=&mut b.studies;
+            match result {
+                Ok(finished)=> {
+                    services.engine.validate_motion_evaluation(&finished)?;
+                    let e=finished.into_report();
+                    if !e.sample.solution.solved {return Err("Motion study has an unsolved position".into());}
+                    let (_,_,mut view,_)=native_viewport::interface_view_snapshot(world);
+                    view.body_poses=e.sample.solution.body_poses.clone().into();
+                    view.instance_body_poses=e.sample.solution.instance_body_poses.clone().into();
+                    native_viewport::apply_interface_view(world,&owner.document_id,None,Some(view))?;
+                    s.time=e.sample.time_seconds;
+                    if e.stopped_by_contact.is_some() {s.started=None;}
+                    let value=json!({"time_seconds":s.time,"stopped_by_contact":e.stopped_by_contact,"preview":true});
+                    s.evaluation=Some(e);Ok(value)
+                }
+                Err(error)=> {restore(world,s,owner)?;s.error=Some(error.clone());Err(error)}
+            }
+        })();
+        world.insert_resource(b);result
+    })
+}
+
 fn key<T: serde::Serialize>(value: T) -> String {
     serde_json::to_value(value)
         .unwrap()
@@ -467,6 +503,7 @@ pub(super) fn reduce(
             if f.value(a)? != f.original {
                 return Err("Apply the study changes before playback".into());
             }
+            s.serial = s.serial.wrapping_add(1);
             if s.started.take().is_some() {
                 return Ok(json!({"playing":false}));
             }
@@ -499,6 +536,7 @@ pub(super) fn reduce(
                     .add_filter("Motion path CSV", &["csv"])
                     .set_file_name(name),
             )?;
+            let operation = s.csv_operation.begin()?;
             let (tx, rx) = std::sync::mpsc::channel();
             let wake = handle.clone();
             std::thread::Builder::new()
@@ -511,6 +549,7 @@ pub(super) fn reduce(
                 })
                 .map_err(|e| e.to_string())?;
             s.picker = Some(Picker {
+                operation,
                 revision,
                 study: f.original.id.0,
                 receive: Mutex::new(rx),
@@ -548,6 +587,50 @@ pub(super) fn reduce(
     restore(world, s, owner)?;
     mutation(world, engine, bridge, owner, revision, request.0, request.1)
 }
+fn export_csv(
+    services: &NativeServices,
+    source: (&DocumentContext, u64),
+    study: u64,
+    path: &std::path::Path,
+    operation: &csv_operation::Lease,
+    admission: impl FnOnce() -> Result<(), String>,
+    completed: impl FnOnce(&limo_cad_native_engine::FinishedMotionPathExport),
+) -> Result<NativeMutationResult, String> {
+    let (owner, revision) = source;
+    let prepared =
+        services
+            .bridge
+            .with_native_document_receipt(&services.engine, owner, |current| {
+                if current != revision {
+                    return Err("The study changed while choosing its export path".into());
+                }
+                admission()?;
+                services.engine.prepare_motion_path_export(
+                    &json!({"study_id":study,"sample_rate_hz":60,"occurrence_ids":[]}).to_string(),
+                )
+            })?;
+    let finished = prepared.export()?;
+    completed(&finished);
+    let value = json!({"path":path,"exported":true});
+    services
+        .bridge
+        .with_native_document_receipt(&services.engine, owner, |current| {
+            if current != revision {
+                return Err("The study changed before its export could be written".into());
+            }
+            operation.commit(|| {
+                services.engine.validate_motion_path_export(&finished)?;
+                limo_cad_project_file::write_binary_file_atomic(path, finished.csv().as_bytes())
+                    .map_err(|error| error.to_string())?;
+                Ok(NativeMutationResult {
+                    context: owner.clone(),
+                    engine_revision: revision,
+                    value,
+                })
+            })
+        })
+}
+
 pub(crate) fn tick(
     world: &mut World,
     handle: &NativeInterfaceHandle,
@@ -559,9 +642,13 @@ pub(crate) fn tick(
     };
     let result = (|| {
         if b.owner.as_ref() != Some(owner) {
+            b.studies.cancel_export();
             return Ok(());
         }
         let s = &mut b.studies;
+        if !b.enabled || b.tab != Tab::Motion {
+            s.cancel_export();
+        }
         if let Some(picker) = &s.picker {
             let path = match picker
                 .receive
@@ -581,13 +668,15 @@ pub(crate) fn tick(
                         world,
                         "assembly_export_motion_path_csv".into(),
                         move |services, guard| {
-                            services.bridge.with_native_document_receipt(&services.engine,&owner,|revision|{
-                        if revision!=picker.revision {return Err("The study changed while choosing its export path".into());}
-                        guard.validate()?;
-                        let csv=parse_engine_envelope(services.engine.engine_call("assembly_export_motion_path_csv",&json!({"study_id":picker.study,"sample_rate_hz":60,"occurrence_ids":[]}).to_string()))?;
-                        limo_cad_project_file::write_binary_file_atomic(&path,csv.as_str().ok_or("Motion path was not text")?.as_bytes()).map_err(|e|e.to_string())?;
-                        Ok(NativeMutationResult{context:owner.clone(),engine_revision:revision,value:json!({"path":path,"exported":true})})
-                    })
+                            export_csv(
+                                services,
+                                (&owner, picker.revision),
+                                picker.study,
+                                &path,
+                                &picker.operation,
+                                || guard.validate(),
+                                |_| {},
+                            )
                         },
                         |_, _, r| Ok(r?.value),
                     )?;

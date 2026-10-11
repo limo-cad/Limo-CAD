@@ -266,6 +266,47 @@ pub struct OcctKernel {
 pub struct DetachedDrawingKernel(OcctKernel);
 /// Independent export shapes with no document mutation or geometry authority.
 pub struct DetachedMeshKernel(OcctKernel);
+/// Independent selected-body sections, without live document authority.
+pub struct DetachedSectionKernel(OcctKernel);
+/// Independent selected shapes for static and sampled occurrence interference.
+pub struct DetachedInterferenceKernel(OcctKernel);
+impl DetachedInterferenceKernel {
+    pub fn evaluate_motion(
+        &self,
+        assembly: &limo_cad_sketch::AssemblyDocumentDto,
+        scene: &limo_cad_solid::SolidSceneDto,
+        request: &limo_cad_sketch::EvaluateMotionStudyRequestDto,
+    ) -> Result<limo_cad_sketch::MotionStudyEvaluationDto, String> {
+        crate::evaluate_motion_study_document(assembly, scene, &self.0, request)
+    }
+
+    pub fn inspect_swept(
+        &self,
+        assembly: &limo_cad_sketch::AssemblyDocumentDto,
+        scene: &limo_cad_solid::SolidSceneDto,
+        request: &limo_cad_sketch::SweptCollisionRequestDto,
+    ) -> Result<limo_cad_sketch::SweptCollisionReportDto, String> {
+        crate::exact_swept_collision_document(assembly, scene, &self.0, request)
+    }
+
+    pub fn inspect(
+        &self,
+        scene: &limo_cad_solid::SolidSceneDto,
+        poses: &[limo_cad_assembly::InstanceBodyPoseDto],
+        request: &limo_cad_assembly::InterferenceCheckRequestDto,
+    ) -> Result<limo_cad_assembly::InterferenceReportDto, String> {
+        crate::exact_interference_report(&self.0, scene, poses, request)
+    }
+}
+impl DetachedSectionKernel {
+    pub fn inspect(
+        &self,
+        request: &crate::section_review::SectionReviewRequest,
+    ) -> Result<crate::section_review::SectionReview, crate::section_review::SectionReviewError>
+    {
+        crate::section_review::inspect_kernel(&self.0, request)
+    }
+}
 impl DetachedMeshKernel {
     /// Exact AP242 output from independently owned selected B-reps.
     pub fn export_step(&self, request: &StepExportRequest) -> Result<Vec<u8>, OcctError> {
@@ -377,6 +418,22 @@ impl OcctKernel {
         let mut result = Self::new()?;
         result.inner = inner;
         Ok(DetachedDrawingKernel(result))
+    }
+
+    pub fn detached_interference_snapshot(
+        &self,
+        ids: &[limo_cad_core::BodyId],
+    ) -> Result<DetachedInterferenceKernel, OcctError> {
+        self.detached_drawing_snapshot(ids)
+            .map(|snapshot| DetachedInterferenceKernel(snapshot.0))
+    }
+
+    pub fn detached_section_snapshot(
+        &self,
+        id: limo_cad_core::BodyId,
+    ) -> Result<DetachedSectionKernel, OcctError> {
+        self.detached_drawing_snapshot(&[id])
+            .map(|snapshot| DetachedSectionKernel(snapshot.0))
     }
 
     pub fn detached_mesh_snapshot(

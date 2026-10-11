@@ -4,7 +4,9 @@ Source review for [#333](https://github.com/limo-cad/Limo-CAD/issues/333), based
 the historical `278025a52247c7316c8553fd2a390f9179150733` census and the
 bounded source follow-up through clean `fd85a556` on 2026-10-11. Scoped STEP,
 native/attached drawing and affected history/input qualification is recorded
-below. This is a concrete inventory
+below. The finite section/static-interference follow-up at `67cb9e15` is recorded
+in the later isolation section and its exact qualification receipt.
+This is a concrete inventory
 of production snapshot APIs and their desktop consumers, shared host/MCP read
 contracts, and the document caches they feed. It is not a census of every clone
 in the repository, a benchmark, or live UI qualification. Test fixtures and
@@ -198,10 +200,12 @@ below and in the later export-isolation section:
   `mechanism.rs`, plus the `active` helper consumers in `palette.rs`,
   `annotations.rs` and `interaction.rs`. Palette/annotation/hover snapshots own
   sketch DTOs keyed by editor stamp; they survive pointer/paint events and share
-  retained geometry. A mechanism drag validates `can_drag_occurrence` from a
-  decoded assembly under the receipt fence, then owns scalar pose/camera state.
-  That predicate is another projection candidate; do not hold a host guard
-  across the drag. Browser sketch-name lookup now borrows the manager's active
+  retained geometry. A mechanism drag validates `can_drag_occurrence` through
+  a borrowed `with_assembly` callback under its original receipt (`1fb5c668`),
+  returning a bool before owning scalar pose/camera state. The full assembly
+  JSON round trip is removed. The predicate still clones required authored
+  assembly input for scene projection and graph work; its capture-time cost
+  scales with that input. No engine guard spans pointer events or the drag. Browser sketch-name lookup now borrows the manager's active
   session name under the existing engine guard and owns only that optional
   string. It no longer serializes/parses a complete SketchDto for the name;
   browser receipt/revision refresh and retained document lifetimes are unchanged.
@@ -374,12 +378,70 @@ and atomic write, never long meshing/HLR/ZIP under that lease. UI revocation has
 no inverse lease-to-publisher callback. Bambu metadata preparation after an actual
 write cannot retroactively claim the file was not written.
 
-Keep #333 open. Historical census counts/excerpts remain historical, not an
-updated whole-repository clone count. Per-body upload reuse is now implemented
-using private checked kernel owner/body generations and exact committed scene
-proof; body IDs/topology/pointers still cannot authorize it. The wider service
-lock graph, memory pressure and actual deployed background-holder/render behavior
-remain acceptance work.
+### Selected-body section computation: source checks passed, live acceptance pending
+
+`NativeEngineHost::prepare_section_review` captures one selected genuine B-rep
+after the existing request/source validation (`b11a727b`, `f9ce64e1`). The owned
+copy is required for native thread isolation. Capture remains a live engine
+read with geometry-dependent copy cost; native section/probe/cutaway computation
+then runs detached. Private finished provenance retains host/session ownership,
+a Weak scene stamp, geometry/metadata revisions and actual selected-body kernel
+identity. The weak stamp alone does not pin a retired scene's buffers.
+
+Desktop `3013d119` uses the existing single ordered worker slot and one original
+dispatch admission. UI receipt capture ends before computation and CPU raster/
+cutaway preparation. Adoption checks the original owner/revision, visible panel
+generation and opaque native proof before adding image assets or adopting the
+report. Close, changed draft, edits and document/kernel replacement reject
+prepared data. Attached MCP queries with genuine native tickets release both
+process-lease and publisher guards for computation/serialization, then recheck
+private native proof under the original completion guards. The genuine outcome
+is retained before fallible liveness publication; delivery-only retry does not
+run section work again. No-ticket compatibility and other query routing remain
+unchanged. Required editor/recovery snapshots retain their existing lifetimes.
+
+The ordered UI and attached-ticket filters passed once at `3013d119`; the native
+section filter passed at `67cb9e15` after correcting its boundary-versus-outside
+fixture assertion. Strict Windows source checks and exact artifacts are in
+`docs/qualification/detached-section-interference-20261011.json`.
+The original human exact180 section pass is selectively marked needs_recheck
+with its receipt retained. These focused source checks do not establish live UI behavior,
+whole-application ownership, memory containment, FPS or latency.
+
+### Static interference computation: source checks passed, live acceptance pending
+
+Static interference captures coherent solved occurrence poses and the current
+scene, then deep-copies only candidate native bodies for exact distance/Common
+work. Repeated occurrences share a copied body definition. The immutable scene
+is a legitimate in-flight broadphase input; finished provenance keeps only its
+Weak stamp. Capture/copy and final validation retain their bounded live guard
+scope, with geometry/pose-dependent cost.
+
+Private source proof includes exact host/session ownership, scene/revision
+stamps, current solved poses and native identities for all visible request-selected
+body sources, not just candidate pairs. Empty reports still reject native source
+changes; absent non-candidate shapes retain absence without a new admission gate.
+Native `2045da06`/`b52d9a5b` and desktop `67cb9e15` separate computation
+from original ordered UI and genuine
+MCP-ticket guards. UI adoption additionally checks the enabled Inspect tab and
+static generation; clearance/source/new Check/hide-reopen/tab changes retire it.
+MCP retains the original once-started outcome before liveness publication and
+retries delivery only. Swept motion at that historical checkpoint remained
+guarded; the qualified motion follow-up below supersedes that disposition.
+The native and two desktop regressions passed once at `67cb9e15`; the same
+receipt records genuine repeated-body overlap/clearance, zero-pair replacement,
+pose changes without render-stamp changes and original worker/ticket rejection.
+Required
+draft/recovery/output ownership and earlier evidence remain intact; source review
+does not qualify deployed responsiveness or memory/performance behavior.
+
+Historical census counts/excerpts remain historical, not an updated
+whole-repository clone count. Per-body upload reuse is implemented using private
+checked kernel owner/body generations and exact committed scene proof; body
+IDs/topology/pointers still cannot authorize it. Broader deployed behavior and
+unrelated service observations remain limits/future work. The issue's original
+source acceptance requires concrete ownership and focused retirement/fence
+checks; the final identified CSV gate is qualified below.
 
 Browser/history/CAM, native identities/body Assets and earlier transport/input
 passes are retained in [the Bevy ownership audit](bevy-ownership-audit.md).
@@ -411,3 +473,82 @@ No mirror test was added for label formatting. Installed EB and retained UI
 passes remain separate from these source revisions. This census update ran no
 additional tests or live UI/MCP actions. No deployed, universal latency/FPS,
 memory-pressure, physical GPU release or final #333 closure is claimed.
+
+### Swept/contact motion follow-up: source checks passed, live acceptance pending
+
+At `f2c47dd9`, swept collision captures the required owned authored Assembly
+sampler intent and Scene Arc, with genuine present visible body copies shared
+across repeated occurrences. It runs the unchanged per-frame sampling/exact
+algorithm outside live guards, without a manager/history clone or retained
+all-frame array. Its private proof retains exact authored inputs, Weak scene,
+host/session and geometry/metadata stamps plus present-or-absent native
+identities for all dependent sources. Missing noncandidate shapes preserve
+their original compatible absence; source changes still retire empty reports.
+
+At `1472b342`, contact evaluation copies enabled contact source shapes, including
+hidden ones because the original contact lookup does not filter visibility.
+It preserves requested-final-sample validation priority, eight probes and
+eighteen bisections while evaluating outside live guards. Finished proof drops
+the strong Scene input and retains exact authored Assembly for raw study,
+driver, contact and placement comparison. This is required sampler ownership,
+not a full model/history copy. Capture/copy, initial solve and final comparison
+remain scaling-dependent live work.
+
+Both use the existing one-slot ordered UI and one original dispatch admission.
+Swept generation is independent of static generation; only actual swept inputs,
+source or lifecycle transitions retire the pending swept report. Motion preview
+adoption additionally requires enabled Motion tab, selected study, current
+serial and native proof. Pause/Stop/Seek/draft/hide/tab or document/native
+replacement cannot adopt a stale result. Admitted MCP computation and encoding
+release process-lease/publisher guards, then reenter original ticket/native
+authority. Failed liveness retains the genuine once-started outcome for
+delivery-only retry, preserving no-ticket compatibility.
+
+Each native/UI-worker/MCP group passed once at its exact source above; earlier
+section/static/drawing/export/input passes remain historical without repetition.
+The test-only E0425/E0603 fixture failure happened before any regression ran and
+was corrected by qualified helper access and a narrow parent reexport without
+weakening production oracles. [Actual receipt](detached-swept-contact-20261011.json)
+also records the two fresh strict Windows compile checks at combined `39ca1a1e`.
+Incoming `9ea6295b` replaces the former section-worker helper; its separately
+authored [macOS source/pixel evidence](section-live-panel-20261011.json) is
+preserved. Neither receipt qualifies a packaged human section interaction here.
+
+All existing UI/MCP leaves and original receipts, including incoming renderer
+rechecks and prior section needs_recheck, remain unchanged by this follow-up.
+No additional human pass, deployed pair, runtime restart, installed operator
+replacement, latency/FPS or memory-pressure result is claimed. Motion CSV export
+was the separate concrete read-hold gate at that checkpoint; its qualified
+follow-up below completes that source repair.
+Universal deployed timing/GPU/process-memory measurements and a complete
+unrelated service graph are not added acceptance requirements. Fresh human
+cutover/display/drawing/slicer acceptance remains tracked separately.
+
+### Motion CSV: source qualification completes the identified ownership gate
+
+At `e224021b`, the existing sampler owns only required authored Assembly and
+shares its coherent Scene input. It runs outside the original live guard and
+does not need native B-reps. Completed proof releases the strong Scene input,
+retaining Weak Scene identity, private host/session, independent revisions and
+exact authored intent. Same-model Scene/native recompute, raw study changes,
+document replacement and foreign owner reject stale CSV. Output ownership
+transfers once through the admitted MCP response, preserving its original
+completion and delivery-only retry.
+
+The UI picker owns a real private revocable authority. Actual draft/cancel/hide/
+tab/drop/retired-picker transitions invalidate it. Computation runs without that
+lease; final publisher -> lease -> source proof -> atomic publication does not
+reverse the lock order or grant new admission. Strict Windows package checks
+and three NEW native/UI-worker/admitted-MCP regressions passed once with genuine
+physical CSV rows, atomic new/overwrite, unchanged models and liveness retry.
+[Exact qualification and seven-criterion disposition](detached-motion-csv-20261011.json)
+retain all older evidence without reruns and distinguish historical foundation
+passes from this new work. The original #333 source criteria are complete;
+closing it after push does not certify every application surface or deploy.
+
+Owned editable/cancel/recovery inputs, required sampler/solver snapshots,
+in-flight readers, output bytes and final source equality/write remain real
+scaling boundaries. Whole-kernel tessellation remains unchanged. No universal
+FPS, latency, total memory, GPU release or human interaction claim is made.
+All UI/MCP leaves, prior receipts, incoming renderer rechecks, section recheck,
+paused phase, saved documents and recovery data remain unchanged.

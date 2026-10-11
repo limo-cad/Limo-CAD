@@ -1576,7 +1576,7 @@ pub(crate) fn reduce_control_input(
                 }
                 return Ok(json!({"cancelled":true}));
             }
-            if section_review::in_3d(world) {
+            if section_review::active(world) {
                 section_review::escape(world);
                 return Ok(json!({"cancelled":true}));
             }
@@ -2652,8 +2652,7 @@ fn synchronize(
         && !assembly::joint::active(world)
         && !named_views::active(world)
         && !print_intent::active(world)
-        && section_review::modal(world).is_none()
-        && !section_review::in_3d(world);
+        && !section_review::active(world);
     body_appearance::synchronize(
         world,
         camera,

@@ -34,8 +34,13 @@ section query; it does not run the drawings' full hidden-line projection.
 
 ## Use
 
-Solid workspace → Check → Section Analysis. Choose one source body, an XY/XZ/YZ
-plane and its offset; enter an optional probe's vertical coordinate; Inspect.
+Solid workspace → Check → Section Analysis opens a compact panel on the right
+and automatically shows a 3D cutaway through the selected body's center. Choose
+one source body and an XY/XZ/YZ plane. Drag the position bar to move the cut
+through that body's extent, or enter an exact offset. The cutaway updates live;
+there is no separate Inspect step. Above/Below plane changes the retained side.
+Changing the body or plane centers the cut in the new axis. An optional probe's
+vertical coordinate measures directional material spans.
 Fields accept the document's length units or an explicit `mm`, `cm` or `in`
 suffix using the existing arithmetic input. The diagram and returned distances
 are explicitly millimetres. These are source-definition coordinates, independent
@@ -50,10 +55,10 @@ saved by a client without creating a drawing sheet. XY uses X/Y, XZ X/Z, YZ Y/Z
 as horizontal/vertical axes. The offset refers to Z, Y, X respectively.
 The Bevy panel's Copy SVG button places the current diagram on the native
 clipboard for saving or pasting into another tool; Escape closes the panel.
-Switch to **3D cutaway** to inspect the retained half-solid in the modeling
-viewport. Choose Below/Above plane and Inspect; orange surfaces identify the
-cut faces. Normal orbit, pan, zoom, orientation and Fit controls remain available.
-Fit frames the inspected source body. Diagram restores the flat section preview;
+Orange surfaces identify the cut faces in the modeling viewport. Normal orbit,
+pan, zoom, orientation and Fit controls remain available in both section modes.
+Fit frames the inspected source body. **2D diagram** shows a compact flat preview;
+**3D cutaway** returns to the retained half-solid.
 Close restores the source scene with its original visibility choices. Temporary
 cut faces are not selectable as modeling topology. Other bodies and occurrence
 poses are excluded from this source-definition review.
@@ -83,10 +88,18 @@ Curves are limited to 100,000 points and probe
 results to 128 intervals. A probe on a boundary follows a half-open convention;
 move it inside the material for an interior measurement.
 
-The preview uses the ordered native query worker. Document owner, revision and
-draft generation guard both dispatch and publication. Editing fields or changing
-the model clears the image and measurements. Reads create no feature, drawing,
-history entry or geometry revision. Closing the panel releases its image.
+The preview worker uses an independent copy of the selected exact source body,
+captured once per document revision/body. Section queries do not hold the live
+engine lock or occupy its mutation worker, so dragging and camera navigation
+remain available. One query runs at a time; intervening edits collapse to the
+latest draft. During a sustained drag, compatible completed positions can update
+the viewport while the newest position computes. SVG copy is available only for
+the completed current draft. Changed bodies, planes, sides, view modes, document
+owners and revisions reject incompatible completions. Closing the panel releases
+its controls, preview and worker without waiting for an in-flight read.
+Every completion also retains the backend's private source proof and validates
+the original scene and native body identity before being displayed.
+Reads create no feature, drawing, history entry or geometry revision.
 
 This tool supplies geometric evidence. It does not calculate snap force,
 displacement, stress, strain, creep or slicer wall-loop behavior.

@@ -63,6 +63,121 @@ fn replace_with_same_model(fixture: &Fixture) -> DocumentContext {
 }
 
 #[test]
+fn file_open_receipt_is_compact_and_preserves_native_geometry_and_owner_guards() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let owner = fixture.owner();
+    for (operation, arguments) in [
+        ("sketch_begin", json!({"type":"origin_plane","plane":"xy"})),
+        (
+            "sketch_add_rectangle",
+            json!({"mode":"two_point","p1":{"x":0.,"y":0.},"p2":{"x":10.,"y":6.},"ctrl_held":false}),
+        ),
+        ("sketch_finish", json!({})),
+        (
+            "solid_extrude",
+            json!({"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":3.},"taper_angle_deg":0.,"flip":false,"target_body_ids":[]}),
+        ),
+    ] {
+        fixture
+            .bridge
+            .apply_native_mutation(&fixture.engine, &owner, operation, &arguments, || Ok(()))
+            .unwrap();
+    }
+    let expected_model = model(&fixture);
+    let expected_scene = fixture.engine.solid_scene_snapshot();
+    assert_eq!(expected_scene.bodies.len(), 1);
+    assert!(!expected_scene.bodies[0].mesh.indices.is_empty());
+    assert!(serde_json::to_vec(&*expected_scene).unwrap().len() > 1024);
+    let (mut app, services, handle) = setup(&fixture);
+    let source = path("compact-open.limo");
+    save_to(&mut app, &services, &handle, &owner, &source);
+    let original_bytes = fs::read(&source).unwrap();
+    fixture
+        .rename(&owner, "Unsaved work must be guarded")
+        .unwrap();
+    let edited = model(&fixture);
+    assert!(
+        request(
+            app.world_mut(),
+            &handle,
+            &services,
+            &owner,
+            &json!({"command":"open","path":source})
+        )
+        .unwrap()["awaiting_input"]
+            == true
+    );
+    assert!(!worker::busy(app.world()));
+    assert_eq!(model(&fixture), edited);
+    assert_eq!(fixture.owner(), owner);
+    let token = app
+        .world()
+        .resource::<Files>()
+        .dialog
+        .as_ref()
+        .unwrap()
+        .token;
+    execute(
+        app.world_mut(),
+        &handle,
+        &services,
+        &owner,
+        FileCommand::Cancel(token),
+    )
+    .unwrap();
+
+    assert!(!worker::busy(app.world()));
+    assert_eq!(model(&fixture), edited);
+    assert_eq!(fixture.owner(), owner);
+    assert_eq!(fs::read(&source).unwrap(), original_bytes);
+
+    request(
+        app.world_mut(),
+        &handle,
+        &services,
+        &owner,
+        &json!({"command":"open","path":source,"discard_changes":true}),
+    )
+    .unwrap();
+    let receipt = drain(app.world_mut(), &services).unwrap();
+    assert_eq!(receipt["operation"], "open_project");
+    assert_eq!(
+        receipt["result"],
+        json!({"opened":true,"body_count":1,
+        "errors":[],"display_warnings":[]})
+    );
+    assert!(receipt["render_error"].is_null(), "{receipt}");
+    assert!(receipt["publication_error"].is_null(), "{receipt}");
+    assert!(
+        serde_json::to_vec(&receipt).unwrap().len() < 4096,
+        "{receipt}"
+    );
+    let opened = fixture.owner();
+    assert_ne!(opened, owner);
+    assert_eq!(receipt["document_id"], opened.document_id);
+    assert_eq!(receipt["document_epoch"], opened.epoch);
+    assert_eq!(model(&fixture), expected_model);
+    assert_eq!(
+        serde_json::to_value(&*fixture.engine.solid_scene_snapshot()).unwrap(),
+        serde_json::to_value(&*expected_scene).unwrap()
+    );
+    assert_eq!(fs::read(&source).unwrap(), original_bytes);
+    let current = tabs(app.world(), &services, &opened).unwrap();
+    assert_eq!(current.len(), 1);
+    assert_eq!(current[0].path.as_ref(), Some(&source));
+    assert!(!current[0].dirty);
+    assert_eq!(
+        app.world().resource::<NativeRenderedDocument>().owner,
+        opened
+    );
+    assert!(services
+        .bridge
+        .with_native_document_owner(&services.engine, &owner, || Ok(()))
+        .is_err());
+}
+
+#[test]
 fn failed_save_as_preserves_the_previous_target_and_explicit_document_name() {
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
     let fixture = Fixture::new();

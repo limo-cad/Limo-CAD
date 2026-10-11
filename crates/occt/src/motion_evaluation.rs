@@ -1,9 +1,10 @@
 //! Shared contact-aware motion sampling for native UI and headless MCP.
 use crate::{exact_pair_result, OcctKernel};
 use limo_cad_sketch::{
-    approximate_pair_result, contact_violation_score, ContactSetDto, EvaluateMotionStudyRequestDto,
-    InterferencePairResultDto, InterferenceReportDto, MotionStudyEvaluationDto, MotionStudyId,
-    MotionStudySampleDto, SampleMotionStudyRequestDto, SketchManager,
+    approximate_pair_result, contact_violation_score, AssemblyDocumentDto, ContactSetDto,
+    EvaluateMotionStudyRequestDto, InterferencePairResultDto, InterferenceReportDto,
+    MotionStudyEvaluationDto, MotionStudyId, MotionStudySampleDto, SampleMotionStudyRequestDto,
+    SketchManager,
 };
 use limo_cad_solid::SolidSceneDto;
 
@@ -12,17 +13,30 @@ pub fn evaluate_motion_study(
     kernel: &OcctKernel,
     request: &EvaluateMotionStudyRequestDto,
 ) -> Result<MotionStudyEvaluationDto, String> {
-    // Sampling is read-only for this call's entire lifetime. In particular,
-    // playback must not duplicate every mesh buffer at each sampled frame.
-    let document = manager.assembly_document_ref();
-    let scene = manager.solid_scene_ref();
+    evaluate_motion_study_document(
+        manager.assembly_document_ref(),
+        manager.solid_scene_ref(),
+        kernel,
+        request,
+    )
+}
+
+/// Evaluate immutable authored sampler inputs against independently owned shapes.
+pub fn evaluate_motion_study_document(
+    document: &AssemblyDocumentDto,
+    scene: &SolidSceneDto,
+    kernel: &OcctKernel,
+    request: &EvaluateMotionStudyRequestDto,
+) -> Result<MotionStudyEvaluationDto, String> {
     let sample = |time_seconds| {
-        manager
-            .sample_motion_study(SampleMotionStudyRequestDto {
-                study_id: request.study_id,
-                time_seconds,
-            })
-            .map_err(|e| e.to_string())
+        document
+            .sample_motion_study(
+                SampleMotionStudyRequestDto {
+                    study_id: request.study_id,
+                    time_seconds,
+                },
+                scene,
+            )
             .and_then(|s| {
                 if s.solution.solved {
                     Ok(s)
@@ -51,7 +65,7 @@ pub fn evaluate_motion_study(
             }
             if start_violation <= 1e-7 {
                 if let Some(crossing) = first_exact_contact_crossing(
-                    manager,
+                    document,
                     kernel,
                     scene,
                     request.study_id,
@@ -124,7 +138,7 @@ fn gated_contact_result(
 /// contact pair can actually touch. Eight ordered probes catch short
 /// enter/exit events across a normal 30 Hz playback frame before bisection.
 fn first_exact_contact_crossing(
-    manager: &SketchManager,
+    document: &AssemblyDocumentDto,
     kernel: &OcctKernel,
     scene: &SolidSceneDto,
     study_id: MotionStudyId,
@@ -141,12 +155,13 @@ fn first_exact_contact_crossing(
         let sample = if step == PROBE_STEPS {
             end.clone()
         } else {
-            manager
-                .sample_motion_study(SampleMotionStudyRequestDto {
+            document.sample_motion_study(
+                SampleMotionStudyRequestDto {
                     study_id,
                     time_seconds: time,
-                })
-                .map_err(|error| error.to_string())?
+                },
+                scene,
+            )?
         };
         let violation = if step == PROBE_STEPS {
             end_violation
@@ -162,25 +177,28 @@ fn first_exact_contact_crossing(
         let mut blocked = sample.time_seconds;
         for _ in 0..BISECTION_STEPS {
             let middle = (safe + blocked) * 0.5;
-            let candidate = manager
-                .sample_motion_study(SampleMotionStudyRequestDto {
+            let candidate = document.sample_motion_study(
+                SampleMotionStudyRequestDto {
                     study_id,
                     time_seconds: middle,
-                })
-                .map_err(|error| error.to_string())?;
+                },
+                scene,
+            )?;
             if gated_exact_contact_violation(kernel, scene, &candidate, contact)? > 1.0e-7 {
                 blocked = middle;
             } else {
                 safe = middle;
             }
         }
-        return manager
-            .sample_motion_study(SampleMotionStudyRequestDto {
-                study_id,
-                time_seconds: blocked,
-            })
-            .map(Some)
-            .map_err(|error| error.to_string());
+        return document
+            .sample_motion_study(
+                SampleMotionStudyRequestDto {
+                    study_id,
+                    time_seconds: blocked,
+                },
+                scene,
+            )
+            .map(Some);
     }
     Ok(None)
 }

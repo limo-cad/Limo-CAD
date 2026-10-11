@@ -1,0 +1,432 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-10-11T15:58:57.4799178Z",
+  "issues": [
+    93
+  ],
+  "source_revision": "19840d61ece6a921c2a2708f76191c119c8d1884",
+  "original_reviewed_commit": "47867403ed5dce30d546cb7f2238398a22c50687",
+  "qualification": {
+    "revision": "19840d61ece6a921c2a2708f76191c119c8d1884",
+    "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+    "recorded_utc": "2026-10-11T15:58:57.4799178Z",
+    "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "msvc": "14.44.35207",
+    "windows_sdk": "10.0.26100.0\\",
+    "filter": "tests::bench_part_notes_preserve_authored_countersinks_and_match_saved_recipe",
+    "artifacts": [
+      {
+        "kind": "example",
+        "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\examples\\author_bench_drawings-8658335d5f2e3e67.exe",
+        "sha256": "04f2b72675bdd693266eafd2e16d40777555d03fef12c18ed13fc442ca88d2b5"
+      }
+    ],
+    "results": [
+      {
+        "kind": "strict-example",
+        "exit_code": 0,
+        "elapsed_seconds": 7.6701909,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\bench-countersink-notes-19840d61-strict-example.log"
+      },
+      {
+        "kind": "example_artifact_compile",
+        "exit_code": 0,
+        "elapsed_seconds": 22.053670099999998,
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\bench-countersink-notes-19840d61-compile.jsonl",
+        "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\bench-countersink-notes-19840d61-compile.stderr.log"
+      },
+      {
+        "kind": "example_regression",
+        "filter": "tests::bench_part_notes_preserve_authored_countersinks_and_match_saved_recipe",
+        "exit_code": 0,
+        "exact_one_pass": true,
+        "elapsed_seconds": 0.0582291,
+        "binary_sha256": "04f2b72675bdd693266eafd2e16d40777555d03fef12c18ed13fc442ca88d2b5",
+        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\bench-countersink-notes-19840d61-test.log"
+      }
+    ],
+    "scope": "One strict author_bench_drawings example compile and one new pure Author.part regression on all20 authored part notes, including six independent knownD10/90countersinks and14withoutinvented countersinks. No generator main, recipe replay, native kernel, CAD session/model/archive writes, UI/runtime action or old passing tests."
+  },
+  "qualification_receipt_sha256": "b8c12673e4ca1cda4f5045eeec379576a4d90e14e6b95db15c90eacc7ea4255e",
+  "original_wrapper_failure": {
+    "source_revision": "19840d61ece6a921c2a2708f76191c119c8d1884",
+    "stage": "MSVC wrapper environment setup before compilation",
+    "exit_code": 1,
+    "diagnostic": "vcvarsall rejected -winsdk=10.0.26100.0; Windows SDK version is a positional argument. The PowerShell harness then refused the missing VCToolsVersion before any cargo stage.",
+    "correction": "Pass positional SDK 10.0.26100.0 and exact -vcvars_ver=14.44.35207; require VCToolsVersion before launching the harness. The harness still checks the exact toolchain and clean source.",
+    "compilations_executed": 0,
+    "regressions_executed": 0,
+    "source_or_test_oracle_changed": false
+  },
+  "digital_review": {
+    "part_sheets_technical_reviewed": 20,
+    "saved_sheets_visually_reviewed": 22,
+    "overall_dimension_labels_checked": 60,
+    "definition_local_bore_centers_checked": 115,
+    "cut_list_definitions": 20,
+    "cut_list_pieces": 34,
+    "checked_content": "Dimensions, quantities, grain/datum A/B/C convention, bore diameter/depth/coordinates, mirrored entry faces, six stock-clipped notch intervals, final20mm/R10 picket slot, rounding, assembly views, cut-list materials/finish and release limits.",
+    "upper_and_lower_rails": "Distinct authored definitions with9 upper and6 lower bore centers; no definition merge.",
+    "visual_findings": "All22 existing sheets show readable placed linework/table/notes/title. No observed clipping, text-to-text collision or title overlap. Some overall dimensions run within silhouettes but remain readable.",
+    "concrete_defect": "BEN12-15 seat_front/second/middle/rear and BEN19-20 arm_left/right omitted their actualD10/90deg countersink while listingD5.5/depth35. Generator discarded authoredsolid_hole style.",
+    "fix": "Match the genuine authoredsolid_hole bybody/diameter/depth/allentrypoints, preserve actualcountersink diameter/angle and refuse ambiguous/unsupported style. Exactlysix saved recipe note strings updated; everygeometry/check/verification input/otherstep unchanged.",
+    "changed_note_ids": [
+      "bench_drawing_seat_front_machining",
+      "bench_drawing_seat_second_machining",
+      "bench_drawing_seat_middle_machining",
+      "bench_drawing_seat_rear_machining",
+      "bench_drawing_arm_left_machining",
+      "bench_drawing_arm_right_machining"
+    ],
+    "independent_changed_note_layout_bound": {
+      "page_mm": [
+        420,
+        297
+      ],
+      "note_origin_mm": [
+        20,
+        180
+      ],
+      "font_height_mm": 3.5,
+      "baseline_step_mm": 4.9,
+      "new_line_characters": 39,
+      "longest_existing_line_characters": 68,
+      "new_final_baselines_mm": [
+        219.2,
+        224.1
+      ],
+      "title_band_start_mm": 243,
+      "minimum_vertical_gap_mm": 18.9,
+      "scope": "Actual existingSVG and productionrenderer height*1.4 baseline rule plus authored origin/font. New ordinaryASCII sentence fits existing clear column and is shorter than existing lines. No new renderedexport or freshly measured fontglyphwidth claim."
+    },
+    "reviewers": "Independent technical/source reviewer and visual/assembly/cut-list reviewer; root reviewed final source."
+  },
+  "historical_reviewed_exports": [
+    {
+      "sheet": "front_leg_left",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-front_leg_left.svg",
+      "bytes": 26352,
+      "sha256": "362fa2eb70d946278e3500e85faa657fd9a10331e2053bfe463c5927071a6cc9"
+    },
+    {
+      "sheet": "front_leg_left",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-front_leg_left.png",
+      "bytes": 271148,
+      "sha256": "3ee98b1761261fb6f48e1abbbde84086d96b11f0aafa11642d65a2d6aa72727d"
+    },
+    {
+      "sheet": "front_leg_right",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-front_leg_right.svg",
+      "bytes": 29799,
+      "sha256": "8e5238dea1196f76c88e5251dbf938f6b8b384a745338ec7244a9001217c4e43"
+    },
+    {
+      "sheet": "front_leg_right",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-front_leg_right.png",
+      "bytes": 275080,
+      "sha256": "3558e42385dc63e36ae763f53c32682f6f5c4b9da75e9ad08ea24f439c4aa8fd"
+    },
+    {
+      "sheet": "rear_leg_left",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-rear_leg_left.svg",
+      "bytes": 29522,
+      "sha256": "1c6e2abf002533c01f360ac1f80ba6e0f9bbbdc83ac447cbb41c88516279ae06"
+    },
+    {
+      "sheet": "rear_leg_left",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-rear_leg_left.png",
+      "bytes": 287072,
+      "sha256": "5d54b18ce6e9f3359860c7f58433ce6f02d27dbceb59400532fe7b32ee62436f"
+    },
+    {
+      "sheet": "rear_leg_right",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-rear_leg_right.svg",
+      "bytes": 32943,
+      "sha256": "b52853d3dad543d2a5fe303b175ac1e2aa51d24087d22698ad9655c19a4adef9"
+    },
+    {
+      "sheet": "rear_leg_right",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-rear_leg_right.png",
+      "bytes": 288869,
+      "sha256": "2b7ada082144d1753aa9901e820b24c5e5098e02db584e9e7870461f4444b95b"
+    },
+    {
+      "sheet": "apron",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-apron.svg",
+      "bytes": 29383,
+      "sha256": "85b4baad1f8d6c31a84c06a283b0df54a3dbd4853bce9cc7620bf605d00db845"
+    },
+    {
+      "sheet": "apron",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-apron.png",
+      "bytes": 250090,
+      "sha256": "82e5eb621d50664fd6b0cd454a078c2d46c6a7491fe1e0397673f9c6f790b636"
+    },
+    {
+      "sheet": "upper_side_rail",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-upper_side_rail.svg",
+      "bytes": 42476,
+      "sha256": "a7580dad476ce9682d567506533305fe9097f752420f99643196cd04bc9838fe"
+    },
+    {
+      "sheet": "upper_side_rail",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-upper_side_rail.png",
+      "bytes": 281658,
+      "sha256": "a51b7a62d4bdacd8e38d3ed2264acb1e5326d5cd7046c9c0906124fee8efd7c1"
+    },
+    {
+      "sheet": "lower_side_rail",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-lower_side_rail.svg",
+      "bytes": 30693,
+      "sha256": "e8407b675928a251ac2a606164adff1c5691fc030af9ba9e202e1db4ebc35b27"
+    },
+    {
+      "sheet": "lower_side_rail",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-lower_side_rail.png",
+      "bytes": 266906,
+      "sha256": "60f89fa37a7930c5f2a6ebad10c5acf7e1dcdf549ba29f7fcbc9da60d958afcb"
+    },
+    {
+      "sheet": "center_bearer",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-center_bearer.svg",
+      "bytes": 37858,
+      "sha256": "93709b7aa558dbb1fbd6565b3d11f3ad26c39b971c4ddc2640a542236d547e74"
+    },
+    {
+      "sheet": "center_bearer",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-center_bearer.png",
+      "bytes": 271160,
+      "sha256": "71120a9cad3fd7c081540ed1d7c9ff88e6fc39b748a4037d3331c66be5cd015a"
+    },
+    {
+      "sheet": "bearer_block_front",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-bearer_block_front.svg",
+      "bytes": 22889,
+      "sha256": "5a8e67421e44e2ba4853bc6d74c975c2a746fad028bbee7ddca6d11c855602c8"
+    },
+    {
+      "sheet": "bearer_block_front",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-bearer_block_front.png",
+      "bytes": 255928,
+      "sha256": "1746df46e0576a071baef58fdf5dd6198078a5d6c9cfdf6b8c7aff3143699981"
+    },
+    {
+      "sheet": "bearer_block_rear",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-bearer_block_rear.svg",
+      "bytes": 21493,
+      "sha256": "fbe1779c17c8399dca7b7f39d2813132de640fc770bc0db3dcaa0edd0b2cb954"
+    },
+    {
+      "sheet": "bearer_block_rear",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-bearer_block_rear.png",
+      "bytes": 255239,
+      "sha256": "6930cc72f8987f4b14df2a41b4e2f0a23254b64b85ee29004960722cd1cc2482"
+    },
+    {
+      "sheet": "stretcher",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-stretcher.svg",
+      "bytes": 20623,
+      "sha256": "6bbca16aed8727cafaf6d6293cf10252724a78b49362f41f4192322bb058f492"
+    },
+    {
+      "sheet": "stretcher",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-stretcher.png",
+      "bytes": 251419,
+      "sha256": "9e5730dd41020abff51bf83332bc112a74d3ea7e4311a1e17059b408eece403d"
+    },
+    {
+      "sheet": "seat_front",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-seat_front.svg",
+      "bytes": 29371,
+      "sha256": "aa801ef0a052463df7053a20d1d32f4071edb7bad09a64bcee71f0b5e02bda7e"
+    },
+    {
+      "sheet": "seat_front",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-seat_front.png",
+      "bytes": 266341,
+      "sha256": "d524730fbaa2a80ffff061b6511af6f4f2d1a0e23f78cd707fb14d945cc34208"
+    },
+    {
+      "sheet": "seat_second",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-seat_second.svg",
+      "bytes": 30477,
+      "sha256": "b050ad6d3a4244b7f1a76cbc0eb480124e0c53edf27b19f037669511d82948c6"
+    },
+    {
+      "sheet": "seat_second",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-seat_second.png",
+      "bytes": 262692,
+      "sha256": "3d5aef871b184125837e232ad7a30f5942bc3caf75fce7fca13de40fdd2062a9"
+    },
+    {
+      "sheet": "seat_middle",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-seat_middle.svg",
+      "bytes": 26459,
+      "sha256": "6dc6244f651a2b233569e32f59194c013bcce11d75c01674067ab69eafce4fa6"
+    },
+    {
+      "sheet": "seat_middle",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-seat_middle.png",
+      "bytes": 242130,
+      "sha256": "5c63f72e17bee65b897add15ede7df6fa92c0d2e5eae15e71920c8c35d3809a6"
+    },
+    {
+      "sheet": "seat_rear",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-seat_rear.svg",
+      "bytes": 29357,
+      "sha256": "bc82939101c68545730776d4b10a88a31cf8b85e3de417b83e8c3874e830e5a2"
+    },
+    {
+      "sheet": "seat_rear",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-seat_rear.png",
+      "bytes": 266458,
+      "sha256": "e585c8c0c287139f7a05ca9bc676f613a98f0aff7c9ba07e0523de5d0ea9928a"
+    },
+    {
+      "sheet": "back_rail",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-back_rail.svg",
+      "bytes": 62272,
+      "sha256": "e5cf46e4a5dcdd27ca51dc2238877126fe129fa7077ae6e2ab0123c2106971c0"
+    },
+    {
+      "sheet": "back_rail",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-back_rail.png",
+      "bytes": 269686,
+      "sha256": "b9324c7cb76af11e70ae8828d9909e0a67f256049128554405bc5af8854b3664"
+    },
+    {
+      "sheet": "picket",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-picket.svg",
+      "bytes": 27685,
+      "sha256": "18e936582ab7ba3fbc127c8fd58fc808ce286427ef77de76f4396a0c337e546e"
+    },
+    {
+      "sheet": "picket",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-picket.png",
+      "bytes": 302289,
+      "sha256": "d752768b331125209405a7192050d53e8eb6282cba0ea1f9ed7396edac0f2b04"
+    },
+    {
+      "sheet": "arm_rail",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-arm_rail.svg",
+      "bytes": 30560,
+      "sha256": "7357933cef4fcb3d3d2276d2228bedb130ad5f4d1d6ba16b1699a8b611fe18f0"
+    },
+    {
+      "sheet": "arm_rail",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-arm_rail.png",
+      "bytes": 264055,
+      "sha256": "d351b2dbaf5472d15d5f7921a287d29718b7f896cfc1cebd5b3b1c19eb977d12"
+    },
+    {
+      "sheet": "arm_left",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-arm_left.svg",
+      "bytes": 30784,
+      "sha256": "6151a140a8b0f84af15c7fd4e110ce8bd9472edf7bddff5609cf80f53a1887ec"
+    },
+    {
+      "sheet": "arm_left",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-arm_left.png",
+      "bytes": 271998,
+      "sha256": "4a704c3c34a0397e4387369033aeb87248eb81bd7666936c061534c261460355"
+    },
+    {
+      "sheet": "arm_right",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-arm_right.svg",
+      "bytes": 30759,
+      "sha256": "00f20ba5a21d8cdad428051d2bf9f00fd6f7b76725a22429e20b48cf11c2273b"
+    },
+    {
+      "sheet": "arm_right",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-arm_right.png",
+      "bytes": 273082,
+      "sha256": "a81903a5bf2746fdb297fe86fa612d2c887ea8e36030d9d4f018aa3e76c45618"
+    },
+    {
+      "sheet": "assembly",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-assembly.svg",
+      "bytes": 153857,
+      "sha256": "1c316ab96a05d26a9866f37044b4ce5ff8fce937515e3e48241715eee77b3935"
+    },
+    {
+      "sheet": "assembly",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-assembly.png",
+      "bytes": 544438,
+      "sha256": "fe90d070c2312705e4229c9f1330c01abcd89d50977b969af9eaa687264a536a"
+    },
+    {
+      "sheet": "cut_list",
+      "kind": "svg",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-cut_list.svg",
+      "bytes": 9485,
+      "sha256": "bf50507e7f8a4238b73ac04aca3fb6ec662c91110e922e760c8fa8c2f7a40016"
+    },
+    {
+      "sheet": "cut_list",
+      "kind": "png",
+      "path": "D:\\limo-cad-maintenance\\pr-pass-20261005\\drawing-evidence\\bench-cut_list.png",
+      "bytes": 455247,
+      "sha256": "7014df588e82ecda9b3c81d9a6e9ea8b4f2dfbddd698ae65dc62b739de14bba5"
+    }
+  ],
+  "coverage_preservation": {
+    "base_revision": "19840d61ece6a921c2a2708f76191c119c8d1884",
+    "all_prior_ui_mcp_leaves_and_receipts_unchanged": true,
+    "broad_run_state": "paused",
+    "new_live_passes": 0,
+    "new_human_recheck_leaves": 0
+  },
+  "limits": [
+    "Reviewinputs are22 historicalSVGs and22PNG captures, not44 newlygeneratedSVG/DXF exports. Corrected notes are qualified in authored source and the real in-memory Author.part regression; historical images remain unchanged.",
+    "Checked-in examples/checkpoints/garden-bench.limo has no drawing sheets; it is not evidence of this22sheet editablepackage. Oldbench-drawing-repro.log isFAILED at an obsolete$count predecessor ($len assertion) before its reopen/export/upstream checks. Currentsource already uses supported$count; later retained acceptance logs mark that exactcaseIGNORED. Neither is accepted as finalsuccessfulcompletion evidence; no currentexportfailure is inferred.",
+    "No generator main, recipe replay, nativegeometry/model/archivesave, UI/MCPinput, deployment, restart or runtime ownership action occurred. Saved/recoverydata and independentheadless documents remain preserved.",
+    "Digitalcontent/layout review is not fabrication release, timber/hardware/load/comfort/process/tolerance certification, physicalprinting or freshPDFdialog acceptance.",
+    "Onlyone new pureexample regression ran. No passing case or suite reran; originalwrapper environmentfailure happened beforeanycompilation/regression and was corrected without changing source or oracle.",
+    "This receipt does not independently prove the claimed complete native22sheet SVG/DXF/reopen/associativedimension roundtrip. That original deliverable remains bounded evidence work until an authentic retained successfulreceipt is located or a specificallyaffected check is authorized.",
+    "Main and JackPRs untouched; publicationtarget onlyPR124/bothBevyaliases. HostedCI is notclaimed green."
+  ]
+}

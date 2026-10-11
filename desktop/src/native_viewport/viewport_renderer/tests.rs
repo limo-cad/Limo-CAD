@@ -155,6 +155,28 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
     app.finish();
     app.cleanup();
     assert!(!app.is_plugin_added::<bevy::pbr::PbrPlugin>());
+    // Bevy disables wgpu's default features. Without wgpu/std its error-scope
+    // thread IDs are a single global stub, so independently nested shader
+    // validation in the two renderers can panic. Require the documented native
+    // scope ownership deterministically, rather than relying on a timing race.
+    let device = app.world().resource::<RenderDevice>().clone();
+    let interface_scope = device
+        .wgpu_device()
+        .push_error_scope(wgpu::ErrorFilter::Validation);
+    let (entered, worker_entered) = mpsc::channel();
+    let (release_scope, scope_released) = mpsc::channel();
+    let thread = std::thread::spawn(move || {
+        let scope = device
+            .wgpu_device()
+            .push_error_scope(wgpu::ErrorFilter::Validation);
+        entered.send(()).unwrap();
+        let _ = scope_released.recv();
+        bevy::tasks::block_on(scope.pop())
+    });
+    worker_entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(bevy::tasks::block_on(interface_scope.pop()).is_none());
+    release_scope.send(()).unwrap();
+    assert!(thread.join().unwrap().is_none());
     app.main_mut().update();
     let target = app
         .world_mut()
