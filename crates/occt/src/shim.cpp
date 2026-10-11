@@ -10101,9 +10101,10 @@ FfiSectionGeometry Kernel::section_geometry(std::uint64_t body_id,
   output.has_cutaway = false;
   output.cutaway.body_id = body_id;
   output.offsets.push_back(0);
-  if (!TopExp_Explorer(section, TopAbs_EDGE).More()) {
+  const bool has_edges = TopExp_Explorer(section, TopAbs_EDGE).More();
+  if (!has_edges) {
     output.outcome = TopExp_Explorer(section, TopAbs_VERTEX).More() ? 1 : 0;
-    return output;
+    if (!options.retain_unintersected) return output;
   }
 
   TopoDS_Shape source = found->second;
@@ -10148,7 +10149,7 @@ FfiSectionGeometry Kernel::section_geometry(std::uint64_t body_id,
     splits_material |= retained_volume > tolerance && source_volume - retained_volume > tolerance;
     if (retained_volume > tolerance) builder.Add(clipped, retained);
   }
-  output.outcome = splits_material ? 2 : 1;
+  if (has_edges) output.outcome = splits_material ? 2 : 1;
   const TopoDS_Shape boundaries = output.outcome == 2
       ? material_section_boundary(found->second, plane, region_budget, stages.Next())
       : section;
@@ -10161,7 +10162,8 @@ FfiSectionGeometry Kernel::section_geometry(std::uint64_t body_id,
   if (output.outcome == 2 && output.points.empty()) {
     throw std::runtime_error("OCCT section material boundary produced no contour points");
   }
-  if (output.outcome == 2 && options.include_cutaway) {
+  if (options.include_cutaway && (output.outcome == 2 || options.retain_unintersected) &&
+      TopExp_Explorer(clipped, TopAbs_SOLID).More()) {
     const SectionMeshBudget budget{options.vertices, options.edge_points, progress.get()};
     output.cutaway = mesh_shape(body_id, clipped, options.deflection, 0.25, false, &budget, stages.Next());
     progress->check("meshing");

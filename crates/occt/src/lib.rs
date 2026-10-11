@@ -544,6 +544,12 @@ impl DetachedSectionKernel {
             source: OcctError("native OCCT support was not enabled at compile time".into()),
         })
     }
+    pub fn inspect_retained(
+        &self,
+        request: &section_review::SectionReviewRequest,
+    ) -> Result<section_review::SectionReview, section_review::SectionReviewError> {
+        self.inspect(request)
+    }
 }
 #[cfg(not(feature = "native-occt"))]
 impl DetachedMeshKernel {
@@ -620,6 +626,13 @@ impl OcctKernel {
         Err(OcctError(
             "native OCCT support was not enabled at compile time".into(),
         ))
+    }
+    pub(crate) fn section_geometry_retained(
+        &self,
+        request: &section_review::SectionReviewRequest,
+        _retain_unintersected: bool,
+    ) -> Result<section_review::SectionGeometry, OcctError> {
+        self.section_geometry(request)
     }
     pub fn new() -> Result<Self, OcctError> {
         Err(OcctError(

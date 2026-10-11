@@ -1,6 +1,15 @@
 {
   "measure_line_label_source_checkpoint": {"source_revision":"ceeec0d4e9b9b18e16db2cf3a24b63c18836d438","evidence":"docs/qualification/measure-line-labels-20261011.json","new_unique_source_regressions_passed":3,"affected_windowless_gpu_regressions_passed":1,"new_live_ui_passes":0,"new_manual_mcp_passes":0,"prior_ui_mcp_leaf_statuses_preserved":true,"broader_run_state":"paused"},
   "measure_ci_source_checkpoint": {"source_revision":"ef1792ac5367467944e003c3ff1ebe7c5f21372f","evidence":"docs/qualification/measure-ci-repair-20261011.json","new_headless_regressions_passed":3,"affected_windowless_gpu_regressions_passed":1,"new_live_ui_passes":0,"new_manual_mcp_passes":0,"existing_ui_mcp_leaf_statuses_preserved":true,"broader_run_state":"paused","new_ci_status":"pending fresh run"},
+  "section_multi_body_source_checkpoint": {
+    "base_revision": "02fea4810040c419241031d4564eb63d5e893a1e",
+    "evidence": "docs/qualification/section-multi-body-20261011.json",
+    "source_regressions_passed": 17,
+    "strict_checks": "desktop release all targets, native engine/OCCT, and no-native OCCT passed",
+    "affected_case": "ui/feature-forms/section-analysis-exact180",
+    "status": "needs_recheck",
+    "reason": "Multi-body selection, coherent exact clipping, retained context and combined diagrams have source/native GPU evidence; physical checkbox selection and dragging on the new app remain pending. Broad UI/MCP coverage stays paused and unrelated passes are retained."
+  },
   "section_slider_viewport_repair_checkpoint": {
     "base_revision": "c11a51cd41239ad4e8f5a7ce2e32e3d971fa8ea8",
     "evidence": "docs/qualification/section-slider-viewport-repair-20261011.json",

@@ -1440,7 +1440,9 @@ fn apply_native_presentation_styles(
             continue;
         }
         visibility.set_if_neq(
-            if section.as_ref().is_some_and(|s| s.active(&model))
+            if section
+                .as_ref()
+                .is_some_and(|s| s.replaces(&model, body.body_id))
                 || state.hidden_body_ids.contains(&body.body_id)
             {
                 Visibility::Hidden
