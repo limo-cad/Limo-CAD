@@ -93,6 +93,9 @@ mod ffi {
         transform_kinds: Vec<u8>,
         transform_values: Vec<f64>,
         radius: f64,
+        /// Explicit angle in degrees; ignored when has_chamfer_angle is false.
+        chamfer_angle_deg: f64,
+        has_chamfer_angle: bool,
         diameter: f64,
         secondary_diameter: f64,
         secondary_depth: f64,
@@ -1073,6 +1076,8 @@ fn empty_ffi_job(feature_id: u64, kind: u8) -> ffi::FfiJob {
         transform_kinds: Vec::new(),
         transform_values: Vec::new(),
         radius: 0.0,
+        chamfer_angle_deg: 0.0,
+        has_chamfer_angle: false,
         diameter: 0.0,
         secondary_diameter: 0.0,
         secondary_depth: 0.0,
@@ -1240,13 +1245,18 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
             edge_indices(&source.edge_keys),
             source.radius,
         ),
-        KernelJobDto::Chamfer(source) => refinement_ffi_job(
-            source.feature_id.0,
-            6,
-            source.target_body_id.0,
-            edge_indices(&source.edge_keys),
-            source.distance,
-        ),
+        KernelJobDto::Chamfer(source) => {
+            let mut job = refinement_ffi_job(
+                source.feature_id.0,
+                6,
+                source.target_body_id.0,
+                edge_indices(&source.edge_keys),
+                source.distance,
+            );
+            job.chamfer_angle_deg = source.angle_deg.unwrap_or(0.0);
+            job.has_chamfer_angle = source.angle_deg.is_some();
+            job
+        }
         KernelJobDto::Hole(source) => {
             let mut job = empty_ffi_job(source.feature_id.0, 7);
             job.operation = 2;
@@ -3408,6 +3418,7 @@ mod tests {
             target_body_id: BodyId(1),
             edge_keys: upper,
             distance: 0.5,
+            angle_deg: None,
             tangent_chain: false,
         }));
         jobs.push(KernelJobDto::Hole(KernelHoleJobDto {
@@ -3456,6 +3467,7 @@ mod tests {
             target_body_id: BodyId(1),
             edge_keys: vec![rim],
             distance: 0.5,
+            angle_deg: None,
             tangent_chain: false,
         }));
         let scene = kernel
@@ -4862,6 +4874,7 @@ mod tests {
                 target_body_id: BodyId(1),
                 edge_keys: vec!["edge:0".to_string(), "edge:1".to_string()],
                 distance: 1.0,
+                angle_deg: None,
                 tangent_chain: false,
             }),
             KernelJobDto::Hole(KernelHoleJobDto {
@@ -5108,6 +5121,75 @@ mod tests {
     }
 
     #[test]
+    fn angled_chamfers_have_the_requested_cutback_and_volume() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let base = kernel
+            .recompute(&RecomputePlanDto {
+                transaction_id: 1,
+                errors: Vec::new(),
+                jobs: vec![notched_plate_job()],
+            })
+            .unwrap();
+        assert!(base.errors.is_empty());
+        for (x, y, sign) in [(25., 25., -1.), (20., 20., 1.)] {
+            let key = vertical_edge_key(&base, x, y);
+            for angle in [15_f64, 30., 45., 60., 75., 85.] {
+                let distance = 0.25;
+                let scene = blend_notched_plate(KernelJobDto::Chamfer(KernelChamferJobDto {
+                    feature_id: FeatureId(3),
+                    target_body_id: BodyId(1),
+                    edge_keys: vec![key.clone()],
+                    distance,
+                    angle_deg: Some(angle),
+                    tangent_chain: false,
+                }));
+                assert!(
+                    scene.errors.is_empty(),
+                    "{angle} degrees at ({x}, {y}): {:?}",
+                    scene.errors
+                );
+                assert_eq!(scene.bodies.len(), 1);
+                let expected =
+                    2625. + sign * 0.5 * distance * distance * angle.to_radians().tan() * 5.;
+                assert!(
+                    (mesh_volume(&scene.bodies[0]) - expected).abs() < 0.01,
+                    "{angle} degree chamfer volume: {}, expected {expected}",
+                    mesh_volume(&scene.bodies[0])
+                );
+                assert_eq!(scene.bodies[0].faces.len(), 9);
+                let repeat = blend_notched_plate(KernelJobDto::Chamfer(KernelChamferJobDto {
+                    feature_id: FeatureId(3),
+                    target_body_id: BodyId(1),
+                    edge_keys: vec![key.clone()],
+                    distance,
+                    angle_deg: Some(angle),
+                    tangent_chain: false,
+                }));
+                assert_eq!(
+                    scene.bodies, repeat.bodies,
+                    "same reference face and geometry after replay"
+                );
+            }
+        }
+        let key = vertical_edge_key(&base, 25., 25.);
+        for angle in [0., 90., -1., 91., f64::NAN, f64::INFINITY] {
+            let scene = blend_notched_plate(KernelJobDto::Chamfer(KernelChamferJobDto {
+                feature_id: FeatureId(3),
+                target_body_id: BodyId(1),
+                edge_keys: vec![key.clone()],
+                distance: 1.,
+                angle_deg: Some(angle),
+                tangent_chain: false,
+            }));
+            assert!(
+                !scene.errors.is_empty(),
+                "invalid angle {angle} must be rejected by the kernel"
+            );
+            assert!((mesh_volume(&scene.bodies[0]) - 2625.).abs() < 1e-3);
+        }
+    }
+
+    #[test]
     fn occt_blends_an_edge_whose_size_consumes_its_walls() {
         let mut kernel = OcctKernel::new().unwrap();
         let base = kernel
@@ -5144,6 +5226,7 @@ mod tests {
                 target_body_id: BodyId(1),
                 edge_keys: vec![edge.to_string()],
                 distance,
+                angle_deg: None,
                 tangent_chain: false,
             })
         };

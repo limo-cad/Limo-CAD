@@ -6863,6 +6863,57 @@ fn ordered_profile_curves(
 #[cfg(test)]
 mod project_tests {
     use super::*;
+    use crate::geometry::Vec2;
+
+    #[test]
+    fn angled_chamfer_dimensions_remain_editable_after_save_and_reopen() {
+        let plane = PlaneRef::OriginPlane {
+            plane: limo_cad_core::OriginPlane::Xy,
+        };
+        let mut session = SketchSession::new("Chamfer", plane, plane.basis().unwrap(), false);
+        let first = session
+            .add_line(Vec2::ZERO, Vec2::new(50., 0.), true)
+            .unwrap()
+            .entity_id;
+        let second = session
+            .add_line(Vec2::ZERO, Vec2::new(0., 50.), true)
+            .unwrap()
+            .entity_id;
+        session
+            .chamfer_lines(&ChamferRequest {
+                l1: first,
+                l2: second,
+                distance_text: "2".into(),
+                angle_text: Some("60/2".into()),
+            })
+            .unwrap();
+        let before = serde_json::to_string(&session.sketch().snapshot()).unwrap();
+        let serialized = serde_json::to_string(&session.project_state(FeatureId(1))).unwrap();
+        let mut reopened =
+            SketchSession::from_project_state(serde_json::from_str(&serialized).unwrap()).unwrap();
+        assert_eq!(
+            serde_json::to_string(&reopened.sketch().snapshot()).unwrap(),
+            before
+        );
+        let angle = reopened
+            .dto()
+            .dimensions
+            .into_iter()
+            .find(|dimension| dimension.kind == "angle")
+            .unwrap();
+        assert_eq!(angle.param_expression.as_deref(), Some("60/2"));
+        assert!((angle.value - 30.).abs() < 1e-9);
+        reopened
+            .edit_dimension(EditDimensionRequest {
+                constraint_id: angle.constraint_id,
+                text: "60".into(),
+            })
+            .unwrap();
+        let expected = Vec2::new(0., 2. * 60_f64.to_radians().tan());
+        assert!(reopened.dto().entities.iter().any(|entity| matches!(entity,
+            crate::dto::EntityDto::Line { id, start, end, .. } if *id == second
+                && (start.distance(expected) < 1e-6 || end.distance(expected) < 1e-6))));
+    }
 
     /// Issue #151, review finding 6: a project saved before center handles
     /// existed must still give its circles a selectable center on load.
@@ -6942,6 +6993,7 @@ mod project_tests {
             body_id: limo_cad_core::BodyId(1),
             edge_ids: vec![],
             distance: 1.0,
+            angle_deg: None,
             tangent_chain: false,
         };
         for rejected in [
@@ -10378,6 +10430,7 @@ mod project_tests {
                 body_id,
                 edge_ids: vec![second_edge],
                 distance: 0.5,
+                angle_deg: None,
                 tangent_chain: false,
             })
             .unwrap();

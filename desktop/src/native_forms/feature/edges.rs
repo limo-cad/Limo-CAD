@@ -5,7 +5,7 @@ use limo_cad_solid::{
     EditSolidChamferRequest, EditSolidFilletRequest, SolidChamferRequest, SolidFilletRequest,
 };
 
-type EdgeValues = Result<(BodyId, Vec<EdgeId>, f64, bool), Vec<(SolidField, String)>>;
+type EdgeValues = Result<(BodyId, Vec<EdgeId>, f64, Option<f64>, bool), Vec<(SolidField, String)>>;
 
 #[derive(Debug)]
 pub(super) struct EdgeFields {
@@ -13,6 +13,8 @@ pub(super) struct EdgeFields {
     body: Option<BodyId>,
     edges: Vec<EdgeId>,
     size: MeasurementInput,
+    angle: MeasurementInput,
+    legacy_angle: bool,
     tangent_chain: bool,
 }
 impl EdgeFields {
@@ -22,6 +24,8 @@ impl EdgeFields {
             body: None,
             edges: vec![],
             size: MeasurementInput::new(DimensionKind::Length, 2., units),
+            angle: MeasurementInput::new(DimensionKind::Angle, 45., units),
+            legacy_angle: false,
             tangent_chain: false,
         }
     }
@@ -32,6 +36,10 @@ impl EdgeFields {
             }
             SolidField::Distance if self.kind == SolidFormKind::Chamfer => {
                 self.size.set_text(value.into())
+            }
+            SolidField::Angle if self.kind == SolidFormKind::Chamfer => {
+                self.angle.set_text(value.into());
+                self.legacy_angle = false;
             }
             SolidField::TangentChain => {
                 self.tangent_chain = match value {
@@ -51,7 +59,7 @@ impl SolidForm {
         definition: &Value,
         model: &FormModel<'_>,
     ) -> Result<Self, String> {
-        let (id, body, edges, size, tangent) = if kind == SolidFormKind::Fillet {
+        let (id, body, edges, size, angle, tangent) = if kind == SolidFormKind::Fillet {
             let d: limo_cad_solid::SolidFilletDefinitionDto =
                 serde_json::from_value(definition.clone()).map_err(|e| e.to_string())?;
             (
@@ -59,6 +67,7 @@ impl SolidForm {
                 d.body_id,
                 d.edge_ids,
                 d.radius,
+                None,
                 d.tangent_chain,
             )
         } else if kind == SolidFormKind::Chamfer {
@@ -69,6 +78,7 @@ impl SolidForm {
                 d.body_id,
                 d.edge_ids,
                 d.distance,
+                d.angle_deg,
                 d.tangent_chain,
             )
         } else {
@@ -80,6 +90,12 @@ impl SolidForm {
         let fields = form.edges.as_mut().unwrap();
         fields.size =
             MeasurementInput::new(DimensionKind::Length, size, model.document.settings.units);
+        fields.angle = MeasurementInput::new(
+            DimensionKind::Angle,
+            angle.unwrap_or(45.),
+            model.document.settings.units,
+        );
+        fields.legacy_angle = angle.is_none();
         fields.tangent_chain = tangent;
         form.edge_values(model).map_err(first_error)?;
         Ok(form)
@@ -182,17 +198,44 @@ impl SolidForm {
                 0.
             }
         };
+        let angle = if fields.kind == SolidFormKind::Chamfer {
+            match fields
+                .angle
+                .evaluate(model.document.settings.units, model.parameters)
+            {
+                Ok(value) if value > 0. && value < 90. => Some(value),
+                Ok(_) => {
+                    errors.push((
+                        F::Angle,
+                        "Chamfer angle must be greater than 0° and less than 90°".into(),
+                    ));
+                    None
+                }
+                Err(error) => {
+                    errors.push((F::Angle, error));
+                    None
+                }
+            }
+        } else {
+            None
+        };
         if !errors.is_empty() {
             return Err(errors);
         }
         let body = body.unwrap();
-        Ok((body.id, fields.edges.clone(), size, fields.tangent_chain))
+        Ok((
+            body.id,
+            fields.edges.clone(),
+            size,
+            if fields.legacy_angle { None } else { angle },
+            fields.tangent_chain,
+        ))
     }
     pub(super) fn edge_payload(
         &self,
         model: &FormModel<'_>,
     ) -> Result<(&'static str, Value), Vec<(SolidField, String)>> {
-        let (body_id, edge_ids, size, tangent_chain) = self.edge_values(model)?;
+        let (body_id, edge_ids, size, angle_deg, tangent_chain) = self.edge_values(model)?;
         Ok(if self.kind() == SolidFormKind::Fillet {
             let fillet = SolidFilletRequest {
                 body_id,
@@ -213,6 +256,7 @@ impl SolidForm {
                 body_id,
                 edge_ids,
                 distance: size,
+                angle_deg,
                 tangent_chain,
             };
             if let Some(feature_id) = self.feature {
@@ -256,6 +300,15 @@ impl SolidForm {
                 },
             ),
             (
+                F::Angle,
+                "Angle (deg)".into(),
+                Field::Text {
+                    value: fields.angle.text().into(),
+                    read_only: false,
+                    selection: None,
+                },
+            ),
+            (
                 F::TangentChain,
                 "Tangent chain".into(),
                 Field::Toggle(fields.tangent_chain),
@@ -267,7 +320,7 @@ impl SolidForm {
             label,
             value,
             enabled,
-            visible: true,
+            visible: field != F::Angle || fields.kind == SolidFormKind::Chamfer,
             error: issues
                 .iter()
                 .find(|(f, _)| *f == field)

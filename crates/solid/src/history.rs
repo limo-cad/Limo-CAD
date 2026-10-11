@@ -1382,6 +1382,7 @@ impl SolidDocument {
     ) -> Result<RecomputePlanDto, SolidError> {
         self.ensure_idle()?;
         validate_positive(request.distance, "chamfer distance")?;
+        validate_chamfer_angle(request.angle_deg)?;
         if request.tangent_chain {
             edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
             let body = self
@@ -1401,6 +1402,7 @@ impl SolidDocument {
             edge_ids: request.edge_ids,
             edge_keys,
             distance: request.distance,
+            angle_deg: request.angle_deg,
             tangent_chain: request.tangent_chain,
         });
         self.prepare(
@@ -1429,6 +1431,7 @@ impl SolidDocument {
     ) -> Result<RecomputePlanDto, SolidError> {
         self.ensure_idle()?;
         validate_positive(request.distance, "chamfer distance")?;
+        validate_chamfer_angle(request.angle_deg)?;
         if request.tangent_chain {
             edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
             let body = self
@@ -1449,6 +1452,7 @@ impl SolidDocument {
         definition.edge_ids = request.edge_ids;
         definition.edge_keys = edge_keys;
         definition.distance = request.distance;
+        definition.angle_deg = request.angle_deg;
         definition.tangent_chain = request.tangent_chain;
         self.prepare(
             crate::SolidFeatureDefinitions {
@@ -3055,6 +3059,7 @@ fn make_jobs(
             }
             FeatureDefinitionRef::Chamfer(definition) => {
                 validate_positive(definition.distance, "chamfer distance")?;
+                validate_chamfer_angle(definition.angle_deg)?;
                 ensure_refinement_target(&available_bodies, definition.body_id)?;
                 if definition.edge_keys.is_empty() {
                     return Err(SolidError::EmptySelection);
@@ -3064,6 +3069,7 @@ fn make_jobs(
                     target_body_id: definition.body_id,
                     edge_keys: definition.edge_keys.clone(),
                     distance: definition.distance,
+                    angle_deg: definition.angle_deg,
                     tangent_chain: definition.tangent_chain,
                 }));
             }
@@ -4182,6 +4188,15 @@ fn refresh_rib_extent_references(definitions: &mut [RibDefinitionDto], scene: &S
     }
 }
 
+fn validate_chamfer_angle(angle: Option<f64>) -> Result<(), SolidError> {
+    if angle.is_some_and(|value| !value.is_finite() || value <= 0.0 || value >= 90.0) {
+        return Err(SolidError::InvalidExtent(
+            "Chamfer angle must be greater than 0° and less than 90°".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_positive(value: f64, label: &str) -> Result<(), SolidError> {
     if value.is_finite() && value > EPS {
         Ok(())
@@ -4871,6 +4886,134 @@ pub fn plane_bases_coplanar(first: PlaneBasis, second: PlaneBasis) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn chamfer_angles_survive_planning_edit_and_saved_definition_replay() {
+        let mut doc = SolidDocument::new();
+        let plan = doc
+            .prepare_add(
+                FeatureId(2),
+                "Base",
+                request(vec![0]),
+                &catalog(),
+                &active(&[1, 2]),
+            )
+            .unwrap();
+        let body_id = extrude_job(&plan.jobs[0]).result_body_ids[0];
+        let mut body = raw_body(body_id);
+        body.edges.push(KernelEdgeDto {
+            key: "edge:0".into(),
+            points: vec![
+                Point3Dto::from([0., 0., 0.]),
+                Point3Dto::from([0., 0., 15.]),
+            ],
+            circle: None,
+            refinable: true,
+        });
+        doc.commit(
+            plan.transaction_id,
+            KernelSceneDto {
+                bodies: vec![body.clone()],
+                errors: vec![],
+            },
+        )
+        .unwrap();
+        let edge_id = doc.scene().bodies[0].edges[0].id;
+        let mut chamfer = SolidChamferRequest {
+            body_id,
+            edge_ids: vec![edge_id],
+            distance: 2.,
+            angle_deg: Some(30.),
+            tangent_chain: false,
+        };
+        for invalid in [0., 90., -1., 91., f64::NAN, f64::INFINITY] {
+            chamfer.angle_deg = Some(invalid);
+            assert!(doc
+                .prepare_add_chamfer(
+                    FeatureId(3),
+                    "Chamfer",
+                    chamfer.clone(),
+                    &catalog(),
+                    &active(&[1, 2, 3])
+                )
+                .is_err());
+            assert!(doc.pending.is_none());
+            assert!(doc.chamfer_definitions().is_empty());
+        }
+        chamfer.angle_deg = Some(30.);
+        let plan = doc
+            .prepare_add_chamfer(
+                FeatureId(3),
+                "Chamfer",
+                chamfer.clone(),
+                &catalog(),
+                &active(&[1, 2, 3]),
+            )
+            .unwrap();
+        assert!(
+            matches!(plan.jobs.last().unwrap(), KernelJobDto::Chamfer(job) if job.angle_deg == Some(30.))
+        );
+        doc.commit(
+            plan.transaction_id,
+            KernelSceneDto {
+                bodies: vec![body.clone()],
+                errors: vec![],
+            },
+        )
+        .unwrap();
+        for invalid in [0., 90.] {
+            chamfer.angle_deg = Some(invalid);
+            assert!(doc
+                .prepare_edit_chamfer(
+                    FeatureId(3),
+                    chamfer.clone(),
+                    &catalog(),
+                    &active(&[1, 2, 3])
+                )
+                .is_err());
+            assert_eq!(doc.chamfer_definitions()[0].angle_deg, Some(30.));
+            assert!(doc.pending.is_none());
+        }
+        chamfer.angle_deg = Some(60.);
+        let plan = doc
+            .prepare_edit_chamfer(FeatureId(3), chamfer, &catalog(), &active(&[1, 2, 3]))
+            .unwrap();
+        assert!(
+            matches!(plan.jobs.last().unwrap(), KernelJobDto::Chamfer(job) if job.angle_deg == Some(60.))
+        );
+        doc.commit(
+            plan.transaction_id,
+            KernelSceneDto {
+                bodies: vec![body],
+                errors: vec![],
+            },
+        )
+        .unwrap();
+        let saved = (
+            doc.definitions().to_vec(),
+            doc.chamfer_definitions().to_vec(),
+        );
+        let serialized = serde_json::to_string(&saved).unwrap();
+        let (extrudes, chamfers) = serde_json::from_str(&serialized).unwrap();
+        let mut reopened =
+            SolidDocument::restore_feature_definitions(crate::SolidFeatureDefinitions {
+                extrudes,
+                chamfers,
+                ..Default::default()
+            })
+            .unwrap();
+        let plan = reopened
+            .prepare_recompute(&catalog(), &active(&[1, 2, 3]))
+            .unwrap();
+        assert!(
+            matches!(plan.jobs.last().unwrap(), KernelJobDto::Chamfer(job) if job.angle_deg == Some(60.))
+        );
+        let legacy: SolidChamferRequest = serde_json::from_value(serde_json::json!({
+            "body_id":1,"edge_ids":[1],"distance":2
+        }))
+        .unwrap();
+        assert_eq!(legacy.angle_deg, None);
+    }
+
     #[test]
     fn body_identity_allocator_rejects_unsafe_floors_and_exhaustion_without_reusing_ids() {
         let mut document = super::SolidDocument::new();
