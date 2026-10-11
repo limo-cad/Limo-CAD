@@ -568,8 +568,20 @@ fn counterbore_extent(body: &BodyDto, ids: &[u64]) -> Option<CounterboreExtent> 
             _ => None,
         }
     };
-    let ((_, small_joint), (bottom_edge, bottom)) = ends(small)?;
-    let ((_, large_joint), (mouth_edge, mouth)) = ends(large)?;
+    let ((small_joint_edge, small_joint), (bottom_edge, bottom)) = ends(small)?;
+    let ((large_joint_edge, large_joint), (mouth_edge, mouth)) = ends(large)?;
+    // Each joint ring must connect its wall to exactly this shoulder. A
+    // touching or duplicated face cannot supply an unambiguous recess span.
+    let unique_shoulder = |wall: &FaceDto, ring: &limo_cad_solid::EdgeDto| {
+        let mut adjacent = body
+            .faces
+            .iter()
+            .filter(|face| face.id != wall.id && face.edge_keys.contains(&ring.key));
+        adjacent.next().is_some_and(|face| face.id == shoulder.id) && adjacent.next().is_none()
+    };
+    if !unique_shoulder(small, small_joint_edge) || !unique_shoulder(large, large_joint_edge) {
+        return None;
+    }
     if !(norm(sub(small_joint, large_joint)) <= 1e-6
         && dot(sub(small_joint, plane.origin), outward).abs() <= 1e-6)
     {
@@ -1670,8 +1682,7 @@ mod tests {
         assert_eq!(holes_from_scene(&scene)[0].depth, None);
     }
 
-    #[test]
-    fn counterbore_extent_uses_oriented_shoulder_and_distinct_wall_geometry() {
+    fn counterbore_scene() -> SolidSceneDto {
         let point = |x, y, z| json!({"x":x,"y":y,"z":z});
         let edges: Vec<_> = [(2., 0.), (2., 5.), (4., 5.), (4., 12.)]
             .into_iter()
@@ -1705,7 +1716,13 @@ mod tests {
             v: [0., 1., 0.],
             normal: [0., 0., 2.],
         });
-        scene.bodies[0].faces.push(shoulder.clone());
+        scene.bodies[0].faces.push(shoulder);
+        scene
+    }
+
+    #[test]
+    fn counterbore_extent_uses_oriented_shoulder_and_distinct_wall_geometry() {
+        let mut scene = counterbore_scene();
         let holes = holes_from_scene(&scene);
         assert_eq!(holes.len(), 1);
         assert_eq!(holes[0].counterbore_depth, Some(7.));
@@ -1714,7 +1731,7 @@ mod tests {
         assert_eq!(holes[0].through, None);
         assert_eq!(holes[0].depth, None);
         assert!(holes[0].counterbore_depth_evidence.is_some());
-        let mut cap = shoulder;
+        let mut cap = scene.bodies[0].faces[2].clone();
         cap.id = limo_cad_core::FaceId(4);
         cap.edge_keys = vec!["r0".into()];
         cap.plane.as_mut().unwrap().origin = [0., 0., 0.];
@@ -1817,6 +1834,89 @@ mod tests {
             .edge_keys
             .push("another_seam".into());
         assert_eq!(holes_from_scene(&scene)[0].counterbore_depth, None);
+    }
+
+    #[test]
+    fn counterbore_extent_requires_unique_shoulder_ownership_on_both_joint_rings() {
+        let mut baseline = counterbore_scene();
+        let mut cap = baseline.bodies[0].faces[2].clone();
+        cap.id = limo_cad_core::FaceId(4);
+        cap.key = "terminal_disk".into();
+        cap.edge_keys = vec!["r0".into()];
+        cap.plane.as_mut().unwrap().origin = [0., 0., 0.];
+        baseline.bodies[0].faces.push(cap);
+        let known = summarize(&baseline, &[]).json(true);
+        assert_eq!(known["holes"][0]["counterbore_depth"], 7.);
+        assert_eq!(known["holes"][0]["depth"], 12.);
+        assert_eq!(known["holes"][0]["through"], false);
+
+        let mut independent = baseline.clone();
+        let mut edge = independent.bodies[0].edges[0].clone();
+        edge.id = limo_cad_core::EdgeId(20);
+        edge.key = "unrelated_ring".into();
+        edge.circle.as_mut().unwrap().center.x = 20.;
+        let mut other = independent.bodies[0].faces[2].clone();
+        other.id = limo_cad_core::FaceId(5);
+        other.key = "unrelated_face".into();
+        other.plane = None;
+        other.edge_keys = vec![edge.key.clone()];
+        independent.bodies[0].edges.push(edge);
+        independent.bodies[0].faces.push(other);
+        assert_eq!(
+            summarize(&independent, &[]).json(true)["holes"],
+            known["holes"]
+        );
+
+        for scenario in [
+            "duplicate",
+            "reversed_duplicate",
+            "touching_small",
+            "touching_large",
+        ] {
+            let mut scene = baseline.clone();
+            let mut touching = scene.bodies[0].faces[2].clone();
+            touching.id = limo_cad_core::FaceId(5);
+            touching.key = scenario.into();
+            match scenario {
+                "reversed_duplicate" => touching.plane.as_mut().unwrap().normal = [0., 0., -1.],
+                "touching_small" | "touching_large" => {
+                    touching.plane = None;
+                    touching.edge_keys = vec![if scenario == "touching_small" {
+                        "r1"
+                    } else {
+                        "r2"
+                    }
+                    .into()];
+                }
+                _ => {}
+            }
+            scene.bodies[0].faces.push(touching);
+            for reversed in [false, true] {
+                if reversed {
+                    scene.bodies[0].faces.reverse();
+                }
+                let before = serde_json::to_value(&scene).unwrap();
+                let report = summarize(&scene, &[]).json(true);
+                assert_eq!(report["hole_count"], 1, "{scenario}");
+                let hole = &report["holes"][0];
+                assert_eq!(hole["body_id"], 1);
+                assert_eq!(hole["face_ids"], json!([1, 2]));
+                assert_eq!(hole["diameter"], 4.);
+                assert_eq!(hole["counterbore_diameter"], 8.);
+                assert_eq!(hole["confidence"], "candidate");
+                for field in [
+                    "counterbore_depth",
+                    "counterbore_depth_evidence",
+                    "depth",
+                    "depth_evidence",
+                    "through",
+                    "through_evidence",
+                ] {
+                    assert!(hole[field].is_null(), "{scenario}: {field}");
+                }
+                assert_eq!(serde_json::to_value(&scene).unwrap(), before);
+            }
+        }
     }
 
     #[test]
