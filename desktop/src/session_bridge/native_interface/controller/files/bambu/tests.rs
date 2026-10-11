@@ -984,8 +984,11 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
         .collect();
     source.bambu.document = Some(document);
     source.bambu.model = before.as_str().unwrap().into();
+    let input_path = path("read-only-input.3mf");
+    assert!(!input_path.exists());
+    std::fs::write(&input_path, archive).unwrap();
     source.bambu.template = Some(Template {
-        path: path("read-only-input.3mf"),
+        path: input_path.clone(),
         encoded: Arc::new(STANDARD.encode(archive)),
         summary,
     });
@@ -1156,6 +1159,12 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
     }
     assert_eq!(
         format!("{:x}", Sha256::digest(archive)),
+        "bc256381139337ea5f6dde0dc78c353dad0cfeafce6567a3b53c4e2594b199b6"
+    );
+    let retained_input = std::fs::read(input_path).unwrap();
+    assert_eq!(retained_input, archive);
+    assert_eq!(
+        format!("{:x}", Sha256::digest(&retained_input)),
         "bc256381139337ea5f6dde0dc78c353dad0cfeafce6567a3b53c4e2594b199b6"
     );
 }
