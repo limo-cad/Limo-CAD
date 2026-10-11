@@ -5334,12 +5334,26 @@ fn error_response(id: Value, code: i64, message: impl Into<String>) -> Value {
     })
 }
 
-fn handle_message(server: &mut CadServer, message: Value) -> Vec<Value> {
-    let Some(method) = message.get("method").and_then(Value::as_str) else {
+/// The stdio dispatcher owns the request. Transfer potentially large export
+/// arguments rather than cloning them while retaining the discarded envelope.
+fn take_tool_call(message: &mut Value) -> Option<(String, Value)> {
+    let params = message.get_mut("params")?;
+    let Value::String(name) = params.get_mut("name")?.take() else {
+        return None;
+    };
+    let arguments = params
+        .get_mut("arguments")
+        .map(Value::take)
+        .unwrap_or_else(|| json!({}));
+    Some((name, arguments))
+}
+
+fn handle_message(server: &mut CadServer, mut message: Value) -> Vec<Value> {
+    let Some(Value::String(method)) = message.get_mut("method").map(Value::take) else {
         return Vec::new();
     };
-    let id = message.get("id").cloned();
-    let mut responses = match method {
+    let id = message.get_mut("id").map(Value::take);
+    let mut responses = match method.as_str() {
         "initialize" => {
             let requested = message
                 .pointer("/params/protocolVersion")
@@ -5441,21 +5455,17 @@ fn handle_message(server: &mut CadServer, message: Value) -> Vec<Value> {
         )],
         "tools/call" => {
             let id = id.unwrap_or(Value::Null);
-            let Some(name) = message.pointer("/params/name").and_then(Value::as_str) else {
+            let Some((name, arguments)) = take_tool_call(&mut message) else {
                 return vec![error_response(
                     id,
                     -32602,
                     "tools/call is missing params.name",
                 )];
             };
-            let arguments = message
-                .pointer("/params/arguments")
-                .cloned()
-                .unwrap_or_else(|| json!({}));
             if !tool_specs().iter().any(|tool| tool.name == name) {
                 return vec![error_response(id, -32602, format!("unknown tool: {name}"))];
             }
-            let result = match server.call_tool(name, arguments) {
+            let result = match server.call_tool(&name, arguments) {
                 Ok(value) => success_result(value),
                 Err(error) => tool_error(error),
             };
@@ -5564,6 +5574,115 @@ mod tests {
     mod print_intent;
     use super::*;
     mod cam_query_effects;
+
+    #[test]
+    fn stdio_tool_request_transfers_owned_model_and_nested_arguments() {
+        let manager = SketchManager::new();
+        let model = manager.export_project_model().unwrap();
+        let mut model_text = String::with_capacity(model.len() + 4096);
+        model_text.push_str(&model);
+        let model_ptr = model_text.as_ptr();
+        let model_capacity = model_text.capacity();
+        let mut rows = Vec::with_capacity(64);
+        rows.push(Value::Object(Map::from_iter([(
+            "model_json".into(),
+            Value::String(model_text),
+        )])));
+        let rows_ptr = rows.as_ptr();
+        let rows_capacity = rows.capacity();
+        let mut name = String::with_capacity(128);
+        name.push_str("solid_export_step");
+        let name_ptr = name.as_ptr();
+        let name_capacity = name.capacity();
+        let mut message = json!({"method":"tools/call","id":17});
+        message["params"] = Value::Object(Map::from_iter([
+            ("name".into(), Value::String(name)),
+            (
+                "arguments".into(),
+                Value::Object(Map::from_iter([(
+                    "reviewed_sources".into(),
+                    Value::Array(rows),
+                )])),
+            ),
+        ]));
+        let expected = message["params"]["arguments"].clone();
+        let (name, arguments) = take_tool_call(&mut message).unwrap();
+        assert_eq!(name.as_ptr(), name_ptr);
+        assert_eq!(name.capacity(), name_capacity);
+        assert_eq!(arguments, expected);
+        let rows = arguments["reviewed_sources"].as_array().unwrap();
+        assert_eq!(rows.as_ptr(), rows_ptr);
+        assert_eq!(rows.capacity(), rows_capacity);
+        let Value::String(model) = &rows[0]["model_json"] else {
+            panic!("The exported model must remain text");
+        };
+        assert_eq!(model.as_ptr(), model_ptr);
+        assert_eq!(model.capacity(), model_capacity);
+        assert!(message["params"]["name"].is_null());
+        assert!(message["params"]["arguments"].is_null());
+        assert_eq!(manager.export_project_model().unwrap(), *model);
+    }
+
+    #[test]
+    fn owned_stdio_dispatch_preserves_read_only_rpc_and_error_contracts() {
+        let mut server = CadServer::new().unwrap();
+        let before = server.manager.export_project_model().unwrap();
+        let expected = server.call_tool("cad_document", json!({})).unwrap();
+        let mut id = String::with_capacity(128);
+        id.push_str("read-only-document");
+        let id_ptr = id.as_ptr();
+        let id_capacity = id.capacity();
+        let mut message = json!({
+            "jsonrpc":"2.0","method":"tools/call","params":{"name":"cad_document"}
+        });
+        message["id"] = Value::String(id);
+        let result = handle_message(&mut server, message);
+        assert_eq!(result[0]["result"]["isError"], false);
+        assert_eq!(result[0]["result"]["structuredContent"], expected);
+        let Value::String(id) = &result[0]["id"] else {
+            panic!("RPC ID must remain text");
+        };
+        assert_eq!(id.as_ptr(), id_ptr);
+        assert_eq!(id.capacity(), id_capacity);
+
+        for arguments in [Value::Null, json!(false), json!([1]), json!({})] {
+            let direct = server.call_tool("cad_help", arguments.clone()).unwrap_err();
+            let result = handle_message(
+                &mut server,
+                json!({
+                    "id":23,"method":"tools/call","params":{"name":"cad_help","arguments":arguments}
+                }),
+            );
+            assert_eq!(result[0]["id"], 23);
+            assert_eq!(result[0]["result"], tool_error(direct));
+        }
+        for params in [Value::Null, json!([]), json!({}), json!({"name":false})] {
+            let result = handle_message(
+                &mut server,
+                json!({"id":24,"method":"tools/call","params":params}),
+            );
+            assert_eq!(
+                result[0],
+                error_response(json!(24), -32602, "tools/call is missing params.name")
+            );
+        }
+        let unknown = handle_message(
+            &mut server,
+            json!({"id":25,"method":"tools/call","params":{"name":"unpublished-tool","arguments":null}}),
+        );
+        assert_eq!(
+            unknown[0],
+            error_response(json!(25), -32602, "unknown tool: unpublished-tool")
+        );
+        let unknown = handle_message(&mut server, json!({"id":26,"method":"unpublished-method"}));
+        assert_eq!(
+            unknown[0],
+            error_response(json!(26), -32601, "method not found: unpublished-method")
+        );
+        assert!(handle_message(&mut server, json!({"method":"unpublished-method"})).is_empty());
+        assert!(handle_message(&mut server, json!({"method":false,"id":27})).is_empty());
+        assert_eq!(server.manager.export_project_model().unwrap(), before);
+    }
 
     #[test]
     fn mcp_response_transfers_owned_engine_payload_through_text_and_structured_output() {
