@@ -690,9 +690,8 @@ pub(super) fn bambu_write_snapshot(
             check_revision(receipt, revision)?;
             validate_dispatch()?;
             super::bambu::check_output(intent, path)?;
-            let report = fresh_layout_report(&services.engine, intent)?;
             check_report_confirmation(
-                report.as_ref(),
+                None,
                 super::bambu::target_layout_has_issues(intent),
                 intent.allow_layout_issues,
             )?;
@@ -726,6 +725,16 @@ pub(super) fn bambu_write_snapshot(
             // operation mutex and cannot invert the publisher's lock order.
             operation.commit(|| {
                 let (finished, value) = outcome?;
+                check_report_confirmation(
+                    None,
+                    finished.source_layout_has_issues()
+                        || finished
+                            .report()
+                            .z_preflight
+                            .iter()
+                            .any(|group| !group.issues.is_empty()),
+                    intent.allow_layout_issues,
+                )?;
                 // Recheck destination aliasing after detached preparation;
                 // this is a filesystem fence, not another control admission.
                 super::bambu::check_output(intent, path)?;
