@@ -9,6 +9,9 @@ use std::{
     process::Command,
     time::Duration,
 };
+#[cfg(any(windows, test))]
+#[path = "occt_runtime.rs"]
+mod runtime;
 
 const VERSION: &str = "7_9_3";
 const SHA256: &str = "5ecf094ec6b12d5413dfb851d8c3590c354058aee556e32e408bdfbf8c357d57";
@@ -69,6 +72,7 @@ struct Options {
     cache: PathBuf,
     sccache: bool,
     github_key: bool,
+    repair_runtime: bool,
     freetype: Vec<String>,
 }
 impl Options {
@@ -79,6 +83,7 @@ impl Options {
         let mut cache = None;
         let mut sccache = false;
         let mut github_key = false;
+        let mut repair_runtime = false;
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--prefix" => {
@@ -96,7 +101,8 @@ impl Options {
                 }
                 "--sccache" => sccache = true,
                 "--github-key" => github_key = true,
-                _ => bail!("use build-occt --prefix PATH [--jobs N] [--cache-dir PATH] [--sccache] [--dry-run]"),
+                "--repair-runtime" => repair_runtime = true,
+                _ => bail!("use build-occt --prefix PATH [--jobs N] [--cache-dir PATH] [--sccache] [--dry-run] [--repair-runtime]"),
             }
         }
         let prefix = prefix.context("missing --prefix PATH")?;
@@ -132,6 +138,7 @@ impl Options {
             cache,
             sccache,
             github_key,
+            repair_runtime,
             freetype: Vec::new(),
         })
     }
@@ -161,6 +168,10 @@ fn configure(options: &Options, source: &Path, build: &Path) -> Command {
 }
 pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     let mut options = Options::parse(args)?;
+    ensure!(
+        !options.repair_runtime || cfg!(windows),
+        "--repair-runtime is supported on Windows only"
+    );
     let overrides = override_digest()?;
     let url =
         format!("https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V{VERSION}.tar.gz");
@@ -239,13 +250,24 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     let _build_lock = crate::occt_cache::lock(&work)?;
     let _prefix_lock = crate::occt_cache::prepare_locked(&options.prefix, &key)?;
     if crate::occt_cache::complete(&options.prefix, &key)? {
+        #[cfg(windows)]
+        let repaired =
+            runtime::verify_or_repair(&options.prefix, &key, &compiler, options.repair_runtime)?;
         crate::occt_storage::verify(&options.prefix)?;
+        #[cfg(windows)]
+        if repaired {
+            crate::occt_cache::publish(&options.prefix, &key)?;
+        }
         println!(
             "Verified installed OCCT SDK cache hit: {}",
             options.prefix.display()
         );
         return Ok(());
     }
+    // Validate and capture the exact dependency inputs before an expensive
+    // native build; assembly rechecks this snapshot before/after adding files.
+    #[cfg(windows)]
+    let runtime_plan = runtime::Plan::from_compiler_identity(&compiler)?;
     run_command(&mut configure(&options, &source, &build))?;
     run_command(
         Command::new("cmake")
@@ -255,6 +277,8 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
             .arg(options.jobs.to_string()),
     )?;
     run_command(Command::new("cmake").arg("--install").arg(&build))?;
+    #[cfg(windows)]
+    runtime_plan.apply(&options.prefix, &key)?;
     let doc = options.prefix.join("share/doc/opencascade");
     fs::create_dir_all(&doc)?;
     let mut copyright = fs::File::create(doc.join("copyright"))?;
@@ -575,6 +599,30 @@ fn download(url: &str, archive: &std::path::Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn runtime_repair_flag_keeps_the_original_occt_configure_recipe() {
+        let base = Options::parse(
+            ["--prefix", "same-owned-sdk"]
+                .map(str::to_owned)
+                .into_iter(),
+        )
+        .unwrap();
+        let repair = Options::parse(
+            ["--prefix", "same-owned-sdk", "--repair-runtime"]
+                .map(str::to_owned)
+                .into_iter(),
+        )
+        .unwrap();
+        assert!(repair.repair_runtime);
+        assert_eq!(
+            configure(&base, Path::new("SOURCE"), Path::new("BUILD"))
+                .get_args()
+                .collect::<Vec<_>>(),
+            configure(&repair, Path::new("SOURCE"), Path::new("BUILD"))
+                .get_args()
+                .collect::<Vec<_>>()
+        );
+    }
     #[test]
     fn windows_compiler_paths_count_utf16_and_keep_the_259_unit_boundary() {
         assert!(require_windows_compiler_path(Path::new(&"a".repeat(259))).is_ok());
