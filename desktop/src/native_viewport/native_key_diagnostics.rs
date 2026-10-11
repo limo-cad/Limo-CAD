@@ -94,7 +94,7 @@ unsafe extern "system" fn subclass(
     observe_message(hwnd.0 as usize, message, wparam.0, lparam.0);
     if message == WM_NCDESTROY {
         // Win32 requires this on destruction; no Rust borrow survives forwarding.
-        unsafe { RemoveWindowSubclass(hwnd, Some(subclass), SUBCLASS_ID) };
+        let _ = unsafe { RemoveWindowSubclass(hwnd, Some(subclass), SUBCLASS_ID) };
     }
     unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
 }
@@ -135,7 +135,7 @@ pub(super) fn reconcile(entity: Option<Entity>) {
         let mut pid = 0;
         let thread = unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
         if thread == unsafe { GetCurrentThreadId() } && pid == std::process::id() {
-            unsafe { RemoveWindowSubclass(hwnd, Some(subclass), SUBCLASS_ID) };
+            let _ = unsafe { RemoveWindowSubclass(hwnd, Some(subclass), SUBCLASS_ID) };
         }
     }
     let Some((hwnd, thread)) = target else {
