@@ -2,6 +2,7 @@
 //! are scoped to one document incarnation, engine revision and active sketch.
 
 mod annotations;
+mod arc_travel;
 mod measurement;
 pub(crate) mod mechanism;
 mod solid;
@@ -264,6 +265,7 @@ fn preview(
         }
         cursor = dynamic::slot_cursor(&editor.draft, cursor)
             .inspect_err(|error| creation_failed(editor, error))?;
+        editor.draft.track_arc_cursor(cursor);
         if marker.as_ref().is_some_and(|marker| {
             let resolved = basis.to_3d([cursor.x, cursor.y]).map(|v| v as f32);
             Vec3::from_array(marker.position).distance(Vec3::from_array(resolved)) > 1e-5

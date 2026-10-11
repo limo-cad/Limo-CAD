@@ -1071,6 +1071,100 @@ mod scaled_tests {
     use super::*;
 
     #[test]
+    fn center_point_arc_menu_shapes_the_full_name_inside_its_row() {
+        use bevy::{
+            asset::AssetPlugin,
+            text::{ComputedTextBlock, TextLayoutInfo, TextPlugin},
+        };
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), TextPlugin))
+            .init_resource::<Assets<Image>>()
+            .init_resource::<bevy::ui::ui_surface::UiSurface>()
+            .add_systems(Startup, crate::native_viewport::ui::load_system_font);
+        app.update();
+        app.update();
+        let camera = app.world_mut().spawn_empty().id();
+        let mut editor = Editor {
+            stamp: Some(Stamp {
+                owner: DocumentContext {
+                    window_id: "main".into(),
+                    document_id: "sketch".into(),
+                    epoch: 1,
+                },
+                revision: 1,
+                sketch: Some("Sketch1".into()),
+                basis: None,
+            }),
+            ..default()
+        };
+        editor.interaction.menu = Some("draw");
+        for scale in [1., 1.75] {
+            app.world_mut().insert_resource(bevy::ui::UiScale(scale));
+            synchronize(
+                app.world_mut(),
+                camera,
+                &mut editor,
+                InterfaceRect {
+                    x: 64.,
+                    y: 34.,
+                    width: 1000.,
+                    height: 72.,
+                },
+                InterfaceRect {
+                    x: 64.,
+                    y: 120.,
+                    width: 1000.,
+                    height: 600.,
+                },
+            )
+            .unwrap();
+            let entity = app
+                .world_mut()
+                .query::<(Entity, &InterfaceControl)>()
+                .iter(app.world())
+                .find(|(_, control)| {
+                    control.role == "menuitem" && control.label == CreateTool::ArcCenter.label()
+                })
+                .map(|(entity, _)| entity)
+                .unwrap();
+            let control = app.world().get::<InterfaceControl>(entity).unwrap();
+            assert_eq!(control.label, "Center Point Arc");
+            assert_eq!(
+                control.label,
+                crate::app_preferences::locale::translate(
+                    crate::app_preferences::Locale::En,
+                    "ribbon.sketch.arcCenter"
+                )
+            );
+            let label = app
+                .world()
+                .get::<Children>(entity)
+                .unwrap()
+                .iter()
+                .find(|child| app.world().get::<Text>(*child).is_some())
+                .unwrap();
+            assert_eq!(app.world().get::<Text>(label).unwrap().0, control.label);
+            app.update();
+            app.world_mut()
+                .run_system_cached(bevy::ui::widget::measure_text_system)
+                .unwrap();
+            app.world_mut()
+                .run_system_cached(bevy::ui::ui_layout_system)
+                .unwrap();
+            app.world_mut()
+                .run_system_cached(bevy::ui::widget::text_system)
+                .unwrap();
+            let text = app.world().get::<ComputedTextBlock>(label).unwrap();
+            assert_eq!(text.buffer().lines().count(), 1);
+            let layout = app.world().get::<TextLayoutInfo>(label).unwrap();
+            let size = layout.size / layout.scale_factor;
+            assert!(size.x > 0. && size.x + 24. <= 232.);
+            assert!(size.y > 0. && size.y <= 28.);
+            assert!(layout.glyphs.len() >= "CenterPointArc".chars().count());
+        }
+    }
+
+    #[test]
     fn every_sketch_menu_item_fits_at_minimum_window_and_largest_interface_size() {
         let mut world = World::new();
         world.init_resource::<ViewportUiAssets>();

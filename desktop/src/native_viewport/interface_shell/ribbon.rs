@@ -724,7 +724,7 @@ fn message_key(semantic: &str) -> Option<&'static str> {
         "Overall slot" => "ribbon.sketch.slotOverall",
         "Center rectangle" => "ribbon.sketch.rectCenter",
         "Two-point circle" => "ribbon.sketch.circle2pt",
-        "Center arc" => "ribbon.sketch.arcCenter",
+        "Center Point Arc" => "ribbon.sketch.arcCenter",
         "Midpoint line" => "ribbon.sketch.midpointLine",
         "Line" => "ribbon.sketch.line",
         "Rectangle" => "ribbon.sketch.rectangle",

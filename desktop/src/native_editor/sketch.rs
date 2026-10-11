@@ -4,6 +4,7 @@
 #[path = "sketch_preview.rs"]
 mod preview;
 
+use super::arc_travel::ArcTravel;
 use limo_cad_sketch::{
     Arc3PointRequest, ArcCenterRequest, CircleMode, CircleRequest, MidpointLineRequest,
     PointRequest, RectangleMode, RectangleRequest, SegmentRequest, SlotMode, SlotRequest,
@@ -50,7 +51,7 @@ impl CreateTool {
             Self::Circle(CircleMode::CenterDiameter) => "Circle",
             Self::Circle(CircleMode::TwoPoint) => "Two-point circle",
             Self::Arc3Point => "Three-point arc",
-            Self::ArcCenter => "Center arc",
+            Self::ArcCenter => "Center Point Arc",
             Self::Slot(SlotMode::CenterToCenter) => "Center-to-center slot",
             Self::Slot(SlotMode::Overall) => "Overall slot",
             Self::Slot(SlotMode::CenterPoint) => "Center-point slot",
@@ -86,6 +87,7 @@ pub(crate) struct Draft {
     /// Anchor and endpoint actually used by the visible construction preview.
     pub resolved_preview: Option<[Vec2; 2]>,
     chain_start: Option<Vec2>,
+    arc_travel: Option<ArcTravel>,
     pub generation: u64,
     pub sizes: super::dynamic::Sizes,
     pub snap_context: Option<limo_cad_sketch::ViewportSnapContext>,
@@ -138,10 +140,12 @@ impl Draft {
             self.points = picks;
             self.cursor = Some(point);
             self.resolved_preview = None;
+            self.track_arc_cursor(point);
             return Ok(None);
         }
         let p1 = picks[0];
         let p2 = *picks.get(1).unwrap_or(&p1);
+        self.track_arc_cursor(point);
         if let Some(command) = self.sizes.prepare(tool, &picks, ctrl)? {
             return Ok(Some(command));
         }
@@ -207,7 +211,7 @@ impl Draft {
                     radius_mm: None,
                     radius_text: None,
                     angle_text: None,
-                    sweep_rad: None,
+                    sweep_rad: Some(self.arc_sweep(point)),
                 },
             ),
             CreateTool::Slot(mode) => encoded(
@@ -302,6 +306,27 @@ impl Draft {
         self.sizes = Default::default();
         self.snap_context = None;
         self.resolved_preview = None;
+        self.arc_travel = None;
+    }
+
+    pub(super) fn track_arc_cursor(&mut self, cursor: Vec2) {
+        if self.tool != Some(CreateTool::ArcCenter) || self.points.len() != 2 {
+            return;
+        }
+        let [center, start] = [self.points[0], self.points[1]];
+        self.arc_travel
+            .get_or_insert_with(|| ArcTravel::new((start.y - center.y).atan2(start.x - center.x)))
+            .advance((cursor.y - center.y).atan2(cursor.x - center.x));
+    }
+
+    /// Preview and commit resolve the same signed sweep, including a final
+    /// click that arrives without a preceding pointer-move event.
+    pub(super) fn arc_sweep(&self, cursor: Vec2) -> f64 {
+        let [center, start] = [self.points[0], self.points[1]];
+        let mut travel = self
+            .arc_travel
+            .unwrap_or_else(|| ArcTravel::new((start.y - center.y).atan2(start.x - center.x)));
+        travel.advance((cursor.y - center.y).atan2(cursor.x - center.x))
     }
 
     pub fn instruction(&self) -> &'static str {
@@ -355,6 +380,172 @@ mod tests {
             command.operation, command.arguments
         );
         response["value"].clone()
+    }
+
+    #[test]
+    fn center_arc_preview_and_commit_follow_both_directions_through_a_full_turn() {
+        let center = Vec2::new(30., 40.);
+        let start = center + Vec2::new(10., 0.);
+        for sign in [-1., 1.] {
+            for degrees in [90, 180, 270, 360] {
+                let mut manager = manager();
+                let mut draft = Draft::default();
+                draft.select(Some(CreateTool::ArcCenter));
+                draft.prepare(center, true).unwrap();
+                draft.prepare(start, true).unwrap();
+                let mut cursor = start;
+                for step in (10..=degrees).step_by(10) {
+                    let angle = (sign * f64::from(step)).to_radians();
+                    cursor = center + Vec2::new(angle.cos(), angle.sin()) * 10.;
+                    draft.track_arc_cursor(cursor);
+                }
+                let outline = draft.outline(cursor);
+                if degrees <= 180 {
+                    assert!(outline
+                        .iter()
+                        .flatten()
+                        .all(|p| (p.y - center.y) * sign >= -1e-8));
+                }
+                // Clicking off the radius must keep the preview's projected end.
+                let command = draft
+                    .prepare(center + (cursor - center) * 2., true)
+                    .unwrap()
+                    .unwrap();
+                let sweep = command.arguments["sweep_rad"].as_f64().unwrap();
+                assert!((sweep - (sign * f64::from(degrees)).to_radians()).abs() < 1e-9);
+                let result = apply(&mut manager, &command);
+                let arc = result["sketch"]["entities"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|entity| entity["kind"] == "arc")
+                    .unwrap();
+                let a0 = arc["start_angle"].as_f64().unwrap();
+                let a1 = arc["end_angle"].as_f64().unwrap();
+                let radius = arc["radius"].as_f64().unwrap();
+                assert!((radius - 10.).abs() < 1e-9);
+                assert!((a1 - a0 - sweep.abs()).abs() < 1e-9);
+                for (index, segment) in outline.iter().enumerate() {
+                    for (end, point) in segment.iter().enumerate() {
+                        let t = (index + end) as f64 / outline.len() as f64;
+                        let t = if sign < 0. { 1. - t } else { t };
+                        let angle = a0 + (a1 - a0) * t;
+                        let expected = center + Vec2::new(angle.cos(), angle.sin()) * radius;
+                        assert!(
+                            point.distance(expected) < 1e-8,
+                            "{sign} {degrees}: {point:?}"
+                        );
+                    }
+                }
+                draft.accepted(&result).unwrap();
+                let undo: Value =
+                    serde_json::from_str(&host::handle(&mut manager, "undo", "")).unwrap();
+                assert!(undo["value"]["sketch"]["entities"]
+                    .as_array()
+                    .unwrap()
+                    .is_empty());
+                let redo: Value =
+                    serde_json::from_str(&host::handle(&mut manager, "redo", "")).unwrap();
+                assert_eq!(
+                    redo["value"]["sketch"]["entities"],
+                    result["sketch"]["entities"]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn center_arc_overshoot_backtrack_final_click_preserves_a_true_full_turn() {
+        let center = Vec2::new(30., 40.);
+        let start = center + Vec2::new(10., 0.);
+        for sign in [-1., 1.] {
+            let mut manager = manager();
+            let mut draft = Draft::default();
+            draft.select(Some(CreateTool::ArcCenter));
+            draft.prepare(center, true).unwrap();
+            draft.prepare(start, true).unwrap();
+            for degrees in (10..=370).step_by(10) {
+                let angle = (sign * f64::from(degrees)).to_radians();
+                draft.track_arc_cursor(center + Vec2::new(angle.cos(), angle.sin()) * 10.);
+            }
+            // Backtrack to the start ray with no preceding pointer-move event.
+            // Preview must resolve that final point without consuming travel.
+            let outline = draft.outline(start);
+            let command = draft.prepare(start, true).unwrap().unwrap();
+            let expected_sweep = sign * std::f64::consts::TAU;
+            let sweep = command.arguments["sweep_rad"].as_f64().unwrap();
+            assert!((sweep - expected_sweep).abs() < 1e-9);
+            assert!(outline.first().unwrap()[0].distance(start) < 1e-8);
+            assert!(outline.last().unwrap()[1].distance(start) < 1e-8);
+            let result = apply(&mut manager, &command);
+            let arc = result["sketch"]["entities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entity| entity["kind"] == "arc")
+                .unwrap();
+            let a0 = arc["start_angle"].as_f64().unwrap();
+            let a1 = arc["end_angle"].as_f64().unwrap();
+            let radius = arc["radius"].as_f64().unwrap();
+            assert!((radius - 10.).abs() < 1e-9);
+            assert!((a1 - a0 - std::f64::consts::TAU).abs() < 1e-9);
+            for angle in [a0, a1] {
+                let endpoint = center + Vec2::new(angle.cos(), angle.sin()) * radius;
+                assert!(endpoint.distance(start) < 1e-8);
+            }
+            for (index, segment) in outline.iter().enumerate() {
+                for (end, point) in segment.iter().enumerate() {
+                    let t = (index + end) as f64 / outline.len() as f64;
+                    let t = if sign < 0. { 1. - t } else { t };
+                    let angle = a0 + (a1 - a0) * t;
+                    let expected = center + Vec2::new(angle.cos(), angle.sin()) * radius;
+                    assert!(point.distance(expected) < 1e-8, "{sign}: {point:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn center_arc_final_click_and_new_gestures_choose_their_own_direction() {
+        let mut draft = Draft::default();
+        draft.select(Some(CreateTool::ArcCenter));
+        for sign in [-1., 1.] {
+            draft.prepare(Vec2::ZERO, true).unwrap();
+            draft.prepare(Vec2::new(10., 0.), true).unwrap();
+            // No move event is required before the final click.
+            let command = draft
+                .prepare(Vec2::new(0., sign * 10.), true)
+                .unwrap()
+                .unwrap();
+            assert!(
+                (command.arguments["sweep_rad"].as_f64().unwrap()
+                    - sign * std::f64::consts::FRAC_PI_2)
+                    .abs()
+                    < 1e-9
+            );
+            draft.escape();
+        }
+        draft.prepare(Vec2::ZERO, true).unwrap();
+        draft.prepare(Vec2::new(10., 0.), true).unwrap();
+        let zero = draft.prepare(Vec2::new(10., 0.), true).unwrap().unwrap();
+        assert_eq!(zero.arguments["sweep_rad"], 0.);
+        let mut manager = manager();
+        let response: Value = serde_json::from_str(&host::handle(
+            &mut manager,
+            "add_arc_center",
+            &zero.arguments.to_string(),
+        ))
+        .unwrap();
+        assert_eq!(
+            response["ok"], false,
+            "zero travel must not create a circle"
+        );
+        let corrected = draft.prepare(Vec2::new(0., -10.), true).unwrap().unwrap();
+        draft.accepted(&apply(&mut manager, &corrected)).unwrap();
+        draft.prepare(Vec2::ZERO, true).unwrap();
+        draft.prepare(Vec2::new(10., 0.), true).unwrap();
+        let fresh = draft.prepare(Vec2::new(0., 10.), true).unwrap().unwrap();
+        assert!(fresh.arguments["sweep_rad"].as_f64().unwrap() > 0.);
     }
 
     #[test]

@@ -95,14 +95,7 @@ impl Draft {
                     return vec![[p1, cursor]];
                 };
                 let a0 = (start.y - p1.y).atan2(start.x - p1.x);
-                let a1 = (cursor.y - p1.y).atan2(cursor.x - p1.x);
-                arc(
-                    p1,
-                    p1.distance(start),
-                    a0,
-                    (a1 - a0).rem_euclid(TAU),
-                    &mut out,
-                );
+                arc(p1, p1.distance(start), a0, self.arc_sweep(cursor), &mut out);
             }
             CreateTool::Slot(mode) => {
                 let Some(&p2) = points.get(1) else {
