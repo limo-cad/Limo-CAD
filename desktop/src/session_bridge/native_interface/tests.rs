@@ -693,3 +693,54 @@ pub(crate) fn swept_stock(
     }
     study
 }
+
+pub(crate) fn contact_stock(
+    engine: &AppState,
+    bridge: &SessionBridgeState,
+    owner: &DocumentContext,
+) -> (
+    limo_cad_sketch::MotionStudyDto,
+    limo_cad_sketch::ContactSetId,
+) {
+    let study = swept_stock(engine, bridge, owner);
+    let sample: limo_cad_sketch::MotionStudySampleDto = serde_json::from_value(
+        crate::session_bridge::parse_engine_envelope(engine.engine_call(
+            "assembly_sample_motion_study",
+            &json!({"study_id":study.id,"time_seconds":0.}).to_string(),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let poses = &sample.solution.instance_body_poses;
+    assert_eq!(poses.len(), 2);
+    let value=bridge.apply_native_mutation(engine,owner,"assembly_create_contact_set",&json!({"name":"Physical stop","occurrence_a":poses[0].occurrence_id,"body_a":poses[0].body_id,"occurrence_b":poses[1].occurrence_id,"body_b":poses[1].body_id,"clearance_mm":0.5,"stop_motion":true}),||Ok(())).unwrap().value;
+    (study, serde_json::from_value(value["id"].clone()).unwrap())
+}
+pub(crate) fn assert_contact_stop(
+    report: &limo_cad_sketch::MotionStudyEvaluationDto,
+    contact: limo_cad_sketch::ContactSetId,
+) {
+    assert_eq!(report.stopped_by_contact, Some(contact));
+    assert!(
+        (report.sample.time_seconds - 0.3).abs() < 1e-5,
+        "Physical contact must stop at the independent .5 mm clearance boundary"
+    );
+    assert!(report.sample.solution.solved);
+    assert_eq!(report.contacts.pairs.len(), 1);
+    let pair = &report.contacts.pairs[0];
+    assert_eq!(pair.body_a, pair.body_b);
+    assert_ne!(pair.occurrence_a, pair.occurrence_b);
+    assert!(!pair.interfering && pair.overlap_volume_mm3.abs() < 1e-6);
+    assert!((pair.minimum_clearance_mm - 0.5).abs() < 1e-5);
+    let moving = report
+        .sample
+        .solution
+        .instance_body_poses
+        .iter()
+        .find(|p| p.translation[2] > 1.)
+        .unwrap();
+    assert!(
+        (moving.translation[2] - 3.5).abs() < 1e-5,
+        "Authored slider position must agree with physical clearance"
+    );
+}

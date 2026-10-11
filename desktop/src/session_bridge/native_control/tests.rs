@@ -798,6 +798,184 @@ fn native_swept_query_releases_live_guards_and_fences_original_completion_once()
 }
 
 #[test]
+fn native_contact_motion_query_releases_live_guards_and_fences_original_completion_once() {
+    super::super::tests::with_isolated_session_test(|| {
+        for case in [
+            "live",
+            "contact",
+            "edit",
+            "pose",
+            "replace",
+            "native",
+            "liveness",
+            "capture_failure",
+        ] {
+            let f = Fixture::new();
+            let mutate = |operation: &str, arguments: Value| {
+                f.state
+                    .apply_native_mutation(&f.engine, &f.owner, operation, &arguments, || Ok(()))
+                    .unwrap()
+                    .value
+            };
+            let (study, contact) = crate::session_bridge::native_interface::contact_stock(
+                &f.engine, &f.state, &f.owner,
+            );
+            let revision = f
+                .state
+                .native_document_receipt(&f.engine, &f.owner)
+                .unwrap()
+                .revision;
+            let before =
+                parse_engine_envelope(f.engine.engine_call("project_export_model", "")).unwrap();
+            let id = "644-1";
+            let controls = f.root.join(&f.session).join("controls");
+            let request_path = controls.join(format!("{id}.request.json"));
+            let result_path = controls.join(format!("{id}.result.json"));
+            let payload = json!({"study_id":if case=="capture_failure" {f.engine.with_assembly(|a|a.next_motion_study_id)}else{study.id.0},"time_seconds":1.,"previous_time_seconds":0.,"enforce_contacts":true})
+            .to_string();
+            atomic_write(&request_path, &json!({"id":id,"expires_ms":now_ms()+30_000,
+                "owner":{"session_id":f.session,"window_id":"main","document_id":f.owner.document_id,
+                    "process_instance_id":f.state.process_instance_id,"base_generation":revision},
+                "sketch_query":{"method":"assembly_evaluate_motion_study","payload":payload}}).to_string()).unwrap();
+            f.state.refresh_query_liveness("main").unwrap();
+            let heartbeat = f.root.join(&f.session).join("heartbeat.json");
+            let saved_heartbeat = fs::read(&heartbeat).unwrap();
+            let mut observed = 0;
+            let mut original_ticket = None;
+            let outcome = control_for_window_owned_with_contact_observer(
+                &f.state,
+                "main",
+                &f.engine,
+                None,
+                Some((&f.owner, id)),
+                |_, _| panic!("Contact motion must not emit drawing projections"),
+                (
+                    |_| panic!("Contact motion must not compute a section"),
+                    |_| panic!("Contact motion must not compute static interference"),
+                    |_| panic!("Contact motion must not compute swept report"),
+                    |finished| {
+                        observed += 1;
+                        assert_eq!(observed, 1);
+                        crate::session_bridge::native_interface::assert_contact_stop(
+                            finished.report(),
+                            contact,
+                        );
+                        let lease = f.state.process_lease_path.try_lock().unwrap();
+                        let publishers = f.state.publishers.try_lock().unwrap();
+                        let admission = publishers["main"].native_control.as_ref().unwrap();
+                        assert!(admission.started && admission.pending_receipt.is_none());
+                        original_ticket = Some(admission.ticket.clone());
+                        f.engine.with_drawing(|_| ());
+                        drop(publishers);
+                        drop(lease);
+                        match case {
+                            "edit" => {
+                                mutate(
+                                    "cad_set_document_name",
+                                    json!({"name":"Edited while contact computes"}),
+                                );
+                            }
+                            "replace" => {
+                                mutate("cad_new_project", json!({}));
+                            }
+                            "contact" => {
+                                let mut changed =
+                                    f.engine.with_assembly(|a| a.contact_sets[0].clone());
+                                changed.clearance_mm = 1.;
+                                parse_engine_envelope(f.engine.engine_call(
+                                    "assembly_update_contact_set",
+                                    &serde_json::to_string(&changed).unwrap(),
+                                ))
+                                .unwrap();
+                            }
+                            "pose" => {
+                                let mut changed = study.clone();
+                                changed.drivers[0].law =
+                                    limo_cad_sketch::MotionDriverLawDto::Motor {
+                                        initial_value: 8.,
+                                        velocity_per_second: 0.,
+                                        acceleration_per_second2: 0.,
+                                    };
+                                parse_engine_envelope(f.engine.engine_call(
+                                    "assembly_update_motion_study",
+                                    &serde_json::to_string(&changed).unwrap(),
+                                ))
+                                .unwrap();
+                            }
+                            "native" => {
+                                parse_engine_envelope(f.engine.project_load(
+                                    &serde_json::to_string(before.as_str().unwrap()).unwrap(),
+                                ))
+                                .unwrap();
+                            }
+                            "liveness" => {
+                                fs::remove_file(&heartbeat).unwrap();
+                                fs::create_dir(&heartbeat).unwrap();
+                            }
+                            _ => {}
+                        }
+                    },
+                ),
+            );
+            assert!(!request_path.exists());
+            if case == "liveness" {
+                assert!(outcome.is_err() && !result_path.exists());
+                let publishers = f.state.publishers.lock().unwrap();
+                let admission = publishers["main"].native_control.as_ref().unwrap();
+                assert_eq!(Some(&admission.ticket), original_ticket.as_ref());
+                assert!(
+                    admission.started
+                        && admission.query_liveness
+                        && admission.pending_receipt.is_some()
+                );
+                drop(publishers);
+                fs::remove_dir(&heartbeat).unwrap();
+                atomic_write(&heartbeat, std::str::from_utf8(&saved_heartbeat).unwrap()).unwrap();
+                retry_pending(&f.state, &f.engine, "main").unwrap();
+                assert_eq!(observed, 1, "Delivery retry must not inspect again");
+            } else {
+                assert!(
+                    outcome.unwrap().is_null(),
+                    "Contact motion response grants no drawing handoff"
+                );
+            }
+            let response = f.read_result(id);
+            let delivered =
+                NativeControlAdmission::decode(&response["control_admission"].to_string()).unwrap();
+            assert_eq!(delivered.document_id, f.owner.document_id);
+            assert_eq!(delivered.epoch, f.owner.epoch);
+            assert_eq!(delivered.revision, revision);
+            if let Some(ticket) = original_ticket {
+                assert_eq!(delivered, ticket.marker);
+            }
+            if matches!(case, "live" | "liveness") {
+                assert_eq!(response["status"], "applied");
+                let report: limo_cad_sketch::MotionStudyEvaluationDto =
+                    serde_json::from_value(response["value"].clone()).unwrap();
+                crate::session_bridge::native_interface::assert_contact_stop(&report, contact);
+            } else {
+                assert_eq!(response["status"], "failed");
+                assert!(response["value"].is_null());
+            }
+            if matches!(case, "live" | "native" | "liveness" | "capture_failure") {
+                assert!(
+                    parse_engine_envelope(f.engine.engine_call("project_export_model", ""))
+                        .unwrap()
+                        == before,
+                    "Contact motion query must preserve the complete authored model"
+                );
+            }
+            assert_eq!(observed, usize::from(case != "capture_failure"));
+            assert!(!has_pending(&f.state, "main").unwrap());
+            assert!(!controls.join(format!("{id}.admitted.json")).exists());
+            let original = f.read_result(id);
+            retry_pending(&f.state, &f.engine, "main").unwrap();
+            assert!(f.read_result(id) == original, "Completion is one-use");
+        }
+    });
+}
+
+#[test]
 fn native_section_query_releases_live_guards_and_fences_original_completion_once() {
     super::super::tests::with_isolated_session_test(|| {
         for case in [
