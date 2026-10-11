@@ -911,16 +911,15 @@ fn template_inspection_runs_outside_publisher_and_rejects_changed_source_receipt
 fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
     use super::super::tests::{path, setup};
     use crate::session_bridge::native_interface::tests::Fixture;
-    use sha2::{Digest, Sha256};
     use std::cell::{Cell, RefCell};
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
     let fixture = Fixture::new();
     let archive = include_bytes!("../../../../../../fixtures/bambu-owned-template.3mf");
+    let summary = inspect_bambu_template(archive).unwrap();
     assert_eq!(
-        format!("{:x}", Sha256::digest(archive)),
+        summary.template_sha256,
         "bc256381139337ea5f6dde0dc78c353dad0cfeafce6567a3b53c4e2594b199b6"
     );
-    let summary = inspect_bambu_template(archive).unwrap();
     let targets: Vec<_> = summary
         .objects
         .iter()
@@ -1158,13 +1157,15 @@ fn native_bambu_write_detaches_build_and_requires_current_dialog_operation() {
         }
     }
     assert_eq!(
-        format!("{:x}", Sha256::digest(archive)),
+        inspect_bambu_template(archive).unwrap().template_sha256,
         "bc256381139337ea5f6dde0dc78c353dad0cfeafce6567a3b53c4e2594b199b6"
     );
     let retained_input = std::fs::read(input_path).unwrap();
     assert_eq!(retained_input, archive);
     assert_eq!(
-        format!("{:x}", Sha256::digest(&retained_input)),
+        inspect_bambu_template(&retained_input)
+            .unwrap()
+            .template_sha256,
         "bc256381139337ea5f6dde0dc78c353dad0cfeafce6567a3b53c4e2594b199b6"
     );
 }
