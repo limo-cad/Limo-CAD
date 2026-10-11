@@ -41,6 +41,13 @@ through that body's extent, or enter an exact offset. The cutaway updates live;
 there is no separate Inspect step. Above/Below plane changes the retained side.
 Changing the body or plane centers the cut in the new axis. An optional probe's
 vertical coordinate measures directional material spans.
+Show 2D diagram adds a diagram beneath the controls while the 3D cutaway stays
+live. Hide 2D diagram removes only that companion diagram.
+
+Failed timeline features do not block inspecting the available body geometry
+that the viewport displays. The inspector retains those errors in its report,
+panel notice and SVG. A missing body or unavailable native geometry still fails
+explicitly; document, revision and native geometry identity checks remain active.
 Fields accept the document's length units or an explicit `mm`, `cm` or `in`
 suffix using the existing arithmetic input. The diagram and returned distances
 are explicitly millimetres. These are source-definition coordinates, independent

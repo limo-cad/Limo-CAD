@@ -90,8 +90,38 @@ pub struct SectionReview {
     pub section: Vec<DrawingPolylineDto>,
     pub probe_spans: Vec<SectionSpan>,
     pub svg: String,
+    /// The available committed body can still be inspected when other history
+    /// operations fail. Retain those failures rather than claiming a clean model.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_errors: Vec<limo_cad_solid::KernelFeatureErrorDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cutaway: Option<limo_cad_solid::KernelBodyDto>,
+}
+impl SectionReview {
+    pub fn source_notice(&self) -> Option<String> {
+        let count = self.source_errors.len();
+        (count > 0).then(|| {
+            format!(
+                "Showing available geometry · {count} timeline error{}.",
+                if count == 1 { "" } else { "s" }
+            )
+        })
+    }
+
+    pub fn with_source_errors(
+        mut self,
+        errors: Vec<limo_cad_solid::KernelFeatureErrorDto>,
+    ) -> Self {
+        self.source_errors = errors;
+        if let Some(notice) = self.source_notice().filter(|_| !self.svg.is_empty()) {
+            // This count-only label contains no authored error text or XML.
+            self.svg = self.svg.replace(
+                "</svg>",
+                &format!(r##"<text x="30" y="70" font-family="sans-serif" font-size="12" fill="#ad501e">{notice}</text></svg>"##),
+            );
+        }
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,7 +185,7 @@ pub fn inspect(
     request: &SectionReviewRequest,
 ) -> Result<SectionReview, SectionReviewError> {
     validate_source(scene, request)?;
-    inspect_kernel(kernel, request)
+    Ok(inspect_kernel(kernel, request)?.with_source_errors(scene.errors.clone()))
 }
 
 /// Validate against the authoritative source before copying a selected body.
@@ -166,11 +196,9 @@ pub fn validate_source(
     request
         .validate()
         .map_err(SectionReviewError::InvalidRequest)?;
-    if !scene.errors.is_empty() {
-        return Err(SectionReviewError::InvalidRequest(
-            "Resolve timeline errors before inspecting a section".into(),
-        ));
-    }
+    // Inspect the body the committed scene actually displays. A later failed
+    // chamfer must not prevent viewing its retained, genuine native geometry.
+    // Missing bodies and kernel copy failures still reject the request.
     if !scene.bodies.iter().any(|body| body.id == request.body_id) {
         return Err(SectionReviewError::InvalidRequest(
             "Section body is missing".into(),
@@ -285,6 +313,7 @@ pub fn present(
             section: vec![],
             probe_spans: vec![],
             svg: String::new(),
+            source_errors: Vec::new(),
             cutaway: None,
         });
     }
@@ -296,6 +325,7 @@ pub fn present(
             section: projection.section,
             probe_spans: vec![],
             svg: String::new(),
+            source_errors: Vec::new(),
             cutaway: None,
         });
     }
@@ -314,6 +344,7 @@ pub fn present(
         section: projection.section,
         probe_spans: spans,
         svg,
+        source_errors: Vec::new(),
         cutaway: None,
     })
 }

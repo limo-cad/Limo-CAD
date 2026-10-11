@@ -1358,6 +1358,69 @@ fn retain_failed_plate_result(directory: &Path, result: &mut PlateVerification) 
     result.message = Some(message);
 }
 
+fn gcode_words(mut line: &[u8]) -> impl Iterator<Item = &[u8]> {
+    let mut comment_depth = 0usize;
+    std::iter::from_fn(move || loop {
+        let byte = *line.first()?;
+        match byte {
+            b'(' => comment_depth = comment_depth.saturating_add(1),
+            b')' => comment_depth = comment_depth.saturating_sub(1),
+            b';' | b'*' if comment_depth == 0 => return None,
+            _ if comment_depth == 0 && !byte.is_ascii_whitespace() => {
+                let end = line
+                    .iter()
+                    .position(|byte| byte.is_ascii_whitespace() || b"();*".contains(byte))
+                    .unwrap_or(line.len());
+                let word = &line[..end];
+                line = &line[end..];
+                return Some(word);
+            }
+            _ => {}
+        }
+        line = &line[1..];
+    })
+}
+
+fn has_linear_movement_command(gcode: &[u8]) -> bool {
+    // This establishes an executable linear-movement command, not physical
+    // motion, extrusion quality or strength. Comment/display text is no evidence.
+    gcode.split(|byte| *byte == b'\n').any(|line| {
+        let mut words = gcode_words(line);
+        let Some(mut command) = words.next() else {
+            return false;
+        };
+        if command.len() > 1
+            && command[0].eq_ignore_ascii_case(&b'N')
+            && command[1..].iter().all(u8::is_ascii_digit)
+        {
+            let Some(next) = words.next() else {
+                return false;
+            };
+            command = next;
+        }
+        if !command.eq_ignore_ascii_case(b"G1") && !command.eq_ignore_ascii_case(b"G01") {
+            return false;
+        }
+        let mut has_coordinate = false;
+        for word in words {
+            if !matches!(word[0].to_ascii_uppercase(), b'X' | b'Y' | b'Z' | b'E') {
+                continue;
+            }
+            let Some(value) = std::str::from_utf8(&word[1..])
+                .ok()
+                .and_then(|number| number.parse::<f64>().ok())
+            else {
+                return false;
+            };
+            if !value.is_finite() {
+                return false;
+            }
+            has_coordinate = true;
+        }
+        has_coordinate
+    })
+}
+
 fn inspect_plate_output(directory: &Path, result: &mut PlateVerification) {
     let validation = (|| -> Result<(), String> {
         let native_path = directory.join("result.json");
@@ -1406,8 +1469,8 @@ fn inspect_plate_output(directory: &Path, result: &mut PlateVerification) {
                 "Bambu Studio {version} is not qualified by this adapter; supported version is {QUALIFIED_VERSION}"
             ));
         }
-        if !gcode.windows(3).any(|window| window == b"G1 ") {
-            return Err("Native output contains no generated moves".into());
+        if !has_linear_movement_command(&gcode) {
+            return Err("Native output contains no executable G1 movement commands".into());
         }
         result.toolpath_sha256 = Some(sha256(&gcode));
         result.toolpaths_generated = true;
@@ -1626,6 +1689,71 @@ mod tests {
         inspect_plate_output(&directory.0, &mut second);
         assert_eq!(second.state, PlateVerificationState::Failed);
         assert!(second.toolpath_sha256.is_none());
+    }
+
+    #[test]
+    fn toolpath_evidence_requires_executable_finite_movement_not_comment_or_display_text() {
+        // Synthetic output-parser evidence only: no slicer, CAD model, native
+        // import/readback, or installed-tool qualification is involved.
+        let directory = OwnedDirectory::create().unwrap();
+        std::fs::write(
+            directory.0.join("result.json"),
+            br#"{"return_code":0,"sliced_plates":[{"id":1,"filaments":[]}]}"#,
+        )
+        .unwrap();
+        for (label, commands, generated) in [
+            (
+                "comment and display text",
+                "; sample G1 X10\n(G1 Y12)\nM117 example G1 X20\n",
+                false,
+            ),
+            ("feedrate only", "G1 F900 ; X20\n", false),
+            ("commented coordinates", "G1 (X12 E1) F900\n", false),
+            ("nonfinite coordinate", "G1 XNaN E1\nG1 Zinf\n", false),
+            ("unresolved coordinate", "G1 X{position}\n", false),
+            ("other command", "G10 X12\nM117 G1 X12\n", false),
+            // The first command shape is present in the retained owned Bambu
+            // 02.08.02.61 output, including its indentation and inline comment.
+            (
+                "native whitespace",
+                "  G1 Y-16 F12000 ; move away\r\n",
+                true,
+            ),
+            (
+                "numbered and commented",
+                "N12 G01 (move) X1.25 Y-2 E.5*42\n",
+                true,
+            ),
+            ("extruder movement", "G1 E-3 F1800\n", true),
+            ("case and tabs", "\tg1\tx1.25\ty-2\n", true),
+        ] {
+            let gcode = format!("; BambuStudio 02.08.02.61\n{commands}");
+            std::fs::write(directory.0.join("plate_1.gcode"), &gcode).unwrap();
+            let mut result = PlateVerification::not_run(1);
+            result.state = PlateVerificationState::ToolpathsGenerated;
+            inspect_plate_output(&directory.0, &mut result);
+            assert_eq!(result.toolpaths_generated, generated, "{label}");
+            assert_eq!(
+                result.state,
+                if generated {
+                    PlateVerificationState::ToolpathsGenerated
+                } else {
+                    PlateVerificationState::Failed
+                },
+                "{label}"
+            );
+            assert_eq!(
+                result.toolpath_sha256,
+                generated.then(|| sha256(gcode.as_bytes())),
+                "{label}"
+            );
+            assert_eq!(result.slicer_version.as_deref(), Some(QUALIFIED_VERSION));
+            assert_eq!(result.native_result.as_ref().unwrap()["id"], 1);
+            assert!(!result.native_project_read_back);
+            if !generated {
+                assert!(result.message.unwrap().contains("no executable G1"));
+            }
+        }
     }
     #[test]
     fn failed_native_plate_retains_selected_empty_layer_diagnostic_without_toolpath_claim() {

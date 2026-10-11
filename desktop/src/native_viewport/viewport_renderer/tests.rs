@@ -435,3 +435,46 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
         UVec2::new(400, 240)
     );
 }
+
+#[test]
+fn worker_shutdown_services_pending_main_thread_surface_work() {
+    bevy::tasks::ComputeTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+    let (done, completed) = mpsc::channel();
+    let main = std::thread::spawn(move || {
+        let executor = MainThreadExecutor::new();
+        let main_thread = std::thread::current().id();
+        let submission = surface_submission::SharedSubmission::default();
+        let surface_submission = submission.clone();
+        let render_executor = executor.clone();
+        let (queued, pending) = mpsc::channel();
+        let render = std::thread::spawn(move || {
+            surface_submission.run(|| {
+                let task = render_executor.0.spawn(async move {
+                    assert_eq!(std::thread::current().id(), main_thread);
+                });
+                queued.send(()).unwrap();
+                bevy::tasks::block_on(task);
+            });
+        });
+        pending.recv_timeout(Duration::from_secs(5)).unwrap();
+        let cad = std::thread::spawn(move || submission.run(|| {}));
+        // A plain join deadlocks: CAD awaits surface work queued exclusively
+        // on this synthetic main thread. Teardown must service that work.
+        drop(Worker {
+            requests: None,
+            frames: Mutex::new(None),
+            thread: Some(cad),
+            sent: None,
+            in_flight: false,
+            stopped: Arc::new(AtomicBool::new(false)),
+            main_thread_executor: Some(executor),
+            gate_release: None,
+        });
+        render.join().unwrap();
+        done.send(()).unwrap();
+    });
+    completed
+        .recv_timeout(Duration::from_secs(5))
+        .expect("CAD shutdown did not service the pending surface work");
+    main.join().unwrap();
+}

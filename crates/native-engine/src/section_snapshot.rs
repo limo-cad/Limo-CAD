@@ -18,6 +18,7 @@ pub struct PreparedSectionReview {
     kernel: limo_cad_occt::DetachedSectionKernel,
     request: SectionReviewRequest,
     source: SourceProof,
+    source_errors: Vec<limo_cad_solid::KernelFeatureErrorDto>,
 }
 
 pub struct FinishedSectionReview {
@@ -39,7 +40,11 @@ impl PreparedSectionReview {
             return Err("The section request does not match its copied source body".into());
         }
         Ok(FinishedSectionReview {
-            report: self.kernel.inspect(request).map_err(|e| e.to_string())?,
+            report: self
+                .kernel
+                .inspect(request)
+                .map_err(|e| e.to_string())?
+                .with_source_errors(self.source_errors.clone()),
             source: self.source.clone(),
         })
     }
@@ -101,6 +106,7 @@ impl NativeEngineHost {
             kernel,
             request,
             source,
+            source_errors: scene.errors.clone(),
         })
     }
     /// Attached callers retain their publisher/ticket receipt through adoption.
