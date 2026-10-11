@@ -875,6 +875,24 @@ impl NativeInterfaceHandle {
             .map(|frame| frame.context.clone())
     }
 
+    /// Atomically capture the presented pointer fence without cloning surface
+    /// text, canvas metadata or modal labels on every deferred cursor sample.
+    pub(crate) fn presented_pointer_context(
+        &self,
+    ) -> Option<(DocumentContext, bool, Option<InterfaceRect>)> {
+        let shared = self.shared.lock().ok()?;
+        let frame = shared.presented_frame.as_ref()?;
+        Some((
+            frame.context.clone(),
+            frame.modal_stack.is_empty(),
+            frame
+                .canvases
+                .iter()
+                .find(|canvas| canvas.name == "viewport")
+                .map(|canvas| canvas.bounds),
+        ))
+    }
+
     pub fn has_capture(&self) -> bool {
         self.shared
             .lock()
