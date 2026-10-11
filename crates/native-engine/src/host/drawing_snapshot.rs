@@ -1,14 +1,117 @@
 //! Cold paper jobs own only selected exact definitions. Copying geometry costs
 //! time/memory at capture, but HLR never retains or locks the live workspace.
-//! A fresh snapshot does not inherit the live kernel's HLR cache; exact source
-//! revision fences conservatively favor correctness over cross-revision reuse.
+//! Finished projections may cross annotation revisions only after coherent
+//! scene, actual geometry generation and fully resolved request comparison.
 use super::*;
 use limo_cad_sketch::{AssemblyDocumentDto, DrawingDocumentDto, DrawingSheetDto, DrawingViewDto};
+use std::collections::BTreeMap;
+use std::sync::Weak;
+
+#[derive(Clone)]
+pub struct SharedDrawingProjection {
+    pub projection: Arc<limo_cad_occt::DrawingProjectionDto>,
+    pub basis: DrawingProjectionBasis,
+}
+
+/// In-process authority, never deserialized. Weak scene ownership prevents a
+/// completed bundle from pinning retired mesh/topology while preventing ABA.
+pub struct FinishedDrawingProjections {
+    owner: String,
+    scene: Weak<SolidSceneDto>,
+    identities: BTreeMap<limo_cad_core::BodyId, limo_cad_occt::KernelBodyGeometryIdentity>,
+    requests: Vec<(u64, DrawingProjectionRequest)>,
+    projections: BTreeMap<u64, SharedDrawingProjection>,
+}
+
+impl FinishedDrawingProjections {
+    /// The cache charges this bundle alongside independently owned paper
+    /// sources, including actual capacities rather than just serialized length.
+    pub fn retained_bytes(&self) -> usize {
+        let mut bytes = self
+            .identities
+            .len()
+            .saturating_mul(128)
+            .saturating_add(self.owner.capacity())
+            .saturating_add(self.projections.len().saturating_mul(128))
+            .saturating_add(
+                self.requests
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<(u64, DrawingProjectionRequest)>()),
+            );
+        for (_, request) in &self.requests {
+            bytes = bytes
+                .saturating_add(
+                    request
+                        .body_ids
+                        .capacity()
+                        .saturating_mul(std::mem::size_of::<limo_cad_core::BodyId>()),
+                )
+                .saturating_add(
+                    request
+                        .occurrence_ids
+                        .capacity()
+                        .saturating_mul(std::mem::size_of::<u64>()),
+                );
+            if let Some(poses) = &request.resolved_occurrences {
+                bytes = bytes.saturating_add(
+                    poses
+                        .capacity()
+                        .saturating_mul(std::mem::size_of::<InstanceBodyPoseDto>()),
+                );
+            }
+        }
+        for resolved in self.projections.values() {
+            let projection = &resolved.projection;
+            bytes =
+                bytes.saturating_add(std::mem::size_of::<limo_cad_occt::DrawingProjectionDto>());
+            for lines in [&projection.visible, &projection.hidden, &projection.section] {
+                bytes = bytes.saturating_add(
+                    lines
+                        .capacity()
+                        .saturating_mul(std::mem::size_of::<limo_cad_occt::DrawingPolylineDto>()),
+                );
+                for line in lines {
+                    bytes = bytes.saturating_add(
+                        line.points
+                            .capacity()
+                            .saturating_mul(std::mem::size_of::<[f64; 2]>()),
+                    );
+                }
+            }
+            bytes =
+                bytes
+                    .saturating_add(projection.anchors.capacity().saturating_mul(
+                        std::mem::size_of::<limo_cad_occt::DrawingProjectionAnchorDto>(),
+                    ))
+                    .saturating_add(projection.circles.capacity().saturating_mul(
+                        std::mem::size_of::<limo_cad_occt::DrawingProjectedCircleDto>(),
+                    ));
+            for anchor in &projection.anchors {
+                bytes = bytes.saturating_add(anchor.edge_key.capacity());
+            }
+            for circle in &projection.circles {
+                bytes = bytes.saturating_add(circle.edge_key.capacity());
+            }
+            for (key, signature) in &projection.topology_signatures {
+                bytes = bytes
+                    .saturating_add(128)
+                    .saturating_add(key.capacity())
+                    .saturating_add(signature.capacity());
+            }
+        }
+        bytes
+    }
+}
 
 pub struct DetachedDrawingSnapshot {
-    kernel: limo_cad_occt::DetachedDrawingKernel,
+    kernel: Option<limo_cad_occt::DetachedDrawingKernel>,
     scene: Arc<SolidSceneDto>,
     assembly: AssemblyDocumentDto,
+    identities: BTreeMap<limo_cad_core::BodyId, limo_cad_occt::KernelBodyGeometryIdentity>,
+    requests: Vec<(u64, DrawingProjectionRequest)>,
+    projections: Mutex<BTreeMap<u64, SharedDrawingProjection>>,
+    reused: Option<Arc<FinishedDrawingProjections>>,
+    owner: String,
 }
 
 impl NativeEngineHost {
@@ -31,6 +134,24 @@ impl NativeEngineHost {
         original_views: &[DrawingViewDto],
         repairing: bool,
     ) -> Result<DetachedDrawingSnapshot, String> {
+        self.detached_drawing_snapshot_reusing(
+            expected,
+            geometry_revision,
+            sheet,
+            (original_views, repairing),
+            None,
+        )
+    }
+
+    pub fn detached_drawing_snapshot_reusing(
+        &self,
+        expected: &Arc<DrawingDocumentDto>,
+        geometry_revision: u64,
+        sheet: &DrawingSheetDto,
+        intent: (&[DrawingViewDto], bool),
+        previous: Option<&Arc<FinishedDrawingProjections>>,
+    ) -> Result<DetachedDrawingSnapshot, String> {
+        let (original_views, repairing) = intent;
         let workspace = self.inner.lock().map_err(|_| "engine lock poisoned")?;
         let inner = workspace.active();
         if inner.geometry_revision != geometry_revision
@@ -43,7 +164,9 @@ impl NativeEngineHost {
             return Err("Resolve timeline errors before generating a drawing view.".into());
         }
         let assembly = inner.manager.assembly_document_ref().clone();
+        let owner = workspace.verification_owner_key();
         let mut bodies = BTreeSet::new();
+        let mut requests = Vec::new();
         // Derived planes resolve against full saved intent, but only projected
         // views' selected definitions need an independent native shape.
         for view in &sheet.views {
@@ -60,19 +183,62 @@ impl NativeEngineHost {
             };
             let request =
                 limo_cad_occt::drawing_export::projection_request(view, views, &scene, &assembly)?;
+            let request = limo_cad_occt::resolve_drawing_request(&scene, &assembly, &request)
+                .map_err(|e| e.to_string())?;
             bodies.extend(
                 limo_cad_occt::drawing_required_body_ids(&scene, &assembly, &request)
                     .map_err(|e| e.to_string())?,
             );
+            if requests.iter().any(|(id, _)| *id == view.id) {
+                return Err("Drawing sheet contains duplicate view identities".into());
+            }
+            requests.push((view.id, request));
         }
-        let kernel = inner
+        let live_identities = inner
             .kernel
-            .detached_drawing_snapshot(&bodies.into_iter().collect::<Vec<_>>())
+            .body_geometry_identities()
             .map_err(|e| e.to_string())?;
+        let identities = bodies
+            .iter()
+            .map(|id| {
+                live_identities
+                    .get(id)
+                    .copied()
+                    .map(|identity| (*id, identity))
+                    .ok_or_else(|| "Drawing body geometry identity is unavailable".to_string())
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let reused = previous
+            .filter(|previous| {
+                previous.owner == owner
+                    && previous
+                        .scene
+                        .upgrade()
+                        .is_some_and(|old| Arc::ptr_eq(&old, &scene))
+                    && previous.identities == identities
+                    && previous.requests == requests
+                    && previous.projections.len() == requests.len()
+            })
+            .cloned();
+        let kernel = if reused.is_none() {
+            Some(
+                inner
+                    .kernel
+                    .detached_drawing_snapshot(&bodies.into_iter().collect::<Vec<_>>())
+                    .map_err(|e| e.to_string())?,
+            )
+        } else {
+            None
+        };
         Ok(DetachedDrawingSnapshot {
             kernel,
             scene,
             assembly,
+            identities,
+            requests,
+            projections: Mutex::new(BTreeMap::new()),
+            reused,
+            owner,
         })
     }
 }
@@ -83,19 +249,85 @@ impl DetachedDrawingSnapshot {
         view: &DrawingViewDto,
         views: &[DrawingViewDto],
     ) -> Result<ResolvedDrawingProjection, String> {
+        let resolved = self.project_shared(view, views)?;
+        Ok(ResolvedDrawingProjection {
+            projection: (*resolved.projection).clone(),
+            basis: resolved.basis,
+        })
+    }
+
+    pub fn project_shared(
+        &self,
+        view: &DrawingViewDto,
+        views: &[DrawingViewDto],
+    ) -> Result<SharedDrawingProjection, String> {
         let request = limo_cad_occt::drawing_export::projection_request(
             view,
             views,
             &self.scene,
             &self.assembly,
         )?;
+        let request = limo_cad_occt::resolve_drawing_request(&self.scene, &self.assembly, &request)
+            .map_err(|e| e.to_string())?;
+        if !self
+            .requests
+            .iter()
+            .any(|(id, captured)| *id == view.id && *captured == request)
+        {
+            return Err("Drawing projection differs from its captured intent".into());
+        }
+        if let Some(reused) = &self.reused {
+            return reused
+                .projections
+                .get(&view.id)
+                .cloned()
+                .ok_or_else(|| "Drawing projection bundle is incomplete".into());
+        }
+        if let Some(projected) = self
+            .projections
+            .lock()
+            .map_err(|_| "Drawing projection cache poisoned")?
+            .get(&view.id)
+        {
+            return Ok(projected.clone());
+        }
         let basis = limo_cad_occt::drawing_projection_basis(request.direction, request.up)
             .map_err(|e| e.to_string())?;
         let projection = self
             .kernel
+            .as_ref()
+            .ok_or("Drawing projection kernel is unavailable")?
             .project(&self.scene, &self.assembly, &request)
             .map_err(|e| e.to_string())?;
-        Ok(ResolvedDrawingProjection { projection, basis })
+        let resolved = SharedDrawingProjection {
+            projection: Arc::new(projection),
+            basis,
+        };
+        self.projections
+            .lock()
+            .map_err(|_| "Drawing projection cache poisoned")?
+            .insert(view.id, resolved.clone());
+        Ok(resolved)
+    }
+
+    pub fn finished_bundle(&self) -> Result<Option<Arc<FinishedDrawingProjections>>, String> {
+        if let Some(reused) = &self.reused {
+            return Ok(Some(Arc::clone(reused)));
+        }
+        let projections = self
+            .projections
+            .lock()
+            .map_err(|_| "Drawing projection cache poisoned")?;
+        if projections.len() != self.requests.len() {
+            return Ok(None);
+        }
+        Ok(Some(Arc::new(FinishedDrawingProjections {
+            scene: Arc::downgrade(&self.scene),
+            owner: self.owner.clone(),
+            identities: self.identities.clone(),
+            requests: self.requests.clone(),
+            projections: projections.clone(),
+        })))
     }
 
     pub fn source_graphics<'a>(

@@ -193,12 +193,22 @@ pub(super) struct EdgeCache {
     failure: Option<(SourceKey, RasterKey, String)>,
     prepared_source: Option<Source>,
     cold: Option<ColdProjection>,
+    bundle: Option<RetainedProjectionBundle>,
 }
 
 struct ColdProjection {
     key: SourceKey,
-    receiver: Mutex<mpsc::Receiver<Result<Source, String>>>,
+    receiver: Mutex<mpsc::Receiver<Result<ColdSource, String>>>,
     retired: Arc<AtomicBool>,
+}
+struct ColdSource {
+    source: Source,
+    bundle: Option<Arc<limo_cad_native_engine::FinishedDrawingProjections>>,
+}
+struct RetainedProjectionBundle {
+    key: SourceKey,
+    projections: Arc<limo_cad_native_engine::FinishedDrawingProjections>,
+    bytes: usize,
 }
 pub(super) struct ColdSourceInput<'a> {
     pub drawing: &'a Arc<limo_cad_sketch::DrawingDocumentDto>,
@@ -223,12 +233,49 @@ pub(super) struct Prepared<'a> {
 }
 
 impl EdgeCache {
+    fn trim_projection_retention(&mut self) {
+        let source_bytes = self
+            .source
+            .as_ref()
+            .map_or(0, |source| source.retained_bytes);
+        let prepared_bytes = self
+            .prepared_source
+            .as_ref()
+            .map_or(0, |source| source.retained_bytes);
+        let budget = Limits::default().retained_bytes;
+        if source_bytes.saturating_add(prepared_bytes).saturating_add(
+            self.previous_source
+                .as_ref()
+                .map_or(0, |source| source.retained_bytes),
+        ) > budget
+        {
+            self.previous_source = None;
+            self.previous_raster = None;
+        }
+        if source_bytes.saturating_add(prepared_bytes) > budget {
+            self.source = None;
+        }
+        let sources = self
+            .source
+            .as_ref()
+            .map_or(0, |source| source.retained_bytes)
+            .saturating_add(prepared_bytes)
+            .saturating_add(
+                self.previous_source
+                    .as_ref()
+                    .map_or(0, |source| source.retained_bytes),
+            );
+        if sources.saturating_add(self.bundle.as_ref().map_or(0, |bundle| bundle.bytes)) > budget {
+            self.bundle = None;
+        }
+    }
     pub(super) fn retire_sources(&mut self) {
         self.source = None;
         self.previous_source = None;
         self.raster = None;
         self.previous_raster = None;
         self.prepared_source = None;
+        self.bundle = None;
         self.failure = None;
         if let Some(job) = &self.cold {
             job.retired.store(true, Ordering::Release);
@@ -270,8 +317,19 @@ impl EdgeCache {
                     let job = self.cold.take().unwrap();
                     if job.key == *key && !job.retired.load(Ordering::Acquire) {
                         match result {
-                            Ok(source) => {
-                                self.prepared_source = Some(source);
+                            Ok(result) => {
+                                // Finished bundles and independently owned sources
+                                // share the same existing retention cap.
+                                self.bundle = result.bundle.map(|bundle| {
+                                    let retained = bundle.retained_bytes();
+                                    RetainedProjectionBundle {
+                                        key: key.clone(),
+                                        projections: bundle,
+                                        bytes: retained,
+                                    }
+                                });
+                                self.prepared_source = Some(result.source);
+                                self.trim_projection_retention();
                                 if self.failure.as_ref().is_some_and(|(k, _, _)| k == key) {
                                     self.failure = None;
                                 }
@@ -317,6 +375,10 @@ impl EdgeCache {
         let sheet = input.sheet.clone();
         let original_views = input.original_views.to_vec();
         let repair_view = input.repair_view;
+        let bundle = self
+            .bundle
+            .as_ref()
+            .map(|bundle| Arc::clone(&bundle.projections));
         std::thread::Builder::new()
             .name("drawing-projection".into())
             .spawn(move || {
@@ -328,19 +390,19 @@ impl EdgeCache {
                             if revision != receipt.revision {
                                 return Err("The drawing changed before projection capture".into());
                             }
-                            services.engine.detached_drawing_snapshot(
+                            services.engine.detached_drawing_snapshot_reusing(
                                 &drawing,
                                 source_key.geometry_revision,
                                 &sheet,
-                                &original_views,
-                                repair_view.is_some(),
+                                (&original_views, repair_view.is_some()),
+                                bundle.as_ref(),
                             )
                         },
                     )?;
                     // HLR now owns independent shapes; release live document services.
                     drop(services);
                     drop(drawing);
-                    Source::project_resolved(
+                    let source = Source::project_resolved(
                         source_key,
                         |view| {
                             if repair_view.is_some() {
@@ -361,7 +423,11 @@ impl EdgeCache {
                             )
                         },
                         Limits::default(),
-                    )
+                    )?;
+                    Ok(ColdSource {
+                        source,
+                        bundle: snapshot.finished_bundle()?,
+                    })
                 })();
                 if !worker_retired.load(Ordering::Acquire) {
                     let _ = sender.send(result);
@@ -379,6 +445,13 @@ impl EdgeCache {
         Ok(false)
     }
     pub(super) fn evict_document(&mut self, owner: &DocumentContext) {
+        if self
+            .bundle
+            .as_ref()
+            .is_some_and(|bundle| bundle.key.belongs_to_document(owner))
+        {
+            self.bundle = None;
+        }
         if self
             .prepared_source
             .as_ref()
@@ -601,7 +674,11 @@ impl EdgeCache {
                     .expect("A changed source was projected or found in the warm cache");
                 let retained_bytes = source.retained_bytes;
                 self.previous_source = self.source.replace(source).filter(|previous| {
-                    previous.retained_bytes.saturating_add(retained_bytes) <= limits.retained_bytes
+                    previous
+                        .retained_bytes
+                        .saturating_add(retained_bytes)
+                        .saturating_add(self.bundle.as_ref().map_or(0, |bundle| bundle.bytes))
+                        <= limits.retained_bytes
                 });
                 self.previous_raster = if self.previous_source.is_some() {
                     self.raster
