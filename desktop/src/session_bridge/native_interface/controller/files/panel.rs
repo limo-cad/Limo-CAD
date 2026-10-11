@@ -400,7 +400,7 @@ pub(crate) fn synchronize(
                     camera,
                     menu_bounds,
                     theme.panel.with_alpha(1.),
-                    60,
+                    61,
                 );
                 world.entity_mut(*state.decoration.last().unwrap()).insert((
                     BorderColor::all(theme.edge),
@@ -507,6 +507,13 @@ pub(crate) fn synchronize(
             }
             state.layout = Some(layout);
         }
+        let menu_scope = match super::modal(world) {
+            Some("file-menu") => Some("file-menu"),
+            None => {
+                super::super::workbench::modal(world).filter(|scope| *scope == "workbench-menu")
+            }
+            _ => None,
+        };
         button(
             world,
             &mut state,
@@ -519,7 +526,7 @@ pub(crate) fn synchronize(
             Some(""),
             FileCommand::Menu,
             node(0., 0., 40., 28.),
-            menu.then_some("file-menu"),
+            menu_scope,
             65,
             None,
             picker,

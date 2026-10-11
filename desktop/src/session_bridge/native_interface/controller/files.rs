@@ -337,6 +337,11 @@ pub(super) fn close_settings(world: &mut World) {
         files.settings = false;
     }
 }
+pub(super) fn dismiss_menu(world: &mut World) {
+    if let Some(mut files) = world.get_resource_mut::<Files>() {
+        files.menu = false;
+    }
+}
 pub(super) fn tabs(
     world: &World,
     services: &NativeServices,
@@ -775,12 +780,18 @@ fn execute(
         };
     }
     if matches!(command, FileCommand::Menu | FileCommand::DismissMenu) {
-        let mut f = world.resource_mut::<Files>();
-        if f.dialog.is_some() || f.picker.is_some() {
-            return Err("Finish the current File dialog first".into());
+        let menu_open = {
+            let mut f = world.resource_mut::<Files>();
+            if f.dialog.is_some() || f.picker.is_some() {
+                return Err("Finish the current File dialog first".into());
+            }
+            f.menu = matches!(command, FileCommand::Menu) && !f.menu;
+            f.menu
+        };
+        if menu_open {
+            super::workbench::dismiss_menu(world);
         }
-        f.menu = matches!(command, FileCommand::Menu) && !f.menu;
-        return Ok(json!({"menu_open":f.menu}));
+        return Ok(json!({"menu_open":menu_open}));
     }
     if let FileCommand::Cancel(token) = command {
         if world
