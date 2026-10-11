@@ -191,7 +191,7 @@ impl Default for Browser {
 impl Browser {
     fn set_enabled(&mut self, enabled: bool) {
         if !enabled {
-            self.inspect.invalidate_report();
+            self.inspect.invalidate_reviews();
         }
         self.enabled = enabled;
     }
@@ -521,7 +521,7 @@ pub(crate) fn reduce(
         match *command {
             Command::Tab(tab) => {
                 if tab != state.tab {
-                    state.inspect.invalidate_report();
+                    state.inspect.invalidate_reviews();
                     studies::restore(world, &mut state.studies, &receipt.owner)?;
                     motion::restore(world, &mut state.motion, &receipt.owner)?;
                     state.motion.changed(&a);

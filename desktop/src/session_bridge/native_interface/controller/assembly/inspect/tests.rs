@@ -188,6 +188,227 @@ fn ordered_interference_review_releases_live_guards_and_rejects_stale_reports() 
     }
 }
 #[test]
+fn ordered_swept_review_releases_live_guards_and_rejects_stale_motion_reports() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    for case in [
+        "live",
+        "stop",
+        "sample",
+        "study",
+        "stop_draft",
+        "clearance_draft",
+        "hide",
+        "tab",
+        "edit",
+        "pose",
+        "replace",
+        "native",
+    ] {
+        let f = Fixture::new();
+        let owner = f.owner();
+        let study = crate::session_bridge::native_interface::tests::swept_stock(
+            &f.engine, &f.bridge, &owner,
+        );
+        let selected_study = if case == "study" {
+            f.bridge
+                .apply_native_mutation(
+                    &f.engine,
+                    &owner,
+                    "assembly_create_motion_study",
+                    &json!({"name":"Other actual study","duration_seconds":1.}),
+                    || Ok(()),
+                )
+                .unwrap()
+                .value["id"]
+                .as_u64()
+                .unwrap()
+        } else {
+            study.id.0
+        };
+        let assembly = document(&f.engine).unwrap();
+        let before = f.engine.engine_call("project_export_model", "");
+        let receipt = f.bridge.native_document_receipt(&f.engine, &owner).unwrap();
+        let services = NativeServices {
+            engine: f.engine.clone(),
+            bridge: f.bridge.clone(),
+        };
+        let mut app = native_viewport::interface_scene_fixture();
+        crate::session_bridge::native_interface::refresh_native_model(
+            &f.engine,
+            app.world_mut(),
+            false,
+        )
+        .unwrap();
+        let world = app.world_mut();
+        worker::install(world, services.clone(), NativeInterfaceHandle::new(|| {})).unwrap();
+        world.insert_resource(Browser {
+            owner: Some(owner.clone()),
+            revision: receipt.revision,
+            enabled: true,
+            tab: Tab::Inspect,
+            ..Default::default()
+        });
+        let capture_services = services.clone();
+        let capture_owner = owner.clone();
+        let adoption_owner = owner.clone();
+        let (sent, ready) = std::sync::mpsc::sync_channel(1);
+        worker::enqueue_swept_collision_review(
+            world,
+            owner.clone(),
+            receipt.revision,
+            json!({"study_id":study.id,"sample_rate_hz":4.,"clearance_threshold_mm":0.5,"stop_at_first":case=="stop"}),
+            move |finished| {
+                capture_services
+                    .bridge
+                    .with_native_document_receipt(&capture_services.engine, &capture_owner, |_| {
+                        capture_services.engine.with_drawing(|_| ());
+                        Ok(())
+                    })
+                    .unwrap();
+                let report = finished.report();
+                assert!(report.exact);
+                assert_eq!(report.sample_count, if case=="stop" {3} else {5});
+                assert_eq!(report.events.len(),1);
+                let event=&report.events[0];
+                assert_eq!(event.body_a,event.body_b);
+                assert_ne!(event.occurrence_a,event.occurrence_b);
+                assert!((event.first_time_seconds-0.5).abs()<1e-9);
+                assert!((event.last_time_seconds-if case=="stop" {0.5}else{1.}).abs()<1e-9);
+                assert!((event.maximum_overlap_volume_mm3-if case=="stop" {30.}else{180.}).abs()<1e-6);
+                let prepared = prepare_swept_report(finished)?;
+                sent.send(()).unwrap();
+                Ok(prepared)
+            },
+            move |world, services, result| {
+                adopt_swept_report(
+                    world,
+                    services,
+                    &adoption_owner,
+                    receipt.revision,
+                    0,
+                    result,
+                )
+            },
+        )
+        .unwrap();
+        ready
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .unwrap();
+        match case {
+            "sample" | "study" | "stop_draft" | "clearance_draft" => {
+                let mut state = std::mem::take(&mut world.resource_mut::<Browser>().inspect);
+                state.study = Some(study.id.0);
+                let (action, input) = match case {
+                    "sample" => (
+                        Action::Field(Edit::SampleRate),
+                        ControlInput::SetValue("8".into()),
+                    ),
+                    "study" => (
+                        Action::Choice(Choice::Study),
+                        ControlInput::SetValue(selected_study.to_string()),
+                    ),
+                    "stop_draft" => (Action::StopFirst, ControlInput::Click),
+                    _ => (
+                        Action::Field(Edit::Clearance),
+                        ControlInput::SetValue("1".into()),
+                    ),
+                };
+                reduce(
+                    world,
+                    (&f.engine, &f.bridge, &owner),
+                    receipt.revision,
+                    &mut state,
+                    &assembly,
+                    UnitSystem::Mm,
+                    (&action, &input),
+                )
+                .unwrap();
+                assert_eq!(
+                    state.report_generation,
+                    u64::from(case == "clearance_draft"),
+                    "Swept-only options must not invalidate static review"
+                );
+                world.resource_mut::<Browser>().inspect = state;
+            }
+            "hide" => {
+                let mut browser = world.resource_mut::<Browser>();
+                browser.set_enabled(false);
+                browser.set_enabled(true);
+            }
+            "tab" => {
+                let mut browser = world.resource_mut::<Browser>();
+                browser.tab = Tab::Structure;
+                browser.inspect.invalidate_reviews();
+                browser.tab = Tab::Inspect;
+            }
+            "edit" => {
+                f.rename(&owner, "Edited during check").unwrap();
+            }
+            "pose" => {
+                let mut changed = study.clone();
+                changed.drivers[0].law = limo_cad_sketch::MotionDriverLawDto::Motor {
+                    initial_value: 8.,
+                    velocity_per_second: 0.,
+                    acceleration_per_second2: 0.,
+                };
+                parse_engine_envelope(f.engine.engine_call(
+                    "assembly_update_motion_study",
+                    &serde_json::to_string(&changed).unwrap(),
+                ))
+                .unwrap();
+            }
+            "replace" => {
+                f.bridge
+                    .apply_native_mutation(&f.engine, &owner, "cad_new_project", &json!({}), || {
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+            "native" => {
+                let model = parse_engine_envelope(before.clone()).unwrap();
+                parse_engine_envelope(
+                    f.engine
+                        .project_load(&serde_json::to_string(model.as_str().unwrap()).unwrap()),
+                )
+                .unwrap();
+            }
+            _ => {}
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            if let Some(outcome) = worker::poll(world, &services) {
+                if matches!(case, "live" | "stop") {
+                    assert!(outcome.value.is_ok());
+                    assert!(world.resource::<Browser>().inspect.swept.is_some());
+                } else {
+                    assert!(outcome.value.is_err());
+                    assert!(world.resource::<Browser>().inspect.swept.is_none());
+                }
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        if matches!(
+            case,
+            "live"
+                | "stop"
+                | "sample"
+                | "study"
+                | "stop_draft"
+                | "clearance_draft"
+                | "hide"
+                | "tab"
+                | "native"
+        ) {
+            assert!(
+                f.engine.engine_call("project_export_model", "") == before,
+                "Swept check must preserve complete model"
+            );
+        }
+    }
+}
+#[test]
 fn native_inspection_is_exact_read_only_and_contact_edits_have_exact_history() {
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
     let f = Fixture::new();
