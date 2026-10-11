@@ -850,6 +850,48 @@ pub(super) fn selected_path(
     owned(world, services, &receipt.owner, token, generation)?;
     inspect(world, services, &receipt.owner, token, path)
 }
+// Only source-context capture and final result admission require the publisher.
+// File I/O, base64 and bounded ZIP/XML inspection grant no document authority.
+fn inspect_template_snapshot(
+    services: &NativeServices,
+    receipt: &DocumentReceipt,
+    intent: &io::ExportIntent,
+    mut validate_io: impl FnMut() -> Result<(), String>,
+    inspect: impl FnOnce() -> Result<(String, Value), String>,
+) -> Result<NativeMutationResult, String> {
+    let source = services.bridge.with_native_document_receipt(
+        &services.engine,
+        &receipt.owner,
+        |revision| {
+            if revision != receipt.revision {
+                return Err("The document changed before template inspection".into());
+            }
+            validate_io()?;
+            context(&services.engine, intent)
+        },
+    )?;
+    let inspected = inspect().map(|(encoded, summary)| {
+        Value::Object(serde_json::Map::from_iter([
+            ("encoded".into(), Value::String(encoded)),
+            ("summary".into(), summary),
+            ("context".into(), source),
+        ]))
+    });
+    services
+        .bridge
+        .with_native_document_receipt(&services.engine, &receipt.owner, |revision| {
+            if revision != receipt.revision {
+                return Err("The document changed during template inspection".into());
+            }
+            validate_io()?;
+            Ok(NativeMutationResult {
+                context: receipt.owner.clone(),
+                engine_revision: revision,
+                value: inspected?,
+            })
+        })
+}
+
 fn inspect(
     world: &mut World,
     services: &NativeServices,
@@ -875,14 +917,32 @@ fn inspect(
         world,
         "inspect_bambu_template".into(),
         move |services, guard| {
-            services.bridge.with_native_document_receipt(&services.engine,&receipt.owner,|revision|{
-            if revision!=receipt.revision{return Err("The document changed before template inspection".into())}guard.validate()?;
-            if std::fs::metadata(&path).map_err(|e|e.to_string())?.len()>128*1024*1024{return Err("Bambu template input is limited to128MiB".into())}
-            let bytes=limo_cad_project_file::read_binary_file(&path).map_err(|e|e.to_string())?;
-            if bytes.len()>128*1024*1024{return Err("Bambu template input is limited to128MiB".into())}
-            let encoded=STANDARD.encode(bytes);let summary=parse_engine_envelope(services.engine.engine_call("bambu_template_inspect",&json!({"template_base64":encoded}).to_string()))?;
-            Ok(NativeMutationResult{context:receipt.owner.clone(),engine_revision:revision,value:json!({"path":path,"encoded":encoded,"summary":summary,"context":context(&services.engine,&intent)?})})
-        })
+            let mut result = inspect_template_snapshot(
+                services,
+                &receipt,
+                &intent,
+                || guard.validate(),
+                || {
+                    if std::fs::metadata(&path).map_err(|e| e.to_string())?.len()
+                        > 128 * 1024 * 1024
+                    {
+                        return Err("Bambu template input is limited to128MiB".into());
+                    }
+                    let bytes = limo_cad_project_file::read_binary_file(&path)
+                        .map_err(|e| e.to_string())?;
+                    if bytes.len() > 128 * 1024 * 1024 {
+                        return Err("Bambu template input is limited to128MiB".into());
+                    }
+                    let encoded = STANDARD.encode(bytes);
+                    let summary = parse_engine_envelope(services.engine.engine_call(
+                        "bambu_template_inspect",
+                        &json!({"template_base64":encoded}).to_string(),
+                    ))?;
+                    Ok((encoded, summary))
+                },
+            )?;
+            result.value["path"] = json!(path);
+            Ok(result)
         },
         move |world, services, result| {
             let result = result?;
