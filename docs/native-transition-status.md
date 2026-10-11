@@ -1,6 +1,23 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: motion CSV source `e224021b`
+Current checkpoint, **2026-10-11 UTC**: source `70eba71a` combines compact
+native File Open completion with original load diagnostics retained, localized
+English/Spanish/German/Simplified Chinese product entrances, and three practical
+edit/recovery lesson guides with authored catalog and UTF-16 harness repairs.
+Independent source review is clear. Three package Clippy checks and five exact
+tests pass once: one scratch-only native File regression at `abdfb8cf`, three new
+pure/bundled-guide lesson checks and one affected existing knowledge corpus check
+at `70eba71a`. Four-page/88-link static validation also passes. Hosted CI is still
+running on the preceding published head; the combined batch will be checked on
+PR124 after one push. Issues **#16 and #21 remain open** for native lesson
+presentation/learning, localized layout/review and release/publication,
+administrator and approval criteria. No live desktop or large-document retry,
+nonempty diagnostic fixture, native lesson replay, deployed pair or human UI/MCP
+pass is claimed. Broad coverage stays paused and its complete ledger is unchanged.
+PR124 remains the integration destination. Exact scope and receipts:
+`docs/qualification/file-open-lessons-localized-20261011.json`.
+
+Historical checkpoint, **2026-10-11 UTC**: motion CSV source `e224021b`
 passes strict Windows desktop/native-engine/OCCT compilation and its three new
 native, ordered-UI worker and admitted-MCP regressions once. The preceding six
 swept/contact passes remain at their original revisions and are not repeated.
