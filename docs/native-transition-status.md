@@ -2354,3 +2354,17 @@ A separate no-op sketch Edit/Cancel/Finish observation produced an Unsaved
 changes prompt despite an exactly unchanged complete persisted model. A scoped
 source repair is underway; engine revision and readiness fences remain intact.
 The Q5 Tab traversal pass does not qualify this separate dirty-state behavior.
+
+Two further source repairs are integrated: `c96f22f7` reconciles clean saved
+existing-sketch round trips against the complete persisted model without
+weakening revision/history or owner/save fences; `053a68ed` shapes accepted
+numeric captions to the actual field width while preserving raw editor precision,
+focus, dirty expressions and IME. At clean `053a68ed`, strict Windows desktop
+Clippy and only the two new production regressions passed once.
+`sketch-clean-caption-053a68ed-results.json` retains the exact artifact, SDK,
+toolchain and raw results; prior passing filters were not rerun. Live prompt and
+caption acceptance remain pending. The previous matched `a3145e2c` window was
+physically closed after Cancel and exact complete model/archive preservation;
+`move-copy-presentation-a3145e2c-cancel-preservation.json` records the unchanged
+original. The retained `2da8cbd0` package workflow is now green across all four
+platforms. Current PR124 checks remain ongoing. Broad UI/MCP coverage stays paused.
