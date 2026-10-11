@@ -520,6 +520,57 @@ pub(super) fn synchronize(
                 }
             }
         }
+        if active {
+            if let Some(menu) = editor.interaction.annotation_menu {
+                let theme = crate::native_viewport::ui::theme(world);
+                let width = 188.;
+                let left =
+                    menu.anchor[0].clamp(0., ((canvas.x + canvas.width) as f32 - width).max(0.));
+                let top = menu.anchor[1].clamp(0., (window_height - 40.).max(0.));
+                panel.widgets.backdrop(
+                    (world, camera),
+                    "annotation-menu-backdrop",
+                    "sketch-menu",
+                    NativeCommand::Sketch(EditorCommand::Interaction(
+                        InteractionCommand::CloseAnnotationMenu,
+                    )),
+                    rect(0., 0., (canvas.x + canvas.width) as f32, window_height),
+                    59,
+                )?;
+                panel.widgets.panel(
+                    world,
+                    camera,
+                    "annotation-menu",
+                    rect(left, top, width, 40.),
+                    theme.header.with_alpha(1.),
+                    60,
+                );
+                let label = match menu.target {
+                    AnnotationTarget::Dimension(_) => "Delete Dimension",
+                    AnnotationTarget::Constraint(_) => "Delete Constraint",
+                };
+                let mut control = InterfaceControl::button("sketch/annotation-menu", label);
+                control.role = "menuitem".into();
+                control.modal_scope = Some("sketch-menu".into());
+                control.owned_keys = ["ArrowUp", "ArrowDown", "Home", "End"]
+                    .map(KeyChord::plain)
+                    .into();
+                let entity = panel.widgets.button(
+                    world,
+                    camera,
+                    "annotation-menu-delete",
+                    control,
+                    None,
+                    NativeCommand::Sketch(EditorCommand::Interaction(
+                        InteractionCommand::DeleteAnnotation(menu.target),
+                    )),
+                    rect(left + 4., top + 4., width - 8., 32.),
+                    None,
+                    61,
+                )?;
+                interface_shell::ribbon::menu_ink(world, entity);
+            }
+        }
         let dimension = active && editor.interaction.dimension.is_some();
         if dimension {
             let theme = crate::native_viewport::ui::theme(world);
@@ -1035,7 +1086,11 @@ pub(super) fn synchronize(
 pub(crate) fn modal(world: &World) -> Option<&'static str> {
     world
         .get_resource::<Editor>()
-        .and_then(|e| e.interaction.menu)
+        .and_then(|e| {
+            e.interaction
+                .menu
+                .or(e.interaction.annotation_menu.map(|_| "annotation"))
+        })
         .map(|_| "sketch-menu")
 }
 pub(crate) fn scroll_panel(world: &mut World, point: [f32; 2], delta: f32) -> bool {
@@ -1063,6 +1118,7 @@ pub(crate) fn scroll_panel(world: &mut World, point: [f32; 2], delta: f32) -> bo
 pub(crate) fn escape(world: &mut World) {
     if let Some(mut editor) = world.get_resource_mut::<Editor>() {
         editor.interaction.menu = None;
+        editor.interaction.annotation_menu = None;
     }
 }
 

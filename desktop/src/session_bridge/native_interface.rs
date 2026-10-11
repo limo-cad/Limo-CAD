@@ -610,6 +610,43 @@ pub(crate) fn reduce_action(
         &binding.command
     {
         use crate::native_editor::{EditorCommand, InteractionCommand};
+        let context_menu = matches!(action.control.input, ControlInput::ContextMenu)
+            || matches!(&action.control.input, ControlInput::Key(key) if !key.ctrl && !key.meta && !key.alt && ((key.key == "ContextMenu" && !key.shift) || (key.key == "F10" && key.shift)));
+        if context_menu {
+            use crate::native_editor::AnnotationTarget;
+            let target = match command {
+                InteractionCommand::EditDimension(id) => Some(AnnotationTarget::Dimension(*id)),
+                InteractionCommand::ConstraintInfo(id) => Some(AnnotationTarget::Constraint(*id)),
+                _ => None,
+            };
+            if let Some(target) = target {
+                let anchor = handle
+                    .read_surface(|_, frame| {
+                        frame
+                            .controls
+                            .iter()
+                            .find(|c| c.key == action.control.key)
+                            .map(|c| {
+                                [
+                                    c.bounds.x as f32,
+                                    (c.bounds.y + c.bounds.height + 4.) as f32,
+                                ]
+                            })
+                    })?
+                    .ok_or("Annotation has no current layout")?;
+                return crate::native_editor::execute(
+                    world,
+                    engine,
+                    bridge,
+                    &action.context,
+                    EditorCommand::Interaction(InteractionCommand::AnnotationContext {
+                        target,
+                        anchor,
+                    }),
+                    || handle.validate_action(action),
+                );
+            }
+        }
         if matches!(
             command,
             InteractionCommand::DimensionText(_) | InteractionCommand::FormValue { .. }

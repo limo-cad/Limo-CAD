@@ -335,6 +335,7 @@ enum EndpointResolution {
 }
 
 struct ChamferEditTopology {
+    angle: Option<(EntityId, EntityId)>,
     origin: EntityId,
     cutbacks: [EntityId; 2],
     carriers: [EntityId; 2],
@@ -4008,7 +4009,7 @@ impl SketchSession {
     /// Recognize an independent trimmed Chamfer before applying edit-local
     /// placement preferences; ambiguous or wider graphs keep the generic path.
     fn chamfer_edit_topology(&self, from: EntityId, to: EntityId) -> Option<ChamferEditTopology> {
-        let relations: Vec<_> = self
+        let mut relations: Vec<_> = self
             .sketch
             .constraints()
             .filter_map(|(_, constraint)| match *constraint {
@@ -4016,15 +4017,46 @@ impl SketchSession {
                     if (origin == from && (a == to || b == to))
                         || (origin == to && (a == from || b == from)) =>
                 {
-                    Some((origin, [a, b]))
+                    Some((origin, [a, b], None))
                 }
                 _ => None,
             })
             .collect();
+        if relations.is_empty() {
+            for (_, constraint) in self.sketch.constraints() {
+                let Constraint::Angle { a, b, .. } = *constraint else {
+                    continue;
+                };
+                for (carrier, connector) in [(a, b), (b, a)] {
+                    let Some((start, end)) = self.sketch.line_endpoint_ids(connector) else {
+                        continue;
+                    };
+                    let Some((carrier_start, carrier_end)) = self.sketch.line_endpoint_ids(carrier)
+                    else {
+                        continue;
+                    };
+                    for (origin, cut) in [(from, to), (to, from)] {
+                        let peer = if start == cut {
+                            end
+                        } else if end == cut {
+                            start
+                        } else {
+                            continue;
+                        };
+                        if [carrier_start, carrier_end].contains(&cut)
+                            && self.sketch.constraints().any(|(_, relation)| matches!(*relation,
+                                Constraint::Coincident { a, b } if (a == origin && b == carrier) || (b == origin && a == carrier)))
+                        {
+                            relations.push((origin, [cut, peer], Some((a, b))));
+                        }
+                    }
+                }
+            }
+        }
         if relations.len() != 1 {
             return None;
         }
-        let (origin, cutbacks) = relations[0];
+        let (origin, cutbacks, angle) = relations[0];
         if cutbacks[0] == cutbacks[1] || cutbacks.contains(&origin) {
             return None;
         }
@@ -4090,7 +4122,10 @@ impl SketchSession {
         // follows the existing generic edit and recovery path.
         for (id, entity) in self.sketch.entities() {
             if let Entity::Line { start, end } = entity {
-                if !local.contains(&id) && (local.contains(start) || local.contains(end)) {
+                if angle.is_none()
+                    && !local.contains(&id)
+                    && (local.contains(start) || local.contains(end))
+                {
                     return None;
                 }
             }
@@ -4124,7 +4159,7 @@ impl SketchSession {
                 }
                 _ => false,
             };
-            if !allowed {
+            if angle.is_none() && !allowed {
                 return None;
             }
         }
@@ -4144,11 +4179,89 @@ impl SketchSession {
             }
         }
         Some(ChamferEditTopology {
+            angle,
             origin,
             cutbacks,
             carriers,
             far_points,
         })
+    }
+
+    fn chamfer_angle_topology(&self, a: EntityId, b: EntityId) -> Option<ChamferEditTopology> {
+        self.sketch.constraints().find_map(|(_, constraint)| {
+            let Constraint::Distance {
+                from, to: Some(to), ..
+            } = *constraint
+            else {
+                return None;
+            };
+            let topology = self.chamfer_edit_topology(from, to)?;
+            (topology.angle == Some((a, b))).then_some(topology)
+        })
+    }
+
+    fn angled_chamfer_positions(
+        &self,
+        topology: &ChamferEditTopology,
+        angle: f64,
+    ) -> Result<[Vec2; 2], SessionError> {
+        let corner = self.sketch.point_position(topology.origin).unwrap();
+        let far = topology
+            .far_points
+            .map(|point| self.sketch.point_position(point).unwrap());
+        let distance = self
+            .sketch
+            .constraints()
+            .find_map(|(cid, constraint)| {
+                if let Constraint::Distance {
+                    from,
+                    to: Some(to),
+                    value,
+                } = *constraint
+                {
+                    if (from == topology.origin && to == topology.cutbacks[0])
+                        || (to == topology.origin && from == topology.cutbacks[0])
+                    {
+                        return Some(self.sketch.dim_value(&cid, value));
+                    }
+                }
+                None
+            })
+            .unwrap_or_else(|| {
+                corner.distance(self.sketch.point_position(topology.cutbacks[0]).unwrap())
+            });
+        let result = crate::geomops::chamfer::chamfer_lines_with_angle(
+            &crate::geomops::chamfer::LineSeg {
+                a: corner,
+                b: far[0],
+            },
+            &crate::geomops::chamfer::LineSeg {
+                a: corner,
+                b: far[1],
+            },
+            distance,
+            angle,
+        )
+        .map_err(|error| {
+            SessionError::InvalidConstraint(match error {
+                crate::geomops::chamfer::ChamferError::AngleOutOfRange => {
+                    "Chamfer angle must be greater than 0° and less than 90°".into()
+                }
+                error => format!("chamfer: {error:?}").to_lowercase(),
+            })
+        })?;
+        Ok([result.point_on_l1, result.point_on_l2])
+    }
+
+    fn validate_chamfer_dimensions(&self) -> Result<(), SessionError> {
+        for (_, constraint) in self.sketch.constraints() {
+            if let Constraint::Angle { a, b, value } = *constraint {
+                if let Some(topology) = self.chamfer_angle_topology(a, b) {
+                    self.angled_chamfer_positions(&topology, value)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Put a newly requested relation on the nearest exact geometric branch
@@ -4364,6 +4477,15 @@ impl SketchSession {
                         .collect::<Vec<_>>();
                     for (point, position) in transformed {
                         set_point(&mut self.sketch, point, position);
+                    }
+                }
+                Constraint::Angle { a, b, value }
+                    if chamfer_edit && self.chamfer_angle_topology(a, b).is_some() =>
+                {
+                    let topology = self.chamfer_angle_topology(a, b).unwrap();
+                    if let Ok(positions) = self.angled_chamfer_positions(&topology, value) {
+                        set_point(&mut self.sketch, topology.cutbacks[0], positions[0]);
+                        set_point(&mut self.sketch, topology.cutbacks[1], positions[1]);
                     }
                 }
                 Constraint::Parallel { a, b }
@@ -4585,10 +4707,14 @@ impl SketchSession {
                             }) = self.chamfer_edit_topology(from, to)
                             {
                                 let corner = self.sketch.point_position(origin).unwrap();
+                                let measured = if from == origin { to } else { from };
+                                let old_distance =
+                                    corner.distance(self.sketch.point_position(measured).unwrap());
+                                let scale = value.abs() / old_distance;
                                 let positions = cutbacks.map(|point| {
-                                    let ray = self.sketch.point_position(point).unwrap() - corner;
-                                    let span = ray.x.hypot(ray.y);
-                                    corner + Vec2::new(ray.x / span, ray.y / span) * value.abs()
+                                    corner
+                                        + (self.sketch.point_position(point).unwrap() - corner)
+                                            * scale
                                 });
                                 set_point(&mut self.sketch, cutbacks[0], positions[0]);
                                 set_point(&mut self.sketch, cutbacks[1], positions[1]);
@@ -4823,6 +4949,14 @@ impl SketchSession {
                             line_lengths.insert(entity);
                         }
                     }
+                }
+                Constraint::Angle { a, b, .. }
+                    if chamfer_edit && self.chamfer_angle_topology(a, b).is_some() =>
+                {
+                    let topology = self.chamfer_angle_topology(a, b).unwrap();
+                    point_positions.insert(topology.origin);
+                    point_positions.extend(topology.far_points);
+                    line_angles.extend(topology.carriers);
                 }
                 Constraint::Parallel { a, b }
                 | Constraint::Perpendicular { a, b }

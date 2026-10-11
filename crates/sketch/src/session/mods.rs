@@ -22,6 +22,15 @@ const EPS: f64 = 1e-9;
 const CORNER_EPS: f64 = 1e-6;
 const TAU: f64 = std::f64::consts::TAU;
 
+pub(super) struct ResolvedChamfer {
+    l1: EntityId,
+    l2: EntityId,
+    pub(super) distance: f64,
+    pub(super) angle_deg: Option<f64>,
+    pub(super) p1: Vec2,
+    pub(super) p2: Vec2,
+}
+
 #[derive(Debug)]
 struct SweepTrim {
     kept: Vec<(f64, f64)>,
@@ -634,7 +643,7 @@ impl SketchSession {
     pub(super) fn resolve_chamfer(
         &self,
         request: &ChamferRequest,
-    ) -> Result<(EntityId, EntityId, f64, Vec2, Vec2), SessionError> {
+    ) -> Result<ResolvedChamfer, SessionError> {
         if !self.is_line_id(request.l1) || !self.is_line_id(request.l2) {
             return Err(SessionError::InvalidConstraint(
                 "Chamfer needs two lines".to_string(),
@@ -646,29 +655,62 @@ impl SketchSession {
             .unwrap();
         let l1_geom = self.line_seg(l1)?;
         let l2_geom = self.line_seg(l2)?;
-        let result = chamfer::chamfer_lines(
-            &chamfer::LineSeg {
-                a: l1_geom.a,
-                b: l1_geom.b,
-            },
-            &chamfer::LineSeg {
-                a: l2_geom.a,
-                b: l2_geom.b,
-            },
+        let angle_deg = request
+            .angle_text
+            .as_deref()
+            .map(|text| self.eval_text(text))
+            .transpose()?;
+        let first = chamfer::LineSeg {
+            a: l1_geom.a,
+            b: l1_geom.b,
+        };
+        let second = chamfer::LineSeg {
+            a: l2_geom.a,
+            b: l2_geom.b,
+        };
+        let result = if let Some(angle) = angle_deg {
+            chamfer::chamfer_lines_with_angle(&first, &second, distance, angle)
+        } else {
+            chamfer::chamfer_lines(&first, &second, distance, distance)
+        }
+        .map_err(|error| {
+            SessionError::InvalidConstraint(match error {
+                chamfer::ChamferError::AngleOutOfRange => {
+                    "Chamfer angle must be greater than 0° and less than 90°".into()
+                }
+                chamfer::ChamferError::IncompatibleAngle => {
+                    "Chamfer angle cannot connect these corner lines; reduce the angle".into()
+                }
+                error => format!("chamfer: {error:?}").to_lowercase(),
+            })
+        })?;
+        Ok(ResolvedChamfer {
+            l1,
+            l2,
             distance,
-            distance,
-        )
-        .map_err(|e| SessionError::InvalidConstraint(format!("chamfer: {e:?}").to_lowercase()))?;
-        Ok((l1, l2, distance, result.point_on_l1, result.point_on_l2))
+            angle_deg,
+            p1: result.point_on_l1,
+            p2: result.point_on_l2,
+        })
     }
 
     pub fn chamfer_preview(&self, request: &ChamferRequest) -> Result<PreviewCurve, SessionError> {
-        let (_, _, _, a, b) = self.resolve_chamfer(request)?;
-        Ok(PreviewCurve::Line { a, b })
+        let resolved = self.resolve_chamfer(request)?;
+        Ok(PreviewCurve::Line {
+            a: resolved.p1,
+            b: resolved.p2,
+        })
     }
 
     pub fn chamfer_lines(&mut self, request: &ChamferRequest) -> Result<ToolResult, SessionError> {
-        let (l1, l2, distance, p1, p2) = self.resolve_chamfer(request)?;
+        let ResolvedChamfer {
+            l1,
+            l2,
+            distance,
+            angle_deg,
+            p1,
+            p2,
+        } = self.resolve_chamfer(request)?;
         self.mutate_with_undo(move |s| {
             let v = line_vertex(&s.line_seg(l1)?, &s.line_seg(l2)?).unwrap();
             let corner1 = s.vertex_endpoint(l1, v);
@@ -680,13 +722,36 @@ impl SketchSession {
             let t2 = s.retarget_line_end(l2, v, p2);
             let corner = shared_corner.unwrap_or_else(|| s.sketch.add_generated_point(v));
             s.anchor_corner_reference(corner, l1, l2);
-            let line_id = s.sketch.add_entity(Entity::line(t1, t2));
-
-            s.sketch.add_constraint(Constraint::EqualDistance {
-                origin: corner,
-                a: t1,
-                b: t2,
+            let carrier = s.line_seg(l1)?;
+            let carrier_direction = carrier.b - carrier.a;
+            let bevel_direction = p2 - p1;
+            let reverse = angle_deg.is_some() && carrier_direction.dot(bevel_direction) < 0.0;
+            let line_id = s.sketch.add_entity(if reverse {
+                Entity::line(t2, t1)
+            } else {
+                Entity::line(t1, t2)
             });
+            let angle_constraint = if let Some(angle) = angle_deg {
+                let bevel_direction = if reverse { p1 - p2 } else { p2 - p1 };
+                let cross = carrier_direction.x * bevel_direction.y
+                    - carrier_direction.y * bevel_direction.x;
+                let (a, b) = if cross >= 0.0 {
+                    (l1, line_id)
+                } else {
+                    (line_id, l1)
+                };
+                Some(
+                    s.sketch
+                        .add_constraint(Constraint::Angle { a, b, value: angle }),
+                )
+            } else {
+                s.sketch.add_constraint(Constraint::EqualDistance {
+                    origin: corner,
+                    a: t1,
+                    b: t2,
+                });
+                None
+            };
             let param =
                 s.param_from_text_pub(ParamKind::Length, Some(&request.distance_text), distance)?;
             let corner_position = s.sketch.point_position(corner).unwrap_or(v);
@@ -712,7 +777,15 @@ impl SketchSession {
                 text_pos,
                 false,
             )?;
-            let _ = line_id;
+            if let Some(cid) = angle_constraint {
+                let angle = angle_deg.unwrap();
+                let param =
+                    s.param_from_text_pub(ParamKind::Angle, request.angle_text.as_deref(), angle)?;
+                let normal = Vec2::new(-bevel_direction.y, bevel_direction.x)
+                    * (6.0 / bevel_direction.length());
+                s.sketch
+                    .bind_dimension(cid, param, (p1 + p2) * 0.5 + normal);
+            }
             Ok(())
         })
     }
