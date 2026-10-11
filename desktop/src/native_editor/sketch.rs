@@ -455,6 +455,57 @@ mod tests {
     }
 
     #[test]
+    fn center_arc_overshoot_backtrack_final_click_preserves_a_true_full_turn() {
+        let center = Vec2::new(30., 40.);
+        let start = center + Vec2::new(10., 0.);
+        for sign in [-1., 1.] {
+            let mut manager = manager();
+            let mut draft = Draft::default();
+            draft.select(Some(CreateTool::ArcCenter));
+            draft.prepare(center, true).unwrap();
+            draft.prepare(start, true).unwrap();
+            for degrees in (10..=370).step_by(10) {
+                let angle = (sign * f64::from(degrees)).to_radians();
+                draft.track_arc_cursor(center + Vec2::new(angle.cos(), angle.sin()) * 10.);
+            }
+            // Backtrack to the start ray with no preceding pointer-move event.
+            // Preview must resolve that final point without consuming travel.
+            let outline = draft.outline(start);
+            let command = draft.prepare(start, true).unwrap().unwrap();
+            let expected_sweep = sign * std::f64::consts::TAU;
+            let sweep = command.arguments["sweep_rad"].as_f64().unwrap();
+            assert!((sweep - expected_sweep).abs() < 1e-9);
+            assert!(outline.first().unwrap()[0].distance(start) < 1e-8);
+            assert!(outline.last().unwrap()[1].distance(start) < 1e-8);
+            let result = apply(&mut manager, &command);
+            let arc = result["sketch"]["entities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entity| entity["kind"] == "arc")
+                .unwrap();
+            let a0 = arc["start_angle"].as_f64().unwrap();
+            let a1 = arc["end_angle"].as_f64().unwrap();
+            let radius = arc["radius"].as_f64().unwrap();
+            assert!((radius - 10.).abs() < 1e-9);
+            assert!((a1 - a0 - std::f64::consts::TAU).abs() < 1e-9);
+            for angle in [a0, a1] {
+                let endpoint = center + Vec2::new(angle.cos(), angle.sin()) * radius;
+                assert!(endpoint.distance(start) < 1e-8);
+            }
+            for (index, segment) in outline.iter().enumerate() {
+                for (end, point) in segment.iter().enumerate() {
+                    let t = (index + end) as f64 / outline.len() as f64;
+                    let t = if sign < 0. { 1. - t } else { t };
+                    let angle = a0 + (a1 - a0) * t;
+                    let expected = center + Vec2::new(angle.cos(), angle.sin()) * radius;
+                    assert!(point.distance(expected) < 1e-8, "{sign}: {point:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn center_arc_final_click_and_new_gestures_choose_their_own_direction() {
         let mut draft = Draft::default();
         draft.select(Some(CreateTool::ArcCenter));

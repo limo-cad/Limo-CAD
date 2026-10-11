@@ -24,7 +24,9 @@ impl ArcTravel {
     pub(super) fn advance(&mut self, angle: f64) -> f64 {
         let step = (angle - self.last_angle + PI).rem_euclid(TAU) - PI;
         self.last_angle = angle;
-        self.travel = (self.travel + step).clamp(-TAU, TAU);
+        // Keep overshoot so backtracking resolves against the actual pointer
+        // travel, rather than subtracting from an already capped full turn.
+        self.travel += step;
         if self.direction == 0. {
             if self.travel.abs() < DIRECTION_THRESHOLD {
                 return 0.;
