@@ -1,7 +1,7 @@
 //! Static exact interference from coherent selected native copies.
 use super::*;
-use limo_cad_assembly::{broad_phase_interference_pairs, InterferenceReportDto};
 use limo_cad_core::BodyId;
+use limo_cad_sketch::{broad_phase_interference_pairs, InterferenceReportDto};
 use std::{collections::BTreeMap, sync::Weak};
 
 struct SourceProof {

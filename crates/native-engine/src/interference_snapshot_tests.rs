@@ -1,6 +1,6 @@
 //! Independent physical overlap/clearance and private static source fences.
 use super::*;
-use limo_cad_assembly::{AssemblyTransformDto, SetOccurrencePoseRequestDto};
+use limo_cad_sketch::{AssemblyTransformDto, SetOccurrencePoseRequestDto};
 use limo_cad_solid::RecomputePlanDto;
 use serde_json::{json, Value};
 fn value(raw: String) -> Value {
@@ -90,7 +90,7 @@ fn detached_static_interference_preserves_repeated_poses_and_rejects_stale_sourc
         inner
             .manager
             .set_occurrence_pose(SetOccurrencePoseRequestDto {
-                occurrence_id: limo_cad_assembly::OccurrenceId(repeats[0]),
+                occurrence_id: limo_cad_sketch::OccurrenceId(repeats[0]),
                 local_pose: AssemblyTransformDto {
                     translation: [6., 0., 0.],
                     rotation: [0., 0., 0., 1.],
