@@ -2129,6 +2129,58 @@ class Kernel::Impl {
  public:
   std::map<std::uint64_t, TopoDS_Shape> bodies;
   std::set<std::uint64_t> imported_display_bodies;
+  std::map<std::uint64_t, std::uint64_t> body_generations;
+  // Job-connected bodies may share native subshapes (kept tools, Split outputs).
+  // Dependency groups are deliberately conservative; never inspect pointers.
+  std::map<std::uint64_t, std::uint64_t> body_groups;
+  std::uint64_t generation_clock = 0;
+  bool generations_exhausted = false;
+
+  void invalidate_job_bodies(const FfiJob& job) {
+    if (generations_exhausted ||
+        generation_clock == std::numeric_limits<std::uint64_t>::max()) {
+      generations_exhausted = true;
+      throw std::runtime_error("OCCT body generation space exhausted");
+    }
+    const auto generation = ++generation_clock;
+    // Inputs are conservative too: algorithms may alter shared native shape
+    // data before throwing. Never certify an attempted target as unchanged.
+    std::set<std::uint64_t> touched;
+    for (const auto id : job.target_body_ids) touched.insert(id);
+    for (const auto id : job.result_body_ids) touched.insert(id);
+    if (job.source_body_id != 0) touched.insert(job.source_body_id);
+    // New/unknown dispatch kinds must not inherit optimistic validity.
+    if (job.kind > 13)
+      for (const auto& body : bodies) touched.insert(body.first);
+    std::set<std::uint64_t> groups;
+    for (const auto id : touched) {
+      const auto found = body_groups.find(id);
+      if (found != body_groups.end()) groups.insert(found->second);
+    }
+    for (const auto& member : body_groups)
+      if (groups.count(member.second) != 0) touched.insert(member.first);
+    // Publish complete bookkeeping before mutation. Allocation failure cannot
+    // split an existing dependency group or certify a partially updated one.
+    auto next_groups = body_groups;
+    auto next_generations = body_generations;
+    for (const auto id : touched) {
+      next_groups[id] = generation;
+      next_generations[id] = generation;
+    }
+    body_groups.swap(next_groups);
+    body_generations.swap(next_generations);
+  }
+
+  void retire_missing_generations() {
+    for (auto at = body_generations.begin(); at != body_generations.end();) {
+      if (bodies.count(at->first) == 0) at = body_generations.erase(at);
+      else ++at;
+    }
+    for (auto at = body_groups.begin(); at != body_groups.end();) {
+      if (bodies.count(at->first) == 0) at = body_groups.erase(at);
+      else ++at;
+    }
+  }
 };
 
 Kernel::Kernel() : impl_(std::make_unique<Impl>()) {}
@@ -2137,9 +2189,23 @@ Kernel::~Kernel() = default;
 void Kernel::reset() {
   impl_->bodies.clear();
   impl_->imported_display_bodies.clear();
+  impl_->body_generations.clear();
+  impl_->body_groups.clear();
+  // Clock and exhaustion survive reset: replay/reused body IDs are successors.
 }
 
 void Kernel::apply_job(const FfiJob& job) {
+  try {
+    impl_->invalidate_job_bodies(job);
+    apply_job_impl(job);
+  } catch (...) {
+    impl_->retire_missing_generations();
+    throw;
+  }
+  impl_->retire_missing_generations();
+}
+
+void Kernel::apply_job_impl(const FfiJob& job) {
   // Generated/replaced bodies do not inherit the original STEP display policy.
   for (const auto body_id : job.result_body_ids)
     impl_->imported_display_bodies.erase(body_id);
@@ -3034,6 +3100,23 @@ rust::Vec<std::uint64_t> Kernel::body_ids() const {
   result.reserve(impl_->bodies.size());
   for (const auto& entry : impl_->bodies) {
     result.push_back(entry.first);
+  }
+  return result;
+}
+
+rust::Vec<FfiBodyGeneration> Kernel::body_generations() const {
+  if (impl_->generations_exhausted)
+    throw std::runtime_error("OCCT body generation space exhausted");
+  rust::Vec<FfiBodyGeneration> result;
+  result.reserve(impl_->bodies.size());
+  for (const auto& body : impl_->bodies) {
+    const auto found = impl_->body_generations.find(body.first);
+    if (found == impl_->body_generations.end() || found->second == 0)
+      throw std::runtime_error("OCCT live body has no geometry generation");
+    FfiBodyGeneration entry;
+    entry.body_id = body.first;
+    entry.generation = found->second;
+    result.push_back(entry);
   }
   return result;
 }

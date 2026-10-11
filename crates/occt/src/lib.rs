@@ -445,6 +445,16 @@ fn endpoint_order(endpoint: DrawingProjectionAnchorEndpoint) -> u8 {
 #[derive(Debug, Clone)]
 pub struct OcctError(pub String);
 
+/// In-process B-rep identity issued by one retained kernel. Not a persistent,
+/// cross-process or serialized identity, and not a tessellation-options key.
+/// Pair with BodyId and the caller's exact document receipt. Moves retain the
+/// owner; a replacement kernel and reset/replay cannot reuse earlier identities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KernelBodyGeometryIdentity {
+    pub kernel_owner: u64,
+    pub generation: u64,
+}
+
 /// One retained source B-rep placed as an assembly occurrence. The transform
 /// uses translation plus an x/y/z/w unit quaternion.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -478,6 +488,13 @@ pub struct OcctKernel;
 
 #[cfg(not(feature = "native-occt"))]
 impl OcctKernel {
+    pub fn body_geometry_identities(
+        &self,
+    ) -> Result<std::collections::BTreeMap<BodyId, KernelBodyGeometryIdentity>, OcctError> {
+        Err(OcctError(
+            "native OCCT support was not enabled at compile time".into(),
+        ))
+    }
     pub(crate) fn section_geometry(
         &self,
         _request: &section_review::SectionReviewRequest,
