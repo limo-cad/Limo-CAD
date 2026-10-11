@@ -1,4 +1,5 @@
 {
+  "measure_ci_source_checkpoint": {"source_revision":"0c0ec6e7d4e19f6ce1f8d34cc2a83773330c0fef","evidence":"docs/qualification/measure-ci-repair-20261011.json","new_headless_regressions_passed":2,"affected_windowless_gpu_regressions_passed":1,"new_live_ui_passes":0,"new_manual_mcp_passes":0,"existing_ui_mcp_leaf_statuses_preserved":true,"broader_run_state":"paused","new_ci_status":"pending fresh run"},
   "garden_bench_sheet_content_source_checkpoint": {
     "source_revision": "19840d61ece6a921c2a2708f76191c119c8d1884",
     "recorded_utc": "2026-10-11T15:58:57.4799178Z",
