@@ -1588,8 +1588,8 @@ pub(super) fn shortcut(
     if modal(world).is_some()
         || awaiting(world)
         || handle
-            .frame()
-            .is_some_and(|frame| !frame.modal_stack.is_empty())
+            .presented_pointer_context()
+            .is_some_and(|(_, modal_empty, _)| !modal_empty)
     {
         handle.record_file_shortcut(event, "blocked_modal_or_awaiting");
         return Ok(None);
