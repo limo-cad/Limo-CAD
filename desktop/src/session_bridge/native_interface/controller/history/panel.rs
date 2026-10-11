@@ -31,14 +31,30 @@ pub(crate) fn synchronize(
                 state.scroll = 0;
                 state.drag = None;
             }
-            let document = services.engine.document_snapshot();
+            let previous = state
+                .snapshot
+                .as_ref()
+                .filter(|(prior, _)| prior.owner == *owner)
+                .map(|(_, document)| document);
+            let document = services.bridge.with_native_document_receipt(
+                &services.engine,
+                owner,
+                |current| {
+                    if current != revision {
+                        return Err("The design changed; refresh feature history".into());
+                    }
+                    Ok(services
+                        .engine
+                        .with_document(|document| retain_history(document, previous)))
+                },
+            )?;
             if state
                 .selected
                 .is_some_and(|id| feature(&document, id).is_err())
             {
                 state.selected = None;
             }
-            state.snapshot = Some((receipt, Arc::new(document)));
+            state.snapshot = Some((receipt, document));
         }
         let document = state.snapshot.as_ref().unwrap().1.clone();
         let mut cameras = world.query_filtered::<Entity, With<InterfaceCamera>>();

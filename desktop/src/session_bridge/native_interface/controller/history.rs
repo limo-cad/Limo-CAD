@@ -2,7 +2,7 @@
 use super::chrome::{rect, Widgets};
 use super::*;
 use interface_shell::{fields, ribbon::Icon};
-use limo_cad_core::{DocumentDto, Feature, FeatureKind};
+use limo_cad_core::{Document, Feature, FeatureKind, FeatureTree};
 use limo_cad_interface::{ControlInput, KeyChord};
 use workspace::DocumentReceipt;
 mod drag;
@@ -104,7 +104,7 @@ struct Rename {
 }
 #[derive(Resource, Default)]
 struct History {
-    snapshot: Option<(DocumentReceipt, Arc<DocumentDto>)>,
+    snapshot: Option<(DocumentReceipt, Arc<FeatureTree>)>,
     selected: Option<u64>,
     menu: Option<Target>,
     delete: Option<Target>,
@@ -141,7 +141,16 @@ pub(super) fn pointer_active(world: &World) -> bool {
         .get_resource::<History>()
         .is_some_and(|state| state.drag.is_some())
 }
-fn feature(document: &DocumentDto, id: u64) -> Result<&Feature, String> {
+/// History rows and drag previews own only ordered features and the build cursor.
+/// They outlive the engine read, but do not retain browser/settings or geometry.
+fn retain_history(document: &Document, previous: Option<&Arc<FeatureTree>>) -> Arc<FeatureTree> {
+    if let Some(previous) = previous.filter(|previous| previous.as_ref() == document.features()) {
+        return Arc::clone(previous);
+    }
+    Arc::new(document.features().clone())
+}
+
+fn feature(document: &FeatureTree, id: u64) -> Result<&Feature, String> {
     document
         .features
         .iter()
