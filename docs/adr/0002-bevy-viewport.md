@@ -183,6 +183,12 @@ OCCT tessellation as their pivot. That presentation pivot is independent from
 the camera target reported to a 3Dconnexion driver; a driver-side automatic
 pivot update must not move it.
 
+Mouse orbit, Shift+trackpad swipes, the Orbit tool and orientation-dial drags
+rotate around the view's right and up axes without a vertical angle limit.
+The camera orientation turns with its position, so repeated full rotations
+pass smoothly through the top, bottom and inverted views. Pan follows the
+current screen axes, and zoom retains the current orientation.
+
 The macOS installed-driver path was calibrated against real cap motions on
 2026-07-31. Device input is canonicalized once at the adapter boundary:
 
