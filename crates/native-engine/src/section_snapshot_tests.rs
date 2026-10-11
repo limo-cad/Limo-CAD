@@ -85,10 +85,25 @@ fn detached_section_preserves_real_geometry_and_rejects_uncommitted_native_sourc
                 synchronous["probe_spans"],
                 serde_json::to_value(&report.probe_spans).unwrap()
             );
-        } else {
-            assert!(report.section.is_empty());
+        } else if outcome == SectionOutcome::BoundaryContact {
+            assert_eq!(report.bounds_mm.unwrap(), [0., 0., 18., 12.]);
+            assert!(!report.section.is_empty());
+            let perimeter: f64 = report
+                .section
+                .iter()
+                .flat_map(|line| line.points.windows(2))
+                .map(|pair| (pair[1][0] - pair[0][0]).hypot(pair[1][1] - pair[0][1]))
+                .sum();
+            assert!((perimeter - 60.).abs() < 1e-6);
             assert!(report.probe_spans.is_empty());
             assert!(report.cutaway.is_none());
+            assert!(report.svg.contains("Boundary contact"));
+        } else {
+            assert!(report.section.is_empty());
+            assert!(report.bounds_mm.is_none());
+            assert!(report.probe_spans.is_empty());
+            assert!(report.cutaway.is_none());
+            assert!(report.svg.is_empty());
         }
     }
     assert!(
