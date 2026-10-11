@@ -308,7 +308,7 @@ impl OcctKernel {
     pub fn new() -> Result<Self, OcctError> {
         static NEXT_GEOMETRY_OWNER: AtomicU64 = AtomicU64::new(1);
         let geometry_owner = NEXT_GEOMETRY_OWNER
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |owner| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |owner| {
                 owner.checked_add(1)
             })
             .map_err(|_| OcctError("OCCT kernel owner space exhausted".into()))?;
