@@ -66,13 +66,22 @@ export class ProjectTransitions {
     return this.revision;
   }
 
+  hasSnapshots(): boolean { return this.snapshots.size > 0; }
+
   assertSettled(revision: number): void {
     this.assertPublished(revision);
     if (this.pending.size) throw new Error(changedMessage());
   }
 
   assertPublished(revision: number): void {
-    if (!this.published || revision !== this.revision) throw new Error(changedMessage());
+    this.assertRevision(revision);
+    if (!this.published) throw new Error(changedMessage());
+  }
+
+  /** Replacement can recover an unpublished model, but cannot borrow consent
+   * from before a different native/UI transition. */
+  assertRevision(revision: number): void {
+    if (revision !== this.revision) throw new Error(changedMessage());
   }
 
   /** Publication may run inside its own applied inbox operation, after that

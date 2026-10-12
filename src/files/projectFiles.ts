@@ -310,10 +310,21 @@ export async function openProject(options?: { filePath: string; discardChanges?:
   assertNoFeatureEdit();
   let consentedOwner = captureProjectOwner();
   const state = consentedOwner.state;
+  // An explicit agent Open may queue behind a Save/Rename snapshot already in
+  // flight. Its name/clean-state publication may finish before replacement;
+  // this does not authorize edits or native/tab changes during file reading.
+  const pendingNameAdoption = options?.discardChanges === true && !options.interactive
+    && projectTransitions.hasSnapshots();
   const assertOpenOwner = () => {
     try {
-      consentedOwner.assertUnchanged();
-      if (useAppStore.getState().dirty !== consentedOwner.state.dirty) throw new Error('Dirtiness changed');
+      consentedOwner.assertReplacementSource(pendingNameAdoption);
+      const current = useAppStore.getState();
+      const before = consentedOwner.state;
+      const allowedDirtyPublication = pendingNameAdoption && (
+        before.dirty && !current.dirty
+        || before.document?.name !== current.document?.name
+      );
+      if (current.dirty !== before.dirty && !allowedDirtyPublication) throw new Error('Dirtiness changed');
     } catch { throw new Error(translate('file.errorDocumentChangedDuringOpen')); }
   };
   if (state.dirty && options && !options.discardChanges && !options.interactive) throw new Error(translate('file.errorReplaceNeedsSaveOrDiscard'));

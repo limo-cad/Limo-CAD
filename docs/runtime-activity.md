@@ -20,11 +20,11 @@ The safe-Rust launch broker holds an OS file lock and uses authenticated, bounde
 
 ## Verification
 
-Frontend tests cover startup completion, task ownership, silent abandonment, durable failures, nested/concurrent geometry work, frame readiness, and four-locale copy. Browser checks of the production Open path hold file IPC while an edit or tab replacement occurs; both reject stale consent before native replacement. Native library verification records **130 passed, 0 failed, 6 intentionally ignored**.
+Frontend tests cover startup completion, task ownership, silent abandonment, durable failures, nested/concurrent geometry work, frame readiness, and four-locale copy. Browser checks of the production Open path reject stale consent across document, tab, CAM, named-view, and native-transition changes, including an Open queued behind a snapshot. Recovery can replace an unpublished native model while Save and export remain guarded. Save/Rename publication already in flight is preserved before a queued explicit replacement. Native library verification records **130 passed, 0 failed, 6 intentionally ignored**.
 
 Thunder Windows checks cover empty startup, a file forwarded during startup, the rendered sample and its four history entries, ordinary reuse, explicit New Window, unsaved-change cancellation, viewport interaction, Activity Escape/focus, and missing-file errors preserving the loaded document. Four localized Activity layouts fit a 1280 × 800 viewport without horizontal overflow.
 
-[Native verification artifact](startup-measurements/runtime-native-staging-keyboard-final.json) · [Document replacement verification artifact](startup-measurements/runtime-native-staging-final.json) · [Frontend test results](startup-measurements/runtime-frontend-tests.log) · [Native test results](startup-measurements/runtime-native-tests.log) · [Locale layout results](startup-measurements/captures/runtime/layout-checks.json)
+[Native verification artifact](startup-measurements/runtime-native-staging-keyboard-final.json) · [Document replacement verification artifact](startup-measurements/runtime-native-staging-final.json) · [Frontend test results](startup-measurements/runtime-frontend-tests.log) · [UI contract results](startup-measurements/runtime-ui-contracts.log) · [Native test results](startup-measurements/runtime-native-tests.log) · [Locale layout results](startup-measurements/captures/runtime/layout-checks.json)
 
 ## Visuals
 

@@ -25,14 +25,14 @@ rendering chunks...
 (!) C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/materials/index.ts is dynamically imported by C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/files/projectFiles.ts but also statically imported by C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/BodyAppearancePanel.tsx, dynamic import will not move module into another chunk.
 
 computing gzip size...
-dist/index.html                     3.46 kB │ gzip:   1.18 kB
+dist/index.html                     3.46 kB │ gzip:   1.19 kB
 dist/assets/index-DmDvVTwo.css     52.63 kB │ gzip:  10.69 kB
-dist/assets/tauri-AzBfl3bh.js      15.10 kB │ gzip:   3.36 kB
-dist/assets/index-DmkvXk7F.js   2,396.61 kB │ gzip: 685.00 kB
+dist/assets/tauri-DeGM3JfF.js      15.10 kB │ gzip:   3.36 kB
+dist/assets/index-Bu8Kiw8v.js   2,397.34 kB │ gzip: 685.17 kB
 
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
-✓ built in 10.87s
+✓ built in 8.31s
 Desktop frontend contains no browser WASM assets.
