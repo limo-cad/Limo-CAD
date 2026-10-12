@@ -176,6 +176,7 @@ mod ffi {
         keep_positive: bool,
         deflection: f64,
         include_cutaway: bool,
+        retain_unintersected: bool,
         timeout_ms: u64,
         contour_points: u32,
         vertices: u32,
@@ -306,6 +307,15 @@ impl DetachedSectionKernel {
     {
         crate::section_review::inspect_kernel(&self.0, request)
     }
+    /// Viewport clipping includes whole retained solids and empty discarded sides.
+    /// The single-body inspection API keeps its contact-only report semantics.
+    pub fn inspect_retained(
+        &self,
+        request: &crate::section_review::SectionReviewRequest,
+    ) -> Result<crate::section_review::SectionReview, crate::section_review::SectionReviewError>
+    {
+        crate::section_review::inspect_retained_kernel(&self.0, request)
+    }
 }
 impl DetachedMeshKernel {
     /// Exact AP242 output from independently owned selected B-reps.
@@ -338,6 +348,13 @@ impl OcctKernel {
         &self,
         request: &crate::section_review::SectionReviewRequest,
     ) -> Result<crate::section_review::SectionGeometry, OcctError> {
+        self.section_geometry_retained(request, false)
+    }
+    pub(crate) fn section_geometry_retained(
+        &self,
+        request: &crate::section_review::SectionReviewRequest,
+        retain_unintersected: bool,
+    ) -> Result<crate::section_review::SectionGeometry, OcctError> {
         request.validate().map_err(OcctError)?;
         let raw = self
             .inner
@@ -349,6 +366,7 @@ impl OcctKernel {
                     keep_positive: request.keep_positive,
                     deflection: request.deflection_mm,
                     include_cutaway: request.include_cutaway,
+                    retain_unintersected,
                     timeout_ms: 30_000,
                     contour_points: 100_000,
                     vertices: 1_000_000,
@@ -2407,6 +2425,7 @@ mod tests {
             keep_positive: false,
             deflection: 0.01,
             include_cutaway: true,
+            retain_unintersected: false,
             timeout_ms: 30_000,
             contour_points: 100_000,
             vertices: 1_000_000,
