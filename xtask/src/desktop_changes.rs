@@ -39,6 +39,7 @@ impl Builds {
         .iter()
         .any(|prefix| path.starts_with(prefix))
             || [
+                ".gitattributes",
                 "Cargo.toml",
                 "Cargo.lock",
                 "VERSION",
@@ -406,6 +407,7 @@ mod tests {
             "assets/ribbon-icons/save.svg",
             ".cargo/config.toml",
             ".cargo/tools.toml",
+            ".gitattributes",
             "crates/occt/sdk.rs",
             "native/occt-overlay/opencascade/math_DoubleTab.lxx",
             "vcpkg-configuration.json",

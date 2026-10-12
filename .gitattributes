@@ -1,0 +1,19 @@
+# Release evidence hashes actual input bytes. Keep these text inputs identical
+# in Windows producers and Unix verification jobs, even with core.autocrlf=true.
+.gitattributes text eol=lf
+VERSION text eol=lf
+Cargo.lock text eol=lf
+**/Cargo.lock text eol=lf
+Cargo.toml text eol=lf
+**/Cargo.toml text eol=lf
+rust-toolchain.toml text eol=lf
+vcpkg.json text eol=lf
+vcpkg-configuration.json text eol=lf
+native/occt-overlay/** text eol=lf
+xtask/src/sbom.rs text eol=lf
+xtask/src/sbom/** text eol=lf
+xtask/src/occt_sdk.rs text eol=lf
+xtask/src/package/** text eol=lf
+.github/actions/setup-release-sbom/** text eol=lf
+.github/actions/release-sbom/** text eol=lf
+.github/workflows/desktop-packages.yml text eol=lf

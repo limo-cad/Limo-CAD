@@ -159,6 +159,9 @@ ease of use**, in that order. Bring a part, a reproducible bug or a focused
 improvement. [Contributing](CONTRIBUTING.md) · [Developer setup](docs/DEVELOPMENT.md)
 · [Documentation](docs/INDEX.md)
 
+[Security policy](SECURITY.md) · [Release SBOMs](docs/security/sboms.md)
+· [CISA/NIST practices](docs/security/cisa-nist.md)
+
 Questions, ideas, or something you made? Start a thread in
 [Discussions](https://github.com/limo-cad/Limo-CAD/discussions). If Limo CAD
 is useful to you, a star helps other people find it.

@@ -89,14 +89,19 @@ carriers disagree with `VERSION`.
 4. **The tag publishes itself.** A `v*` tag makes `desktop-packages.yml` build the
    Windows x64 and ARM64 portable ZIPs, the signed and notarized macOS DMG and the
    Ubuntu DEB and AppImage with `LIMO_CAD_BUILD_CHANNEL` set to the tag name. When all
-   four succeed, its `publish_release` job then:
+   builders and the newer-host AppImage check succeed, the release security job
+   verifies all five final-package SBOMs and checks current RustSec/native
+   advisories. Its `publish_release` job then:
 
    - checks every package against its `.sha256` and fails if any of the five is
      missing, so a release cannot go out with a gap;
+   - verifies each inventory's archive/source identity and signed SBOM/build
+     evidence against this repository, workflow, tag and source commit;
    - creates the GitHub release **as a draft** from `docs/release-notes/<tag>.md`,
      substituting `{{commit}}` with the tagged revision;
-   - uploads the packages, their checksums and a generated `SHA256SUMS.txt`, and
-     only when all eleven assets are attached publishes the draft (a `-rc.1` tag
+   - uploads the packages, their checksums, the six SBOM/evidence sidecars for
+     each package and a generated `SHA256SUMS.txt`, and only when all 41 assets
+     are attached publishes the draft (a `-rc.1` tag
      is published as a pre-release and does not take the Latest badge), then
      writes the asset list to the run summary.
 
@@ -106,6 +111,10 @@ carriers disagree with `VERSION`.
    duplicating it, as long as the run's build artifacts still exist (they are
    kept for seven days; after that, tag a new version). The job requests
    `contents: write` for itself only; the repository default stays read-only.
+   Package builders request `id-token: write` and `attestations: write` to sign
+   pushed-tag evidence. PR/manual builds generate unsigned inventories. See
+   [SBOM generation and verification](security/sboms.md) and the
+   [security review record](security/dependencies.md) before tagging.
 
    If a package build fails, the publish job is skipped and the tag ships no
    release: fix `main`, then tag again with a new version rather than reusing the

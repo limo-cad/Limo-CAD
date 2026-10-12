@@ -1,0 +1,18 @@
+name: Set up pinned native advisory scanner
+description: Install a checksum-verified Linux Grype executable.
+runs:
+  using: composite
+  steps:
+    - name: Install verified Grype 0.120.1
+      shell: bash
+      run: |
+        set -euo pipefail
+        test "$RUNNER_OS/$RUNNER_ARCH" = Linux/X64
+        tool_dir="$RUNNER_TEMP/limo-grype"
+        mkdir -p "$tool_dir"
+        curl --proto '=https' --tlsv1.2 --fail --location --retry 3 \
+          https://github.com/anchore/grype/releases/download/v0.120.1/grype_0.120.1_linux_amd64.tar.gz \
+          -o "$tool_dir/grype.tar.gz"
+        printf '%s  %s\n' 0a9ee97ef5ae2ee953b0a80098105052e846cdbe319a57d808b519c33cd1343d "$tool_dir/grype.tar.gz" | sha256sum -c -
+        tar -xzf "$tool_dir/grype.tar.gz" -C "$tool_dir" grype
+        echo "$tool_dir" >> "$GITHUB_PATH"

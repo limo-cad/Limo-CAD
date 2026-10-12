@@ -51,6 +51,17 @@ pub(super) struct Package {
 }
 impl Package {
     pub fn new() -> Result<Self> {
+        if env::var("LIMO_CAD_AUDITABLE").as_deref() == Ok("1") {
+            ensure!(
+                env::var("LIMO_CAD_AUDITABLE_VERSION").as_deref()
+                    == Ok(crate::sbom::AUDITABLE_VERSION),
+                "install the pinned cargo-auditable {} and set LIMO_CAD_AUDITABLE_VERSION",
+                crate::sbom::AUDITABLE_VERSION
+            );
+            // cargo-auditable forwards --version to Cargo; its installer records
+            // the checksum-verified tool version separately.
+            output(crate::build_tools::cargo().args(["auditable", "--version"]))?;
+        }
         let root = super::super::release_tooling::root().canonicalize()?;
         let desktop = root.join("desktop");
         let target = env::var_os("CARGO_TARGET_DIR")
@@ -81,6 +92,11 @@ impl Package {
     pub fn cargo(&self) -> Command {
         let mut command = crate::build_tools::cargo();
         command.current_dir(&self.root);
+        // Release CI embeds the dependency graph in the executable itself, so
+        // a package SBOM describes this build's crates, features and target.
+        if env::var("LIMO_CAD_AUDITABLE").as_deref() == Ok("1") {
+            command.arg("auditable");
+        }
         command.args([
             "build",
             "--manifest-path",

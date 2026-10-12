@@ -88,3 +88,5 @@ vcpkg_install_copyright(
         "${SOURCE_PATH}/LICENSE_LGPL_21.txt"
         "${SOURCE_PATH}/OCCT_LGPL_EXCEPTION.txt"
 )
+
+include("${CMAKE_CURRENT_LIST_DIR}/write-sbom.cmake")

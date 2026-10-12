@@ -81,6 +81,11 @@ jobs:
     env:
       CARGO_PROFILE_RELEASE_STRIP: symbols
 
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
     steps:
       - name: Check out Limo CAD
         uses: actions/checkout@v4
@@ -107,6 +112,9 @@ jobs:
         run: cargo xtask materials --fetch --check
       - name: Fetch and verify embedded printer profiles
         run: cargo xtask printer-profiles --fetch --check
+
+      - name: Set up release SBOM tools
+        uses: ./.github/actions/setup-release-sbom
 
       - name: Build portable ZIP
         shell: pwsh
@@ -205,6 +213,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Generate release SBOMs and tag attestations
+        uses: ./.github/actions/release-sbom
+        with:
+          artifact: desktop/target/${{ matrix.rust_target }}/release/bundle/portable/*.zip
+          sdk: ${{ steps.occt.outputs.root }}
+          target: ${{ matrix.rust_target }}
+
       - name: Upload portable release
         uses: actions/upload-artifact@v4
         with:
@@ -212,6 +227,8 @@ jobs:
           path: |
             desktop/target/${{ matrix.rust_target }}/release/bundle/portable/*.zip
             desktop/target/${{ matrix.rust_target }}/release/bundle/portable/*.sha256
+            desktop/target/${{ matrix.rust_target }}/release/bundle/portable/*.zip.sbom.*
+            desktop/target/${{ matrix.rust_target }}/release/bundle/portable/*.zip.provenance.sigstore.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -225,6 +242,11 @@ jobs:
     env:
       CARGO_INCREMENTAL: 0
       CARGO_PROFILE_RELEASE_STRIP: symbols
+
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
 
     steps:
       - name: Check out Limo CAD
@@ -260,6 +282,9 @@ jobs:
         run: cargo xtask materials --fetch --check
       - name: Fetch and verify embedded printer profiles
         run: cargo xtask printer-profiles --fetch --check
+
+      - name: Set up release SBOM tools
+        uses: ./.github/actions/setup-release-sbom
 
       - name: Build and audit Linux packages
         shell: bash
@@ -320,6 +345,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Generate release SBOMs and tag attestations
+        uses: ./.github/actions/release-sbom
+        with:
+          artifact: desktop/target/release/bundle/deb/*.deb
+          sdk: ${{ env.OCCT_ROOT }}
+          target: x86_64-unknown-linux-gnu
+
       - name: Upload Ubuntu release
         uses: actions/upload-artifact@v4
         with:
@@ -327,6 +359,8 @@ jobs:
           path: |
             desktop/target/release/bundle/deb/*.deb
             desktop/target/release/bundle/deb/*.deb.sha256
+            desktop/target/release/bundle/deb/*.deb.sbom.*
+            desktop/target/release/bundle/deb/*.deb.provenance.sigstore.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -344,6 +378,11 @@ jobs:
       DEBIAN_FRONTEND: noninteractive
       OCCT_ROOT: /opt/opencascade
       LD_LIBRARY_PATH: /opt/opencascade/lib
+
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
 
     steps:
       - name: Install Ubuntu 22.04 build SDK
@@ -450,6 +489,9 @@ jobs:
       - name: Fetch and verify embedded printer profiles
         run: cargo xtask printer-profiles --fetch --check
 
+      - name: Set up release SBOM tools
+        uses: ./.github/actions/setup-release-sbom
+
       - name: Build and audit the AppImage
         shell: bash
         run: |
@@ -507,6 +549,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Generate release SBOMs and tag attestations
+        uses: ./.github/actions/release-sbom
+        with:
+          artifact: desktop/target/release/bundle/appimage/*.AppImage
+          sdk: ${{ env.OCCT_ROOT }}
+          target: x86_64-unknown-linux-gnu
+
       - name: Upload AppImage release
         uses: actions/upload-artifact@v4
         with:
@@ -514,6 +563,8 @@ jobs:
           path: |
             desktop/target/release/bundle/appimage/*.AppImage
             desktop/target/release/bundle/appimage/*.AppImage.sha256
+            desktop/target/release/bundle/appimage/*.AppImage.sbom.*
+            desktop/target/release/bundle/appimage/*.AppImage.provenance.sigstore.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -609,6 +660,11 @@ jobs:
             (github.event_name == 'workflow_dispatch' && inputs.macos_signing == 'production') }}
       CARGO_PROFILE_RELEASE_STRIP: symbols
 
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
     steps:
       - name: Check out Limo CAD
         uses: actions/checkout@v4
@@ -634,6 +690,9 @@ jobs:
 
       - name: Install checked OpenCASCADE 7.9.3
         uses: ./.github/actions/setup-unix-occt
+
+      - name: Set up release SBOM tools
+        uses: ./.github/actions/setup-release-sbom
 
       - name: Import Developer ID Application certificate
         if: env.MACOS_DISTRIBUTION_BUILD == 'true'
@@ -837,6 +896,13 @@ jobs:
             shasum -a 256 "$dmg_name" > "$dmg_name.sha256"
           )
 
+      - name: Generate release SBOMs and tag attestations
+        uses: ./.github/actions/release-sbom
+        with:
+          artifact: desktop/target/release/bundle/dmg/*.dmg
+          sdk: ${{ env.OCCT_ROOT }}
+          target: aarch64-apple-darwin
+
       - name: Upload Apple silicon release
         uses: actions/upload-artifact@v4
         with:
@@ -844,6 +910,8 @@ jobs:
           path: |
             desktop/target/release/bundle/dmg/*.dmg
             desktop/target/release/bundle/dmg/*.sha256
+            desktop/target/release/bundle/dmg/*.dmg.sbom.*
+            desktop/target/release/bundle/dmg/*.dmg.provenance.sigstore.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -857,6 +925,53 @@ jobs:
             "$RUNNER_TEMP/limo-cad-signing-certificate.p12" \
             "$RUNNER_TEMP/limo-cad-notary-api-key.p8"
 
+  release_security:
+    name: Verify release inventories and dependency advisories
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows-portable, build-linux-ubuntu, build-linux-appimage, build-macos-apple-silicon]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup-rust
+      - name: Check all locked Rust dependencies
+        uses: ./.github/actions/audit-rust
+      - uses: ./.github/actions/setup-grype
+      - name: Download this run's packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: Limo-CAD-*
+          path: dist
+          merge-multiple: false
+      - name: Verify complete SBOM coverage and archive identities
+        run: cargo xtask sbom verify --directory dist --require-release-evidence
+      - name: Check native and compiled release advisories
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          checked=0
+          while IFS= read -r sbom; do
+            report="security-reports/$(basename "$sbom").grype.json"
+            if grype "sbom:$sbom" --fail-on high --output json > "$report"; then
+              echo "Advisories: $(basename "$sbom") passed the high/critical gate"
+            else
+              echo "::error::Release advisory scan failed; inspect $report."
+              failed=1
+            fi
+            checked=$((checked + 1))
+          done < <(find dist -type f -name '*.sbom.cdx.json' | sort)
+          test "$checked" -eq 5
+          exit "$failed"
+      - name: Retain all release findings and maintenance warnings
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-security-reports-${{ github.sha }}
+          path: security-reports
+          if-no-files-found: error
+          retention-days: 90
+
   publish_release:
     name: Publish the tag release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -866,10 +981,12 @@ jobs:
       - build-linux-appimage
       - verify-linux-appimage
       - build-macos-apple-silicon
+      - release_security
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
+      attestations: read
     steps:
       - name: Check out Limo CAD
         uses: actions/checkout@v4
@@ -906,6 +1023,23 @@ jobs:
           mapfile -t packages < <(find dist -type f -name '*.zip' ! -path '*diagnostics*' | sort)
           python3 scripts/ci/verify-default-windows-package.py --version "$(cat VERSION)" --revision "$GITHUB_SHA" "${packages[@]}"
 
+      - name: Verify inventories and their signed release identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cargo xtask sbom verify --directory dist --require-release-evidence
+          identity=(--repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/desktop-packages.yml" --source-ref "$GITHUB_REF" --source-digest "$GITHUB_SHA" --deny-self-hosted-runners)
+          while IFS= read -r archive; do
+            gh attestation verify "$archive" --bundle "$archive.sbom.sigstore.json" --predicate-type https://cyclonedx.org/bom "${identity[@]}"
+            for subject in "$archive" "$archive.sbom.cdx.json" "$archive.sbom.spdx.json" "$archive.sbom.metadata.json" "$archive.sbom.SHA256SUMS.txt"; do
+              gh attestation verify "$subject" --bundle "$archive.provenance.sigstore.json" "${identity[@]}"
+            done
+          done < <(find dist -type f \
+            \( -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' \) \
+            ! -path '*diagnostics*' | sort)
+
       - name: Publish packages, checksums and notes
         shell: bash
         env:
@@ -928,6 +1062,12 @@ jobs:
           test "${#binaries[@]}" -eq 5
           sums=()
           while IFS= read -r sum; do sums+=("$sum"); done < <(find dist -type f -name '*.sha256' ! -path '*diagnostics*' | sort)
+
+          inventories=()
+          while IFS= read -r inventory; do inventories+=("$inventory"); done < <(find dist -type f \
+            \( -name '*.sbom.*' -o -name '*.provenance.sigstore.json' \) \
+            ! -path '*diagnostics*' | sort)
+          test "${#inventories[@]}" -eq 30
 
           : > dist/SHA256SUMS.txt
           for binary in "${binaries[@]}"; do
@@ -954,10 +1094,10 @@ jobs:
               --draft
           fi
 
-          gh release upload "$tag" "${binaries[@]}" "${sums[@]}" dist/SHA256SUMS.txt --clobber
+          gh release upload "$tag" "${binaries[@]}" "${sums[@]}" "${inventories[@]}" dist/SHA256SUMS.txt --clobber
 
           uploaded="$(gh release view "$tag" --json assets --jq '.assets | length')"
-          test "$uploaded" -eq 11
+          test "$uploaded" -eq 41
           gh release edit "$tag" --draft=false "${channel[@]}"
 
           {

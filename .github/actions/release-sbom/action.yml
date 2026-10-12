@@ -1,0 +1,60 @@
+name: Generate and attest the finished release inventory
+description: Extract one final archive, inventory its compiled and native dependencies, and attest tag releases.
+inputs:
+  artifact:
+    description: Glob matching exactly one finished release archive.
+    required: true
+  sdk:
+    description: Checked OCCT SDK prefix used for this package.
+    required: true
+  target:
+    description: Rust target triple of the finished package.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Inventory the finished release archive
+      id: sbom
+      shell: bash
+      env:
+        LIMO_SBOM_GLOB: ${{ inputs.artifact }}
+        LIMO_SBOM_SDK: ${{ inputs.sdk }}
+        LIMO_SBOM_TARGET: ${{ inputs.target }}
+      run: |
+        set -euo pipefail
+        # checkout's temporary HOME does not persist its safe.directory setting
+        # for later shell steps in the root-owned AppImage container.
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        archives=()
+        while IFS= read -r archive; do archives+=("$archive"); done < <(compgen -G "$LIMO_SBOM_GLOB" | sort)
+        test "${#archives[@]}" -eq 1
+        cargo xtask sbom release --artifact "${archives[0]}" --sdk "$LIMO_SBOM_SDK" --target "$LIMO_SBOM_TARGET" --github-output
+    - name: Sign the CycloneDX inventory for the archive
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+      id: sbom_attestation
+      uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
+      with:
+        subject-path: ${{ steps.sbom.outputs.artifact }}
+        sbom-path: ${{ steps.sbom.outputs.cdx }}
+    - name: Sign the archive and every inventory sidecar
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+      id: provenance
+      uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+      with:
+        subject-path: |
+          ${{ steps.sbom.outputs.artifact }}
+          ${{ steps.sbom.outputs.cdx }}
+          ${{ steps.sbom.outputs.spdx }}
+          ${{ steps.sbom.outputs.metadata }}
+          ${{ steps.sbom.outputs.checksums }}
+    - name: Keep portable signed evidence alongside the archive
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+      shell: bash
+      env:
+        LIMO_SBOM_ARCHIVE: ${{ steps.sbom.outputs.artifact }}
+        LIMO_SBOM_BUNDLE: ${{ steps.sbom_attestation.outputs.bundle-path }}
+        LIMO_PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+      run: |
+        set -euo pipefail
+        cp "$LIMO_SBOM_BUNDLE" "$LIMO_SBOM_ARCHIVE.sbom.sigstore.json"
+        cp "$LIMO_PROVENANCE_BUNDLE" "$LIMO_SBOM_ARCHIVE.provenance.sigstore.json"
