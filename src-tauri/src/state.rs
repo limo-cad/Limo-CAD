@@ -749,13 +749,8 @@ impl AppState {
             &assembly,
             &request,
             |r| {
-                let projection = nbcad_occt::project_drawing(
-                    &inner.kernel,
-                    scene,
-                    &assembly,
-                    r,
-                )
-                .map_err(|e| e.to_string())?;
+                let projection = nbcad_occt::project_drawing(&inner.kernel, scene, &assembly, r)
+                    .map_err(|e| e.to_string())?;
                 completed(r, &projection);
                 Ok(projection)
             },

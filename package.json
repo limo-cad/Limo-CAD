@@ -14,7 +14,7 @@
   },
   "type": "module",
   "scripts": {
-    "test:startup": "tsx src/startup.test.ts && tsx src/files/documentLoadProgress.test.ts && node --test scripts/test-startup-bootstrap.mjs",
+    "test:startup": "tsx src/startup.test.ts && tsx src/files/documentLoadProgress.test.ts && tsx src/files/documentFrameReadiness.test.ts && tsx src/runtimeActivity.test.ts && tsx src/engine/runtimeFeedback.test.ts && node --test scripts/test-startup-bootstrap.mjs",
     "tauri": "tauri",
     "dev": "vite",
     "dev:bevy-ui:capture": "node scripts/capture-bevy-ui.mjs",

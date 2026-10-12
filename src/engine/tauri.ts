@@ -7,6 +7,7 @@
  */
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import {trackEngineOperation, trackEngineRead} from './activity';
+import { withParentGeometryActivity, withRuntimeCommandFeedback } from './runtimeFeedback';
 const readOnlyCommands = new Set([
   'engine_project_visibility',
   'engine_active_sketch',
@@ -153,11 +154,13 @@ export class TauriEngine implements Engine {
   readonly kind = 'tauri' as const;
 
   private async call<T>(command: string, payload?: unknown): Promise<T> {
-    const json =
-      payload === undefined
-        ? await invoke<string>(command)
-        : await invoke<string>(command, { payload: JSON.stringify(payload) });
-    return unwrapEnvelope(json);
+    return withRuntimeCommandFeedback(command, async () => {
+      const json =
+        payload === undefined
+          ? await invoke<string>(command)
+          : await invoke<string>(command, { payload: JSON.stringify(payload) });
+      return unwrapEnvelope<T>(json);
+    });
   }
 
   async getDocument(): Promise<DocumentDto> {
@@ -681,7 +684,10 @@ export class TauriEngine implements Engine {
       throw new ProjectLoadError(unchanged ? 'unchanged' : 'unverified', error);
     }
     try {
-      return await restoreLoadedDatumHistoryFrames(this, update);
+      return await restoreLoadedDatumHistoryFrames({
+        datumPlaneDefinitions: () => this.datumPlaneDefinitions(),
+        setRollback: (index) => withParentGeometryActivity(() => this.setRollback(index)),
+      }, update);
     } catch (error) {
       // The new document is already committed. Repair may itself have changed
       // the rollback stage; never classify this as an atomic load rejection.

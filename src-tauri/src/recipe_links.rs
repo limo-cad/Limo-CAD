@@ -2,7 +2,7 @@
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::sync::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 
 #[derive(Clone, Serialize)]
@@ -53,20 +53,23 @@ pub fn native_recipe_open_ack(state: tauri::State<'_, RecipeLinkState>, id: u64)
 }
 
 fn enqueue(app: &tauri::AppHandle, uri: &str) {
-    let state = app.state::<RecipeLinkState>();
-    match state.0.lock().unwrap().push(uri) {
-        Ok(()) => {
-            let _ = app.emit("recipe-open-pending", ());
-        }
-        Err(error) => eprintln!("Recipe link rejected: {error}"),
-    };
+    let result =
+        crate::launch_requests::LaunchTarget::from_argument(uri, std::path::Path::new("/"))
+            .and_then(|target| crate::launch_requests::enqueue(app, &[target]));
+    if let Err(error) = result {
+        eprintln!("Recipe link rejected: {error}");
+    }
 }
 
 pub fn install(app: &tauri::AppHandle) {
-    // The plugin owns OS registration and macOS URL delivery. Do not install a
-    // global single-instance lock: independent CAD/recording processes are valid.
+    // OS links share the retained startup-ready launch queue. Explicit new
+    // windows and isolated diagnostic profiles do not share a relaunch broker.
     #[cfg(any(target_os = "windows", target_os = "linux"))]
-    if !cfg!(debug_assertions) {
+    if !cfg!(debug_assertions)
+        && !app
+            .state::<crate::launch_requests::LaunchRequestsState>()
+            .isolated
+    {
         if let Err(error) = app.deep_link().register_all() {
             eprintln!("Could not register recipe links: {error}");
         }

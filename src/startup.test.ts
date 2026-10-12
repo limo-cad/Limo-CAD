@@ -1,5 +1,6 @@
-import { usesNativeStartup, workspaceIsReady, workspaceLayoutIsReady, startupApplicationPhase, type RenderReadiness } from './startup';
+import { completeStartup, startupFailed, useStartupStore, usesNativeStartup, workspaceIsReady, workspaceLayoutIsReady, startupApplicationPhase, type RenderReadiness } from './startup';
 import { beginDocumentLoad, currentDocumentLoad, useDocumentLoadStore } from './files/documentLoadProgress';
+import { initializeStartupDocument } from './startupInitialization';
 import { projectModelDifference } from './engine/projectModelComparison';
 import en from './i18n/en.json';
 import zhCN from './i18n/zh-CN.json';
@@ -70,6 +71,21 @@ assert(!ready({ ...rendered, geometryRevision: 3 }), 'A prior rendered model mus
 assert(!ready({ ...rendered, modelSessionId: 'another-document' }), 'A successful frame for a different document must not reveal the workspace.');
 assert(!ready({ ...rendered, startupError: 'pipeline compilation failed' }), 'A rendering failure must never be hidden by an earlier successful frame.');
 assert(!workspaceIsReady(true, true, null, rendered, 4), 'An unbound bootstrap document must not be considered usable.');
+
+const initialStartup = useStartupStore.getState();
+assert(!completeStartup(), 'Startup cannot latch before its required document is prepared.');
+startupFailed(new Error('initial document failed'), 'document');
+assert(!completeStartup(), 'An initial failure must retain recovery instead of latching ready.');
+useStartupStore.setState({ documentReady: true, error: null });
+assert(completeStartup() && useStartupStore.getState().completed, 'Verified startup completion must latch for this session.');
+startupFailed(new Error('later runtime failure'), 'renderer');
+assert(useStartupStore.getState().phase === 'ready' && useStartupStore.getState().error === null,
+  'A later operation failure must never replace the ready workspace with the startup screen.');
+const completedStartup = useStartupStore.getState();
+void initializeStartupDocument(true);
+assert(useStartupStore.getState() === completedStartup,
+  'A remount or stale empty-recovery action after completion must not reset the document or startup state.');
+useStartupStore.setState(initialStartup);
 
 const dictionaries = { en, 'zh-CN': zhCN, es, de };
 assert(Object.values(en.startup).every((copy) => !/\p{Script=Han}/u.test(copy)),

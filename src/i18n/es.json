@@ -1,4 +1,40 @@
 {
+  "runtimeActivity": {
+    "title": "Actividad",
+    "current": "En curso",
+    "recent": "Actividad reciente",
+    "empty": "No hay actividad reciente.",
+    "starting": "Iniciando…",
+    "completed": "Completado",
+    "failed": "Falló",
+    "elapsed": "{seconds} s transcurridos",
+    "close": "Cerrar actividad",
+    "dismiss": "Descartar notificación",
+    "details": "Detalles del error",
+    "copy": "Copiar detalles",
+    "copied": "Detalles copiados",
+    "kind": {
+      "open": "Abrir dibujo",
+      "import": "Importar geometría",
+      "save": "Guardar dibujo",
+      "export": "Exportar",
+      "rebuild": "Reconstruir geometría",
+      "drawing": "Actualizar dibujo",
+      "cam": "Cálculo CAM"
+    },
+    "phase": {
+      "queued": "Esperando a que termine la operación actual…",
+      "reading": "Leyendo…",
+      "validating": "Comprobando…",
+      "geometry": "Preparando la geometría…",
+      "adopting": "Actualizando el documento…",
+      "rendering": "Preparando la vista…",
+      "writing": "Escribiendo el archivo…",
+      "running": "Calculando…",
+      "choosing": "Esperando tu elección…"
+    },
+    "renderTimeout": "El documento se cargó, pero la vista no terminó de dibujarse en 60 segundos."
+  },
   "meshExport": {
     "title": "Exportar malla",
     "close": "Cerrar exportación de malla",
@@ -38,6 +74,7 @@
   "font": "Preparando el texto…"
 },
   "documentLoad": {
+    "rendering": "Preparando la vista…",
     "reading": "Leyendo el dibujo…",
     "validating": "Comprobando el dibujo…",
     "waiting": "Esperando a que termine la operación actual…",
@@ -56,6 +93,8 @@
     "scripts": "Scripts"
   },
   "file": {
+    "errorDocumentChangedDuringOpen": "El documento activo cambió mientras se abría el archivo. Intenta abrirlo de nuevo.",
+    "newWindow": "Nueva ventana",
     "menu": "Archivo",
     "new": "Nuevo",
     "panel": "PROYECTO",

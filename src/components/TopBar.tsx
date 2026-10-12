@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Box,
   BookOpen,
@@ -42,6 +43,7 @@ import { cx } from '../lib/cx';
 import { exportActiveDrawingDxf } from '../drawing/export';
 import { requestNativeViewportLayout } from './viewport/nativeViewportBridge';
 import { PresentationReopen } from './PresentationControls';
+import { ActivityIndicator } from './ActivityIndicator';
 import { openScriptFile, showScripts, useScriptWorkspace } from '../scripts/workspace';
 
 const FILE_MENU_VIEWPORT_MARGIN = 6;
@@ -252,6 +254,16 @@ export function ProjectMenuControls() {
                 shortcut={fileShortcut('O')}
                 onClick={() => run(openProject)}
               />
+              {isTauriRuntime() && <FileMenuItem
+                icon={<Plus size={14} />}
+                label={t('file.newWindow')}
+                onClick={() => {
+                  setMenuOpen(false);
+                  void invoke('native_new_window').catch((error) => useAppStore.getState().setConstraintDialog({
+                    titleKey: 'file.errorTitle', message: error instanceof Error ? error.message : String(error),
+                  }));
+                }}
+              />}
               <FileMenuItem
                 icon={<BookOpen size={14} />}
                 label={t('topbar.openScript')}
@@ -525,6 +537,7 @@ export function ProjectTabBar() {
         })}
       </div>
       <PresentationReopen />
+      <ActivityIndicator />
       <button type="button" aria-label={t('topbar.scripts')} aria-expanded={scriptsOpen}
         data-interface-group="document/scripts" onClick={showScripts}
         className="flex shrink-0 items-center gap-1.5 border-l border-edge px-3 text-xs text-mute hover:bg-edge hover:text-ink">

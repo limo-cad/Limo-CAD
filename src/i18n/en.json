@@ -1,4 +1,40 @@
 {
+  "runtimeActivity": {
+    "title": "Activity",
+    "current": "In progress",
+    "recent": "Recent activity",
+    "empty": "No recent activity.",
+    "starting": "Starting…",
+    "completed": "Completed",
+    "failed": "Failed",
+    "elapsed": "{seconds}s elapsed",
+    "close": "Close activity",
+    "dismiss": "Dismiss notification",
+    "details": "Error details",
+    "copy": "Copy details",
+    "copied": "Details copied",
+    "kind": {
+      "open": "Open drawing",
+      "import": "Import geometry",
+      "save": "Save drawing",
+      "export": "Export",
+      "rebuild": "Rebuild geometry",
+      "drawing": "Update drawing",
+      "cam": "CAM work"
+    },
+    "phase": {
+      "queued": "Waiting for the current operation…",
+      "reading": "Reading…",
+      "validating": "Checking…",
+      "geometry": "Preparing geometry…",
+      "adopting": "Updating the document…",
+      "rendering": "Preparing the view…",
+      "writing": "Writing file…",
+      "running": "Computing…",
+      "choosing": "Waiting for your choice…"
+    },
+    "renderTimeout": "The loaded document did not finish rendering within 60 seconds."
+  },
   "meshExport": {
     "title": "Mesh export",
     "close": "Close mesh export",
@@ -38,6 +74,7 @@
   "font": "Preparing text…"
 },
   "documentLoad": {
+    "rendering": "Preparing the view…",
     "reading": "Reading drawing…",
     "validating": "Checking drawing…",
     "waiting": "Waiting for the current operation…",
@@ -56,6 +93,8 @@
     "scripts": "Scripts"
   },
   "file": {
+    "errorDocumentChangedDuringOpen": "The active document changed while opening the file. Try opening it again.",
+    "newWindow": "New Window",
     "menu": "File",
     "new": "New",
     "panel": "PROJECT",

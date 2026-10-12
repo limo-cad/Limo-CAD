@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { beginRuntimeActivity } from '../runtimeActivity';
+import { useStartupStore } from '../startup';
 
-export type DocumentLoadPhase = 'reading' | 'validating' | 'waiting' | 'geometry' | 'adopting';
+export type DocumentLoadPhase = 'reading' | 'validating' | 'waiting' | 'geometry' | 'adopting' | 'rendering';
 export interface DocumentLoadProgress {
   id: number;
   name: string;
@@ -17,6 +19,10 @@ const measuredPhases: Partial<Record<DocumentLoadPhase, string>> = {
  * readiness. Each Open owns its entry, including while queued behind another
  * project transition. Finishing one Open must not clear another Open's status. */
 export function beginDocumentLoad(name: string) {
+  const runtime = typeof window !== 'undefined'
+    && (!('__TAURI_INTERNALS__' in window) || useStartupStore.getState().completed)
+    ? beginRuntimeActivity({ kind: /\.(step|stp)$/i.test(name) ? 'import' : 'open', target: name, notifySuccess: true }) : null;
+  runtime?.setPhase('reading');
   const id = ++nextId;
   let phase: DocumentLoadPhase = 'reading';
   let started = performance.now();
@@ -40,6 +46,7 @@ export function beginDocumentLoad(name: string) {
       if (finished || next === phase) return;
       record();
       phase = next;
+      runtime?.setPhase(next === 'waiting' ? 'queued' : next);
       started = performance.now();
       useDocumentLoadStore.setState((state) => ({
         operations: state.operations.map((operation) => operation.id === id ? { ...operation, phase } : operation),
@@ -49,6 +56,21 @@ export function beginDocumentLoad(name: string) {
       if (finished) return;
       finished = true;
       record();
+      runtime?.finish();
+      useDocumentLoadStore.setState((state) => ({ operations: state.operations.filter((operation) => operation.id !== id) }));
+    },
+    fail(error: unknown) {
+      if (finished) return;
+      finished = true;
+      record();
+      runtime?.fail(error);
+      useDocumentLoadStore.setState((state) => ({ operations: state.operations.filter((operation) => operation.id !== id) }));
+    },
+    discard() {
+      if (finished) return;
+      finished = true;
+      record();
+      runtime?.discard();
       useDocumentLoadStore.setState((state) => ({ operations: state.operations.filter((operation) => operation.id !== id) }));
     },
   };

@@ -10,6 +10,7 @@ let initializationInFlight: Promise<void> | null = null;
 /** Keep the frontend's existing tab UUID through recovery. Reloading the
  * WebView loses that UUID while its native project session remains bound. */
 export function initializeStartupDocument(empty = false): Promise<void> {
+  if (useStartupStore.getState().completed) return Promise.resolve();
   if (initializationInFlight) return initializationInFlight;
   useStartupStore.setState((state) => ({
     attempt: state.attempt + 1, phase: 'document', appPrepared: false, documentReady: false,

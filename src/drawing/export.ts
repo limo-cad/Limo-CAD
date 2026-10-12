@@ -46,6 +46,7 @@ import { buildDrawingSheetDxf, buildManufacturingProfileDxf } from './dxf';
 import { drawingProjectionRequestForView } from './projection';
 import { drawingLineStyle, type DrawingLineRole } from './styles';
 import {assertTitleBlockFits, drawingTitleBlock} from './titleBlock';
+import {beginRuntimeActivity} from '../runtimeActivity';
 
 const DXF_TYPE: SaveType = {
   description: 'Drawing Exchange Format',
@@ -61,6 +62,21 @@ const SVG_TYPE: SaveType = {
   mime: 'image/svg+xml',
 };
 
+async function saveDrawingExport(name: string, type: SaveType, generate: () => Promise<string> | string): Promise<boolean> {
+  const activity = beginRuntimeActivity({kind: 'export', target: name, notifySuccess: true});
+  try {
+    activity.setPhase('geometry');
+    const drawing = await generate();
+    activity.setPhase('choosing');
+    const target = await chooseSaveTarget(name, type);
+    if (!target) { activity.discard(); return false; }
+    activity.setPhase('writing');
+    await writeSaveTarget(target, new TextEncoder().encode(drawing));
+    activity.finish();
+    return true;
+  } catch (error) { activity.fail(error); throw error; }
+}
+
 /** Primary editable CAD interchange export. Geometry is written 1:1 in mm. */
 export async function exportActiveDrawingDxf(): Promise<boolean> {
   const state = useAppStore.getState();
@@ -68,13 +84,10 @@ export async function exportActiveDrawingDxf(): Promise<boolean> {
     (candidate) => candidate.id === state.drawingDocument.active_sheet_id,
   );
   if (!sheet) throw new Error(translate('drawing.errors.errorNoActiveSheetExport'));
-  const dxf = await drawingSheetDxf(sheet, state.document?.settings.units ?? 'mm');
   const project = safeFilePart(state.document?.name ?? 'Untitled');
   const sheetName = safeFilePart(sheet.name);
-  const target = await chooseSaveTarget(`${project}-${sheetName}.dxf`, DXF_TYPE);
-  if (!target) return false;
-  await writeSaveTarget(target, new TextEncoder().encode(dxf));
-  return true;
+  return saveDrawingExport(`${project}-${sheetName}.dxf`, DXF_TYPE,
+    () => drawingSheetDxf(sheet, state.document?.settings.units ?? 'mm'));
 }
 
 export async function drawingSheetDxf(
@@ -90,13 +103,10 @@ export async function exportManufacturingProfileDxf(
   profileIndex: number,
 ): Promise<boolean> {
   const state = useAppStore.getState();
-  const dxf = buildManufacturingProfileDxf(catalog, profileIndex);
   const project = safeFilePart(state.document?.name ?? 'Untitled');
   const sketch = safeFilePart(catalog.sketch_name);
-  const target = await chooseSaveTarget(`${project}-${sketch}-profile-${profileIndex + 1}.dxf`, DXF_TYPE);
-  if (!target) return false;
-  await writeSaveTarget(target, new TextEncoder().encode(dxf));
-  return true;
+  return saveDrawingExport(`${project}-${sketch}-profile-${profileIndex + 1}.dxf`, DXF_TYPE,
+    () => buildManufacturingProfileDxf(catalog, profileIndex));
 }
 
 export async function exportActiveDrawingSvg(): Promise<boolean> {
@@ -105,13 +115,10 @@ export async function exportActiveDrawingSvg(): Promise<boolean> {
     (candidate) => candidate.id === state.drawingDocument.active_sheet_id,
   );
   if (!sheet) throw new Error(translate('drawing.errors.errorNoActiveSheetExport'));
-  const svg = await drawingSheetSvg(sheet, state.document?.settings.units ?? 'mm');
   const project = safeFilePart(state.document?.name ?? 'Untitled');
   const sheetName = safeFilePart(sheet.name);
-  const target = await chooseSaveTarget(`${project}-${sheetName}.svg`, SVG_TYPE);
-  if (!target) return false;
-  await writeSaveTarget(target, new TextEncoder().encode(svg));
-  return true;
+  return saveDrawingExport(`${project}-${sheetName}.svg`, SVG_TYPE,
+    () => drawingSheetSvg(sheet, state.document?.settings.units ?? 'mm'));
 }
 
 export function printActiveDrawing(): void {

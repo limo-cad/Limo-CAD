@@ -7,6 +7,8 @@ export function usesNativeStartup(nativeRuntime: boolean, mode: string): boolean
 export type StartupPhase = 'document' | 'renderer' | 'assets' | 'gpu' | 'pipelines' | 'frame' | 'font' | 'initialized' | 'ready' | 'failed';
 interface StartupState {
   phase: StartupPhase;
+  /** One-way latch for this application session, after its expanded frame. */
+  completed: boolean;
   /** Initial engine getters and project session/tab binding have completed.
    * This does not prove rendering or completion of an optional file open. */
   appPrepared: boolean;
@@ -18,7 +20,7 @@ interface StartupState {
 }
 
 export const useStartupStore = create<StartupState>(() => ({
-  phase: 'document', appPrepared: false, documentReady: false, error: null, delayed: false, failureSource: 'renderer', attempt: 0,
+  phase: 'document', completed: false, appPrepared: false, documentReady: false, error: null, delayed: false, failureSource: 'renderer', attempt: 0,
 }));
 
 /** Application initialization and a file Open can overlap. A file operation
@@ -33,7 +35,18 @@ export function startupApplicationPhase(
 }
 
 export function startupFailed(error: unknown, failureSource: 'document' | 'renderer' = 'renderer'): void {
+  if (useStartupStore.getState().completed) return;
   useStartupStore.setState({ phase: 'failed', failureSource, error: error instanceof Error ? error.message : String(error) });
+}
+
+/** Called only after the real current-document expanded-frame checks pass.
+ * Subsequent runtime errors and remounts cannot restart application loading. */
+export function completeStartup(): boolean {
+  const state = useStartupStore.getState();
+  if (state.completed) return true;
+  if (state.error || !state.documentReady) return false;
+  useStartupStore.setState({ completed: true, phase: 'ready', delayed: false });
+  return true;
 }
 
 export interface RenderReadiness {

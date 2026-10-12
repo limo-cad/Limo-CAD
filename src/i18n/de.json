@@ -1,4 +1,40 @@
 {
+  "runtimeActivity": {
+    "title": "Aktivität",
+    "current": "In Bearbeitung",
+    "recent": "Letzte Aktivitäten",
+    "empty": "Keine letzten Aktivitäten.",
+    "starting": "Wird gestartet…",
+    "completed": "Abgeschlossen",
+    "failed": "Fehlgeschlagen",
+    "elapsed": "{seconds} s vergangen",
+    "close": "Aktivitäten schließen",
+    "dismiss": "Benachrichtigung schließen",
+    "details": "Fehlerdetails",
+    "copy": "Details kopieren",
+    "copied": "Details kopiert",
+    "kind": {
+      "open": "Zeichnung öffnen",
+      "import": "Geometrie importieren",
+      "save": "Zeichnung speichern",
+      "export": "Exportieren",
+      "rebuild": "Geometrie neu berechnen",
+      "drawing": "Zeichnung aktualisieren",
+      "cam": "CAM-Berechnung"
+    },
+    "phase": {
+      "queued": "Warten auf den Abschluss des aktuellen Vorgangs…",
+      "reading": "Wird gelesen…",
+      "validating": "Wird geprüft…",
+      "geometry": "Geometrie wird vorbereitet…",
+      "adopting": "Dokument wird aktualisiert…",
+      "rendering": "Ansicht wird vorbereitet…",
+      "writing": "Datei wird geschrieben…",
+      "running": "Wird berechnet…",
+      "choosing": "Warten auf deine Auswahl…"
+    },
+    "renderTimeout": "Das Dokument wurde geladen, aber die Ansicht wurde nicht innerhalb von 60 Sekunden fertig dargestellt."
+  },
   "meshExport": {
     "title": "Netzexport",
     "close": "Netzexport schließen",
@@ -38,6 +74,7 @@
   "font": "Text wird vorbereitet…"
 },
   "documentLoad": {
+    "rendering": "Ansicht wird vorbereitet…",
     "reading": "Zeichnung wird gelesen…",
     "validating": "Zeichnung wird geprüft…",
     "waiting": "Warten auf den Abschluss des aktuellen Vorgangs…",
@@ -56,6 +93,8 @@
     "scripts": "Skripte"
   },
   "file": {
+    "errorDocumentChangedDuringOpen": "Das aktive Dokument wurde während des Öffnens geändert. Öffne die Datei erneut.",
+    "newWindow": "Neues Fenster",
     "menu": "Datei",
     "new": "Neu",
     "panel": "PROJEKT",

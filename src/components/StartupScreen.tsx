@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { isTauriRuntime } from '../engine';
 import { useTranslation } from '../i18n';
 import { useAppStore } from '../store/appStore';
-import { startupFailed, useStartupStore, workspaceIsReady, workspaceLayoutIsReady, startupApplicationPhase } from '../startup';
+import { completeStartup, startupFailed, useStartupStore, workspaceIsReady, workspaceLayoutIsReady, startupApplicationPhase } from '../startup';
 import { requestNativeViewportLayout, type NativeViewportMetrics } from './viewport/nativeViewportBridge';
 import { applyUiScale, currentUiScale } from '../uiScale';
 import { measureInitialViewportInteraction } from '../startupMeasurement';
@@ -50,6 +50,7 @@ export function StartupScreen() {
   }, []);
 
   useEffect(() => {
+    if (startup.completed) return;
     if (!isTauriRuntime()) {
       startupFailed(t('startup.browser'));
       return;
@@ -61,7 +62,7 @@ export function StartupScreen() {
     let requiredRevision: number | null = null;
     let expansionStartedMs: number | null = null;
     const delayedTimer = window.setTimeout(() => {
-      if (!disposed) useStartupStore.setState({ delayed: true });
+      if (!disposed && !useStartupStore.getState().completed) useStartupStore.setState({ delayed: true });
     }, 30_000);
     const fail = (error: unknown, source = useStartupStore.getState().failureSource) => {
       window.clearTimeout(delayedTimer);
@@ -75,7 +76,7 @@ export function StartupScreen() {
     const poll = async () => {
       try {
         const state = useStartupStore.getState();
-        if (state.error || disposed) {
+        if (state.completed || state.error || disposed) {
           window.clearTimeout(delayedTimer);
           window.clearTimeout(deadlineTimer);
           return;
@@ -84,7 +85,7 @@ export function StartupScreen() {
           requiredRevision = await invoke<number>('native_viewport_sync_model');
         }
         const metrics = await invoke<NativeViewportMetrics>('native_viewport_metrics');
-        if (disposed || useStartupStore.getState().error) return;
+        if (disposed || useStartupStore.getState().completed || useStartupStore.getState().error) return;
         if (metrics.startupError) {
           fail(new Error(metrics.startupError), 'renderer');
           return;
@@ -95,7 +96,7 @@ export function StartupScreen() {
             useStartupStore.setState({ phase: 'frame' });
             expansionStartedMs = performance.now();
             await expandWorkspaceWindow();
-            if (disposed || useStartupStore.getState().error) return;
+            if (disposed || useStartupStore.getState().completed || useStartupStore.getState().error) return;
             expanded = true;
             // The compact frame was real, but it is not the expanded layout.
             // Read fresh native metrics after the resize and zoom have applied.
@@ -113,7 +114,7 @@ export function StartupScreen() {
             timer = window.setTimeout(() => void poll(), 16);
             return;
           }
-          useStartupStore.setState({ phase: 'ready', delayed: false });
+          if (!completeStartup()) return;
           window.clearTimeout(delayedTimer);
           window.clearTimeout(deadlineTimer);
           document.documentElement.dataset.startupReady = 'true';
@@ -146,9 +147,9 @@ export function StartupScreen() {
     };
     // Locale changes affect copy, but must not restart native initialization.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startup.attempt]);
+  }, [startup.attempt, startup.completed]);
 
-  if (startup.phase === 'ready') return null;
+  if (startup.completed || startup.phase === 'ready') return null;
   const failed = startup.error !== null;
   const phaseKey = startup.phase;
   const details = startup.error ?? (startup.delayed ? t('startup.slow') : '');

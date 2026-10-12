@@ -39,6 +39,9 @@ import type { EngineOperationOwner } from '../engine/activity';
 import { captureProjectOwner } from './projectOwnership';
 import { requestProjectFraming, type ProjectFramingOwner } from './projectFraming';
 import { beginDocumentLoad } from './documentLoadProgress';
+import { waitForDocumentFrame } from './documentFrameReadiness';
+import { beginRuntimeActivity } from '../runtimeActivity';
+import { withParentGeometryActivity } from '../engine/runtimeFeedback';
 
 const PROJECT_TYPE: SaveType = {
   description: 'noBS CAD Project',
@@ -186,50 +189,59 @@ export async function saveProject(saveAs = false, targetOverride?: SaveTarget): 
   if (state.activeSketch) {
     throw new Error(translate('file.finishBeforeSave'));
   }
-  await owner.assertCurrent();
-  const engine = await getEngine();
-  const expectedModelJson = await exportProjectModelWithVisibility(engine, owner.assertSettled);
-  const existingTarget = !saveAs ? getCurrentProjectTarget() : null;
-  const target =
-    targetOverride ?? existingTarget ??
-    (await chooseSaveTarget(currentSuggestedName(), PROJECT_TYPE));
-  if (!target) return false;
+  const activity = beginRuntimeActivity({ kind: 'save', target: state.projectFileName ?? state.document.name, notifySuccess: true });
+  try {
+    activity.setPhase('reading');
+    await owner.assertCurrent();
+    const engine = await getEngine();
+    const expectedModelJson = await exportProjectModelWithVisibility(engine, owner.assertSettled);
+    const existingTarget = !saveAs ? getCurrentProjectTarget() : null;
+    if (!targetOverride && !existingTarget) activity.setPhase('choosing');
+    const target =
+      targetOverride ?? existingTarget ??
+      (await chooseSaveTarget(currentSuggestedName(), PROJECT_TYPE));
+    if (!target) { activity.discard(); return false; }
 
-  await owner.assertCurrent();
-  // An explicit Rename Project changes model identity without moving the
-  // file. Only a new destination (first Save or Save As) derives the model
-  // name from the filename selected by the user.
-  const designName = existingTarget
-    ? state.document.name
-    : withoutExtension(target.name);
-  let modelJson: string;
-  const capture = projectTransitions.beginSnapshot();
-  try {
-    capture.assertCurrent(); owner.assertSettled();
-    modelJson = await engine.exportProjectModel({expected_model_json: expectedModelJson, save_name: designName});
-    capture.assertCurrent(); owner.assertSettled();
-  } finally { capture.release(); }
-  // Rename a serialized copy under the engine lock. A failed write never
-  // renames the live model, and captured bytes cannot turn into another tab.
-  await writeSaveTarget(target, createNbcadArchive(modelJson));
-  await owner.assertCurrent();
-  const adoption = projectTransitions.beginSnapshot();
-  try {
-    adoption.assertCurrent(); owner.assertSettled();
-    const document = await engine.setDocumentName(designName, expectedModelJson);
-    adoption.assertOwned(); owner.assertUnchanged();
-    const reusableTarget = target.kind === 'download' ? null : target;
-    await recordActiveProjectSave(modelJson, reusableTarget, owner.assertUnchanged);
-    adoption.assertOwned(); owner.assertUnchanged();
-    useAppStore.setState({
-      document,
-      dirty: false,
-      projectFileName: target.name,
-    });
-    recordActiveProjectMetadata();
-    if (!hasUnsavedProjects()) clearProjectRecovery();
-    return true;
-  } finally { adoption.release(); }
+    await owner.assertCurrent();
+    // An explicit Rename Project changes model identity without moving the
+    // file. Only a new destination (first Save or Save As) derives the model
+    // name from the filename selected by the user.
+    const designName = existingTarget
+      ? state.document.name
+      : withoutExtension(target.name);
+    let modelJson: string;
+    activity.setPhase('adopting');
+    const capture = projectTransitions.beginSnapshot();
+    try {
+      capture.assertCurrent(); owner.assertSettled();
+      modelJson = await engine.exportProjectModel({expected_model_json: expectedModelJson, save_name: designName});
+      capture.assertCurrent(); owner.assertSettled();
+    } finally { capture.release(); }
+    // Rename a serialized copy under the engine lock. A failed write never
+    // renames the live model, and captured bytes cannot turn into another tab.
+    activity.setPhase('writing');
+    await writeSaveTarget(target, createNbcadArchive(modelJson));
+    await owner.assertCurrent();
+    activity.setPhase('adopting');
+    const adoption = projectTransitions.beginSnapshot();
+    try {
+      adoption.assertCurrent(); owner.assertSettled();
+      const document = await engine.setDocumentName(designName, expectedModelJson);
+      adoption.assertOwned(); owner.assertUnchanged();
+      const reusableTarget = target.kind === 'download' ? null : target;
+      await recordActiveProjectSave(modelJson, reusableTarget, owner.assertUnchanged);
+      adoption.assertOwned(); owner.assertUnchanged();
+      useAppStore.setState({
+        document,
+        dirty: false,
+        projectFileName: target.name,
+      });
+      recordActiveProjectMetadata();
+      if (!hasUnsavedProjects()) clearProjectRecovery();
+      activity.finish();
+      return true;
+    } finally { adoption.release(); }
+  } catch (error) { activity.fail(error); throw error; }
 }
 
 /** Open a fresh untitled design in a new window-level document tab. */
@@ -294,17 +306,27 @@ export async function saveAllUnsavedProjects(): Promise<boolean> {
   return !hasUnsavedProjects();
 }
 
-export async function openProject(options?: { filePath: string; discardChanges?: boolean }): Promise<boolean> {
+export async function openProject(options?: { filePath: string; discardChanges?: boolean; interactive?: boolean }): Promise<boolean> {
   assertNoFeatureEdit();
-  const state = useAppStore.getState();
-  if (state.dirty && options && !options.discardChanges) throw new Error(translate('file.errorReplaceNeedsSaveOrDiscard'));
-  if (state.dirty && !options) {
+  let consentedOwner = captureProjectOwner();
+  const state = consentedOwner.state;
+  const assertOpenOwner = () => {
+    try {
+      consentedOwner.assertUnchanged();
+      if (useAppStore.getState().dirty !== consentedOwner.state.dirty) throw new Error('Dirtiness changed');
+    } catch { throw new Error(translate('file.errorDocumentChangedDuringOpen')); }
+  };
+  if (state.dirty && options && !options.discardChanges && !options.interactive) throw new Error(translate('file.errorReplaceNeedsSaveOrDiscard'));
+  if (state.dirty && (!options || options.interactive)) {
     const decision = await requestUnsavedDecision(
       'replace',
       state.document?.name ?? null,
     );
     if (decision === 'cancel') return false;
+    assertOpenOwner();
     if (decision === 'save' && !(await saveProject(false))) return false;
+    // A successful Save may legitimately adopt a new name/file target.
+    consentedOwner = captureProjectOwner();
   }
   const loading = { current: null as ReturnType<typeof beginDocumentLoad> | null };
   try {
@@ -327,7 +349,11 @@ export async function openProject(options?: { filePath: string; discardChanges?:
     try {
       loading.current?.setPhase('waiting');
       await releaseTransition.waitForSnapshots();
+      // Consent belongs to the model that was visible, not any later edit/tab
+      // that arrived while file IO or an earlier transition was pending.
+      assertOpenOwner();
       const engine = await getEngine();
+      assertOpenOwner();
       changed = true;
       loading.current?.setPhase('geometry');
       let update = modelJson === null
@@ -391,7 +417,18 @@ export async function openProject(options?: { filePath: string; discardChanges?:
       releaseTransition(changed, published);
     }
     requestProjectFraming(openedOwner);
+    // Initial launch has its own stricter expanded-frame readiness gate.
+    // Runtime Open must keep Activity alive through its actual current view.
+    if (typeof window !== 'undefined' && document.documentElement.dataset.startupReady === 'true'
+      && useAppStore.getState().activeTab !== 'drawing') {
+      loading.current?.setPhase('rendering');
+      const presented = await waitForDocumentFrame(openedOwner, { timeoutMessage: translate('runtimeActivity.renderTimeout') });
+      if (!presented) loading.current?.discard();
+    }
     return true;
+  } catch (error) {
+    loading.current?.fail(error);
+    throw error;
   } finally {
     loading.current?.finish();
   }
@@ -421,6 +458,7 @@ export async function exportStep(selectedOnly: boolean): Promise<boolean> {
   const suffix = selectedOnly && state.selectedBody !== null ? `-Body${state.selectedBody}` : '';
   const engine = await getEngine();
   return runExport({
+    activityTarget: documentName,
     assertSelectionOwner: exportSelectionOwner(transition, state),
     captureModel: () => engine.exportProjectModel(),
     chooseOptions: async () => {
@@ -539,6 +577,7 @@ async function exportMesh(format: 'stl' | '3mf', selectedOnly: boolean): Promise
   const suffix = selectedOnly && state.selectedBody !== null ? `-Body${state.selectedBody}` : '';
   const engine = await getEngine();
   return runExport({
+    activityTarget: documentName,
     assertSelectionOwner: exportSelectionOwner(transition, state),
     captureModel: () => engine.exportProjectModel(),
     chooseOptions: requestMeshExportScope,
@@ -693,13 +732,13 @@ async function openStepAsProject(
 ) {
   await engine.newProject();
   await engine.setDocumentName(withoutExtension(fileName));
-  return engine.bodyFeature({
+  return withParentGeometryActivity(() => engine.bodyFeature({
     type: 'import_step',
     request: {
       file_name: fileName,
       data_base64: bytesToBase64(bytes),
     },
-  });
+  }));
 }
 
 /** Periodic JSON recovery is intentionally separate from the user-owned

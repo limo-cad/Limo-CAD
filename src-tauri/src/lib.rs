@@ -10,12 +10,14 @@
 mod cam_library;
 mod cam_playback;
 mod cam_posts;
+pub mod launch_requests;
 mod native_menu;
 pub mod native_viewport;
 mod recipe_links;
 mod scripts;
 mod session_bridge;
 mod six_dof_mouse;
+pub mod startup;
 pub mod startup_metrics;
 mod state;
 
@@ -230,6 +232,8 @@ fn native_window_set_locale(app: tauri::AppHandle, locale: String) -> Result<(),
         "en" | "es" | "de" => "Limo CAD",
         _ => return Err("unsupported application locale".to_string()),
     };
+    app.state::<native_menu::NativeFileMenuState>()
+        .set_new_window_locale(&locale)?;
     app.get_webview_window("main")
         .ok_or("main window is unavailable")?
         .set_title(title)
@@ -1314,6 +1318,10 @@ fn write_binary_file_atomic(path: String, bytes: Vec<u8>) -> Result<(), String> 
 }
 
 pub fn run() {
+    run_with_launch_requests(launch_requests::LaunchRequestsState::default());
+}
+
+pub fn run_with_launch_requests(launch_requests: launch_requests::LaunchRequestsState) {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
@@ -1324,6 +1332,7 @@ pub fn run() {
             state
         })
         .manage(CamSimulationService::default())
+        .manage(launch_requests)
         .manage(cam_playback::CamPlaybackService::default())
         .manage(NativeQuitState::default())
         .manage(scripts::NativeScriptState::default())
@@ -1346,6 +1355,8 @@ pub fn run() {
     builder
         .setup(|app| {
             startup_metrics::record_native_milestone("setupReached");
+            app.state::<launch_requests::LaunchRequestsState>()
+                .install(app.handle());
             recipe_links::install(app.handle());
             session_bridge::start_mcp_wake_loop(app.handle().clone());
             let viewport = NativeViewport::install(app).map_err(std::io::Error::other)?;
@@ -1402,6 +1413,9 @@ pub fn run() {
             native_viewport_pick,
             native_viewport_metrics,
             native_viewport_start,
+            launch_requests::native_launch_pending,
+            launch_requests::native_launch_ack,
+            launch_requests::native_new_window,
             native_window_prepare_workspace,
             native_window_set_locale,
             startup_metrics::startup_record,
@@ -1608,6 +1622,29 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building noBS CAD")
         .run(|app, event| {
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            if let tauri::RunEvent::Opened { urls } = &event {
+                let targets = urls
+                    .iter()
+                    .filter_map(|url| {
+                        if url.scheme() == "file" {
+                            url.to_file_path().ok().and_then(|path| {
+                                path.to_str()
+                                    .map(|path| launch_requests::LaunchTarget::File {
+                                        path: path.into(),
+                                    })
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if !targets.is_empty() {
+                    if let Err(error) = launch_requests::enqueue(app, &targets) {
+                        eprintln!("Launch request rejected: {error}");
+                    }
+                }
+            }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 let state = app.state::<NativeQuitState>();
                 if state.approved.swap(false, Ordering::AcqRel) {

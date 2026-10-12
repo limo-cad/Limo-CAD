@@ -33,6 +33,8 @@ const QUIT_ID: &str = "nbcad-app-quit";
 #[cfg(target_os = "macos")]
 const FILE_NEW_ID: &str = "nbcad-file-new";
 #[cfg(target_os = "macos")]
+const FILE_NEW_WINDOW_ID: &str = "nbcad-file-new-window";
+#[cfg(target_os = "macos")]
 const FILE_OPEN_ID: &str = "nbcad-file-open";
 #[cfg(target_os = "macos")]
 const FILE_OPEN_SCRIPT_ID: &str = "nbcad-file-open-script";
@@ -64,8 +66,9 @@ const APP_SETTINGS_ID: &str = "nbcad-app-settings";
 /// Native File-menu item id → frontend command payload. Mirrors the in-app
 /// File menu one-to-one so both entry points run the same project actions.
 #[cfg(target_os = "macos")]
-const FILE_COMMANDS: [(&str, &str); 15] = [
+const FILE_COMMANDS: [(&str, &str); 16] = [
     (FILE_NEW_ID, "new"),
+    (FILE_NEW_WINDOW_ID, "new-window"),
     (FILE_OPEN_ID, "open"),
     (FILE_OPEN_SCRIPT_ID, "open-script"),
     (FILE_SAVE_ID, "save"),
@@ -92,6 +95,7 @@ pub struct NativeEditMenuState {
 /// project action, including New and Open, is disabled until the mutation
 /// finishes.
 pub struct NativeFileItems {
+    new_window: MenuItem<Wry>,
     idle_items: Vec<MenuItem<Wry>>,
     document_items: Vec<MenuItem<Wry>>,
     all_body_items: Vec<MenuItem<Wry>>,
@@ -106,6 +110,26 @@ pub struct NativeFileMenuState {
 }
 
 impl NativeFileMenuState {
+    pub fn set_new_window_locale(&self, locale: &str) -> Result<(), String> {
+        let label = match locale {
+            "zh-CN" => "新建窗口",
+            "es" => "Nueva ventana",
+            "de" => "Neues Fenster",
+            _ => "New Window",
+        };
+        if let Some(items) = self
+            .items
+            .lock()
+            .map_err(|_| "native File menu state is unavailable")?
+            .as_ref()
+        {
+            items
+                .new_window
+                .set_text(label)
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
     #[cfg(target_os = "macos")]
     fn install(&self, items: NativeFileItems) {
         if let Ok(mut slot) = self.items.lock() {
@@ -239,13 +263,10 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
     };
     let new_project =
         MenuItem::with_id(app, FILE_NEW_ID, "New Project", true, Some("CmdOrCtrl+N"))?;
-    let open = MenuItem::with_id(
-        app,
-        FILE_OPEN_ID,
-        "Open…",
-        true,
-        Some("CmdOrCtrl+O"),
-    )?;
+    // An independent window does not mutate this document and stays available
+    // while its project commands are busy.
+    let new_window = MenuItem::with_id(app, FILE_NEW_WINDOW_ID, "New Window", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, FILE_OPEN_ID, "Open…", true, Some("CmdOrCtrl+O"))?;
     let open_script =
         MenuItem::with_id(app, FILE_OPEN_SCRIPT_ID, "Open Script…", true, None::<&str>)?;
     let save = MenuItem::with_id(app, FILE_SAVE_ID, "Save", false, Some("CmdOrCtrl+S"))?;
@@ -319,6 +340,7 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
         .collect::<tauri::Result<_>>()?;
     let file_items: Vec<&dyn IsMenuItem<Wry>> = vec![
         &new_project,
+        &new_window,
         &open,
         &open_script,
         &save,
@@ -340,6 +362,7 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
     ];
     file.insert_items(&file_items, 0)?;
     app.state::<NativeFileMenuState>().install(NativeFileItems {
+        new_window,
         idle_items: vec![new_project, open, open_script],
         document_items: vec![save, save_as, rename],
         all_body_items: vec![export_step_all, export_3mf_all, export_stl_all],

@@ -80,7 +80,7 @@ import { MeshExportDialog } from './components/MeshExportDialog';
 import { StartupScreen } from './components/StartupScreen';
 import { usesNativeStartup, useStartupStore } from './startup';
 import { initializeStartupDocument } from './startupInitialization';
-import { DocumentLoadStatus } from './components/DocumentLoadStatus';
+import { installNativeLaunchRequests } from './nativeLaunchRequests';
 
 export default function App() {
   useEffect(installRecipeLinks, []);
@@ -95,7 +95,7 @@ export default function App() {
   const themePreference = useAppStore((s) => s.themePreference);
   const syncResolvedTheme = useAppStore((s) => s.syncResolvedTheme);
   const nativeStartup = usesNativeStartup(isTauriRuntime(), import.meta.env.MODE);
-  const nativeStartupReady = useStartupStore((s) => s.phase === 'ready');
+  const nativeStartupReady = useStartupStore((s) => s.completed);
   const startupReady = !nativeStartup || nativeStartupReady;
   const initialized = useRef(false);
 
@@ -120,6 +120,7 @@ export default function App() {
   useEffect(() => startupReady ? installNativeEditMenu() : undefined, [startupReady]);
 
   useEffect(() => startupReady ? installNativeFileMenu() : undefined, [startupReady]);
+  useEffect(() => startupReady ? installNativeLaunchRequests() : undefined, [startupReady]);
 
   useEffect(() => {
     const media = window.matchMedia(SYSTEM_DARK_QUERY);
@@ -221,7 +222,7 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (usesNativeStartup(isTauriRuntime(), import.meta.env.MODE) && useStartupStore.getState().phase !== 'ready') return;
+      if (usesNativeStartup(isTauriRuntime(), import.meta.env.MODE) && !useStartupStore.getState().completed) return;
       // Never steal keys from text inputs.
       if (isTextEditingTarget(e.target)) {
         // The custom native menu delegates text Undo/Redo back to WebKit. If
@@ -489,7 +490,6 @@ export default function App() {
                 <div className="contents" data-mcp-surface="comments"><CommentsPanel /></div>
               </>
             )}
-            {startupReady && <DocumentLoadStatus />}
           </main>
           <PresentationControls />
         </div>
