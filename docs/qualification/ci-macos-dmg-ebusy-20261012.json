@@ -1,98 +1,105 @@
-﻿{
-    "schema_version":  1,
-    "purpose":  "Bounded recovery for the observed macOS DMG hdiutil EBUSY failure; no underlying busy resource is attributed.",
-    "observed_failure":  {
-                             "head":  "153a1eb6aa996f77aa213936d4946584e13d53b5",
-                             "run_id":  38254936958,
-                             "run_attempt":  1,
-                             "job_id":  114830946165,
-                             "step":  "Build ad-hoc signed DMG",
-                             "exit_code":  1,
-                             "stderr_line":  "hdiutil: create failed - Resource busy",
-                             "original_log_sha256":  "512576aca4a30bd890d2e775b276610090e74c9cd2bc25c5a9786f4a50ede502",
-                             "evidence":  "Bounded watcher receipt only; original log body remained sealed."
-                         },
-    "source":  {
-                   "base":  "b31568d138ef222ab30818cf77f96b73495f1085",
-                   "files":  [
-                                 {
-                                     "path":  "xtask/src/package.rs",
-                                     "sha256":  "77c69d7112fda483fd4bc7d5856cc091eef3b48a1ff1e778e01ef688a8d9fca4"
-                                 },
-                                 {
-                                     "path":  "xtask/src/package/dmg.rs",
-                                     "sha256":  "d0e5a9b25c1ce81f55db9bed5640cad654c879e688cc62f6ce920997e274e481"
-                                 },
-                                 {
-                                     "path":  "xtask/src/package/macos.rs",
-                                     "sha256":  "ec45c9fd8674a3d3973df8be2834718428709a239f5b4e63183df57219b87acb"
-                                 }
-                             ],
-                   "unchanged_during_probe":  true
-               },
-    "repair":  {
-                   "retry":  "Only exit code 1 plus an exact stderr line; 3 attempts maximum, delays 100 ms and 200 ms.",
-                   "candidates":  "Fresh owned temporary directories under checked canonical output; cleanup limited to these candidates.",
-                   "staging":  "Reuse the same signed source stage and creation argv, changing only the candidate output path.",
-                   "publication":  "Preserve existing final DMG until successful creation of a nonempty ordinary candidate; publish by rename.",
-                   "downstream":  "DMG signing, notarization, stapling, hdiutil verification, and checksum sequence remain unchanged."
-               },
-    "qualification":  {
-                          "command":  [
-                                          "cargo",
-                                          "test",
-                                          "--manifest-path",
-                                          "xtask/Cargo.toml",
-                                          "--locked",
-                                          "--jobs",
-                                          "1",
-                                          "package::dmg::tests::exact_busy_retry_preserves_staging_and_final_artifact",
-                                          "--",
-                                          "--exact",
-                                          "--test-threads=1",
-                                          "--nocapture"
-                                      ],
-                          "started_utc":  "2026-10-12T15:00:43.5982797Z",
-                          "completed_utc":  "2026-10-12T15:03:46.6123902Z",
-                          "exit_code":  0,
-                          "cases_passed":  1,
-                          "cases_failed":  0,
-                          "case_seconds":  0.05,
-                          "main_cases_filtered":  216,
-                          "other_harnesses_selected":  0,
-                          "compiler_duration":  "2m 25s",
-                          "compiler_warnings":  0,
-                          "warning_policy":  "Standard host debug/default features, rustflags []; no -D warnings override",
-                          "target_cache":  "D:/noBS-CAD-builds/finish-bevy-rc2/release-target",
-                          "occt_root":  "C:/Users/jeffg/dev/noBS-CAD/vcpkg_installed/x64-windows",
-                          "rustc":  "rustc 1.99.0 (b940084d7 2026-09-28)",
-                          "cargo":  "cargo 1.99.0 (5f94df478 2026-08-27)",
-                          "msvc":  "14.44.35207",
-                          "windows_sdk":  "10.0.26100.0\\",
-                          "matrix":  [
-                                         "Exact busy partial image then success",
-                                         "Different stderr failure is immediate",
-                                         "Same diagnostic with exit code 2 is immediate",
-                                         "Diagnostic suffix mismatch is immediate",
-                                         "Signal/no exit code is immediate",
-                                         "Persistent exact busy stops at 3",
-                                         "Immediate successful final publication"
-                                     ],
-                          "invariants":  [
-                                             "Existing final preserved through every creation attempt and every failed result",
-                                             "Signed stage bytes and unrelated output preserved",
-                                             "Owned partial candidates and temporary directories removed",
-                                             "Successful final contains complete new image bytes"
-                                         ],
-                          "proof_receipt":  {
-                                                "basename":  "ci-macos-dmg-ebusy-debug-v1-20261012.json",
-                                                "sha256":  "38e4f53bee389bff6471c8d3525d778ab4d1b4bc16be487cac4c5d2d764fd8e5"
-                                            },
-                          "proof_log":  {
-                                            "basename":  "ci-macos-dmg-ebusy-debug-v1-20261012.log",
-                                            "bytes":  2299,
-                                            "sha256":  "7b3374d97c07a7caf8af31c24ea0193e3fa2a61c63815ece56c8f373358334f0"
-                                        }
-                      },
-    "limits":  "Portable Windows CPU fixture with fake outcomes and disposable files only. No real hdiutil/macOS, CAD GUI, GPU, model, session or inbox calls. No existing passing case rerun. Real macOS artifact acceptance requires current-head hosted packaging CI."
+{
+  "schema_version": 1,
+  "purpose": "Bounded recovery for the observed macOS DMG hdiutil EBUSY failure; no underlying busy resource is attributed.",
+  "observed_failure": {
+    "head": "153a1eb6aa996f77aa213936d4946584e13d53b5",
+    "run_id": 38254936958,
+    "run_attempt": 1,
+    "job_id": 114830946165,
+    "step": "Build ad-hoc signed DMG",
+    "exit_code": 1,
+    "stderr_line": "hdiutil: create failed - Resource busy",
+    "original_log_sha256": "512576aca4a30bd890d2e775b276610090e74c9cd2bc25c5a9786f4a50ede502",
+    "evidence": "Bounded watcher receipt only; original log body remained sealed."
+  },
+  "source": {
+    "base": "b31568d138ef222ab30818cf77f96b73495f1085",
+    "files": [
+      {
+        "path": "xtask/src/package.rs",
+        "sha256": "77c69d7112fda483fd4bc7d5856cc091eef3b48a1ff1e778e01ef688a8d9fca4"
+      },
+      {
+        "path": "xtask/src/package/dmg.rs",
+        "sha256": "d0e5a9b25c1ce81f55db9bed5640cad654c879e688cc62f6ce920997e274e481"
+      },
+      {
+        "path": "xtask/src/package/macos.rs",
+        "sha256": "ec45c9fd8674a3d3973df8be2834718428709a239f5b4e63183df57219b87acb"
+      }
+    ],
+    "unchanged_during_probe": true
+  },
+  "repair": {
+    "retry": "Only exit code 1 plus an exact stderr line; 3 attempts maximum, delays 100 ms and 200 ms.",
+    "candidates": "Fresh owned temporary directories under checked canonical output; cleanup limited to these candidates.",
+    "staging": "Reuse the same signed source stage and creation argv, changing only the candidate output path.",
+    "publication": "Preserve existing final DMG until successful creation of a nonempty ordinary candidate; publish by rename.",
+    "downstream": "DMG signing, notarization, stapling, hdiutil verification, and checksum sequence remain unchanged."
+  },
+  "qualification": {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "xtask/Cargo.toml",
+      "--locked",
+      "--jobs",
+      "1",
+      "package::dmg::tests::exact_busy_retry_preserves_staging_and_final_artifact",
+      "--",
+      "--exact",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "started_utc": "2026-10-12T15:00:43.5982797Z",
+    "completed_utc": "2026-10-12T15:03:46.6123902Z",
+    "exit_code": 0,
+    "cases_passed": 1,
+    "cases_failed": 0,
+    "case_seconds": 0.05,
+    "main_cases_filtered": 216,
+    "other_harnesses_selected": 0,
+    "compiler_duration": "2m 25s",
+    "compiler_warnings": 0,
+    "warning_policy": "Standard host debug/default features, rustflags []; no -D warnings override",
+    "target_cache": "D:/noBS-CAD-builds/finish-bevy-rc2/release-target",
+    "occt_root": "C:/Users/jeffg/dev/noBS-CAD/vcpkg_installed/x64-windows",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "msvc": "14.44.35207",
+    "windows_sdk": "10.0.26100.0\\",
+    "matrix": [
+      "Exact busy partial image then success",
+      "Different stderr failure is immediate",
+      "Same diagnostic with exit code 2 is immediate",
+      "Diagnostic suffix mismatch is immediate",
+      "Signal/no exit code is immediate",
+      "Persistent exact busy stops at 3",
+      "Immediate successful final publication"
+    ],
+    "invariants": [
+      "Existing final preserved through every creation attempt and every failed result",
+      "Signed stage bytes and unrelated output preserved",
+      "Owned partial candidates and temporary directories removed",
+      "Successful final contains complete new image bytes"
+    ],
+    "proof_receipt": {
+      "basename": "ci-macos-dmg-ebusy-debug-v1-20261012.json",
+      "sha256": "38e4f53bee389bff6471c8d3525d778ab4d1b4bc16be487cac4c5d2d764fd8e5"
+    },
+    "proof_log": {
+      "basename": "ci-macos-dmg-ebusy-debug-v1-20261012.log",
+      "bytes": 2299,
+      "sha256": "7b3374d97c07a7caf8af31c24ea0193e3fa2a61c63815ece56c8f373358334f0"
+    }
+  },
+  "limits": "Portable Windows CPU fixture with fake outcomes and disposable files only. No real hdiutil/macOS, CAD GUI, GPU, model, session or inbox calls. No existing passing case rerun. Real macOS artifact acceptance requires current-head hosted packaging CI.",
+  "integration_review": {
+    "preserved_incoming_base": "2d137201b7056e5caf745af488216a078904401c",
+    "original_checkpoint": "093a0849656c07fe894fdf1ae317572c1a26094c",
+    "review": "Root independently reviewed exact retry policy, output ownership, original failure and source-fenced one-case result. Incoming app-only option and auditable packaging remain preserved; the hdiutil create path and ordinary filesystem guards used by the CPU fixture are unchanged.",
+    "passing_case_repeated": false,
+    "source_hash_representation": "Raw probe checkout bytes; the incoming LF attributes may change materialized bytes in other checkouts without changing the qualified helper logic."
+  }
 }
