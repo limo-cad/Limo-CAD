@@ -469,6 +469,7 @@
     "fit": "Anpassen",
     "displaySettings": "Darstellungseinstellungen",
     "gridSettings": "Rastereinstellungen",
+    "showGrid": "Raster anzeigen",
     "undo": "Rückgängig",
     "redo": "Wiederholen",
     "lookAtSketch": "Zurück zur flachen Skizzenansicht",

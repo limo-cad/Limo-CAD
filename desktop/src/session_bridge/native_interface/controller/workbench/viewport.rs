@@ -414,9 +414,24 @@ pub(super) fn synchronize(
             31,
         );
     }
-    for (i, (id, label_key, icon)) in [
-        ("display", "navbar.displaySettings", Icon::Monitor),
-        ("grid", "navbar.gridSettings", Icon::Grid),
+    let grid_visible = native_viewport::interface_view(world).2.grid_visible();
+    for (i, (id, label_key, icon, command, selected, disabled)) in [
+        (
+            "display",
+            "navbar.displaySettings",
+            Icon::Monitor,
+            Command::Menu("display".into()),
+            None,
+            true,
+        ),
+        (
+            "grid",
+            "navbar.showGrid",
+            Icon::Grid,
+            Command::ToggleGrid,
+            Some(grid_visible),
+            false,
+        ),
     ]
     .into_iter()
     .enumerate()
@@ -426,10 +441,10 @@ pub(super) fn synchronize(
         centered_button(
             (&mut state.widgets, world, camera),
             (&format!("nav-{id}"), label, ""),
-            NativeCommand::Workbench(Command::Menu("display".into())),
+            NativeCommand::Workbench(command),
             rect(left, nav_y + 5., 26., 24.),
-            None,
-            true,
+            selected,
+            disabled,
             30,
         )?;
         state.widgets.glyph(
@@ -437,7 +452,13 @@ pub(super) fn synchronize(
             &format!("nav-{id}-glyph"),
             rect(left + 5., nav_y + 9., 16., 16.),
             icon,
-            theme.edge,
+            if disabled {
+                theme.edge
+            } else if selected == Some(true) {
+                theme.accent
+            } else {
+                theme.mute
+            },
             31,
         );
     }

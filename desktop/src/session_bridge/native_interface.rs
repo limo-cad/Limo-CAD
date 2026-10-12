@@ -825,7 +825,13 @@ pub(crate) fn reduce_action(
     }
     if let NativeCommand::Workbench(command) = &binding.command {
         bridge.with_native_document_owner(engine, &action.context, || {
-            handle.validate_action(action)
+            handle.validate_action(action)?;
+            if matches!(command, controller::workbench::Command::ToggleGrid)
+                && native_viewport::interface_view(world).0 != action.context.document_id
+            {
+                return Err("The rendered document is not current".into());
+            }
+            Ok(())
         })?;
         return controller::workbench::execute(world, command);
     }

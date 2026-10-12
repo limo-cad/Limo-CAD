@@ -160,6 +160,10 @@ pub enum ViewportOriginPlane {
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewportPresentation {
+    /// Ground-grid visibility in solid, plane-picking and CAM views. Kept
+    /// separate from the sketch grid so each view retains its own choice.
+    #[serde(default)]
+    pub hide_ground_grid: bool,
     /// Presentation-only palette choices; hiding a point never deletes it or
     /// disables snapping. False preserves existing clients' display defaults.
     #[serde(default)]
@@ -251,6 +255,25 @@ pub struct ViewportPresentation {
     pub cam_gpu_stock_removal: bool,
     /// Keep cutter metadata for hidden paths without drawing the cutter.
     pub cam_tool_hidden: bool,
+}
+
+impl ViewportPresentation {
+    pub(crate) fn grid_visible(&self) -> bool {
+        if self.mode == ViewportMode::Sketch {
+            !self.hide_sketch_grid
+        } else {
+            !self.hide_ground_grid
+        }
+    }
+
+    pub(crate) fn toggle_grid(&mut self) {
+        let hidden = if self.mode == ViewportMode::Sketch {
+            &mut self.hide_sketch_grid
+        } else {
+            &mut self.hide_ground_grid
+        };
+        *hidden = !*hidden;
+    }
 }
 
 fn deserialize_shared_values<'de, T, D>(deserializer: D) -> Result<std::sync::Arc<Vec<T>>, D::Error>

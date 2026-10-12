@@ -51,6 +51,8 @@ jobs:
         env:
           LIMO_CAD_PREVIEW_PROOF_DIR: ${{ github.workspace }}/docs/qa/native-boundary
         run: cargo xtask ci native-ignored-test sketch-visual
+      - name: Verify grid visibility restores without pointer input
+        run: cargo xtask ci native-ignored-test grid-redraw
       - name: Retain native visual evidence
         if: always()
         uses: actions/upload-artifact@v4

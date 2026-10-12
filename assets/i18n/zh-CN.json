@@ -469,6 +469,7 @@
     "fit": "适应",
     "displaySettings": "显示设置",
     "gridSettings": "网格设置",
+    "showGrid": "显示网格",
     "undo": "撤销",
     "redo": "重做",
     "lookAtSketch": "返回平面草图视图",

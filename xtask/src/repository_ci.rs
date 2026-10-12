@@ -28,7 +28,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "native-ignored-test" => {
             let suite = args
                 .next()
-                .context("missing native ignored suite (fonts or sketch-visual)")?;
+                .context("missing native ignored suite (fonts, sketch-visual or grid-redraw)")?;
             ensure!(
                 args.next().is_none(),
                 "unexpected native ignored suite argument"
@@ -133,7 +133,11 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             "native_sketch_boundary_visual_matrix",
             &["native_sketch_boundary_visual_matrix"],
         )),
-        _ => bail!("unknown native ignored suite; use fonts or sketch-visual"),
+        "grid-redraw" => Ok((
+            "native_viewport_grid_restores_without_pointer_motion_or_another_scene_request",
+            &["native_viewport_grid_restores_without_pointer_motion_or_another_scene_request"],
+        )),
+        _ => bail!("unknown native ignored suite; use fonts, sketch-visual or grid-redraw"),
     }
 }
 
@@ -325,7 +329,7 @@ mod tests {
     use super::*;
     #[test]
     fn native_diagnostic_filters_reject_empty_renamed_and_duplicate_tests() {
-        for suite in ["fonts", "sketch-visual"] {
+        for suite in ["fonts", "sketch-visual", "grid-redraw"] {
             let (filter, expected) = native_ignored_suite(suite).unwrap();
             let inventory = expected
                 .iter()
