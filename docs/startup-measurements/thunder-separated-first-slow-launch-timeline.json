@@ -1,0 +1,137 @@
+{
+  "run": 1,
+  "pid": 22744,
+  "scope": "first retained empty launch, no warmup; OS/driver cache temperature unverified under observed foreign compilation",
+  "segments": [
+    {
+      "name": "launch→Rust main origin",
+      "startMs": 0,
+      "endMs": 2645,
+      "durationMs": 2645
+    },
+    {
+      "name": "Rust main origin→setup",
+      "startMs": 2645,
+      "endMs": 6410.5195,
+      "durationMs": 3765.5195000000003
+    },
+    {
+      "name": "setup→feedback receipt",
+      "startMs": 6410.5195,
+      "endMs": 6545.1861,
+      "durationMs": 134.66659999999956
+    },
+    {
+      "name": "feedback receipt→native installed",
+      "startMs": 6545.1861,
+      "endMs": 10505.142,
+      "durationMs": 3959.9559
+    },
+    {
+      "name": "native installed→expansion request",
+      "startMs": 10505.142,
+      "endMs": 11782.2051,
+      "durationMs": 1277.0630999999994
+    },
+    {
+      "name": "expansion request→workspace receipt",
+      "startMs": 11782.2051,
+      "endMs": 12014.7778,
+      "durationMs": 232.57270000000062
+    }
+  ],
+  "containedObservations": [
+    {
+      "detail": null,
+      "durationMs": 3.2308,
+      "phase": "cadEngineSetup",
+      "pid": 22744,
+      "processElapsedMs": 9.9786,
+      "processSpanEndMs": 9.9786,
+      "processSpanStartMs": 6.7478,
+      "processStartedUnixMs": 1791753420332,
+      "recordKind": "span",
+      "scope": "application",
+      "webElapsedMs": null
+    },
+    {
+      "detail": null,
+      "durationMs": 161.30000001192093,
+      "phase": "appDocumentSetup",
+      "pid": 22744,
+      "processElapsedMs": 4477.873299999999,
+      "processStartedUnixMs": 1791753420332,
+      "recordKind": "span",
+      "scope": "application",
+      "webElapsedMs": 754.7000000476837,
+      "webSpanEndMs": 754.7000000476837,
+      "webSpanStartMs": 593.4000000357628
+    },
+    {
+      "detail": null,
+      "durationMs": 193.5999999642372,
+      "phase": "document",
+      "pid": 22744,
+      "processElapsedMs": 4478.5515,
+      "processStartedUnixMs": 1791753420332,
+      "recordKind": "span",
+      "scope": "startupComposite",
+      "webElapsedMs": 755.3000000119209,
+      "webSpanEndMs": 755.3000000119209,
+      "webSpanStartMs": 561.7000000476837
+    },
+    {
+      "detail": null,
+      "durationMs": 3224.8809,
+      "phase": "gpuDevice",
+      "pid": 22744,
+      "processElapsedMs": 7129.0638,
+      "processSpanEndMs": 7129.0638,
+      "processSpanStartMs": 3904.1829,
+      "processStartedUnixMs": 1791753420332,
+      "recordKind": "span",
+      "scope": "application",
+      "webElapsedMs": null
+    },
+    {
+      "detail": null,
+      "durationMs": 80.39689999999999,
+      "phase": "nativeFonts",
+      "pid": 22744,
+      "processElapsedMs": 7209.9256000000005,
+      "processSpanEndMs": 7209.9256000000005,
+      "processSpanStartMs": 7129.5287,
+      "processStartedUnixMs": 1791753420332,
+      "recordKind": "span",
+      "scope": "application",
+      "webElapsedMs": null
+    },
+    {
+      "detail": null,
+      "durationMs": 646.2130000000001,
+      "phase": "rendererInstall",
+      "pid": 22744,
+      "processElapsedMs": 7859.8379,
+      "processSpanEndMs": 7859.8379,
+      "processSpanStartMs": 7213.6249,
+      "processStartedUnixMs": 1791753420332,
+      "recordKind": "span",
+      "scope": "application",
+      "webElapsedMs": null
+    },
+    {
+      "detail": null,
+      "durationMs": 226,
+      "phase": "windowExpansion",
+      "pid": 22744,
+      "processElapsedMs": 9369.1847,
+      "processStartedUnixMs": 1791753420332,
+      "recordKind": "span",
+      "scope": "application",
+      "webElapsedMs": 5638.5,
+      "webSpanEndMs": 5638.5,
+      "webSpanStartMs": 5412.5
+    }
+  ],
+  "unattributedNote": "The main→setup interval includes framework/window construction; instrumentation does not establish exclusive WebView, DLL, disk-cache, antivirus, or scheduler causality."
+}

@@ -1,7 +1,8 @@
 #[cfg(target_os = "linux")]
 use bevy::render::pipelined_rendering::PipelinedRenderingPlugin;
+use bevy::render::settings::RenderCreation;
 #[cfg(target_os = "linux")]
-use bevy::render::settings::{RenderCreation, WgpuFeatures, WgpuSettings, WgpuSettingsPriority};
+use bevy::render::settings::{WgpuFeatures, WgpuSettings, WgpuSettingsPriority};
 use bevy::{
     asset::RenderAssetUsages,
     camera::{visibility::RenderLayers, ClearColorConfig},
@@ -120,6 +121,9 @@ use crate::state::BOOTSTRAP_SESSION_ID;
 #[path = "script_preview.rs"]
 pub(crate) mod script_preview;
 
+#[path = "loading.rs"]
+mod loading;
+
 #[cfg(target_os = "linux")]
 const INITIAL_PHYSICAL_SIZE: u32 = 1;
 #[cfg(not(target_os = "linux"))]
@@ -210,6 +214,12 @@ struct NativePointers {
 #[derive(Default)]
 struct MetricsState {
     ready: bool,
+    renderer_initialized: bool,
+    startup_phase: String,
+    model_session_id: String,
+    geometry_revision: u64,
+    ready_pipeline_count: usize,
+    uploaded_mesh_count: usize,
     startup_error: Option<String>,
     display_backend: String,
     ci_probe_written: bool,
@@ -259,7 +269,22 @@ struct PendingRenderCommands {
     cam_stock: Option<Option<ViewportCamStock>>,
     presentation: Option<ViewportPresentation>,
     scheduled: bool,
+    continuation_pending: bool,
     settle_frames: usize,
+}
+
+impl PendingRenderCommands {
+    fn has_work(&self) -> bool {
+        self.resize.is_some()
+            || self.model.is_some()
+            || !self.rebind_model_sessions.is_empty()
+            || !self.drop_model_sessions.is_empty()
+            || self.camera.is_some()
+            || self.preview.is_some()
+            || self.cam_stock.is_some()
+            || self.presentation.is_some()
+            || self.settle_frames > 0
+    }
 }
 
 struct MainThreadRenderRuntime {
@@ -295,6 +320,7 @@ impl Default for PickState {
 
 pub struct PlatformNativeViewport {
     app: tauri::AppHandle,
+    start: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     runtime: Arc<AtomicUsize>,
     pending: Arc<Mutex<PendingRenderCommands>>,
     pick_state: Arc<Mutex<PickState>>,
@@ -326,11 +352,69 @@ impl PlatformNativeViewport {
         let install_metrics = metrics.clone();
         let install_runtime = runtime.clone();
         let install_pending = pending.clone();
-        #[cfg(target_os = "linux")]
         let install_last_layout = last_layout.clone();
-
-        main_window
-            .with_webview(move |platform| {
+        let install_suspended = suspended.clone();
+        let (start, requested) = tokio::sync::oneshot::channel();
+        // The shell requests initialization after its first feedback has painted.
+        // Device discovery and creation need no native window: the previous
+        // automatic RenderPlugin also ran before we installed the raw handle.
+        // Keep the Bevy App, surface creation and updates on the native UI thread.
+        tauri::async_runtime::spawn(async move {
+            if requested.await.is_err() {
+                return;
+            }
+            let worker_metrics = install_metrics.clone();
+            let resources = tauri::async_runtime::spawn_blocking(move || {
+                crate::startup_metrics::record_native_milestone("nativeWorkerStarted");
+                std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    if let Ok(mut current) = worker_metrics.lock() {
+                        current.startup_phase = "renderer".to_string();
+                    }
+                    let RenderCreation::Automatic(settings) = cad_render_plugin().render_creation
+                    else {
+                        return Err("expected automatic GPU settings".to_string());
+                    };
+                    let backends = settings.backends.ok_or("no GPU backend is enabled")?;
+                    let device_started = Instant::now();
+                    let resources = bevy::tasks::block_on(
+                        bevy::render::renderer::initialize_renderer(backends, None, &settings),
+                    );
+                    crate::startup_metrics::record_native_span("gpuDevice", device_started);
+                    if let Ok(mut current) = worker_metrics.lock() {
+                        current.startup_phase = "font".to_string();
+                    }
+                    let fonts_started = Instant::now();
+                    let fonts = ui::prepare_system_fonts();
+                    crate::startup_metrics::record_native_span("nativeFonts", fonts_started);
+                    if let Ok(mut current) = worker_metrics.lock() {
+                        current.startup_phase = "assets".to_string();
+                    }
+                    Ok((resources, fonts))
+                }))
+                .unwrap_or_else(|payload| {
+                    Err(format!(
+                        "GPU initialization failed: {}",
+                        panic_message(payload)
+                    ))
+                })
+            })
+            .await;
+            let (resources, fonts) = match resources {
+                Ok(Ok(resources)) => resources,
+                Ok(Err(error)) => {
+                    record_startup_failure(&install_metrics, error);
+                    return;
+                }
+                Err(error) => {
+                    record_startup_failure(
+                        &install_metrics,
+                        format!("GPU initialization worker failed: {error}"),
+                    );
+                    return;
+                }
+            };
+            let callback_metrics = install_metrics.clone();
+            let result = main_window.with_webview(move |platform| {
                 // Tauri guarantees this closure runs on the native UI thread.
                 #[cfg(target_os = "macos")]
                 let marker =
@@ -394,7 +478,14 @@ impl PlatformNativeViewport {
                 // alive and expose the real cause through metrics/CI instead of
                 // silently leaving an empty viewport.
                 let initialized = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                    let bevy_app = build_bevy_app(view_handle, scale_factor as f32)?;
+                    let installation_started = Instant::now();
+                    let bevy_app =
+                        build_bevy_app(view_handle, scale_factor as f32, resources, fonts);
+                    crate::startup_metrics::record_native_span(
+                        "rendererInstall",
+                        installation_started,
+                    );
+                    let bevy_app = bevy_app?;
                     let render_runtime = Box::new(MainThreadRenderRuntime {
                         app: bevy_app,
                         model: ViewportModel {
@@ -414,16 +505,8 @@ impl PlatformNativeViewport {
                         scale_factor: scale_factor as f32,
                         session_aliases: HashMap::new(),
                     });
-                    // Linux must not create a Vulkan surface for GTK's 1x1
-                    // placeholder drawable. Its first Bevy update is driven
-                    // by the server-confirmed ConfigureNotify below. macOS
-                    // and Windows keep their established eager bootstrap.
-                    #[cfg(target_os = "linux")]
-                    let render_runtime = render_runtime;
-                    #[cfg(not(target_os = "linux"))]
-                    let mut render_runtime = render_runtime;
-                    #[cfg(not(target_os = "linux"))]
-                    render_frames(&mut render_runtime.app, 2, &install_metrics);
+                    // The first update follows a real layout. Do not compile
+                    // and present a throwaway 32x32 bootstrap viewport.
                     Ok::<_, String>(render_runtime)
                 }));
                 let render_runtime = match initialized {
@@ -452,8 +535,10 @@ impl PlatformNativeViewport {
                 // dereferenced only by run_on_main_thread closures.
                 let runtime_pointer = Box::into_raw(render_runtime) as usize;
                 install_runtime.store(runtime_pointer, Ordering::Release);
+                crate::startup_metrics::record_native_milestone("nativeInstalled");
                 if let Ok(mut current) = install_metrics.lock() {
-                    current.ready = true;
+                    current.renderer_initialized = true;
+                    current.startup_phase = "assets".to_string();
                     current.scale_factor = scale_factor;
                     current.display_backend = display_backend;
                 }
@@ -464,13 +549,45 @@ impl PlatformNativeViewport {
                 // has allocated the embedded X11 child. Keep it coalesced
                 // until the first real ConfigureNotify; draining here would
                 // still create a FIFO swapchain for the 1x1 placeholder.
-                #[cfg(not(target_os = "linux"))]
-                drain_render_commands(&install_runtime, &install_pending, &install_metrics);
-            })
-            .map_err(|error| format!("could not access the native webview: {error}"))?;
+                // Layout can arrive while the GPU worker is still running.
+                // Replay it now; otherwise that first request would be lost
+                // because the native child did not exist when it was sent.
+                let initial_layout = install_last_layout
+                    .lock()
+                    .ok()
+                    .and_then(|layout| layout.clone());
+                // Suspension can precede both installation and the first
+                // layout; honor it independently of whether a layout exists.
+                let replay_app = install_pending
+                    .lock()
+                    .ok()
+                    .and_then(|pending| pending.app.clone());
+                if let Some(app) = replay_app {
+                    let viewport = app.state::<super::NativeViewport>();
+                    let result = if install_suspended.load(Ordering::Acquire) {
+                        viewport.set_suspended(&app, true)
+                    } else if let Some(layout) = initial_layout {
+                        // Preserve Linux's server-confirmed configure path.
+                        viewport.set_layout(&app, layout)
+                    } else {
+                        Ok(())
+                    };
+                    if let Err(error) = result {
+                        record_startup_failure(&install_metrics, error);
+                    }
+                }
+            });
+            if let Err(error) = result {
+                record_startup_failure(
+                    &callback_metrics,
+                    format!("could not access the native webview: {error}"),
+                );
+            }
+        });
 
         Ok(Self {
             app: app_handle,
+            start: Mutex::new(Some(start)),
             runtime,
             pending,
             pick_state,
@@ -480,6 +597,22 @@ impl PlatformNativeViewport {
             pointers,
             metrics,
         })
+    }
+
+    pub fn start(&self) -> Result<(), String> {
+        let mut start = self
+            .start
+            .lock()
+            .map_err(|_| "startup request lock poisoned")?;
+        if let Some(request) = start.take() {
+            if let Ok(mut metrics) = self.metrics.lock() {
+                metrics.startup_phase = "gpu".to_string();
+            }
+            request
+                .send(())
+                .map_err(|_| "renderer initialization task is unavailable")?;
+        }
+        Ok(())
     }
 
     pub fn set_layout(&self, app: &tauri::AppHandle, layout: ViewportLayout) -> Result<(), String> {
@@ -576,6 +709,7 @@ impl PlatformNativeViewport {
             .lock()
             .map_err(|_| "native viewport layout lock poisoned".to_string())?
             .clone();
+        let resume_layout = (!suspended).then(|| layout.clone()).flatten();
         app.run_on_main_thread(move || {
             let webview_pointer = pointers.webview.load(Ordering::Acquire);
             let viewport_pointer = pointers.viewport.load(Ordering::Acquire);
@@ -593,7 +727,11 @@ impl PlatformNativeViewport {
                 );
             }
         })
-        .map_err(|error| format!("could not suspend native viewport: {error}"))
+        .map_err(|error| format!("could not suspend native viewport: {error}"))?;
+        if let Some(layout) = resume_layout {
+            self.set_layout(app, layout)?;
+        }
+        Ok(())
     }
 
     pub fn sync_model(&self, model: ViewportModel) -> Result<(), String> {
@@ -758,6 +896,12 @@ impl PlatformNativeViewport {
         NativeViewportMetrics {
             available: true,
             ready: metrics.ready,
+            renderer_initialized: metrics.renderer_initialized,
+            startup_phase: metrics.startup_phase.clone(),
+            model_session_id: metrics.model_session_id.clone(),
+            geometry_revision: metrics.geometry_revision,
+            ready_pipeline_count: metrics.ready_pipeline_count,
+            uploaded_mesh_count: metrics.uploaded_mesh_count,
             startup_error: metrics.startup_error.clone(),
             backend: NATIVE_BACKEND.to_string(),
             logical_width: metrics.logical_width,
@@ -806,6 +950,9 @@ fn write_ci_probe(metrics: &MetricsState, status: &str) -> Result<(), String> {
         "physicalWidth": metrics.physical_width,
         "physicalHeight": metrics.physical_height,
         "renderedFrames": metrics.rendered_frames,
+        "startupPhase": metrics.startup_phase,
+        "readyPipelineCount": metrics.ready_pipeline_count,
+        "uploadedMeshCount": metrics.uploaded_mesh_count,
     });
     let bytes = serde_json::to_vec_pretty(&payload)
         .map_err(|error| format!("could not encode native viewport probe: {error}"))?;
@@ -818,6 +965,7 @@ fn record_startup_failure(metrics: &Arc<Mutex<MetricsState>>, error: String) {
     if let Ok(mut current) = metrics.lock() {
         current.startup_error = Some(error);
         current.ready = false;
+        current.startup_phase = "error".to_string();
         if !current.ci_probe_written {
             match write_ci_probe(&current, "error") {
                 Ok(()) => current.ci_probe_written = true,
@@ -2333,13 +2481,10 @@ struct CadSketchPointGizmos;
 
 fn cad_render_plugin() -> RenderPlugin {
     let render_plugin = RenderPlugin {
-        // This renderer advances only in response to bridge commands. On
-        // Windows, asynchronously compiled PBR/UI pipelines can otherwise
-        // finish after the two-frame render burst and remain invisible
-        // until unrelated input happens to wake Bevy again. Blocking the
-        // pipeline queue keeps origin-plane fills and native HUD chrome
-        // deterministic. Bevy ignores this setting on macOS.
-        synchronous_pipeline_compilation: true,
+        // Loading drives bounded continuation frames until the render-world
+        // monitor confirms successful preparation and presentation. Compile
+        // pipelines asynchronously so the UI can process events in between.
+        synchronous_pipeline_compilation: false,
         ..default()
     };
     #[cfg(target_os = "linux")]
@@ -2363,6 +2508,8 @@ fn cad_render_plugin() -> RenderPlugin {
 fn build_bevy_app(
     view_handle: NativeViewHandle,
     scale_factor: f32,
+    resources: bevy::render::settings::RenderResources,
+    fonts: ui::PreparedSystemFonts,
 ) -> Result<bevy::app::App, String> {
     let mut app = bevy::app::App::new();
     #[cfg(target_os = "linux")]
@@ -2389,10 +2536,14 @@ fn build_bevy_app(
             exit_condition: ExitCondition::DontExit,
             close_when_requested: false,
         })
-        .set(cad_render_plugin());
+        .set(RenderPlugin {
+            render_creation: resources.into(),
+            ..cad_render_plugin()
+        });
     #[cfg(target_os = "linux")]
     let plugins = plugins.disable::<PipelinedRenderingPlugin>();
     app.add_plugins(plugins);
+    ui::install_prepared_fonts(&mut app, fonts);
 
     let (window_entity, holder) = {
         let world = app.world_mut();
@@ -2416,6 +2567,9 @@ fn build_bevy_app(
 
     install_cad_scene(&mut app);
     app.finish();
+    // Attach while RenderApp is accessible: pipelined rendering moves it
+    // to the render thread during cleanup on Windows and macOS.
+    loading::install(&mut app);
     app.cleanup();
     Ok(app)
 }
@@ -6277,6 +6431,18 @@ fn drain_render_commands(
 ) {
     #[cfg(target_os = "macos")]
     debug_assert!(MainThreadMarker::new().is_some());
+    // A caught render panic may leave Bevy's schedules partially unwound.
+    // Quarantine all App mutations, including queued layout/model changes.
+    if metrics
+        .lock()
+        .is_ok_and(|metrics| metrics.startup_error.is_some())
+    {
+        if let Ok(mut pending) = pending.lock() {
+            pending.settle_frames = 0;
+            pending.scheduled = pending.continuation_pending;
+        }
+        return;
+    }
     let pointer = runtime_pointer.load(Ordering::Acquire);
     if pointer == 0 {
         if let Ok(mut pending) = pending.lock() {
@@ -6286,24 +6452,17 @@ fn drain_render_commands(
     }
     let runtime = unsafe { &mut *(pointer as *mut MainThreadRenderRuntime) };
 
+    let mut loading_poll = false;
     {
         let commands = {
             let Ok(mut pending) = pending.lock() else {
                 return;
             };
-            if pending.resize.is_none()
-                && pending.model.is_none()
-                && pending.rebind_model_sessions.is_empty()
-                && pending.drop_model_sessions.is_empty()
-                && pending.camera.is_none()
-                && pending.preview.is_none()
-                && pending.cam_stock.is_none()
-                && pending.presentation.is_none()
-                && pending.settle_frames == 0
-            {
-                pending.scheduled = false;
+            if !pending.has_work() {
+                pending.scheduled = pending.continuation_pending;
                 return;
             }
+            pending.scheduled = true;
             (
                 pending.resize.take(),
                 pending.model.take(),
@@ -6402,12 +6561,33 @@ fn drain_render_commands(
             render_frames(&mut runtime.app, 1, metrics);
             if let Ok(mut pending) = pending.lock() {
                 pending.settle_frames = pending.settle_frames.max(frame_count.saturating_sub(1));
+                if startup_continuation(metrics) {
+                    pending.settle_frames = pending.settle_frames.max(1);
+                    // Keep the ordinary upload-settle burst prompt. Once that
+                    // burst is exhausted, poll startup at display cadence so
+                    // UI events and shader workers have time to make progress.
+                    loading_poll = frame_count <= 1 && loading::initial_loading(&runtime.app);
+                }
             }
             maybe_write_ready_probe(metrics);
         }
     }
-    let Some(app) = pending.lock().ok().and_then(|pending| pending.app.clone()) else {
-        return;
+    let app = {
+        let Ok(mut pending) = pending.lock() else {
+            return;
+        };
+        if pending.continuation_pending {
+            return;
+        }
+        if !pending.has_work() {
+            pending.scheduled = false;
+            return;
+        }
+        let Some(app) = pending.app.clone() else {
+            return;
+        };
+        pending.continuation_pending = true;
+        app
     };
     let runtime = runtime_pointer.clone();
     let pending = pending.clone();
@@ -6415,11 +6595,28 @@ fn drain_render_commands(
     // One bounded continuation, not an always-running render loop. Scheduling
     // off the UI thread prevents run_on_main_thread from executing recursively.
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-        if schedule_render_drain(app, runtime, pending.clone(), metrics).is_err() {
+        tokio::time::sleep(std::time::Duration::from_millis(if loading_poll {
+            16
+        } else {
+            1
+        }))
+        .await;
+        let callback_pending = pending.clone();
+        let callback_metrics = metrics.clone();
+        if let Err(error) = app.run_on_main_thread(move || {
+            if let Ok(mut pending) = callback_pending.lock() {
+                pending.continuation_pending = false;
+            }
+            drain_render_commands(&runtime, &callback_pending, &callback_metrics);
+        }) {
             if let Ok(mut pending) = pending.lock() {
                 pending.scheduled = false;
+                pending.continuation_pending = false;
             }
+            record_startup_failure(
+                &metrics,
+                format!("Could not schedule viewport preparation: {error}"),
+            );
         }
     });
 }
@@ -6459,6 +6656,30 @@ fn apply_render_command(
                     scale_factor as f32,
                     scale_factor_changed,
                 );
+            }
+            // Subpixel DOM noise that does not resize Bevy must not require a
+            // frame at an extent the swapchain was never asked to use.
+            let applied_logical_size = if size_changed {
+                (logical_width as f32, logical_height as f32)
+            } else {
+                runtime.logical_size
+            };
+            let applied_scale_factor = if size_changed {
+                scale_factor as f32
+            } else {
+                runtime.scale_factor
+            };
+            if loading::layout_received(
+                &mut runtime.app,
+                applied_logical_size.0,
+                applied_logical_size.1,
+                applied_scale_factor,
+                size_changed,
+            ) {
+                if let Ok(mut current) = metrics.lock() {
+                    current.ready = false;
+                    current.startup_phase = "frame".to_string();
+                }
             }
             {
                 let mut viewport = runtime
@@ -6740,8 +6961,20 @@ fn resize_embedded_window(
 
 fn render_frames(app: &mut bevy::app::App, count: usize, metrics: &Arc<Mutex<MetricsState>>) {
     for _ in 0..count {
+        if metrics
+            .lock()
+            .is_ok_and(|metrics| metrics.startup_error.is_some())
+        {
+            return;
+        }
         let started = Instant::now();
-        app.update();
+        if let Err(payload) = std::panic::catch_unwind(AssertUnwindSafe(|| app.update())) {
+            record_startup_failure(
+                metrics,
+                format!("Viewport rendering failed: {}", panic_message(payload)),
+            );
+            return;
+        }
         #[cfg(target_os = "linux")]
         if std::env::var_os("NBCAD_VIEWPORT_PROBE_FILE").is_some() {
             if let Some(render_app) = app.get_sub_app(bevy::render::RenderApp) {
@@ -6768,11 +7001,34 @@ fn render_frames(app: &mut bevy::app::App, count: usize, metrics: &Arc<Mutex<Met
             }
         }
         let elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0;
+        let report = loading::report(app);
+        let failure = report.as_ref().and_then(|report| report.error.clone());
         if let Ok(mut current) = metrics.lock() {
             current.rendered_frames += 1;
             current.total_frame_ms += elapsed_ms;
+            if let Some(report) = report {
+                current.ready = report.ready;
+                current.startup_phase = report.phase.to_string();
+                current.model_session_id = report.session_id;
+                current.geometry_revision = report.geometry_revision;
+                current.ready_pipeline_count = report.pipeline_count;
+                current.uploaded_mesh_count = report.uploaded_mesh_count;
+            }
+        }
+        if let Some(error) = failure {
+            record_startup_failure(metrics, error);
+            return;
         }
     }
+}
+
+fn startup_continuation(metrics: &Arc<Mutex<MetricsState>>) -> bool {
+    // Stop on the exact readiness snapshot published to the frontend. Reading
+    // the asynchronous report again can see a newer ready frame and stop while
+    // the externally visible metrics still say pending, leaving startup stuck.
+    metrics
+        .lock()
+        .is_ok_and(|metrics| metrics.startup_error.is_none() && !metrics.ready)
 }
 
 fn pick_occt_scene(
@@ -8203,6 +8459,32 @@ mod tests {
             }),
             "the internal triangulation diagonal must not be rendered"
         );
+    }
+
+    #[test]
+    fn failed_renderer_quarantines_pending_updates_and_finishes_its_timer() {
+        let runtime = Arc::new(AtomicUsize::new(0));
+        let pending = Arc::new(Mutex::new(PendingRenderCommands {
+            settle_frames: 8,
+            scheduled: true,
+            continuation_pending: true,
+            ..default()
+        }));
+        let metrics = Arc::new(Mutex::new(MetricsState {
+            startup_error: Some("test pipeline failure".to_string()),
+            ..default()
+        }));
+        drain_render_commands(&runtime, &pending, &metrics);
+        {
+            let mut pending = pending.lock().unwrap();
+            assert_eq!(pending.settle_frames, 0);
+            assert!(pending.scheduled);
+            // The already reserved timer clears this bit before draining.
+            pending.continuation_pending = false;
+        }
+        drain_render_commands(&runtime, &pending, &metrics);
+        assert!(!pending.lock().unwrap().scheduled);
+        assert_eq!(metrics.lock().unwrap().rendered_frames, 0);
     }
 
     #[test]

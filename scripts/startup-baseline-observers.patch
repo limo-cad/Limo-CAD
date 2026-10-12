@@ -1,0 +1,1108 @@
+diff --git a/src-tauri/src/lib.rs b/src-tauri/src/lib.rs
+index af22f7e2..9630bfe7 100644
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -11,6 +11,7 @@ mod cam_library;
+ mod cam_playback;
+ mod cam_posts;
+ mod native_menu;
++pub mod startup_metrics;
+ pub mod native_viewport;
+ mod recipe_links;
+ mod scripts;
+@@ -175,7 +176,7 @@ fn native_viewport_set_suspended(
+ async fn native_viewport_sync_model(
+     engine: tauri::State<'_, AppState>,
+     viewport: tauri::State<'_, NativeViewport>,
+-) -> Result<(), String> {
++) -> Result<u64, String> {
+     let (
+         session_id,
+         geometry_revision,
+@@ -199,7 +200,8 @@ async fn native_viewport_sync_model(
+         body_appearances,
+         body_poses,
+         instance_body_poses,
+-    })
++    })?;
++    Ok(geometry_revision)
+ }
+ 
+ #[tauri::command]
+@@ -1296,6 +1298,8 @@ pub fn run() {
+         })
+         .invoke_handler(tauri::generate_handler![
+             ping,
++            startup_metrics::startup_record,
++            startup_metrics::startup_measurement_settings,
+             system_memory_status,
+             native_unsaved_set,
+             native_force_quit,
+diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
+index 86b8a60c..faf4c659 100644
+--- a/src-tauri/src/main.rs
++++ b/src-tauri/src/main.rs
+@@ -6,6 +6,7 @@
+ mod startup;
+ 
+ fn main() -> std::process::ExitCode {
++    nbcad_lib::startup_metrics::begin();
+     use startup::Startup;
+     let startup = match startup::parse(std::env::args_os().skip(1)) {
+         Ok(startup) => startup,
+diff --git a/src-tauri/src/native_viewport/loading.rs b/src-tauri/src/native_viewport/loading.rs
+new file mode 100644
+index 00000000..2271b1dc
+--- /dev/null
++++ b/src-tauri/src/native_viewport/loading.rs
+@@ -0,0 +1,506 @@
++//! Readiness for the embedded viewport, using Bevy 0.19's render-world APIs.
++//!
++//! Like Bevy's loading-screen example, assets and pipelines are independent
++//! requirements. Unlike a queue-length test, this also requires prepared GPU
++//! assets, a nonempty successful pipeline cache, and a presented real-size
++//! viewport frame for the current document. The shared result works with both
++//! the synchronous and pipelined render sub-apps.
++
++use std::{
++    sync::{Arc, Mutex},
++    time::{Duration, Instant},
++};
++
++use bevy::{
++    asset::{
++        AssetId, LoadState, RecursiveDependencyLoadState, UntypedAssetId, VisitAssetDependencies,
++    },
++    pbr::{PreparedMaterial, SpecializedMaterialPipelineCache},
++    prelude::*,
++    render::{
++        camera::ExtractedCamera,
++        erased_render_asset::ErasedRenderAssets,
++        mesh::RenderMesh,
++        render_asset::RenderAssets,
++        render_resource::{CachedPipelineState, Pipeline, PipelineCache},
++        renderer::render_system,
++        sync_world::MainEntity,
++        texture::GpuImage,
++        view::{window::ExtractedWindows, ViewTarget},
++        Extract, ExtractSchedule, Render, RenderApp, RenderSystems,
++    },
++    shader::ShaderCacheError,
++    text::FontSource,
++};
++
++use super::{
++    CamStockResource, CameraResource, HudResource, ModelResource, NativeModelGeometry,
++    PresentationResource, PreviewResource, RenderedRevisions, ViewportSizeResource,
++};
++
++#[derive(Clone, Default)]
++pub(super) struct Report {
++    pub ready: bool,
++    pub phase: &'static str,
++    pub error: Option<String>,
++    pub session_id: String,
++    pub geometry_revision: u64,
++    model_revision: u64,
++    pub pipeline_count: usize,
++    pub uploaded_mesh_count: usize,
++    has_been_ready: bool,
++}
++
++#[derive(Resource, Clone)]
++struct SharedReport(Arc<Mutex<Report>>);
++
++#[derive(Resource)]
++struct LoadingState {
++    started: Instant,
++    real_layout: bool,
++}
++
++#[derive(Resource, Clone, Default)]
++struct Requirements {
++    session_id: String,
++    geometry_revision: u64,
++    model_revision: u64,
++    real_layout: bool,
++    cpu_ready: bool,
++    error: Option<String>,
++    meshes: Vec<AssetId<Mesh>>,
++    materials: Vec<AssetId<StandardMaterial>>,
++    images: Vec<AssetId<Image>>,
++    visible_material_entities: Vec<Entity>,
++}
++
++#[derive(Resource, Default)]
++struct FrameEvidence {
++    acquired_window: Option<Entity>,
++}
++
++pub(super) fn install(app: &mut App) {
++    let shared = SharedReport(Arc::new(Mutex::new(Report {
++        phase: "assets",
++        ..default()
++    })));
++    app.insert_resource(shared.clone())
++        .insert_resource(LoadingState {
++            started: Instant::now(),
++            real_layout: false,
++        })
++        .init_resource::<Requirements>()
++        .add_systems(Last, collect_requirements);
++    app.sub_app_mut(RenderApp)
++        .insert_resource(shared)
++        .init_resource::<Requirements>()
++        .init_resource::<FrameEvidence>()
++        .add_systems(ExtractSchedule, extract_requirements)
++        .add_systems(
++            Render,
++            (
++                capture_acquired_frame.before(render_system),
++                publish_report.after(render_system),
++            )
++                .in_set(RenderSystems::Render),
++        );
++}
++
++pub(super) fn layout_received(app: &mut App) {
++    if let Some(mut state) = app.world_mut().get_resource_mut::<LoadingState>() {
++        state.real_layout = true;
++    }
++}
++
++pub(super) fn initial_loading(app: &App) -> bool {
++    app.world()
++        .get_resource::<SharedReport>()
++        .is_some_and(|shared| shared.0.lock().is_ok_and(|report| !report.has_been_ready))
++}
++
++pub(super) fn report(app: &App) -> Option<Report> {
++    let shared = app.world().get_resource::<SharedReport>()?;
++    let mut report = shared.0.lock().ok()?.clone();
++    let model = app.world().get_resource::<ModelResource>()?;
++    // A pipelined render may still be publishing the preceding document.
++    // Never identify that completed frame as the newly requested document.
++    if report.session_id != model.session_id
++        || report.geometry_revision != model.geometry_revision
++        || report.model_revision != model.revision
++    {
++        report.ready = false;
++        report.phase = "gpu";
++    }
++    let state = app.world().get_resource::<LoadingState>()?;
++    if !report.ready
++        && !report.has_been_ready
++        && report.error.is_none()
++        && state.started.elapsed() > Duration::from_secs(60)
++    {
++        let pending_phase = report.phase;
++        report.phase = "error";
++        report.error = Some(format!("Viewport preparation timed out during {pending_phase}. Retry startup or open an empty document."));
++    }
++    Some(report)
++}
++
++fn collect_requirements(
++    mut required: ResMut<Requirements>,
++    state: Res<LoadingState>,
++    shared: Res<SharedReport>,
++    model: Res<ModelResource>,
++    (hud, preview, stock, size, camera, presentation): (
++        Res<HudResource>,
++        Res<PreviewResource>,
++        Res<CamStockResource>,
++        Res<ViewportSizeResource>,
++        Res<CameraResource>,
++        Res<PresentationResource>,
++    ),
++    revisions: Res<RenderedRevisions>,
++    asset_server: Res<AssetServer>,
++    (meshes, materials, images, fonts, shaders): (
++        Res<Assets<Mesh>>,
++        Res<Assets<StandardMaterial>>,
++        Res<Assets<Image>>,
++        Res<Assets<Font>>,
++        Res<Assets<Shader>>,
++    ),
++    mesh_entities: Query<(
++        Entity,
++        &Mesh3d,
++        &MeshMaterial3d<StandardMaterial>,
++        Option<&NativeModelGeometry>,
++        Option<&Visibility>,
++        Option<&ViewVisibility>,
++    )>,
++    text_fonts: Query<&TextFont>,
++    mut previous: Local<Option<(String, u64, u64, u64, u64, u64, u32, u32)>>,
++) {
++    let key = (
++        model.session_id.clone(),
++        model.geometry_revision,
++        model.revision,
++        hud.revision,
++        preview.revision,
++        stock.revision,
++        size.logical_width.to_bits(),
++        size.logical_height.to_bits(),
++    );
++    if previous.as_ref() == Some(&key)
++        && !presentation.is_changed()
++        && shared.0.lock().is_ok_and(|report| report.ready)
++    {
++        if camera.is_changed() {
++            // Camera motion changes visibility without changing any assets.
++            // Refresh only draw requirements; retain the prepared-asset scan.
++            required.visible_material_entities = mesh_entities
++                .iter()
++                .filter(|(_, _, _, geometry, visibility, view_visibility)| {
++                    !visibility.is_some_and(|visibility| *visibility == Visibility::Hidden)
++                        && !geometry.is_some_and(|geometry| geometry.session_id != model.session_id)
++                        && view_visibility.is_some_and(|visibility| visibility.get())
++                })
++                .map(|(entity, ..)| entity)
++                .collect();
++        }
++        return;
++    }
++    *previous = Some(key);
++    let mut next = Requirements {
++        session_id: model.session_id.clone(),
++        geometry_revision: model.geometry_revision,
++        model_revision: model.revision,
++        real_layout: state.real_layout,
++        cpu_ready: revisions.model == model.revision,
++        ..default()
++    };
++    let mut assets = Vec::<UntypedAssetId>::new();
++    for (entity, mesh, material, geometry, visibility, view_visibility) in &mesh_entities {
++        if visibility.is_some_and(|v| *v == Visibility::Hidden)
++            || geometry.is_some_and(|g| g.session_id != model.session_id)
++        {
++            continue;
++        }
++        next.meshes.push(mesh.0.id());
++        next.materials.push(material.0.id());
++        if view_visibility.is_some_and(|visibility| visibility.get()) {
++            next.visible_material_entities.push(entity);
++        }
++        next.cpu_ready &= meshes.contains(&mesh.0) && materials.contains(&material.0);
++        assets.push(mesh.0.id().untyped());
++        assets.push(material.0.id().untyped());
++        if let Some(value) = materials.get(&material.0) {
++            value.visit_dependencies(&mut |id| assets.push(id));
++        }
++    }
++    for font in &text_fonts {
++        if let FontSource::Handle(handle) = &font.font {
++            next.cpu_ready &= fonts.contains(handle);
++            assets.push(handle.id().untyped());
++        }
++    }
++    // This viewport's image assets include text atlases and its embedded
++    // tonemapping LUTs. Waiting for GPU preparation avoids a blank first HUD.
++    next.images.extend(images.ids());
++    assets.extend(next.images.iter().map(|id| id.untyped()));
++    assets.extend(shaders.ids().map(|id| id.untyped()));
++    for id in assets {
++        match asset_server.get_load_state(id) {
++            Some(LoadState::Failed(error)) => {
++                next.error = Some(format!("Required viewport asset failed: {error}"))
++            }
++            Some(LoadState::Loaded) => match asset_server.get_recursive_dependency_load_state(id) {
++                Some(RecursiveDependencyLoadState::Failed(error)) => {
++                    next.error = Some(format!(
++                        "Required viewport asset dependency failed: {error}"
++                    ))
++                }
++                Some(RecursiveDependencyLoadState::Loaded) => {}
++                _ => next.cpu_ready = false,
++            },
++            Some(_) => next.cpu_ready = false,
++            // Procedural meshes, materials, fonts and embedded shaders are
++            // inserted directly into Assets; AssetServer does not own them.
++            None => {}
++        }
++    }
++    *required = next;
++}
++
++fn extract_requirements(mut commands: Commands, required: Extract<Res<Requirements>>) {
++    commands.insert_resource((**required).clone());
++}
++
++fn capture_acquired_frame(
++    mut evidence: ResMut<FrameEvidence>,
++    required: Res<Requirements>,
++    windows: Res<ExtractedWindows>,
++    cameras: Query<(&ExtractedCamera, &ViewTarget)>,
++) {
++    evidence.acquired_window = None;
++    if !required.real_layout {
++        return;
++    }
++    for window in windows.values() {
++        if window.physical_width <= 1
++            || window.physical_height <= 1
++            || window.swap_chain_texture.is_none()
++        {
++            continue;
++        }
++        if cameras.iter().any(|(camera, _)| matches!(camera.target,
++            Some(bevy::camera::NormalizedRenderTarget::Window(target)) if target.entity() == window.entity)) {
++            evidence.acquired_window = Some(window.entity);
++            break;
++        }
++    }
++}
++
++fn publish_report(
++    shared: Res<SharedReport>,
++    required: Res<Requirements>,
++    evidence: Res<FrameEvidence>,
++    windows: Res<ExtractedWindows>,
++    cache: Res<PipelineCache>,
++    specialized_materials: Res<SpecializedMaterialPipelineCache>,
++    meshes: Res<RenderAssets<RenderMesh>>,
++    materials: Res<ErasedRenderAssets<PreparedMaterial>>,
++    images: Res<RenderAssets<GpuImage>>,
++) {
++    let mut next = Report {
++        phase: "assets",
++        session_id: required.session_id.clone(),
++        geometry_revision: required.geometry_revision,
++        model_revision: required.model_revision,
++        error: required.error.clone(),
++        ..default()
++    };
++    next.uploaded_mesh_count = required
++        .meshes
++        .iter()
++        .filter(|id| meshes.get(**id).is_some())
++        .count();
++    let gpu_ready = next.uploaded_mesh_count == required.meshes.len()
++        && required
++            .materials
++            .iter()
++            .all(|id| materials.get(*id).is_some())
++        && required.images.iter().all(|id| images.get(*id).is_some());
++    let mut pipelines_ready = true;
++    for pipeline in cache.pipelines() {
++        match &pipeline.state {
++            CachedPipelineState::Ok(Pipeline::RenderPipeline(_)) => next.pipeline_count += 1,
++            CachedPipelineState::Ok(Pipeline::ComputePipeline(_)) => {}
++            CachedPipelineState::Err(
++                ShaderCacheError::ShaderNotLoaded(_)
++                | ShaderCacheError::ShaderImportNotYetAvailable,
++            ) => pipelines_ready = false,
++            CachedPipelineState::Err(error) => {
++                next.error = Some(format!("Viewport shader pipeline failed: {error}"));
++                pipelines_ready = false;
++            }
++            _ => pipelines_ready = false,
++        }
++    }
++    pipelines_ready = pipeline_evidence_ready(
++        next.pipeline_count,
++        pipelines_ready,
++        cache.waiting_pipelines().next().is_none(),
++    );
++    // Uploaded assets alone do not prove their material pipelines were
++    // specialized: Bevy can defer a mesh while its instance/view is prepared.
++    // Require actual successful pipeline IDs for the meshes visible this frame.
++    // Offscreen geometry does not need a draw pipeline until it becomes visible.
++    pipelines_ready &= required.visible_material_entities.iter().all(|entity| {
++        let entity = MainEntity::from(*entity);
++        specialized_materials.values().any(|view| {
++            view.get(&entity)
++                .is_some_and(|pipeline| cache.get_render_pipeline(*pipeline).is_some())
++        })
++    });
++    let presented = evidence
++        .acquired_window
++        .and_then(|id| windows.get(&id))
++        .is_some_and(|window| window.swap_chain_texture.is_none() && !window.needs_initial_present);
++    next.phase = readiness_phase(required.cpu_ready, gpu_ready, pipelines_ready, presented);
++    next.ready = next.phase == "ready" && next.error.is_none();
++    if next.error.is_some() {
++        next.phase = "error";
++    }
++    if let Ok(mut report) = shared.0.lock() {
++        next.has_been_ready = report.has_been_ready || next.ready;
++        *report = next;
++    }
++}
++
++fn readiness_phase(assets: bool, gpu: bool, pipelines: bool, presented: bool) -> &'static str {
++    if !assets {
++        "assets"
++    } else if !gpu {
++        "gpu"
++    } else if !pipelines {
++        "pipelines"
++    } else if !presented {
++        "frame"
++    } else {
++        "ready"
++    }
++}
++
++fn pipeline_evidence_ready(
++    successful_render_count: usize,
++    all_successful: bool,
++    queue_empty: bool,
++) -> bool {
++    successful_render_count > 0 && all_successful && queue_empty
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn readiness_requires_each_independent_stage() {
++        assert_eq!(readiness_phase(false, true, true, true), "assets");
++        assert_eq!(readiness_phase(true, false, true, true), "gpu");
++        assert_eq!(readiness_phase(true, true, false, true), "pipelines");
++        assert_eq!(readiness_phase(true, true, true, false), "frame");
++        assert_eq!(readiness_phase(true, true, true, true), "ready");
++    }
++    #[test]
++    fn an_empty_pipeline_cache_is_not_readiness_evidence() {
++        assert!(!pipeline_evidence_ready(0, true, true));
++        assert!(!pipeline_evidence_ready(4, false, true));
++        assert!(!pipeline_evidence_ready(4, true, false));
++        assert!(pipeline_evidence_ready(4, true, true));
++    }
++
++    fn test_app(published: Report, elapsed: Duration) -> App {
++        let mut app = App::new();
++        app.insert_resource(SharedReport(Arc::new(Mutex::new(published))))
++            .insert_resource(LoadingState {
++                started: Instant::now() - elapsed,
++                real_layout: true,
++            })
++            .insert_resource(ModelResource {
++                session_id: "current".to_string(),
++                geometry_revision: 7,
++                ..default()
++            });
++        app
++    }
++
++    #[test]
++    fn stale_document_frame_never_releases_the_overlay() {
++        for (session_id, geometry_revision) in [("previous", 7), ("current", 6)] {
++            let app = test_app(
++                Report {
++                    ready: true,
++                    phase: "ready",
++                    session_id: session_id.to_string(),
++                    geometry_revision,
++                    ..default()
++                },
++                Duration::ZERO,
++            );
++            assert!(!report(&app).unwrap().ready);
++        }
++        let app = test_app(
++            Report {
++                ready: true,
++                phase: "ready",
++                session_id: "current".to_string(),
++                geometry_revision: 7,
++                ..default()
++            },
++            Duration::ZERO,
++        );
++        assert!(report(&app).unwrap().ready);
++    }
++
++    #[test]
++    fn timeout_applies_to_startup_and_retains_the_stalled_phase() {
++        let app = test_app(
++            Report {
++                phase: "pipelines",
++                session_id: "current".to_string(),
++                geometry_revision: 7,
++                ..default()
++            },
++            Duration::from_secs(61),
++        );
++        assert!(report(&app)
++            .unwrap()
++            .error
++            .unwrap()
++            .contains("during pipelines"));
++        let app = test_app(
++            Report {
++                phase: "pipelines",
++                session_id: "current".to_string(),
++                geometry_revision: 7,
++                has_been_ready: true,
++                ..default()
++            },
++            Duration::from_secs(61),
++        );
++        assert!(report(&app).unwrap().error.is_none());
++    }
++
++    #[test]
++    fn pose_or_appearance_update_requires_a_new_document_frame() {
++        let mut app = test_app(
++            Report {
++                ready: true,
++                phase: "ready",
++                session_id: "current".to_string(),
++                geometry_revision: 7,
++                ..default()
++            },
++            Duration::ZERO,
++        );
++        assert!(report(&app).unwrap().ready);
++        app.world_mut().resource_mut::<ModelResource>().revision += 1;
++        assert!(!report(&app).unwrap().ready);
++    }
++}
+diff --git a/src-tauri/src/native_viewport/mod.rs b/src-tauri/src/native_viewport/mod.rs
+index cbf5c3aa..57b888a1 100644
+--- a/src-tauri/src/native_viewport/mod.rs
++++ b/src-tauri/src/native_viewport/mod.rs
+@@ -643,6 +643,12 @@ pub struct NativePick {
+ pub struct NativeViewportMetrics {
+     pub available: bool,
+     pub ready: bool,
++    pub renderer_initialized: bool,
++    pub startup_phase: String,
++    pub model_session_id: String,
++    pub geometry_revision: u64,
++    pub ready_pipeline_count: usize,
++    pub uploaded_mesh_count: usize,
+     pub startup_error: Option<String>,
+     pub backend: String,
+     pub logical_width: f64,
+diff --git a/src-tauri/src/native_viewport/platform.rs b/src-tauri/src/native_viewport/platform.rs
+index 03e98edf..4fed9146 100644
+--- a/src-tauri/src/native_viewport/platform.rs
++++ b/src-tauri/src/native_viewport/platform.rs
+@@ -117,6 +117,9 @@ use super::{
+ };
+ use crate::state::BOOTSTRAP_SESSION_ID;
+ 
++#[path = "loading.rs"]
++mod loading;
++
+ #[path = "script_preview.rs"]
+ pub(crate) mod script_preview;
+ 
+@@ -210,6 +213,12 @@ struct NativePointers {
+ #[derive(Default)]
+ struct MetricsState {
+     ready: bool,
++    renderer_initialized: bool,
++    startup_phase: String,
++    model_session_id: String,
++    geometry_revision: u64,
++    ready_pipeline_count: usize,
++    uploaded_mesh_count: usize,
+     startup_error: Option<String>,
+     display_backend: String,
+     ci_probe_written: bool,
+@@ -453,7 +462,7 @@ impl PlatformNativeViewport {
+                 let runtime_pointer = Box::into_raw(render_runtime) as usize;
+                 install_runtime.store(runtime_pointer, Ordering::Release);
+                 if let Ok(mut current) = install_metrics.lock() {
+-                    current.ready = true;
++                    current.renderer_initialized = true;
+                     current.scale_factor = scale_factor;
+                     current.display_backend = display_backend;
+                 }
+@@ -758,6 +767,12 @@ impl PlatformNativeViewport {
+         NativeViewportMetrics {
+             available: true,
+             ready: metrics.ready,
++            renderer_initialized: metrics.renderer_initialized,
++            startup_phase: metrics.startup_phase.clone(),
++            model_session_id: metrics.model_session_id.clone(),
++            geometry_revision: metrics.geometry_revision,
++            ready_pipeline_count: metrics.ready_pipeline_count,
++            uploaded_mesh_count: metrics.uploaded_mesh_count,
+             startup_error: metrics.startup_error.clone(),
+             backend: NATIVE_BACKEND.to_string(),
+             logical_width: metrics.logical_width,
+@@ -2416,6 +2431,7 @@ fn build_bevy_app(
+ 
+     install_cad_scene(&mut app);
+     app.finish();
++    loading::install(&mut app);
+     app.cleanup();
+     Ok(app)
+ }
+@@ -6438,6 +6454,7 @@ fn apply_render_command(
+             palette,
+             hud,
+         } => {
++            if logical_width > 1.0 && logical_height > 1.0 { loading::layout_received(&mut runtime.app); }
+             let physical_width = (logical_width * scale_factor).round().max(1.0) as u32;
+             let physical_height = (logical_height * scale_factor).round().max(1.0) as u32;
+             let logical_size_changed = (runtime.logical_size.0 - logical_width as f32).abs() > 0.01
+@@ -6741,7 +6758,10 @@ fn resize_embedded_window(
+ fn render_frames(app: &mut bevy::app::App, count: usize, metrics: &Arc<Mutex<MetricsState>>) {
+     for _ in 0..count {
+         let started = Instant::now();
+-        app.update();
++        if let Err(payload) = std::panic::catch_unwind(AssertUnwindSafe(|| app.update())) {
++            record_startup_failure(metrics, format!("Viewport rendering failed: {}", panic_message(payload)));
++            return;
++        }
+         #[cfg(target_os = "linux")]
+         if std::env::var_os("NBCAD_VIEWPORT_PROBE_FILE").is_some() {
+             if let Some(render_app) = app.get_sub_app(bevy::render::RenderApp) {
+@@ -6771,6 +6791,17 @@ fn render_frames(app: &mut bevy::app::App, count: usize, metrics: &Arc<Mutex<Met
+         if let Ok(mut current) = metrics.lock() {
+             current.rendered_frames += 1;
+             current.total_frame_ms += elapsed_ms;
++            if let Some(report) = loading::report(app) {
++                current.ready = report.ready;
++                current.startup_phase = report.phase.to_string();
++                current.model_session_id = report.session_id;
++                current.geometry_revision = report.geometry_revision;
++                current.ready_pipeline_count = report.pipeline_count;
++                current.uploaded_mesh_count = report.uploaded_mesh_count;
++                if let Some(error) = report.error {
++                    current.startup_error = Some(error);
++                }
++            }
+         }
+     }
+ }
+diff --git a/src-tauri/src/startup_metrics.rs b/src-tauri/src/startup_metrics.rs
+new file mode 100644
+index 00000000..c6ddf648
+--- /dev/null
++++ b/src-tauri/src/startup_metrics.rs
+@@ -0,0 +1,89 @@
++//! Opt-in launch telemetry. Compilation is deliberately outside the interval.
++use serde::{Deserialize, Serialize};
++use std::{
++    io::Write,
++    sync::{Mutex, OnceLock},
++    time::{Instant, SystemTime, UNIX_EPOCH},
++};
++
++static STARTED: OnceLock<Instant> = OnceLock::new();
++static STARTED_UNIX_MS: OnceLock<u128> = OnceLock::new();
++static REPORT: Mutex<()> = Mutex::new(());
++
++pub fn begin() {
++    STARTED.get_or_init(Instant::now);
++    STARTED_UNIX_MS.get_or_init(|| {
++        SystemTime::now()
++            .duration_since(UNIX_EPOCH)
++            .unwrap_or_default()
++            .as_millis()
++    });
++}
++
++#[derive(Deserialize, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub enum StartupMilestone {
++    Feedback,
++    Workspace,
++    Interaction,
++    CadInteraction,
++    Error,
++}
++
++#[derive(Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct StartupMeasurementSettings {
++    locale: Option<String>,
++    document_path: Option<String>,
++}
++
++/// Diagnostic launches opt in explicitly; ordinary preferences and files are
++/// never changed by benchmark environment variables alone.
++#[tauri::command]
++pub fn startup_measurement_settings() -> Option<StartupMeasurementSettings> {
++    std::env::var_os("NBCAD_STARTUP_REPORT_FILE")?;
++    Some(StartupMeasurementSettings {
++        locale: std::env::var("NBCAD_STARTUP_LOCALE")
++            .ok()
++            .filter(|locale| matches!(locale.as_str(), "en" | "zh-CN" | "es" | "de")),
++        document_path: std::env::var("NBCAD_STARTUP_DOCUMENT").ok(),
++    })
++}
++
++#[tauri::command]
++pub fn startup_record(
++    phase: StartupMilestone,
++    elapsed_ms: f64,
++    duration_ms: Option<f64>,
++    detail: Option<String>,
++) -> Result<(), String> {
++    let Some(path) = std::env::var_os("NBCAD_STARTUP_REPORT_FILE") else {
++        return Ok(());
++    };
++    if !elapsed_ms.is_finite() || elapsed_ms < 0.0 {
++        return Err("invalid startup time".into());
++    }
++    if duration_ms.is_some_and(|duration| !duration.is_finite() || duration < 0.0) {
++        return Err("invalid interaction duration".into());
++    }
++    let _guard = REPORT.lock().map_err(|_| "startup report lock poisoned")?;
++    let mut file = std::fs::OpenOptions::new()
++        .create(true)
++        .append(true)
++        .open(path)
++        .map_err(|error| format!("cannot write startup report: {error}"))?;
++    serde_json::to_writer(
++        &mut file,
++        &serde_json::json!({
++            "phase": phase,
++            "processElapsedMs": STARTED.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0,
++            "processStartedUnixMs": STARTED_UNIX_MS.get().copied(),
++            "webElapsedMs": elapsed_ms,
++            "durationMs": duration_ms,
++            "detail": detail.map(|text| text.chars().take(4096).collect::<String>()),
++            "pid": std::process::id(),
++        }),
++    )
++    .map_err(|error| error.to_string())?;
++    file.write_all(b"\n").map_err(|error| error.to_string())
++}
+diff --git a/src/App.tsx b/src/App.tsx
+index cb6ffeee..50d44d6a 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -7,6 +7,8 @@
+  * deletion, Esc plane-pick cancellation, and engine undo/redo.
+  */
+ import { useEffect, useRef } from 'react';
++import { invoke } from '@tauri-apps/api/core';
++import { applyStartupMeasurementLocale, loadStartupMeasurementDocument, observeBaselineWorkspace } from './startupBaselineObserver';
+ import { installOperationFeedback } from './operationPlayback';
+ import { PresentationControls } from './components/PresentationControls';
+ import { applicationFileShortcut, isTextEditingTarget, listenForModelKeys } from './modelKeyboard';
+@@ -80,6 +82,11 @@ import { UnsavedChangesDialog } from './components/UnsavedChangesDialog';
+ import { MeshExportDialog } from './components/MeshExportDialog';
+ 
+ export default function App() {
++  useEffect(() => {
++    requestAnimationFrame(() => requestAnimationFrame(() => {
++      void invoke('startup_record', { phase: 'feedback', elapsedMs: performance.now() });
++    }));
++  }, []);
+   useEffect(installRecipeLinks, []);
+   useEffect(installOperationFeedback, []);
+   const { t } = useTranslation();
+@@ -97,12 +104,14 @@ export default function App() {
+   useEffect(() => {
+     if (initialized.current) return;
+     initialized.current = true;
+-    void loadDocument()
++    void applyStartupMeasurementLocale().then(loadDocument)
+       .then(async () => {
+         // A new application launch always begins with one clean Untitled
+         // document. Previous emergency snapshots are retained as a fallback,
+         // but are never reopened as the user's active workspace.
+         await initializeProjectTabs();
++        await loadStartupMeasurementDocument();
++        void observeBaselineWorkspace();
+       })
+       .catch((error) => {
+         useAppStore.getState().setConstraintDialog({
+diff --git a/src/components/viewport/nativeViewportBridge.ts b/src/components/viewport/nativeViewportBridge.ts
+index 6b6b3d2b..e612dec3 100644
+--- a/src/components/viewport/nativeViewportBridge.ts
++++ b/src/components/viewport/nativeViewportBridge.ts
+@@ -41,6 +41,12 @@ export interface NativeCameraState {
+ export interface NativeViewportMetrics {
+   available: boolean;
+   ready: boolean;
++  rendererInitialized: boolean;
++  startupPhase: string;
++  modelSessionId: string;
++  geometryRevision: number;
++  readyPipelineCount: number;
++  uploadedMeshCount: number;
+   startupError: string | null;
+   backend: string;
+   logicalWidth: number;
+@@ -371,7 +377,7 @@ function probe(): Promise<boolean> {
+     if (!isTauriRuntime()) return false;
+     try {
+       latestMetrics = await invoke<NativeViewportMetrics>('native_viewport_metrics');
+-      active = latestMetrics.available && latestMetrics.ready;
++      active = latestMetrics.available && latestMetrics.rendererInitialized;
+       return active;
+     } catch {
+       active = false;
+@@ -1956,3 +1962,8 @@ export async function pickNativeViewport(
+     purpose,
+   });
+ }
++
++export function currentNativeViewportCamera(): NativeCameraState | null {
++  if (!latestCamera) return null;
++  return { ...latestCamera, position: [...latestCamera.position], target: [...latestCamera.target], up: [...latestCamera.up] };
++}
+diff --git a/src/engine/projectModelComparison.ts b/src/engine/projectModelComparison.ts
+new file mode 100644
+index 00000000..1c99a7e0
+--- /dev/null
++++ b/src/engine/projectModelComparison.ts
+@@ -0,0 +1,37 @@
++/** JSON object member order has no model meaning. Arrays and every stored
++ * value remain exact; never discard metadata or tolerate geometric drift. */
++export function projectModelDifference(beforeJson: string, afterJson: string): string | null {
++  const before: unknown = JSON.parse(beforeJson);
++  const after: unknown = JSON.parse(afterJson);
++  const summary = (value: unknown): string => {
++    if (Array.isArray(value)) return `array(${value.length})`;
++    if (value && typeof value === 'object') return `object(${Object.keys(value).length})`;
++    return JSON.stringify(value)?.slice(0, 100) ?? 'missing';
++  };
++  const compare = (a: unknown, b: unknown, path: string): string | null => {
++    if (a === b) return null;
++    if (Array.isArray(a) && Array.isArray(b)) {
++      if (a.length !== b.length) return `${path}.length: ${a.length} -> ${b.length}`;
++      for (let i = 0; i < a.length; i++) {
++        const difference = compare(a[i], b[i], `${path}[${i}]`);
++        if (difference) return difference;
++      }
++      return null;
++    }
++    if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
++      const left = a as Record<string, unknown>;
++      const right = b as Record<string, unknown>;
++      const keys = [...new Set([...Object.keys(left), ...Object.keys(right)])].sort();
++      for (const key of keys) {
++        const child = `${path}[${JSON.stringify(key)}]`.slice(0, 500);
++        if (!Object.prototype.hasOwnProperty.call(left, key)) return `${child}: missing -> ${summary(right[key])}`;
++        if (!Object.prototype.hasOwnProperty.call(right, key)) return `${child}: ${summary(left[key])} -> missing`;
++        const difference = compare(left[key], right[key], child);
++        if (difference) return difference;
++      }
++      return null;
++    }
++    return `${path}: ${summary(a)} -> ${summary(b)}`;
++  };
++  return compare(before, after, '$');
++}
+diff --git a/src/startupBaselineObserver.ts b/src/startupBaselineObserver.ts
+new file mode 100644
+index 00000000..3271dadb
+--- /dev/null
++++ b/src/startupBaselineObserver.ts
+@@ -0,0 +1,28 @@
++/** Measurement only: preserve the baseline shell and renderer scheduling. */
++import { invoke } from '@tauri-apps/api/core';
++import { useAppStore } from './store/appStore';
++import type { NativeViewportMetrics } from './components/viewport/nativeViewportBridge';
++import { measureInitialViewportInteraction } from './startupMeasurement';
++export { applyStartupMeasurementLocale, loadStartupMeasurementDocument } from './startupMeasurement';
++
++export async function observeBaselineWorkspace(): Promise<void> {
++  const settings = await invoke('startup_measurement_settings');
++  if (!settings) return;
++  await document.fonts.ready;
++  const requiredRevision = await invoke<number>('native_viewport_sync_model');
++  const deadline = performance.now() + 120_000;
++  while (performance.now() < deadline) {
++    const metrics = await invoke<NativeViewportMetrics>('native_viewport_metrics');
++    if (metrics.startupError) throw new Error(metrics.startupError);
++    const sessionId = useAppStore.getState().activeProjectTabId;
++    if (sessionId !== null && metrics.available && metrics.ready && metrics.renderedFrames > 0
++      && metrics.modelSessionId === sessionId && metrics.geometryRevision >= requiredRevision) {
++      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
++      await invoke('startup_record', { phase: 'workspace', elapsedMs: performance.now() });
++      await measureInitialViewportInteraction();
++      return;
++    }
++    await new Promise((resolve) => window.setTimeout(resolve, 50));
++  }
++  throw new Error('Baseline did not reach the same successful rendered-workspace criterion.');
++}
+diff --git a/src/startupMeasurement.ts b/src/startupMeasurement.ts
+new file mode 100644
+index 00000000..701213b0
+--- /dev/null
++++ b/src/startupMeasurement.ts
+@@ -0,0 +1,178 @@
++/** Opt-in launch observer shared with the unchanged baseline. Normal launches
++ * never open a fixture, override language, or synthesize CAD interaction. */
++import { invoke } from '@tauri-apps/api/core';
++import { getEngine, isTauriRuntime } from './engine';
++import { isSupportedLocale } from './i18n/locales';
++import { useLocaleStore } from './i18n/localeStore';
++import { setActiveLocale } from './i18n';
++import { openProject } from './files/projectFiles';
++import { useAppStore } from './store/appStore';
++import { currentNativeViewportCamera, type NativeViewportMetrics } from './components/viewport/nativeViewportBridge';
++import { projectModelDifference } from './engine/projectModelComparison';
++
++export interface StartupMeasurementSettings {
++  locale: string | null;
++  documentPath: string | null;
++}
++declare global {
++  interface Window {
++    __startupMeasurementSettingsPromise?: Promise<StartupMeasurementSettings | null>;
++  }
++}
++let settingsPromise: Promise<StartupMeasurementSettings | null> | null = null;
++
++export function startupMeasurementSettings(): Promise<StartupMeasurementSettings | null> {
++  if (!isTauriRuntime()) return Promise.resolve(null);
++  settingsPromise ??= window.__startupMeasurementSettingsPromise
++    ?? invoke<StartupMeasurementSettings | null>('startup_measurement_settings');
++  return settingsPromise;
++}
++
++export async function applyStartupMeasurementLocale(): Promise<void> {
++  const settings = await startupMeasurementSettings();
++  if (settings?.locale && isSupportedLocale(settings.locale)) {
++    useLocaleStore.setState({ locale: settings.locale });
++    setActiveLocale(settings.locale);
++    document.documentElement.lang = settings.locale;
++  }
++}
++
++export async function loadStartupMeasurementDocument(): Promise<void> {
++  const settings = await startupMeasurementSettings();
++  if (settings?.documentPath) {
++    const opened = await openProject({ filePath: settings.documentPath, discardChanges: true });
++    if (!opened) throw new Error(`Could not open startup measurement document: ${settings.documentPath}`);
++  }
++}
++
++
++export async function measureInitialViewportInteraction(): Promise<void> {
++  try {
++    await runInitialViewportInteraction();
++  } catch (error) {
++    await invoke('startup_record', {
++      phase: 'error', elapsedMs: performance.now(),
++      detail: error instanceof Error ? error.message : String(error),
++    }).catch(() => undefined);
++    throw error;
++  }
++}
++
++async function runInitialViewportInteraction(): Promise<void> {
++  if (!(await startupMeasurementSettings())) return;
++  const camera = currentNativeViewportCamera();
++  if (!camera) throw new Error('The startup measurement requires an initialized viewport camera.');
++  const before = await invoke<NativeViewportMetrics>('native_viewport_metrics');
++  const changed = { ...camera, position: [...camera.position] as [number, number, number] };
++  changed.position[0] += 0.5;
++  const started = performance.now();
++  try {
++    await invoke('native_viewport_set_camera', { camera: changed });
++    let after: NativeViewportMetrics;
++    do {
++      after = await invoke<NativeViewportMetrics>('native_viewport_metrics');
++      if (after.startupError) throw new Error(after.startupError);
++      if (performance.now() - started > 10_000) throw new Error('Initial viewport interaction did not render within 10 seconds.');
++      if (after.renderedFrames <= before.renderedFrames) await new Promise((resolve) => window.setTimeout(resolve, 10));
++    } while (after.renderedFrames <= before.renderedFrames);
++    await invoke('native_viewport_pick', {
++      x: after.logicalWidth / 2,
++      y: after.logicalHeight / 2,
++      camera: changed,
++      logicalWidth: after.logicalWidth,
++      logicalHeight: after.logicalHeight,
++      purpose: 'geometry',
++    });
++    const elapsedMs = performance.now();
++    await invoke('startup_record', { phase: 'interaction', elapsedMs, durationMs: elapsedMs - started });
++  } finally {
++    await invoke('native_viewport_set_camera', { camera });
++  }
++  const first = await measureCadEdit();
++  const repeated = await measureCadEdit();
++  await invoke('startup_record', {
++    phase: 'cadInteraction', elapsedMs: first.elapsedMs, durationMs: first.durationMs,
++    detail: JSON.stringify({ ...first.timings, repeatedCadInteractionMs: repeated.durationMs,
++      repeatedTimings: repeated.timings }),
++  });
++}
++
++/** Exercise the real solver, first sketch frame, OCCT extrusion, and first
++ * opaque solid frame. Restore the model exactly; never save the fixture file. */
++async function measureCadEdit() {
++  const engine = await getEngine();
++  const model = await engine.exportProjectModel();
++  const state = useAppStore.getState();
++  const previous = { mode: state.mode, activeTab: state.activeTab, activeSketch: state.activeSketch, dirty: state.dirty };
++  const before = await invoke<NativeViewportMetrics>('native_viewport_metrics');
++  const started = performance.now();
++  let measurement: { elapsedMs: number; durationMs: number; timings: {
++    sketchCommandsMs: number; sketchFrameMs: number; solidCommandsMs: number; solidFrameMs: number;
++  }} | null = null;
++  try {
++    const sketch = await engine.beginSketch({ type: 'origin_plane', plane: 'xy' });
++    useAppStore.setState({ activeSketch: sketch, mode: 'sketch', activeTab: 'sketch' });
++    const result = await engine.addRectangle({
++      mode: 'two_point', p1: { x: 0, y: 0 }, p2: { x: 10, y: 8 }, ctrl_held: false,
++    });
++    useAppStore.getState().setActiveSketch(result.sketch);
++    const afterRectangle = performance.now();
++    const revision = await invoke<number>('native_viewport_sync_model');
++    let rendered: NativeViewportMetrics;
++    do {
++      rendered = await invoke<NativeViewportMetrics>('native_viewport_metrics');
++      if (rendered.startupError) throw new Error(rendered.startupError);
++      if (performance.now() - started > 10_000) throw new Error('The first CAD edit did not render within 10 seconds.');
++      if (!rendered.ready || rendered.geometryRevision < revision || rendered.renderedFrames <= before.renderedFrames) {
++        await new Promise((resolve) => window.setTimeout(resolve, 10));
++      }
++    } while (!rendered.ready || rendered.geometryRevision < revision || rendered.renderedFrames <= before.renderedFrames);
++    const afterSketchFrame = performance.now();
++    await engine.endSketch();
++    const profiles = (await engine.profileCatalog()).find((item) => item.sketch_name === sketch.name);
++    const profile = profiles?.profiles.find((item) => item.nesting_depth === 0);
++    if (!profile) throw new Error('The diagnostic rectangle did not produce a bounded extrusion profile.');
++    const update = await engine.extrude({
++      sketch_name: sketch.name, profile_indices: [profile.index], operation: 'new_body',
++      extent: { type: 'distance', distance: 5 }, taper_angle_deg: 0, flip: false, target_body_ids: [],
++    });
++    const afterExtrude = performance.now();
++    useAppStore.getState().applySolidUpdate(update);
++    useAppStore.setState({ activeSketch: null, mode: 'solid', activeTab: 'solid' });
++    const solidRevision = await invoke<number>('native_viewport_sync_model');
++    do {
++      rendered = await invoke<NativeViewportMetrics>('native_viewport_metrics');
++      if (rendered.startupError) throw new Error(rendered.startupError);
++      if (performance.now() - started > 10_000) throw new Error('The first solid CAD operation did not render within 10 seconds.');
++      if (!rendered.ready || rendered.geometryRevision < solidRevision || rendered.bodyCount <= before.bodyCount) {
++        await new Promise((resolve) => window.setTimeout(resolve, 10));
++      }
++    } while (!rendered.ready || rendered.geometryRevision < solidRevision || rendered.bodyCount <= before.bodyCount);
++    const elapsedMs = performance.now();
++    measurement = { elapsedMs, durationMs: elapsedMs - started, timings: {
++      sketchCommandsMs: afterRectangle - started,
++      sketchFrameMs: afterSketchFrame - afterRectangle,
++      solidCommandsMs: afterExtrude - afterSketchFrame,
++      solidFrameMs: elapsedMs - afterExtrude,
++    }};
++  } finally {
++    await engine.loadProjectModel(model);
++    await useAppStore.getState().loadDocument();
++    useAppStore.setState(previous);
++    const restoredRevision = await invoke<number>('native_viewport_sync_model');
++    const restorationStarted = performance.now();
++    // A second trial must begin with the restored frame, rather than stale
++    // body counts from its predecessor's temporary extrusion.
++    for (;;) {
++      const restored = await invoke<NativeViewportMetrics>('native_viewport_metrics');
++      if (restored.startupError) throw new Error(restored.startupError);
++      if (restored.ready && restored.geometryRevision >= restoredRevision) break;
++      if (performance.now() - restorationStarted > 10_000) throw new Error('The restored CAD document did not render within 10 seconds.');
++      await new Promise((resolve) => window.setTimeout(resolve, 10));
++    }
++  }
++  const difference = projectModelDifference(model, await engine.exportProjectModel());
++  if (difference) throw new Error(`The diagnostic CAD interaction did not restore its original model: ${difference}`);
++  if (!measurement) throw new Error('The diagnostic CAD interaction did not complete.');
++  return measurement;
++}

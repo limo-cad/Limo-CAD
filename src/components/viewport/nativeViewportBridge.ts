@@ -41,6 +41,10 @@ export interface NativeCameraState {
 export interface NativeViewportMetrics {
   available: boolean;
   ready: boolean;
+  rendererInitialized: boolean;
+  startupPhase: 'renderer' | 'font' | 'assets' | 'gpu' | 'pipelines' | 'frame' | 'ready' | 'error';
+  modelSessionId: string;
+  geometryRevision: number;
   startupError: string | null;
   backend: string;
   logicalWidth: number;
@@ -371,7 +375,9 @@ function probe(): Promise<boolean> {
     if (!isTauriRuntime()) return false;
     try {
       latestMetrics = await invoke<NativeViewportMetrics>('native_viewport_metrics');
-      active = latestMetrics.available && latestMetrics.ready;
+      // Installation allows real viewport layout and model preparation. The
+      // startup overlay separately requires a successfully rendered frame.
+      active = latestMetrics.available && !latestMetrics.startupError;
       return active;
     } catch {
       active = false;
@@ -389,6 +395,12 @@ export function nativeViewportIsActive(): boolean {
 
 export function nativeViewportMetrics(): NativeViewportMetrics | null {
   return latestMetrics;
+}
+
+/** Read-only snapshot for the opt-in, matched-launch measurement observer. */
+export function currentNativeViewportCamera(): NativeCameraState | null {
+  if (!latestCamera) return null;
+  return { ...latestCamera, position: [...latestCamera.position], target: [...latestCamera.target], up: [...latestCamera.up] };
 }
 
 function rectFor(element: Element): NativeRect | null {

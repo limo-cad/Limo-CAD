@@ -3932,6 +3932,7 @@ dependencies = [
  "bevy_ecs",
  "bevy_gizmos",
  "bevy_reflect",
+ "fontique",
  "gdk",
  "gdkx11-sys",
  "glib",

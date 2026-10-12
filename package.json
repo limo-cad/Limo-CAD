@@ -14,6 +14,7 @@
   },
   "type": "module",
   "scripts": {
+    "test:startup": "tsx src/startup.test.ts && tsx src/files/documentLoadProgress.test.ts && node --test scripts/test-startup-bootstrap.mjs",
     "tauri": "tauri",
     "dev": "vite",
     "dev:bevy-ui:capture": "node scripts/capture-bevy-ui.mjs",
@@ -26,7 +27,7 @@
     "bundle:windows:portable": "pwsh -NoProfile -File scripts/bundle-windows-portable.ps1",
     "build:wasm": "wasm-pack build crates/wasm --target web --out-dir ../../src/engine-wasm/pkg --out-name nbcad_wasm",
     "smoke:wasm": "node scripts/smoke-wasm.mjs",
-    "test:frontend": "npm run test:constraint-glyphs && npm run test:revolve-axis && npm run test:modeling-picker && npm run test:screen-picker && npm run test:center-pick && npm run test:viewport-theme && npm run test:project-archive && npm run test:profile-picker && npm run test:presentation && npm run test:drawing-instances && npm run test:export-flow && npm run test:arc-sweep && npm run test:ui-scale",
+    "test:frontend": "npm run test:constraint-glyphs && npm run test:revolve-axis && npm run test:modeling-picker && npm run test:screen-picker && npm run test:center-pick && npm run test:viewport-theme && npm run test:project-archive && npm run test:profile-picker && npm run test:presentation && npm run test:drawing-instances && npm run test:export-flow && npm run test:arc-sweep && npm run test:ui-scale && npm run test:startup",
     "test:ui-scale": "tsx src/uiScale.test.ts",
     "test:arc-sweep": "tsx src/components/viewport/arcSweep.test.ts && tsx src/components/viewport/toolOperation.test.ts",
     "test:drawing-instances": "tsx src/drawing/instances.test.ts",

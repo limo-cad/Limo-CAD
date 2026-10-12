@@ -10,7 +10,7 @@ use std::fs;
 
 use bevy::{
     prelude::*,
-    text::FontWeight,
+    text::{FontCx, FontWeight},
     ui::{BoxShadow, UiTransform},
 };
 
@@ -42,10 +42,15 @@ pub(crate) struct ViewportUiAssets {
     font: Option<Handle<Font>>,
 }
 
-/// Prefer a system UI font with broad glyph coverage so native labels match
-/// the desktop UI and CAD marks do not render as tofu. Bevy's embedded
-/// default remains a safe fallback on unusual installations.
-pub(crate) fn load_system_font(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
+/// Prepared on the renderer worker: opening and registering a CJK collection
+/// can be much more expensive than adding the primary UI font asset.
+#[derive(Resource)]
+pub(crate) struct PreparedSystemFonts {
+    font_context: Option<FontCx>,
+    primary: Option<Font>,
+}
+
+pub(crate) fn prepare_system_fonts() -> PreparedSystemFonts {
     #[cfg(target_os = "macos")]
     let candidates = [
         "/System/Library/Fonts/SFNS.ttf",
@@ -67,10 +72,75 @@ pub(crate) fn load_system_font(mut commands: Commands, mut fonts: ResMut<Assets<
         "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
     ];
 
-    let font = candidates
+    let primary = candidates
         .into_iter()
         .find_map(|path| fs::read(path).ok())
-        .map(|bytes| fonts.add(Font::from_bytes(bytes)));
+        .map(Font::from_bytes);
+
+    // The app intentionally disables global system-font discovery. Register
+    // one known regional fallback instead of scanning the desktop font set.
+    #[cfg(target_os = "macos")]
+    let cjk_candidates = [
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/STHeiti Light.ttc",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    ];
+    #[cfg(target_os = "windows")]
+    let cjk_candidates = [
+        r"C:\Windows\Fonts\msyh.ttc",
+        r"C:\Windows\Fonts\msyh.ttf",
+        r"C:\Windows\Fonts\simhei.ttf",
+        r"C:\Windows\Fonts\simsun.ttc",
+    ];
+    #[cfg(target_os = "linux")]
+    let cjk_candidates = [
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    ];
+    let mut font_context = FontCx::default();
+    if let Some(bytes) = cjk_candidates
+        .into_iter()
+        .find_map(|path| fs::read(path).ok())
+    {
+        let font = Font::from_bytes(bytes);
+        let families = font_context.collection.register_fonts(font.data, None);
+        font_context.collection.set_fallbacks(
+            fontique::Script::from_bytes(*b"Hani"),
+            families.iter().map(|(family, _)| *family),
+        );
+    }
+    PreparedSystemFonts {
+        font_context: Some(font_context),
+        primary,
+    }
+}
+
+pub(crate) fn install_prepared_fonts(app: &mut App, mut prepared: PreparedSystemFonts) {
+    if let Some(context) = prepared.font_context.take() {
+        app.insert_resource(context);
+    }
+    app.insert_resource(prepared);
+}
+
+/// Preserve the desktop UI face while Parley selects the registered Han
+/// fallback only for characters the primary font cannot draw.
+pub(crate) fn load_system_font(
+    mut commands: Commands,
+    mut fonts: ResMut<Assets<Font>>,
+    prepared: Option<ResMut<PreparedSystemFonts>>,
+) {
+    let primary = if let Some(mut prepared) = prepared {
+        prepared.primary.take()
+    } else {
+        // The standalone UI capture lab does not have a renderer worker.
+        let mut prepared = prepare_system_fonts();
+        if let Some(context) = prepared.font_context.take() {
+            commands.insert_resource(context);
+        }
+        prepared.primary
+    };
+    let font = primary.map(|font| fonts.add(font));
     commands.insert_resource(ViewportUiAssets { font });
 }
 

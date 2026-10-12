@@ -223,9 +223,9 @@ export function ProjectMenuControls() {
             data-testid="product-mark"
             title={t('app.name')}
             aria-label={t('app.name')}
-            className="flex h-4 w-5 shrink-0 items-center justify-center rounded border border-accent/40 bg-accent/10 font-mono text-[7px] font-black tracking-[-0.08em] text-accent"
+            className="flex h-4 min-w-5 shrink-0 items-center justify-center rounded border border-accent/40 bg-accent/10 px-1 font-sans text-[8px] font-semibold text-accent"
           >
-            NB
+            {t('app.shortName')}
           </div>
           {busy ? (
             <Loader2 size={7} className="animate-spin" />

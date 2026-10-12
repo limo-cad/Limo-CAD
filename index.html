@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-startup-window="compact">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/app-icon.svg" type="image/svg+xml" />
-    <title>noBS CAD</title>
+    <link rel="stylesheet" href="/startup.css" />
+    <title>Limo CAD</title>
     <script>
       (() => {
         const key = 'nbcad.theme';
@@ -28,22 +29,48 @@
       (() => {
         const supported = ['en', 'zh-CN', 'es', 'de'];
         let locale = 'en';
+        let savedLocale = false;
         try {
           const stored = localStorage.getItem('nbcad.locale');
-          if (stored && supported.includes(stored)) locale = stored;
-          else {
+          if (stored && supported.includes(stored)) {
+            locale = stored;
+            savedLocale = true;
+          }
+        } catch {}
+        if (!savedLocale) {
+          try {
             const nav = navigator.language.toLowerCase();
             if (nav.startsWith('zh')) locale = 'zh-CN';
             else if (nav.startsWith('es')) locale = 'es';
             else if (nav.startsWith('de')) locale = 'de';
-          }
-        } catch {}
+          } catch {}
+        }
         document.documentElement.lang = locale;
       })();
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="startup-bootstrap" class="startup-screen" role="status" aria-live="polite">
+        <div class="startup-card">
+          <div id="startup-drag" class="startup-drag" data-tauri-drag-region aria-hidden="true"></div>
+          <button id="startup-close" class="startup-close" hidden aria-label="Close app" title="Close app"><span aria-hidden="true">×</span></button>
+          <header class="startup-brand">
+            <h1 id="startup-name" class="startup-name">Limo CAD</h1>
+            <p id="startup-tagline" class="startup-tagline">Design with understanding.</p>
+            <img class="startup-drawing" src="/startup-part.svg" alt="" width="216" height="172" />
+          </header>
+          <div class="startup-body">
+          <p class="startup-status"><span class="startup-dot" aria-hidden="true"></span><span id="startup-status">Opening Limo CAD…</span></p>
+          <aside id="startup-note" class="startup-note" hidden><span id="startup-note-label" class="startup-note-label"></span><p id="startup-note-text"></p></aside>
+          <p id="startup-detail" class="startup-detail"></p>
+          <div class="startup-actions"><button id="startup-retry" hidden onclick="location.reload()">Try again</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="/startup.js"></script>
+    <script id="startup-notes-script" async src="/startup-notes.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -6,6 +6,7 @@
 mod startup;
 
 fn main() -> std::process::ExitCode {
+    nbcad_lib::startup_metrics::begin();
     use startup::Startup;
     let startup = match startup::parse(std::env::args_os().skip(1)) {
         Ok(startup) => startup,

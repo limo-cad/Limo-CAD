@@ -1,0 +1,78 @@
+
+running 73 tests
+test native_viewport::path_progress::tests::completed_plunge_persists_after_the_tool_enters_horizontal_motion ... ok
+test native_viewport::path_progress::tests::partial_arc_joins_at_true_curve_not_inside_its_chord ... ok
+test native_viewport::path_progress::tests::rapid_dots_keep_their_phase_and_only_the_intersected_dot_is_split ... ok
+test native_viewport::path_progress::tests::partial_line_meets_tool_center_and_rewind_hides_future_travel ... ok
+test native_viewport::platform::loading::tests::an_empty_pipeline_cache_is_not_readiness_evidence ... ok
+test native_viewport::path_progress::tests::stale_timeline_or_closed_playback_cannot_color_retained_lines ... ok
+test native_viewport::platform::script_preview::tests::native_concave_edge_strokes_read_like_convex_ones ... ignored, requires a GPU; set NBCAD_PREVIEW_PROOF_DIR to retain visual evidence
+test native_viewport::platform::loading::tests::readiness_requires_each_independent_stage ... ok
+test native_viewport::platform::script_preview::tests::native_ground_grid_visual_matrix ... ignored, requires a GPU; set NBCAD_PREVIEW_PROOF_DIR to retain visual evidence
+test native_viewport::path_progress::tests::zero_duration_and_missing_or_invalid_cursor_do_not_create_partial_lines ... ok
+test native_viewport::platform::script_preview::tests::abandoned_or_expired_preview_receipt_cancels_queued_work ... ok
+test native_viewport::platform::script_preview::tests::native_ground_grid_zoom_is_continuous ... ignored, requires a GPU; set NBCAD_PREVIEW_PROOF_DIR to retain visual evidence
+test native_viewport::platform::script_preview::tests::native_preview_gpu_renders_real_kernel_frames_and_orbit ... ignored, requires a GPU; run explicitly when validating the native preview renderer
+test native_viewport::platform::script_preview::tests::native_sketch_boundary_visual_matrix ... ignored, requires a GPU; set NBCAD_PREVIEW_PROOF_DIR to retain visual evidence
+test native_viewport::platform::tests::cad_studio_lights_are_camera_relative_and_bilaterally_balanced ... ok
+test native_viewport::platform::tests::cam_stock_upload_gets_a_dedicated_asset_settle_frame ... ok
+test native_viewport::platform::script_preview::tests::closed_preview_view_rejects_late_work_and_queue_stays_bounded ... ok
+test native_viewport::platform::script_preview::tests::preview_cache_and_render_dimensions_have_explicit_bounds ... ok
+test native_viewport::platform::tests::camera_transform_stays_finite_at_up_axis_alignment ... ok
+test native_viewport::platform::tests::edge_side_faces_follow_boundary_membership ... ok
+test native_viewport::platform::tests::camera_frequency_annotation_updates_do_not_rebuild_preview_meshes ... ok
+test native_viewport::platform::tests::grid_lattices_nest_along_the_sequence ... ok
+test native_viewport::platform::tests::grid_lines_brighten_continuously_with_their_spacing ... ok
+test native_viewport::platform::tests::failed_renderer_quarantines_pending_updates_and_finishes_its_timer ... ok
+test native_viewport::platform::script_preview::tests::immutable_preview_fits_all_frames_and_rejects_invalid_geometry ... ok
+test native_viewport::platform::tests::grid_sheet_follows_zoom_and_pan_without_jumps ... ok
+test native_viewport::platform::tests::grid_step_follows_the_1_2_5_sequence_and_clamps ... ok
+test native_viewport::platform::tests::inside_corner_faces_lift_the_stroke_and_outside_corners_do_not ... ok
+test native_viewport::platform::tests::highlighted_face_boundary_omits_shared_tessellation_diagonal ... ok
+test native_viewport::platform::tests::hole_point_markers_sit_on_the_support_face ... ok
+test native_viewport::platform::tests::interaction_line_weight_tracks_logical_viewport_and_backing_density ... ok
+test native_viewport::platform::tests::native_body_material_uses_the_document_appearance ... ok
+test native_viewport::platform::tests::native_highlight_stroke_respects_two_pixel_cap ... ok
+test native_viewport::platform::loading::tests::asynchronous_ready_report_keeps_polling_until_frontend_metrics_are_published ... ok
+test native_viewport::platform::loading::tests::backing_scale_change_requires_a_new_matching_frame ... ok
+test native_viewport::platform::tests::native_pick_purpose_defaults_to_geometry_and_requires_explicit_connector_opt_in ... ok
+test native_viewport::platform::loading::tests::pose_or_appearance_update_requires_a_new_document_frame ... ok
+test native_viewport::platform::tests::embedded_resize_updates_pixels_and_notifies_bevy_camera_system ... ok
+test native_viewport::platform::tests::native_reference_plane_matches_the_react_pick_footprint ... ok
+test native_viewport::platform::tests::native_picker_exposes_a_virtual_circular_connector_at_a_cylinder_opening ... ok
+test native_viewport::platform::loading::tests::compact_frame_cannot_release_a_resized_workspace ... ok
+test native_viewport::platform::tests::native_preview_preserves_endpoint_snap_semantics ... ok
+test native_viewport::platform::loading::tests::repeated_extent_and_unapplied_subpixel_layout_preserve_readiness ... ok
+test native_viewport::platform::loading::tests::timeout_applies_to_startup_and_retains_the_stalled_phase ... ok
+test native_viewport::platform::tests::ray_triangle_returns_forward_hit ... ok
+test native_viewport::platform::tests::reference_planes_scale_with_camera_depth ... ok
+test native_viewport::platform::tests::rectangle_intersection_clips_overlay_to_viewport ... ok
+test native_viewport::platform::tests::retained_cam_tool_places_flute_and_shank_from_the_tip_axis ... ok
+test native_viewport::platform::tests::shared_native_edge_eligibility_distinguishes_straight_from_bent_edges ... ok
+test native_viewport::platform::tests::sketch_point_billboard_axes_are_orthonormal ... ok
+test native_viewport::platform::loading::tests::stale_document_frame_never_releases_the_overlay ... ok
+test native_viewport::platform::tests::sketch_point_radius_stays_constant_in_screen_space_at_different_depths ... ok
+test native_viewport::platform::tests::visible_sketch_points_use_the_persistent_always_on_top_layer ... ok
+test native_viewport::profile_outline::tests::adjacent_hover_and_selection_leave_no_duplicate_stroke_between_them ... ok
+test native_viewport::profile_outline::tests::adjacent_profile_arcs_collectively_replace_the_whole_base_circle ... ok
+test native_viewport::profile_outline::tests::crossing_nearby_touching_and_degenerate_lines_do_not_erase_an_edge ... ok
+test native_viewport::profile_outline::tests::direct_boundary_line_replaces_the_profile_stroke_in_either_direction ... ok
+test native_viewport::profile_outline::tests::inactive_feedback_keeps_the_complete_closed_outline ... ok
+test native_viewport::profile_outline::tests::oblique_reversed_overlap_preserves_exact_uncovered_endpoints ... ok
+test native_viewport::profile_outline::tests::profile_border_preserves_open_spline_tails ... ok
+test native_viewport::profile_outline::tests::profile_border_removes_only_the_covered_part_of_an_extended_base_line ... ok
+test native_viewport::profile_outline::tests::full_circular_profile_has_no_duplicate_base_circle_stroke ... ok
+test native_viewport::profile_outline::tests::reversed_partial_arc_preserves_the_uncovered_half_of_its_base_circle ... ok
+test native_viewport::profile_outline::tests::selecting_part_of_a_merged_boundary_keeps_its_neighbors ... ok
+test native_viewport::profile_outline::tests::unrelated_circle_keeps_its_original_stroke ... ok
+test native_viewport::profile_outline::tests::wrapped_arc_and_merged_source_ids_preserve_only_the_open_tail ... ok
+test native_viewport::platform::tests::viewport_cameras_use_portable_msaa ... ok
+test native_viewport::platform::tests::retained_cam_cutter_reuses_gpu_assets_during_motion_and_tool_changes ... ok
+test native_viewport::platform::tests::recovery_session_rebind_preserves_solid_faces_and_absorbs_late_bootstrap_sync ... ok
+test native_viewport::platform::tests::native_model_carries_closed_profiles_from_an_internal_midplane_sketch ... ok
+test native_viewport::platform::tests::native_occurrences_share_meshes_and_pick_the_exact_instance ... ok
+test native_viewport::platform::tests::native_geometry_picker_ignores_virtual_caps_on_an_actual_partial_revolve ... ok
+test native_viewport::platform::tests::native_picker_hits_an_actual_occt_extrusion_snapshot ... ok
+
+test result: ok. 68 passed; 0 failed; 5 ignored; 0 measured; 56 filtered out; finished in 0.05s
+

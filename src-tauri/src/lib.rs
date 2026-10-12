@@ -16,6 +16,7 @@ mod recipe_links;
 mod scripts;
 mod session_bridge;
 mod six_dof_mouse;
+pub mod startup_metrics;
 mod state;
 
 use std::fs::{self, OpenOptions};
@@ -172,10 +173,74 @@ fn native_viewport_set_suspended(
 }
 
 #[tauri::command]
+fn native_viewport_start(viewport: tauri::State<'_, NativeViewport>) -> Result<(), String> {
+    viewport.start()
+}
+
+/// Expand the existing startup window only after its real viewport is prepared.
+/// Keep all window ownership on the UI thread; the caller awaits the request,
+/// then independently verifies a presented frame at the resulting DOM layout.
+#[tauri::command]
+async fn native_window_prepare_workspace(app: tauri::AppHandle) -> Result<(), String> {
+    startup_metrics::record_native_milestone("workspaceExpansionRequested");
+    let (send, receive) = tokio::sync::oneshot::channel();
+    let window_app = app.clone();
+    app.run_on_main_thread(move || {
+        let result = (|| {
+            let window = window_app
+                .get_webview_window("main")
+                .ok_or("main window is unavailable")?;
+            // Restore normal workspace chrome before applying the client size.
+            // Native decorations can change the client extent independently of
+            // the outer window, so frontend readiness still checks its new frame.
+            window
+                .set_decorations(true)
+                .map_err(|error| error.to_string())?;
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            window.set_shadow(true).map_err(|error| error.to_string())?;
+            // Enable resizing before changing constraints on GTK/Linux.
+            window
+                .set_resizable(true)
+                .map_err(|error| error.to_string())?;
+            window
+                .set_size(tauri::LogicalSize::new(1440.0, 900.0))
+                .map_err(|error| error.to_string())?;
+            window
+                .set_min_size(Some(tauri::LogicalSize::new(1200.0, 760.0)))
+                .map_err(|error| error.to_string())?;
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            window
+                .set_maximizable(true)
+                .map_err(|error| error.to_string())?;
+            window.center().map_err(|error| error.to_string())?;
+            Ok::<_, String>(())
+        })();
+        let _ = send.send(result);
+    })
+    .map_err(|error| error.to_string())?;
+    receive
+        .await
+        .map_err(|_| "workspace window request was interrupted".to_string())?
+}
+
+#[tauri::command]
+fn native_window_set_locale(app: tauri::AppHandle, locale: String) -> Result<(), String> {
+    let title = match locale.as_str() {
+        "zh-CN" => "砺模 CAD",
+        "en" | "es" | "de" => "Limo CAD",
+        _ => return Err("unsupported application locale".to_string()),
+    };
+    app.get_webview_window("main")
+        .ok_or("main window is unavailable")?
+        .set_title(title)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn native_viewport_sync_model(
     engine: tauri::State<'_, AppState>,
     viewport: tauri::State<'_, NativeViewport>,
-) -> Result<(), String> {
+) -> Result<u64, String> {
     let (
         session_id,
         geometry_revision,
@@ -199,7 +264,8 @@ async fn native_viewport_sync_model(
         body_appearances,
         body_poses,
         instance_body_poses,
-    })
+    })?;
+    Ok(geometry_revision)
 }
 
 #[tauri::command]
@@ -969,7 +1035,11 @@ fn engine_project_load(
     state: tauri::State<'_, AppState>,
     payload: &str,
 ) -> String {
-    bridge.run_project_replacement(window.label(), &state, || state.project_load(payload))
+    let started = std::time::Instant::now();
+    let result =
+        bridge.run_project_replacement(window.label(), &state, || state.project_load(payload));
+    startup_metrics::record_document_span("nativeProjectLoad", started);
+    result
 }
 
 #[tauri::command]
@@ -1194,11 +1264,17 @@ async fn cam_library_set_location(
 
 #[tauri::command]
 fn read_binary_file(path: String) -> Result<Vec<u8>, String> {
-    let metadata = fs::metadata(&path).map_err(|error| format!("could not read file: {error}"))?;
-    if metadata.len() > MAX_FILE_BYTES {
-        return Err("file is larger than the 256 MB safety limit".to_string());
-    }
-    fs::read(path).map_err(|error| format!("could not read file: {error}"))
+    let started = std::time::Instant::now();
+    let result = (|| {
+        let metadata =
+            fs::metadata(&path).map_err(|error| format!("could not read file: {error}"))?;
+        if metadata.len() > MAX_FILE_BYTES {
+            return Err("file is larger than the 256 MB safety limit".to_string());
+        }
+        fs::read(path).map_err(|error| format!("could not read file: {error}"))
+    })();
+    startup_metrics::record_document_span("nativeFileRead", started);
+    result
 }
 
 /// Write bytes to a path atomically (temp file + rename).
@@ -1241,7 +1317,12 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
-        .manage(AppState::new())
+        .manage({
+            let started = std::time::Instant::now();
+            let state = AppState::new();
+            startup_metrics::record_native_span("cadEngineSetup", started);
+            state
+        })
         .manage(CamSimulationService::default())
         .manage(cam_playback::CamPlaybackService::default())
         .manage(NativeQuitState::default())
@@ -1264,6 +1345,7 @@ pub fn run() {
         .on_menu_event(native_menu::handle_event);
     builder
         .setup(|app| {
+            startup_metrics::record_native_milestone("setupReached");
             recipe_links::install(app.handle());
             session_bridge::start_mcp_wake_loop(app.handle().clone());
             let viewport = NativeViewport::install(app).map_err(std::io::Error::other)?;
@@ -1319,6 +1401,11 @@ pub fn run() {
             native_viewport_set_presentation,
             native_viewport_pick,
             native_viewport_metrics,
+            native_viewport_start,
+            native_window_prepare_workspace,
+            native_window_set_locale,
+            startup_metrics::startup_record,
+            startup_metrics::startup_measurement_settings,
             native_menu::native_edit_menu_set_state,
             native_menu::native_file_menu_set_state,
             read_binary_file,

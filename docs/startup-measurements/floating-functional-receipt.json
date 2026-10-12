@@ -1,0 +1,32 @@
+{
+    "sha256":  "f48b231c425644dfa901fc9f832aeaea40be3c7a93c48b4a3feca7fc7c11f0a7",
+    "nativeFramelessCapture":  "562x382 outer;560x380 requestedclient",
+    "englishRetry":  {
+                         "sameProcess":  true,
+                         "historyEntries":  4,
+                         "firstCadMs":  255.3,
+                         "repeatCadMs":  171.8,
+                         "pid":  5048,
+                         "exactModelRestored":  true,
+                         "workspaceChromeRestored":  true
+                     },
+    "chineseClose":  {
+                         "exited":  true,
+                         "pid":  15172,
+                         "stderrWarning":  "WebView2 Chrome_WidgetWin_0 unregister class error1412 during exit; retained",
+                         "customCloseInvoked":  true
+                     },
+    "dragVerification":  {
+                             "verifiedMovement":  false,
+                             "attempts":  2,
+                             "unchangedOrigin":  {
+                                                     "y":  506,
+                                                     "x":  1007
+                                                 },
+                             "note":  "Synthetic drag did not movewindow; human held-presscheck outstanding",
+                             "implemented":  true
+                         },
+    "browserLayoutCases":  14,
+    "ownedProcessesRetired":  true,
+    "installedUserWindowsPreserved":  2
+}

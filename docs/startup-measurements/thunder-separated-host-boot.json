@@ -1,0 +1,12 @@
+{
+  "hostname": "Thunder",
+  "observedAtUtc": "2026-10-11T20:49:11.9689771Z",
+  "lastBootUpTimeUtc": "2026-10-08T02:01:41.4901620Z",
+  "osCaption": "Microsoft Windows 11 Pro",
+  "osVersion": "10.0.26200",
+  "manufacturer": "ASUS",
+  "model": "System Product Name",
+  "hostnameSource": "node os.hostname from prior same-host report",
+  "observedDefinition": "Fresh per-run process/profile, no harness executable/document read before batch, no warmup. OS/driver caches unverified, no reboot.",
+  "postBootOsDriverColdVerified": false
+}
