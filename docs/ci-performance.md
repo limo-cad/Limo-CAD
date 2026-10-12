@@ -38,13 +38,25 @@ PRs. See [GitHub's cache scope rules](https://docs.github.com/en/actions/referen
 No PR source is checked out or executed in the default-branch warmer, and there
 is no `pull_request_target` trigger or privileged cache-sharing workaround.
 
-The first main run may still take about an hour on a cold SDK/compiler key. The
+The first main run can still take around 100 minutes on the observed cold x64 key. The
 benefit starts after that run saves the installed tree. A new compiler or cache
 eviction must build a matching SDK again rather than reuse an incompatible one.
 
 ## Independent native acceptance runners
 
-Each native platform now has three runners:
+Each native platform has three test runners. Both call the same
+`mcp-acceptance.yml` suite, so platform-independent commands and failure handling
+are defined once. Linux starts independently of the Windows SDK preparation.
+
+Windows prepares its SDK once per workflow run, before starting its three test
+shards. The producer saves the existing ABI-keyed caches, then publishes the
+installed x64 SDK as a seven-day artifact. Consumers download that exact artifact
+ID from the same run and check their MSVC toolset against the producer. They do
+not check out vcpkg or rebuild a missing SDK. A failed producer, missing artifact,
+compiler mismatch or missing headers prevents acceptance and fails its aggregate
+gate. Rerunning failed test jobs can reuse the successful producer's artifact;
+after expiry or a compiler-image change, rerun the whole workflow to prepare it
+again. No cross-run artifact lookup or privileged fork trigger is introduced.
 
 | Shard | Tests and outputs |
 | --- | --- |
@@ -89,9 +101,11 @@ sizes and SHA-256 hashes. Partial/empty inputs never produce a final demo bundle
 Rerunning failed jobs can reuse successful shard inputs from the same run; input
 artifacts are kept for seven days, after which all shards must be rerun together.
 
-Sharding reduces elapsed time, not necessarily total billed runner minutes: it
-duplicates a small amount of compilation/SDK setup and needs additional runner
-capacity. The serial recipe assertions still do the same work.
+Sharding preserves serial recipe assertions while running independent checks on
+separate runners. Windows SDK preparation is shared; the small Cargo compilation
+remains per shard so future test targets and doctests retain Cargo's normal
+behavior. The producer adds a scheduling and artifact-transfer barrier, whose
+cost must be measured separately on cache-hit runs.
 
 ## Baseline and verification
 
@@ -122,10 +136,19 @@ delay jobs independently of repository changes.
   8 minutes 10 seconds, and the workshop 5 minutes 4 seconds.
   Both exact SDK caches missed; compiling OpenCASCADE alone took about 94 minutes.
   All three Windows shards independently prepared the same SDK.
+  Their SDK setup steps totaled 17,440 seconds (290m40s). A single preparation
+  at the observed slowest duration of 5,901 seconds would avoid 11,539 seconds
+  (192m19s), about 66% of that preparation work, before artifact-transfer costs.
+  This estimates runner work; it is not a measured reduction in critical-path
+  elapsed time. The cold critical path still includes one SDK build, while a
+  compatible default-branch cache can remove that compilation on later runs.
 - [Linux turbine acceptance](https://github.com/limo-cad/Limo-CAD/actions/runs/38251064087/job/114817714831):
   3 seconds queued, 51 minutes 10 seconds executing. Rust compilation took
   51.75 seconds; the native geometry recipe test took 2,980.34 seconds.
   Reducing compiler work will have little effect on this test's dominant cost.
+  Flagship invocations retain their existing slow-RPC output on successful runs,
+  making construction, drawing, restore and interference costs visible without
+  removing assertions, motion samples or independent replay.
 - [Browser smoke](https://github.com/limo-cad/Limo-CAD/actions/runs/38266323719/job/114869293985):
   22 minutes 13 seconds queued, 6 minutes 28 seconds executing. Installing
   wasm-pack took 68 seconds, compiling the browser engine 184 seconds, and
@@ -167,15 +190,17 @@ gh api repos/limo-cad/Limo-CAD/actions/cache/usage
 gh api repos/limo-cad/Limo-CAD/actions/caches --paginate
 ```
 
-Local verification: 15 workflow/sharding/release contracts passed using Git Bash
+Local verification: 16 workflow/sharding/release contracts passed using Git Bash
 on Windows, actionlint passed excluding only the existing ARM runner label, and
 the actual tool guard passed missing/matching/wrong-version and failed-install
-cases. An autocrlf-enabled checkout preserved LF manifest bytes. The unrelated
+cases. Ten executable platform/SDK guard cases passed, including missing inputs,
+unknown platform, compiler mismatch and missing SDK headers. An autocrlf-enabled
+checkout preserved LF manifest bytes. The unrelated
 full-suite symlink fixture needs Windows symlink privileges.
 
 After merge, compare matched x64 jobs with the same manifest/compiler key. Record
 queue delay, SDK source/setup duration, and total execution separately. Inspect
-the browser tool step independently. Investigate the turbine recipe geometry
+the browser tool step and SDK artifact upload/download independently. Investigate the turbine recipe geometry
 cost next if it remains dominant, preserving its correctness assertions.
 
 Sources: [runner billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions),
