@@ -6,6 +6,9 @@ heavy bureaucracy.
 Maintainers today: `@jackControls` and `@jeffglousher`. Either can review the
 other’s work; a PR author should not approve their own PR.
 
+Follow the [community conduct](CODE_OF_CONDUCT.md). Report vulnerabilities
+privately through the [security policy](SECURITY.md).
+
 ## 1. Issues
 
 - Search existing issues before opening a new one.

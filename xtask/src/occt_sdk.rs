@@ -33,6 +33,44 @@ const SOURCE_OVERRIDES: &[SourceOverride<'_>] = &[
     ),
 ];
 
+/// Evidence for the actual checked SDK, covered by its completed-file receipt.
+pub(crate) fn sbom_evidence(compiler: &str) -> Result<serde_json::Value> {
+    let field = |key: &str| {
+        compiler
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("{key}=")))
+            .unwrap_or("unknown")
+            .to_owned()
+    };
+    let patches = SOURCE_OVERRIDES
+        .iter()
+        .map(|(path, original, replacement)| {
+            Ok(serde_json::json!({"path": path, "originalSha256": original,
+            "sha256": crate::hash::reader(*replacement)?}))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let dependency_identity = |key: &str| {
+        field(key)
+            .split(';')
+            .find_map(|file| crate::sbom::native::binary_identity(Path::new(file)))
+    };
+    Ok(serde_json::json!({
+        "schemaVersion": 1,
+        "occt": {"name": "Open CASCADE Technology", "version": VERSION.replace('_', "."),
+            "producer": "Open Cascade SAS", "license": "LGPL-2.1-only WITH OCCT-exception-1.0",
+            "source": format!("https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V{VERSION}.tar.gz"),
+            "sourceSha256": SHA256, "patches": patches},
+        "dependencies": [
+            {"name": "freetype", "version": field("FREETYPE_VERSION_STRING"), "binaryIdentity": dependency_identity("FREETYPE_LIBRARIES"),
+                "producer": "FreeType Project", "license": "FTL OR GPL-2.0-only"},
+            {"name": "fontconfig", "version": field("Fontconfig_VERSION"), "binaryIdentity": dependency_identity("Fontconfig_LIBRARIES"),
+                "producer": "Fontconfig Project", "license": "MIT"}
+        ],
+        "compiler": {"id": field("CMAKE_CXX_COMPILER_ID"), "version": field("CMAKE_CXX_COMPILER_VERSION"),
+            "system": field("CMAKE_SYSTEM_NAME"), "architecture": field("CMAKE_SYSTEM_PROCESSOR")}
+    }))
+}
+
 fn override_digest() -> Result<String> {
     let mut inputs = Vec::new();
     for (path, original, replacement) in SOURCE_OVERRIDES {
@@ -256,9 +294,16 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
         #[cfg(windows)]
         let repaired =
             runtime::verify_or_repair(&options.prefix, &key, &compiler, options.repair_runtime)?;
+        #[cfg(not(windows))]
+        let repaired = false;
         crate::occt_storage::verify(&options.prefix)?;
-        #[cfg(windows)]
-        if repaired {
+        // A compatible completed SDK can acquire new build evidence without
+        // discarding its qualified runtime or rebuilding its Ninja objects.
+        let recorded = fs::read(options.prefix.join(".limo-sdk-sbom.json"))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+        if repaired || recorded.as_ref() != Some(&sbom_evidence(&compiler)?) {
+            write_sbom_evidence(&options.prefix, &compiler)?;
             crate::occt_cache::publish(&options.prefix, &key)?;
         }
         println!(
@@ -309,6 +354,7 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     .context("validate the installed OCCT SDK before publishing its receipt")?;
     verify_source_with_overrides(&archive, &source, SHA256, SOURCE_OVERRIDES)?;
     crate::occt_storage::verify(&options.prefix)?;
+    write_sbom_evidence(&options.prefix, &compiler)?;
     crate::occt_cache::publish(&options.prefix, &key)?;
     println!(
         "Installed OCCT {} into {}\nBuild cache: {}",
@@ -319,6 +365,14 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     if options.sccache {
         crate::build_tools::run(Command::new("sccache").arg("--show-stats"))?;
     }
+    Ok(())
+}
+
+fn write_sbom_evidence(prefix: &Path, compiler: &str) -> Result<()> {
+    let mut file = tempfile::NamedTempFile::new_in(prefix)?;
+    serde_json::to_writer_pretty(file.as_file_mut(), &sbom_evidence(compiler)?)?;
+    file.as_file_mut().sync_all()?;
+    file.persist(prefix.join(".limo-sdk-sbom.json"))?;
     Ok(())
 }
 

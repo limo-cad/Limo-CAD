@@ -66,6 +66,7 @@ mod release_tooling;
 mod replay;
 mod repository;
 mod repository_ci;
+mod sbom;
 mod showcase_media;
 mod switching_comparison;
 mod test_mcp;
@@ -107,6 +108,7 @@ fn run() -> Result<()> {
         "deps" => build_tools::deps(args),
         "package" => package::run(args),
         "ci" => repository_ci::run(args),
+        "sbom" => sbom::run(args),
         "build-occt" => occt_sdk::run(args),
         "verify-occt-storage" => occt_storage::run(args),
         "build-wasm" => wasm_build::run(args),
@@ -167,6 +169,8 @@ Commands:
                 Requires CMake/Ninja, a C++ compiler and FreeType; preserves compatible build objects.
   verify-occt-storage  Qualify checked allocation/copy in the installed SDK: --prefix PATH.
   ci            Rust CI tasks: mcp-shard SHARD, stage-demo-projects, require-platform.
+  sbom          Release inventories from auditable binaries and packaged native libraries;
+                source, release --artifact PATH --sdk PATH --target TRIPLE, verify --directory PATH.
   knowledge     Validate the bundle (check), generate/verify index (index --check),
                 build the static site (site), or stage verified videos (media --verify).
   audit-icons   Check shared vector assets and the product provenance inventory.

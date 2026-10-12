@@ -158,7 +158,8 @@ fn check_package_gates(source: &Value) -> Result<()> {
                 "build-linux-ubuntu",
                 "build-linux-appimage",
                 "verify-linux-appimage",
-                "build-macos-apple-silicon"
+                "build-macos-apple-silicon",
+                "release_security"
             ],
         "publication must await every build and the newer-host AppImage check"
     );
@@ -200,7 +201,7 @@ fn check_package_gates(source: &Value) -> Result<()> {
         publication["if"].is_null(),
         "publication cannot bypass earlier steps"
     );
-    requires_command(publication, "test \"$uploaded\" -eq 11")?;
+    requires_command(publication, "test \"$uploaded\" -eq 41")?;
     ensure!(
         tag_index < download_index
             && download_index < checksum_index
@@ -208,6 +209,179 @@ fn check_package_gates(source: &Value) -> Result<()> {
         "validate tag, download and verify before publishing"
     );
     Ok(())
+}
+
+fn check_release_sbom_gates(source: &Value) -> Result<()> {
+    for (id, upload, glob) in [
+        (
+            "build-windows-portable",
+            "Upload portable release",
+            "desktop/target/${{ matrix.rust_target }}/release/bundle/portable/*.zip",
+        ),
+        (
+            "build-linux-ubuntu",
+            "Upload Ubuntu release",
+            "desktop/target/release/bundle/deb/*.deb",
+        ),
+        (
+            "build-linux-appimage",
+            "Upload AppImage release",
+            "desktop/target/release/bundle/appimage/*.AppImage",
+        ),
+        (
+            "build-macos-apple-silicon",
+            "Upload Apple silicon release",
+            "desktop/target/release/bundle/dmg/*.dmg",
+        ),
+    ] {
+        let builder = executable_job(source, id)?;
+        ensure!(
+            builder["permissions"]["contents"].as_str() == Some("read")
+                && builder["permissions"]["id-token"].as_str() == Some("write")
+                && builder["permissions"]["attestations"].as_str() == Some("write"),
+            "builders require scoped signing permissions"
+        );
+        let (setup_index, setup) = named_step(builder, "Set up release SBOM tools")?;
+        ensure!(
+            setup["uses"].as_str() == Some("./.github/actions/setup-release-sbom")
+                && setup["if"].is_null(),
+            "all packages require auditable build tools"
+        );
+        let (inventory_index, inventory) =
+            named_step(builder, "Generate release SBOMs and tag attestations")?;
+        ensure!(
+            inventory["uses"].as_str() == Some("./.github/actions/release-sbom")
+                && inventory["if"].is_null()
+                && inventory["with"]["artifact"].as_str() == Some(glob),
+            "inventory the actual final archive unconditionally"
+        );
+        let (upload_index, upload) = named_step(builder, upload)?;
+        let paths = upload["with"]["path"]
+            .as_str()
+            .context("release upload paths")?;
+        ensure!(
+            paths
+                .lines()
+                .any(|line| line.trim() == format!("{glob}.sbom.*"))
+                && paths
+                    .lines()
+                    .any(|line| line.trim() == format!("{glob}.provenance.sigstore.json")),
+            "upload inventories and portable signatures with each package"
+        );
+        ensure!(
+            setup_index < inventory_index && inventory_index < upload_index,
+            "generate inventories before package publication"
+        );
+    }
+    let scanner = executable_job(source, "release_security")?;
+    ensure!(
+        needs(scanner)?
+            == [
+                "build-windows-portable",
+                "build-linux-ubuntu",
+                "build-linux-appimage",
+                "build-macos-apple-silicon"
+            ],
+        "scan every completed platform inventory"
+    );
+    let (_, rust) = named_step(scanner, "Check all locked Rust dependencies")?;
+    ensure!(
+        rust["uses"].as_str() == Some("./.github/actions/audit-rust") && rust["if"].is_null(),
+        "Rust advisories must block releases"
+    );
+    let (verify_index, verify) = named_step(
+        scanner,
+        "Verify complete SBOM coverage and archive identities",
+    )?;
+    requires_command(
+        verify,
+        "cargo xtask sbom verify --directory dist --require-release-evidence",
+    )?;
+    let (scan_index, scan) = named_step(scanner, "Check native and compiled release advisories")?;
+    ensure!(
+        scan["run"]
+            .as_str()
+            .is_some_and(|run| run.lines().any(|line| line
+                .trim()
+                .starts_with("if grype \"sbom:$sbom\" --fail-on high --output json"))),
+        "retain all findings and block high/critical advisories"
+    );
+    requires_command(scan, "test \"$checked\" -eq 5")?;
+    requires_command(scan, "exit \"$failed\"")?;
+    ensure!(
+        verify_index < scan_index && verify["if"].is_null() && scan["if"].is_null(),
+        "scan only verified inventories and propagate failures"
+    );
+    let publisher = executable_job(source, "publish_release")?;
+    ensure!(
+        needs(publisher)?.contains(&"release_security"),
+        "publication requires successful advisory scans"
+    );
+    let (signature_index, signature) = named_step(
+        publisher,
+        "Verify inventories and their signed release identity",
+    )?;
+    requires_command(
+        signature,
+        "cargo xtask sbom verify --directory dist --require-release-evidence",
+    )?;
+    requires_command(signature,"gh attestation verify \"$archive\" --bundle \"$archive.sbom.sigstore.json\" --predicate-type https://cyclonedx.org/bom")?;
+    requires_command(
+        signature,
+        "gh attestation verify \"$subject\" --bundle \"$archive.provenance.sigstore.json\"",
+    )?;
+    ensure!(signature["if"].is_null() && signature["run"].as_str().is_some_and(|run|run.contains("--source-ref \"$GITHUB_REF\" --source-digest \"$GITHUB_SHA\" --deny-self-hosted-runners") && run.contains("$GITHUB_REPOSITORY/.github/workflows/desktop-packages.yml")),"enforce source/tag/workflow signer identity");
+    let (publish_index, _) = named_step(publisher, "Publish packages, checksums and notes")?;
+    ensure!(
+        signature_index < publish_index,
+        "authenticate evidence before publication"
+    );
+    Ok(())
+}
+
+#[test]
+fn release_sbom_gates_reject_omitted_inventories_bypassed_scans_and_unsigned_publication() {
+    let source = workflow(".github/workflows/desktop-packages.yml");
+    check_release_sbom_gates(&source).unwrap();
+    let inventory_index = named_step(
+        &source["jobs"]["build-linux-appimage"],
+        "Generate release SBOMs and tag attestations",
+    )
+    .unwrap()
+    .0;
+    let mut conditional = source.clone();
+    conditional["jobs"]["build-linux-appimage"]["steps"][inventory_index]["if"] =
+        Value::String("github.event_name == 'push'".into());
+    assert!(check_release_sbom_gates(&conditional).is_err());
+    let upload_index = named_step(
+        &source["jobs"]["build-windows-portable"],
+        "Upload portable release",
+    )
+    .unwrap()
+    .0;
+    let mut omitted = source.clone();
+    omitted["jobs"]["build-windows-portable"]["steps"][upload_index]["with"]["path"] =
+        Value::String("desktop/target/**/*.zip".into());
+    assert!(check_release_sbom_gates(&omitted).is_err());
+    let scan_index = named_step(
+        &source["jobs"]["release_security"],
+        "Check native and compiled release advisories",
+    )
+    .unwrap()
+    .0;
+    let mut ignored = source.clone();
+    ignored["jobs"]["release_security"]["steps"][scan_index]["continue-on-error"] =
+        Value::Bool(true);
+    assert!(check_release_sbom_gates(&ignored).is_err());
+    let signature_index = named_step(
+        &source["jobs"]["publish_release"],
+        "Verify inventories and their signed release identity",
+    )
+    .unwrap()
+    .0;
+    let mut unsigned = source;
+    unsigned["jobs"]["publish_release"]["steps"][signature_index]["run"] = Value::String("cargo xtask sbom verify --directory dist --require-release-evidence\n# gh attestation verify example only".into());
+    assert!(check_release_sbom_gates(&unsigned).is_err());
 }
 
 fn check_mcp_provenance(source: &Value) -> Result<()> {
@@ -471,7 +645,7 @@ fn package_and_publication_cannot_bypass_version_or_failed_builds() {
     assert!(
         publish.contains("merge-multiple: false")
             && publish.contains("--draft")
-            && publish.contains("test \"$uploaded\" -eq 11")
+            && publish.contains("test \"$uploaded\" -eq 41")
     );
     assert!(publish.contains("test \"$checked\" -eq 5"));
     assert!(publish.contains("perl -pi -e 's/\\r$//'"));
