@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "issue": "https://github.com/limo-cad/Limo-CAD/issues/374",
+  "scope": "Normal default packaged desktop startup, stdio EOF retention and guarded close fixtures on Windows x64, Windows ARM64 and macOS Apple Silicon.",
+  "result": "All three independently reviewed package fixture gates passed.",
+  "qualified_pr_head": "fa1d8568c48b64a5bf7f7de32aa7f79a31d82ccd",
+  "actual_compiled_build": {
+    "version": "0.2.2",
+    "channel": "preview",
+    "revision": "b44da00325c6d9a2b630466f98e9df821b253f2c",
+    "modified": false,
+    "merge_base_parent": "e4015de638b55823299d4a195e20a10ecbe9fae7",
+    "merge_head_parent": "fa1d8568c48b64a5bf7f7de32aa7f79a31d82ccd",
+    "pr_api_base_when_evidence_collected": "54dcab7fb0783af35ec8fdf26366b77ac0c5927f",
+    "base_limit": "The API base advanced after this checkout. It is recorded separately and is not relabeled as the tested merge parent."
+  },
+  "normal_run": {
+    "id": 38207519206,
+    "attempt": 1,
+    "event": "pull_request",
+    "workflow": ".github/workflows/desktop-packages.yml",
+    "url": "https://github.com/limo-cad/Limo-CAD/actions/runs/38207519206",
+    "conclusion": "success"
+  },
+  "checklist_sha256": "51f925b7f2fa3ee9360cc6eb30f42c3c53706ae0b8d509a434f0143fa6f578d6",
+  "platforms": [
+    {
+      "platform": "Windows x64",
+      "job_id": 114712477269,
+      "default_step_number": 10,
+      "default_step_started_at": "2026-10-12T08:18:15Z",
+      "default_step_completed_at": "2026-10-12T08:18:41Z",
+      "artifact_id": 11736550212,
+      "artifact_name": "Limo-CAD-windows-x64-viewport-diagnostics",
+      "artifact_api_and_download_sha256": "6837e9a1ed4093406a53754511968b802c676e4804178d6680597267ec081167",
+      "report_relative_path": "desktop-stdio.json",
+      "lifecycle_relative_path": "desktop-stdio.json.lifecycle",
+      "independent_review_receipt": "issue374-fa1-windows-x64-independent-artifact-review-20261012.json",
+      "independent_review_sha256": "ee0814186d597dd476de1949fc255c2e2f81a71ba7be441641723993c1552660",
+      "review_result": "CLEAR"
+    },
+    {
+      "platform": "Windows ARM64",
+      "job_id": 114712477339,
+      "default_step_number": 10,
+      "default_step_started_at": "2026-10-12T09:22:50Z",
+      "default_step_completed_at": "2026-10-12T09:23:13Z",
+      "artifact_id": 11738344213,
+      "artifact_name": "Limo-CAD-windows-arm64-viewport-diagnostics",
+      "artifact_api_and_download_sha256": "fcb57529a365befa59965a8042ca954e812fa5f7d7f286ff212a884137b3ca59",
+      "report_relative_path": "desktop-stdio.json",
+      "lifecycle_relative_path": "desktop-stdio.json.lifecycle",
+      "independent_review_receipt": "issue374-arm64-independent-artifact-review-20261012.json",
+      "independent_review_sha256": "2f118297408ab3e77f6f13a87a32bd4b163971a9cd2a4f58bd2ffea46bf3b63c",
+      "review_result": "CLEAR"
+    },
+    {
+      "platform": "macOS Apple Silicon",
+      "job_id": 114712477225,
+      "default_step_number": 15,
+      "default_step_started_at": "2026-10-12T08:32:46Z",
+      "default_step_completed_at": "2026-10-12T08:33:21Z",
+      "artifact_id": 11735588534,
+      "artifact_name": "Limo-CAD-macos-mcp-diagnostics",
+      "artifact_api_and_download_sha256": "a1ec8716da12cf30c5df4980016d3a382a33e20f1bd5a2b08ca47085d84d363d",
+      "report_relative_path": "limo-cad-mcp-macos.json",
+      "lifecycle_relative_path": "limo-cad-mcp-macos.json.lifecycle",
+      "independent_review_receipt": "issue374-macos-independent-review-fa1d8568-20261012.json",
+      "independent_review_sha256": "34587660e71c32e4b8b1d15db6c9f5db231be8741bf3ca2f83a843487e27c7a7",
+      "review_result": "CLEAR",
+      "package_isolation": "Original successful command mounted the DMG read-only and moved repository desktop/occt-libs staging away before launching its contained executable."
+    }
+  ],
+  "verified_in_each_artifact": [
+    "The original normal default-desktop step completed successfully; report passed and desktop_requested are actual true Booleans.",
+    "All ten required desktop lifecycle acceptance Booleans are true, including EOF before GUI exit, unsaved/live model retention, guarded close and second self-close acknowledgement.",
+    "Default-desktop, headless-observer and self-close-desktop initialization metadata agree with the actual clean compiled checkout. Recorded fixture desktop/MCP pairs match.",
+    "Both GUI children exit with code 0 before and after cleanup; kill_attempted is actual false, kill_error is null, and no unavailable/error cleanup observation is accepted.",
+    "Owned process IDs match their exclusively owned child directories, compact default-desktop PID and self-close stages through complete.",
+    "All ten required stderr/process/stdout/stage logs have exactly one complete retention record, with integer original/retained/regular ZIP sizes equal and actual truncated=false; no ancestor skip covers a required log.",
+    "Complete retained stderr for both GUI children has no SurfaceNotConfigured, Surface is not configured for presentation, Surface::get_current_texture_view or panicked at signature. Observer stderr corroborates the fixture outcome."
+  ],
+  "evidence_storage": "Authenticated original archives, relative indexes, scoped original commands and independent review receipts are retained outside the source tree under D:/limo-cad-maintenance/backlog-autonomous-20261010. Artifact IDs and hashes above bind that evidence without embedding fixture models or raw responses here.",
+  "limits": [
+    "No separate model, document, recovery, profile or inbox file was opened for acceptance. Original CI reports contain inline fixture fields; those are not used as model or human UI acceptance.",
+    "The normal release ZIPs were not retained by this observer, so the conditional package-manifest/executable hash inspection is unavailable. No native-computer-control flag is inferred from BuildInfo or controlled-source-host evidence.",
+    "These recorded fixtures do not qualify the current installed runtime, a current live build pair, physical gestures, monitors/DPI/IME/clipboard, broad UI coverage, signing/notarization/publication, universal GPU timing or main integration.",
+    "An older dd810066 ARM64 controlled-source-host readiness timeout remains historical and unattributed; the current normal controlled step passed. It is not claimed as a repaired cause or substituted for default startup.",
+    "All 12 normal fa1 workflows succeeded, but its separate CodeQL security aggregate still reported alert 192. Package acceptance is not a whole-head CI-green assertion."
+  ]
+}

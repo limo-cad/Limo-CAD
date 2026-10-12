@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 pub(super) struct CompilationGate {
     pub(super) receiver: Mutex<mpsc::Receiver<()>>,
     pub(super) release: mpsc::SyncSender<()>,
+    pub(super) entered: mpsc::Sender<()>,
 }
 
 #[derive(Resource, Default)]
@@ -222,9 +223,11 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
         .init_resource::<Captured>();
     install(&mut app);
     let (release, receiver) = mpsc::sync_channel(1);
+    let (entered, compiling) = mpsc::channel();
     app.insert_resource(CompilationGate {
         receiver: Mutex::new(receiver),
         release: release.clone(),
+        entered,
     });
     app.world_mut().resource_mut::<ModelResource>().session_id = "first-owner".into();
     bind_document_geometry(app.world_mut());
@@ -294,6 +297,8 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
             ));
         })
         .id();
+    app.update();
+    compiling.recv_timeout(Duration::from_secs(5)).unwrap();
     let before = capture(&mut app, &target, "menus-before-3d");
     assert!(
         before

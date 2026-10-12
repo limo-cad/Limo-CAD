@@ -373,6 +373,162 @@ fn trackpad_pan_and_orbit_have_the_same_scale_on_retina_displays() {
 }
 
 #[test]
+fn shift_trackpad_orbit_completes_repeated_turns_in_both_directions() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let (mut app, handle) = setup(&fixture);
+    let before = fixture.engine.engine_call("project_export_model", "");
+    let mut start = camera(app.world());
+    start.target = [2., -3., 5.];
+    start.position = [102., -3., 5.];
+    start.up = [0., 0., 1.];
+    let height = handle.frame().unwrap().canvases[0].bounds.height as f32;
+    let step = height / 32. / 0.6;
+
+    for axis in [Vec2::X, Vec2::Y] {
+        for sign in [-1., 1.] {
+            native_viewport::apply_interface_view(
+                app.world_mut(),
+                &fixture.owner().document_id,
+                Some(start),
+                None,
+            )
+            .unwrap();
+            let expected_offsets = if axis == Vec2::Y {
+                [Vec3::Z * sign, -Vec3::X, -Vec3::Z * sign, Vec3::X]
+            } else {
+                [-Vec3::Y * sign, -Vec3::X, Vec3::Y * sign, Vec3::X]
+            };
+            let expected_ups = if axis == Vec2::Y {
+                [-Vec3::X * sign, -Vec3::Z, Vec3::X * sign, Vec3::Z]
+            } else {
+                [Vec3::Z; 4]
+            };
+
+            // Two complete turns must cross both poles, retain the inverted
+            // view halfway through, and return to the starting orientation.
+            for frame in 1..=64 {
+                let delta = axis * step * sign;
+                let mut event = input(
+                    &handle,
+                    [300., 300.],
+                    wheel(MouseScrollUnit::Pixel, delta.x, delta.y),
+                );
+                event.modifiers.shift = true;
+                assert!(navigate(app.world_mut(), &handle, &event).unwrap());
+                let actual = camera(app.world());
+                assert_eq!(actual.target, start.target);
+                assert!((distance(actual) - 100.).abs() < 1e-3);
+                assert!(super::super::motion::pose(actual).is_ok());
+                if frame % 8 == 0 {
+                    let quarter = (frame / 8 - 1) % 4;
+                    let offset =
+                        Vec3::from_array(actual.position) - Vec3::from_array(actual.target);
+                    assert!(
+                        offset.abs_diff_eq(expected_offsets[quarter] * 100., 1e-2),
+                        "axis={axis:?}, sign={sign}, frame={frame}: {actual:?}"
+                    );
+                    assert!(Vec3::from_array(actual.up).abs_diff_eq(expected_ups[quarter], 1e-4));
+                }
+            }
+        }
+    }
+    assert_eq!(
+        before,
+        fixture.engine.engine_call("project_export_model", "")
+    );
+}
+
+#[test]
+fn mouse_orbit_crosses_poles_and_inverted_views_still_pan_and_zoom() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let (mut app, handle) = setup(&fixture);
+    let before = fixture.engine.engine_call("project_export_model", "");
+    let mut start = camera(app.world());
+    start.position = [100., 0., 0.];
+    start.target = [0.; 3];
+    start.up = [0., 0., 1.];
+    let step = handle.frame().unwrap().canvases[0].bounds.height as f32 / 16.;
+    workbench::execute(
+        app.world_mut(),
+        &workbench::Command::Navigation(NavigationTool::Orbit),
+    )
+    .unwrap();
+
+    for kind in [MouseButton::Right, MouseButton::Middle, MouseButton::Left] {
+        native_viewport::apply_interface_view(
+            app.world_mut(),
+            &fixture.owner().document_id,
+            Some(start),
+            None,
+        )
+        .unwrap();
+        let mut inverted = start;
+        for frame in 1..=16 {
+            // Separate short drags represent lifting and repositioning the
+            // mouse to keep rotating without leaving the viewport.
+            for (cursor, event) in [
+                ([300., 300.], button(kind, ButtonState::Pressed)),
+                ([300., 300. + step], moved([300., 300. + step])),
+                ([300., 300. + step], button(kind, ButtonState::Released)),
+            ] {
+                let mut event = input(&handle, cursor, event);
+                event.modifiers.shift = kind == MouseButton::Middle;
+                assert!(navigate(app.world_mut(), &handle, &event).unwrap());
+            }
+            if frame % 4 == 0 {
+                let expected = [Vec3::Z, -Vec3::X, -Vec3::Z, Vec3::X][frame / 4 - 1];
+                let actual = camera(app.world());
+                assert!(Vec3::from_array(actual.position).abs_diff_eq(expected * 100., 1e-2));
+                assert_eq!(actual.target, start.target);
+                assert!(super::super::motion::pose(actual).is_ok());
+                if frame == 8 {
+                    inverted = actual;
+                    assert!(Vec3::from_array(actual.up).abs_diff_eq(-Vec3::Z, 1e-4));
+                }
+            }
+        }
+
+        native_viewport::apply_interface_view(
+            app.world_mut(),
+            &fixture.owner().document_id,
+            Some(inverted),
+            None,
+        )
+        .unwrap();
+        let pan = input(
+            &handle,
+            [300., 300.],
+            wheel(MouseScrollUnit::Pixel, 20., -10.),
+        );
+        assert!(navigate(app.world_mut(), &handle, &pan).unwrap());
+        let panned = camera(app.world());
+        assert_eq!(panned.up, inverted.up);
+        assert!(panned.target[1] < inverted.target[1]);
+        assert!(panned.target[2] > inverted.target[2]);
+        let offset = Vec3::from_array(panned.position) - Vec3::from_array(panned.target);
+        assert!(offset.abs_diff_eq(Vec3::from_array(inverted.position), 1e-3));
+        let mut zoom = input(
+            &handle,
+            [300., 300.],
+            wheel(MouseScrollUnit::Pixel, 0., 20.),
+        );
+        zoom.modifiers.ctrl = true;
+        assert!(navigate(app.world_mut(), &handle, &zoom).unwrap());
+        let zoomed = camera(app.world());
+        assert_eq!(zoomed.up, inverted.up);
+        assert_eq!(zoomed.target, panned.target);
+        assert!(distance(zoomed) < distance(panned));
+        assert!(super::super::motion::pose(zoomed).is_ok());
+    }
+    assert_eq!(
+        before,
+        fixture.engine.engine_call("project_export_model", "")
+    );
+}
+
+#[test]
 fn toolbar_modes_capture_left_drag_and_window_zoom_without_editing_geometry() {
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
     let fixture = Fixture::new();

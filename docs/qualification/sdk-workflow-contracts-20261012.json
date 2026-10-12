@@ -1,0 +1,49 @@
+{
+  "recorded_utc": "2026-10-12T05:14:51.0613028Z",
+  "compiled_revision": "e3505cd7b090d208a5f0b4c6175345f7efe4151f",
+  "checkout": "D:/limo-cad-maintenance/ownership-worktree",
+  "source_blobs": {
+    "xtask/src/workflow_contracts.rs": "17b25746f181a0c9ebfe0cdc31f6d5fbb0a7e8b1",
+    ".github/workflows/codeql.yml": "f5555d7a20332eb3b3eb8daca8786a063a993f2c",
+    ".github/workflows/native-host-tests.yml": "f3ef2ee5d8d3ff7046a0f84defeb7f92388f31cb",
+    ".github/workflows/mcp-server.yml": "ade74aa48310a373fdc9072f5d7e9c7536e65cc0",
+    ".github/workflows/desktop-packages.yml": "ae6aadcc8eca5c6959499217d8f100e4d9acf583",
+    ".github/workflows/linux-engine-tests.yml": "653a25f907a54b609a2afd48527d894206865cac",
+    ".github/workflows/required-interface.yml": "9dfb4287177549ca6aefb5b669da2e93fad6e3d0",
+    ".github/workflows/session-storage.yml": "8b0891896e28403bbfe67051340900127dedaeda"
+  },
+  "reported_failure": {
+    "head": "f38ed8511a0758cf9ac24a7d49e400546f4bd881",
+    "url": "https://github.com/limo-cad/Limo-CAD/actions/runs/38204038600/job/114663462812",
+    "command": "cargo test --locked --workspace",
+    "failed_case": "workflow_contracts::security_and_heavy_ci_keep_coverage_without_duplicate_or_stale_pr_work",
+    "original_log_sha256": "bf724fab134ae9be507b28bbd7a9f80f0cb315834b794aa26e2e7a9560da5c09",
+    "cause": "A stale contract required PR cancellation for native Host and MCP workflows after their reviewed policy changed to preserve active SDK qualification and cache publication. The normal host-neutral workspace reported 214 xtask passes, one failure and one ignored case."
+  },
+  "policy": "Retain security triggers, transport coverage and short Linux/interface PR cancellation. Separately require protected Host/MCP SDK owners with their existing branch/manual-probe namespaces. Protect native CodeQL languages while cancelling superseded script checks; retain all five distinct language contexts, permissions, timeouts and ordinary PR execution. Matrix order is immaterial. Keep the separately qualified Desktop contract unchanged.",
+  "environment": {
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "msvc": "14.44.35207",
+    "windows_sdk": "10.0.26100.0",
+    "target": "x86_64-pc-windows-msvc",
+    "features": "default xtask features; native-control-harness not enabled",
+    "profile": "Existing release target; incremental=true, release opt-level=3, repository application/dependency packages opt-level=1, jobs=1. Exact flags and structured commands retained in the local receipt."
+  },
+  "qualification": {
+    "helper_sha256": "41ea9a9615c625b56d8deb06f4027afa583b41d085c7fa64523b047c19630c06",
+    "wrapper_sha256": "2a20cb5ef20931ee78059fa42293b0df2535f8574760972ea6047bb65f8c9eea",
+    "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/sdk-workflow-contracts-e3505cd7-results.json",
+    "receipt_sha256": "1c47a1f5863cd2d27f0939d69dc44a6c97610b73b8349ddebd070c2add70d172",
+    "artifact": "D:/noBS-CAD-builds/finish-bevy-rc2/release-target/x86_64-pc-windows-msvc/release/deps/xtask-395a63163e96da73.exe",
+    "artifact_sha256": "02baf3b80c07f423203c2319601b130a6ea3fed57637f15e854d26f20ee43283",
+    "source_and_helper_review": "Root and independent peer CLEAR. Clean exact-revision checks surround compilation and each exact case. Atomic CreateNew receipt reservation prevents duplicate execution; partial reservations remain for reconciliation."
+  },
+  "results": [
+    { "kind": "strict_xtask_all_targets_clippy", "exit_code": 0, "elapsed_seconds": 40.4712672, "log_sha256": "6c99ed82528b3c66297e27a603791b6555c70095dd51462703566de0abf5b8e7" },
+    { "kind": "single_xtask_test_artifact_compile", "exit_code": 0, "elapsed_seconds": 127.1980515, "json_log_sha256": "f076eec9910f4985ee36e49034ccafa581e645bd838ba7bf976a340878dec715", "stderr_sha256": "8a8c96c4e244a55195de85f2950fa4a74313add97539148103e996e7dc7230a4" },
+    { "kind": "exact_case", "filter": "workflow_contracts::security_and_heavy_ci_keep_coverage_without_duplicate_or_stale_pr_work", "exit_code": 0, "passed": 1, "failed": 0, "ignored": 0, "filtered_out": 215, "elapsed_seconds": 0.038025, "log_sha256": "2185ec1ebb0bdd1676f06e6b47feb225519920381c0cbd59a07af27d5b9406c7" },
+    { "kind": "exact_case", "filter": "workflow_contracts::sdk_owners_and_fast_scripts_keep_distinct_supersession_policies", "exit_code": 0, "passed": 1, "failed": 0, "ignored": 0, "filtered_out": 215, "elapsed_seconds": 0.0345386, "log_sha256": "52353d6ec4317846b84d00d51a789aa4b7824a542855853b297a4fa5e63e21aa" }
+  ],
+  "scope": "One strict changed-tooling lint, one compiled artifact and exactly two affected pure workflow-contract cases. The new case includes counterexamples for cancellation/type drift, commit/run/global or colliding namespaces, lost/duplicated CodeQL contexts, top-level overrides and disabled/manual-only jobs, plus reordered-matrix acceptance. Workflow files, their gates and production code are unchanged by this repair. No local suite or previously passing Desktop/native regression was rerun. No GUI process/input, model/session/inbox mutation, recipe, deployment or shared runtime change. Hosted CI and packaged startup still require their own latest-head normal receipts."
+}

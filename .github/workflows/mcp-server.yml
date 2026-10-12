@@ -58,8 +58,9 @@ permissions:
 
 concurrency:
   group: mcp-server-${{ github.ref }}
-  # Keep main/tag/manual receipts; only superseded PR acceptance is obsolete.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Let the current SDK owner finish qualification and save its checked cache.
+  # New revisions replace the pending run, then perform their own full checks.
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always

@@ -11135,7 +11135,13 @@ mod tests {
         );
         assert_eq!(imported.manager.solid_scene_ref(), &before_scene);
         println!("native exact-tangent donor: {donor_evidence}");
-        println!("native exact-tangent STEP: {imported_evidence}; full summary: {full}");
+        // Log only geometry counts and numeric native identities from the public
+        // response; a generic MCP response can carry private route/error metadata.
+        println!(
+            "native exact-tangent STEP: {imported_evidence}; public summary: {} hole candidates, {} ambiguous candidates; native wall faces: {reported_wall_ids:?}",
+            holes.len(),
+            ambiguous.len(),
+        );
         // Captured STEP bytes can preserve the authentic witness independently.
         // This source contract does not establish a clean matched desktop/MCP
         // pair; that original #369 criterion remains.

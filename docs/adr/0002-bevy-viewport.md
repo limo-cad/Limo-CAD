@@ -106,6 +106,14 @@ render world. Camera and presentation-only changes render exactly once on both
 macOS and Windows; duplicating those updates adds pointer latency without
 creating a new GPU pipeline.
 
+The native interface and windowless CAD worker share a GPU device and queue.
+Window configuration and frame acquisition exclude queue operations in the
+interface's render world. CAD extraction/recovery and GPU render updates share
+the same submission guard with those window operations. Mesh rebuilding and
+pipeline prewarming/compilation run outside the guard, preserving menu rendering
+while geometry and shaders prepare. On shutdown, a stopped worker cancels its
+pending submission wait so the interface can finish its last frame.
+
 The Extrude tool volume is a translucent fill without a duplicate edge cage;
 the source sketch remains visible in its normal retained sketch layer. Its DOM
 drag proxy is hit-test-only and never becomes a webview mask island. Projected
@@ -182,6 +190,12 @@ view**. Touchpad orbit and 3D-mouse rotation share the center of the visible
 OCCT tessellation as their pivot. That presentation pivot is independent from
 the camera target reported to a 3Dconnexion driver; a driver-side automatic
 pivot update must not move it.
+
+Mouse orbit, Shift+trackpad swipes, the Orbit tool and orientation-dial drags
+rotate around the view's right and up axes without a vertical angle limit.
+The camera orientation turns with its position, so repeated full rotations
+pass smoothly through the top, bottom and inverted views. Pan follows the
+current screen axes, and zoom retains the current orientation.
 
 The macOS installed-driver path was calibrated against real cap motions on
 2026-07-31. Device input is canonicalized once at the adapter boundary:

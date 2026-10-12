@@ -352,7 +352,7 @@ fn move_camera(
     {
         return Err("The rendered document is not current".into());
     }
-    let (target, distance, _) = super::motion::pose(camera)?;
+    let (target, distance, orientation) = super::motion::pose(camera)?;
     let offset = Vec3::from_array(camera.position) - target;
     let up = Vec3::from_array(camera.up).normalize();
     let height = (bounds.height as f32).max(1.);
@@ -374,15 +374,16 @@ fn move_camera(
             }
             Mode::Zoom | Mode::ZoomWindow => {}
             Mode::Orbit => {
-                let to_y = Quat::from_rotation_arc(up, Vec3::Y);
-                let local = to_y * (offset / distance);
-                let theta = local.x.atan2(local.z) - std::f32::consts::TAU * delta.x / height;
-                let phi = (local.y.clamp(-1., 1.).acos()
-                    - std::f32::consts::TAU * delta.y / height)
-                    .clamp(1e-3, std::f32::consts::PI - 1e-3);
-                let direction =
-                    Vec3::new(phi.sin() * theta.sin(), phi.cos(), phi.sin() * theta.cos());
-                camera.position = (target + to_y.inverse() * direction * distance).to_array();
+                // Turn the complete orientation around the current screen axes.
+                // Keeping up with the view lets orbit cross either pole and
+                // continue through inverted views without an angle clamp.
+                let angles = -std::f32::consts::TAU * delta / height;
+                let rotation = (orientation
+                    * Quat::from_rotation_y(angles.x)
+                    * Quat::from_rotation_x(angles.y))
+                .normalize();
+                camera.position = (target + rotation * Vec3::Z * distance).to_array();
+                camera.up = (rotation * Vec3::Y).to_array();
             }
         }
     }

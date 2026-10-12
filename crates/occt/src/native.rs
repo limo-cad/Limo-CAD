@@ -204,11 +204,36 @@ mod ffi {
         closest_point_b_z: f64,
     }
 
+    // Native primitives exercise the same clearance helper without changing a model.
+    // cxx-build generates ordinary C++ linkage before Rust unit-test compilation,
+    // so the private qualification declarations must also exist in normal builds.
+    #[allow(
+        dead_code,
+        reason = "private native qualification bridge is called only by unit tests"
+    )]
+    struct FfiClearanceRegression {
+        legacy_inner_solution: bool,
+        legacy_minimum_clearance_mm: f64,
+        legacy_point_a: [f64; 3],
+        legacy_point_b: [f64; 3],
+        reversed_disjoint: FfiInterferenceResult,
+        swapped_disjoint: FfiInterferenceResult,
+        contact: FfiInterferenceResult,
+        contained: FfiInterferenceResult,
+        partial_overlap: FfiInterferenceResult,
+        overlapping_envelopes: FfiInterferenceResult,
+    }
+
     unsafe extern "C++" {
         include!("shim.hpp");
 
         type Kernel;
         fn new_kernel() -> UniquePtr<Kernel>;
+        #[allow(
+            dead_code,
+            reason = "private native qualification bridge is called only by unit tests"
+        )]
+        fn clearance_regression_probe() -> Result<FfiClearanceRegression>;
         fn reset(self: Pin<&mut Kernel>);
         fn apply_job(self: Pin<&mut Kernel>, job: &FfiJob) -> Result<()>;
         fn body_ids(self: &Kernel) -> Vec<u64>;
@@ -3734,6 +3759,224 @@ mod tests {
         assert!((projection.bounds[1] + 10.0).abs() < 1.0e-6);
         assert!((projection.bounds[2] - 10.0).abs() < 1.0e-6);
         assert!((projection.bounds[3] - 10.0).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn exact_clearance_rejects_disjoint_native_containment_shortcuts() {
+        let probe = ffi::clearance_regression_probe().unwrap();
+        // The reversed primitive intentionally has complement material in OCCT.
+        // Its actual raw shortcut is a finite-CAD-boundary regression witness,
+        // not an attribution of the separately reported imported STEP anomaly.
+        assert!(probe.legacy_inner_solution);
+        assert_eq!(probe.legacy_minimum_clearance_mm, 0.0);
+        assert_eq!(probe.legacy_point_a, probe.legacy_point_b);
+        println!(
+            "synthetic raw InnerSolution={} clearance={} witnesses={:?}/{:?}",
+            probe.legacy_inner_solution,
+            probe.legacy_minimum_clearance_mm,
+            probe.legacy_point_a,
+            probe.legacy_point_b
+        );
+
+        let points = |result: &ffi::FfiInterferenceResult| {
+            (
+                [
+                    result.closest_point_a_x,
+                    result.closest_point_a_y,
+                    result.closest_point_a_z,
+                ],
+                [
+                    result.closest_point_b_x,
+                    result.closest_point_b_y,
+                    result.closest_point_b_z,
+                ],
+            )
+        };
+        let assert_point = |actual: [f64; 3], expected: [f64; 3]| {
+            for axis in 0..3 {
+                assert!(
+                    (actual[axis] - expected[axis]).abs() < 1.0e-7,
+                    "point {actual:?} differs from analytic {expected:?}"
+                );
+            }
+        };
+        // A 90-degree native location puts the reversed 10 mm box at
+        // [30,40] x [20,30] x [5,15]; the other box occupies [0,2]^3.
+        let analytic_clearance = (28.0_f64.powi(2) + 18.0_f64.powi(2) + 3.0_f64.powi(2)).sqrt();
+        for (label, result, expected_a, expected_b) in [
+            (
+                "reversed placed solid",
+                &probe.reversed_disjoint,
+                [30.0, 20.0, 5.0],
+                [2.0, 2.0, 2.0],
+            ),
+            (
+                "swapped placed solid",
+                &probe.swapped_disjoint,
+                [2.0, 2.0, 2.0],
+                [30.0, 20.0, 5.0],
+            ),
+        ] {
+            assert!(
+                (result.minimum_clearance_mm - analytic_clearance).abs() < 1.0e-7,
+                "{label}: clearance {} differs from {analytic_clearance}",
+                result.minimum_clearance_mm
+            );
+            assert!(result.overlap_volume_mm3.abs() < 1.0e-7);
+            let interfering = result.overlap_volume_mm3 > 1.0e-7;
+            assert!(!interfering, "{label} must not interfere");
+            let (point_a, point_b) = points(result);
+            assert_point(point_a, expected_a);
+            assert_point(point_b, expected_b);
+            println!(
+                "{label}: clearance={} volume={} witnesses={point_a:?}/{point_b:?}",
+                result.minimum_clearance_mm, result.overlap_volume_mm3
+            );
+        }
+        for (label, result, expected_volume) in [
+            ("contact", &probe.contact, 0.0),
+            ("contained", &probe.contained, 8.0),
+            ("partial overlap", &probe.partial_overlap, 1.0),
+        ] {
+            assert!(result.minimum_clearance_mm.abs() < 1.0e-7, "{label}");
+            assert!(
+                (result.overlap_volume_mm3 - expected_volume).abs() < 1.0e-7,
+                "{label}"
+            );
+            let (point_a, point_b) = points(result);
+            assert!(
+                point_a.into_iter().chain(point_b).all(f64::is_finite),
+                "{label}"
+            );
+        }
+        // A compound's envelope encloses the query box, but neither native
+        // member does. A box-bound approximation would incorrectly return zero.
+        assert!(
+            (probe.overlapping_envelopes.minimum_clearance_mm - 27.0_f64.sqrt()).abs() < 1.0e-7
+        );
+        assert!(probe.overlapping_envelopes.overlap_volume_mm3.abs() < 1.0e-7);
+        let (point_a, point_b) = points(&probe.overlapping_envelopes);
+        let close_to = |point: [f64; 3], expected: [f64; 3]| {
+            point
+                .into_iter()
+                .zip(expected)
+                .all(|(a, b)| (a - b).abs() < 1.0e-7)
+        };
+        assert!(
+            close_to(point_a, [2.0, 2.0, 2.0]) || close_to(point_a, [10.0, 10.0, 10.0]),
+            "compound witness must lie on an actual member: {point_a:?}"
+        );
+        assert!(
+            close_to(point_b, [5.0, 5.0, 5.0]) || close_to(point_b, [7.0, 7.0, 7.0]),
+            "query witness must lie on its native boundary: {point_b:?}"
+        );
+        let compound_witness_distance = point_a
+            .into_iter()
+            .zip(point_b)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+            .sqrt();
+        assert!(
+            (compound_witness_distance - probe.overlapping_envelopes.minimum_clearance_mm).abs()
+                < 1.0e-7,
+            "compound witnesses must describe the reported native clearance"
+        );
+
+        // Optional read-only local evidence in this SAME case. The private
+        // component is never bundled or published, and ordinary CI exercises
+        // the synthetic native regression above without requiring private data.
+        let Some(step_path) = std::env::var_os("LIMO_CAD_NATIVE_DISTANCE_REPRO_STEP") else {
+            println!("authenticated local STEP probe not requested");
+            return;
+        };
+        let step = std::fs::read(&step_path).unwrap();
+        let source_hash = limo_cad_export::slicer_verification::sha256(&step);
+        assert_eq!(
+            source_hash, "05cf085685dee6425f67409a4ea9853b36afd9ca05345e350b631f94164f2125",
+            "local probe must use the authenticated reported STEP"
+        );
+        let mut kernel = OcctKernel::new().unwrap();
+        let scene = kernel
+            .recompute(&RecomputePlanDto {
+                transaction_id: 1,
+                errors: Vec::new(),
+                jobs: vec![
+                    KernelJobDto::ImportStep(KernelImportStepJobDto {
+                        feature_id: FeatureId(1),
+                        result_body_id: BodyId(1),
+                        data_base64: encode_base64(&step),
+                    }),
+                    KernelJobDto::Extrude(KernelExtrudeJobDto {
+                        feature_id: FeatureId(2),
+                        operation: ExtrudeOperation::NewBody,
+                        source_face: None,
+                        profiles: vec![rectangle_profile(0, 4.4, 15.6, 57.2, 62.8)],
+                        normal: Point3Dto {
+                            x: 0.0,
+                            y: 0.0,
+                            z: 1.0,
+                        },
+                        start_offset: 9.9,
+                        end_offset: 153.1,
+                        taper_angle_deg: 0.0,
+                        target_body_ids: Vec::new(),
+                        result_body_ids: vec![BodyId(2)],
+                    }),
+                ],
+            })
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        assert_eq!(scene.bodies.len(), 2);
+        let native_identities = kernel.body_geometry_identities().unwrap();
+        let identity = |body_id| PlacedBodyQueryDto {
+            body_id: BodyId(body_id),
+            translation: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+        };
+        let result = kernel.exact_interference(identity(2), identity(1)).unwrap();
+        // Retained independent native enclosure/prism query proved this lower
+        // bound, not the screw's exact clearance. Keep the two distinct.
+        assert!(result.minimum_clearance_mm >= 148.2038368765174 - 1.0e-6);
+        assert!(result.overlap_volume_mm3.abs() < 1.0e-7);
+        let interfering = result.overlap_volume_mm3 > 1.0e-7;
+        assert!(!interfering);
+        let witness_distance = result
+            .closest_point_a
+            .into_iter()
+            .zip(result.closest_point_b)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+            .sqrt();
+        assert!((witness_distance - result.minimum_clearance_mm).abs() < 1.0e-6);
+        for (point, min, max) in [
+            (
+                result.closest_point_a,
+                [4.4, 57.2, 9.9],
+                [15.6, 62.8, 153.1],
+            ),
+            (
+                result.closest_point_b,
+                [45.772299194335936, -98.29999694824218, 119.0999969482422],
+                [53.5723014831543, -87.9, 126.9000030517578],
+            ),
+        ] {
+            for axis in 0..3 {
+                assert!(point[axis].is_finite());
+                assert!(point[axis] >= min[axis] - 1.0e-6 && point[axis] <= max[axis] + 1.0e-6);
+            }
+        }
+        assert_eq!(
+            kernel.body_geometry_identities().unwrap(),
+            native_identities
+        );
+        assert_eq!(std::fs::read(&step_path).unwrap(), step);
+        println!(
+            "authenticated local STEP {source_hash}: clearance={} volume={} witnesses={:?}/{:?}",
+            result.minimum_clearance_mm,
+            result.overlap_volume_mm3,
+            result.closest_point_a,
+            result.closest_point_b
+        );
     }
 
     #[test]
