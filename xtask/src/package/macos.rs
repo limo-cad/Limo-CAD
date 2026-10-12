@@ -330,6 +330,10 @@ pub(super) fn build(package: &Package, options: &Options) -> Result<()> {
                 .arg(&app),
         )?;
     }
+    if options.bundle.as_deref() == Some("app") {
+        println!("Native app: {}", app.display());
+        return Ok(());
+    }
     let output = bundle.join("dmg");
     fs::create_dir_all(&output)?;
     let arch = if env::consts::ARCH == "aarch64" {

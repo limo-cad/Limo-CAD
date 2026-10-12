@@ -563,6 +563,56 @@ pub(crate) fn enqueue_motion_evaluation<P: Send + 'static>(
     )
 }
 
+pub(crate) fn enqueue_measurement_review(
+    world: &mut World,
+    owner: DocumentContext,
+    revision: u64,
+    request: limo_cad_occt::measurement::MeasurementRequest,
+    complete: impl FnOnce(
+            &mut World,
+            &NativeServices,
+            Result<limo_cad_native_engine::FinishedMeasurementReview, String>,
+        ) -> Result<Value, String>
+        + Send
+        + 'static,
+) -> Result<Value, String> {
+    let (output, prepared) = mpsc::sync_channel(1);
+    enqueue(
+        world,
+        "measure_selection".into(),
+        move |services, guard| {
+            let snapshot = services.bridge.with_native_document_receipt(
+                &services.engine,
+                &owner,
+                |current| {
+                    if current != revision {
+                        return Err("The model changed before measurement".into());
+                    }
+                    guard.validate()?;
+                    services.engine.prepare_measurement_review(&request)
+                },
+            )?;
+            output
+                .send(snapshot.inspect()?)
+                .map_err(|_| "Measurement receiver retired")?;
+            Ok(NativeMutationResult {
+                context: owner,
+                engine_revision: revision,
+                value: Value::Null,
+            })
+        },
+        move |world, services, result| {
+            let result = result.and_then(|_| {
+                prepared
+                    .try_recv()
+                    .map_err(|_| "Measurement returned no report".into())
+            });
+            complete(world, services, result)
+        },
+        |_| false,
+    )
+}
+
 fn enqueue(
     world: &mut World,
     operation: String,

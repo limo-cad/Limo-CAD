@@ -894,6 +894,7 @@ pub(crate) fn process_one(
                 support::hover(world, &presented_owner, &mut editor.support, None)?;
                 crate::session_bridge::native_interface::feature::hover_references(world,services,&presented_owner,None)?;
                 solid::hover(world, services, &presented_owner, None)?;
+                crate::session_bridge::native_interface::controller::measure::canvas(world, services, &presented_owner, None, false, false, false)?;
             }
             WindowEvent::CursorMoved(moved) if editor.support.active => {
                 if let Some(canvas) = viewport_bounds {
@@ -910,7 +911,11 @@ pub(crate) fn process_one(
                     let p=moved.position;let a=canvas;
                     let inside=f64::from(p.x)>=a.x&&f64::from(p.x)<a.x+a.width&&f64::from(p.y)>=a.y&&f64::from(p.y)<a.y+a.height&&!handle.owns_pointer([f64::from(p.x),f64::from(p.y)]);
                     let handled=crate::session_bridge::native_interface::feature::hover_references(world,services,&presented_owner,inside.then_some([p.x-a.x as f32,p.y-a.y as f32]))?;
-                    if !handled {
+                    let measuring = crate::session_bridge::native_interface::controller::measure::canvas(
+                        world,services,&presented_owner,inside.then_some([p.x-a.x as f32,p.y-a.y as f32]),false,
+                        event.modifiers.ctrl || event.modifiers.meta,event.modifiers.shift,
+                    )?.is_some();
+                    if !handled && !measuring {
                         solid::hover(world, services, &presented_owner, inside.then_some([p.x-a.x as f32,p.y-a.y as f32]))?;
                     }
                     result=json!({"handled":true,"hover":inside});
@@ -951,6 +956,10 @@ pub(crate) fn process_one(
             {
                 match key.key_code {
                     KeyCode::Escape => {
+                        if crate::session_bridge::native_interface::controller::measure::escape(world, &presented_owner)? {
+                            editor.press = None;
+                            return Ok(json!({"handled":true,"closed_measure":true}));
+                        }
                         editor.draft.escape();
                         if editor.stamp.as_ref().is_none_or(|stamp| stamp.sketch.is_none()) {
                             solid::clear(world, &presented_owner)?;
@@ -1022,6 +1031,10 @@ pub(crate) fn process_one(
                         return support::pick(world, services, &owner, &mut editor,
                             [cursor.x-canvas.x as f32,cursor.y-canvas.y as f32]);
                     }
+                    if let Some(value)=crate::session_bridge::native_interface::controller::measure::canvas(
+                        world,services,&owner,Some([cursor.x-canvas.x as f32,cursor.y-canvas.y as f32]),true,
+                        event.modifiers.ctrl || event.modifiers.meta,event.modifiers.shift,
+                    )? {return Ok(value);}
                     if let Some(value)=joint::canvas(world,services,&owner,Some([cursor.x-canvas.x as f32,cursor.y-canvas.y as f32]),true)? {return Ok(value);}
                     if let Some(value) = crate::session_bridge::native_interface::feature::handle_canvas_pick(
                         world, services, &owner,

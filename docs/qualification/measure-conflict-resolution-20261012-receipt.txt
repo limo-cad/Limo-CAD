@@ -1,0 +1,32 @@
+measure-current-conflicts-kernel-tests.log
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+running 4 tests
+test host::measurement_snapshot::tests::measure_native_edge_and_vertex_use_exact_topology_without_parent_body_totals ... ok
+test host::measurement_snapshot::tests::measure_native_box_properties_face_distances_and_angles_are_read_only ... ok
+test host::measurement_snapshot::tests::measure_native_circles_report_exact_curves_centers_and_parallel_extrema ... ok
+test host::measurement_snapshot::tests::measure_native_repeated_occurrences_preserve_placements_and_reject_stale_results ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 0.05s
+
+measure-current-conflicts-clearance-test.log
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.56s
+running 1 test
+test native::tests::exact_clearance_rejects_disjoint_native_containment_shortcuts ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 124 filtered out; finished in 0.03s
+
+measure-current-conflicts-native-clippy.log
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 20.39s
+
+measure-current-conflicts-desktop-tests.log
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 54s
+running 7 tests
+test native_viewport::platform::viewport_renderer::surface_submission::tests::stopped_worker_cancels_extraction_and_render_waits ... ok
+test native_viewport::platform::viewport_renderer::surface_submission::tests::worker_submission_and_compilation_preserve_surface_order_and_frame_readiness ... ok
+test native_viewport::platform::viewport_renderer::tests::native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_frames ... ok
+test native_viewport::platform::viewport_renderer::tests::worker_shutdown_services_pending_main_thread_surface_work ... ok
+test session_bridge::native_interface::controller::measure::tests::measure_connection_labels_match_panel_units_precision_and_signed_local_deltas ... ok
+test session_bridge::native_interface::controller::measure::tests::measure_overlay_highlights_the_correct_extremum_reuses_idle_guides_and_preserves_preview ... ok
+test session_bridge::native_interface::controller::tests::admitted_inspection_wakes_until_its_existing_deadline_without_claiming_gpu_submission ... ok
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 1070 filtered out; finished in 5.34s
+
+measure-current-conflicts-desktop-clippy.log
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 56.62s

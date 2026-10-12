@@ -164,6 +164,11 @@ pub struct ViewportPresentation {
     /// separate from the sketch grid so each view retains its own choice.
     #[serde(default)]
     pub hide_ground_grid: bool,
+    /// Disposable read-only inspection guides, independent of modeling previews.
+    #[serde(default, deserialize_with = "deserialize_shared_values")]
+    pub measurement_lines: std::sync::Arc<Vec<ViewportMeasurementLine>>,
+    #[serde(default, deserialize_with = "deserialize_shared_values")]
+    pub measurement_points: std::sync::Arc<Vec<[f32; 3]>>,
     /// Presentation-only palette choices; hiding a point never deletes it or
     /// disables snapping. False preserves existing clients' display defaults.
     #[serde(default)]
@@ -274,6 +279,15 @@ impl ViewportPresentation {
         };
         *hidden = !*hidden;
     }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct ViewportMeasurementLine {
+    pub points: [f32; 6],
+    pub color: [f32; 4],
+    /// Formatted metric for a connection guide; topology highlights have none.
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 fn deserialize_shared_values<'de, T, D>(deserializer: D) -> Result<std::sync::Arc<Vec<T>>, D::Error>
@@ -669,6 +683,7 @@ pub enum NativePickPurpose {
     Edge,
     StraightEdge,
     Vertex,
+    CurveCenter,
 }
 
 #[derive(Debug, Clone, Serialize)]

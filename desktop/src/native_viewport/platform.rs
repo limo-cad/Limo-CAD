@@ -8,9 +8,9 @@ use super::ui::{
 };
 use super::{
     NativePick, NativePickPurpose, ViewportAnnotationKind, ViewportCamStock, ViewportCamTool,
-    ViewportCamera, ViewportHud, ViewportLinePattern, ViewportMode, ViewportModel,
-    ViewportOriginPlane, ViewportPalette, ViewportPresentation, ViewportPreview, ViewportSnapKind,
-    ViewportSnapMarker,
+    ViewportCamera, ViewportHud, ViewportLinePattern, ViewportMeasurementLine, ViewportMode,
+    ViewportModel, ViewportOriginPlane, ViewportPalette, ViewportPresentation, ViewportPreview,
+    ViewportSnapKind, ViewportSnapMarker,
 };
 #[cfg(target_os = "linux")]
 use bevy::render::settings::WgpuFeatures;
@@ -151,6 +151,8 @@ type BodyPoseQuery<'w, 's> = Query<
     ),
 >;
 
+#[path = "measurement_labels.rs"]
+mod measurement_labels;
 #[path = "script_preview.rs"]
 pub(crate) mod script_preview;
 #[path = "section_view.rs"]
@@ -761,6 +763,7 @@ fn install_cad_renderer(app: &mut bevy::app::App, viewport_ui: bool) {
             Update,
             (
                 rebuild_native_annotations,
+                measurement_labels::update,
                 rebuild_native_hud,
                 update_native_hud_orientation,
             )
@@ -3462,6 +3465,31 @@ fn draw_cad_gizmos(
         );
     }
 
+    for line in state.measurement_lines.iter() {
+        let start = Vec3::from_slice(&line.points[..3]);
+        let end = Vec3::from_slice(&line.points[3..]);
+        if start.is_finite() && end.is_finite() {
+            direct_pick_feedback.line(
+                start,
+                end,
+                Color::srgba(line.color[0], line.color[1], line.color[2], line.color[3]),
+            );
+        }
+    }
+    for point in state.measurement_points.iter() {
+        let point = Vec3::from_array(*point);
+        if point.is_finite() {
+            draw_screen_dot(
+                &mut direct_pick_feedback,
+                point,
+                camera.camera,
+                *viewport,
+                5.,
+                rgb(palette.0.edge_selected),
+            );
+        }
+    }
+
     for completed_pass in [false, true] {
         for layer in preview
             .value
@@ -5499,6 +5527,7 @@ fn pick_occt_scene(
             | NativePickPurpose::Edge
             | NativePickPurpose::StraightEdge
             | NativePickPurpose::Vertex
+            | NativePickPurpose::CurveCenter
     ) {
         return edge_picking::pick_edges(
             scene,

@@ -41,6 +41,7 @@
 #include <BRepFilletAPI_MakeChamfer.hxx>
 #include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepGProp.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepLib.hxx>
 #include <BRepOffsetAPI_MakePipeShell.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
@@ -10700,7 +10701,12 @@ std::optional<double> finite_native_bound_separation(
   return separation;
 }
 
-FfiInterferenceResult exact_shape_interference(
+struct ExactShapeDistance {
+  FfiInterferenceResult clearance;
+  bool possible_overlap;
+};
+
+ExactShapeDistance exact_shape_distance(
     const TopoDS_Shape& a, const TopoDS_Shape& b) {
   BRepExtrema_DistShapeShape distance(a, b);
   auto require_distance = [&distance] {
@@ -10761,8 +10767,15 @@ FfiInterferenceResult exact_shape_interference(
   output.closest_point_b_y = point_b.Y();
   output.closest_point_b_z = point_b.Z();
 
-  if (separated_bound ||
-      (!distance.InnerSolution() && output.minimum_clearance_mm > 1.0e-7)) {
+  return {output, !separated_bound &&
+      (distance.InnerSolution() || output.minimum_clearance_mm <= 1.0e-7)};
+}
+
+FfiInterferenceResult exact_shape_interference(
+    const TopoDS_Shape& a, const TopoDS_Shape& b) {
+  const auto distance = exact_shape_distance(a, b);
+  FfiInterferenceResult output = distance.clearance;
+  if (!distance.possible_overlap) {
     return output;
   }
   BRepAlgoAPI_Common common(a, b, Message_ProgressRange());
@@ -10808,6 +10821,27 @@ FfiClearanceRegression clearance_regression_probe() {
   output.reversed_disjoint = exact_shape_interference(reversed, small);
   output.swapped_disjoint = exact_shape_interference(small, reversed);
 
+  // Exercise the actual Measure method after its normal detached snapshot copy,
+  // including its placement transform, rather than merely the raw OCCT solver.
+  Kernel measurement_fixture;
+  measurement_fixture.impl_->bodies.emplace(1, reversed);
+  measurement_fixture.impl_->bodies.emplace(2, small);
+  rust::Vec<std::uint64_t> ids;
+  ids.push_back(1);
+  ids.push_back(2);
+  auto detached = measurement_fixture.drawing_snapshot(ids);
+  rust::Vec<FfiMeasurementSelection> selections;
+  for (const auto id : ids) {
+    FfiMeasurementSelection selection{};
+    selection.placement.body_id = id;
+    selection.placement.rotation = {0., 0., 0., 1.};
+    selections.push_back(selection);
+  }
+  output.measure_reversed_disjoint = detached->measure(selections);
+  selections[0].placement.body_id = 2;
+  selections[1].placement.body_id = 1;
+  output.measure_swapped_disjoint = detached->measure(selections);
+
   const TopoDS_Shape large = BRepPrimAPI_MakeBox(10.0, 10.0, 10.0).Shape();
   output.contact = exact_shape_interference(
       large, BRepPrimAPI_MakeBox(gp_Pnt(10.0, 0.0, 0.0), 2.0, 2.0, 2.0).Shape());
@@ -10824,6 +10858,152 @@ FfiClearanceRegression clearance_regression_probe() {
   output.overlapping_envelopes = exact_shape_interference(
       separated_members,
       BRepPrimAPI_MakeBox(gp_Pnt(5.0, 5.0, 5.0), 2.0, 2.0, 2.0).Shape());
+  return output;
+}
+
+FfiMeasurementResult Kernel::measure(const rust::Vec<FfiMeasurementSelection>& selections) const {
+  if (selections.empty() || selections.size() > 2)
+    throw std::runtime_error("Measure requires one or two selections");
+  FfiMeasurementResult output{};
+  std::vector<TopoDS_Shape> shapes;
+  auto xyz = [](const gp_Pnt& p) { return std::array<double, 3>{p.X(), p.Y(), p.Z()}; };
+  auto direction = [](const gp_Dir& p) { return std::array<double, 3>{p.X(), p.Y(), p.Z()}; };
+  for (const auto& selection : selections) {
+    const auto& placement = selection.placement;
+    const auto found = impl_->bodies.find(placement.body_id);
+    if (found == impl_->bodies.end()) throw std::runtime_error("Measurement body is missing");
+    if (selection.kind > 5) throw std::runtime_error("Unknown measurement selection");
+    TopoDS_Shape shape = found->second;
+    if (selection.kind != 0) {
+      TopTools_IndexedMapOfShape topology;
+      TopExp::MapShapes(shape, selection.kind == 1 ? TopAbs_FACE : TopAbs_EDGE, topology);
+      if (selection.index >= static_cast<std::uint32_t>(topology.Extent()))
+        throw std::runtime_error("Measurement topology is missing");
+      shape = topology.FindKey(static_cast<int>(selection.index) + 1);
+      if (selection.kind >= 3) {
+        BRepAdaptor_Curve curve(TopoDS::Edge(shape));
+        gp_Pnt point;
+        if (selection.kind == 5) {
+          if (curve.GetType() != GeomAbs_Circle)
+            throw std::runtime_error("Select an analytic circular edge to measure its center");
+          point = curve.Circle().Location();
+        } else {
+          point = curve.Value(selection.kind == 3 ? curve.FirstParameter() : curve.LastParameter());
+        }
+        shape = BRepBuilderAPI_MakeVertex(point).Shape();
+      }
+    }
+    for (const auto value : placement.translation)
+      if (!std::isfinite(value)) throw std::runtime_error("Measurement placement is not finite");
+    double magnitude = 0.;
+    for (const auto value : placement.rotation) {
+      if (!std::isfinite(value)) throw std::runtime_error("Measurement rotation is not finite");
+      magnitude += value * value;
+    }
+    magnitude = std::sqrt(magnitude);
+    if (!std::isfinite(magnitude) || magnitude <= 1.e-12)
+      throw std::runtime_error("Measurement rotation is degenerate");
+    gp_Trsf transform;
+    transform.SetRotation(gp_Quaternion(placement.rotation[0] / magnitude,
+      placement.rotation[1] / magnitude, placement.rotation[2] / magnitude, placement.rotation[3] / magnitude));
+    transform.SetTranslationPart(gp_Vec(placement.translation[0], placement.translation[1], placement.translation[2]));
+    // Only detached copies reach this query. Transforming subshapes preserves
+    // native surface/curve geometry without depending on display triangles.
+    shape = BRepBuilderAPI_Transform(shape, transform, true).Shape();
+    shapes.push_back(shape);
+    FfiMeasurementProperties properties{};
+    GProp_GProps mass;
+    if (selection.kind == 0 || selection.kind == 1) {
+      BRepGProp::SurfaceProperties(shape, mass);
+      properties.area = mass.Mass(); properties.flags |= 2;
+      if (selection.kind == 0) {
+        if (TopExp_Explorer(shape, TopAbs_SOLID).More()) {
+          BRepGProp::VolumeProperties(shape, mass, true);
+          properties.volume = std::abs(mass.Mass()); properties.flags |= 8;
+        }
+        Bnd_Box bounds;
+        BRepBndLib::AddOptimal(shape, bounds, false, false);
+        if (!bounds.IsVoid() && !bounds.IsOpen()) {
+          double x0, y0, z0, x1, y1, z1;
+          bounds.Get(x0, y0, z0, x1, y1, z1);
+          properties.size = {x1-x0, y1-y0, z1-z0}; properties.flags |= 128;
+        }
+      } else {
+        // Count each boundary occurrence, including both sides of a seam.
+        for (TopExp_Explorer edges(shape, TopAbs_EDGE); edges.More(); edges.Next()) {
+          BRepGProp::LinearProperties(edges.Current(), mass);
+          properties.loop_length += mass.Mass();
+        }
+        properties.flags |= 4;
+        BRepAdaptor_Surface surface(TopoDS::Face(shape), true);
+        if (surface.GetType() == GeomAbs_Plane) {
+          properties.direction_kind = 2;
+          properties.direction = direction(surface.Plane().Axis().Direction());
+          const TopoDS_Wire outer = BRepTools::OuterWire(TopoDS::Face(shape));
+          TopExp_Explorer boundary(outer, TopAbs_EDGE);
+          if (boundary.More()) {
+            const TopoDS_Edge edge = TopoDS::Edge(boundary.Current());
+            boundary.Next();
+            BRepAdaptor_Curve curve(edge);
+            if (!boundary.More() && curve.GetType() == GeomAbs_Circle &&
+                std::abs(curve.LastParameter() - curve.FirstParameter() - 2.*M_PI) < 1.e-10) {
+              properties.center = xyz(curve.Circle().Location()); properties.flags |= 64;
+              properties.radius = curve.Circle().Radius(); properties.flags |= 16;
+            }
+          }
+        } else if (surface.GetType() == GeomAbs_Cylinder) {
+          properties.radius = surface.Cylinder().Radius(); properties.flags |= 16;
+        }
+      }
+    } else if (selection.kind == 2) {
+      BRepGProp::LinearProperties(shape, mass);
+      properties.length = mass.Mass(); properties.flags |= 1;
+      BRepAdaptor_Curve curve(TopoDS::Edge(shape));
+      if (curve.GetType() == GeomAbs_Line) {
+        properties.direction_kind = 1; properties.direction = direction(curve.Line().Direction());
+      } else if (curve.GetType() == GeomAbs_Circle) {
+        properties.radius = curve.Circle().Radius(); properties.flags |= 16;
+        properties.center = xyz(curve.Circle().Location()); properties.flags |= 64;
+        properties.direction_kind = std::abs(curve.LastParameter() - curve.FirstParameter() - 2.*M_PI) < 1.e-10 ? 3 : 4;
+        properties.direction = direction(curve.Circle().Axis().Direction());
+      }
+    } else {
+      properties.position = xyz(BRep_Tool::Pnt(TopoDS::Vertex(shape))); properties.flags |= 32;
+    }
+    output.selections.push_back(properties);
+  }
+  if (shapes.size() == 2) {
+    // Share the finite-CAD-bound guard and native witnesses with clearance
+    // inspection, without computing an overlap Boolean for Measure.
+    const auto distance = exact_shape_distance(shapes[0], shapes[1]).clearance;
+    output.distance = distance.minimum_clearance_mm; output.flags |= 1;
+    output.point_a = {distance.closest_point_a_x, distance.closest_point_a_y, distance.closest_point_a_z};
+    output.point_b = {distance.closest_point_b_x, distance.closest_point_b_y, distance.closest_point_b_z};
+    const auto& a = output.selections[0]; const auto& b = output.selections[1];
+    const double dot = std::clamp(std::abs(a.direction[0]*b.direction[0] +
+      a.direction[1]*b.direction[1] + a.direction[2]*b.direction[2]), 0., 1.);
+    if (a.direction_kind > 0 && a.direction_kind < 3 && b.direction_kind > 0 && b.direction_kind < 3) {
+      output.angle_degrees = (a.direction_kind == b.direction_kind ? std::acos(dot) : std::asin(dot)) * 180. / M_PI;
+      output.flags |= 2;
+    }
+    if (a.direction_kind >= 3 && b.direction_kind >= 3) {
+      const gp_Vec delta(gp_Pnt(a.center[0],a.center[1],a.center[2]), gp_Pnt(b.center[0],b.center[1],b.center[2]));
+      output.center_distance = delta.Magnitude(); output.flags |= 4;
+      if (a.direction_kind == 3 && b.direction_kind == 3 && dot > 1. - 1.e-10) {
+        const double height = delta.Dot(gp_Vec(a.direction[0],a.direction[1],a.direction[2]));
+        const double radial = std::sqrt(std::max(0., delta.SquareMagnitude() - height*height));
+        output.maximum_distance = std::hypot(radial + a.radius + b.radius, height); output.flags |= 8;
+        const gp_Vec normal(a.direction[0],a.direction[1],a.direction[2]);
+        gp_Vec across = delta - normal*height;
+        if (across.Magnitude() < 1.e-12) {
+          across = normal.Crossed(std::abs(normal.X()) < 0.9 ? gp_Vec(1.,0.,0.) : gp_Vec(0.,1.,0.));
+        }
+        across.Normalize();
+        output.maximum_point_a = xyz(gp_Pnt(a.center[0],a.center[1],a.center[2]).Translated(-across*a.radius));
+        output.maximum_point_b = xyz(gp_Pnt(b.center[0],b.center[1],b.center[2]).Translated(across*b.radius));
+      }
+    }
+  }
   return output;
 }
 

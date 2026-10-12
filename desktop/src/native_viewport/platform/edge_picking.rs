@@ -2,7 +2,7 @@
 //! raycast cannot select ordinary edges: their tessellation has zero area.
 use super::*;
 
-fn project(
+pub(super) fn project(
     basis: &CameraProjectionBasis,
     viewport: (f32, f32),
     point: Vec3,
@@ -47,6 +47,7 @@ pub(super) fn pick_edges(
 ) -> Option<NativePick> {
     let straight = purpose == NativePickPurpose::StraightEdge;
     let vertices = purpose == NativePickPurpose::Vertex;
+    let centers = purpose == NativePickPurpose::CurveCenter;
     let basis = camera_projection(camera, viewport)?;
     let cursor = Vec2::from_array(cursor);
     if !cursor.is_finite() {
@@ -80,6 +81,7 @@ pub(super) fn pick_edges(
         for (occurrence, transform) in placements {
             for edge in body.edges.iter().filter(|edge| {
                 vertices
+                    || centers
                     || purpose == NativePickPurpose::Edge
                     || if straight {
                         edge_is_straight(edge)
@@ -88,13 +90,21 @@ pub(super) fn pick_edges(
                     }
             }) {
                 let mut best = None;
-                let count = if vertices {
+                let center = edge.circle.map(|c| c.center);
+                let count = if centers {
+                    usize::from(center.is_some())
+                } else if vertices {
                     usize::from(!edge.points.is_empty()) * 2
                 } else {
                     edge.points.len().saturating_sub(1)
                 };
                 for index in 0..count {
-                    let pair = if vertices {
+                    let pair = if centers {
+                        let Some(p) = center.as_ref() else {
+                            continue;
+                        };
+                        [p, p]
+                    } else if vertices {
                         let p = &edge.points[if index == 0 { 0 } else { edge.points.len() - 1 }];
                         [p, p]
                     } else {
@@ -177,7 +187,7 @@ pub(super) fn pick_edges(
             edge_id: Some(edge),
             point: world.to_array(),
             distance: f64::from(depth),
-            connector_kind: None,
+            connector_kind: centers.then(|| "measurement_center".into()),
             connector_origin: None,
             connector_primary_axis: None,
             connector_secondary_axis: None,
@@ -190,6 +200,7 @@ pub(super) fn pick_edges(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use limo_cad_solid::Point3Dto;
     use serde_json::json;
     fn scene() -> SolidSceneDto {
         serde_json::from_value(json!({"bodies":[{"id":1,"feature_id":1,"name":"Plate",
@@ -234,6 +245,53 @@ mod tests {
         assert!(
             pick(&scene, rear.to_array(), &[]).is_none(),
             "Hidden vertices cannot snap through the front face"
+        );
+    }
+    #[test]
+    fn measurement_circle_centers_snap_in_pixels_without_picking_hidden_references() {
+        let mut scene = scene();
+        scene.bodies[0].edges.retain(|e| e.id.0 == 2);
+        scene.bodies[0].edges[0].circle = Some(limo_cad_solid::CircularCurveDto {
+            center: Point3Dto {
+                x: 0.,
+                y: 0.,
+                z: 1.,
+            },
+            normal: Point3Dto {
+                x: 0.,
+                y: 0.,
+                z: 1.,
+            },
+            reference: Point3Dto {
+                x: 1.,
+                y: 0.,
+                z: 0.,
+            },
+            radius: 2.,
+            closed: true,
+        });
+        let viewport = (800., 600.);
+        let basis = camera_projection(camera(), viewport).unwrap();
+        let (screen, _) = project(&basis, viewport, Vec3::new(0., 0., 1.)).unwrap();
+        let pick = |scene: &SolidSceneDto, cursor: [f32; 2], hidden: &[u64]| {
+            pick_edges(
+                scene,
+                (camera(), viewport, cursor),
+                hidden,
+                &[],
+                &[],
+                NativePickPurpose::CurveCenter,
+            )
+        };
+        let hit = pick(&scene, [screen.x + 4., screen.y], &[]).unwrap();
+        assert_eq!(hit.connector_kind.as_deref(), Some("measurement_center"));
+        assert_eq!(hit.point, [0., 0., 1.]);
+        assert!(pick(&scene, [screen.x + 10., screen.y], &[]).is_none());
+        assert!(pick(&scene, screen.to_array(), &[1]).is_none());
+        scene.bodies[0].edges[0].circle.as_mut().unwrap().center.z = 0.;
+        assert!(
+            pick(&scene, screen.to_array(), &[]).is_none(),
+            "Hidden centers cannot snap through the front face"
         );
     }
     #[test]

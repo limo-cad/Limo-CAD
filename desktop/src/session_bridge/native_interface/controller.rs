@@ -34,6 +34,7 @@ mod capture;
 pub(crate) mod chrome;
 pub(crate) mod files;
 pub(crate) mod history;
+pub(crate) mod measure;
 pub(crate) mod named_views;
 pub(crate) mod presentation;
 pub(crate) mod print_intent;
@@ -1580,6 +1581,9 @@ pub(crate) fn reduce_control_input(
                 section_review::escape(world);
                 return Ok(json!({"cancelled":true}));
             }
+            if measure::escape(world, &action.context)? {
+                return Ok(json!({"cancelled":true,"closed_measure":true}));
+            }
             if let Some(panel) = feature::panel(world) {
                 return feature::reduce(
                     engine,
@@ -2652,7 +2656,8 @@ fn synchronize(
         && !assembly::joint::active(world)
         && !named_views::active(world)
         && !print_intent::active(world)
-        && !section_review::active(world);
+        && !section_review::active(world)
+        && !measure::active(world);
     body_appearance::synchronize(
         world,
         camera,
@@ -2666,6 +2671,7 @@ fn synchronize(
     named_views::synchronize(world, camera, services, &owner, width, height)?;
     print_intent::synchronize(world, camera, services, &owner, width, height)?;
     section_review::synchronize(world, camera, services, &owner, width, height)?;
+    measure::synchronize(world, camera, services, &owner, width, height)?;
     if assembly::active(world) || workbench::workspace(world) != workbench::Workspace::Solid {
         browser::hide(world);
     } else {
@@ -2887,6 +2893,7 @@ fn decorate(
 fn command_group(command: &NativeCommand) -> &'static str {
     match command {
         NativeCommand::Sketch(_) => "sketch/draw",
+        NativeCommand::Measure(..) => "solid/measure",
         NativeCommand::Assembly(assembly::Command::Study(_)) => "assembly/motion",
         NativeCommand::Assembly(assembly::Command::Inspect(_)) => "assembly/inspect",
         NativeCommand::Assembly(_) => "assembly/joints",

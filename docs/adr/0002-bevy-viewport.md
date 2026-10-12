@@ -113,6 +113,7 @@ the same submission guard with those window operations. Mesh rebuilding and
 pipeline prewarming/compilation run outside the guard, preserving menu rendering
 while geometry and shaders prepare. On shutdown, a stopped worker cancels its
 pending submission wait so the interface can finish its last frame.
+Teardown also services any pending main-thread surface work.
 
 The Extrude tool volume is a translucent fill without a duplicate edge cage;
 the source sketch remains visible in its normal retained sketch layer. Its DOM
