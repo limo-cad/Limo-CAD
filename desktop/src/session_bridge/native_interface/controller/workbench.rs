@@ -176,6 +176,11 @@ pub(crate) fn modal(world: &World) -> Option<&'static str> {
                 .map(|_| "workbench-menu")
         })
 }
+pub(super) fn dismiss_menu(world: &mut World) {
+    if let Some(mut state) = world.get_resource_mut::<Workbench>() {
+        state.menu = None;
+    }
+}
 pub(crate) fn escape(world: &mut World) {
     // The section side panel keeps ordinary camera gestures available.
     if section_review::active(world) {
@@ -279,6 +284,11 @@ pub(crate) fn execute(world: &mut World, command: &Command) -> Result<Value, Str
         let visible = presentation.grid_visible();
         native_viewport::apply_interface_view(world, &document, None, Some(presentation))?;
         return Ok(json!({"grid_visible":visible}));
+    }
+    if matches!(command, Command::Menu(_)) {
+        // The guarded menu anchor owns this activation. Transfer only the
+        // transient menu, leaving File dialogs and other editors untouched.
+        files::dismiss_menu(world);
     }
     world.init_resource::<Workbench>();
     let mut state = world.resource_mut::<Workbench>();

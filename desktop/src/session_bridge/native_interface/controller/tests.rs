@@ -4,6 +4,7 @@ use crate::session_bridge::parse_engine_envelope;
 use std::fs;
 
 mod playback_priority;
+mod sibling_menus;
 mod window_close;
 
 /// Finish the actual control admitted by a fixture's poll worker. Discarding

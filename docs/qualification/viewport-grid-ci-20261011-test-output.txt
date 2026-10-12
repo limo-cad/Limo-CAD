@@ -28,3 +28,19 @@ The GPU case above was executed explicitly with --ignored --exact.
 Root and desktop cargo fmt --all -- --check: exit 0.
 Merged coverage inventory: 329 additional cases; grid evidence and incoming cases retained; broad testing paused.
 Local OCCT compilation retained SDK/C++ warnings and the test linker's compact-unwind warning in the full logs; both commands completed successfully.
+
+Follow-up integration: branch 0794ac8f plus PR124 e165cd1b.
+Command-handler conflict resolved by retaining both ToggleGrid and menu-only dismissal.
+Upstream 8b1d7ce0 removes the surface argument-lint exemption; normal enforcement is retained.
+
+Final all-target/all-feature native lint (final-macos-clippy.log), exit 0:
+    Finished `release` profile [optimized] target(s) in 35.99s
+
+Grid regressions after command-handler resolution (final-grid-regressions.log), exit 0:
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 1063 filtered out; finished in 0.05s
+
+Sibling-menu regression (final-menu-regression.log), exit 0:
+test session_bridge::native_interface::controller::tests::sibling_menus::sibling_menu_clicks_transfer_modal_ownership_and_keep_dialog_and_stale_action_guards ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1067 filtered out; finished in 0.06s
+
+Final desktop formatting and diff whitespace checks: exit 0.

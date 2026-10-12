@@ -169,7 +169,7 @@ fn button(
     control.modal_scope = scope.map(str::to_owned);
     control.selected = selected;
     control.disabled = disabled;
-    control.expanded = (key == "file").then_some(scope.is_some());
+    control.expanded = (key == "file").then(|| world.resource::<Files>().menu);
     control.role = if key.starts_with("tab-") {
         "tab"
     } else if key.starts_with("file-item-") {
@@ -400,7 +400,7 @@ pub(crate) fn synchronize(
                     camera,
                     menu_bounds,
                     theme.panel.with_alpha(1.),
-                    60,
+                    61,
                 );
                 world.entity_mut(*state.decoration.last().unwrap()).insert((
                     BorderColor::all(theme.edge),
@@ -507,6 +507,13 @@ pub(crate) fn synchronize(
             }
             state.layout = Some(layout);
         }
+        let menu_scope = match super::modal(world) {
+            Some("file-menu") => Some("file-menu"),
+            None => {
+                super::super::workbench::modal(world).filter(|scope| *scope == "workbench-menu")
+            }
+            _ => None,
+        };
         button(
             world,
             &mut state,
@@ -519,7 +526,7 @@ pub(crate) fn synchronize(
             Some(""),
             FileCommand::Menu,
             node(0., 0., 40., 28.),
-            menu.then_some("file-menu"),
+            menu_scope,
             65,
             None,
             picker,
@@ -865,7 +872,7 @@ pub(crate) fn synchronize(
                         &format!("file-separator-{i}"),
                         node(7., y + 4., 254., 1.),
                         theme.edge,
-                        61,
+                        62,
                     );
                     y += 9.;
                 }
@@ -882,7 +889,7 @@ pub(crate) fn synchronize(
                     command,
                     node(7., y, 254., row_height),
                     Some("file-menu"),
-                    61,
+                    62,
                     None,
                     disabled,
                 )?;
@@ -892,7 +899,7 @@ pub(crate) fn synchronize(
                     node(19., y + (row_height - 14.) / 2., 14., 14.),
                     icon,
                     if disabled { theme.edge } else { theme.mute },
-                    62,
+                    63,
                 );
                 if !shortcut.is_empty() {
                     state.chrome.text(
@@ -902,7 +909,7 @@ pub(crate) fn synchronize(
                         node(191., y + (row_height - 14.) / 2., 58., 14.),
                         &shortcut,
                         10.,
-                        62,
+                        63,
                     );
                     world
                         .entity_mut(state.chrome.entity(&format!("file-shortcut-{i}")).unwrap())
@@ -916,7 +923,7 @@ pub(crate) fn synchronize(
                 "file-footer-edge",
                 node(7., y + 4., 254., 1.),
                 theme.edge,
-                61,
+                62,
             );
             state.chrome.text(
                 world,
@@ -925,7 +932,7 @@ pub(crate) fn synchronize(
                 node(19., y + 13., 230., 32.),
                 t("file.zipHint"),
                 9.,
-                62,
+                63,
             );
             world
                 .entity_mut(state.chrome.entity("file-footer").unwrap())

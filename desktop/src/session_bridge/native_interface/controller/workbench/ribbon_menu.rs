@@ -184,6 +184,7 @@ pub(super) fn synchronize(
 ) -> Result<(), String> {
     let theme = crate::native_viewport::ui::theme(world);
     let locale = localization::locale(world);
+    let menu_scope = menu_anchor_scope(world, state);
     let workspace_label = dictionary::translate(locale, workspace_label_key(state.workspace));
     let workspace_width = 108.;
     let workspace = centered_button(
@@ -197,7 +198,7 @@ pub(super) fn synchronize(
         ribbon::node(4., 34., workspace_width - 8.),
         Some(state.menu.as_deref() == Some("workspace")),
         false,
-        42,
+        menu_anchor_z(menu_scope.as_deref(), 42),
     )?;
     let workspace_glyph = workspace_icon(state.workspace, theme.viewport.to_srgba().red > 0.7);
     ribbon::decorate(world, workspace, workspace_glyph);
@@ -219,7 +220,7 @@ pub(super) fn synchronize(
     );
     if let Some(mut c) = world.get_mut::<InterfaceControl>(workspace) {
         c.expanded = Some(state.menu.as_deref() == Some("workspace"));
-        c.modal_scope = state.menu.as_ref().map(|_| "workbench-menu".into());
+        c.modal_scope = menu_scope.clone();
     }
     state.widgets.text(
         world,
@@ -443,11 +444,11 @@ pub(super) fn synchronize(
             rect(x + 4., 90., group_width - 9., 20.),
             Some(selected),
             !has_menu,
-            42,
+            menu_anchor_z(menu_scope.as_deref(), 42),
         )?;
         if let Some(mut c) = world.get_mut::<InterfaceControl>(entity) {
             c.expanded = has_menu.then_some(selected);
-            c.modal_scope = state.menu.as_ref().map(|_| "workbench-menu".into());
+            c.modal_scope = menu_scope.clone();
         }
         ribbon::group_caption(
             world,
@@ -730,6 +731,26 @@ fn workspace_label_key(workspace: Workspace) -> &'static str {
     }
 }
 
+// Only sibling menu anchors share a transient menu's scope. Commands beneath
+// them keep their own scope, and File dialogs/settings never admit these anchors.
+fn menu_anchor_scope(world: &World, state: &Workbench) -> Option<String> {
+    match files::modal(world) {
+        Some("file-menu") => Some("file-menu".into()),
+        None if state.menu.is_some() => Some("workbench-menu".into()),
+        _ => None,
+    }
+}
+
+fn menu_anchor_z(scope: Option<&str>, normal: i32) -> i32 {
+    if scope == Some("file-menu") {
+        // Visible sibling anchors beat File's dismissal backdrop (59), but
+        // File's dropdown card (61) and entries (62) still cover them.
+        60
+    } else {
+        normal
+    }
+}
+
 fn drawing_ribbon(
     world: &mut World,
     camera: Entity,
@@ -855,6 +876,7 @@ fn drawing_ribbon(
     }
     let expanded = state.menu.as_deref() == Some("drawing-dimensions");
     let more_label = t("ribbon.drawing.moreDimensions");
+    let menu_scope = menu_anchor_scope(world, state);
     let more = centered_button(
         (&mut state.widgets, world, camera),
         ("drawing-more-dimensions", more_label, more_label),
@@ -862,11 +884,11 @@ fn drawing_ribbon(
         ribbon::node(workspace_width + 354., 34., 48.),
         Some(expanded),
         active.is_none(),
-        30,
+        menu_anchor_z(menu_scope.as_deref(), 30),
     )?;
     if let Some(mut control) = world.get_mut::<InterfaceControl>(more) {
         control.expanded = Some(expanded);
-        control.modal_scope = state.menu.as_ref().map(|_| "workbench-menu".into());
+        control.modal_scope = menu_scope;
     }
     ribbon::decorate(world, more, Icon::ChevronDown);
     ribbon::caption(world, more, more_label);

@@ -30,6 +30,21 @@
       "desktop/src/native_viewport/viewport_renderer/tests.rs": "ce8316445350cfea7d80c70a9361ffd2bdc9119ca37c90319f52431af7abfb21"
     }
   },
+  "integration_followup": {
+    "trigger": "PR124 advanced during validation, creating a command-handler conflict on the pushed branch.",
+    "previous_branch_revision": "0794ac8f6b928fee14f2dcb684a4344d871b6a15",
+    "merged_pr124_revision": "e165cd1be342f2b09052a81864ea2f484755ccde",
+    "resolution": "Preserve the early ToggleGrid return and the following menu-only File-menu dismissal as separate conditions.",
+    "lint_enforcement_commit": "8b1d7ce01f3ad792a92a4232cc09cbf0dca7d8dc",
+    "strict_native_lint": "Passed all targets and all features with warnings denied, including configure_surfaces after removing its lint exemption.",
+    "affected_regressions": "4 grid tests and 1 sibling-menu ownership/guard regression passed.",
+    "gpu_evidence": "The Metal result above is retained. The subsequent renderer change removes only a lint attribute; grid rendering and the GPU test source remain unchanged.",
+    "formatting": "Desktop cargo fmt --all -- --check and diff whitespace check passed.",
+    "source_sha256": {
+      "desktop/src/native_viewport/viewport_renderer/surface_submission.rs": "bb6417d614c48864e65aa1742c86a6c3256d64b8e6c2a95fab49c85ad5d450e5",
+      "desktop/src/session_bridge/native_interface/controller/workbench.rs": "17baf1934d84b822a87eb12674be3f21f763eccfde3ed56b6d4f72e530258aff"
+    }
+  },
   "limits": [
     "This receipt records local checks. GitHub CI on the pushed merge must report its own result.",
     "Packaged-app human acceptance and broad UI/MCP qualification retain their previous pending/paused state."
