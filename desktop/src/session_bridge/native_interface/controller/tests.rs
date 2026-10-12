@@ -4,6 +4,7 @@ use crate::session_bridge::parse_engine_envelope;
 use std::fs;
 
 mod playback_priority;
+mod sibling_menus;
 mod window_close;
 
 /// Finish the actual control admitted by a fixture's poll worker. Discarding
@@ -728,6 +729,149 @@ fn visible_receipt_waits_for_scene_submission_and_hidden_or_suppressed_rendering
     assert_eq!(response["presented"], false);
     assert_eq!(response["render_status"], "unavailable");
     assert!(app.world().resource::<Controller>().pending.is_none());
+}
+
+#[test]
+fn admitted_inspection_wakes_until_its_existing_deadline_without_claiming_gpu_submission() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let services = NativeServices {
+            engine: fixture.engine.clone(),
+            bridge: fixture.bridge.clone(),
+        };
+        let mut app = native_viewport::interface_scene_fixture();
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        app.world_mut().spawn(InterfaceCamera);
+        let wakes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = wakes.clone();
+        let handle = NativeInterfaceHandle::new(move || {
+            counted.fetch_add(1, Ordering::Relaxed);
+        });
+        let mut state = Controller::new("main".into(), None, Arc::new(AtomicBool::new(false)));
+        synchronize(app.world_mut(), &handle, &services, &mut state).unwrap();
+        interface_shell::tests::publish_layout_once(app.world_mut(), handle.clone());
+        app.insert_resource(services.clone());
+        app.insert_resource(state);
+        let owner = fixture.owner();
+        fixture
+            .bridge
+            .publish_native_document(&fixture.engine, &owner, "solid")
+            .unwrap();
+        let session = fixture
+            .bridge
+            .session_id_for_window("main")
+            .unwrap()
+            .unwrap();
+        let controls = crate::session_bridge::session_root()
+            .join(&session)
+            .join("controls");
+        fs::create_dir_all(&controls).unwrap();
+        let id = "703-1";
+        let request_path = controls.join(format!("{id}.request.json"));
+        let admitted_path = controls.join(format!("{id}.admitted.json"));
+        let result_path = controls.join(format!("{id}.result.json"));
+        fs::write(
+            &request_path,
+            json!({"id":id,"expires_ms":now_ms()+30_000,"ui":{"action":"inspect"}}).to_string(),
+        )
+        .unwrap();
+        let request = crate::session_bridge::control_for_window_owned(
+            &fixture.bridge,
+            "main",
+            &fixture.engine,
+            None,
+            Some((&owner, id)),
+        )
+        .unwrap();
+        let ticket = native_control::ticket_for(&fixture.bridge, &owner, &session, id).unwrap();
+        assert!(
+            !request_path.exists(),
+            "Admission removes the filesystem wake"
+        );
+        assert!(admitted_path.is_file());
+        app.world_mut()
+            .resource_scope(|world, mut state: Mut<Controller>| {
+                start_control_with_ticket(
+                    world,
+                    &handle,
+                    &services,
+                    &mut state,
+                    &owner,
+                    &request,
+                    Some(ticket),
+                )
+                .unwrap();
+            });
+        let presentation_deadline = app
+            .world()
+            .resource::<Controller>()
+            .pending
+            .as_ref()
+            .unwrap()
+            .presentation_deadline;
+        app.init_resource::<crate::native_viewport::winit_host::NativeRenderAvailability>();
+        app.world_mut()
+            .resource_mut::<crate::native_viewport::winit_host::NativeRenderAvailability>()
+            .drawable = true;
+        let target = handle.render_receipt().unwrap().laid_out_revision;
+        assert!(target > 0);
+        assert!(handle.render_receipt().unwrap().submitted_revision < target);
+
+        // There is no render app, queued pipeline, GPU callback or inbox watcher.
+        // Discard all preparation wakes, then run later frames only when the
+        // actual pending-receipt path requests one, as in the low-power host.
+        wakes.store(0, Ordering::Relaxed);
+        complete_control(app.world_mut());
+        assert!(
+            !result_path.exists(),
+            "An unsubmitted frame cannot complete early"
+        );
+        let limit = std::time::Instant::now() + Duration::from_secs(5);
+        while app.world().resource::<Controller>().pending.is_some() {
+            assert!(
+                std::time::Instant::now() < limit,
+                "Receipt missed its finite deadline"
+            );
+            assert!(
+                wakes.swap(0, Ordering::Relaxed) > 0,
+                "No GPU submission callback exists to wake the next receipt frame"
+            );
+            complete_control(app.world_mut());
+        }
+        assert!(now_ms() >= presentation_deadline);
+        let original_result = fs::read(&result_path).unwrap();
+        let response: Value = serde_json::from_slice(&original_result).unwrap();
+        assert_eq!(response["status"], "applied");
+        assert_eq!(response["request_id"], id);
+        assert_eq!(response["session_id"], session);
+        assert_eq!(
+            response["control_admission"]["document_id"],
+            owner.document_id
+        );
+        assert_eq!(response["control_admission"]["epoch"], owner.epoch);
+        assert_eq!(
+            response["desktop_build"],
+            json!(limo_cad_build_info::build_info())
+        );
+        assert!(response["ui"].is_object());
+        assert_eq!(response["native_layout_revision"], target);
+        assert!(response["native_submitted_revision"].as_u64().unwrap() < target);
+        assert_eq!(response["presented"], false);
+        assert_eq!(response["render_status"], "submission_timeout");
+        assert!(!admitted_path.exists());
+        assert!(!native_control::has_pending(&fixture.bridge, "main").unwrap());
+        assert_eq!(
+            wakes.swap(0, Ordering::Relaxed),
+            0,
+            "Completed receipts stop waking"
+        );
+        complete_control(app.world_mut());
+        assert_eq!(wakes.load(Ordering::Relaxed), 0);
+        assert!(
+            fs::read(&result_path).unwrap() == original_result,
+            "No receipt replay"
+        );
+    });
 }
 
 #[test]

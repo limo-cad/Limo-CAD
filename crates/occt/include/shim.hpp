@@ -36,6 +36,7 @@ struct FfiBodyPlacement;
 struct FfiInterferenceResult;
 struct FfiMeasurementSelection;
 struct FfiMeasurementResult;
+struct FfiClearanceRegression;
 
 class Kernel {
  public:
@@ -75,5 +76,8 @@ class Kernel {
 };
 
 std::unique_ptr<Kernel> new_kernel();
+
+// Private bridge qualification seam; not a document or modeling operation.
+FfiClearanceRegression clearance_regression_probe();
 
 }
