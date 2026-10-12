@@ -46,7 +46,8 @@ jobs:
       - uses: ./.github/actions/setup-rust
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          key: desktop-input-classifier
+          # Reuse repository-tooling's existing key/job prefix and automatic hashes.
+          shared-key: repository-tools-repository-tooling
       - name: Inspect changed paths
         # Classify this event's immutable base/head; newer PR heads must not
         # fail retained SDK runs or substitute a different changed-file list.
