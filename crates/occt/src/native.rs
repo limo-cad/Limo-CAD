@@ -253,6 +253,8 @@ mod ffi {
         contained: FfiInterferenceResult,
         partial_overlap: FfiInterferenceResult,
         overlapping_envelopes: FfiInterferenceResult,
+        measure_reversed_disjoint: FfiMeasurementResult,
+        measure_swapped_disjoint: FfiMeasurementResult,
     }
 
     unsafe extern "C++" {
@@ -3856,6 +3858,41 @@ mod tests {
         assert!((projection.bounds[1] + 10.0).abs() < 1.0e-6);
         assert!((projection.bounds[2] - 10.0).abs() < 1.0e-6);
         assert!((projection.bounds[3] - 10.0).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn measure_clearance_rejects_disjoint_native_containment_shortcuts() {
+        let probe = ffi::clearance_regression_probe().unwrap();
+        let expected = (28.0_f64.powi(2) + 18.0_f64.powi(2) + 3.0_f64.powi(2)).sqrt();
+        for (label, result, point_a, point_b) in [
+            (
+                "reversed",
+                probe.measure_reversed_disjoint,
+                [30., 20., 5.],
+                [2., 2., 2.],
+            ),
+            (
+                "swapped",
+                probe.measure_swapped_disjoint,
+                [2., 2., 2.],
+                [30., 20., 5.],
+            ),
+        ] {
+            println!(
+                "Measure {label}: distance={} witnesses={:?}/{:?}",
+                result.distance, result.point_a, result.point_b
+            );
+            assert_ne!(result.flags & 1, 0);
+            assert!(
+                (result.distance - expected).abs() < 1.0e-7,
+                "Measure {label}: {} differs from analytic {expected}",
+                result.distance
+            );
+            for axis in 0..3 {
+                assert!((result.point_a[axis] - point_a[axis]).abs() < 1.0e-7);
+                assert!((result.point_b[axis] - point_b[axis]).abs() < 1.0e-7);
+            }
+        }
     }
 
     #[test]

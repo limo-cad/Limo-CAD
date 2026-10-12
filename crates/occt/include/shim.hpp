@@ -70,6 +70,8 @@ class Kernel {
   FfiMeasurementResult measure(const rust::Vec<FfiMeasurementSelection>& selections) const;
 
  private:
+  // Qualification fixture only: inject independent native primitives.
+  friend FfiClearanceRegression clearance_regression_probe();
   void apply_job_impl(const FfiJob& job);
   class Impl;
   std::unique_ptr<Impl> impl_;

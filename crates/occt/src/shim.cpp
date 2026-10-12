@@ -10701,7 +10701,12 @@ std::optional<double> finite_native_bound_separation(
   return separation;
 }
 
-FfiInterferenceResult exact_shape_interference(
+struct ExactShapeDistance {
+  FfiInterferenceResult clearance;
+  bool possible_overlap;
+};
+
+ExactShapeDistance exact_shape_distance(
     const TopoDS_Shape& a, const TopoDS_Shape& b) {
   BRepExtrema_DistShapeShape distance(a, b);
   auto require_distance = [&distance] {
@@ -10762,8 +10767,15 @@ FfiInterferenceResult exact_shape_interference(
   output.closest_point_b_y = point_b.Y();
   output.closest_point_b_z = point_b.Z();
 
-  if (separated_bound ||
-      (!distance.InnerSolution() && output.minimum_clearance_mm > 1.0e-7)) {
+  return {output, !separated_bound &&
+      (distance.InnerSolution() || output.minimum_clearance_mm <= 1.0e-7)};
+}
+
+FfiInterferenceResult exact_shape_interference(
+    const TopoDS_Shape& a, const TopoDS_Shape& b) {
+  const auto distance = exact_shape_distance(a, b);
+  FfiInterferenceResult output = distance.clearance;
+  if (!distance.possible_overlap) {
     return output;
   }
   BRepAlgoAPI_Common common(a, b, Message_ProgressRange());
@@ -10808,6 +10820,27 @@ FfiClearanceRegression clearance_regression_probe() {
   output.legacy_point_b = {legacy_b.X(), legacy_b.Y(), legacy_b.Z()};
   output.reversed_disjoint = exact_shape_interference(reversed, small);
   output.swapped_disjoint = exact_shape_interference(small, reversed);
+
+  // Exercise the actual Measure method after its normal detached snapshot copy,
+  // including its placement transform, rather than merely the raw OCCT solver.
+  Kernel measurement_fixture;
+  measurement_fixture.impl_->bodies.emplace(1, reversed);
+  measurement_fixture.impl_->bodies.emplace(2, small);
+  rust::Vec<std::uint64_t> ids;
+  ids.push_back(1);
+  ids.push_back(2);
+  auto detached = measurement_fixture.drawing_snapshot(ids);
+  rust::Vec<FfiMeasurementSelection> selections;
+  for (const auto id : ids) {
+    FfiMeasurementSelection selection{};
+    selection.placement.body_id = id;
+    selection.placement.rotation = {0., 0., 0., 1.};
+    selections.push_back(selection);
+  }
+  output.measure_reversed_disjoint = detached->measure(selections);
+  selections[0].placement.body_id = 2;
+  selections[1].placement.body_id = 1;
+  output.measure_swapped_disjoint = detached->measure(selections);
 
   const TopoDS_Shape large = BRepPrimAPI_MakeBox(10.0, 10.0, 10.0).Shape();
   output.contact = exact_shape_interference(
@@ -10940,11 +10973,12 @@ FfiMeasurementResult Kernel::measure(const rust::Vec<FfiMeasurementSelection>& s
     output.selections.push_back(properties);
   }
   if (shapes.size() == 2) {
-    BRepExtrema_DistShapeShape distance(shapes[0], shapes[1]);
-    if (!distance.IsDone() || distance.NbSolution() == 0 || !std::isfinite(distance.Value()))
-      throw std::runtime_error("OCCT could not measure the selected objects");
-    output.distance = distance.Value(); output.flags |= 1;
-    output.point_a = xyz(distance.PointOnShape1(1)); output.point_b = xyz(distance.PointOnShape2(1));
+    // Share the finite-CAD-bound guard and native witnesses with clearance
+    // inspection, without computing an overlap Boolean for Measure.
+    const auto distance = exact_shape_distance(shapes[0], shapes[1]).clearance;
+    output.distance = distance.minimum_clearance_mm; output.flags |= 1;
+    output.point_a = {distance.closest_point_a_x, distance.closest_point_a_y, distance.closest_point_a_z};
+    output.point_b = {distance.closest_point_b_x, distance.closest_point_b_y, distance.closest_point_b_z};
     const auto& a = output.selections[0]; const auto& b = output.selections[1];
     const double dot = std::clamp(std::abs(a.direction[0]*b.direction[0] +
       a.direction[1]*b.direction[1] + a.direction[2]*b.direction[2]), 0., 1.);
