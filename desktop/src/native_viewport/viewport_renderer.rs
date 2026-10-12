@@ -327,12 +327,6 @@ impl Plugin for ViewportRendererPlugin {
             .name("CAD viewport".into())
             .spawn(move || {
                 let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                    #[cfg(test)]
-                    if let Some(gate) = gate {
-                        if gate.receiver.lock().unwrap().recv().is_err() {
-                            return Ok(());
-                        }
-                    }
                     render_worker(
                         resources,
                         jobs,
@@ -340,6 +334,8 @@ impl Plugin for ViewportRendererPlugin {
                         &handle,
                         &worker_stopped,
                         &submission,
+                        #[cfg(test)]
+                        gate,
                     )
                 }));
                 let error = match result {
@@ -544,8 +540,9 @@ fn render_worker(
     jobs: mpsc::Receiver<Snapshot>,
     replies: &mpsc::SyncSender<Result<Frame, String>>,
     handle: &NativeInterfaceHandle,
-    stopped: &AtomicBool,
+    stopped: &Arc<AtomicBool>,
     submission: &surface_submission::SharedSubmission,
+    #[cfg(test)] gate: Option<tests::CompilationGate>,
 ) -> Result<(), String> {
     if stopped.load(Ordering::Acquire) {
         return Ok(());
@@ -573,7 +570,15 @@ fn render_worker(
     app.insert_resource(RenderErrorHandler(report_render_error));
     app.finish();
     app.cleanup();
-    surface_submission::install_worker(app.sub_app_mut(RenderApp), submission.clone());
+    surface_submission::install_worker(
+        app.sub_app_mut(RenderApp),
+        submission.clone(),
+        stopped.clone(),
+    );
+    #[cfg(test)]
+    if let Some(gate) = gate {
+        app.sub_app_mut(RenderApp).insert_resource(gate);
+    }
     // The main world and its pipelined render world may each retain a distinct
     // completed frame. A third texture lets CAD render without overwriting
     // either. Only an unleased texture can be reused; there is no readback.
@@ -689,6 +694,9 @@ fn render_worker(
             let before = pipelines.pipelines().count();
             let pending_before = pipelines.waiting_pipelines().next().is_some();
             app.update();
+            if stopped.load(Ordering::Acquire) {
+                return Ok(());
+            }
             if app.should_exit().is_some() {
                 return Err("CAD viewport reported a rendering error".into());
             }
@@ -732,7 +740,9 @@ fn render_worker(
                 .wgpu_device()
                 .poll(PollType::Poll)
         };
-        let polled = submission.run(poll);
+        let Some(polled) = submission.run_worker(stopped, poll) else {
+            return Ok(());
+        };
         polled.map_err(|error| error.to_string())?;
         last = Some(stamp.clone());
         if replies

@@ -29,7 +29,10 @@ use bevy::{
     },
     window::RawHandleWrapper,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 
 #[derive(Clone, Default, Resource)]
 pub(super) struct SharedSubmission(Arc<Mutex<()>>);
@@ -39,6 +42,55 @@ impl SharedSubmission {
         let _guard = self.0.lock().expect("shared GPU submission gate");
         work()
     }
+
+    pub(super) fn run_worker<T>(
+        &self,
+        stopped: &AtomicBool,
+        work: impl FnOnce() -> T,
+    ) -> Option<T> {
+        // A final interface frame can await main-thread work while holding its
+        // surface guard. A stopped worker must cancel that wait during teardown.
+        let _guard = loop {
+            if stopped.load(Ordering::Acquire) {
+                return None;
+            }
+            match self.0.try_lock() {
+                Ok(guard) => break guard,
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                Err(std::sync::TryLockError::Poisoned(error)) => {
+                    panic!("shared GPU submission gate: {error}");
+                }
+            }
+        };
+        Some(work())
+    }
+}
+
+#[derive(Clone, Default, Resource)]
+struct WorkerStopped(Arc<AtomicBool>);
+
+fn order_interface(render: &mut SubApp) {
+    // GPU work behind read-only resources also needs explicit phase ordering.
+    render.configure_sets(
+        Render,
+        (
+            RenderSystems::ExtractCommands,
+            RenderSystems::PrepareAssets,
+            RenderSystems::PrepareMeshes,
+            RenderSystems::CreateViews,
+            RenderSystems::Specialize,
+            RenderSystems::PrepareViews,
+            RenderSystems::Queue,
+            RenderSystems::PhaseSort,
+            RenderSystems::Prepare,
+            RenderSystems::Render,
+            RenderSystems::Cleanup,
+            RenderSystems::PostCleanup,
+        )
+            .chain(),
+    );
 }
 
 struct RunGuardedWindow;
@@ -82,6 +134,7 @@ where
 }
 
 pub(super) fn install_interface(render: &mut SubApp) -> SharedSubmission {
+    order_interface(render);
     let submission = SharedSubmission::default();
     render.insert_resource(submission.clone());
     render
@@ -108,6 +161,7 @@ pub(super) fn install_interface(render: &mut SubApp) -> SharedSubmission {
             schedule.add_systems(
                 guarded_window_system(create_surfaces, configure_surfaces)
                     .run_if(need_surface_configuration)
+                    .in_set(RenderSystems::PrepareViews)
                     .after(RenderSystems::ExtractCommands)
                     .before(acquire_surfaces),
             );
@@ -187,7 +241,12 @@ pub(super) fn compiled_after_draw(world: &World) -> bool {
     world.resource::<CompiledAfterDraw>().0
 }
 
-pub(super) fn install_worker(render: &mut SubApp, submission: SharedSubmission) {
+pub(super) fn install_worker(
+    render: &mut SubApp,
+    submission: SharedSubmission,
+    stopped: Arc<AtomicBool>,
+) {
+    render.insert_resource(WorkerStopped(stopped));
     remove_cache_processor::<PipelineCache>(render);
     install_worker_schedule(
         render,
@@ -327,6 +386,11 @@ fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
 }
 
 fn compile_pipelines(world: &mut World) -> bool {
+    #[cfg(test)]
+    if let Some(gate) = world.remove_resource::<super::tests::CompilationGate>() {
+        let _ = gate.entered.send(());
+        let _ = gate.receiver.lock().unwrap().recv();
+    }
     let mut cache = world.resource_mut::<PipelineCache>();
     let before = cache.pipelines().count();
     let pending = cache.waiting_pipelines().next().is_some();
@@ -344,15 +408,25 @@ fn install_worker_schedule(
     // those GPU initialization paths without gating the CAD main-world update.
     render.init_resource::<CompiledAfterDraw>();
     render.init_resource::<WorkerExiting>();
+    render.init_resource::<WorkerStopped>();
+    let stopped = render.world().resource::<WorkerStopped>().0.clone();
+    let extract_stopped = stopped.clone();
     let mut original_extract = render.take_extract().expect("CAD renderer extraction");
     let extract_submission = submission.clone();
     render.set_extract(move |main, world| {
-        extract_submission.run(|| original_extract(main, world));
+        if extract_submission
+            .run_worker(&extract_stopped, || original_extract(main, world))
+            .is_none()
+        {
+            world.resource_mut::<WorkerExiting>().0 = true;
+            world.resource_mut::<CompiledAfterDraw>().0 = false;
+            return;
+        }
         let exiting = main
             .get_resource::<Messages<AppExit>>()
             .is_some_and(|messages| !messages.is_empty());
         world.resource_mut::<WorkerExiting>().0 = exiting;
-        if exiting {
+        if exiting || extract_stopped.load(Ordering::Acquire) {
             world.resource_mut::<CompiledAfterDraw>().0 = false;
             return;
         }
@@ -369,7 +443,14 @@ fn install_worker_schedule(
         // Asset preparation can submit image/slab/storage copies too. Protect
         // the entire render update, including Bevy's existing recovery policy,
         // while leaving CAD main-world/model preparation outside the gate.
-        submission.run(|| world.run_schedule(original));
+        if submission
+            .run_worker(&stopped, || world.run_schedule(original))
+            .is_none()
+            || stopped.load(Ordering::Acquire)
+        {
+            world.resource_mut::<CompiledAfterDraw>().0 = false;
+            return;
+        }
         // macOS pipeline creation is synchronous even when Bevy's async flag is
         // false. Compile outside the gate after draining this draw's requests;
         // require a later stable draw before publishing its texture.
@@ -384,6 +465,111 @@ mod tests {
     use bevy::ecs::{change_detection::Tick, system::SystemChangeTick};
     use bevy::render::RenderStartup;
     use std::{sync::mpsc, thread, time::Duration};
+
+    #[derive(Resource)]
+    struct Upload {
+        pending: Arc<AtomicBool>,
+        started: mpsc::Sender<()>,
+        release: Mutex<mpsc::Receiver<()>>,
+        acquired: mpsc::Sender<bool>,
+    }
+
+    fn upload(upload: Res<Upload>) {
+        upload.started.send(()).unwrap();
+        upload
+            .release
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        upload.pending.store(false, Ordering::Release);
+    }
+
+    fn acquire(_: bevy::ecs::system::NonSendMarker, upload: Res<Upload>) {
+        upload
+            .acquired
+            .send(!upload.pending.load(Ordering::Acquire))
+            .unwrap();
+    }
+
+    fn intermediate_phase(_: Res<Upload>) {}
+
+    #[test]
+    fn window_frame_acquisition_waits_for_gpu_asset_uploads() {
+        bevy::tasks::ComputeTaskPool::get_or_init(|| {
+            bevy::tasks::TaskPoolBuilder::new().num_threads(2).build()
+        });
+        let mut render = SubApp::new();
+        render.add_schedule(Render::base_schedule());
+        order_interface(&mut render);
+        let (started, uploading) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let (acquired, acquisition) = mpsc::channel();
+        render.insert_resource(Upload {
+            pending: Arc::new(AtomicBool::new(true)),
+            started,
+            release: Mutex::new(released),
+            acquired,
+        });
+        // These systems both read a shared handle. ECS access alone cannot
+        // order the upload before a surface's GPU-idle wait or acquisition.
+        render.add_systems(
+            Render,
+            (
+                acquire.in_set(RenderSystems::PrepareViews),
+                upload.in_set(RenderSystems::PrepareAssets),
+                intermediate_phase.in_set(RenderSystems::PrepareMeshes),
+                intermediate_phase.in_set(RenderSystems::CreateViews),
+                intermediate_phase.in_set(RenderSystems::Specialize),
+            ),
+        );
+        let host = thread::spawn(move || render.world_mut().run_schedule(Render));
+        uploading.recv_timeout(Duration::from_secs(5)).unwrap();
+        let premature = acquisition.recv_timeout(Duration::from_millis(100));
+        release.send(()).unwrap();
+        host.join().unwrap();
+        assert!(
+            premature.is_err(),
+            "window acquisition overlapped an upload"
+        );
+        assert!(acquisition.recv_timeout(Duration::from_secs(5)).unwrap());
+    }
+
+    #[test]
+    fn stopped_worker_cancels_an_existing_surface_queue_wait() {
+        let submission = SharedSubmission::default();
+        let surface_submission = submission.clone();
+        let (entered, configuring) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let surface = thread::spawn(move || {
+            surface_submission.run(|| {
+                entered.send(()).unwrap();
+                released.recv_timeout(Duration::from_secs(5)).unwrap();
+            })
+        });
+        configuring.recv_timeout(Duration::from_secs(5)).unwrap();
+        let stopped = Arc::new(AtomicBool::new(false));
+        let worker_stopped = stopped.clone();
+        let (attempted, attempting) = mpsc::channel();
+        let (finished, completion) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            attempted.send(()).unwrap();
+            finished
+                .send(submission.run_worker(&worker_stopped, || true))
+                .unwrap();
+        });
+        attempting.recv_timeout(Duration::from_secs(5)).unwrap();
+        let premature = completion.recv_timeout(Duration::from_millis(20));
+        stopped.store(true, Ordering::Release);
+        let cancelled = completion.recv_timeout(Duration::from_secs(1));
+        // Release only after the cancellation outcome: shutdown must not depend
+        // on a paused interface frame eventually releasing its surface guard.
+        release.send(()).unwrap();
+        surface.join().unwrap();
+        worker.join().unwrap();
+        assert!(premature.is_err(), "worker submitted during surface work");
+        assert_eq!(cancelled.unwrap(), None);
+    }
 
     #[derive(Clone, Debug, PartialEq, Eq, Hash, ScheduleLabel)]
     struct OriginalWorkerUpdate;
