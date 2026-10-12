@@ -1,6 +1,58 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: source `70eba71a` combines compact
+Current checkpoint, **2026-10-11 UTC**: source `ab1de731` also repairs
+the genuine `c11a51cd` macOS strict-Clippy failure in `configure_surfaces`. Grouping
+the existing gate/queue guard parameters brings its Apple signature to seven
+arguments while preserving the main-thread marker, queue exclusion and original
+system identity. Independent pinned-API review and one strict changed-desktop
+Windows compiler check pass; the unchanged scheduling regression is retained.
+Actual Apple compilation and packaged GPU acceptance remain normal repaired-head
+CI gates. The same source includes the independently qualified **#377** receipt-only
+status repair; all four qualified MCP source blobs remain unchanged from
+`8b6825c6`, so its passing check and exact regression are retained without repetition.
+Broad UI/MCP coverage remains paused. No deployed pair, runtime change or main merge
+is claimed. Original failure, exact commands, hashes and scope:
+`docs/qualification/apple-surface-signature-20261011.json` and
+`docs/qualification/receipt-only-status-20261011.json`.
+
+Historical checkpoint, **2026-10-11 UTC**: source `8b6825c6` repairs
+receipt-only routed completion for **#377**. Public `cad_route` status now accepts
+`include_values:false`; inbox polling skips the full result read before allocation,
+and receipt-only batches use the same boundary. Full values remain the default.
+Original tickets, operation errors and publication/admission ownership fences are
+retained; full queries and internal scene readers remain compatible. Independent
+review corrected one timing-sensitive synthetic admission fixture. The strict
+changed MCP check and one new exact public-contract regression pass once on this
+clean source, using a private unit registry without submitting a CAD operation.
+The original large production-document retry and connector limits remain
+unqualified. The `c11a51cd` hosted matrix exposed an Apple-only strict lint failure:
+the surface wrapper's main-thread marker adds an eighth parameter. Its signature
+repair is separate pending source work; no hosted green or fresh deployed pair is
+claimed. Broad UI/MCP coverage remains paused, with
+saved documents, recovery/session data, the runtime and coverage ledger preserved.
+Exact source bindings, commands, artifacts and scope:
+`docs/qualification/receipt-only-status-20261011.json`.
+
+Historical checkpoint, **2026-10-11 UTC**: source `35c2a8bf` integrates
+the reviewed shared GPU surface/submission repair for **#374**, retained owned-child
+exit diagnostics, executable slicer-toolpath evidence for **#316**, and the
+strengthened authentic native tangent/full-reader test for **#369**. Strict changed
+desktop/export/MCP checks and their three exact affected regressions pass once on
+clean code source `b1ffcde3`, whose qualified code blobs remain unchanged; the previously qualified xtask check and single owned-child
+regression are retained without repetition. Native fixture source is preserved as
+the committed STEP witness, with four real native face owners on its tangent edge
+and two ambiguous reader candidates whose depth/extent remain unknown. Source
+review is clear; actual repaired-head Windows ARM64/x64/macOS packaged GPU acceptance is pending the next normal PR124 checks.
+The earlier compile errors and pre-correction renderer pass remain recorded.
+Three practical lesson captions now explain the completed dimensions and retained
+edit drivers; operation, chapter, camera and timing source is unchanged. Original
+teaching/learning review remains open. Issues #316 and #369 retain their original
+live/native handoff criteria. Broad
+UI/MCP coverage stays paused, and its complete ledger and live runtime/data remain
+unchanged. Exact receipts, source bindings, authentic failures and scope limits:
+`docs/qualification/surface-toolpath-tangent-20261011.json`.
+
+Historical checkpoint, **2026-10-11 UTC**: source `70eba71a` combines compact
 native File Open completion with original load diagnostics retained, localized
 English/Spanish/German/Simplified Chinese product entrances, and three practical
 edit/recovery lesson guides with authored catalog and UTF-16 harness repairs.

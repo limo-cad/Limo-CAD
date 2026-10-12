@@ -40,16 +40,42 @@ pub(crate) enum InteractionCommand {
     RepositionDimension,
     ConstraintInfo(ConstraintId),
     DeleteConstraint,
+    AnnotationContext {
+        target: AnnotationTarget,
+        anchor: [f32; 2],
+    },
+    DeleteAnnotation(AnnotationTarget),
+    CloseAnnotationMenu,
     DimensionText(String),
     ApplyDimension,
     CancelDimension,
     DimensionActions,
     Menu(Option<&'static str>),
     Form(super::forms::FormKind),
-    FormValue { id: u64, index: usize, text: String },
-    FormOption { id: u64 },
-    ApplyForm { id: u64 },
-    CancelForm { id: u64 },
+    FormValue {
+        id: u64,
+        index: usize,
+        text: String,
+    },
+    FormOption {
+        id: u64,
+    },
+    ApplyForm {
+        id: u64,
+    },
+    CancelForm {
+        id: u64,
+    },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AnnotationTarget {
+    Dimension(ConstraintId),
+    Constraint(ConstraintId),
+}
+#[derive(Clone, Copy)]
+pub(super) struct AnnotationMenu {
+    pub target: AnnotationTarget,
+    pub anchor: [f32; 2],
 }
 #[derive(Default)]
 pub(super) struct Interaction {
@@ -64,6 +90,7 @@ pub(super) struct Interaction {
     pub reposition_dimension: Option<ConstraintId>,
     pub constraint: Option<limo_cad_sketch::ConstraintDto>,
     pub menu: Option<&'static str>,
+    pub annotation_menu: Option<AnnotationMenu>,
     pub form: Option<super::forms::ModifyForm>,
 }
 impl Interaction {
@@ -249,15 +276,62 @@ pub(super) fn execute(
     {
         return Err("Finish or cancel the active tool before editing an annotation".into());
     }
+    if let InteractionCommand::AnnotationContext { target, .. } = &command {
+        let current_dimension = matches!(target, AnnotationTarget::Dimension(id) if annotations::editing_dimension(editor, *id));
+        if annotations::geometry_tool_active(editor) && !current_dimension {
+            return Err("Finish or cancel the active tool before editing an annotation".into());
+        }
+    }
     let sketch = active(engine)?.ok_or("Start or edit a sketch first")?;
     editor.draft.select(None);
     editor.press = None;
     editor.error.clear();
     editor.interaction.menu = None;
+    if !matches!(command, InteractionCommand::DeleteAnnotation(_)) {
+        editor.interaction.annotation_menu = None;
+    }
     clear_preview(world, engine, bridge, owner)?;
     match command {
         InteractionCommand::Select => editor.interaction = Default::default(),
         InteractionCommand::Menu(menu) => editor.interaction.menu = menu,
+        InteractionCommand::AnnotationContext { target, anchor } => {
+            match target {
+                AnnotationTarget::Dimension(id)
+                    if sketch.dimensions.iter().any(|d| d.constraint_id == id) => {}
+                AnnotationTarget::Constraint(id)
+                    if sketch.constraints.iter().any(|c| {
+                        c.id == id
+                            && c.constraint.kind() == limo_cad_sketch::ConstraintKind::Geometric
+                    }) => {}
+                _ => return Err("The annotation no longer exists".into()),
+            }
+            editor.interaction = Interaction {
+                annotation_menu: Some(AnnotationMenu { target, anchor }),
+                ..Default::default()
+            };
+        }
+        InteractionCommand::CloseAnnotationMenu => {}
+        InteractionCommand::DeleteAnnotation(target) => {
+            if editor
+                .interaction
+                .annotation_menu
+                .is_none_or(|menu| menu.target != target)
+            {
+                return Err("The annotation menu changed; open it again".into());
+            }
+            let (operation, id) = match target {
+                AnnotationTarget::Dimension(id) => ("sketch_delete_dimension", id),
+                AnnotationTarget::Constraint(id) => ("sketch_delete_constraint", id),
+            };
+            return mutate(
+                world,
+                editor,
+                Prepared {
+                    operation,
+                    arguments: json!({"constraint_id":id}),
+                },
+            );
+        }
         InteractionCommand::Modify(tool) => {
             editor.interaction = Interaction {
                 modify: Some(tool),

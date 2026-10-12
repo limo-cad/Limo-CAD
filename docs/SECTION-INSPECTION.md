@@ -35,12 +35,24 @@ section query; it does not run the drawings' full hidden-line projection.
 ## Use
 
 Solid workspace → Check → Section Analysis opens a compact panel on the right
-and automatically shows a 3D cutaway through the selected body's center. Choose
-one source body and an XY/XZ/YZ plane. Drag the position bar to move the cut
-through that body's extent, or enter an exact offset. The cutaway updates live;
+and automatically shows a 3D cutaway through the selected bodies' center. Open
+**Bodies** to check any combination of source bodies; **Select all**, **Clear**
+and **Done** manage the checklist. Existing viewport body selections are used
+when opening the tool, with the first source body as the fallback. Choose an
+XY/XZ/YZ plane. Drag the position bar through the selected bodies' combined
+extent, or enter an exact offset. Every selected body shares that plane and
+position. The cutaway updates live;
 there is no separate Inspect step. Above/Below plane changes the retained side.
-Changing the body or plane centers the cut in the new axis. An optional probe's
+Changing the plane centers the cut in the new axis. Adding or removing bodies
+keeps the current offset. An optional probe's
 vertical coordinate measures directional material spans.
+Show 2D diagram adds a diagram beneath the controls while the 3D cutaway stays
+live. Hide 2D diagram removes only that companion diagram.
+
+Failed timeline features do not block inspecting the available body geometry
+that the viewport displays. The inspector retains those errors in its report,
+panel notice and SVG. A missing body or unavailable native geometry still fails
+explicitly; document, revision and native geometry identity checks remain active.
 Fields accept the document's length units or an explicit `mm`, `cm` or `in`
 suffix using the existing arithmetic input. The diagram and returned distances
 are explicitly millimetres. These are source-definition coordinates, independent
@@ -57,11 +69,16 @@ The Bevy panel's Copy SVG button places the current diagram on the native
 clipboard for saving or pasting into another tool; Escape closes the panel.
 Orange surfaces identify the cut faces in the modeling viewport. Normal orbit,
 pan, zoom, orientation and Fit controls remain available in both section modes.
-Fit frames the inspected source body. **2D diagram** shows a compact flat preview;
-**3D cutaway** returns to the retained half-solid.
-Close restores the source scene with its original visibility choices. Temporary
-cut faces are not selectable as modeling topology. Other bodies and occurrence
-poses are excluded from this source-definition review.
+Fit frames the retained selected geometry. The optional diagram and copied SVG
+include all selected bodies on the same coordinates. Hatching respects each
+body's holes; probe intervals merge overlapping material across bodies.
+Close restores the source scene with its original visibility choices. Unselected
+bodies stay visible with their existing visibility settings. Selected bodies
+wholly on the retained side stay intact; selected bodies wholly on the discarded
+side disappear. Boundary contact keeps only geometry on the requested side and
+does not create an orange interior cap. Temporary cut faces are not selectable
+as modeling topology. Occurrence poses are excluded from the source-definition
+section calculation.
 
 Persistent drawing sections remain in the Drawing workspace, with associative
 parent views, cutting-line annotations, hatching and SVG/DXF export. The modeling
@@ -82,14 +99,18 @@ crossings. Open/ambiguous probe intersections reject rather than invent a
 thickness. Invalid requests and kernel failures return errors. A plane that
 touches the boundary without splitting a connected source solid returns
 `boundary_contact`, with empty material spans and no cutaway. The diagram can
-show its boundary contours; 3D mode preserves the source instead of displaying
-an empty clipped body. `no_intersection` returns no bounds and an empty SVG.
+show its boundary contours. These single-body MCP outcomes keep their original
+semantics. The desktop retained-side preview also clips outside/contact positions
+so multiple bodies remain coherent. `no_intersection` returns no section bounds
+and an empty SVG.
 Curves are limited to 100,000 points and probe
 results to 128 intervals. A probe on a boundary follows a half-open convention;
 move it inside the material for an interior measurement.
 
-The preview worker uses an independent copy of the selected exact source body,
-captured once per document revision/body. Section queries do not hold the live
+The preview worker uses independent copies of the selected exact source bodies,
+captured together under one source guard and reused for that document revision
+and selection. A batch supports up to 128 bodies within the same aggregate
+geometry/contour budgets as a single preview. Section queries do not hold the live
 engine lock or occupy its mutation worker, so dragging and camera navigation
 remain available. One query runs at a time; intervening edits collapse to the
 latest draft. During a sustained drag, compatible completed positions can update
@@ -97,8 +118,10 @@ the viewport while the newest position computes. SVG copy is available only for
 the completed current draft. Changed bodies, planes, sides, view modes, document
 owners and revisions reject incompatible completions. Closing the panel releases
 its controls, preview and worker without waiting for an in-flight read.
-Every completion also retains the backend's private source proof and validates
-the original scene and native body identity before being displayed.
+Every completion also retains each body's private source proof and validates
+the original scene and every native body identity together before being displayed.
+Changing the selected set rejects the entire old completion, including when its
+first body is still selected.
 Reads create no feature, drawing, history entry or geometry revision.
 
 This tool supplies geometric evidence. It does not calculate snap force,

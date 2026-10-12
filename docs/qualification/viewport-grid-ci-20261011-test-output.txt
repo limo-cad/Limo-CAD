@@ -1,0 +1,30 @@
+PR375 CI follow-up: grid head 84e96f43 plus PR124 b4fb29e6.
+Full logs retained in /private/tmp/viewport-grid-ci-84e96f43.
+
+Original macOS CI failure (macos-native-job.log):
+2026-10-11T23:37:05.6854390Z error: this function has too many arguments (8/7)
+2026-10-11T23:37:05.6882550Z    --> src/native_viewport/viewport_renderer/surface_submission.rs:124:1
+Repair already present on PR124: ab1de7314a1d2cf33888d0078ff04a2ca4e952b4.
+
+Local strict native lint (updated-macos-clippy.log), exit 0:
+cargo clippy --locked --manifest-path desktop/Cargo.toml --release --all-targets --all-features --no-deps --config 'profile.release.package.limo-cad.opt-level=0' -- -D warnings
+    Finished `release` profile [optimized] target(s) in 40.27s
+
+GPU regression (updated-grid-gpu.log), exit 0:
+running 1 test
+test native_viewport::platform::viewport_renderer::tests::native_viewport_grid_restores_without_pointer_motion_or_another_scene_request ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1066 filtered out; finished in 0.49s
+
+Affected grid regressions (updated-grid-regressions.log), exit 0:
+running 5 tests
+test native_viewport::platform::viewport_renderer::tests::native_viewport_grid_restores_without_pointer_motion_or_another_scene_request ... ignored, requires a native graphics adapter
+test native_editor::snapping::tests::midpoint_commit_keeps_the_viewport_grid_instead_of_the_script_default ... ok
+test native_viewport::platform::tests::viewport_grid_visibility_removes_and_restores_rendered_grid_lines ... ok
+test session_bridge::native_interface::controller::workbench::tests::grid::viewport_grid_button_activates_and_rejects_a_mismatched_rendered_document ... ok
+test session_bridge::native_interface::controller::workbench::tests::grid::viewport_grid_and_sketch_palette_share_visibility_without_changing_snap_or_geometry ... ok
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 1062 filtered out; finished in 0.05s
+The GPU case above was executed explicitly with --ignored --exact.
+
+Root and desktop cargo fmt --all -- --check: exit 0.
+Merged coverage inventory: 329 additional cases; grid evidence and incoming cases retained; broad testing paused.
+Local OCCT compilation retained SDK/C++ warnings and the test linker's compact-unwind warning in the full logs; both commands completed successfully.

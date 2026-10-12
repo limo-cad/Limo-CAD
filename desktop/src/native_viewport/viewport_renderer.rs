@@ -10,6 +10,7 @@ use bevy::{
     app::AppExit,
     asset::AssetId,
     render::{
+        error_handler::{RenderError, RenderErrorHandler, RenderErrorPolicy},
         render_asset::{prepare_assets, RenderAssets},
         render_resource::{
             Extent3d, PipelineCache, PollType, TextureDimension, TextureFormat, TextureUsages,
@@ -30,6 +31,36 @@ use std::{
     },
     thread::JoinHandle,
 };
+
+#[path = "viewport_renderer/surface_submission.rs"]
+mod surface_submission;
+
+const CAD_TARGET_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
+
+fn report_render_error(
+    error: &RenderError,
+    main_world: &mut World,
+    _: &mut World,
+) -> RenderErrorPolicy {
+    // Packaged desktops do not install LogPlugin. Keep the renderer's existing
+    // fail-closed policy, but retain its actual error in the owned stderr log.
+    let mut end = error.description.len().min(4096);
+    while !error.description.is_char_boundary(end) {
+        end -= 1;
+    }
+    eprintln!(
+        "Limo CAD rendering error ({:?}): {}{}",
+        error.ty,
+        &error.description[..end],
+        if end < error.description.len() {
+            " [truncated]"
+        } else {
+            ""
+        }
+    );
+    main_world.write_message(AppExit::error());
+    RenderErrorPolicy::StopRendering
+}
 
 #[derive(Clone, PartialEq)]
 struct Stamp {
@@ -240,6 +271,7 @@ pub(crate) fn install(app: &mut App) {
 
 impl Plugin for ViewportRendererPlugin {
     fn build(&self, app: &mut App) {
+        app.insert_resource(RenderErrorHandler(report_render_error));
         let render = app.sub_app_mut(RenderApp);
         render
             .add_systems(ExtractSchedule, extract_texture)
@@ -252,6 +284,7 @@ impl Plugin for ViewportRendererPlugin {
     }
 
     fn finish(&self, app: &mut App) {
+        let submission = surface_submission::install_interface(app.sub_app_mut(RenderApp));
         let render = app.sub_app(RenderApp).world();
         let resources = RenderResources(
             render.resource::<RenderDevice>().clone(),
@@ -279,7 +312,14 @@ impl Plugin for ViewportRendererPlugin {
                             return Ok(());
                         }
                     }
-                    render_worker(resources, jobs, &replies, &handle, &worker_stopped)
+                    render_worker(
+                        resources,
+                        jobs,
+                        &replies,
+                        &handle,
+                        &worker_stopped,
+                        &submission,
+                    )
                 }));
                 let error = match result {
                     Ok(Ok(())) => return,
@@ -469,7 +509,7 @@ fn target_image(size: UVec2) -> Image {
             depth_or_array_layers: 1,
         },
         TextureDimension::D2,
-        TextureFormat::Rgba8UnormSrgb,
+        CAD_TARGET_FORMAT,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     );
     image.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT;
@@ -482,6 +522,7 @@ fn render_worker(
     replies: &mpsc::SyncSender<Result<Frame, String>>,
     handle: &NativeInterfaceHandle,
     stopped: &AtomicBool,
+    submission: &surface_submission::SharedSubmission,
 ) -> Result<(), String> {
     if stopped.load(Ordering::Acquire) {
         return Ok(());
@@ -506,8 +547,10 @@ fn render_worker(
     let plugins = plugins.disable::<bevy::log::LogPlugin>();
     app.add_plugins(plugins);
     install_cad_renderer(&mut app, false);
+    app.insert_resource(RenderErrorHandler(report_render_error));
     app.finish();
     app.cleanup();
+    surface_submission::install_worker(app.sub_app_mut(RenderApp), submission.clone());
     // The main world and its pipelined render world may each retain a distinct
     // completed frame. A third texture lets CAD render without overwriting
     // either. Only an unleased texture can be reused; there is no readback.
@@ -640,7 +683,10 @@ fn render_worker(
                     }
                 }
             }
-            if pipelines.waiting_pipelines().next().is_none()
+            let compiled_after_draw =
+                surface_submission::compiled_after_draw(app.sub_app(RenderApp).world());
+            if !compiled_after_draw
+                && pipelines.waiting_pipelines().next().is_none()
                 && !pending_before
                 && before == pipelines.pipelines().count()
             {
@@ -657,11 +703,14 @@ fn render_worker(
             .get(target)
             .ok_or("CAD viewport target was not prepared")?
             .clone();
-        app.world()
-            .resource::<RenderDevice>()
-            .wgpu_device()
-            .poll(PollType::Poll)
-            .map_err(|error| error.to_string())?;
+        let poll = || {
+            app.world()
+                .resource::<RenderDevice>()
+                .wgpu_device()
+                .poll(PollType::Poll)
+        };
+        let polled = submission.run(poll);
+        polled.map_err(|error| error.to_string())?;
         last = Some(stamp.clone());
         if replies
             .send(Ok(Frame {

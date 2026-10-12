@@ -2624,6 +2624,8 @@ fn build_tool_specs() -> Vec<ToolSpec> {
             "body_id": { "type": "integer", "minimum": 1 },
             "edge_ids": edge_ids,
             "distance": { "type": "number", "exclusiveMinimum": 0 },
+            "angle_deg": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 90,
+                "description": "Angle from the first adjacent face in degrees. New UI chamfers default to 45; omit for legacy equal-distance behavior." },
             "tangent_chain": { "type": "boolean" }
         }),
         &["body_id", "edge_ids", "distance", "tangent_chain"],
@@ -3417,14 +3419,16 @@ fn build_tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "sketch_chamfer",
             "Chamfer sketch lines",
-            "Trim two intersecting lines and connect them with an equal-distance chamfer.",
+            "Trim two intersecting lines with a distance and optional acute angle from the first line. Omitted angle retains equal setbacks.",
             "chamfer_lines",
             Payload::Object,
             object_schema(
                 json!({
                     "l1": {"type": "integer", "minimum": 1},
                     "l2": {"type": "integer", "minimum": 1},
-                    "distance_text": {"type": "string", "minLength": 1}
+                    "distance_text": {"type": "string", "minLength": 1},
+                    "angle_text": {"type": "string", "minLength": 1,
+                        "description": "Angle expression in degrees, strictly between 0 and 90. The native UI defaults to 45."}
                 }),
                 &["l1", "l2", "distance_text"],
             ),
@@ -7154,6 +7158,51 @@ mod tests {
     }
 
     #[test]
+    fn chamfer_angle_schemas_accept_legacy_requests_and_enforce_exclusive_bounds() {
+        let catalog = full_tool_catalog();
+        let schema = |name: &str| {
+            catalog
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|tool| tool["name"] == name)
+                .unwrap()["inputSchema"]
+                .clone()
+        };
+        for name in ["solid_chamfer", "solid_edit_chamfer"] {
+            let schema = schema(name);
+            let validator = jsonschema::validator_for(&schema).unwrap();
+            let request = |angle: Option<f64>| {
+                let mut chamfer =
+                    json!({"body_id":1,"edge_ids":[1],"distance":2.,"tangent_chain":false});
+                if let Some(value) = angle {
+                    chamfer["angle_deg"] = json!(value);
+                }
+                if name == "solid_edit_chamfer" {
+                    json!({"feature_id":2,"chamfer":chamfer})
+                } else {
+                    chamfer
+                }
+            };
+            assert!(validator.is_valid(&request(None)));
+            for angle in [0.01, 15., 45., 89.99] {
+                assert!(validator.is_valid(&request(Some(angle))));
+            }
+            for angle in [-1., 0., 90., 91.] {
+                assert!(!validator.is_valid(&request(Some(angle))));
+            }
+        }
+        let schema = schema("sketch_chamfer");
+        let validator = jsonschema::validator_for(&schema).unwrap();
+        let mut request = json!({"l1":1,"l2":2,"distance_text":"2"});
+        assert!(validator.is_valid(&request));
+        request["angle_text"] = json!("60/2");
+        assert!(validator.is_valid(&request));
+        request["angle_text"] = json!("");
+        assert!(!validator.is_valid(&request));
+    }
+
+    #[test]
     fn tool_registry_is_granular_and_protocol_lists_revolve() {
         let catalog = full_tool_catalog();
         let all_tools = catalog.as_array().unwrap();
@@ -10867,6 +10916,126 @@ mod tests {
 
     #[test]
     fn native_bore_tangent_to_stock_boundary_has_no_inner_wire_through_proof() {
+        use std::collections::BTreeSet;
+
+        // The native mcp_box fixture is [-10, 10] x [-10, 10] x [0, 10].
+        // These exact inputs make its R3 bore tangent to the stock's X10 plane.
+        const STOCK_X: f64 = 10.0;
+        const STOCK_TOP: f64 = 10.0;
+        const CENTER_X: f64 = 7.0;
+        const RADIUS: f64 = 3.0;
+        const TOLERANCE: f64 = 1e-6;
+
+        let inspect_native = |scene: &limo_cad_solid::SolidSceneDto| {
+            assert!(scene.errors.is_empty());
+            assert_eq!(scene.bodies.len(), 1);
+            let body = &scene.bodies[0];
+            let walls = body
+                .faces
+                .iter()
+                .filter(|face| face.cylinder.is_some())
+                .collect::<Vec<_>>();
+            assert!(
+                !walls.is_empty(),
+                "native tangent fixture lost its cylinder"
+            );
+            let stock_faces = body
+                .faces
+                .iter()
+                .filter(|face| {
+                    face.plane.is_some_and(|plane| {
+                        (plane.origin[0] - STOCK_X).abs() < TOLERANCE
+                            && (plane.normal[0].abs() - 1.0).abs() < TOLERANCE
+                            && plane.normal[1].abs() < TOLERANCE
+                            && plane.normal[2].abs() < TOLERANCE
+                    })
+                })
+                .collect::<Vec<_>>();
+            assert!(!stock_faces.is_empty(), "native X10 stock plane is missing");
+            for wall in &walls {
+                let cylinder = wall.cylinder.unwrap();
+                assert!((cylinder.radius - RADIUS).abs() < TOLERANCE);
+                assert!((cylinder.origin.x - CENTER_X).abs() < TOLERANCE);
+                assert!(cylinder.origin.y.abs() < TOLERANCE);
+                assert!(cylinder.axis.x.abs() < TOLERANCE);
+                assert!(cylinder.axis.y.abs() < TOLERANCE);
+                assert!((cylinder.axis.z.abs() - 1.0).abs() < TOLERANCE);
+                for stock in &stock_faces {
+                    let plane = stock.plane.unwrap();
+                    let offset = [
+                        cylinder.origin.x - plane.origin[0],
+                        cylinder.origin.y - plane.origin[1],
+                        cylinder.origin.z - plane.origin[2],
+                    ];
+                    let distance = offset
+                        .iter()
+                        .zip(plane.normal)
+                        .map(|(delta, normal)| delta * normal)
+                        .sum::<f64>()
+                        .abs();
+                    assert!((distance - cylinder.radius).abs() < TOLERANCE);
+                }
+                assert!(!wall.edge_keys.is_empty());
+                assert!(wall
+                    .edge_keys
+                    .iter()
+                    .all(|key| body.edges.iter().any(|edge| &edge.key == key)));
+            }
+            let wall_ids = walls.iter().map(|face| face.id.0).collect::<BTreeSet<_>>();
+            // Owners come from real native face/edge identities, without copying
+            // faces or inferring connectivity from tessellation or coordinates.
+            let ownership = body
+                .edges
+                .iter()
+                .filter(|edge| walls.iter().any(|wall| wall.edge_keys.contains(&edge.key)))
+                .map(|edge| {
+                    (
+                        edge.id.0,
+                        edge.key.clone(),
+                        body.faces
+                            .iter()
+                            .filter(|face| face.edge_keys.contains(&edge.key))
+                            .map(|face| face.id.0)
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let tangent_edges = ownership
+                .iter()
+                .filter(|(_, _, owners)| {
+                    owners.iter().any(|id| wall_ids.contains(id))
+                        && stock_faces.iter().any(|face| owners.contains(&face.id.0))
+                })
+                .collect::<Vec<_>>();
+            assert!(
+                !tangent_edges.is_empty(),
+                "analytic tangency needs a native cylinder/stock shared edge: {ownership:?}"
+            );
+            assert!(body
+                .faces
+                .iter()
+                .all(|face| face.planar_inner_ring_edge_keys.is_empty()));
+            // Preserve the existing unauthored geometry inference contract too.
+            let inferred = summary::summarize(scene, &[]);
+            assert!(!inferred.holes.is_empty() || !inferred.ambiguous_hole_candidates.is_empty());
+            assert!(inferred
+                .holes
+                .iter()
+                .all(|hole| hole.through.is_none() && hole.depth.is_none()));
+            let evidence = json!({
+                "body_id": body.id.0,
+                "wall_faces": walls.iter().map(|face| json!({
+                    "id": face.id.0, "key": face.key, "cylinder": face.cylinder,
+                })).collect::<Vec<_>>(),
+                "stock_faces": stock_faces.iter().map(|face| json!({
+                    "id": face.id.0, "key": face.key, "plane": face.plane,
+                })).collect::<Vec<_>>(),
+                "wall_edge_owners": ownership,
+                "tangent_shared_edges": tangent_edges,
+            });
+            (body.id.0, wall_ids, evidence)
+        };
+
         let (mut server, _) = mcp_box();
         let body = &server.manager.solid_scene_ref().bodies[0];
         let cap = body
@@ -10875,37 +11044,101 @@ mod tests {
             .find(|face| face.plane.is_some_and(|plane| plane.normal[2] > 0.9))
             .unwrap();
         let plane = cap.plane.unwrap();
-        // R3 at X7 touches the stock's X10 boundary exactly.
         let delta = [
-            7.0 - plane.origin[0],
+            CENTER_X - plane.origin[0],
             -plane.origin[1],
-            10.0 - plane.origin[2],
+            STOCK_TOP - plane.origin[2],
         ];
         let project = |axis: [f64; 3]| delta.iter().zip(axis).map(|(a, b)| a * b).sum::<f64>();
         let request = json!({"body_id":body.id.0, "face_id":cap.id.0,
-            "position":{"x":project(plane.u),"y":project(plane.v)}, "diameter":6.0,
+            "position":{"x":project(plane.u),"y":project(plane.v)}, "diameter":2.0 * RADIUS,
             "extent":{"type":"through_all"}, "style":"simple", "counterbore_diameter":0.0,
             "counterbore_depth":0.0, "countersink_diameter":0.0, "countersink_angle_deg":90.0,
             "thread":null, "flip":false});
         server.call_tool("solid_hole", request).unwrap();
-        let scene = server.manager.solid_scene_ref();
-        assert!(scene.errors.is_empty());
-        assert_eq!(scene.bodies.len(), 1);
-        assert!(scene.bodies[0].faces.iter().any(|face| {
-            face.cylinder
-                .is_some_and(|cylinder| (cylinder.radius - 3.0).abs() < 1e-6)
-        }));
-        assert!(scene.bodies[0]
-            .faces
-            .iter()
-            .all(|face| face.planar_inner_ring_edge_keys.is_empty()));
-        // Do not read the authored Hole feature's extent as geometry evidence.
-        let inferred = summary::summarize(scene, &[]);
-        assert!(!inferred.holes.is_empty() || !inferred.ambiguous_hole_candidates.is_empty());
-        assert!(inferred
-            .holes
-            .iter()
-            .all(|hole| hole.through.is_none() && hole.depth.is_none()));
+        // Retain the authentic native STEP witness in this bounded fixture's
+        // captured output, including when a stricter ownership assertion fails.
+        let exported = server.call_tool("solid_export_step", json!({})).unwrap();
+        println!(
+            "native exact-tangent STEP source: {}",
+            exported["bytes_base64"].as_str().unwrap()
+        );
+        let (_, _, donor_evidence) = inspect_native(server.manager.solid_scene_ref());
+        // STEP removes authored Hole metadata, so the actual public full reader
+        // cannot substitute the request's through-all extent for native evidence.
+        let mut imported = CadServer::new().unwrap();
+        imported
+            .call_tool(
+                "solid_import_step",
+                json!({"file_name":"exact-tangent-native-ownership.step",
+                    "data_base64":exported["bytes_base64"].as_str().unwrap()}),
+            )
+            .unwrap();
+        assert!(imported.manager.hole_definitions().is_empty());
+        let before_model = imported.manager.export_project_model().unwrap();
+        let before_scene = imported.manager.solid_scene_ref().clone();
+        let (body_id, native_wall_ids, imported_evidence) = inspect_native(&before_scene);
+        let full = imported
+            .call_tool(
+                "cad_interface",
+                json!({"action":"summary", "detail":"full"}),
+            )
+            .unwrap();
+        assert_eq!(full["scene_errors"], 0);
+        assert_eq!(full["hole_source"], "scene");
+        assert_eq!(full["authored_hole_count"], 0);
+        let holes = full["holes"].as_array().unwrap();
+        let ambiguous = full["ambiguous_hole_candidates"].as_array().unwrap();
+        assert!(!holes.is_empty() || !ambiguous.is_empty());
+        assert_eq!(full["hole_count"], holes.len());
+        assert_eq!(full["ambiguous_hole_candidate_count"], ambiguous.len());
+        let mut reported_wall_ids = BTreeSet::new();
+        for (rows, confidence) in [(holes, "candidate"), (ambiguous, "ambiguous")] {
+            for candidate in rows {
+                assert_eq!(candidate["body_id"], body_id);
+                assert_eq!(candidate["source"], "geometry");
+                assert_eq!(candidate["confidence"], confidence);
+                assert!(candidate["inference_method"]
+                    .as_str()
+                    .is_some_and(|method| !method.is_empty()));
+                assert_eq!(candidate["diameter"], 2.0 * RADIUS);
+                assert_eq!(candidate.get("through"), Some(&Value::Null));
+                assert_eq!(candidate.get("depth"), Some(&Value::Null));
+                if confidence == "ambiguous" {
+                    assert!(candidate["reason"]
+                        .as_str()
+                        .is_some_and(|reason| !reason.trim().is_empty()));
+                } else {
+                    for unknown in [
+                        "feature_id",
+                        "through_evidence",
+                        "depth_evidence",
+                        "counterbore_diameter",
+                        "counterbore_depth",
+                    ] {
+                        assert_eq!(candidate.get(unknown), Some(&Value::Null), "{unknown}");
+                    }
+                }
+                let faces = candidate["face_ids"].as_array().unwrap();
+                assert!(!faces.is_empty());
+                for face in faces {
+                    let id = face.as_u64().unwrap();
+                    assert!(native_wall_ids.contains(&id));
+                    assert!(reported_wall_ids.insert(id), "duplicate native wall {id}");
+                }
+            }
+        }
+        assert_eq!(reported_wall_ids, native_wall_ids);
+        assert_eq!(
+            imported.manager.export_project_model().unwrap(),
+            before_model
+        );
+        assert_eq!(imported.manager.solid_scene_ref(), &before_scene);
+        println!("native exact-tangent donor: {donor_evidence}");
+        println!("native exact-tangent STEP: {imported_evidence}; full summary: {full}");
+        // Captured STEP bytes can preserve the authentic witness independently.
+        // This source contract does not establish a clean matched desktop/MCP
+        // pair; that original #369 criterion remains.
     }
 
     #[test]

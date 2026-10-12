@@ -10,6 +10,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod process_evidence;
+
 const DEFAULT_INITIALIZATION_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(crate) struct Client {
@@ -19,6 +21,8 @@ pub(crate) struct Client {
     id: u64,
     request_timeout: Option<Duration>,
     initialization: Value,
+    process_evidence: Option<process_evidence::Evidence>,
+    cleanup_finished: bool,
 }
 impl Client {
     pub(crate) fn worker_command(executable: impl AsRef<std::ffi::OsStr>) -> Command {
@@ -72,23 +76,24 @@ impl Client {
             .write(true)
             .create_new(true)
             .open(directory.join("host-stderr.log"))?;
+        let process_evidence = process_evidence::Evidence::create(directory)?;
         Self::start_with_logs(
             command,
             request_timeout.unwrap_or(DEFAULT_INITIALIZATION_TIMEOUT),
             request_timeout,
-            Some((stdout, stderr)),
+            Some((stdout, stderr, process_evidence)),
         )
     }
     fn start_with_logs(
         mut command: Command,
         initialization_timeout: Duration,
         request_timeout: Option<Duration>,
-        logs: Option<(fs::File, fs::File)>,
+        logs: Option<(fs::File, fs::File, process_evidence::Evidence)>,
     ) -> Result<Self> {
         crate::deploy_native::configure_runtime_environment(&mut command)?;
-        let (mut stdout_log, stderr) = match logs {
-            Some((stdout, stderr)) => (Some(stdout), Stdio::from(stderr)),
-            None => (None, Stdio::inherit()),
+        let (mut stdout_log, stderr, process_evidence) = match logs {
+            Some((stdout, stderr, evidence)) => (Some(stdout), Stdio::from(stderr), Some(evidence)),
+            None => (None, Stdio::inherit(), None),
         };
         command
             .stdin(Stdio::piped())
@@ -126,7 +131,11 @@ impl Client {
             id: 0,
             request_timeout: Some(initialization_timeout),
             initialization: Value::Null,
+            process_evidence,
+            cleanup_finished: false,
         };
+        let spawned = process_evidence::observe(&mut client.child, Duration::ZERO);
+        client.record_process("spawned", None, &spawned, None)?;
         client.initialization = client.rpc("initialize",json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"limo-cad-rust-replay","version":"1"}}))
             .with_context(|| format!(
                 "MCP initialization failed (deadline {initialization_timeout:?}). The executable must expose stdio MCP; use --server-arg --headless for packaged CAD workers without a window"
@@ -187,10 +196,11 @@ impl Client {
     pub(crate) fn rpc(&mut self, method: &str, params: Value) -> Result<Value> {
         let response = self.rpc_response(method, params)?;
         if let Some(error) = response.get("error") {
+            let error = anyhow!("MCP error: {error}");
             if self.request_timeout.is_some() {
-                self.terminate();
+                return Err(self.cleanup_after_error(error));
             }
-            bail!("MCP error: {error}");
+            return Err(error);
         }
         Ok(response["result"].clone())
     }
@@ -207,10 +217,10 @@ impl Client {
         )?;
         input.flush()?;
         let response = self.receive_reply(id, deadline, method);
-        if response.is_err() && self.request_timeout.is_some() {
-            self.terminate();
+        match response {
+            Err(error) if self.request_timeout.is_some() => Err(self.cleanup_after_error(error)),
+            response => response,
         }
-        response
     }
     pub(crate) fn rpc_with_timeout(
         &mut self,
@@ -251,7 +261,33 @@ impl Client {
                     }
                     eprintln!("Replay is running; live playback controls remain available.");
                 }
-                Err(error) => bail!("MCP connection closed: {error}"),
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    let timeout =
+                        deadline.map_or(process_evidence::DISCONNECTED_EXIT_GRACE, |end| {
+                            end.saturating_duration_since(Instant::now())
+                                .min(process_evidence::DISCONNECTED_EXIT_GRACE)
+                        });
+                    let observed = process_evidence::observe(&mut self.child, timeout);
+                    let error = anyhow!(
+                        "MCP connection closed (PID {}, method={:?}{}, request ID {id}; before cleanup: {})",
+                        self.process_id(),
+                        process_evidence::bounded_text(method, 128),
+                        if method.len() > 128 { " (truncated)" } else { "" },
+                        observed.describe()
+                    );
+                    return match self.record_process(
+                        "rpc_disconnected",
+                        Some((method, id)),
+                        &observed,
+                        None,
+                    ) {
+                        Ok(()) => Err(error),
+                        Err(retention) => Err(error.context(format!(
+                            "Retain owned process receipt: {}",
+                            process_evidence::bounded_text(&retention.to_string(), 256)
+                        ))),
+                    };
+                }
             }
         }
     }
@@ -266,7 +302,10 @@ impl Client {
                     bail!("MCP exited unsuccessfully after EOF: {status}");
                 }
 
-                return self.require_stdout_eof(deadline.saturating_duration_since(Instant::now()));
+                self.require_stdout_eof(deadline.saturating_duration_since(Instant::now()))?;
+                return self
+                    .terminate()
+                    .context("Retain owned process exit receipt");
             }
             if Instant::now() >= deadline {
                 bail!("MCP did not exit within {timeout:?} after EOF");
@@ -274,10 +313,67 @@ impl Client {
             std::thread::sleep(Duration::from_millis(10));
         }
     }
-    fn terminate(&mut self) {
+    fn terminate(&mut self) -> Result<()> {
         drop(self.input.take());
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if self.cleanup_finished {
+            return Ok(());
+        }
+        let before = process_evidence::observe(&mut self.child, Duration::ZERO);
+        let kill_attempted = !matches!(before, process_evidence::Observation::Exited(_));
+        let kill_error = if kill_attempted {
+            self.child.kill().err().map(|error| error.to_string())
+        } else {
+            None
+        };
+        let after = process_evidence::Observation::from_wait(self.child.wait().map(Some));
+        self.cleanup_finished = matches!(after, process_evidence::Observation::Exited(_));
+        let mut errors = Vec::new();
+        if let Err(error) = self.record_process(
+            "cleanup",
+            None,
+            &before,
+            Some((&after, kill_attempted, kill_error.as_deref())),
+        ) {
+            errors.push(format!(
+                "retain process receipt: {}",
+                process_evidence::bounded_text(&error.to_string(), 256)
+            ));
+        }
+        if let Some(error) = kill_error {
+            errors.push(format!(
+                "kill failed: {}",
+                process_evidence::bounded_text(&error, 256)
+            ));
+        }
+        if let process_evidence::Observation::Unavailable(error) = after {
+            errors.push(format!("wait failed: {error}"));
+        }
+        ensure!(
+            errors.is_empty(),
+            "Owned MCP cleanup failed (PID {}): {}",
+            self.process_id(),
+            errors.join("; ")
+        );
+        Ok(())
+    }
+    fn cleanup_after_error(&mut self, error: anyhow::Error) -> anyhow::Error {
+        match self.terminate() {
+            Ok(()) => error,
+            Err(cleanup) => error.context(cleanup),
+        }
+    }
+    fn record_process(
+        &mut self,
+        event: &str,
+        request: Option<(&str, u64)>,
+        observed: &process_evidence::Observation,
+        cleanup: Option<(&process_evidence::Observation, bool, Option<&str>)>,
+    ) -> std::io::Result<()> {
+        let pid = self.process_id();
+        match self.process_evidence.as_mut() {
+            Some(evidence) => evidence.record(event, pid, request, observed, cleanup),
+            None => Ok(()),
+        }
     }
     pub(crate) fn call(&mut self, name: &str, args: Value) -> Result<Value> {
         let result = self.rpc("tools/call", json!({"name":name,"arguments":args}))?;
@@ -324,7 +420,9 @@ fn reply_wait(deadline: Option<Instant>, method: &str) -> Result<Duration> {
 }
 impl Drop for Client {
     fn drop(&mut self) {
-        self.terminate();
+        if let Err(error) = self.terminate() {
+            eprintln!("{error:#}");
+        }
     }
 }
 
@@ -1132,11 +1230,21 @@ mod tests {
                     break;
                 }
             }
+            if let Ok(code) = std::env::var("LIMO_CAD_TRANSPORT_TEST_EXIT_CODE") {
+                std::process::exit(code.parse::<u8>().unwrap().into());
+            }
         }
     }
 
     fn transport_client(
         timeout: Option<Duration>,
+    ) -> (Client, mpsc::Sender<Result<Value, String>>) {
+        transport_client_with_exit_code(timeout, None)
+    }
+
+    fn transport_client_with_exit_code(
+        timeout: Option<Duration>,
+        exit_code: Option<u8>,
     ) -> (Client, mpsc::Sender<Result<Value, String>>) {
         let mut command = Command::new(std::env::current_exe().unwrap());
         command
@@ -1147,9 +1255,13 @@ mod tests {
                 "--nocapture",
             ])
             .env("LIMO_CAD_TRANSPORT_TEST_CHILD", "1")
+            .env_remove("LIMO_CAD_TRANSPORT_TEST_EXIT_CODE")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
+        if let Some(code) = exit_code {
+            command.env("LIMO_CAD_TRANSPORT_TEST_EXIT_CODE", code.to_string());
+        }
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -1189,9 +1301,103 @@ mod tests {
                 id: 0,
                 request_timeout: timeout,
                 initialization: Value::Null,
+                process_evidence: None,
+                cleanup_finished: false,
             },
             sender,
         )
+    }
+
+    #[test]
+    fn disconnected_rpc_records_exit_before_cleanup_and_live_eof_separately() {
+        let records = |directory: &Path| -> Vec<Value> {
+            fs::read_to_string(directory.join("host-process.jsonl"))
+                .unwrap()
+                .lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect()
+        };
+
+        let exited_logs = TestDirectory::new();
+        let (mut exited, sender) = transport_client_with_exit_code(None, Some(23));
+        exited.process_evidence = Some(process_evidence::Evidence::create(&exited_logs.0).unwrap());
+        let exited_pid = exited.process_id();
+        exited.close_input();
+        drop(sender);
+        assert!(matches!(
+            process_evidence::observe(&mut exited.child, Duration::from_secs(5)),
+            process_evidence::Observation::Exited(status) if status.code() == Some(23)
+        ));
+        let error = exited
+            .receive_reply(41, None, "tools/list")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(&format!("PID {exited_pid}")), "{error}");
+        assert!(error.contains("method=\"tools/list\""), "{error}");
+        assert!(error.contains("request ID 41"), "{error}");
+        assert!(error.contains("code=Some(23)"), "{error}");
+        // A caller without a request deadline can keep observing transport EOF.
+        // Exhaust the receipt budget and verify cleanup still gets its own slot.
+        for id in 42..64 {
+            assert!(exited.receive_reply(id, None, "tools/list").is_err());
+        }
+        exited.terminate().unwrap();
+        drop(exited);
+        let exited_records = records(&exited_logs.0);
+        assert_eq!(
+            exited_records.len(),
+            16,
+            "Cleanup must retain its reserved slot once"
+        );
+        assert_eq!(exited_records[0]["event"], "rpc_disconnected");
+        assert_eq!(exited_records[0]["pid"], exited_pid);
+        assert_eq!(exited_records[0]["request"]["id"], 41);
+        assert_eq!(exited_records[0]["observed"]["code"], 23);
+        let exited_cleanup = exited_records.last().unwrap();
+        assert_eq!(exited_cleanup["event"], "cleanup");
+        assert_eq!(exited_cleanup["cleanup"]["kill_attempted"], false);
+        assert_eq!(exited_cleanup["cleanup"]["after"]["code"], 23);
+
+        let live_logs = TestDirectory::new();
+        let (mut live, sender) = transport_client(Some(Duration::from_secs(5)));
+        live.process_evidence = Some(process_evidence::Evidence::create(&live_logs.0).unwrap());
+        let live_pid = live.process_id();
+        drop(sender);
+        let method = format!("ping{}", "🦀".repeat(1024));
+        let error = live
+            .rpc(
+                &method,
+                json!({"private_request_argument":"must-not-be-retained"}),
+            )
+            .unwrap_err();
+        let error = format!("{error:#}");
+        assert!(error.contains(&format!("PID {live_pid}")), "{error}");
+        assert!(error.contains("request ID 1"), "{error}");
+        assert!(error.contains("before cleanup: still running"), "{error}");
+        assert!(error.contains("(truncated)"), "{error}");
+        assert!(error.len() < 1024, "{error}");
+        assert!(
+            live.child.try_wait().unwrap().is_some(),
+            "Owned child was not reaped"
+        );
+        drop(live);
+        let live_records = records(&live_logs.0);
+        assert_eq!(
+            live_records.len(),
+            2,
+            "Drop must not repeat completed cleanup"
+        );
+        assert_eq!(live_records[0]["observed"]["state"], "running");
+        assert!(live_records[0]["observed"].get("code").is_none());
+        assert_eq!(live_records[0]["request"]["method_truncated"], true);
+        assert!(live_records[0]["request"]["method"].as_str().unwrap().len() <= 128);
+        assert_eq!(live_records[1]["event"], "cleanup");
+        assert_eq!(live_records[1]["cleanup"]["after"]["state"], "exited");
+        let bytes = fs::read(live_logs.0.join("host-process.jsonl")).unwrap();
+        assert!(bytes.len() <= 64 * 1024);
+        assert!(!String::from_utf8(bytes)
+            .unwrap()
+            .contains("must-not-be-retained"));
     }
 
     #[test]

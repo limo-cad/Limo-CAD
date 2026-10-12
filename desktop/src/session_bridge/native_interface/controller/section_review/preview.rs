@@ -4,21 +4,90 @@ use super::*;
 use limo_cad_native_engine::{FinishedSectionReview, PreparedSectionReview};
 use std::sync::mpsc;
 
-type SourceKey = (DocumentContext, u64, BodyId);
-type PreparedPreview = (
-    FinishedSectionReview,
-    Option<Image>,
-    Option<Arc<native_viewport::section_view::PreparedCutaway>>,
-);
+type SourceKey = (DocumentContext, u64, Vec<BodyId>);
+pub(super) struct PreparedPreview {
+    pub(super) finished: Vec<FinishedSectionReview>,
+    pub(super) report: SectionReview,
+    pub(super) image: Option<Image>,
+    pub(super) cutaway: Option<Arc<native_viewport::section_view::PreparedCutaway>>,
+}
+pub(super) fn prepare(
+    source: &[PreparedSectionReview],
+    requests: &[SectionReviewRequest],
+    diagram: bool,
+) -> Result<PreparedPreview, String> {
+    if source.len() != requests.len() || source.is_empty() {
+        return Err("Section source was released".into());
+    }
+    let mut finished = Vec::new();
+    let mut bodies = Vec::new();
+    let (mut vertices, mut triangles, mut edge_points, mut contour_points) = (0, 0, 0, 0);
+    for (source, request) in source.iter().zip(requests) {
+        let mut result = source.inspect_retained_at(request)?;
+        contour_points += result
+            .report()
+            .section
+            .iter()
+            .map(|line| line.points.len())
+            .sum::<usize>();
+        if let Some(body) = result.report_mut().cutaway.take() {
+            vertices += body.positions.len() / 3;
+            triangles += body.indices.len() / 3;
+            edge_points += body
+                .edges
+                .iter()
+                .map(|edge| edge.points.len())
+                .sum::<usize>();
+            bodies.push(body);
+        }
+        if vertices > 1_000_000
+            || triangles > 1_000_000
+            || edge_points > 100_000
+            || contour_points > 100_000
+        {
+            return Err(
+                "Selected section bodies exceed the preview geometry budget; select fewer bodies"
+                    .into(),
+            );
+        }
+        finished.push(result);
+    }
+    let reports: Vec<_> = finished.iter().map(|r| r.report().clone()).collect();
+    let report = limo_cad_occt::section_review::combine(&reports)?;
+    let image = if diagram && !report.svg.is_empty() {
+        Some(rasterize(&report.svg)?)
+    } else {
+        None
+    };
+    let cutaway = Some(Arc::new(
+        native_viewport::section_view::PreparedCutaway::collection(
+            requests.iter().map(|r| r.body_id.0).collect(),
+            finished
+                .iter()
+                .filter(|r| r.report().outcome == SectionOutcome::MaterialSection)
+                .map(|r| r.report().request.body_id.0)
+                .collect(),
+            bodies,
+        ),
+    ));
+    Ok(PreparedPreview {
+        finished,
+        report,
+        image,
+        cutaway,
+    })
+}
 struct Job {
     key: SourceKey,
     generation: u64,
-    source: Option<PreparedSectionReview>,
-    request: SectionReviewRequest,
+    source: Option<Vec<PreparedSectionReview>>,
+    requests: Vec<SectionReviewRequest>,
+    diagram: bool,
 }
 struct Completed {
     key: SourceKey,
     generation: u64,
+    diagram: bool,
     result: Result<PreparedPreview, String>,
 }
 pub(super) struct Worker {
@@ -26,11 +95,17 @@ pub(super) struct Worker {
     completed: std::sync::Mutex<mpsc::Receiver<Completed>>,
     key: Option<SourceKey>,
     running: bool,
+    #[cfg(test)]
+    stopped: Arc<std::sync::atomic::AtomicBool>,
 }
 impl Worker {
     fn new(handle: NativeInterfaceHandle) -> Result<Self, String> {
         let (jobs, incoming) = mpsc::sync_channel::<Job>(1);
         let (output, completed) = mpsc::channel();
+        #[cfg(test)]
+        let stopped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        #[cfg(test)]
+        let shutdown = stopped.clone();
         std::thread::Builder::new()
             .name("cad-section-preview".into())
             .spawn(move || {
@@ -40,20 +115,11 @@ impl Worker {
                         source = job.source;
                     }
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        let mut finished = source
-                            .as_ref()
-                            .ok_or("Section source was released")?
-                            .inspect_at(&job.request)?;
-                        let report = finished.report_mut();
-                        let image = if job.request.include_cutaway || report.svg.is_empty() {
-                            None
-                        } else {
-                            Some(rasterize(&report.svg)?)
-                        };
-                        let cutaway = report.cutaway.take().map(|body| {
-                            Arc::new(native_viewport::section_view::PreparedCutaway::new(body))
-                        });
-                        Ok((finished, image, cutaway))
+                        prepare(
+                            source.as_deref().ok_or("Section source was released")?,
+                            &job.requests,
+                            job.diagram,
+                        )
                     }))
                     .unwrap_or_else(|_| {
                         Err("Section preview failed; adjust the plane to retry".into())
@@ -62,6 +128,7 @@ impl Worker {
                         .send(Completed {
                             key: job.key,
                             generation: job.generation,
+                            diagram: job.diagram,
                             result,
                         })
                         .is_err()
@@ -70,6 +137,9 @@ impl Worker {
                     }
                     handle.request_redraw();
                 }
+                drop(source);
+                #[cfg(test)]
+                shutdown.store(true, std::sync::atomic::Ordering::Release);
             })
             .map_err(|error| format!("Cannot start section preview: {error}"))?;
         Ok(Self {
@@ -77,6 +147,8 @@ impl Worker {
             completed: std::sync::Mutex::new(completed),
             key: None,
             running: false,
+            #[cfg(test)]
+            stopped,
         })
     }
 }
@@ -86,14 +158,21 @@ fn adopt(
     services: &NativeServices,
     completed: Completed,
 ) -> Result<bool, String> {
-    if !state.current(&completed.key.0, completed.key.1, completed.generation)
-        && !completed.result.as_ref().is_ok_and(|(finished, _, _)| {
-            state.accepts_preview(
-                &completed.key.0,
-                completed.key.1,
-                &finished.report().request,
-            )
-        })
+    if state.body_ids().ok().as_ref() != Some(&completed.key.2)
+        || state.show_diagram != completed.diagram
+        || (!state.current(&completed.key.0, completed.key.1, completed.generation)
+            && !completed.result.as_ref().is_ok_and(|preview| {
+                state.accepts_preview(
+                    &completed.key.0,
+                    completed.key.1,
+                    &preview
+                        .finished
+                        .iter()
+                        .map(|r| r.report().request.clone())
+                        .collect::<Vec<_>>(),
+                    completed.diagram,
+                )
+            }))
     {
         return Ok(false);
     }
@@ -103,16 +182,22 @@ fn adopt(
             if current != completed.key.1 {
                 return Err("The section source model changed".into());
             }
-            let (finished, image, cutaway) = completed.result?;
-            services.engine.validate_section_review(&finished)?;
-            let report = finished.into_report();
+            let PreparedPreview {
+                finished,
+                report,
+                image,
+                cutaway,
+            } = completed.result?;
+            services.engine.validate_section_reviews(&finished)?;
             // Intermediate positions keep a sustained drag moving. Only the
             // completed current draft enables export.
             state.finished_generation = Some(completed.generation);
             state.message = match report.outcome {
-                SectionOutcome::NoIntersection => "Plane does not intersect this body.".into(),
+                SectionOutcome::NoIntersection => {
+                    "Plane does not intersect the selected bodies.".into()
+                }
                 SectionOutcome::BoundaryContact => {
-                    "Plane touches the boundary. Move inside the body to reveal a section.".into()
+                    "Plane touches a boundary. Move inside to reveal a section.".into()
                 }
                 SectionOutcome::MaterialSection if report.request.probe_mm.is_some() => {
                     if report.probe_spans.is_empty() {
@@ -133,6 +218,9 @@ fn adopt(
                     "Drag the bar to move the section. Copy SVG for the full diagram.".into()
                 }
             };
+            if let Some(notice) = report.source_notice() {
+                state.message = notice;
+            }
             state.cutaway = cutaway;
             state.report = Some(report);
             state.prepared_image = image;
@@ -171,7 +259,7 @@ pub(super) fn synchronize(
     {
         return Ok(());
     }
-    let request = match state.request(services.engine.document_units()) {
+    let requests = match state.requests(services.engine.document_units()) {
         Ok(request) => request,
         Err(error) => {
             state.finished_generation = Some(state.generation);
@@ -187,7 +275,11 @@ pub(super) fn synchronize(
             world.resource::<NativeInterfaceHandle>().clone(),
         )?);
     }
-    let key = (owner.clone(), state.revision, request.body_id);
+    let key = (
+        owner.clone(),
+        state.revision,
+        requests.iter().map(|r| r.body_id).collect(),
+    );
     let preview = state.preview.as_mut().unwrap();
     let source = if preview.key.as_ref() != Some(&key) {
         let captured =
@@ -197,9 +289,7 @@ pub(super) fn synchronize(
                     if current != state.revision {
                         return Err("The section source model changed".into());
                     }
-                    services.engine.prepare_section_review(
-                        &serde_json::to_string(&request).map_err(|error| error.to_string())?,
-                    )
+                    services.engine.prepare_section_reviews(&requests)
                 });
         match captured {
             Ok(source) => Some(source),
@@ -218,7 +308,8 @@ pub(super) fn synchronize(
             key: key.clone(),
             generation: state.generation,
             source,
-            request,
+            requests,
+            diagram: state.show_diagram,
         })
         .map_err(|error| format!("Cannot update section preview: {error}"))?;
     preview.key = Some(key);
@@ -237,7 +328,16 @@ mod tests {
         use crate::session_bridge::native_interface::tests::Fixture;
         let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
         for case in [
-            "live", "drag", "side", "close", "edit", "replace", "native", "owner",
+            "live",
+            "drag",
+            "selection",
+            "side",
+            "diagram",
+            "close",
+            "edit",
+            "replace",
+            "native",
+            "owner",
         ] {
             let fixture = Fixture::new();
             let owner = fixture.owner();
@@ -281,7 +381,7 @@ mod tests {
                 owner: Some(owner.clone()),
                 revision: receipt.revision,
                 visible: true,
-                in_3d: true,
+                show_diagram: false,
                 body: body.0.to_string(),
                 bodies: vec![(body.0, "Stock".into())],
                 plane: "xy".into(),
@@ -315,7 +415,12 @@ mod tests {
                 });
             match case {
                 "drag" => state.set_value(Field::Offset, "3".into()),
+                "selection" => {
+                    state.bodies.push((body.0 + 1, "Another body".into()));
+                    state.toggle_body(body.0 + 1).unwrap();
+                }
                 "side" => state.set_value(Field::Side, "positive".into()),
+                "diagram" => state.toggle_view(),
                 "close" => {
                     state.visible = false;
                     state.reset_controls("");
@@ -354,9 +459,15 @@ mod tests {
                 &mut state,
                 &services,
                 Completed {
-                    key: (owner.clone(), receipt.revision, body),
+                    key: (owner.clone(), receipt.revision, vec![body]),
                     generation: 0,
-                    result: Ok((finished, None, cutaway)),
+                    diagram: false,
+                    result: Ok(PreparedPreview {
+                        report: finished.report().clone(),
+                        finished: vec![finished],
+                        image: None,
+                        cutaway,
+                    }),
                 },
             );
             if matches!(case, "live" | "drag") {
@@ -373,7 +484,7 @@ mod tests {
             }
             if matches!(
                 case,
-                "live" | "drag" | "side" | "close" | "owner" | "native"
+                "live" | "drag" | "selection" | "side" | "diagram" | "close" | "owner" | "native"
             ) {
                 assert_eq!(
                     fixture.engine.engine_call("project_export_model", ""),
@@ -383,8 +494,7 @@ mod tests {
         }
     }
     #[test]
-    fn rapid_slider_changes_finish_at_latest_position_without_blocking_native_inputs_or_editing_model(
-    ) {
+    fn rapid_slider_and_diagram_keep_viewport_cut_live_with_failed_history() {
         use crate::session_bridge::native_interface::tests::Fixture;
         let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
         let fixture = Fixture::new();
@@ -397,7 +507,32 @@ mod tests {
         checked(fixture.engine.engine_call("add_rectangle", &json!({"mode":"two_point","p1":{"x":-10.,"y":-6.},"p2":{"x":10.,"y":6.},"ctrl_held":true}).to_string()));
         checked(fixture.engine.engine_call("end_sketch", ""));
         checked(fixture.engine.solid_extrude(&json!({"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":10.}}).to_string()));
+        let stock_scene = fixture.engine.solid_scene_snapshot();
+        let stock_body = &stock_scene.bodies[0];
+        let edge = &stock_body.edges[0];
+        let mut model: serde_json::Value = serde_json::from_str(
+            checked(fixture.engine.engine_call("project_export_model", ""))
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        model["document"]["history"]["features"].as_array_mut().unwrap().push(
+            json!({"id":3,"name":"Failed chamfer","kind":"chamfer","suppressed":false,"status":{"state":"ok"}}),
+        );
+        model["document"]["history"]["rollback_index"] = json!(3);
+        model["chamfers"] = json!([{"feature_id":3,"name":"Failed chamfer","body_id":stock_body.id,
+            "edge_ids":[edge.id],"edge_keys":[edge.key],"distance":100.,"tangent_chain":false}]);
+        checked(
+            fixture
+                .engine
+                .project_load(&serde_json::to_string(&model.to_string()).unwrap()),
+        );
         let scene = fixture.engine.solid_scene_snapshot();
+        assert_eq!(
+            scene.errors.len(),
+            1,
+            "The retained model must contain a genuine failed chamfer"
+        );
         let body = scene.bodies[0].id;
         let owner = fixture.owner();
         let receipt = fixture
@@ -415,7 +550,7 @@ mod tests {
             owner: Some(owner.clone()),
             revision: receipt.revision,
             visible: true,
-            in_3d: true,
+            show_diagram: false,
             body: body.0.to_string(),
             bodies: vec![(body.0, "Fixture".into())],
             plane: "xy".into(),
@@ -427,6 +562,8 @@ mod tests {
         synchronize(&world, &mut state, &services, &owner).unwrap();
         assert!(state.preview.as_ref().unwrap().running);
         assert!(!worker::busy(&world));
+        state.toggle_view();
+        assert!(state.show_diagram);
         for value in [4., 6., 8.] {
             state.set_position(value).unwrap();
             synchronize(&world, &mut state, &services, &owner).unwrap();
@@ -444,7 +581,14 @@ mod tests {
         let report = state.report.as_ref().unwrap();
         assert_eq!(report.request.offset_mm, 8.);
         assert_eq!(report.outcome, SectionOutcome::MaterialSection);
+        assert!(report.request.include_cutaway);
+        assert_eq!(report.source_errors, scene.errors);
+        assert!(state.message.contains("Showing available geometry"));
         assert!(state.cutaway.is_some());
+        assert!(
+            state.prepared_image.is_some(),
+            "The diagram must accompany the viewport cut"
+        );
         assert_eq!(
             fixture.engine.engine_call("project_export_model", ""),
             before
@@ -459,11 +603,24 @@ mod tests {
         );
         state.set_position(5.).unwrap();
         synchronize(&world, &mut state, &services, &owner).unwrap();
+        let stopped = state.preview.as_ref().unwrap().stopped.clone();
         world.insert_resource(state);
+        let close_started = std::time::Instant::now();
         assert!(escape(&mut world));
+        assert!(close_started.elapsed() < Duration::from_millis(250));
         let closed = world.resource::<State>();
         assert!(closed.preview.is_none());
         assert!(closed.report.is_none());
         assert!(closed.cutaway.is_none());
+        // Keep OCCT alive until the retired copy is freed, without making the
+        // production close path wait for an in-flight section or raster job.
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !stopped.load(std::sync::atomic::Ordering::Acquire) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Section worker did not retire"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
     }
 }
