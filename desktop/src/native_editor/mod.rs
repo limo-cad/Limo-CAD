@@ -22,7 +22,7 @@ mod snapping;
 pub(crate) use forms::FormKind;
 mod interaction;
 pub(crate) mod panel;
-pub(crate) use interaction::{InteractionCommand, ModifyTool};
+pub(crate) use interaction::{AnnotationTarget, InteractionCommand, ModifyTool};
 
 use crate::{
     native_viewport::{
@@ -634,6 +634,7 @@ fn queue_mutation(
                             editor.interaction.dimension_reference = false;
                             editor.interaction.reposition_dimension = None;
                             editor.interaction.constraint = None;
+                            editor.interaction.annotation_menu = None;
                             Ok(())
                         }
                     }

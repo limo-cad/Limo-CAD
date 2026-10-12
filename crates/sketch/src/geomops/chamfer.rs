@@ -23,6 +23,8 @@ pub enum ChamferError {
     Degenerate,
     DistanceTooLarge,
     NotPositive,
+    AngleOutOfRange,
+    IncompatibleAngle,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -96,7 +98,7 @@ pub fn chamfer_lines(
     d1: f64,
     d2: f64,
 ) -> Result<ChamferResult, ChamferError> {
-    if d1 <= 0.0 || d2 <= 0.0 {
+    if !d1.is_finite() || !d2.is_finite() || d1 <= 0.0 || d2 <= 0.0 {
         return Err(ChamferError::NotPositive);
     }
 
@@ -154,6 +156,40 @@ pub fn chamfer_lines(
         point_on_l1: p1,
         point_on_l2: p2,
     })
+}
+
+/// Distance along the first carrier and acute chamfer angle measured from it.
+/// The sine rule also handles corners whose carrier angle is not 90 degrees.
+pub fn chamfer_lines_with_angle(
+    l1: &LineSeg,
+    l2: &LineSeg,
+    distance: f64,
+    angle_deg: f64,
+) -> Result<ChamferResult, ChamferError> {
+    if !angle_deg.is_finite() || angle_deg <= 0.0 || angle_deg >= 90.0 {
+        return Err(ChamferError::AngleOutOfRange);
+    }
+    if !distance.is_finite() || distance <= 0.0 {
+        return Err(ChamferError::NotPositive);
+    }
+    let vertex = line_intersection(l1, l2).ok_or(ChamferError::Parallel)?;
+    let ray = |line: &LineSeg| {
+        let a = pt_sub(line.a, vertex);
+        let b = pt_sub(line.b, vertex);
+        pt_norm(if pt_len(b) >= pt_len(a) - 1e-15 { b } else { a })
+    };
+    let first = ray(l1);
+    let second = ray(l2);
+    let corner_angle = cross2d(first, second)
+        .abs()
+        .atan2(first.x * second.x + first.y * second.y);
+    let angle = angle_deg.to_radians();
+    let remaining_angle = std::f64::consts::PI - corner_angle - angle;
+    if remaining_angle <= 0.0 {
+        return Err(ChamferError::IncompatibleAngle);
+    }
+    let second_distance = distance * angle.sin() / remaining_angle.sin();
+    chamfer_lines(l1, l2, distance, second_distance)
 }
 
 #[cfg(test)]

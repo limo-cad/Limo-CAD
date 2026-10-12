@@ -2362,6 +2362,11 @@ fn reject_busy_controls(session: &str, except_id: Option<&str>) -> Result<(), St
 }
 
 #[cfg(test)]
+pub(crate) fn with_isolated_session_test(test: impl FnOnce()) {
+    tests::with_isolated_session_test(test);
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
