@@ -55,11 +55,11 @@ pub(in super::super) fn apply_bindings(world: &mut World, bindings: Bindings) {
 
 fn modifier_bits(input: &NativeHostInput) -> u8 {
     let m = input.modifiers;
-    u8::from(m.shift) * bindings::SHIFT
-        | u8::from(m.ctrl) * bindings::CTRL
-        | u8::from(m.alt) * bindings::ALT
-        | u8::from(m.meta) * bindings::META
-        | u8::from(m.alt_graph) * bindings::ALT_GRAPH
+    (u8::from(m.shift) * bindings::SHIFT)
+        | (u8::from(m.ctrl) * bindings::CTRL)
+        | (u8::from(m.alt) * bindings::ALT)
+        | (u8::from(m.meta) * bindings::META)
+        | (u8::from(m.alt_graph) * bindings::ALT_GRAPH)
 }
 
 pub(in super::super) fn cancel_pointer(world: &mut World) {

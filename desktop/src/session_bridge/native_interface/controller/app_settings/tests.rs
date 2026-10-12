@@ -3,6 +3,8 @@ use crate::session_bridge::{native_interface::tests::Fixture, parse_engine_envel
 use bevy::text::{EditableText, TextCursorStyle};
 use bevy::ui::ComputedStackIndex;
 
+mod navigation_bindings;
+
 #[test]
 fn settings_build_identity_wraps_without_overlapping_description_or_controls() {
     use bevy::camera::{ComputedCameraValues, RenderTargetInfo, Viewport};

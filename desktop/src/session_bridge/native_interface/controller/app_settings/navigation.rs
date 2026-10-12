@@ -414,10 +414,12 @@ fn text(
     );
     settings.widgets.parent(world, key, parent);
     let entity = settings.widgets.entity(key).unwrap();
-    world.entity_mut(entity).insert(TextLayout::new(
-        Justify::Left,
-        bevy::text::LineBreak::WordOrCharacter,
-    ));
+    let layout = TextLayout::new(Justify::Left, bevy::text::LineBreak::WordOrCharacter);
+    if world.get::<TextLayout>(entity).is_none_or(|current| {
+        current.justify != layout.justify || current.linebreak != layout.linebreak
+    }) {
+        world.entity_mut(entity).insert(layout);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

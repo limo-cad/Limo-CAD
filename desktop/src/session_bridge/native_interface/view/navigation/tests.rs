@@ -69,6 +69,160 @@ fn distance(camera: ViewportCamera) -> f32 {
 }
 
 #[test]
+fn custom_navigation_bindings_move_the_camera_and_keep_scoped_input_owners() {
+    use crate::app_preferences::navigation::{
+        Action, Bindings, Button, DragBinding, Modifiers as Chord,
+    };
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let (mut app, handle) = setup(&fixture);
+    let before = fixture.engine.engine_call("project_export_model", "");
+    let original = camera(app.world());
+    let bindings = Bindings {
+        pan: DragBinding {
+            button: Button::Right,
+            modifiers: Chord::None,
+        },
+        orbit: DragBinding {
+            button: Button::Middle,
+            modifiers: Chord::None,
+        },
+        orbit_alternative: DragBinding {
+            button: Button::Middle,
+            modifiers: Chord::Shift,
+        },
+        zoom: DragBinding {
+            button: Button::Right,
+            modifiers: Chord::Ctrl,
+        },
+        wheel: Action::Pan,
+        trackpad: Action::Zoom,
+        ..Bindings::default()
+    };
+    bindings.validate().unwrap();
+    apply_bindings(app.world_mut(), bindings);
+    let send = |world: &mut World, point, event| {
+        navigate(world, &handle, &input(&handle, point, event)).unwrap()
+    };
+    assert!(!send(
+        app.world_mut(),
+        [300., 300.],
+        button(MouseButton::Left, ButtonState::Pressed)
+    ));
+    assert_eq!(camera(app.world()), original);
+    let mut unmatched = input(
+        &handle,
+        [300., 300.],
+        button(MouseButton::Middle, ButtonState::Pressed),
+    );
+    unmatched.modifiers.ctrl = true;
+    assert!(!navigate(app.world_mut(), &handle, &unmatched).unwrap());
+    assert!(send(
+        app.world_mut(),
+        [300., 300.],
+        button(MouseButton::Right, ButtonState::Pressed)
+    ));
+    let mut movement = input(&handle, [330., 320.], moved([330., 320.]));
+    movement.modifiers.ctrl = true;
+    assert!(navigate(app.world_mut(), &handle, &movement).unwrap());
+    let panned = camera(app.world());
+    assert_ne!(panned.target, original.target);
+    assert!((distance(panned) - distance(original)).abs() < 1e-3);
+    assert!(send(
+        app.world_mut(),
+        [330., 320.],
+        button(MouseButton::Right, ButtonState::Released)
+    ));
+    assert!(send(
+        app.world_mut(),
+        [300., 300.],
+        button(MouseButton::Middle, ButtonState::Pressed)
+    ));
+    assert!(send(app.world_mut(), [340., 325.], moved([340., 325.])));
+    let orbited = camera(app.world());
+    assert_ne!(orbited.position, panned.position);
+    assert_eq!(orbited.target, panned.target);
+    assert!((distance(orbited) - distance(panned)).abs() < 1e-3);
+    assert!(send(
+        app.world_mut(),
+        [340., 325.],
+        button(MouseButton::Middle, ButtonState::Released)
+    ));
+    let mut zoom_press = input(
+        &handle,
+        [300., 300.],
+        button(MouseButton::Right, ButtonState::Pressed),
+    );
+    zoom_press.modifiers.ctrl = true;
+    assert!(navigate(app.world_mut(), &handle, &zoom_press).unwrap());
+    assert!(send(app.world_mut(), [300., 320.], moved([300., 320.])));
+    let zoomed = camera(app.world());
+    assert_eq!(zoomed.target, orbited.target);
+    assert!(distance(zoomed) > distance(orbited));
+    assert!(send(
+        app.world_mut(),
+        [300., 320.],
+        button(MouseButton::Right, ButtonState::Released)
+    ));
+    assert!(send(
+        app.world_mut(),
+        [300., 300.],
+        wheel(MouseScrollUnit::Line, 0., 2.)
+    ));
+    let wheel_pan = camera(app.world());
+    assert_ne!(wheel_pan.target, zoomed.target);
+    assert!((distance(wheel_pan) - distance(zoomed)).abs() < 1e-3);
+    assert!(send(
+        app.world_mut(),
+        [300., 300.],
+        wheel(MouseScrollUnit::Pixel, 0., 20.)
+    ));
+    assert!(distance(camera(app.world())) < distance(wheel_pan));
+    let stable = camera(app.world());
+    let mut blocked = input(
+        &handle,
+        [300., 300.],
+        wheel(MouseScrollUnit::Pixel, 0., 20.),
+    );
+    blocked.consumed = true;
+    assert!(!navigate(app.world_mut(), &handle, &blocked).unwrap());
+    blocked.consumed = false;
+    blocked.context.as_mut().unwrap().epoch += 1;
+    assert!(!navigate(app.world_mut(), &handle, &blocked).unwrap());
+    let mut frame = handle.frame().unwrap();
+    frame.modal_stack.push("file-menu".into());
+    frame.surfaces.push(limo_cad_interface::Surface {
+        name: "file-menu".into(),
+        text: None,
+    });
+    handle.present(frame).unwrap();
+    interface_shell::tests::publish_layout_once(app.world_mut(), handle.clone());
+    assert!(!send(
+        app.world_mut(),
+        [300., 300.],
+        button(MouseButton::Right, ButtonState::Pressed)
+    ));
+    assert_eq!(camera(app.world()), stable);
+    let mut frame = handle.frame().unwrap();
+    frame.modal_stack.clear();
+    handle.present(frame).unwrap();
+    interface_shell::tests::publish_layout_once(app.world_mut(), handle.clone());
+    assert!(send(
+        app.world_mut(),
+        [300., 300.],
+        button(MouseButton::Right, ButtonState::Pressed)
+    ));
+    apply_bindings(app.world_mut(), Bindings::default());
+    assert!(!pointer_active(app.world()));
+    assert!(!send(app.world_mut(), [350., 330.], moved([350., 330.])));
+    assert_eq!(camera(app.world()), stable);
+    assert!(
+        fixture.engine.engine_call("project_export_model", "") == before,
+        "Navigation must preserve document geometry/model"
+    );
+}
+
+#[test]
 fn pointer_pan_orbit_wheel_and_pinch_move_only_the_camera() {
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
     let fixture = Fixture::new();
