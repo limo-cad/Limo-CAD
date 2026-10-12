@@ -107,14 +107,13 @@ macOS and Windows; duplicating those updates adds pointer latency without
 creating a new GPU pipeline.
 
 The native interface and windowless CAD worker share a GPU device and queue.
-Surface configuration and acquisition exclude CAD GPU submissions through one
-shared guard. Interface render phases use strict ordering: surface creation runs
-after asset uploads and before window frame acquisition, retaining Bevy's window
-system identity and main-thread routing. CAD mesh rebuilding and pipeline
-compilation run outside the guard; GPU extraction/startup and render updates use
-it. On shutdown, a stopped worker cancels a pending queue wait, and teardown
-services any remaining main-thread surface work. Menus keep rendering while CAD
-geometry and shaders prepare.
+Window configuration and frame acquisition exclude queue operations in the
+interface's render world. CAD extraction/recovery and GPU render updates share
+the same submission guard with those window operations. Mesh rebuilding and
+pipeline prewarming/compilation run outside the guard, preserving menu rendering
+while geometry and shaders prepare. On shutdown, a stopped worker cancels its
+pending submission wait so the interface can finish its last frame.
+Teardown also services any pending main-thread surface work.
 
 The Extrude tool volume is a translucent fill without a duplicate edge cage;
 the source sketch remains visible in its normal retained sketch layer. Its DOM

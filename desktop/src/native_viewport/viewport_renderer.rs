@@ -577,7 +577,7 @@ fn render_worker(
     );
     #[cfg(test)]
     if let Some(gate) = gate {
-        app.sub_app_mut(RenderApp).insert_resource(gate);
+        app.sub_app_mut(RenderApp).world_mut().insert_resource(gate);
     }
     // The main world and its pipelined render world may each retain a distinct
     // completed frame. A third texture lets CAD render without overwriting
@@ -740,7 +740,7 @@ fn render_worker(
                 .wgpu_device()
                 .poll(PollType::Poll)
         };
-        let Some(polled) = submission.run_worker(stopped, poll) else {
+        let Some(polled) = submission.run_until_stopped(stopped, poll) else {
             return Ok(());
         };
         polled.map_err(|error| error.to_string())?;
