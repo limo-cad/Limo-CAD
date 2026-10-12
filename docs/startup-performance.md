@@ -26,7 +26,7 @@ frame after normal decorations and workspace size have been restored.
 Brand and a text-free machined-plate drawing occupy the left column. The right
 column shows the actual application phase, independent file work when present,
 and one stationary regional workshop note. The blank top edge uses Tauri's
-standard drag region, but native movement remains unresolved in verification.
+standard drag region; the maintainer confirmed native movement on October 12.
 A small localized close control remains available from early HTML feedback.
 Recovery keeps useful details selectable and scrollable and fits four actions.
 
@@ -73,7 +73,8 @@ unverified: two short synthetic drag inputs left the window origin unchanged.
 Source review confirms shadow and decoration flags are independent; queued
 native dragging requires a held primary press, which this automation API cannot
 pause mid-drag. This is a hypothesis about the failed check, not proof of native
-drag success. Manual dragging and native macOS/Linux transitions remain outstanding.
+drag success. The maintainer later confirmed native dragging on October 12;
+this earlier automated result is retained as historical evidence.
 
 Two additional fresh-profile empty launches passed full expanded-frame,
 camera/picking, first/repeated CAD and exact restoration checks. Their
@@ -97,11 +98,9 @@ The executable is SHA-256
 the [staging receipt](startup-measurements/standard-drag-staging.json) records it.
 Earlier captures and comparisons retain their actual earlier hashes.
 
-Two computer-controlled drags across the blank top edge left the origin at
-1007,506. The [check receipt](startup-measurements/standard-drag-native-check.json)
-records both paths. This is a failed movement check, not proof that the change
-fixed dragging. The supported automation API cannot pause a held mouse button;
-the real held-button gesture remains outstanding. The PR stays a draft.
+The maintainer confirmed native card dragging on October 12, and the PR is ready
+for review. The earlier [automated check receipt](startup-measurements/standard-drag-native-check.json)
+is retained as a record of that automation attempt.
 
 The final executable's [native recovery card](startup-measurements/captures/floating/native-standard-drag-recovery.jpg),
 [retry loading phase](startup-measurements/captures/floating/native-standard-drag-loading.jpg),
@@ -169,7 +168,7 @@ newline-sensitive checks assumed LF in CRLF files. A read-only check of the same
 [passed at 0.2.2](startup-measurements/pr-version-check.log). The repository
 version script and unrelated files were not changed to hide that limitation.
 
-Outstanding checks remain native dragging, actual post-reboot/driver-cold and
+The recorded measurements do not cover actual post-reboot/driver-cold and
 shipping-profile measurements, macOS/Linux native transitions, the six ignored
 tests, and large-document responsiveness. Runtime progress is nonmodal, but
 native project preparation and JavaScript archive decoding still contain

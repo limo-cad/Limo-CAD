@@ -52,12 +52,29 @@ German — Limo CAD:
 
 ## Actual Windows frames
 
+Recorded native loading on Thunder, from opening feedback through workspace
+reveal. These are sampled window-only screenshots of a normal empty launch in
+a private fresh profile, not a performance benchmark. The small card is centered
+on a neutral canvas and the workspace is scaled to fit; the final workspace has
+a one-second presentation hold before the loop restarts.
+
+Playback at the observed sample spacing:
+
+![Native loading recording](startup-measurements/captures/floating/native-loading.gif)
+
+The same recording at one-third speed, to make short phases easier to read:
+
+![Native loading recording at one-third speed](startup-measurements/captures/floating/native-loading-slow.gif)
+
+The [recording receipt](startup-measurements/captures/floating/native-loading-recording.json)
+retains the source executable hash, frame dimensions, sample intervals and GIF
+playback delays. Startup timings come from separate unrecorded runs.
+
 These captures came from the native application, using an isolated profile and
 private failure fixture. Recovery includes deliberate human/automation waits;
 the images do not encode measured timing.
 
-Final standard-drag executable (movement remains unresolved), loading without
-the Windows title bar:
+Final native executable, loading without the Windows title bar:
 
 ![Native loading](startup-measurements/captures/floating/native-standard-drag-loading.jpg)
 
