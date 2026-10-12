@@ -45,6 +45,7 @@
 #include <BRepOffsetAPI_MakePipeShell.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
+#include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
@@ -10670,6 +10671,162 @@ static FfiMesh mesh_shape(std::uint64_t body_id,
   return output;
 }
 
+namespace {
+
+std::optional<double> finite_native_bound_separation(
+    const TopoDS_Shape& a, const TopoDS_Shape& b) {
+  Bnd_Box bounds_a;
+  Bnd_Box bounds_b;
+  // Native surfaces and their tolerances only: display triangulation cannot
+  // establish an exact-clearance guard, especially for imported curved faces.
+  BRepBndLib::AddOptimal(a, bounds_a, false, true);
+  BRepBndLib::AddOptimal(b, bounds_b, false, true);
+  for (const Bnd_Box* bounds : {&bounds_a, &bounds_b}) {
+    if (bounds->IsVoid() || bounds->IsWhole() || bounds->IsOpen()) {
+      return std::nullopt;
+    }
+    std::array<double, 6> coordinates{};
+    bounds->Get(coordinates[0], coordinates[1], coordinates[2],
+                coordinates[3], coordinates[4], coordinates[5]);
+    if (std::any_of(coordinates.begin(), coordinates.end(),
+                    [](double value) { return !std::isfinite(value); })) {
+      return std::nullopt;
+    }
+  }
+  const double separation = bounds_a.Distance(bounds_b);
+  if (!std::isfinite(separation) || separation < 0.0) {
+    return std::nullopt;
+  }
+  return separation;
+}
+
+FfiInterferenceResult exact_shape_interference(
+    const TopoDS_Shape& a, const TopoDS_Shape& b) {
+  BRepExtrema_DistShapeShape distance(a, b);
+  auto require_distance = [&distance] {
+    if (!distance.IsDone() || distance.NbSolution() <= 0 ||
+        !std::isfinite(distance.Value()) || distance.Value() < 0.0) {
+      throw std::runtime_error("OCCT could not evaluate exact body clearance");
+    }
+  };
+  require_distance();
+  std::optional<double> separated_bound;
+  if (distance.InnerSolution() || distance.Value() <= Precision::Confusion()) {
+    separated_bound = finite_native_bound_separation(a, b);
+    if (separated_bound &&
+        distance.Value() + Precision::Confusion() < *separated_bound) {
+      // DistShapeShape's root-solid containment shortcut can return one input
+      // vertex for both witnesses. Disjoint finite CAD boundaries disprove
+      // that result; the bounds are a guard, never the reported clearance.
+      // Identity compound roots retain every native member and its existing
+      // placement/orientation while bypassing only the SOLID/COMPSOLID shortcut.
+      BRep_Builder builder;
+      TopoDS_Compound boundary_a;
+      TopoDS_Compound boundary_b;
+      builder.MakeCompound(boundary_a);
+      builder.MakeCompound(boundary_b);
+      builder.Add(boundary_a, a);
+      builder.Add(boundary_b, b);
+      distance.LoadS1(boundary_a);
+      distance.LoadS2(boundary_b);
+      distance.Perform();
+      require_distance();
+      if (distance.InnerSolution() || distance.Value() <= 0.0 ||
+          distance.Value() + Precision::Confusion() < *separated_bound) {
+        throw std::runtime_error(
+            "OCCT exact body clearance contradicts separated native bounds");
+      }
+    } else {
+      separated_bound.reset();
+    }
+  }
+
+  const gp_Pnt point_a = distance.PointOnShape1(1);
+  const gp_Pnt point_b = distance.PointOnShape2(1);
+  const std::array<double, 6> coordinates = {
+      point_a.X(), point_a.Y(), point_a.Z(), point_b.X(), point_b.Y(), point_b.Z()};
+  if (std::any_of(coordinates.begin(), coordinates.end(),
+                  [](double value) { return !std::isfinite(value); }) ||
+      (separated_bound &&
+       std::abs(point_a.Distance(point_b) - distance.Value()) >
+           std::max(Precision::Confusion(), distance.Value() * 1.0e-10))) {
+    throw std::runtime_error("OCCT exact body clearance has invalid witnesses");
+  }
+  FfiInterferenceResult output{};
+  output.minimum_clearance_mm = distance.Value();
+  output.closest_point_a_x = point_a.X();
+  output.closest_point_a_y = point_a.Y();
+  output.closest_point_a_z = point_a.Z();
+  output.closest_point_b_x = point_b.X();
+  output.closest_point_b_y = point_b.Y();
+  output.closest_point_b_z = point_b.Z();
+
+  if (separated_bound ||
+      (!distance.InnerSolution() && output.minimum_clearance_mm > 1.0e-7)) {
+    return output;
+  }
+  BRepAlgoAPI_Common common(a, b, Message_ProgressRange());
+  if (!common.IsDone()) {
+    throw std::runtime_error("OCCT could not evaluate exact body overlap");
+  }
+  const TopoDS_Shape overlap = common.Shape();
+  if (!overlap.IsNull()) {
+    GProp_GProps properties;
+    BRepGProp::VolumeProperties(overlap, properties);
+    output.overlap_volume_mm3 = std::abs(properties.Mass());
+    if (!std::isfinite(output.overlap_volume_mm3)) {
+      throw std::runtime_error("OCCT exact body overlap volume is not finite");
+    }
+  }
+  return output;
+}
+
+}
+
+FfiClearanceRegression clearance_regression_probe() {
+  // A reversed solid describes complement material to OCCT. This deliberately
+  // exercises the finite-CAD-body defense, not the cause of any imported STEP.
+  TopoDS_Shape reversed = BRepPrimAPI_MakeBox(10.0, 10.0, 10.0).Shape();
+  reversed.Reverse();
+  gp_Trsf placement;
+  placement.SetRotation(gp_Ax1(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0)),
+                        kPi / 2.0);
+  placement.SetTranslationPart(gp_Vec(40.0, 20.0, 5.0));
+  reversed = reversed.Moved(TopLoc_Location(placement));
+  const TopoDS_Shape small = BRepPrimAPI_MakeBox(2.0, 2.0, 2.0).Shape();
+  BRepExtrema_DistShapeShape legacy(reversed, small);
+  if (!legacy.IsDone() || legacy.NbSolution() <= 0) {
+    throw std::runtime_error("native clearance regression raw solver failed");
+  }
+  FfiClearanceRegression output{};
+  output.legacy_inner_solution = legacy.InnerSolution();
+  output.legacy_minimum_clearance_mm = legacy.Value();
+  const gp_Pnt legacy_a = legacy.PointOnShape1(1);
+  const gp_Pnt legacy_b = legacy.PointOnShape2(1);
+  output.legacy_point_a = {legacy_a.X(), legacy_a.Y(), legacy_a.Z()};
+  output.legacy_point_b = {legacy_b.X(), legacy_b.Y(), legacy_b.Z()};
+  output.reversed_disjoint = exact_shape_interference(reversed, small);
+  output.swapped_disjoint = exact_shape_interference(small, reversed);
+
+  const TopoDS_Shape large = BRepPrimAPI_MakeBox(10.0, 10.0, 10.0).Shape();
+  output.contact = exact_shape_interference(
+      large, BRepPrimAPI_MakeBox(gp_Pnt(10.0, 0.0, 0.0), 2.0, 2.0, 2.0).Shape());
+  output.contained = exact_shape_interference(
+      large, BRepPrimAPI_MakeBox(gp_Pnt(2.0, 2.0, 2.0), 2.0, 2.0, 2.0).Shape());
+  output.partial_overlap = exact_shape_interference(
+      large, BRepPrimAPI_MakeBox(gp_Pnt(9.0, 9.0, 9.0), 2.0, 2.0, 2.0).Shape());
+  BRep_Builder builder;
+  TopoDS_Compound separated_members;
+  builder.MakeCompound(separated_members);
+  builder.Add(separated_members, small);
+  builder.Add(separated_members,
+              BRepPrimAPI_MakeBox(gp_Pnt(10.0, 10.0, 10.0), 2.0, 2.0, 2.0).Shape());
+  output.overlapping_envelopes = exact_shape_interference(
+      separated_members,
+      BRepPrimAPI_MakeBox(gp_Pnt(5.0, 5.0, 5.0), 2.0, 2.0, 2.0).Shape());
+  return output;
+}
+
 FfiInterferenceResult Kernel::exact_interference(
     const FfiBodyPlacement& placement_a,
     const FfiBodyPlacement& placement_b) const {
@@ -10713,37 +10870,7 @@ FfiInterferenceResult Kernel::exact_interference(
              placement_b.rotation[0], placement_b.rotation[1],
              placement_b.rotation[2], placement_b.rotation[3]);
 
-  BRepExtrema_DistShapeShape distance(a, b);
-  if (!distance.IsDone()) {
-    throw std::runtime_error("OCCT could not evaluate exact body clearance");
-  }
-  FfiInterferenceResult output{};
-  output.minimum_clearance_mm = distance.Value();
-  if (distance.NbSolution() > 0) {
-    const gp_Pnt point_a = distance.PointOnShape1(1);
-    const gp_Pnt point_b = distance.PointOnShape2(1);
-    output.closest_point_a_x = point_a.X();
-    output.closest_point_a_y = point_a.Y();
-    output.closest_point_a_z = point_a.Z();
-    output.closest_point_b_x = point_b.X();
-    output.closest_point_b_y = point_b.Y();
-    output.closest_point_b_z = point_b.Z();
-  }
-
-  if (!distance.InnerSolution() && output.minimum_clearance_mm > 1.0e-7) {
-    return output;
-  }
-  BRepAlgoAPI_Common common(a, b, Message_ProgressRange());
-  if (!common.IsDone()) {
-    throw std::runtime_error("OCCT could not evaluate exact body overlap");
-  }
-  const TopoDS_Shape overlap = common.Shape();
-  if (!overlap.IsNull()) {
-    GProp_GProps properties;
-    BRepGProp::VolumeProperties(overlap, properties);
-    output.overlap_volume_mm3 = std::abs(properties.Mass());
-  }
-  return output;
+  return exact_shape_interference(a, b);
 }
 
 FfiDrawingProjection Kernel::drawing_projection(
