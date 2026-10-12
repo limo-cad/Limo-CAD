@@ -29,6 +29,10 @@ pub(crate) enum Command {
     CopySvg,
     Close,
     ToggleView,
+    Bodies,
+    ToggleBody(u64),
+    AllBodies(bool),
+    BodyPage(bool),
 }
 #[derive(Resource, Default)]
 struct State {
@@ -41,11 +45,13 @@ struct State {
     visible: bool,
     bodies: Vec<(u64, String)>,
     body: String,
+    choosing_bodies: bool,
+    body_page: usize,
     plane: String,
     offset: String,
     probe: String,
     side: String,
-    in_3d: bool,
+    show_diagram: bool,
     cutaway: Option<Arc<native_viewport::section_view::PreparedCutaway>>,
     report: Option<SectionReview>,
     image: Option<Handle<Image>>,
@@ -106,7 +112,7 @@ impl State {
         }
     }
     fn toggle_view(&mut self) {
-        self.in_3d = !self.in_3d;
+        self.show_diagram = !self.show_diagram;
         self.controls_generation = self.controls_generation.saturating_add(1);
         // Existing geometry is still useful in the other view, but an older
         // query must not complete into the replacement presentation scope.
@@ -136,24 +142,26 @@ impl State {
             .then_some((min[axis], max[axis]))
     }
     fn source(&mut self, scene: &limo_cad_solid::SolidSceneDto, recenter: bool) {
-        self.bounds = scene
-            .bodies
-            .iter()
-            .find(|body| body.id.0.to_string() == self.body)
-            .and_then(|body| {
-                let mut min = [f64::INFINITY; 3];
-                let mut max = [f64::NEG_INFINITY; 3];
-                for point in body.mesh.positions.as_chunks::<3>().0 {
-                    for axis in 0..3 {
-                        min[axis] = min[axis].min(f64::from(point[axis]));
-                        max[axis] = max[axis].max(f64::from(point[axis]));
-                    }
+        let ids = self.body_ids().unwrap_or_default();
+        self.bounds = {
+            let mut min = [f64::INFINITY; 3];
+            let mut max = [f64::NEG_INFINITY; 3];
+            for point in scene
+                .bodies
+                .iter()
+                .filter(|body| ids.contains(&body.id))
+                .flat_map(|body| body.mesh.positions.as_chunks::<3>().0)
+            {
+                for axis in 0..3 {
+                    min[axis] = min[axis].min(f64::from(point[axis]));
+                    max[axis] = max[axis].max(f64::from(point[axis]));
                 }
-                min.iter()
-                    .chain(&max)
-                    .all(|v| v.is_finite())
-                    .then_some((min, max))
-            });
+            }
+            min.iter()
+                .chain(&max)
+                .all(|v| v.is_finite())
+                .then_some((min, max))
+        };
         if recenter {
             if let Some((min, max)) = self.range() {
                 self.offset =
@@ -181,25 +189,28 @@ impl State {
         &self,
         owner: &DocumentContext,
         revision: u64,
-        request: &SectionReviewRequest,
+        requests: &[SectionReviewRequest],
+        diagram: bool,
     ) -> bool {
-        if !self.visible || self.owner.as_ref() != Some(owner) || self.revision != revision {
+        if !self.visible
+            || self.owner.as_ref() != Some(owner)
+            || self.revision != revision
+            || self.show_diagram != diagram
+        {
             return false;
         }
-        self.request(self.units).is_ok_and(|current| {
-            current.body_id == request.body_id
-                && current.plane == request.plane
-                && current.keep_positive == request.keep_positive
-                && current.include_cutaway == request.include_cutaway
+        self.requests(self.units).is_ok_and(|current| {
+            current.len() == requests.len()
+                && current.iter().zip(requests).all(|(current, request)| {
+                    current.body_id == request.body_id
+                        && current.plane == request.plane
+                        && current.keep_positive == request.keep_positive
+                        && current.include_cutaway == request.include_cutaway
+                })
         })
     }
     fn choices(&self, field: Field) -> Option<Vec<ChoiceOption>> {
         let items = match field {
-            Field::Body => self
-                .bodies
-                .iter()
-                .map(|(id, name)| (id.to_string(), format!("{name} (body {id})")))
-                .collect(),
             Field::Plane => vec![
                 ("xy".into(), "XY - through Z".into()),
                 ("xz".into(), "XZ - through Y".into()),
@@ -223,10 +234,7 @@ impl State {
         )
     }
     fn request(&self, units: UnitSystem) -> Result<SectionReviewRequest, String> {
-        let body_id = self.body.parse::<u64>().map_err(|_| "Choose a body")?;
-        if !self.bodies.iter().any(|(id, _)| *id == body_id) {
-            return Err("Choose a current body".into());
-        }
+        let body_id = self.body_ids()?[0];
         let plane = match self.plane.as_str() {
             "xy" => SectionPlane::Xy,
             "xz" => SectionPlane::Xz,
@@ -234,7 +242,7 @@ impl State {
             _ => return Err("Choose a section plane".into()),
         };
         let req = SectionReviewRequest {
-            body_id: BodyId(body_id),
+            body_id,
             plane,
             offset_mm: coordinate(&self.offset, units)?,
             probe_mm: if self.probe.trim().is_empty() {
@@ -243,11 +251,65 @@ impl State {
                 Some(coordinate(&self.probe, units)?)
             },
             deflection_mm: 0.01,
-            include_cutaway: self.in_3d,
+            include_cutaway: true,
             keep_positive: self.side == "positive",
         };
         req.validate()?;
         Ok(req)
+    }
+    fn body_ids(&self) -> Result<Vec<BodyId>, String> {
+        let ids: Vec<_> = self
+            .body
+            .split(',')
+            .map(|id| id.parse::<u64>().map(BodyId))
+            .collect::<Result<_, _>>()
+            .map_err(|_| "Choose at least one body")?;
+        if ids.is_empty()
+            || ids.len() > 128
+            || ids
+                .iter()
+                .any(|id| !self.bodies.iter().any(|(current, _)| *current == id.0))
+        {
+            return Err("Choose between 1 and 128 current bodies".into());
+        }
+        if ids.iter().collect::<std::collections::BTreeSet<_>>().len() != ids.len() {
+            return Err("Choose each section body once".into());
+        }
+        Ok(ids)
+    }
+    fn requests(&self, units: UnitSystem) -> Result<Vec<SectionReviewRequest>, String> {
+        let request = self.request(units)?;
+        Ok(self
+            .body_ids()?
+            .into_iter()
+            .map(|body_id| SectionReviewRequest {
+                body_id,
+                ..request.clone()
+            })
+            .collect())
+    }
+    fn toggle_body(&mut self, id: u64) -> Result<(), String> {
+        if !self.bodies.iter().any(|(body, _)| *body == id) {
+            return Err("Choose a current body".into());
+        }
+        let mut ids = self.body_ids().unwrap_or_default();
+        if ids.contains(&BodyId(id)) {
+            ids.retain(|body| body.0 != id);
+        } else {
+            if ids.len() >= 128 {
+                return Err("Select up to 128 section bodies".into());
+            }
+            ids.push(BodyId(id));
+        }
+        let value = self
+            .bodies
+            .iter()
+            .filter(|(id, _)| ids.contains(&BodyId(*id)))
+            .map(|(id, _)| id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        self.set_value(Field::Body, value);
+        Ok(())
     }
 }
 fn coordinate(text: &str, units: UnitSystem) -> Result<f64, String> {
@@ -272,7 +334,10 @@ pub(crate) fn reduce(
             return Err("Activate Section Analysis".into());
         }
         let scene = engine.solid_scene_snapshot();
-        let selected = &native_viewport::interface_view(world).2.selected_body_ids;
+        let selected = native_viewport::interface_view(world)
+            .2
+            .selected_body_ids
+            .clone();
         let body = scene
             .bodies
             .iter()
@@ -290,10 +355,22 @@ pub(crate) fn reduce(
             .iter()
             .map(|b| (b.id.0, b.name.clone()))
             .collect();
-        state.body = body.id.0.to_string();
+        state.body = scene
+            .bodies
+            .iter()
+            .filter(|b| selected.contains(&b.id.0))
+            .map(|b| b.id.0.to_string())
+            .take(128)
+            .collect::<Vec<_>>()
+            .join(",");
+        if state.body.is_empty() {
+            state.body = body.id.0.to_string();
+        }
+        state.choosing_bodies = false;
+        state.body_page = 0;
         state.plane = "yz".into();
         state.side = "negative".into();
-        state.in_3d = true;
+        state.show_diagram = false;
         state.units = engine.document_units();
         state.offset = "0".into();
         state.source(&scene, true);
@@ -316,8 +393,8 @@ pub(crate) fn reduce(
         } else {
             return Ok(json!({"focused":true}));
         };
-        if value.len() > 256 {
-            return Err("Section field exceeds 256 characters".into());
+        if value.len() > if *field == Field::Body { 2048 } else { 256 } {
+            return Err("Section field is too long".into());
         }
         if let Some(options) = state.choices(*field) {
             if !options.iter().any(|o| o.value == value) {
@@ -337,8 +414,63 @@ pub(crate) fn reduce(
         }
         return Ok(json!({"handled":true}));
     }
+    if let Command::ToggleBody(id) = command {
+        let mut state = world.resource_mut::<State>();
+        let checked = state.body_ids().unwrap_or_default().contains(&BodyId(*id));
+        let changed = if let ControlInput::SetValue(value) = &action.control.input {
+            value
+                .parse::<bool>()
+                .map_err(|_| "Choose a checked or unchecked section body")?
+                != checked
+        } else if super::super::is_activation(&action.control.input) {
+            true
+        } else {
+            return Ok(json!({"focused":true}));
+        };
+        if changed {
+            state.toggle_body(*id)?;
+            state.source(&engine.solid_scene_snapshot(), false);
+        }
+        return Ok(json!({"handled":true}));
+    }
     if !super::super::is_activation(&action.control.input) {
         return Err("Activate a section control".into());
+    }
+    match command {
+        Command::Bodies => {
+            let mut state = world.resource_mut::<State>();
+            state.choosing_bodies = !state.choosing_bodies;
+            return Ok(json!({"handled":true}));
+        }
+        Command::AllBodies(all) => {
+            let mut state = world.resource_mut::<State>();
+            if *all && state.bodies.len() > 128 {
+                return Err("Select up to 128 section bodies".into());
+            }
+            let value = if *all {
+                state
+                    .bodies
+                    .iter()
+                    .map(|(id, _)| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            } else {
+                String::new()
+            };
+            state.set_value(Field::Body, value);
+            state.source(&engine.solid_scene_snapshot(), false);
+            return Ok(json!({"handled":true}));
+        }
+        Command::BodyPage(forward) => {
+            let mut state = world.resource_mut::<State>();
+            state.body_page = if *forward {
+                state.body_page.saturating_add(1)
+            } else {
+                state.body_page.saturating_sub(1)
+            };
+            return Ok(json!({"handled":true}));
+        }
+        _ => {}
     }
     if *command == Command::Close {
         let mut state = world.resource_mut::<State>();
@@ -351,7 +483,7 @@ pub(crate) fn reduce(
     if *command == Command::ToggleView {
         let mut state = world.resource_mut::<State>();
         state.toggle_view();
-        return Ok(json!({"view":if state.in_3d {"cutaway"} else {"diagram"}}));
+        return Ok(json!({"view":if state.show_diagram {"cutaway_and_diagram"} else {"cutaway"}}));
     }
     if *command == Command::CopySvg {
         let state = world.resource::<State>();
@@ -473,18 +605,18 @@ pub(crate) fn synchronize(
                 .iter()
                 .map(|b| (b.id.0, b.name.clone()))
                 .collect();
-            let missing = !state
-                .bodies
-                .iter()
-                .any(|(id, _)| id.to_string() == state.body);
-            if missing {
-                state.body = state
-                    .bodies
-                    .first()
-                    .map(|(id, _)| id.to_string())
-                    .unwrap_or_default();
-            }
-            state.source(&scene, missing);
+            let previous = state.body.clone();
+            state.body = previous
+                .split(',')
+                .filter(|id| {
+                    state
+                        .bodies
+                        .iter()
+                        .any(|(current, _)| current.to_string() == *id)
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            state.source(&scene, false);
         }
         if let Err(error) = preview::synchronize(world, &mut state, services, owner) {
             state.invalidate(&error);
@@ -495,17 +627,13 @@ pub(crate) fn synchronize(
             world.init_resource::<Assets<Image>>();
             state.image = Some(world.resource_mut::<Assets<Image>>().add(image));
         }
-        if state.in_3d {
-            if let Some(report) = &state.report {
-                native_viewport::section_view::show(
-                    world,
-                    &owner.document_id,
-                    &report.request,
-                    state.cutaway.clone(),
-                )?;
-            } else {
-                native_viewport::section_view::clear(world);
-            }
+        if let Some(report) = &state.report {
+            native_viewport::section_view::show(
+                world,
+                &owner.document_id,
+                &report.request,
+                state.cutaway.clone(),
+            )?;
         } else {
             native_viewport::section_view::clear(world);
         }
@@ -536,12 +664,10 @@ pub(crate) fn active(world: &World) -> bool {
 }
 #[cfg(test)]
 fn in_3d(world: &World) -> bool {
-    world
-        .get_resource::<State>()
-        .is_some_and(|s| s.visible && s.in_3d)
+    world.get_resource::<State>().is_some_and(|s| s.visible)
 }
 
-fn control(label: &str, _in_3d: bool) -> InterfaceControl {
+fn control(label: &str) -> InterfaceControl {
     InterfaceControl::button("document/section", label)
 }
 
@@ -555,12 +681,26 @@ fn paint(
     let w = (width - 24.).clamp(240., 312.);
     let x = (width - w - 16.).max(12.);
     let y = 130.;
-    let preview_height = if !state.in_3d && state.image.is_some() {
-        ((w - 24.) * 0.75).min((height - y - 16. - 368.).max(0.))
+    let rows = ((height - y - 392.) / 28.).clamp(1., 6.) as usize;
+    let pages = state.bodies.len().div_ceil(rows).max(1);
+    state.body_page = state.body_page.min(pages - 1);
+    let shown = state
+        .bodies
+        .len()
+        .saturating_sub(state.body_page * rows)
+        .min(rows);
+    let body_extra = if state.choosing_bodies {
+        shown as f32 * 28. + 34. + if pages > 1 { 26. } else { 0. }
+    } else {
+        0.
+    };
+    let preview_height = if state.show_diagram && state.image.is_some() {
+        ((w - 24.) * 0.75).min((height - y - 16. - 368. - body_extra).max(0.))
     } else {
         0.
     };
     let h = 356.
+        + body_extra
         + if preview_height > 20. {
             preview_height + 12.
         } else {
@@ -588,7 +728,7 @@ fn paint(
         world,
         camera,
         "section-close",
-        control("Close section analysis", state.in_3d),
+        control("Close section analysis"),
         Some("×"),
         NativeCommand::SectionReview(state.controls_generation, Command::Close),
         chrome::rect(x + w - 38., y + 8., 26., 24.),
@@ -600,8 +740,115 @@ fn paint(
         "xz" => ["X", "Z", "Y"],
         _ => ["Y", "Z", "X"],
     };
+    state.widgets.text(
+        world,
+        camera,
+        "section-label-0",
+        chrome::rect(x + 12., y + 44., 72., 28.),
+        "Bodies",
+        11.,
+        72,
+    );
+    let selected = state.body_ids().unwrap_or_default();
+    let caption = if selected.len() == 1 {
+        state
+            .bodies
+            .iter()
+            .find(|(id, _)| *id == selected[0].0)
+            .map(|(_, name)| format!("{name} ▾"))
+            .unwrap_or_default()
+    } else {
+        format!("{} selected ▾", selected.len())
+    };
+    let mut bodies_control = control("Choose section bodies");
+    bodies_control.expanded = Some(state.choosing_bodies);
+    state.widgets.button(
+        world,
+        camera,
+        "section-field-0",
+        bodies_control,
+        Some(&caption),
+        NativeCommand::SectionReview(state.controls_generation, Command::Bodies),
+        chrome::rect(x + 88., y + 44., w - 100., 28.),
+        None,
+        72,
+    )?;
+    if state.choosing_bodies {
+        for (index, (id, name)) in state
+            .bodies
+            .iter()
+            .skip(state.body_page * rows)
+            .take(rows)
+            .enumerate()
+        {
+            let checked = selected.contains(&BodyId(*id));
+            let mut body = control(&format!("Include {name} (body {id}) in section"));
+            body.role = "checkbox".into();
+            body.field = ControlField::Toggle(checked);
+            body.selected = Some(checked);
+            let caption = format!("{} {name} (body {id})", if checked { "☑" } else { "☐" });
+            state.widgets.button(
+                world,
+                camera,
+                &format!("section-body-{id}"),
+                body,
+                Some(&caption),
+                NativeCommand::SectionReview(state.controls_generation, Command::ToggleBody(*id)),
+                chrome::rect(x + 12., y + 80. + index as f32 * 28., w - 24., 24.),
+                None,
+                72,
+            )?;
+        }
+        let footer_y = y + 80. + shown as f32 * 28.;
+        let third = (w - 32.) / 3.;
+        for (index, key, caption, command) in [
+            (0, "section-all", "Select all", Command::AllBodies(true)),
+            (1, "section-none", "Clear", Command::AllBodies(false)),
+            (2, "section-bodies-done", "Done", Command::Bodies),
+        ] {
+            let mut button = control(caption);
+            button.disabled = index == 0 && state.bodies.len() > 128;
+            state.widgets.button(
+                world,
+                camera,
+                key,
+                button,
+                Some(caption),
+                NativeCommand::SectionReview(state.controls_generation, command),
+                chrome::rect(x + 12. + index as f32 * (third + 4.), footer_y, third, 24.),
+                None,
+                72,
+            )?;
+        }
+        if pages > 1 {
+            for (forward, key, caption, left) in [
+                (false, "section-bodies-prev", "Previous", x + 12.),
+                (true, "section-bodies-next", "Next", x + w * 0.5),
+            ] {
+                let mut button = control(caption);
+                button.disabled = if forward {
+                    state.body_page + 1 == pages
+                } else {
+                    state.body_page == 0
+                };
+                state.widgets.button(
+                    world,
+                    camera,
+                    key,
+                    button,
+                    Some(caption),
+                    NativeCommand::SectionReview(
+                        state.controls_generation,
+                        Command::BodyPage(forward),
+                    ),
+                    chrome::rect(left, footer_y + 26., w * 0.5 - 14., 24.),
+                    None,
+                    72,
+                )?;
+            }
+        }
+    }
     for (index, field, label, caption, row_y) in [
-        (0, Field::Body, "Source body".into(), "Body".into(), 44.),
         (1, Field::Plane, "Section plane".into(), "Plane".into(), 80.),
         (
             2,
@@ -625,6 +872,7 @@ fn paint(
             236.,
         ),
     ] {
+        let row_y = row_y + body_extra;
         state.widgets.text(
             world,
             camera,
@@ -634,7 +882,7 @@ fn paint(
             11.,
             72,
         );
-        let mut control = control(&label, state.in_3d);
+        let mut control = control(&label);
         let mut choice_caption = None;
         if let Some(options) = state.choices(field) {
             choice_caption = options
@@ -677,10 +925,7 @@ fn paint(
     }
     let range = state.range();
     let (min, max) = range.unwrap_or((-1., 1.));
-    let mut slider = control(
-        &format!("Section {} position slider (mm)", labels[2]),
-        state.in_3d,
-    );
+    let mut slider = control(&format!("Section {} position slider (mm)", labels[2]));
     slider.disabled = range.is_none();
     slider.field = ControlField::Range {
         value: coordinate(&state.offset, state.units)
@@ -697,7 +942,7 @@ fn paint(
         slider,
         None,
         NativeCommand::SectionReview(state.controls_generation, Command::Field(Field::Position)),
-        chrome::rect(x + 12., y + 148., w - 24., 26.),
+        chrome::rect(x + 12., y + 148. + body_extra, w - 24., 26.),
         None,
         72,
     )?;
@@ -723,7 +968,7 @@ fn paint(
             world,
             camera,
             key,
-            chrome::rect(left, y + 174., w * 0.5 - 12., 16.),
+            chrome::rect(left, y + 174. + body_extra, w * 0.5 - 12., 16.),
             &text,
             9.,
             72,
@@ -734,18 +979,18 @@ fn paint(
         world,
         camera,
         "section-mode",
-        control("Switch section view", state.in_3d),
-        Some(if state.in_3d {
-            "2D diagram"
+        control("Show or hide section diagram"),
+        Some(if state.show_diagram {
+            "Hide 2D diagram"
         } else {
-            "3D cutaway"
+            "Show 2D diagram"
         }),
         NativeCommand::SectionReview(state.controls_generation, Command::ToggleView),
-        chrome::rect(x + 12., y + 274., half, 28.),
+        chrome::rect(x + 12., y + 274. + body_extra, half, 28.),
         None,
         72,
     )?;
-    let mut copy = control("Copy section SVG", state.in_3d);
+    let mut copy = control("Copy section SVG");
     copy.disabled =
         !state.report_current() || state.report.as_ref().is_none_or(|r| r.svg.is_empty());
     state.widgets.button(
@@ -755,7 +1000,7 @@ fn paint(
         copy,
         Some("Copy SVG"),
         NativeCommand::SectionReview(state.controls_generation, Command::CopySvg),
-        chrome::rect(x + 18. + half, y + 274., half, 28.),
+        chrome::rect(x + 18. + half, y + 274. + body_extra, half, 28.),
         None,
         72,
     )?;
@@ -763,7 +1008,7 @@ fn paint(
         world,
         camera,
         "section-message",
-        chrome::rect(x + 12., y + 310., w - 24., 34.),
+        chrome::rect(x + 12., y + 310. + body_extra, w - 24., 34.),
         &state.message,
         10.,
         72,
@@ -775,7 +1020,7 @@ fn paint(
                 world,
                 camera,
                 "section-preview",
-                chrome::rect(x + (w - iw) / 2., y + 354., iw, preview_height),
+                chrome::rect(x + (w - iw) / 2., y + 354. + body_extra, iw, preview_height),
                 Color::WHITE,
                 71,
             );
@@ -798,10 +1043,9 @@ pub(crate) fn paint_capture(
     height: f32,
 ) -> Result<(), String> {
     let scene = engine.solid_scene_snapshot();
-    let body = scene
-        .bodies
-        .first()
-        .ok_or("Section capture needs a saved solid")?;
+    if scene.bodies.is_empty() {
+        return Err("Section capture needs a saved solid".into());
+    }
     let session = engine.viewport_frame().session_id;
     let owner = DocumentContext {
         window_id: "section-lab".into(),
@@ -811,7 +1055,15 @@ pub(crate) fn paint_capture(
     let mut state = State {
         owner: Some(owner.clone()),
         visible: true,
-        body: body.id.0.to_string(),
+        body: std::env::var("LIMO_CAD_SECTION_LAB_BODIES").unwrap_or_else(|_| {
+            scene
+                .bodies
+                .iter()
+                .map(|b| b.id.0.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        }),
+        choosing_bodies: std::env::var_os("LIMO_CAD_SECTION_LAB_CHOOSER").is_some(),
         bodies: scene
             .bodies
             .iter()
@@ -820,40 +1072,28 @@ pub(crate) fn paint_capture(
         plane: std::env::var("LIMO_CAD_SECTION_LAB_PLANE").unwrap_or_else(|_| "xy".into()),
         side: "negative".into(),
         units: engine.document_units(),
-        in_3d: std::env::var_os("LIMO_CAD_SECTION_LAB_DIAGRAM").is_none(),
+        show_diagram: std::env::var_os("LIMO_CAD_SECTION_LAB_DIAGRAM").is_some(),
         ..Default::default()
     };
     state.source(&scene, true);
     if let Ok(offset) = std::env::var("LIMO_CAD_SECTION_LAB_OFFSET") {
         state.offset = offset;
     }
-    let request = state.request(state.units)?;
-    let finished = engine
-        .prepare_section_review(&serde_json::to_string(&request).map_err(|e| e.to_string())?)?
-        .inspect()?;
-    engine.validate_section_review(&finished)?;
-    let mut report = finished.into_report();
-    state.cutaway = report
-        .cutaway
-        .take()
-        .map(|body| Arc::new(native_viewport::section_view::PreparedCutaway::new(body)));
-    if state.in_3d {
-        native_viewport::section_view::show(world, &session, &request, state.cutaway.clone())?;
-    } else if !report.svg.is_empty() {
-        state.image = Some(
-            world
-                .resource_mut::<Assets<Image>>()
-                .add(rasterize(&report.svg)?),
-        );
+    let requests = state.requests(state.units)?;
+    let source = engine.prepare_section_reviews(&requests)?;
+    let prepared = preview::prepare(&source, &requests, state.show_diagram)?;
+    engine.validate_section_reviews(&prepared.finished)?;
+    let report = prepared.report;
+    state.cutaway = prepared.cutaway;
+    native_viewport::section_view::show(world, &session, &report.request, state.cutaway.clone())?;
+    if let Some(image) = prepared.image {
+        state.image = Some(world.resource_mut::<Assets<Image>>().add(image));
     }
+    state.message = report
+        .source_notice()
+        .unwrap_or_else(|| "Drag the bar to move the cut. Orange faces show the section.".into());
     state.report = Some(report);
     state.finished_generation = Some(state.generation);
-    state.message = if state.in_3d {
-        "Drag the bar to move the cut. Orange faces show the section."
-    } else {
-        "Drag the bar to move the section. Copy SVG for the full diagram."
-    }
-    .into();
     let bounds = InterfaceRect {
         x: 0.,
         y: 0.,
@@ -896,13 +1136,79 @@ pub(crate) fn paint_capture(
 mod tests {
     use super::*;
     #[test]
+    fn multi_body_picker_has_independent_checkboxes_and_one_shared_slider_range() {
+        let mut world = World::new();
+        world.init_resource::<ViewportUiAssets>();
+        let camera = world.spawn_empty().id();
+        let mut state = State {
+            visible: true,
+            choosing_bodies: true,
+            body: "1".into(),
+            bodies: vec![(1, "Upper".into()), (2, "Lower".into()), (3, "Pin".into())],
+            plane: "xy".into(),
+            offset: "1".into(),
+            side: "negative".into(),
+            ..Default::default()
+        };
+        let mut scene = limo_cad_solid::SolidSceneDto::default();
+        for (id, z) in [(1, [0., 8.]), (2, [-12., 0.]), (3, [-2., 9.])] {
+            let mut body = limo_cad_solid::BodyDto {
+                id: BodyId(id),
+                topology_signature: String::new(),
+                display_warnings: vec![],
+                name: format!("Body{id}"),
+                feature_id: limo_cad_core::FeatureId(id),
+                faces: vec![],
+                edges: vec![],
+                mesh: limo_cad_solid::MeshDto {
+                    positions: vec![],
+                    normals: vec![],
+                    indices: vec![],
+                },
+            };
+            body.mesh.positions = vec![0., 0., z[0], 20., 12., z[1]];
+            scene.bodies.push(body);
+        }
+        state.source(&scene, false);
+        assert_eq!(state.range(), Some((0., 8.)));
+        state.toggle_body(2).unwrap();
+        state.source(&scene, false);
+        assert_eq!(state.range(), Some((-12., 8.)));
+        let requests = state.requests(UnitSystem::Mm).unwrap();
+        assert_eq!(
+            requests.iter().map(|r| r.body_id.0).collect::<Vec<_>>(),
+            [1, 2]
+        );
+        assert!(requests.iter().all(|r| r.offset_mm == 1.));
+        state.widgets.begin();
+        paint(&mut world, camera, &mut state, 1200., 900.).unwrap();
+        state.widgets.finish(&mut world);
+        for (id, checked) in [(1, true), (2, true), (3, false)] {
+            let entity = state.widgets.entity(&format!("section-body-{id}")).unwrap();
+            let control = world.get::<InterfaceControl>(entity).unwrap();
+            assert_eq!(control.role, "checkbox");
+            assert_eq!(control.field, ControlField::Toggle(checked));
+            assert!(!control.disabled);
+        }
+        let card = world
+            .get::<Node>(state.widgets.entity("section-card").unwrap())
+            .unwrap();
+        assert_eq!(card.width, px(312.));
+        state.toggle_body(1).unwrap();
+        state.toggle_body(2).unwrap();
+        assert!(state.requests(UnitSystem::Mm).is_err());
+        state.toggle_body(3).unwrap();
+        assert_eq!(state.body_ids().unwrap(), [BodyId(3)]);
+        assert!(state.toggle_body(999).is_err());
+    }
+    #[test]
     fn compact_right_panel_has_a_live_slider_and_preserves_inch_offset_precision() {
         let mut world = World::new();
         world.init_resource::<ViewportUiAssets>();
         let camera = world.spawn_empty().id();
         let mut state = State {
             visible: true,
-            in_3d: true,
+            show_diagram: false,
             body: "1".into(),
             plane: "xy".into(),
             side: "negative".into(),
@@ -960,7 +1266,7 @@ mod tests {
             owner: Some(owner.clone()),
             revision: 8,
             visible: true,
-            in_3d: true,
+            show_diagram: false,
             body: "1".into(),
             bodies: vec![(1, "Fixture".into())],
             plane: "xy".into(),
@@ -970,12 +1276,12 @@ mod tests {
         };
         let request = state.request(UnitSystem::Mm).unwrap();
         state.set_value(Field::Offset, "6".into());
-        assert!(state.accepts_preview(&owner, 8, &request));
+        assert!(state.accepts_preview(&owner, 8, std::slice::from_ref(&request), false));
         assert!(!state.report_current());
-        assert!(!state.accepts_preview(&owner, 9, &request));
+        assert!(!state.accepts_preview(&owner, 9, std::slice::from_ref(&request), false));
         let mut other = owner.clone();
         other.epoch += 1;
-        assert!(!state.accepts_preview(&other, 8, &request));
+        assert!(!state.accepts_preview(&other, 8, std::slice::from_ref(&request), false));
         for change in [Field::Body, Field::Plane, Field::Side] {
             let old = state.value(change).to_owned();
             let changed = match change {
@@ -984,33 +1290,37 @@ mod tests {
                 _ => "positive",
             };
             state.set_value(change, changed.into());
-            assert!(!state.accepts_preview(&owner, 8, &request));
+            assert!(!state.accepts_preview(&owner, 8, std::slice::from_ref(&request), false));
             state.set_value(change, old);
         }
         state.toggle_view();
-        assert!(!state.accepts_preview(&owner, 8, &request));
+        assert!(!state.accepts_preview(&owner, 8, std::slice::from_ref(&request), false));
         state.toggle_view();
         state.visible = false;
-        assert!(!state.accepts_preview(&owner, 8, &request));
+        assert!(!state.accepts_preview(&owner, 8, std::slice::from_ref(&request), false));
     }
     #[test]
     fn three_d_inspection_keeps_camera_navigation_available_and_escape_closes() {
         let mut world = World::new();
         world.insert_resource(State {
             visible: true,
-            in_3d: true,
+            show_diagram: false,
             ..Default::default()
         });
         assert_eq!(modal(&world), None);
         assert!(in_3d(&world));
-        assert!(control("Inspect", true).modal_scope.is_none());
+        assert!(control("Inspect").modal_scope.is_none());
         assert!(escape(&mut world));
         assert!(!in_3d(&world));
         world.resource_mut::<State>().visible = true;
-        world.resource_mut::<State>().in_3d = false;
+        world.resource_mut::<State>().show_diagram = true;
         assert_eq!(modal(&world), None);
         assert!(active(&world));
-        assert!(control("Inspect", false).modal_scope.is_none());
+        assert!(
+            in_3d(&world),
+            "The diagram must not turn off the viewport cut"
+        );
+        assert!(control("Inspect").modal_scope.is_none());
         assert!(escape(&mut world));
         assert!(!active(&world));
     }
@@ -1322,6 +1632,7 @@ mod tests {
             plane: "xy".into(),
             offset: "3 mm".into(),
             image: Some(image),
+            show_diagram: true,
             ..Default::default()
         };
         state.widgets.begin();

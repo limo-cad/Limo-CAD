@@ -48,6 +48,14 @@ whether to retry. Never repeat the whole batch after partial completion.
 Use `include_values:false` when only application receipts are needed. The
 broker does not attach or recompute geometry in the MCP process.
 
+`action: "status"` also accepts `include_values:false`. Use it with the complete
+original ticket to reconcile a pending receipt-only batch without submitting
+another operation. This skips reading the inbox's full result value, which may
+contain the complete document and tessellated scene. Status, original ownership,
+publication fences and operation errors are retained. `applied` reports operation
+completion, not geometry validity; inspect the scene or request full values when
+that evidence is needed. Both status and batch retain full values by default.
+
 The batch request takes `route`, `base_generation` and `calls`, where each call
 contains a literal tool `name` and optional `arguments` object. Optional
 `timeout_ms` defaults to 30,000 and ranges from 1 to 30,000; `include_values`

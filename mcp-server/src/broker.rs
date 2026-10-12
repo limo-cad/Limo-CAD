@@ -15,12 +15,18 @@ enum Request {
     },
     Status {
         ticket: Ticket,
+        #[serde(default = "default_include_values")]
+        include_values: bool,
     },
     Batch(batch::Request),
 }
 
 fn empty_arguments() -> Value {
     json!({})
+}
+
+fn default_include_values() -> bool {
+    true
 }
 
 #[derive(Deserialize)]
@@ -103,7 +109,8 @@ pub(super) fn specs() -> Vec<ToolSpec> {
     let status = object_schema(
         json!({
             "action":{"type":"string","enum":["status"]},
-            "ticket":{"type":"object","description":"The complete ticket returned by submit or an individual batch receipt, including its original route and operation."}
+            "ticket":{"type":"object","description":"The complete ticket returned by submit or an individual batch receipt, including its original route and operation."},
+            "include_values":{"type":"boolean","default":true,"description":"Set false for receipt-only polling without loading an inbox operation's full result. Status and publication fences do not certify geometry validity."}
         }),
         &["action", "ticket"],
     );
@@ -119,7 +126,7 @@ pub(super) fn specs() -> Vec<ToolSpec> {
     input_schema["oneOf"] = json!(variants);
     vec![ToolSpec::control(
         "cad_route", "Route a live CAD request",
-        "One broker addresses several desktop documents without changing cad_attach selection or copying their models. action=submit sends one modeling tool, live query, or cad_interface UI action to an explicit route from cad_list_sessions and returns immediately. action=status polls its complete ticket without waiting or retargeting. action=batch applies 1–16 literal typed modeling operations or live engine queries in order on one explicit route, using route, base_generation, calls and optional timeout_ms/include_values. The batch validates all names and argument envelopes before publication, awaits each normal receipt and stops on failure, owner replacement, intervening edits or its single deadline (maximum 30 seconds). Successful calls remain applied with separate Undo entries; the batch is not atomic. Each result retains its own ticket: poll pending tickets with action=status before retrying any operation, and never repeat the whole batch. include_values=false omits operation values while retaining receipts. Batch calls do not support scripts, generated-ID references, loops, files, UI targets or nested broker actions. All route selectors are intersected; ambiguous, closed, stale and mismatched owners reject before publication. Mutations, batch requests and UI actions other than inspect/capture require the current base_generation. Modeling writes use each document's ordered inbox; queries and UI actions use its separate owner-fenced control queue. Submission does not switch tabs; activate an inactive document before submitting UI controls. Modeling writes can remain queued until activation. Receipts survive replacement, close and process exit. Scripts and offline tools retain their existing explicit attachment workflow.",
+        "One broker addresses several desktop documents without changing cad_attach selection or copying their models. action=submit sends one modeling tool, live query, or cad_interface UI action to an explicit route from cad_list_sessions and returns immediately. action=status polls its complete ticket without waiting or retargeting. action=batch applies 1–16 literal typed modeling operations or live engine queries in order on one explicit route, using route, base_generation, calls and optional timeout_ms/include_values. The batch validates all names and argument envelopes before publication, awaits each normal receipt and stops on failure, owner replacement, intervening edits or its single deadline (maximum 30 seconds). Successful calls remain applied with separate Undo entries; the batch is not atomic. Each result retains its own ticket: poll pending tickets with action=status before retrying any operation, and never repeat the whole batch. Both status and batch accept include_values=false for receipt-only polling; an inbox status then skips loading the full operation result. Full values remain the default. Receipts establish operation completion, not geometry validity. Batch calls do not support scripts, generated-ID references, loops, files, UI targets or nested broker actions. All route selectors are intersected; ambiguous, closed, stale and mismatched owners reject before publication. Mutations, batch requests and UI actions other than inspect/capture require the current base_generation. Modeling writes use each document's ordered inbox; queries and UI actions use its separate owner-fenced control queue. Submission does not switch tabs; activate an inactive document before submitting UI controls. Modeling writes can remain queued until activation. Receipts survive replacement, close and process exit. Scripts and offline tools retain their existing explicit attachment workflow.",
         input_schema,
     )]
 }
@@ -221,7 +228,10 @@ pub(super) fn call(arguments: Value) -> Result<Value, String> {
             arguments,
             base_generation,
         } => submit(resolve(route)?, &name, arguments, base_generation),
-        Request::Status { ticket } => status(ticket),
+        Request::Status {
+            ticket,
+            include_values,
+        } => status_with_values(ticket, include_values),
         Request::Batch(request) => batch::call(request, started),
     }
 }
@@ -337,12 +347,18 @@ fn submit(
 }
 
 fn status(ticket: Ticket) -> Result<Value, String> {
+    status_with_values(ticket, true)
+}
+
+/// Operation values are separate from retained apply/publication receipts. A
+/// receipt-only poll must not read a potentially complete document/scene value.
+fn status_with_values(ticket: Ticket, include_values: bool) -> Result<Value, String> {
     session::require_valid_session_id(&ticket.route.session_id)?;
     let session_id = &ticket.route.session_id;
     let mut result = match &ticket.operation {
         Pending::Inbox { seq } => {
             let mut receipt = session::await_inbox_apply(session_id, *seq, 0, 1)?;
-            if receipt["status"] == "applied" {
+            if include_values && receipt["status"] == "applied" {
                 if let Ok(body) =
                     session::read_session_file(session_id, &format!("inbox/results/{seq}.json"))
                 {
@@ -381,6 +397,12 @@ fn status(ticket: Ticket) -> Result<Value, String> {
             }
         }
     };
+    if !include_values {
+        result
+            .as_object_mut()
+            .ok_or("Retained CAD status receipt is not an object")?
+            .remove("value");
+    }
     result["ticket"] = serde_json::to_value(ticket).map_err(|error| error.to_string())?;
     if result.get("desktop_build").is_some() {
         build_pair::decorate(&mut result);

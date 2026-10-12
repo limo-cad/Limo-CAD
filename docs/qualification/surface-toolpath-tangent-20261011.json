@@ -1,0 +1,1338 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-10-11T21:34:47.084559+00:00",
+  "source_revision": "b1ffcde3e842b414fe34ef51ffb42dc33e17e9b7",
+  "integration_pr": "https://github.com/limo-cad/Limo-CAD/pull/124",
+  "issues": [
+    374,
+    316,
+    369
+  ],
+  "status": "source-qualified; repaired-head packaged GPU acceptance pending",
+  "source_bindings": {
+    "owned_child_diagnostics": {
+      "xtask/src/replay.rs": "3983d19de00fbac8b445a28e0dfafa98d02b0a78",
+      "xtask/src/replay/process_evidence.rs": "abc1d48e02e4c360b998a344ec29acd044f2f460"
+    },
+    "surface_submission": {
+      "desktop/src/native_viewport/viewport_renderer.rs": "39e75d9cf529ed34c14a2dc350872ecf1f03e173",
+      "desktop/src/native_viewport/viewport_renderer/surface_submission.rs": "c14077a2a23adbf7b17d8b25e68b8835a0cb9626"
+    },
+    "toolpath_evidence": {
+      "crates/export/src/slicer_verification.rs": "d1a2a628b3f46d60ac740e693c33c43302fc1718"
+    },
+    "native_tangent_reader": {
+      "mcp-server/src/lib.rs": "c234f98d0661ba61b9013d34117b445dc61f81f6"
+    },
+    "macos_step_title": {
+      ".github/workflows/desktop-packages.yml": "8bbe5491c1780c26f685796ec77fee69cb2a3c75"
+    }
+  },
+  "observed_failure": {
+    "issue": "https://github.com/limo-cad/Limo-CAD/issues/374",
+    "stderr": "Surface::get_current_texture_view: Surface is not configured for presentation",
+    "artifacts": [
+      {
+        "head": "65facf42731474457e4c0e258b95c300ab2454b6",
+        "platform": "Windows ARM64",
+        "run": 38154830137,
+        "job": 114535886037,
+        "artifact_id": 11714090867,
+        "zip_sha256": "a5b15d83cab73cbaace25ef8de94214fbdad0042775473a43781f883d5a3b847",
+        "phase": "first default packaged desktop",
+        "observed_child_exit_code": null
+      },
+      {
+        "head": "bd17a49e6b4931439b20f371b0d48325ddf79d40",
+        "platform": "macOS Apple Silicon",
+        "run": 38165862998,
+        "job": 114559450997,
+        "artifact_id": 11713113564,
+        "zip_sha256": "1e261e5ca5c45b26ed745c329b6dee7c6c7ccb663af3c32bf02f66cb4bfddb69",
+        "phase": "default packaged desktop",
+        "observed_child_exit_code": null
+      },
+      {
+        "head": "bd17a49e6b4931439b20f371b0d48325ddf79d40",
+        "platform": "Windows x64",
+        "run": 38165862998,
+        "job": 114559451048,
+        "artifact_id": 11714795127,
+        "zip_sha256": "4697dc37a61602329d4ab3d5aa059c3f0e2d40df72ef76a892c58110019a6eed",
+        "phase": "second desktop self-close fixture; first default desktop passed",
+        "observed_child_exit_code": null
+      }
+    ],
+    "cause_limit": "The source permits concurrent shared-queue submissions during surface configuration/reconfiguration. The specific initial configure error, GPU adapter and GpuWaitTimeout were not observed in these artifacts. No link to older user-window disappearances or File Open response-size errors is established."
+  },
+  "qualification": {
+    "owned_child_diagnostics": {
+      "receipt_path": "D:/limo-cad-maintenance/backlog-autonomous-20261010/owned-process-diagnostics-03623e2c-results.json",
+      "receipt_sha256": "af3690930194d832f125c58c68f1358a9de1d4ec133810bcd7b26c78dd391151",
+      "receipt": {
+        "revision": "03623e2ca5e0ca55c677735bfd486a1339f424c9",
+        "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+        "help_filters": [],
+        "xtask_filters": [
+          "replay::tests::disconnected_rpc_records_exit_before_cleanup_and_live_eof_separately"
+        ],
+        "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+        "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
+        "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+        "msvc": "14.44.35207",
+        "windows_sdk": "10.0.26100.0\\",
+        "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+        "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+        "recorded_utc": "2026-10-11T20:22:25.5790024Z",
+        "profile_flags": [
+          "--config",
+          "profile.release.incremental=true",
+          "--config",
+          "profile.release.opt-level=3",
+          "--config",
+          "profile.release.package.limo-cad.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-assembly.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-build-info.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-cam.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-core.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-export.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-help.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-interface.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-mcp.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-mcp-mutate.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-native-engine.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-occt.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-print.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-project-file.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-recipes.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-script.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-session-storage.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-sketch.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-solid.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-wasm.opt-level=1"
+        ],
+        "artifacts": [
+          {
+            "kind": "xtask",
+            "target_name": "xtask",
+            "target_kind": "bin",
+            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\xtask-cac2d272a202a472.exe",
+            "sha256": "3560fc3a97806cad110d0a68caee3083d2e3fca840c1ab3b000719fd653c94a1"
+          }
+        ],
+        "results": [
+          {
+            "kind": "strict-xtask",
+            "exit_code": 0,
+            "elapsed_seconds": 21.669684699999998,
+            "command": [
+              "cargo",
+              "clippy",
+              "--manifest-path",
+              "xtask/Cargo.toml",
+              "-p",
+              "xtask",
+              "--bin",
+              "xtask",
+              "--features",
+              "native-control-harness",
+              "--locked",
+              "--release",
+              "--no-deps",
+              "--target",
+              "x86_64-pc-windows-msvc",
+              "--jobs",
+              "1",
+              "--config",
+              "profile.release.incremental=true",
+              "--config",
+              "profile.release.opt-level=3",
+              "--config",
+              "profile.release.package.limo-cad.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-assembly.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-build-info.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-cam.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-core.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-export.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-help.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-interface.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp-mutate.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-native-engine.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-occt.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-print.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-project-file.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-recipes.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-script.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-session-storage.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-sketch.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-solid.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-wasm.opt-level=1",
+              "--",
+              "-D",
+              "warnings"
+            ],
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-strict-xtask.log"
+          },
+          {
+            "kind": "xtask_artifact_compile",
+            "exit_code": 0,
+            "elapsed_seconds": 78.9443648,
+            "command": [
+              "cargo",
+              "test",
+              "--locked",
+              "--release",
+              "--manifest-path",
+              "xtask/Cargo.toml",
+              "-p",
+              "xtask",
+              "--bin",
+              "xtask",
+              "--features",
+              "native-control-harness",
+              "--target",
+              "x86_64-pc-windows-msvc",
+              "--jobs",
+              "1",
+              "--no-run",
+              "--message-format=json-render-diagnostics",
+              "--config",
+              "profile.release.incremental=true",
+              "--config",
+              "profile.release.opt-level=3",
+              "--config",
+              "profile.release.package.limo-cad.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-assembly.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-build-info.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-cam.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-core.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-export.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-help.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-interface.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp-mutate.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-native-engine.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-occt.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-print.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-project-file.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-recipes.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-script.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-session-storage.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-sketch.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-solid.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-wasm.opt-level=1"
+            ],
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-xtask-compile.jsonl",
+            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-xtask-compile.stderr.log"
+          },
+          {
+            "kind": "xtask_regression",
+            "filter": "replay::tests::disconnected_rpc_records_exit_before_cleanup_and_live_eof_separately",
+            "exit_code": 0,
+            "exact_one_pass": true,
+            "elapsed_seconds": 0.353809,
+            "binary_sha256": "3560fc3a97806cad110d0a68caee3083d2e3fca840c1ab3b000719fd653c94a1",
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-xtask-test-0.log"
+          }
+        ],
+        "scope": "One strict changed xtask --bin xtask Clippy check with native-control-harness; exactly one new CPU owned-child regression for observed exit 23 versus live transport disconnect, bounded Unicode method/context receipts, no parameter retention, cleanup reservation, reaping and idempotence. No CAD process, suite, recipe replay, model fixture, GUI input, live session/model/inbox writes, runtime change, deployment, main change or Jack PR action."
+      }
+    },
+    "surface_toolpath_tangent": {
+      "receipt_path": "D:/limo-cad-maintenance/backlog-autonomous-20261010/surface-toolpath-batch-b1ffcde3-results.json",
+      "receipt_sha256": "1ab6aaa4f41dbc7f1faf4d8d83be7894a6e2549b3b5ed193a06c0339b35ee0e1",
+      "receipt": {
+        "revision": "b1ffcde3e842b414fe34ef51ffb42dc33e17e9b7",
+        "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+        "desktop_filters": [
+          "native_viewport::platform::viewport_renderer::surface_submission::tests::worker_submission_and_compilation_preserve_surface_order_and_frame_readiness"
+        ],
+        "native_filters": [],
+        "export_filters": [
+          "slicer_verification::tests::toolpath_evidence_requires_executable_finite_movement_not_comment_or_display_text"
+        ],
+        "mcp_filters": [
+          "tests::native_bore_tangent_to_stock_boundary_has_no_inner_wire_through_proof"
+        ],
+        "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+        "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
+        "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+        "msvc": "14.44.35207",
+        "windows_sdk": "10.0.26100.0\\",
+        "profile_flags": [
+          "--config",
+          "profile.release.incremental=true",
+          "--config",
+          "profile.release.opt-level=3",
+          "--config",
+          "profile.release.package.limo-cad.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-assembly.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-build-info.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-cam.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-core.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-export.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-help.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-interface.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-mcp.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-mcp-mutate.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-native-engine.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-occt.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-print.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-project-file.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-recipes.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-script.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-session-storage.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-sketch.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-solid.opt-level=1",
+          "--config",
+          "profile.release.package.limo-cad-wasm.opt-level=1"
+        ],
+        "unit_session_registry": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-unit-session-registry",
+        "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+        "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+        "recorded_utc": "2026-10-11T21:33:04.1420381Z",
+        "artifacts": [
+          {
+            "kind": "desktop",
+            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
+            "sha256": "8ac2d57df38e78424922c11fffc814faa53195a9b3a4b77e9f0bcb1df8db07f3"
+          },
+          {
+            "kind": "export",
+            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_export-df7b06d8934930ed.exe",
+            "sha256": "21ea2b02faf8c53b661ce756dcdfc5ba482663a8ce6a408c5961663251b69fb0"
+          },
+          {
+            "kind": "mcp",
+            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_mcp-c628fbc944ba67ed.exe",
+            "sha256": "6d20a2e2807e9d199aa466ccf3c2c2df30b97ac74998e529a52f527a9fcaa1ce"
+          }
+        ],
+        "results": [
+          {
+            "kind": "strict-desktop",
+            "exit_code": 0,
+            "elapsed_seconds": 66.99663269999999,
+            "command": [
+              "cargo",
+              "clippy",
+              "--manifest-path",
+              "desktop/Cargo.toml",
+              "-p",
+              "limo-cad",
+              "--locked",
+              "--release",
+              "--all-targets",
+              "--all-features",
+              "--no-deps",
+              "--target",
+              "x86_64-pc-windows-msvc",
+              "--jobs",
+              "1",
+              "--config",
+              "profile.release.incremental=true",
+              "--config",
+              "profile.release.opt-level=3",
+              "--config",
+              "profile.release.package.limo-cad.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-assembly.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-build-info.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-cam.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-core.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-export.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-help.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-interface.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp-mutate.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-native-engine.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-occt.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-print.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-project-file.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-recipes.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-script.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-session-storage.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-sketch.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-solid.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-wasm.opt-level=1",
+              "--",
+              "-D",
+              "warnings"
+            ],
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-strict-desktop.log"
+          },
+          {
+            "kind": "strict-export",
+            "exit_code": 0,
+            "elapsed_seconds": 9.762616399999999,
+            "command": [
+              "cargo",
+              "clippy",
+              "--manifest-path",
+              "Cargo.toml",
+              "-p",
+              "limo-cad-export",
+              "--locked",
+              "--release",
+              "--all-targets",
+              "--all-features",
+              "--no-deps",
+              "--target",
+              "x86_64-pc-windows-msvc",
+              "--jobs",
+              "1",
+              "--config",
+              "profile.release.incremental=true",
+              "--config",
+              "profile.release.opt-level=3",
+              "--config",
+              "profile.release.package.limo-cad.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-assembly.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-build-info.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-cam.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-core.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-export.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-help.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-interface.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp-mutate.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-native-engine.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-occt.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-print.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-project-file.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-recipes.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-script.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-session-storage.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-sketch.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-solid.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-wasm.opt-level=1",
+              "--",
+              "-D",
+              "warnings"
+            ],
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-strict-export.log"
+          },
+          {
+            "kind": "strict-mcp",
+            "exit_code": 0,
+            "elapsed_seconds": 40.8930012,
+            "command": [
+              "cargo",
+              "clippy",
+              "--manifest-path",
+              "mcp-server/Cargo.toml",
+              "-p",
+              "limo-cad-mcp",
+              "--locked",
+              "--release",
+              "--all-targets",
+              "--all-features",
+              "--no-deps",
+              "--target",
+              "x86_64-pc-windows-msvc",
+              "--jobs",
+              "1",
+              "--config",
+              "profile.release.incremental=true",
+              "--config",
+              "profile.release.opt-level=3",
+              "--config",
+              "profile.release.package.limo-cad.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-assembly.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-build-info.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-cam.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-core.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-export.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-help.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-interface.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp-mutate.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-native-engine.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-occt.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-print.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-project-file.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-recipes.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-script.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-session-storage.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-sketch.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-solid.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-wasm.opt-level=1",
+              "--",
+              "-D",
+              "warnings"
+            ],
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-strict-mcp.log"
+          },
+          {
+            "kind": "desktop_artifact_compile",
+            "exit_code": 0,
+            "elapsed_seconds": 740.8725491,
+            "command": [
+              "cargo",
+              "test",
+              "--locked",
+              "--release",
+              "--manifest-path",
+              "desktop/Cargo.toml",
+              "-p",
+              "limo-cad",
+              "--lib",
+              "--target",
+              "x86_64-pc-windows-msvc",
+              "--jobs",
+              "1",
+              "--no-run",
+              "--message-format=json-render-diagnostics",
+              "--config",
+              "profile.release.incremental=true",
+              "--config",
+              "profile.release.opt-level=3",
+              "--config",
+              "profile.release.package.limo-cad.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-assembly.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-build-info.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-cam.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-core.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-export.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-help.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-interface.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp-mutate.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-native-engine.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-occt.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-print.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-project-file.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-recipes.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-script.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-session-storage.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-sketch.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-solid.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-wasm.opt-level=1",
+              "--features",
+              "native-computer-control"
+            ],
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-desktop-compile.jsonl",
+            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-desktop-compile.stderr.log"
+          },
+          {
+            "kind": "desktop_regression",
+            "filter": "native_viewport::platform::viewport_renderer::surface_submission::tests::worker_submission_and_compilation_preserve_surface_order_and_frame_readiness",
+            "exit_code": 0,
+            "exact_one_pass": true,
+            "elapsed_seconds": 0.0555258,
+            "command": [
+              "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
+              "--exact",
+              "native_viewport::platform::viewport_renderer::surface_submission::tests::worker_submission_and_compilation_preserve_surface_order_and_frame_readiness",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "binary_sha256": "8ac2d57df38e78424922c11fffc814faa53195a9b3a4b77e9f0bcb1df8db07f3",
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-desktop-test-0.log"
+          },
+          {
+            "kind": "export_artifact_compile",
+            "exit_code": 0,
+            "elapsed_seconds": 167.58870439999998,
+            "command": [
+              "cargo",
+              "test",
+              "--locked",
+              "--release",
+              "--manifest-path",
+              "Cargo.toml",
+              "-p",
+              "limo-cad-export",
+              "--lib",
+              "--target",
+              "x86_64-pc-windows-msvc",
+              "--jobs",
+              "1",
+              "--no-run",
+              "--message-format=json-render-diagnostics",
+              "--config",
+              "profile.release.incremental=true",
+              "--config",
+              "profile.release.opt-level=3",
+              "--config",
+              "profile.release.package.limo-cad.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-assembly.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-build-info.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-cam.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-core.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-export.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-help.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-interface.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp-mutate.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-native-engine.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-occt.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-print.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-project-file.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-recipes.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-script.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-session-storage.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-sketch.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-solid.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-wasm.opt-level=1"
+            ],
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-export-compile.jsonl",
+            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-export-compile.stderr.log"
+          },
+          {
+            "kind": "export_regression",
+            "filter": "slicer_verification::tests::toolpath_evidence_requires_executable_finite_movement_not_comment_or_display_text",
+            "exit_code": 0,
+            "exact_one_pass": true,
+            "elapsed_seconds": 0.2906933,
+            "command": [
+              "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_export-df7b06d8934930ed.exe",
+              "--exact",
+              "slicer_verification::tests::toolpath_evidence_requires_executable_finite_movement_not_comment_or_display_text",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "binary_sha256": "21ea2b02faf8c53b661ce756dcdfc5ba482663a8ce6a408c5961663251b69fb0",
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-export-test-0.log"
+          },
+          {
+            "kind": "mcp_artifact_compile",
+            "exit_code": 0,
+            "elapsed_seconds": 233.07101519999998,
+            "command": [
+              "cargo",
+              "test",
+              "--locked",
+              "--release",
+              "--manifest-path",
+              "mcp-server/Cargo.toml",
+              "-p",
+              "limo-cad-mcp",
+              "--lib",
+              "--target",
+              "x86_64-pc-windows-msvc",
+              "--jobs",
+              "1",
+              "--no-run",
+              "--message-format=json-render-diagnostics",
+              "--config",
+              "profile.release.incremental=true",
+              "--config",
+              "profile.release.opt-level=3",
+              "--config",
+              "profile.release.package.limo-cad.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-assembly.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-build-info.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-cam.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-core.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-export.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-help.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-interface.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-mcp-mutate.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-native-engine.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-occt.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-print.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-project-file.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-recipes.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-script.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-session-storage.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-sketch.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-solid.opt-level=1",
+              "--config",
+              "profile.release.package.limo-cad-wasm.opt-level=1",
+              "--features",
+              "native-computer-control"
+            ],
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-mcp-compile.jsonl",
+            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-mcp-compile.stderr.log"
+          },
+          {
+            "kind": "mcp_regression",
+            "filter": "tests::native_bore_tangent_to_stock_boundary_has_no_inner_wire_through_proof",
+            "exit_code": 0,
+            "exact_one_pass": true,
+            "elapsed_seconds": 0.17901029999999998,
+            "command": [
+              "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_mcp-c628fbc944ba67ed.exe",
+              "--exact",
+              "tests::native_bore_tangent_to_stock_boundary_has_no_inner_wire_through_proof",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "binary_sha256": "6d20a2e2807e9d199aa466ccf3c2c2df30b97ac74998e529a52f527a9fcaa1ce",
+            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-mcp-test-0.log"
+          }
+        ],
+        "scope": "Strict changed desktop, export and MCP Windows package Clippy checks; one affected CPU renderer scheduling regression with the new executed-system tick assertion, one new synthetic production-output-inspector regression, and one strengthened authentic native tangent/full-reader regression in an isolated in-process scratch document. The earlier renderer pass preceded a real source correction and does not cover its new tick assertion. Earlier unrelated passing tests and the qualified xtask diagnostic filter are not rerun. The native fixture retains genuine STEP bytes before ownership assertions and requires exact source preservation; unit session storage is isolated under this receipt directory. No GPU desktop process, suite, recipe replay, live model/session/inbox write, GUI input, runtime restart, deployment, main change or Jack PR action. Actual packaged GPU acceptance is left to normal hosted checks on the repaired head; a matched live desktop/MCP tangent witness remains unqualified."
+      }
+    }
+  },
+  "native_witness": {
+    "path": "D:/limo-cad-maintenance/backlog-autonomous-20261010/native-tangent-b1ffcde3-witness.step",
+    "repository_path": "docs/qualification/fixtures/native-exact-tangent-20261011.step",
+    "bytes": 27598,
+    "sha256": "a8246e6a461be517b0b05b72be9c97be835fc575b8bc5ed5874e94699cffbee2",
+    "captured_log": "D:/limo-cad-maintenance/backlog-autonomous-20261010/surface-toolpath-batch-b1ffcde3-mcp-test-0.log",
+    "captured_log_sha256": "4e8cb84a83055b5ef67b06ddab4b6bc1011c11b7156aa23e2465464ae042aea8",
+    "maximum_native_edge_face_owners": 4,
+    "donor_native_ownership": {
+      "body_id": 1,
+      "stock_faces": [
+        {
+          "id": 601310433329064,
+          "key": "face:2",
+          "plane": {
+            "normal": [
+              1.0,
+              -0.0,
+              -0.0
+            ],
+            "origin": [
+              10.0,
+              -10.0,
+              0.0
+            ],
+            "u": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "v": [
+              0.0,
+              -0.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "id": 605708479841908,
+          "key": "face:6",
+          "plane": {
+            "normal": [
+              1.0,
+              -0.0,
+              -0.0
+            ],
+            "origin": [
+              10.0,
+              -10.0,
+              0.0
+            ],
+            "u": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "v": [
+              0.0,
+              -0.0,
+              1.0
+            ]
+          }
+        }
+      ],
+      "tangent_shared_edges": [
+        [
+          7584766852359734,
+          "edge:8",
+          [
+            601310433329064,
+            605708479841908,
+            606807991470119,
+            594713363559798
+          ]
+        ]
+      ],
+      "wall_edge_owners": [
+        [
+          7584766852359734,
+          "edge:8",
+          [
+            601310433329064,
+            605708479841908,
+            606807991470119,
+            594713363559798
+          ]
+        ],
+        [
+          4143829403303721,
+          "edge:12",
+          [
+            602409944957275,
+            606807991470119
+          ]
+        ],
+        [
+          4142729891675510,
+          "edge:13",
+          [
+            602409944957275,
+            594713363559798
+          ]
+        ],
+        [
+          4148227449816565,
+          "edge:16",
+          [
+            607907503098330,
+            606807991470119
+          ]
+        ],
+        [
+          4147127938188354,
+          "edge:17",
+          [
+            607907503098330,
+            594713363559798
+          ]
+        ],
+        [
+          4149326961444776,
+          "edge:19",
+          [
+            606807991470119,
+            594713363559798
+          ]
+        ]
+      ],
+      "wall_faces": [
+        {
+          "cylinder": {
+            "axis": {
+              "x": -0.0,
+              "y": -0.0,
+              "z": -1.0
+            },
+            "origin": {
+              "x": 7.0,
+              "y": 0.0,
+              "z": 10.0001
+            },
+            "radius": 3.0,
+            "reference": {
+              "x": -1.0,
+              "y": 0.0,
+              "z": 0.0
+            }
+          },
+          "id": 606807991470119,
+          "key": "face:7"
+        },
+        {
+          "cylinder": {
+            "axis": {
+              "x": -0.0,
+              "y": -0.0,
+              "z": -1.0
+            },
+            "origin": {
+              "x": 7.0,
+              "y": 0.0,
+              "z": 10.0001
+            },
+            "radius": 3.0,
+            "reference": {
+              "x": -1.0,
+              "y": 0.0,
+              "z": 0.0
+            }
+          },
+          "id": 594713363559798,
+          "key": "face:8"
+        }
+      ]
+    },
+    "imported_native_ownership": {
+      "body_id": 1,
+      "stock_faces": [
+        {
+          "id": 601310433329064,
+          "key": "face:2",
+          "plane": {
+            "normal": [
+              1.0,
+              -0.0,
+              -0.0
+            ],
+            "origin": [
+              10.0,
+              -10.0,
+              0.0
+            ],
+            "u": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "v": [
+              0.0,
+              -0.0,
+              1.0
+            ]
+          }
+        },
+        {
+          "id": 605708479841908,
+          "key": "face:6",
+          "plane": {
+            "normal": [
+              1.0,
+              -0.0,
+              -0.0
+            ],
+            "origin": [
+              10.0,
+              -10.0,
+              0.0
+            ],
+            "u": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "v": [
+              0.0,
+              -0.0,
+              1.0
+            ]
+          }
+        }
+      ],
+      "tangent_shared_edges": [
+        [
+          7585866363987945,
+          "edge:9",
+          [
+            601310433329064,
+            605708479841908,
+            606807991470119,
+            594713363559798
+          ]
+        ]
+      ],
+      "wall_edge_owners": [
+        [
+          7585866363987945,
+          "edge:9",
+          [
+            601310433329064,
+            605708479841908,
+            606807991470119,
+            594713363559798
+          ]
+        ],
+        [
+          4143829403303721,
+          "edge:12",
+          [
+            602409944957275,
+            606807991470119
+          ]
+        ],
+        [
+          4142729891675510,
+          "edge:13",
+          [
+            602409944957275,
+            594713363559798
+          ]
+        ],
+        [
+          4148227449816565,
+          "edge:16",
+          [
+            607907503098330,
+            606807991470119
+          ]
+        ],
+        [
+          4147127938188354,
+          "edge:17",
+          [
+            607907503098330,
+            594713363559798
+          ]
+        ],
+        [
+          4149326961444776,
+          "edge:19",
+          [
+            606807991470119,
+            594713363559798
+          ]
+        ]
+      ],
+      "wall_faces": [
+        {
+          "cylinder": {
+            "axis": {
+              "x": -0.0,
+              "y": -0.0,
+              "z": -1.0
+            },
+            "origin": {
+              "x": 7.0,
+              "y": 0.0,
+              "z": 10.0001
+            },
+            "radius": 3.0,
+            "reference": {
+              "x": -1.0,
+              "y": 0.0,
+              "z": 0.0
+            }
+          },
+          "id": 606807991470119,
+          "key": "face:7"
+        },
+        {
+          "cylinder": {
+            "axis": {
+              "x": -0.0,
+              "y": -0.0,
+              "z": -1.0
+            },
+            "origin": {
+              "x": 7.0,
+              "y": 0.0,
+              "z": 10.0001
+            },
+            "radius": 3.0,
+            "reference": {
+              "x": -1.0,
+              "y": 0.0,
+              "z": 0.0
+            }
+          },
+          "id": 594713363559798,
+          "key": "face:8"
+        }
+      ]
+    },
+    "actual_public_full_summary": {
+      "additional_geometry_candidate_count": 0,
+      "additional_geometry_candidate_scope": "independent_inference_may_overlap_authored_features",
+      "additional_geometry_candidates": [],
+      "ambiguous_hole_candidate_count": 2,
+      "ambiguous_hole_candidates": [
+        {
+          "axis": [
+            -0.0,
+            -0.0,
+            -1.0
+          ],
+          "body_id": 1,
+          "classification": "cylindrical_surface_candidate",
+          "confidence": "ambiguous",
+          "depth": null,
+          "diameter": 6.0,
+          "face_ids": [
+            606807991470119
+          ],
+          "inference_method": "analytic_cylinder_boundary_and_display_normals",
+          "position": [
+            7.0,
+            0.0,
+            10.0001
+          ],
+          "reason": "open_or_split_circular_boundary",
+          "source": "geometry",
+          "through": null
+        },
+        {
+          "axis": [
+            -0.0,
+            -0.0,
+            -1.0
+          ],
+          "body_id": 1,
+          "classification": "cylindrical_surface_candidate",
+          "confidence": "ambiguous",
+          "depth": null,
+          "diameter": 6.0,
+          "face_ids": [
+            594713363559798
+          ],
+          "inference_method": "analytic_cylinder_boundary_and_display_normals",
+          "position": [
+            7.0,
+            0.0,
+            10.0001
+          ],
+          "reason": "open_or_split_circular_boundary",
+          "source": "geometry",
+          "through": null
+        }
+      ],
+      "authored_hole_count": 0,
+      "bodies": [
+        {
+          "bbox_max": [
+            10.0,
+            10.0,
+            10.0
+          ],
+          "bbox_min": [
+            -10.0,
+            -10.0,
+            0.0
+          ],
+          "cylindrical_faces": 2,
+          "faces": 9,
+          "feature_id": 1,
+          "id": 1,
+          "name": "Body1",
+          "planar_faces": 7,
+          "size": [
+            20.0,
+            20.0,
+            10.0
+          ]
+        }
+      ],
+      "display_warning_count": 0,
+      "display_warnings": [],
+      "hole_candidate_count": 0,
+      "hole_count": 0,
+      "hole_detection_scope": "closed_cylindrical_cavities",
+      "hole_source": "scene",
+      "holes": [],
+      "holes_by_class": [],
+      "scene_errors": 0,
+      "warnings": []
+    },
+    "scope": "Actual OCCT tangent fixture exported once before ownership assertions; the same STEP payload is imported by the strengthened full-reader test and preserved unchanged as the committed witness. A native tangent edge has four face owners; both cylinder halves are reported ambiguous with reasons and unknown depth/through. No duplicated scene faces or replay. No live matched desktop/MCP pair is claimed.",
+    "repository_attributes": {
+      "path": "docs/qualification/fixtures/.gitattributes",
+      "entry": "native-exact-tangent-20261011.step binary",
+      "scope": "Keep this authentic generated STEP artifact, including its original OCCT whitespace, byte-identical across checkout and merge policies. Native ownership and full-reader evidence remain separately readable in this record."
+    }
+  },
+  "source_review": {
+    "renderer": "Root and independent peer source reviews clear; normal thread/access/deferred metadata and original function-type ordering identities retained through Bevy public CombinatorSystem. Original system function bodies are called only by the executing guarded system; its actual last-run tick is retained.",
+    "renderer_compilation": "Current native two-camera image/order/blend/view-format keys are derived and prewarmed outside the shared gate. Post-draw pipeline work is outside the gate. A later stable draw is required for new or same-ID pipeline changes. Delegated extraction/startup, original render update and explicit polling are guarded; AppExit prevents subsequent worker work.",
+    "renderer_tradeoff": "Each real native-window acquisition intentionally takes the shared gate, including upstream Outdated reconfiguration. This is not a universal responsiveness, gesture-timing or physical pinch qualification.",
+    "toolpath": "Root and independent peer source review clear. Synthetic inspector regression only: comments/display text do not establish toolpaths, executable G1/G01 commands need finite supported movement coordinates. This does not qualify actual Bambu operation, full firmware grammar, native 3MF readback, cancellation or physical motion.",
+    "tangent": "Root and independent peer source review clear. Original affected native filter strengthened rather than duplicated; exact stock/cylinder/plane/edge-owner facts, unauthored imported STEP, actual full public reader, provenance/unknown dimensions and unchanged full model/native scene pass. The actual edge has four native face owners and the reader emits two ambiguous rows with open_or_split_circular_boundary reasons; both retain unknown depth and through. This does not qualify other unobserved topology branches.",
+    "ci_label": "Only macOS step display name changed from without GUI initialization to Verify default packaged desktop stdio. Actual commands, job keys, runners, conditions and required checks remain unchanged."
+  },
+  "retained_attempts": {
+    "module_path_compile_error": "packaged-surface-repair-6f39c34e-results.json: E0583, no regression ran; explicit submodule path corrected",
+    "system_set_compile_error": "packaged-surface-repair-b9983c41-results.json: E0277, no regression ran; public combinator preserves original identities instead of prohibited in_set(function)",
+    "earlier_renderer_pass": "packaged-surface-repair-8d4b3f40-results.json: first CPU case passed, then independent review identified stale non-executing-system last-run metadata. The final affected regression adds that assertion; the earlier pass does not cover it."
+  },
+  "preservation": {
+    "coverage_ledger_blob": "5aa045ccb7c35f484e48cadb7a278e85db6cc03e",
+    "broad_ui_mcp_coverage": "paused and unchanged",
+    "live_documents_recovery_sessions": "untouched",
+    "shared_runtime": "not restarted or deployed",
+    "main_and_jack_prs": "untouched",
+    "earlier_unaffected_passes": "retained without repetition"
+  },
+  "remaining_acceptance": {
+    "374": "Normal repaired-head Windows ARM64, Windows x64 (including desktop self-close) and macOS packaged default-desktop checks must pass. Headless-only, skipped or old-head passes do not close this defect.",
+    "316": "Authentic installed Bambu/native-readback, cancellation, stale completion/rebind and platform acceptance remain open.",
+    "369": "The genuine exact-tangent four-owner native witness and its actual ambiguous full-reader result are now preserved and qualified in isolation. A clean live matched desktop/MCP witness remains unqualified; other unobserved topology branches are not inferred from this result.",
+    "16_and_21": "Earlier source/content/layout progress retained; original teaching/release and approval/publication/administrative criteria remain open."
+  },
+  "integration_source_revision": "35c2a8bf7a66ec39b336243a1a5074cff7816773",
+  "authored_caption_refinement": {
+    "issue": 16,
+    "source_revision": "35c2a8bf7a66ec39b336243a1a5074cff7816773",
+    "source_bindings": {
+      "examples/scripts/mounting-plate.limo.jsonc": "44f7f264edf87d03339c3b7fb648920655a928ff",
+      "examples/scripts/revolved-spacer.limo.jsonc": "80cc8e6d1595d0d90e375fab0b2b6078f70eea2f",
+      "examples/scripts/angle-bracket.limo.jsonc": "b308e3c7ebce46d49ed52ed9c3bb6ed85c4efc04"
+    },
+    "scope": "Three completed-part captions now state exact authored dimensions and distinguish retained sketch drivers from feature drivers. Root and peer reviewed the exact three-line change against construction and current guides. Calls, chapters, timing, views, checks and history are unchanged; no replay, repeated test or human teaching/learning acceptance is claimed."
+  }
+}

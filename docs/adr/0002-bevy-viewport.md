@@ -107,13 +107,12 @@ macOS and Windows; duplicating those updates adds pointer latency without
 creating a new GPU pipeline.
 
 The native interface and windowless CAD worker share a GPU device and queue.
-Their GPU updates exclude each other so surface configuration can wait for an
-idle queue without concurrent CAD submissions. Interface render phases use
-strict ordering, and surface creation runs after asset uploads and attachment
-cleanup, before window frame acquisition. CAD mesh rebuilding, extraction and
-pipeline compilation run outside the queue guard, preserving menu rendering
-while geometry and shaders prepare. On shutdown, a stopped worker leaves a
-pending queue wait so the interface can finish its last frame.
+Window configuration and frame acquisition exclude queue operations in the
+interface's render world. CAD extraction/recovery and GPU render updates share
+the same submission guard with those window operations. Mesh rebuilding and
+pipeline prewarming/compilation run outside the guard, preserving menu rendering
+while geometry and shaders prepare. On shutdown, a stopped worker cancels its
+pending submission wait so the interface can finish its last frame.
 
 The Extrude tool volume is a translucent fill without a duplicate edge cage;
 the source sketch remains visible in its normal retained sketch layer. Its DOM

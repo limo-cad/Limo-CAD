@@ -165,7 +165,7 @@ pub(super) fn call(request: Request, started: Instant) -> Result<Value, String> 
             let ticket: Ticket = serde_json::from_value(submitted["ticket"].clone())
                 .map_err(|error| error.to_string())?;
             loop {
-                let mut receipt = match status(ticket.clone()) {
+                let mut receipt = match status_with_values(ticket.clone(), request.include_values) {
                     Ok(receipt) => receipt,
                     Err(error) => {
                         return Ok(
@@ -183,9 +183,6 @@ pub(super) fn call(request: Request, started: Instant) -> Result<Value, String> 
                             receipt["batch_stopped"] = json!(true);
                             receipt["batch_error"] = json!("Applied receipt omitted its publication fence; do not retry the operation");
                         }
-                    }
-                    if !request.include_values {
-                        receipt.as_object_mut().unwrap().remove("value");
                     }
                     return Ok(receipt);
                 }

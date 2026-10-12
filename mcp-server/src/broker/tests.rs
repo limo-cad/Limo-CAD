@@ -69,6 +69,198 @@ impl Drop for Registry {
 }
 
 #[test]
+fn receipt_only_status_preserves_fences_without_reading_operation_values() {
+    // Synthetic files in this test's private registry qualify the public receipt
+    // contract, not native geometry, a live desktop or a connector's byte limit.
+    let _environment = session::env_lock();
+    let registry = Registry::new();
+    let route = registry.first.clone();
+    let public_specs = specs();
+    let status_schema = &public_specs[0].input_schema["oneOf"][1];
+    assert_eq!(
+        status_schema["properties"]["include_values"]["type"],
+        "boolean"
+    );
+    assert_eq!(
+        status_schema["properties"]["include_values"]["default"],
+        true
+    );
+    let read = |ticket: &Ticket, include_values: Option<bool>| {
+        let mut request = json!({"action":"status","ticket":ticket});
+        if let Some(include_values) = include_values {
+            request["include_values"] = json!(include_values);
+        }
+        call(request)
+    };
+    let ticket = Ticket {
+        route: route.clone(),
+        operation: Pending::Inbox { seq: 41 },
+    };
+    let expected_ticket = serde_json::to_value(&ticket).unwrap();
+    let pending = read(&ticket, Some(false)).unwrap();
+    assert_eq!(pending["status"], "pending");
+    assert_eq!(pending["applied"], false);
+    assert_eq!(pending["ticket"], expected_ticket);
+    assert!(pending.get("value").is_none());
+
+    session::write_session(
+        &route.session_id,
+        "inbox/applied/41.json",
+        &json!({"name":"solid_move_copy","base_generation":1}).to_string(),
+    )
+    .unwrap();
+    let result_path = "inbox/results/41.json";
+    session::write_session(&route.session_id, result_path, "not-json").unwrap();
+    let unpublished = read(&ticket, Some(false)).unwrap();
+    assert_eq!(unpublished["status"], "timeout");
+    assert_eq!(unpublished["applied"], true);
+    assert_eq!(unpublished["published"], false);
+    assert!(unpublished["published_generation"].is_null());
+
+    let mut heartbeat: Value = serde_json::from_str(
+        &session::read_session_file(&route.session_id, "heartbeat.json").unwrap(),
+    )
+    .unwrap();
+    heartbeat["generation"] = json!(2);
+    heartbeat["published_generation"] = json!(2);
+    heartbeat["model_generation"] = json!(2);
+    let heartbeat = heartbeat.to_string();
+    session::write_session(&route.session_id, "heartbeat.json", &heartbeat).unwrap();
+    let compact = read(&ticket, Some(false)).unwrap();
+    assert_eq!(compact["status"], "applied");
+    assert_eq!(compact["applied"], true);
+    assert_eq!(compact["published"], true);
+    assert_eq!(compact["base_generation"], 1);
+    assert_eq!(compact["published_generation"], 2);
+    assert_eq!(compact["model_generation"], 2);
+    assert_eq!(compact["ticket"], expected_ticket);
+    assert!(compact.get("value").is_none());
+    // A malformed retained value proves receipt-only status never reads/parses it.
+    for full in [None, Some(true)] {
+        assert!(read(&ticket, full).is_err());
+    }
+    assert_eq!(
+        session::read_session_file(&route.session_id, result_path).unwrap(),
+        "not-json"
+    );
+
+    let value = json!({"synthetic_operation_output":"geometry-sized-value".repeat(2048)});
+    let encoded = value.to_string();
+    assert!(encoded.len() > 32 * 1024);
+    session::write_session(&route.session_id, result_path, &encoded).unwrap();
+    for full in [None, Some(true)] {
+        let observed = read(&ticket, full).unwrap();
+        assert_eq!(observed["value"], value);
+        assert_eq!(observed["ticket"], expected_ticket);
+    }
+    assert!(
+        serde_json::to_vec(&read(&ticket, Some(false)).unwrap())
+            .unwrap()
+            .len()
+            < 4096
+    );
+    assert_eq!(
+        session::read_session_file(&route.session_id, result_path).unwrap(),
+        encoded
+    );
+    assert_eq!(
+        session::read_session_file(&route.session_id, "heartbeat.json").unwrap(),
+        heartbeat
+    );
+    assert_eq!(
+        session::read_session_file(&route.session_id, "model.json").unwrap(),
+        "{}\n"
+    );
+
+    let failed_ticket = Ticket {
+        operation: Pending::Inbox { seq: 42 },
+        ..ticket.clone()
+    };
+    session::write_session(
+        &route.session_id,
+        "inbox/failed/42.json",
+        &json!({"name":"solid_move_copy","base_generation":1,"error":"generation_conflict"})
+            .to_string(),
+    )
+    .unwrap();
+    let failed = read(&failed_ticket, Some(false)).unwrap();
+    assert_eq!(failed["status"], "failed");
+    assert_eq!(failed["applied"], false);
+    assert_eq!(failed["dead_lettered"], true);
+    assert_eq!(failed["error"], "generation_conflict");
+    assert_eq!(
+        failed["ticket"],
+        serde_json::to_value(&failed_ticket).unwrap()
+    );
+
+    let admitted_ms = session::now_ms();
+    let expiry = admitted_ms.saturating_add(1000);
+    let control = Ticket {
+        route: route.clone(),
+        operation: Pending::Control {
+            request_id: "700-1".into(),
+            expires_ms: expiry,
+        },
+    };
+    session::write_session(
+        &route.session_id,
+        "controls/700-1.result.json",
+        &json!({"status":"applied","value":value,"engine_revision":2}).to_string(),
+    )
+    .unwrap();
+    for full in [None, Some(true)] {
+        assert_eq!(read(&control, full).unwrap()["value"], value);
+    }
+    let compact_control = read(&control, Some(false)).unwrap();
+    assert_eq!(compact_control["status"], "applied");
+    assert_eq!(compact_control["engine_revision"], 2);
+    assert_eq!(
+        compact_control["ticket"],
+        serde_json::to_value(&control).unwrap()
+    );
+    assert!(compact_control.get("value").is_none());
+    session::write_session(&route.session_id, "controls/700-1.result.json",
+        &json!({"status":"failed","code":"source_changed","error":"Original source retired","value":value}).to_string()).unwrap();
+    let failed_control = read(&control, Some(false)).unwrap();
+    assert_eq!(failed_control["status"], "failed");
+    assert_eq!(failed_control["code"], "source_changed");
+    assert_eq!(failed_control["error"], "Original source retired");
+    assert!(failed_control.get("value").is_none());
+
+    let marker = NativeControlAdmission {
+        version: 1,
+        session_id: route.session_id.clone(),
+        window_id: route.window_id.clone(),
+        document_id: route.document_id.clone(),
+        process_instance_id: route.process_instance_id.clone(),
+        request_id: "700-2".into(),
+        epoch: 1,
+        revision: 1,
+        expires_ms: expiry,
+        admitted_ms,
+    };
+    session::write_session(
+        &route.session_id,
+        "controls/700-2.admitted.json",
+        &marker.encode().unwrap(),
+    )
+    .unwrap();
+    let wrong_owner = Ticket {
+        route: Route {
+            document_id: "replacement".into(),
+            ..route
+        },
+        operation: Pending::Control {
+            request_id: "700-2".into(),
+            expires_ms: expiry,
+        },
+    };
+    assert!(read(&wrong_owner, Some(false))
+        .unwrap_err()
+        .contains("original control ticket"));
+}
+
+#[test]
 fn native_control_status_retains_late_receipt_and_original_timeout_ticket() {
     let _environment = session::env_lock();
     let registry = Registry::new();
