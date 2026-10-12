@@ -13,7 +13,7 @@ standalone required PR check and Desktop packages' preflight cannot cancel each
 other. The required check names in [branch protection](branch-protection.md) stay
 unchanged. CI helper/contract tests run in this dependency-free preflight too.
 
-## Shared Windows ARM OpenCASCADE cache
+## Shared Windows OpenCASCADE caches
 
 `.github/actions/setup-windows-occt` is used by Windows packaging, Windows MCP
 acceptance and the SDK cache warmer. It retains the existing installed-tree and
@@ -21,9 +21,9 @@ binary-cache paths and key formats. Each key includes the runner/target ABI,
 detected MSVC toolset, exact vcpkg revision and `vcpkg.json` hash. There is no
 partial-key fallback across compiler or SDK versions.
 
-The **Warm Windows ARM SDK cache** workflow runs only on the default branch:
+The **Warm Windows SDK caches** workflow runs only on the default branch:
 
-- After SDK manifest, setup-action or warmer-workflow changes merge to main.
+- After SDK manifest, checkout-attribute, setup-action or warmer-workflow changes merge to main.
 - Daily at 06:17 UTC, to refresh after runner/compiler updates and retain the cache.
 - Manually when needed, after the workflow is on main:
 
@@ -31,7 +31,8 @@ The **Warm Windows ARM SDK cache** workflow runs only on the default branch:
   gh workflow run windows-occt-cache.yml --ref main
   ```
 
-It builds/restores only the ARM64 SDK, never application packages. Default-branch
+It builds/restores the x64 and ARM64 SDKs, never application packages. The x64
+job matches the Windows2025 packaging and MCP runner namespace. Default-branch
 caches can be reused by new PRs; caches created by a PR cannot be reused by sibling
 PRs. See [GitHub's cache scope rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache).
 No PR source is checked out or executed in the default-branch warmer, and there
@@ -107,3 +108,77 @@ contract and negative-path tests. Also validate workflow YAML/expressions with
 actionlint when editing it; its runner-label catalog may lag the existing
 `ubuntu-26.04` and `windows-11-vs2026-arm` labels used by this repository. Compare
 real Actions job/step timings after rollout before claiming a measured speedup.
+
+## Measured bottlenecks
+
+Observed on 12 October 2026. These are hosted job timings, excluding local compilation.
+Queue time and execution time are separate; GitHub reported an Actions incident
+affecting queues and checks that day. Runner capacity and incident recovery can
+delay jobs independently of repository changes.
+
+- [Windows core acceptance](https://github.com/limo-cad/Limo-CAD/actions/runs/38251064087/job/114817714771):
+  2 seconds queued, 122 minutes 47 seconds executing. SDK setup took 98 minutes
+  21 seconds, MCP tests 9 minutes 22 seconds, native geometry regressions
+  8 minutes 10 seconds, and the workshop 5 minutes 4 seconds.
+  Both exact SDK caches missed; compiling OpenCASCADE alone took about 94 minutes.
+  All three Windows shards independently prepared the same SDK.
+- [Linux turbine acceptance](https://github.com/limo-cad/Limo-CAD/actions/runs/38251064087/job/114817714831):
+  3 seconds queued, 51 minutes 10 seconds executing. Rust compilation took
+  51.75 seconds; the native geometry recipe test took 2,980.34 seconds.
+  Reducing compiler work will have little effect on this test's dominant cost.
+- [Browser smoke](https://github.com/limo-cad/Limo-CAD/actions/runs/38266323719/job/114869293985):
+  22 minutes 13 seconds queued, 6 minutes 28 seconds executing. Installing
+  wasm-pack took 68 seconds, compiling the browser engine 184 seconds, and
+  smoke tests 89 seconds.
+- [Host-neutral Rust tests](https://github.com/limo-cad/Limo-CAD/actions/runs/38251063987):
+  2 seconds queued, 4 minutes 11 seconds executing.
+
+The cache API snapshot contained 23 caches totaling 10,748,439,918 bytes, all
+scoped to PR merge refs. That is around the default 10 GiB repository cache limit.
+A cache under one PR merge ref cannot supply an unrelated PR. Default-branch
+caches can supply PRs; keeping compatible SDKs there avoids repeated cold builds.
+
+## Manifest identity and browser tool reuse
+
+`vcpkg.json` uses LF on every checkout. Its Windows CRLF hash was
+`f0611456cc56445180a7a46a36d542dbbb53c90b45df2f741cd9a15b3eb260d5`, matching
+the observed misses. The same manifest with LF hashes to
+`2b9d516ae49f1cdf2100ff1ba7a12ef10bd19ea468623ef63247b89cb28165c8`.
+This intentionally requires one compatible cold seed after adoption. Cache keys
+retain every ABI input and have no broad SDK fallback.
+
+The browser job checks the version of wasm-pack restored by its existing Rust
+cache. It installs only when absent or different from pinned 0.13.1. The tool's
+installation metadata is not needed to reuse the verified binary. Installation
+failure still fails the job. No extra cache or test skip is introduced.
+
+No acceptance tests or package gates are removed. Post-change hosted savings
+remain to be measured after the default-branch seed. Avoided tool/SDK work is
+not a promise of total wall-clock savings. Standard hosted runners are free for
+this public repository; no paid runners are required.
+
+Reproduce the observations without launching more builds:
+
+```sh
+gh api repos/limo-cad/Limo-CAD/actions/runs/38251064087/jobs --paginate
+gh api repos/limo-cad/Limo-CAD/actions/jobs/114817714771/logs
+gh api repos/limo-cad/Limo-CAD/actions/jobs/114817714831/logs
+gh api repos/limo-cad/Limo-CAD/actions/cache/usage
+gh api repos/limo-cad/Limo-CAD/actions/caches --paginate
+```
+
+Local verification: 15 workflow/sharding/release contracts passed using Git Bash
+on Windows, actionlint passed excluding only the existing ARM runner label, and
+the actual tool guard passed missing/matching/wrong-version and failed-install
+cases. An autocrlf-enabled checkout preserved LF manifest bytes. The unrelated
+full-suite symlink fixture needs Windows symlink privileges.
+
+After merge, compare matched x64 jobs with the same manifest/compiler key. Record
+queue delay, SDK source/setup duration, and total execution separately. Inspect
+the browser tool step independently. Investigate the turbine recipe geometry
+cost next if it remains dominant, preserving its correctness assertions.
+
+Sources: [runner billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions),
+[cache scope and eviction](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching),
+[Rust cache contents](https://github.com/Swatinem/rust-cache/tree/v2#cache-details),
+[GitHub incident history](https://www.githubstatus.com/).

@@ -34,7 +34,13 @@ jobs:
         with:
           key: sketch-wasm
       - name: Install pinned WASM packager
-        run: cargo install wasm-pack --version 0.13.1 --locked
+        # rust-cache already restores ~/.cargo/bin. Cargo install otherwise
+        # rebuilds the tool when its installation metadata is absent.
+        run: |
+          if ! command -v wasm-pack >/dev/null || [ "$(wasm-pack --version)" != 'wasm-pack 0.13.1' ]; then
+            cargo install wasm-pack --version 0.13.1 --locked --force
+          fi
+          test "$(wasm-pack --version)" = 'wasm-pack 0.13.1'
       - name: Build current browser engine
         run: npm run build:wasm
       - name: Install Chromium

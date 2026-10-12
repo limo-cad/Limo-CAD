@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { flagshipTests } from './run-mcp-tests.mjs';
 
-const read = file => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
+const read = file => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const desktop = read('.github/workflows/desktop-packages.yml');
 const mcp = read('.github/workflows/mcp-server.yml');
 const version = read('.github/workflows/version-guard.yml');
@@ -35,12 +35,15 @@ test('every package job requires both successful cheap preflights, including tag
   assert.match(version, /node --test scripts\/ci\/\*.test.mjs/);
 });
 
-test('SDK warmer is default-branch-only and shares exact ARM architecture/cache setup', () => {
+test('SDK warmer is default-branch-only and shares exact architecture/cache setup', () => {
   assert.match(warmer, /^  push:\n    branches: \[main\]/m);
   assert.match(warmer, /^  workflow_dispatch:/m);
   assert.match(warmer, /^  schedule:/m);
   assert.doesNotMatch(warmer, /^  pull_request(?:_target)?:/m);
   assert.match(job(warmer, 'warm-arm64'), /if: github.ref == format\('refs\/heads\/\{0\}', github.event.repository.default_branch\)/);
+  assert.match(job(warmer, 'warm-x64'), /if: github.ref == format\('refs\/heads\/\{0\}', github.event.repository.default_branch\)/);
+  assert.match(warmer, /cancel-in-progress: false/);
+  assert(read('.gitattributes').includes('vcpkg.json text eol=lf'));
   for (const source of [desktop, mcp, warmer]) {
     assert.match(source, /uses: \.\/\.github\/actions\/setup-windows-occt/);
   }
@@ -48,6 +51,12 @@ test('SDK warmer is default-branch-only and shares exact ARM architecture/cache 
     'arm64-windows', 'Microsoft.VisualStudio.Component.VC.Tools.ARM64']) {
     assert(desktop.includes(value));
     assert(warmer.includes(value));
+  }
+  for (const value of ['windows-2025', 'windows-2025-x64-windows-msvc',
+    'x64-windows', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64']) {
+    assert(desktop.includes(value));
+    assert(mcp.includes(value));
+    assert(job(warmer, 'warm-x64').includes(value));
   }
   assert.doesNotMatch(warmer, /run:.*(?:cargo|npm|tauri)/);
   assert.match(sdk, /default: 716b42043743cdceabed9c8e2e6cf80ddae1e0c1/);
