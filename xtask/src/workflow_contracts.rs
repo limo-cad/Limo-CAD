@@ -1108,6 +1108,190 @@ fn check_superseded_pr_policy(source: &Value) -> Result<()> {
     Ok(())
 }
 
+fn check_sdk_owner_policy(concurrency: &Value, expected_group: &str) -> Result<()> {
+    ensure!(
+        concurrency["group"].as_str() == Some(expected_group),
+        "keep the stable SDK-owner namespace and its branch/manual-probe isolation"
+    );
+    ensure!(
+        concurrency["cancel-in-progress"].as_bool() == Some(false),
+        "finish the running SDK qualification and cache publication before supersession"
+    );
+    Ok(())
+}
+
+fn check_codeql_supersession_policies(source: &Value) -> Result<()> {
+    ensure!(
+        source["concurrency"].is_null(),
+        "workflow-level cancellation must not override protected native CodeQL jobs"
+    );
+    for (id, group, cancel, languages, timeout) in [
+        (
+            "native",
+            "codeql-${{ github.workflow }}-${{ github.ref }}-native-${{ matrix.language }}",
+            false,
+            &["rust", "c-cpp"][..],
+            240,
+        ),
+        (
+            "scripts",
+            "codeql-${{ github.workflow }}-${{ github.ref }}-scripts-${{ matrix.language }}",
+            true,
+            &["actions", "python", "javascript-typescript"][..],
+            20,
+        ),
+    ] {
+        let job = executable_job(source, id)?;
+        ensure!(
+            job["concurrency"]["group"].as_str() == Some(group),
+            "{id} must isolate each CodeQL language and PR without a commit/run-specific group"
+        );
+        ensure!(
+            job["concurrency"]["cancel-in-progress"].as_bool() == Some(cancel),
+            "protect native SDK owners while cancelling superseded script checks"
+        );
+        let actual_languages = job["strategy"]["matrix"]["include"]
+            .as_sequence()
+            .context("missing normal CodeQL matrix")?
+            .iter()
+            .map(|entry| {
+                entry["language"]
+                    .as_str()
+                    .context("missing CodeQL language")
+            })
+            .collect::<Result<Vec<_>>>()?;
+        ensure!(
+            actual_languages.len() == languages.len()
+                && languages
+                    .iter()
+                    .all(|language| actual_languages.contains(language)),
+            "retain all five CodeQL languages"
+        );
+        ensure!(
+            job["name"].as_str() == Some("CodeQL (${{ matrix.language }})")
+                && job["if"].is_null()
+                && job["strategy"]["fail-fast"].as_bool() == Some(false)
+                && job["timeout-minutes"].as_u64() == Some(timeout)
+                && job["permissions"]["contents"].as_str() == Some("read")
+                && job["permissions"]["security-events"].as_str() == Some("write"),
+            "preserve CodeQL check identities, failure coverage, bounded timeouts and permissions"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn sdk_owners_and_fast_scripts_keep_distinct_supersession_policies() {
+    // Native SDK builds must finish qualification/cache publication. Stable ref
+    // groups still consolidate pending revisions; old-head success never waives
+    // the newest head's normal acceptance jobs. The package case below retains
+    // its separately qualified existing contract.
+    let host_group = concat!(
+        "native-host-tests-${{ github.workflow }}-${{ github.ref }}",
+        "${{ inputs.ime-probe-only && (inputs.ime-probe-macos && '-ime-probe-macos' || '-ime-probe') ",
+        "|| inputs.ime-native-macos && '-ime-native-macos' || inputs.input-family == 'windows-ime' ",
+        "&& '-windows-ime' || inputs.input-family == 'windows-print' && '-windows-print' ",
+        "|| inputs.input-family == 'switching' && '-switching' || inputs.linux-only ",
+        "&& format('-linux-only-{0}', inputs.input-family || 'all') || '' }}"
+    );
+    for (file, group) in [
+        ("mcp-server", "mcp-server-${{ github.ref }}"),
+        ("native-host-tests", host_group),
+    ] {
+        let policy = workflow(&format!(".github/workflows/{file}.yml"));
+        check_sdk_owner_policy(&policy["concurrency"], group).unwrap();
+        for cancellation in [
+            Value::Bool(true),
+            Value::String("${{ github.event_name == 'pull_request' }}".into()),
+            Value::String("false".into()),
+            Value::Null,
+        ] {
+            let mut drift = policy["concurrency"].clone();
+            drift["cancel-in-progress"] = cancellation;
+            assert!(check_sdk_owner_policy(&drift, group).is_err(), "{file}");
+        }
+        for changed_group in [
+            group.replace("github.ref", "github.sha"),
+            format!("{group}-${{{{ github.run_id }}}}"),
+            "native-sdk".into(),
+            group.replace("${{ github.ref }}", ""),
+        ] {
+            let mut drift = policy["concurrency"].clone();
+            drift["group"] = Value::String(changed_group);
+            assert!(check_sdk_owner_policy(&drift, group).is_err(), "{file}");
+        }
+    }
+
+    let codeql = workflow(".github/workflows/codeql.yml");
+    check_codeql_supersession_policies(&codeql).unwrap();
+    let mut reordered = codeql.clone();
+    for id in ["native", "scripts"] {
+        reordered["jobs"][id]["strategy"]["matrix"]["include"]
+            .as_sequence_mut()
+            .unwrap()
+            .reverse();
+    }
+    check_codeql_supersession_policies(&reordered).unwrap();
+    let mut workflow_override = codeql.clone();
+    workflow_override["concurrency"] =
+        workflow(".github/workflows/linux-engine-tests.yml")["concurrency"].clone();
+    assert!(check_codeql_supersession_policies(&workflow_override).is_err());
+    for id in ["native", "scripts"] {
+        for cancellation in [
+            Value::Bool(id == "native"),
+            Value::String("${{ github.event_name == 'pull_request' }}".into()),
+            Value::String("false".into()),
+            Value::Null,
+        ] {
+            let mut drift = codeql.clone();
+            drift["jobs"][id]["concurrency"]["cancel-in-progress"] = cancellation;
+            assert!(check_codeql_supersession_policies(&drift).is_err(), "{id}");
+        }
+        let group = codeql["jobs"][id]["concurrency"]["group"].as_str().unwrap();
+        for changed_group in [
+            group.replace("-${{ matrix.language }}", ""),
+            group.replace("github.ref", "github.sha"),
+            format!("{group}-${{{{ github.run_id }}}}"),
+            group.replace("${{ github.ref }}", ""),
+        ] {
+            let mut drift = codeql.clone();
+            drift["jobs"][id]["concurrency"]["group"] = Value::String(changed_group);
+            assert!(check_codeql_supersession_policies(&drift).is_err(), "{id}");
+        }
+        let mut missing_language = codeql.clone();
+        missing_language["jobs"][id]["strategy"]["matrix"]["include"]
+            .as_sequence_mut()
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert!(
+            check_codeql_supersession_policies(&missing_language).is_err(),
+            "{id}"
+        );
+        let mut duplicate_language = codeql.clone();
+        let entries = duplicate_language["jobs"][id]["strategy"]["matrix"]["include"]
+            .as_sequence_mut()
+            .unwrap();
+        let first = entries[0].clone();
+        *entries.last_mut().unwrap() = first;
+        assert!(
+            check_codeql_supersession_policies(&duplicate_language).is_err(),
+            "{id}"
+        );
+        for condition in [
+            Value::Bool(false),
+            Value::String("${{ github.event_name == 'workflow_dispatch' }}".into()),
+        ] {
+            let mut disabled_job = codeql.clone();
+            disabled_job["jobs"][id]["if"] = condition;
+            assert!(
+                check_codeql_supersession_policies(&disabled_job).is_err(),
+                "{id}"
+            );
+        }
+    }
+}
+
 fn check_sdk_preserving_package_policy(source: &Value) -> Result<()> {
     ensure!(
         source["concurrency"]["group"].as_str() == Some("desktop-packages-${{ github.ref }}"),
@@ -1161,12 +1345,9 @@ fn security_and_heavy_ci_keep_coverage_without_duplicate_or_stale_pr_work() {
         .unwrap()
         .remove(Value::String("pull_request".into()));
     assert!(check_security_scan_triggers(&missing_pr).is_err());
-    for file in [
-        "mcp-server",
-        "native-host-tests",
-        "linux-engine-tests",
-        "required-interface",
-    ] {
+    // Short PR checks cancel stale work. SDK-backed workflows have their own
+    // strict owner-preserving contract above rather than this cancellation rule.
+    for file in ["linux-engine-tests", "required-interface"] {
         let policy = workflow(&format!(".github/workflows/{file}.yml"));
         check_superseded_pr_policy(&policy).unwrap();
         for bypass in [Value::Bool(true), Value::Bool(false)] {

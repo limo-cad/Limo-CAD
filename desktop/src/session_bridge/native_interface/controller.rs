@@ -3026,6 +3026,10 @@ fn complete_control(world: &mut World) {
                     presented = handle.wait_for_submission(receipt.laid_out_revision);
                     if !presented && !deadline_elapsed {
                         state.pending = Some(pending);
+                        // Admission retires the request-file wake. A suppressed
+                        // renderer may produce no submission callback, so keep
+                        // revisiting this live receipt's existing deadline.
+                        handle.request_redraw();
                         return;
                     }
                     render_status = if presented {
