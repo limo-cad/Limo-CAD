@@ -29,7 +29,10 @@ use bevy::{
     },
     window::RawHandleWrapper,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 
 #[derive(Clone, Default, Resource)]
 pub(super) struct SharedSubmission(Arc<Mutex<()>>);
@@ -38,6 +41,29 @@ impl SharedSubmission {
     pub(super) fn run<T>(&self, work: impl FnOnce() -> T) -> T {
         let _guard = self.0.lock().expect("shared GPU submission gate");
         work()
+    }
+
+    pub(super) fn run_until_stopped<T>(
+        &self,
+        stopped: &AtomicBool,
+        work: impl FnOnce() -> T,
+    ) -> Option<T> {
+        // Shutdown joins the worker while the interface may still need the main
+        // thread to finish its last surface operation. Cancel a pending wait.
+        loop {
+            if stopped.load(Ordering::Acquire) {
+                return None;
+            }
+            match self.0.try_lock() {
+                Ok(_guard) => return Some(work()),
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                Err(std::sync::TryLockError::Poisoned(error)) => {
+                    panic!("shared GPU submission gate: {error}");
+                }
+            }
+        }
     }
 }
 
@@ -186,11 +212,16 @@ pub(super) fn compiled_after_draw(world: &World) -> bool {
     world.resource::<CompiledAfterDraw>().0
 }
 
-pub(super) fn install_worker(render: &mut SubApp, submission: SharedSubmission) {
+pub(super) fn install_worker(
+    render: &mut SubApp,
+    submission: SharedSubmission,
+    stopped: Arc<AtomicBool>,
+) {
     remove_cache_processor::<PipelineCache>(render);
     install_worker_schedule(
         render,
         submission,
+        stopped,
         prewarm_blit_pipelines,
         compile_pipelines,
     );
@@ -326,6 +357,13 @@ fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
 }
 
 fn compile_pipelines(world: &mut World) -> bool {
+    #[cfg(test)]
+    if let Some(gate) = world.remove_resource::<super::tests::CompilationGate>() {
+        let _ = gate.entered.send(());
+        if gate.receiver.lock().unwrap().recv().is_err() {
+            return false;
+        }
+    }
     let mut cache = world.resource_mut::<PipelineCache>();
     let before = cache.pipelines().count();
     let pending = cache.waiting_pipelines().next().is_some();
@@ -336,6 +374,7 @@ fn compile_pipelines(world: &mut World) -> bool {
 fn install_worker_schedule(
     render: &mut SubApp,
     submission: SharedSubmission,
+    stopped: Arc<AtomicBool>,
     prewarm: fn(&mut World, &mut World),
     compile: fn(&mut World) -> bool,
 ) {
@@ -345,11 +384,14 @@ fn install_worker_schedule(
     render.init_resource::<WorkerExiting>();
     let mut original_extract = render.take_extract().expect("CAD renderer extraction");
     let extract_submission = submission.clone();
+    let extract_stopped = stopped.clone();
     render.set_extract(move |main, world| {
-        extract_submission.run(|| original_extract(main, world));
-        let exiting = main
-            .get_resource::<Messages<AppExit>>()
-            .is_some_and(|messages| !messages.is_empty());
+        let extracted = extract_submission
+            .run_until_stopped(&extract_stopped, || original_extract(main, world));
+        let exiting = extracted.is_none()
+            || main
+                .get_resource::<Messages<AppExit>>()
+                .is_some_and(|messages| !messages.is_empty());
         world.resource_mut::<WorkerExiting>().0 = exiting;
         if exiting {
             world.resource_mut::<CompiledAfterDraw>().0 = false;
@@ -368,7 +410,14 @@ fn install_worker_schedule(
         // Asset preparation can submit image/slab/storage copies too. Protect
         // the entire render update, including Bevy's existing recovery policy,
         // while leaving CAD main-world/model preparation outside the gate.
-        submission.run(|| world.run_schedule(original));
+        if submission
+            .run_until_stopped(&stopped, || world.run_schedule(original))
+            .is_none()
+            || stopped.load(Ordering::Acquire)
+        {
+            world.resource_mut::<CompiledAfterDraw>().0 = false;
+            return;
+        }
         // macOS pipeline creation is synchronous even when Bevy's async flag is
         // false. Compile outside the gate after draining this draw's requests;
         // require a later stable draw before publishing its texture.
@@ -476,6 +525,61 @@ mod tests {
                 .unwrap();
         }
         changed
+    }
+
+    #[test]
+    fn stopped_worker_cancels_extraction_and_render_waits() {
+        for cancel_extraction in [true, false] {
+            let submission = SharedSubmission::default();
+            let stopped = Arc::new(AtomicBool::new(false));
+            // The interface still owns its last surface operation when it
+            // joins the worker. Shutdown must finish without releasing this.
+            let interface_guard = submission.0.lock().unwrap();
+            let (started, attempting) = mpsc::channel();
+            let (finished, completion) = mpsc::channel();
+            let worker_submission = submission.clone();
+            let worker_stopped = stopped.clone();
+            let thread = thread::spawn(move || {
+                let mut worker = SubApp::new();
+                worker.update_schedule = Some(OriginalWorkerUpdate.intern());
+                worker.init_resource::<CpuPipelines>();
+                worker.add_systems(
+                    OriginalWorkerUpdate,
+                    |mut pipelines: ResMut<CpuPipelines>| pipelines.draws += 1,
+                );
+                worker.set_extract(|_, world| {
+                    world.resource_mut::<CpuPipelines>().extracts += 1;
+                });
+                install_worker_schedule(
+                    &mut worker,
+                    worker_submission,
+                    worker_stopped,
+                    |_, world| world.resource_mut::<CpuPipelines>().prewarms += 1,
+                    |world| {
+                        world.resource_mut::<CpuPipelines>().compiles += 1;
+                        false
+                    },
+                );
+                started.send(()).unwrap();
+                if cancel_extraction {
+                    worker.extract(&mut World::new());
+                }
+                worker.update();
+                finished
+                    .send(worker.world().resource::<CpuPipelines>().clone())
+                    .unwrap();
+            });
+            attempting.recv_timeout(Duration::from_secs(5)).unwrap();
+            stopped.store(true, Ordering::Release);
+            let result = completion.recv_timeout(Duration::from_secs(1));
+            drop(interface_guard);
+            thread.join().unwrap();
+            let pipelines = result.expect("shutdown waited for the interface's GPU gate");
+            assert_eq!(pipelines.extracts, 0);
+            assert_eq!(pipelines.prewarms, 0);
+            assert_eq!(pipelines.draws, 0);
+            assert_eq!(pipelines.compiles, 0);
+        }
     }
 
     #[test]
@@ -611,6 +715,7 @@ mod tests {
         install_worker_schedule(
             &mut worker,
             submission.clone(),
+            Arc::new(AtomicBool::new(false)),
             prewarm_cpu_pipeline,
             compile_cpu_pipeline,
         );
