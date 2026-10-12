@@ -42,7 +42,7 @@ impl FormKind {
     pub fn fields(self) -> &'static [(&'static str, &'static str)] {
         match self {
             Self::Fillet => &[("Radius", "2")],
-            Self::Chamfer => &[("Distance", "2")],
+            Self::Chamfer => &[("Distance", "2"), ("Angle (deg)", "45")],
             Self::Offset => &[("Distance", "2")],
             Self::MoveCopy => &[("X distance", "0"), ("Y distance", "0")],
             Self::Scale => &[("Scale factor", "1"), ("Origin X", "0"), ("Origin Y", "0")],
@@ -72,7 +72,8 @@ impl FormKind {
     }
     pub fn instruction(self) -> &'static str {
         match self {
-            Self::Fillet | Self::Chamfer => "Select two lines at a corner",
+            Self::Fillet => "Select two lines at a corner",
+            Self::Chamfer => "Select two lines; first is reference",
             Self::Offset => "Select a curve, then click on its offset side",
             Self::Mirror => "Select geometry, then select the mirror axis last",
             Self::Polygon => "Click the center, or enter its coordinates",
@@ -196,12 +197,17 @@ impl ModifyForm {
             }
             FormKind::Chamfer => {
                 let (l1, l2) = pair()?;
+                let angle = number(1, Angle)?;
+                if angle <= 0. || angle >= 90. {
+                    return Err("Chamfer angle must be greater than 0° and less than 90°".into());
+                }
                 encoded(
                     "sketch_chamfer",
                     ChamferRequest {
                         l1,
                         l2,
                         distance_text: expression(0, Length)?,
+                        angle_text: Some(expression(1, Angle)?),
                     },
                 )
             }
@@ -343,6 +349,49 @@ mod tests {
             spec.engine_method,
             serde_json::from_str(&args).unwrap(),
         )
+    }
+
+    #[test]
+    fn chamfer_form_defaults_and_degree_units_match_the_engine_preview() {
+        let engine = rectangle();
+        let before = drawing(&engine);
+        let lines: Vec<_> = before
+            .entities
+            .iter()
+            .filter(|entity| matches!(entity, EntityDto::Line { .. }))
+            .map(EntityDto::id)
+            .collect();
+        let mut form = ModifyForm::new(1, FormKind::Chamfer);
+        assert_eq!(form.values[1], "45");
+        let initial = form.request(&before, &lines[..2], UnitSystem::Mm).unwrap();
+        assert_eq!(initial.arguments["angle_text"], "45");
+        for invalid in ["0", "90", "-1", "91", "1/0"] {
+            form.values[1] = invalid.into();
+            assert!(form.request(&before, &lines[..2], UnitSystem::Mm).is_err());
+            assert_eq!(drawing(&engine), before);
+        }
+        form.values[1] = "60/2 deg".into();
+        let command = form.request(&before, &lines[..2], UnitSystem::Mm).unwrap();
+        let preview = super::super::modify_preview::form(&engine, before.basis, &command)
+            .unwrap()
+            .unwrap();
+        apply(&engine, command);
+        let after = drawing(&engine);
+        assert!(after
+            .dimensions
+            .iter()
+            .any(|dimension| dimension.kind == "angle" && (dimension.value - 30.).abs() < 1e-8));
+        let segments = &preview.lines[0].segments;
+        let a = Vec2::new(f64::from(segments[0]), f64::from(segments[1]));
+        let b = Vec2::new(f64::from(segments[3]), f64::from(segments[4]));
+        assert!(after.entities.iter().any(|entity| matches!(entity, EntityDto::Line { start, end, .. }
+            if (start.distance(a) < 1e-5 && end.distance(b) < 1e-5) || (start.distance(b) < 1e-5 && end.distance(a) < 1e-5))));
+        call(&engine, "undo", Value::Null);
+        let mut expected_undo = before.clone();
+        expected_undo.can_redo = true;
+        assert_eq!(drawing(&engine), expected_undo);
+        call(&engine, "redo", Value::Null);
+        assert_eq!(drawing(&engine), after);
     }
 
     #[test]

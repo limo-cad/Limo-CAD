@@ -17,6 +17,10 @@ use crate::params::{ParamId, ParamKind};
 use crate::session::{SessionError, SketchSession};
 use crate::sketch::DimensionMode;
 
+#[cfg(test)]
+#[path = "dimension_edit_tests.rs"]
+mod edit_tests;
+
 impl From<ExprError> for SessionError {
     fn from(e: ExprError) -> Self {
         SessionError::Expression(e.to_string())
@@ -422,6 +426,11 @@ impl SketchSession {
         }
 
         self.sketch.sync_dimension_constraint_values();
+        if let Err(error) = self.validate_chamfer_dimensions() {
+            self.sketch.restore(before);
+            self.recompute();
+            return Err(error);
+        }
 
         let changed_dimensions = self
             .sketch

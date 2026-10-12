@@ -408,12 +408,19 @@ impl SketchSession {
                 )
             }
             CreationPreviewRequest::Chamfer(request) => {
-                let (_, _, distance, a, b) = self.resolve_chamfer(request)?;
+                let resolved = self.resolve_chamfer(request)?;
+                let mut measurements = vec![("distance", resolved.distance)];
+                if let Some(angle) = resolved.angle_deg {
+                    measurements.push(("angle", angle));
+                }
                 (
-                    vec![PreviewCurve::Line { a, b }],
-                    b,
+                    vec![PreviewCurve::Line {
+                        a: resolved.p1,
+                        b: resolved.p2,
+                    }],
+                    resolved.p2,
                     SnapTarget::None,
-                    vec![("distance", distance)],
+                    measurements,
                 )
             }
             CreationPreviewRequest::Rectangle(request) => {

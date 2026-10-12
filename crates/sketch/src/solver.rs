@@ -2524,7 +2524,12 @@ pub(crate) fn solve_with_stays(
         }
         for i in 0..n {
             if active_variables[i] {
-                ata[i][i] += lambda * movement_weight[i] * ata[i][i].max(1e-12);
+                // Free or nearly free coordinates can have a zero-gradient
+                // column inside an otherwise active component. Keep their
+                // regularization above solve_square's pivot tolerance even
+                // as lambda decreases, so they cannot stall a dimension edit
+                // or take large steps along an unconstrained direction.
+                ata[i][i] += lambda * movement_weight[i] * ata[i][i].max(1.0);
             } else {
                 ata[i][i] = 1.0;
             }

@@ -2624,6 +2624,8 @@ fn build_tool_specs() -> Vec<ToolSpec> {
             "body_id": { "type": "integer", "minimum": 1 },
             "edge_ids": edge_ids,
             "distance": { "type": "number", "exclusiveMinimum": 0 },
+            "angle_deg": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 90,
+                "description": "Angle from the first adjacent face in degrees. New UI chamfers default to 45; omit for legacy equal-distance behavior." },
             "tangent_chain": { "type": "boolean" }
         }),
         &["body_id", "edge_ids", "distance", "tangent_chain"],
@@ -3417,14 +3419,16 @@ fn build_tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "sketch_chamfer",
             "Chamfer sketch lines",
-            "Trim two intersecting lines and connect them with an equal-distance chamfer.",
+            "Trim two intersecting lines with a distance and optional acute angle from the first line. Omitted angle retains equal setbacks.",
             "chamfer_lines",
             Payload::Object,
             object_schema(
                 json!({
                     "l1": {"type": "integer", "minimum": 1},
                     "l2": {"type": "integer", "minimum": 1},
-                    "distance_text": {"type": "string", "minLength": 1}
+                    "distance_text": {"type": "string", "minLength": 1},
+                    "angle_text": {"type": "string", "minLength": 1,
+                        "description": "Angle expression in degrees, strictly between 0 and 90. The native UI defaults to 45."}
                 }),
                 &["l1", "l2", "distance_text"],
             ),
@@ -7151,6 +7155,51 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn chamfer_angle_schemas_accept_legacy_requests_and_enforce_exclusive_bounds() {
+        let catalog = full_tool_catalog();
+        let schema = |name: &str| {
+            catalog
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|tool| tool["name"] == name)
+                .unwrap()["inputSchema"]
+                .clone()
+        };
+        for name in ["solid_chamfer", "solid_edit_chamfer"] {
+            let schema = schema(name);
+            let validator = jsonschema::validator_for(&schema).unwrap();
+            let request = |angle: Option<f64>| {
+                let mut chamfer =
+                    json!({"body_id":1,"edge_ids":[1],"distance":2.,"tangent_chain":false});
+                if let Some(value) = angle {
+                    chamfer["angle_deg"] = json!(value);
+                }
+                if name == "solid_edit_chamfer" {
+                    json!({"feature_id":2,"chamfer":chamfer})
+                } else {
+                    chamfer
+                }
+            };
+            assert!(validator.is_valid(&request(None)));
+            for angle in [0.01, 15., 45., 89.99] {
+                assert!(validator.is_valid(&request(Some(angle))));
+            }
+            for angle in [-1., 0., 90., 91.] {
+                assert!(!validator.is_valid(&request(Some(angle))));
+            }
+        }
+        let schema = schema("sketch_chamfer");
+        let validator = jsonschema::validator_for(&schema).unwrap();
+        let mut request = json!({"l1":1,"l2":2,"distance_text":"2"});
+        assert!(validator.is_valid(&request));
+        request["angle_text"] = json!("60/2");
+        assert!(validator.is_valid(&request));
+        request["angle_text"] = json!("");
+        assert!(!validator.is_valid(&request));
     }
 
     #[test]

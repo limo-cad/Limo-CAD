@@ -463,6 +463,7 @@ fn chamfer_resolves_overlapping_line_to_the_adjacent_corner_carrier() {
         l1: setup.entity_id,
         l2: right,
         distance_text: "4".to_string(),
+        angle_text: None,
     })
     .expect("overlap pick resolves to the adjacent bottom carrier");
 
@@ -638,6 +639,7 @@ fn r20_bottom_fillets_allow_exact_distance_20_top_chamfer() {
         l1: top,
         l2: left,
         distance_text: "20.001".to_string(),
+        angle_text: None,
     });
     assert!(too_large.is_err(), "distance beyond the carrier must fail");
     assert_eq!(
@@ -650,6 +652,7 @@ fn r20_bottom_fillets_allow_exact_distance_20_top_chamfer() {
         l1: top,
         l2: left,
         distance_text: "20".to_string(),
+        angle_text: None,
     });
     assert!(
         result.is_ok(),
@@ -870,6 +873,7 @@ fn chamfer_then_fillet_on_dimensioned_rect() {
         l1: bottom,
         l2: left,
         distance_text: "4".to_string(),
+        angle_text: None,
     })
     .expect("chamfer works");
     let r = s.fillet_lines(&FilletRequest {
@@ -970,6 +974,7 @@ fn corner_op_matrix_on_dimensioned_rect() {
                             l1: la,
                             l2: lb,
                             distance_text: "4".to_string(),
+                            angle_text: None,
                         })
                         .map(|_| ())
                     }
@@ -991,6 +996,7 @@ fn corner_op_matrix_on_dimensioned_rect() {
                         l1: l2a,
                         l2: l2b,
                         distance_text: "4".to_string(),
+                        angle_text: None,
                     })
                     .map(|_| ())
                 };
