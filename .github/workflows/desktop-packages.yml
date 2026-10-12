@@ -814,6 +814,7 @@ jobs:
         with:
           name: Limo-CAD-macos-mcp-diagnostics
           path: |
+            ${{ runner.temp }}/limo-cad-macos-smoke.log
             ${{ runner.temp }}/limo-cad-mcp-macos.json
             ${{ runner.temp }}/limo-cad-mcp-macos.json.lifecycle
             ${{ runner.temp }}/limo-cad-macos-uri.json
