@@ -122,7 +122,6 @@ pub(super) fn install_interface(render: &mut SubApp) -> SharedSubmission {
 }
 
 // Mirrors Bevy's surface-system inputs, with the shared submission guard.
-#[allow(clippy::too_many_arguments)]
 fn configure_surfaces(
     commands: Commands,
     #[cfg(any(target_os = "macos", target_os = "ios"))] marker: NonSendMarker,
