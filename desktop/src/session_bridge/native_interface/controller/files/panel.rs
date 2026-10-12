@@ -872,7 +872,7 @@ pub(crate) fn synchronize(
                         &format!("file-separator-{i}"),
                         node(7., y + 4., 254., 1.),
                         theme.edge,
-                        61,
+                        62,
                     );
                     y += 9.;
                 }
@@ -889,7 +889,7 @@ pub(crate) fn synchronize(
                     command,
                     node(7., y, 254., row_height),
                     Some("file-menu"),
-                    61,
+                    62,
                     None,
                     disabled,
                 )?;
@@ -899,7 +899,7 @@ pub(crate) fn synchronize(
                     node(19., y + (row_height - 14.) / 2., 14., 14.),
                     icon,
                     if disabled { theme.edge } else { theme.mute },
-                    62,
+                    63,
                 );
                 if !shortcut.is_empty() {
                     state.chrome.text(
@@ -909,7 +909,7 @@ pub(crate) fn synchronize(
                         node(191., y + (row_height - 14.) / 2., 58., 14.),
                         &shortcut,
                         10.,
-                        62,
+                        63,
                     );
                     world
                         .entity_mut(state.chrome.entity(&format!("file-shortcut-{i}")).unwrap())
@@ -923,7 +923,7 @@ pub(crate) fn synchronize(
                 "file-footer-edge",
                 node(7., y + 4., 254., 1.),
                 theme.edge,
-                61,
+                62,
             );
             state.chrome.text(
                 world,
@@ -932,7 +932,7 @@ pub(crate) fn synchronize(
                 node(19., y + 13., 230., 32.),
                 t("file.zipHint"),
                 9.,
-                62,
+                63,
             );
             world
                 .entity_mut(state.chrome.entity("file-footer").unwrap())
