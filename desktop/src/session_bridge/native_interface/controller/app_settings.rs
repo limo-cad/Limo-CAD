@@ -9,6 +9,7 @@ use limo_cad_interface::{ControlInput, Field};
 use std::sync::atomic::AtomicU64;
 use std::time::Instant;
 
+mod navigation;
 mod panel;
 #[cfg(test)]
 mod tests;
@@ -37,6 +38,12 @@ pub(super) fn six_dof_speed(world: &World) -> f32 {
         }) as f32
 }
 
+pub(super) fn discard_navigation_draft(world: &mut World) {
+    if let Some(mut settings) = world.get_resource_mut::<Settings>() {
+        settings.navigation = None;
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Command {
     Theme(ThemePreference),
@@ -45,6 +52,10 @@ pub(crate) enum Command {
     ResetSpeed,
     InterfaceSize(u8),
     GpuStock(bool),
+    NavigationField(navigation::Field),
+    ApplyNavigation,
+    CancelNavigation,
+    ResetNavigation,
     Scroll(i32),
     Retry,
     Close,
@@ -64,6 +75,7 @@ struct Settings {
     scroll: f32,
     content: Option<InterfaceRect>,
     scroll_max: f32,
+    navigation: Option<navigation::Draft>,
 }
 impl Settings {
     fn new(store: Result<Store, String>, detected: Locale) -> Self {
@@ -85,6 +97,7 @@ impl Settings {
             scroll: 0.,
             content: None,
             scroll_max: 0.,
+            navigation: None,
         }
     }
     fn effective(&self) -> Effective {
@@ -102,6 +115,10 @@ impl Settings {
                 Ok(saved) => {
                     self.saved = saved;
                     self.error = self.save_error.clone();
+                    let live = self.effective().navigation;
+                    if let Some(draft) = &mut self.navigation {
+                        draft.observe(live);
+                    }
                 }
                 Err(error) => self.error = Some(error),
             }
@@ -147,6 +164,9 @@ fn merge(target: &mut Preferences, patch: &Preferences) {
     if let Some(scale) = patch.ui_scale {
         target.ui_scale = Some(scale);
     }
+    if let Some(bindings) = patch.navigation {
+        target.navigation = Some(bindings);
+    }
 }
 
 fn initialize(world: &mut World) {
@@ -173,6 +193,7 @@ pub(super) fn refresh(world: &mut World, force: bool) {
     settings.wake = wake;
     settings.poll(force || notified);
     let effective = settings.effective();
+    view::apply_navigation_bindings(world, effective.navigation);
     native_viewport::apply_interface_gpu_stock_preference(world, effective.gpu_stock_removal);
     let resolved = effective.theme.resolve(system_dark(world));
     let changed_locale = localization::set_locale(world, effective.locale);
@@ -230,6 +251,9 @@ pub(super) fn caption(world: &World) -> Option<String> {
         "effective":settings.effective(),
         "error":settings.error,
         "open":files::settings_open(world),
+        "navigation_draft":settings.navigation.as_ref().map(|draft| draft.value),
+        "navigation_conflicts":settings.navigation.as_ref().map(|draft| draft.value.conflicts().into_iter().map(|conflict| conflict.message(settings.effective().locale)).collect::<Vec<_>>()),
+        "navigation_error":settings.navigation.as_ref().and_then(|draft| draft.error.as_ref()),
     }).to_string())
 }
 
@@ -257,6 +281,21 @@ pub(crate) fn reduce(
         settings.scroll =
             (settings.scroll + direction as f32 * page).clamp(0., settings.scroll_max);
         return Ok(json!({"scroll":settings.scroll}));
+    }
+    if matches!(
+        command,
+        Command::NavigationField(_)
+            | Command::ApplyNavigation
+            | Command::CancelNavigation
+            | Command::ResetNavigation
+    ) {
+        initialize(world);
+        let mut settings = world.remove_resource::<Settings>().unwrap();
+        settings.poll(true);
+        let result = navigation::reduce(&mut settings, command, &action.control.input);
+        world.insert_resource(settings);
+        refresh(world, true);
+        return result;
     }
     let patch = match command {
         Command::Speed => {
@@ -314,7 +353,12 @@ pub(crate) fn reduce(
                     files::close_settings(world);
                     return Ok(json!({"closed":true}));
                 }
-                Command::Speed | Command::Scroll(_) => unreachable!(),
+                Command::Speed
+                | Command::Scroll(_)
+                | Command::NavigationField(_)
+                | Command::ApplyNavigation
+                | Command::CancelNavigation
+                | Command::ResetNavigation => unreachable!(),
             }
         }
     };
@@ -410,6 +454,7 @@ pub(super) fn synchronize(
     } else {
         settings.content = None;
         settings.scroll = 0.;
+        settings.navigation = None;
         Ok(())
     };
     settings.widgets.finish(world);

@@ -77,12 +77,13 @@ pub(super) fn paint(
         height: (h - if settings.error.is_some() { 141. } else { 85. }) as f64,
     };
     settings.content = Some(body);
+    let navigation_height = navigation::height(world, settings);
     let content_height = settings
         .widgets
         .entity("settings-content")
         .and_then(|entity| world.get::<ComputedNode>(entity))
         .map_or(0., |node| node.size.y * node.inverse_scale_factor)
-        .max(ABOUT_MIN_HEIGHT + OPTIONS_HEIGHT);
+        .max(ABOUT_MIN_HEIGHT + OPTIONS_HEIGHT + navigation_height);
     settings.scroll_max = (content_height - body.height as f32).max(0.);
     settings.scroll = settings.scroll.clamp(0., settings.scroll_max);
     settings.widgets.panel(
@@ -184,7 +185,7 @@ pub(super) fn paint(
         camera,
         "settings-options-content",
         Node {
-            height: px(OPTIONS_HEIGHT),
+            height: px(OPTIONS_HEIGHT + navigation_height),
             flex_shrink: 0.,
             ..default()
         },
@@ -460,6 +461,7 @@ pub(super) fn paint(
         t("appearance.gpuStockRemovalDescription"),
         10.,
     );
+    navigation::paint(world, camera, settings, content, inner)?;
     let units = match services.engine.document_units() {
         limo_cad_core::UnitSystem::Mm => "mm",
         limo_cad_core::UnitSystem::Cm => "cm",
@@ -469,7 +471,7 @@ pub(super) fn paint(
         world,
         settings,
         "settings-units",
-        680.,
+        680. + navigation_height,
         22.,
         &t("appearance.documentUnits").replace("{unit}", units),
         11.,

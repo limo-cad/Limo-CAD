@@ -16,6 +16,7 @@ use std::{
 };
 
 pub(crate) mod locale;
+pub(crate) mod navigation;
 pub(crate) mod palette;
 
 const FILE_NAME: &str = "app-preferences.json";
@@ -87,6 +88,8 @@ pub(crate) struct Preferences {
     pub ui_scale: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpu_stock_removal: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub navigation: Option<navigation::Bindings>,
 }
 
 impl Preferences {
@@ -97,6 +100,7 @@ impl Preferences {
             six_dof_speed: self.six_dof_speed.unwrap_or(DEFAULT_SIX_DOF_SPEED),
             ui_scale: self.ui_scale.map(snap_ui_scale).unwrap_or(DEFAULT_UI_SCALE),
             gpu_stock_removal: self.gpu_stock_removal.unwrap_or(true),
+            navigation: self.navigation.unwrap_or_default(),
         }
     }
 
@@ -122,6 +126,9 @@ impl Preferences {
         if patch.ui_scale.is_some() {
             self.ui_scale = patch.ui_scale;
         }
+        if patch.navigation.is_some() {
+            self.navigation = patch.navigation;
+        }
     }
 }
 
@@ -132,6 +139,7 @@ pub(crate) struct Effective {
     pub six_dof_speed: f64,
     pub ui_scale: f64,
     pub gpu_stock_removal: bool,
+    pub navigation: navigation::Bindings,
 }
 
 pub(crate) fn snap_ui_scale(value: f64) -> f64 {
@@ -185,6 +193,8 @@ struct Stored {
     ui_scale: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     gpu_stock_removal: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    navigation: Option<navigation::Bindings>,
     #[serde(flatten)]
     extra: BTreeMap<String, serde_json::Value>,
 }
@@ -198,6 +208,7 @@ impl Default for Stored {
             six_dof_speed: None,
             ui_scale: None,
             gpu_stock_removal: None,
+            navigation: None,
             extra: BTreeMap::new(),
         }
     }
@@ -211,6 +222,7 @@ impl Stored {
             six_dof_speed: self.six_dof_speed,
             ui_scale: self.ui_scale.map(snap_ui_scale),
             gpu_stock_removal: self.gpu_stock_removal,
+            navigation: self.navigation,
         }
     }
 
@@ -230,6 +242,9 @@ impl Stored {
             !scale.is_finite() || !(UI_SCALE_OPTIONS[0]..=UI_SCALE_OPTIONS[5]).contains(&scale)
         }) {
             return Err("Saved interface size must be between 90% and 175%".into());
+        }
+        if let Some(bindings) = self.navigation {
+            bindings.validate()?;
         }
         Ok(())
     }
@@ -265,7 +280,23 @@ impl Store {
     }
 
     pub(crate) fn patch(&self, patch: Preferences) -> Result<Preferences, String> {
-        self.update(patch.normalized())
+        self.update(patch.normalized(), None)
+    }
+
+    /// Apply a Settings draft only if its navigation baseline is still current.
+    /// The comparison and merge share the existing cross-process writer lock.
+    pub(crate) fn patch_navigation(
+        &self,
+        expected: navigation::Bindings,
+        bindings: navigation::Bindings,
+    ) -> Result<Preferences, String> {
+        self.update(
+            Preferences {
+                navigation: Some(bindings),
+                ..Default::default()
+            },
+            Some(expected),
+        )
     }
 
     fn read_stored(&self) -> Result<Stored, String> {
@@ -295,7 +326,14 @@ impl Store {
         Ok(stored)
     }
 
-    fn update(&self, patch: Preferences) -> Result<Preferences, String> {
+    fn update(
+        &self,
+        patch: Preferences,
+        expected_navigation: Option<navigation::Bindings>,
+    ) -> Result<Preferences, String> {
+        if let Some(bindings) = patch.navigation {
+            bindings.validate()?;
+        }
         if patch == Preferences::default() {
             return self.read();
         }
@@ -320,6 +358,11 @@ impl Store {
         })?;
         let mut stored = self.read_stored()?;
         let before = stored.preferences();
+        if expected_navigation
+            .is_some_and(|expected| before.navigation.unwrap_or_default() != expected)
+        {
+            return Err("Navigation settings changed in another window. Cancel changes to load the latest bindings before applying.".into());
+        }
         let mut after = before.clone();
         after.merge(patch);
         if after == before {
@@ -330,6 +373,7 @@ impl Store {
         stored.six_dof_speed = after.six_dof_speed;
         stored.ui_scale = after.ui_scale;
         stored.gpu_stock_removal = after.gpu_stock_removal;
+        stored.navigation = after.navigation;
         stored.validate()?;
         let bytes = serde_json::to_vec_pretty(&stored)
             .map_err(|error| format!("Cannot serialize application preferences: {error}"))?;

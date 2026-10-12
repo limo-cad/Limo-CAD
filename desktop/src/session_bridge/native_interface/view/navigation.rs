@@ -1,6 +1,7 @@
 //! Pointer navigation only reads the rendered camera and the current UI owner.
 //! In particular, it must not acquire the document/publisher locks held by OCC.
 use super::*;
+use crate::app_preferences::navigation::{self as bindings, Action, Bindings, Button};
 use crate::native_viewport::{
     interface_shell::NativeInterfaceHandle,
     winit_host::{cancel_native_pointer, NativeHostInput},
@@ -32,6 +33,33 @@ struct Drag {
 #[derive(Resource, Default)]
 struct Navigation {
     drag: Option<Drag>,
+}
+
+#[derive(Resource)]
+struct ConfiguredBindings(Bindings);
+
+/// Publish only applied preferences. Existing gestures finish with the mode
+/// selected on press; a preference change retires that pointer owner first.
+pub(in super::super) fn apply_bindings(world: &mut World, bindings: Bindings) {
+    let current = world
+        .get_resource::<ConfiguredBindings>()
+        .map(|current| current.0);
+    if current == Some(bindings) {
+        return;
+    }
+    if current.unwrap_or_default() != bindings {
+        cancel_pointer(world);
+    }
+    world.insert_resource(ConfiguredBindings(bindings));
+}
+
+fn modifier_bits(input: &NativeHostInput) -> u8 {
+    let m = input.modifiers;
+    u8::from(m.shift) * bindings::SHIFT
+        | u8::from(m.ctrl) * bindings::CTRL
+        | u8::from(m.alt) * bindings::ALT
+        | u8::from(m.meta) * bindings::META
+        | u8::from(m.alt_graph) * bindings::ALT_GRAPH
 }
 
 pub(in super::super) fn cancel_pointer(world: &mut World) {
@@ -224,6 +252,9 @@ fn navigate_inner(
             );
             cursor.distance(center) < dial.width as f32 / 2.
         });
+    let bindings = world
+        .get_resource::<ConfiguredBindings>()
+        .map_or_else(Bindings::default, |current| current.0);
     match &input.event {
         WindowEvent::MouseButtonInput(button) if (on_canvas || on_dial) && state.drag.is_none() => {
             let mode = match button.button {
@@ -235,9 +266,19 @@ fn navigate_inner(
                     NavigationTool::Zoom => Mode::Zoom,
                     NavigationTool::ZoomWindow => Mode::ZoomWindow,
                 },
-                MouseButton::Middle if !input.modifiers.shift => Mode::Pan,
-                MouseButton::Middle | MouseButton::Right => Mode::Orbit,
-                _ => return Ok(false),
+                button => {
+                    let button = match button {
+                        MouseButton::Middle => Button::Middle,
+                        MouseButton::Right => Button::Right,
+                        _ => return Ok(false),
+                    };
+                    match bindings.drag_action(button, modifier_bits(input)) {
+                        Some(Action::Pan) => Mode::Pan,
+                        Some(Action::Orbit) => Mode::Orbit,
+                        Some(Action::Zoom) => Mode::Zoom,
+                        _ => return Ok(false),
+                    }
+                }
             };
             state.drag = Some(Drag {
                 owner: input.context.clone().expect("validated canvas owner"),
@@ -300,19 +341,19 @@ fn navigate_inner(
                 return Ok(false);
             }
             let delta = delta.clamp(Vec2::splat(-240.), Vec2::splat(240.));
-            if input.modifiers.shift {
-                move_camera(world, input, bounds, Mode::Orbit, delta * 0.6, None)?;
-            } else if input.modifiers.ctrl || wheel.unit == MouseScrollUnit::Line {
-                move_camera(
+            match bindings.scroll_action(wheel.unit == MouseScrollUnit::Pixel, modifier_bits(input))
+            {
+                Action::Orbit => move_camera(world, input, bounds, Mode::Orbit, delta * 0.6, None)?,
+                Action::Zoom => move_camera(
                     world,
                     input,
                     bounds,
                     Mode::Pan,
                     Vec2::ZERO,
                     Some(-delta.y * 0.002),
-                )?;
-            } else {
-                move_camera(world, input, bounds, Mode::Pan, delta, None)?;
+                )?,
+                Action::Pan => move_camera(world, input, bounds, Mode::Pan, delta, None)?,
+                Action::Disabled | Action::Inherit => return Ok(false),
             }
             Ok(true)
         }

@@ -23,6 +23,80 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn navigation_preferences_round_trip_reject_conflicts_and_preserve_concurrent_fields() {
+    use navigation::{Action, Bindings, Button, DragBinding, Modifiers};
+    let fixture = Fixture::new();
+    fixture.write(br#"{"schema_version":1,"theme":"dark","future":{"keep":[1,2,3]}}"#);
+    let defaults = Bindings::default();
+    assert_eq!(
+        fixture.0.read().unwrap().effective(Locale::En).navigation,
+        defaults
+    );
+    let custom = Bindings {
+        pan: DragBinding {
+            button: Button::Right,
+            modifiers: Modifiers::None,
+        },
+        orbit: DragBinding {
+            button: Button::Middle,
+            modifiers: Modifiers::None,
+        },
+        orbit_alternative: DragBinding {
+            button: Button::Middle,
+            modifiers: Modifiers::Shift,
+        },
+        zoom: DragBinding {
+            button: Button::Right,
+            modifiers: Modifiers::Ctrl,
+        },
+        wheel: Action::Pan,
+        ..defaults
+    };
+    let saved = fixture.0.patch_navigation(defaults, custom).unwrap();
+    assert_eq!(saved.navigation, Some(custom));
+    assert_eq!(fixture.0.read().unwrap(), saved);
+    let observer = Store::at(fixture.0.path.parent().unwrap().to_path_buf()).unwrap();
+    assert_eq!(
+        observer.read().unwrap().effective(Locale::De).navigation,
+        custom
+    );
+    observer
+        .patch(Preferences {
+            locale: Some(Locale::Es),
+            six_dof_speed: Some(2.25),
+            ..Default::default()
+        })
+        .unwrap();
+    let changed = Bindings {
+        trackpad: Action::Zoom,
+        ..custom
+    };
+    let merged = fixture.0.patch_navigation(custom, changed).unwrap();
+    assert_eq!(merged.locale, Some(Locale::Es));
+    assert_eq!(merged.six_dof_speed, Some(2.25));
+    let before = fs::read(fixture.0.path()).unwrap();
+    let conflict = Bindings {
+        zoom: custom.pan,
+        ..changed
+    };
+    assert!(fixture.0.patch_navigation(changed, conflict).is_err());
+    assert_eq!(fs::read(fixture.0.path()).unwrap(), before);
+    assert!(fixture
+        .0
+        .patch_navigation(custom, defaults)
+        .unwrap_err()
+        .contains("another window"));
+    assert_eq!(fs::read(fixture.0.path()).unwrap(), before);
+    let raw: serde_json::Value = serde_json::from_slice(&before).unwrap();
+    assert_eq!(raw["future"], serde_json::json!({"keep":[1,2,3]}));
+    fixture.0.patch_navigation(changed, defaults).unwrap();
+    let restored = fixture.0.read().unwrap();
+    assert_eq!(restored.navigation, Some(defaults));
+    assert_eq!(restored.theme, Some(ThemePreference::Dark));
+    assert_eq!(restored.locale, Some(Locale::Es));
+}
+
+#[test]
 fn defaults_do_not_create_files_and_explicit_choices_persist() {
     let fixture = Fixture::new();
     let saved = fixture.0.read().unwrap();
@@ -35,6 +109,7 @@ fn defaults_do_not_create_files_and_explicit_choices_persist() {
             six_dof_speed: 1.5,
             ui_scale: 1.,
             gpu_stock_removal: true,
+            navigation: navigation::Bindings::default(),
         }
     );
     assert!(!fixture.0.path.parent().unwrap().exists());

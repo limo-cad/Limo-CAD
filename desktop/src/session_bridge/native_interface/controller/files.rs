@@ -336,6 +336,7 @@ pub(super) fn close_settings(world: &mut World) {
     if let Some(mut files) = world.get_resource_mut::<Files>() {
         files.settings = false;
     }
+    app_settings::discard_navigation_draft(world);
 }
 pub(super) fn dismiss_menu(world: &mut World) {
     if let Some(mut files) = world.get_resource_mut::<Files>() {
@@ -742,7 +743,13 @@ fn execute(
                 files.scripts = false;
             }
         }
-        return Ok(json!({"scripts": files.scripts, "settings": files.settings}));
+        let response = json!({"scripts": files.scripts, "settings": files.settings});
+        let settings_closed = !files.settings;
+        drop(files);
+        if settings_closed {
+            app_settings::discard_navigation_draft(world);
+        }
+        return Ok(response);
     }
     match &command {
         FileCommand::ScriptLaunch(action) => return scripts::launch_command(world, *action),
@@ -1664,6 +1671,8 @@ pub(super) fn escape(world: &mut World) {
     f.scripts = false;
     f.settings = false;
     f.replace_dialog(None);
+    drop(f);
+    app_settings::discard_navigation_draft(world);
 }
 pub(super) fn dialog_error(world: &mut World, error: &str) {
     if let Some(dialog) = world.resource_mut::<Files>().dialog.as_mut() {
