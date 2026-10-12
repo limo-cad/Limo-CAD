@@ -1,5 +1,6 @@
 //! Native package builders. There are no legacy-script fallbacks.
 mod common;
+mod dmg;
 mod linux;
 mod macos;
 mod recipe_handler;

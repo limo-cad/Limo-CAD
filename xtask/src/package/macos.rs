@@ -1,12 +1,15 @@
 use super::{
     common::{self, Package},
+    dmg::{self, CreateResult},
     Options,
 };
 use anyhow::{ensure, Context, Result};
 use std::{
     collections::{BTreeMap, VecDeque},
     env, fs,
+    io::Write,
     path::{Path, PathBuf},
+    process::Stdio,
 };
 
 const ENTRY_LIBRARIES: &[&str] = &[
@@ -349,13 +352,28 @@ pub(super) fn build(package: &Package, options: &Options) -> Result<()> {
             Path::new("/Applications"),
             &temp.path().join("Applications"),
         )?;
-        common::run(
-            package
-                .command("hdiutil")
-                .args(["create", "-volname", "Limo CAD", "-srcfolder"])
-                .arg(temp.path())
-                .args(["-ov", "-format", "UDZO"])
-                .arg(&dmg),
+        dmg::create_with_busy_retry(
+            &dmg,
+            temp.path(),
+            |source, candidate| {
+                let result = package
+                    .command("hdiutil")
+                    .args(["create", "-volname", "Limo CAD", "-srcfolder"])
+                    .arg(source)
+                    .args(["-ov", "-format", "UDZO"])
+                    .arg(candidate)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::piped())
+                    .output()
+                    .context("start hdiutil create")?;
+                std::io::stderr().write_all(&result.stderr)?;
+                Ok(CreateResult {
+                    code: result.status.code(),
+                    stderr: result.stderr,
+                })
+            },
+            std::thread::sleep,
         )?;
     }
     if production {
