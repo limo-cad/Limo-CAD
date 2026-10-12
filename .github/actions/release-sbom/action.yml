@@ -22,6 +22,9 @@ runs:
         LIMO_SBOM_TARGET: ${{ inputs.target }}
       run: |
         set -euo pipefail
+        # checkout's temporary HOME does not persist its safe.directory setting
+        # for later shell steps in the root-owned AppImage container.
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
         archives=()
         while IFS= read -r archive; do archives+=("$archive"); done < <(compgen -G "$LIMO_SBOM_GLOB" | sort)
         test "${#archives[@]}" -eq 1

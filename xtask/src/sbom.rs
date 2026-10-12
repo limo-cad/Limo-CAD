@@ -160,6 +160,7 @@ fn input_hashes(root: &Path) -> Result<BTreeMap<String, String>> {
         "ls-files",
         "-z",
         "--",
+        ".gitattributes",
         "VERSION",
         "Cargo.lock",
         "desktop/Cargo.lock",

@@ -44,6 +44,12 @@ are published as release assets. Weekly scans verify the latest release's signed
 inventories before checking current advisory data. Older releases without SBOMs
 remain a reported coverage gap until an inventoried release is available.
 
+Release input hashes cover the actual checkout bytes, including `.gitattributes`.
+The scoped attributes keep those inputs at LF on Windows and Unix so a Windows
+inventory can be checked on the Linux publication host without weakening input
+tamper checks. The AppImage container trusts only its exact checkout path before
+reading the source revision and inputs.
+
 ## Generate locally
 
 Use the same versions as `.github/actions/setup-release-sbom`: Syft **1.54.1**

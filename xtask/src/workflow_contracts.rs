@@ -952,6 +952,18 @@ fn appimage_keeps_oldest_glibc_and_minimal_host_input_runtime() {
 }
 
 #[test]
+fn release_inventory_trusts_the_exact_checkout_before_reading_git_metadata() {
+    let action = read(".github/actions/release-sbom/action.yml");
+    ordered(
+        &action,
+        "git config --global --add safe.directory \"$GITHUB_WORKSPACE\"",
+        "cargo xtask sbom release",
+    );
+    assert!(!action.contains("safe.directory '*'"));
+    assert!(!action.contains("safe.directory \"*\""));
+}
+
+#[test]
 fn package_gates_reject_dependencies_disabled_commands_and_foreign_artifacts() {
     let valid = workflow(".github/workflows/desktop-packages.yml");
     check_package_gates(&valid).unwrap();

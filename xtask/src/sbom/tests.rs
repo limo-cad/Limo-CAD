@@ -1,5 +1,67 @@
 use super::*;
 
+#[test]
+fn release_input_hashes_match_windows_and_unix_checkout_settings() {
+    let root = crate::release_tooling::root();
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source");
+    fs::create_dir(&source).unwrap();
+    let mut paths: Vec<_> = input_hashes(root).unwrap().into_keys().collect();
+    if !paths.iter().any(|path| path == ".gitattributes") {
+        paths.push(".gitattributes".into());
+    }
+    // Start with the same LF source blobs, then exercise Git's real checkout
+    // filters for every tracked release input, rather than normalizing hashes.
+    for path in paths {
+        let destination = source.join(&path);
+        fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        let contents = fs::read_to_string(root.join(path)).unwrap();
+        fs::write(destination, contents.replace("\r\n", "\n")).unwrap();
+    }
+    let hooks = temporary.path().join("empty-hooks");
+    fs::create_dir(&hooks).unwrap();
+    let git = || {
+        let mut command = Command::new("git");
+        command
+            .current_dir(&source)
+            .args(["-c", "commit.gpgsign=false", "-c", "user.name=SBOM fixture"])
+            .args(["-c", "user.email=sbom-fixture@example.invalid", "-c"])
+            .arg(format!("core.hooksPath={}", hooks.display()));
+        command
+    };
+    execute(git().args(["init", "--quiet"])).unwrap();
+    execute(git().args(["add", "--all"])).unwrap();
+    execute(git().args(["commit", "--quiet", "-m", "Release input fixture"])).unwrap();
+    let checkouts: Vec<_> = ["true", "false"]
+        .into_iter()
+        .map(|autocrlf| {
+            let checkout = temporary.path().join(format!("autocrlf-{autocrlf}"));
+            execute(
+                git()
+                    .args(["clone", "--quiet", "--no-local", "--config"])
+                    .arg(format!("core.autocrlf={autocrlf}"))
+                    .arg(&source)
+                    .arg(&checkout),
+            )
+            .unwrap();
+            checkout
+        })
+        .collect();
+    let windows = input_hashes(&checkouts[0]).unwrap();
+    let unix = input_hashes(&checkouts[1]).unwrap();
+    assert_eq!(windows, unix);
+    assert!(windows.contains_key(".gitattributes"));
+    assert_eq!(
+        fs::read(checkouts[0].join("VERSION")).unwrap(),
+        fs::read(checkouts[1].join("VERSION")).unwrap()
+    );
+    let manifest = checkouts[0].join("Cargo.toml");
+    let mut contents = fs::read_to_string(&manifest).unwrap();
+    contents.push_str("\n# Substantive input edit must still change release identity.\n");
+    fs::write(manifest, contents).unwrap();
+    assert_ne!(input_hashes(&checkouts[0]).unwrap(), unix);
+}
+
 fn cdx() -> Value {
     json!({"bomFormat":"CycloneDX","specVersion":"1.6","version":1,
         "metadata":{"component":{"bom-ref":"archive","type":"file","name":"package","version":"0.2.2"}},
