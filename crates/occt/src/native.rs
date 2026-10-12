@@ -205,6 +205,12 @@ mod ffi {
     }
 
     // Native primitives exercise the same clearance helper without changing a model.
+    // cxx-build generates ordinary C++ linkage before Rust unit-test compilation,
+    // so the private qualification declarations must also exist in normal builds.
+    #[allow(
+        dead_code,
+        reason = "private native qualification bridge is called only by unit tests"
+    )]
     struct FfiClearanceRegression {
         legacy_inner_solution: bool,
         legacy_minimum_clearance_mm: f64,
@@ -223,6 +229,10 @@ mod ffi {
 
         type Kernel;
         fn new_kernel() -> UniquePtr<Kernel>;
+        #[allow(
+            dead_code,
+            reason = "private native qualification bridge is called only by unit tests"
+        )]
         fn clearance_regression_probe() -> Result<FfiClearanceRegression>;
         fn reset(self: Pin<&mut Kernel>);
         fn apply_job(self: Pin<&mut Kernel>, job: &FfiJob) -> Result<()>;
