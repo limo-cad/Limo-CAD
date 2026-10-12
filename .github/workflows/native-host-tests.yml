@@ -132,8 +132,9 @@ permissions:
 
 concurrency:
   group: native-host-tests-${{ github.workflow }}-${{ github.ref }}${{ inputs.ime-probe-only && (inputs.ime-probe-macos && '-ime-probe-macos' || '-ime-probe') || inputs.ime-native-macos && '-ime-native-macos' || inputs.input-family == 'windows-ime' && '-windows-ime' || inputs.input-family == 'windows-print' && '-windows-print' || inputs.input-family == 'switching' && '-switching' || inputs.linux-only && format('-linux-only-{0}', inputs.input-family || 'all') || '' }}
-  # Preserve explicit/manual qualification; cancel only superseded PR checks.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Let the current SDK owner finish qualification and save its checked cache.
+  # New revisions replace the pending run, then perform their own full checks.
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
