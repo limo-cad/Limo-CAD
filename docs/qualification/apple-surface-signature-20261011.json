@@ -205,5 +205,174 @@
     "receipt": "docs/qualification/receipt-only-status-20261011.json"
   },
   "surface_coverage_blob_unchanged": "5aa045ccb7c35f484e48cadb7a278e85db6cc03e",
-  "scope": "One changed Desktop strict Windows compiler/lint check, after a genuine cfg Apple CI failure. No unchanged passing regression was repeated. Local Windows compilation does not qualify cfg Apple; normal repaired-head hosted checks supply that evidence. Original #374 GPU-startup criteria remain independent and open. No test execution, suite, GUI input, deployment/restart, live data mutation, main change or Jack PR action."
+  "scope": "One changed Desktop strict Windows compiler/lint check, after a genuine cfg Apple CI failure. No unchanged passing regression was repeated. Local Windows compilation does not qualify cfg Apple; normal repaired-head hosted checks supply that evidence. Original #374 GPU-startup criteria remain independent and open. No test execution, suite, GUI input, deployment/restart, live data mutation, main change or Jack PR action.",
+  "hosted_apple_compile_and_host_tests": {
+    "recorded_utc": "2026-10-12T00:15:46.202988+00:00",
+    "qualified_head": "f41b9240579dc9a33ad62bb7c73cf53b244778ed",
+    "integration_source_revision": "8b1d7ce01f3ad792a92a4232cc09cbf0dca7d8dc",
+    "source_path": "desktop/src/native_viewport/viewport_renderer/surface_submission.rs",
+    "original_signature_source_blob": "603309de5d06780bb592ff460310565f3504620e",
+    "qualified_host_source_blob": "4d573d302afcaeed916f325a6090d0359f8443f1",
+    "integration_source_blob": "31955d4242be4bba24b6154475f850101d2016a8",
+    "source_trajectory": {
+      "original_to_host": "Only one explanatory comment and an incoming too_many_arguments waiver were added.",
+      "host_to_integration": "Only the redundant too_many_arguments waiver is removed; comment and all executable source are preserved.",
+      "executable_source_identical": true,
+      "unwaived_apple_lint_acceptance": "Pending normal final-head hosted CI; f41 strict lint ran with the waiver present."
+    },
+    "job_url": "https://github.com/limo-cad/Limo-CAD/actions/runs/38184109357/job/114602735133",
+    "receipt_path": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\ci-batch-f41b9240-mac-host-success-steps.json",
+    "receipt_sha256": "070b2e6f8d7ac048916c36cbb4699e10d829e26b017b17e5d86082491ef70957",
+    "observed_at": "2026-10-12T00:02:40.924Z",
+    "job": {
+      "completed_at": "2026-10-11T23:59:43Z",
+      "conclusion": "success",
+      "head_sha": "f41b9240579dc9a33ad62bb7c73cf53b244778ed",
+      "id": 114602735133,
+      "name": "macOS native Bevy host",
+      "run_id": 38184109357,
+      "runner_id": 1000005577,
+      "started_at": "2026-10-11T23:29:56Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completed_at": "2026-10-11T23:29:58Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "started_at": "2026-10-11T23:29:57Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:30:02Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "started_at": "2026-10-11T23:29:58Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:30:08Z",
+          "conclusion": "success",
+          "name": "Run ./.github/actions/setup-rust",
+          "number": 3,
+          "started_at": "2026-10-11T23:30:02Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:30:17Z",
+          "conclusion": "success",
+          "name": "Run Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
+          "number": 4,
+          "started_at": "2026-10-11T23:30:08Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:50:25Z",
+          "conclusion": "success",
+          "name": "Install native geometry kernel",
+          "number": 5,
+          "started_at": "2026-10-11T23:30:17Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:51:15Z",
+          "conclusion": "success",
+          "name": "Test concurrent first-use OCCT projection",
+          "number": 6,
+          "started_at": "2026-10-11T23:50:25Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:52:15Z",
+          "conclusion": "success",
+          "name": "Lint every native target and feature",
+          "number": 7,
+          "started_at": "2026-10-11T23:51:15Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:59:35Z",
+          "conclusion": "success",
+          "name": "Test the native Bevy host",
+          "number": 8,
+          "started_at": "2026-10-11T23:52:15Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:59:35Z",
+          "conclusion": "skipped",
+          "name": "Build the live native host",
+          "number": 9,
+          "started_at": "2026-10-11T23:59:35Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:59:35Z",
+          "conclusion": "skipped",
+          "name": "Verify installed CJK and emoji fonts through Bevy shaping",
+          "number": 10,
+          "started_at": "2026-10-11T23:59:35Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:59:35Z",
+          "conclusion": "skipped",
+          "name": "Exercise macOS Command shortcuts and clipboard",
+          "number": 11,
+          "started_at": "2026-10-11T23:59:35Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:59:35Z",
+          "conclusion": "skipped",
+          "name": "Verify same-job stock macOS IME prerequisite",
+          "number": 12,
+          "started_at": "2026-10-11T23:59:35Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:59:35Z",
+          "conclusion": "skipped",
+          "name": "Exercise actual Bevy Japanese composition, commit and cancellation",
+          "number": 13,
+          "started_at": "2026-10-11T23:59:35Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:59:35Z",
+          "conclusion": "skipped",
+          "name": "Retain macOS input snapshots and native captures",
+          "number": 14,
+          "started_at": "2026-10-11T23:59:35Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:59:36Z",
+          "conclusion": "success",
+          "name": "Post Run Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
+          "number": 27,
+          "started_at": "2026-10-11T23:59:35Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:59:36Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 28,
+          "started_at": "2026-10-11T23:59:36Z",
+          "status": "completed"
+        },
+        {
+          "completed_at": "2026-10-11T23:59:38Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 29,
+          "started_at": "2026-10-11T23:59:36Z",
+          "status": "completed"
+        }
+      ]
+    },
+    "scope": "Authenticated macOS native-host CI passed all-target/all-feature compilation and native-host tests with the tuple-SystemParam repair. An incoming redundant too_many_arguments waiver was present at f41, so its lint-step success does not qualify unwaived argument-limit enforcement. The integration removes only that waiver; normal final-head CI must supply unwaived Apple lint acceptance. Optional live host, font, clipboard, IME and capture steps were skipped. A successful Post Rust-cache step does not independently prove cache-key persistence. This is not #374 packaged-default startup acceptance, current final-head CI completion, a live GUI/build pair or physical manual qualification."
+  }
 }

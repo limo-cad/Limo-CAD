@@ -1,6 +1,37 @@
 # Native transition status
 
-Current checkpoint, **2026-10-11 UTC**: source `ab1de731` also repairs
+Current checkpoint, **2026-10-12 UTC**: source `a104920e` repairs
+the posted **#378** sibling-menu switch defect. File and workbench menu openers
+now transfer the transient menu owner on one click; their target ordering keeps
+visible sibling buttons above the File backdrop and covered targets below its
+card. File expansion metadata follows actual File ownership. The original File
+card/rows/decorations used depths 60/61/62. The initial sibling fix raised the
+card to 61 but left selectable rows tied at 61; six production depth changes
+restore card61/rows62/decorations63, with separator/footer rules at 62. The
+formerly blocked Rename menu row now reaches its real dialog in the same case.
+Real dialogs, stale retained-action rejection and document/revision guards remain
+intact. Independent source review, one strict changed-desktop check and
+one new exact generated-UI/guarded-pointer regression pass once on this clean
+source. The regression uses a bounded headless absolute-layout/paint-order adapter;
+physical macOS and native rendering are not claimed. Earlier fixture compile and
+pointer-hit failures are retained, with their signature, traversal and layout/stack
+adapter corrections. The `f0dca20d` failing click remains unattributed; `6420fbac`
+completed earlier subassertions but failed its final Rename row hit and remains
+zero whole cases qualified. Its genuine card/row tie and six-value correction are
+recorded separately. Incoming Bevy section
+work at `f41b9240` is preserved, with all six qualified menu source blobs unchanged.
+The incoming `f41b9240` macOS native-host job passed compile/lint (step 7) with a
+retained `configure_surfaces` argument-count waiver, and host tests (step 8).
+Optional live/font/clipboard/IME steps 9–14 were skipped. These
+are retained [incoming-head CI results](https://github.com/limo-cad/Limo-CAD/actions/runs/38184109357/job/114602735133),
+not unwaived Apple lint, final merged-head or packaged GPU acceptance.
+Unwaived Apple lint, current-head hosted CI and **#374** packaged GPU acceptance
+remain pending.
+Broad UI/MCP coverage stays paused; no deployed pair, runtime change, live input
+or main merge is claimed. Exact commands, artifact/log hashes, source bindings
+and limits: `docs/qualification/sibling-menu-switch-20261011.json`.
+
+Historical checkpoint, **2026-10-11 UTC**: source `ab1de731` also repairs
 the genuine `c11a51cd` macOS strict-Clippy failure in `configure_surfaces`. Grouping
 the existing gate/queue guard parameters brings its Apple signature to seven
 arguments while preserving the main-thread marker, queue exclusion and original
