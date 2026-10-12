@@ -1,100 +1,83 @@
-# Limo CAD startup visual review
+# Limo CAD startup and loading visuals
 
-The floating card is 560 × 380 logical pixels. Shared artwork contains no text;
-names, status, document progress, notes and recovery controls use the selected
-language. English mode is entirely English. The card dismisses on successful
-required initialization and rendering, without a mandatory animation or delay.
+The initial application launch uses a **560 × 380** floating splash card. It shows the selected regional name, an engineering drawing, the real startup phase, and one stationary workshop note. It dismisses when the workspace is ready. Work in the ready application uses top-bar **Activity**.
 
-## English design examples
+## Startup splash recording
 
-These are selected states of the actual React component, captured with simulated
-native IPC. They demonstrate layout and copy, not measured startup duration.
+A native Windows launch on Thunder, captured as sampled window-only frames:
 
-Preparing the first view, with one stationary workshop note:
+![Native startup splash recording](startup-measurements/captures/floating/native-loading.gif)
 
-![Floating English card](startup-measurements/captures/floating/en-floating-composition.png)
+[One-third-speed playback](startup-measurements/captures/floating/native-loading-slow.gif) makes short phases easier to read. The recording places the small card on a neutral canvas, scales the workspace to fit, and holds the workspace for one second before looping. The [capture receipt](startup-measurements/captures/floating/native-loading-recording.json) records the executable, sample intervals, and playback delays. Performance measurements use separate unrecorded runs.
 
-GPU preparation:
+## English startup views
 
-![Preparing graphics](startup-measurements/captures/floating/en-graphics.png)
+These five states use the actual source component with simulated native IPC to select the phase. They check layout and copy.
 
-CAD initialization and file geometry preparation are independent:
+Preparing the first view with the workshop note:
 
-![Separate application and document phases](startup-measurements/captures/floating/en-file.png)
+![English splash composition](startup-measurements/captures/floating/en-floating-composition.png)
+
+Preparing graphics:
+
+![Graphics preparation](startup-measurements/captures/floating/en-graphics.png)
+
+Application preparation and file geometry work:
+
+![Application and file phases](startup-measurements/captures/floating/en-file.png)
 
 Light appearance:
 
-![Light loading card](startup-measurements/captures/floating/en-light.png)
+![Light splash](startup-measurements/captures/floating/en-light.png)
 
-Recovery keeps details and actions available:
+Recovery with readable details and actions:
 
-![Recovery layout with long detail](startup-measurements/captures/floating/en-recovery.png)
+![Recovery](startup-measurements/captures/floating/en-recovery.png)
 
-## Companion view in four languages
+## Four-language companion
 
-The same graphics-preparation phase, artwork and layout:
+The graphics-preparation view shares text-free artwork and layout. Names, statuses, notes, and actions use one selected language.
 
-English — Limo CAD:
+English — **Limo CAD**:
 
 ![English](startup-measurements/captures/floating/en-graphics.png)
 
-Simplified Chinese — 砺模 CAD:
+Simplified Chinese — **砺模 CAD**:
 
 ![Simplified Chinese](startup-measurements/captures/floating/zh-CN-graphics.png)
 
-Spanish — Limo CAD:
+Spanish — **Limo CAD**:
 
 ![Spanish](startup-measurements/captures/floating/es-graphics.png)
 
-German — Limo CAD:
+German — **Limo CAD**:
 
 ![German](startup-measurements/captures/floating/de-graphics.png)
 
-## Actual Windows frames
+## Native startup and recovery
 
-Recorded native loading on Thunder, from opening feedback through workspace
-reveal. These are sampled window-only screenshots of a normal empty launch in
-a private fresh profile, not a performance benchmark. The small card is centered
-on a neutral canvas and the workspace is scaled to fit; the final workspace has
-a one-second presentation hold before the loop restarts.
+The frameless startup card:
 
-Playback at the observed sample spacing:
+![Native startup splash](startup-measurements/captures/floating/native-standard-drag-loading.jpg)
 
-![Native loading recording](startup-measurements/captures/floating/native-loading.gif)
-
-The same recording at one-third speed, to make short phases easier to read:
-
-![Native loading recording at one-third speed](startup-measurements/captures/floating/native-loading-slow.gif)
-
-The [recording receipt](startup-measurements/captures/floating/native-loading-recording.json)
-retains the source executable hash, frame dimensions, sample intervals and GIF
-playback delays. Startup timings come from separate unrecorded runs.
-
-These captures came from the native application, using an isolated profile and
-private failure fixture. Recovery includes deliberate human/automation waits;
-the images do not encode measured timing.
-
-Final native executable, loading without the Windows title bar:
-
-![Native loading](startup-measurements/captures/floating/native-standard-drag-loading.jpg)
-
-Recoverable invalid project:
+A recoverable invalid project:
 
 ![Native recovery](startup-measurements/captures/floating/native-standard-drag-recovery.jpg)
 
-After repairing the private fixture and retrying in the same process, the sample
-renders with its four history entries and normal workspace controls return:
+Retry restores the sample in the same process, with four history entries and normal workspace controls:
 
-![Native workspace](startup-measurements/captures/floating/native-standard-drag-workspace.jpg)
+![Recovered native workspace](startup-measurements/captures/floating/native-standard-drag-workspace.jpg)
 
-The native front-view control changes the rendered sample:
+## Loading feedback in the workspace
 
-![Native viewport interaction](startup-measurements/captures/floating/native-standard-drag-front-view.jpg)
+Top-bar Activity reports a completed file open over the rendered CAD document:
 
-Regional glyphs and recovery in the earlier floating executable's native Chinese
-card (the report preserves its distinct executable hash):
+![Native Activity](startup-measurements/captures/runtime/native-activity-keyboard-final.jpg)
 
-![Native Chinese recovery](startup-measurements/captures/floating/native-zh-recovery.jpg)
+Expandable runtime error details preserve the loaded document:
 
-See [measurements and verification](startup-performance.md) for executable hashes,
-cache conditions, timing scopes, reproduction commands and outstanding checks.
+![Native runtime error](startup-measurements/captures/runtime/native-runtime-failure.jpg)
+
+The [four localized Activity views](runtime-activity.md#visuals) use the actual component with simulated operations for copy/layout checks. Native screenshots show the Windows application; simulated component screenshots do not establish native rendering or timings.
+
+[Startup optimizations, measurements, and verification](startup-performance.md) · [Activity behavior](runtime-activity.md)
