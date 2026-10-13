@@ -1782,8 +1782,6 @@ dependencies = [
 [[package]]
 name = "bevy_winit"
 version = "0.20.0-rc.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6324bea4cd0e205b3f9abbfee41e7a9f836e1412c214e1bc4577c76d52251d0"
 dependencies = [
  "accesskit",
  "accesskit_winit",
