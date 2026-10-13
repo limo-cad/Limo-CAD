@@ -529,12 +529,16 @@
     "Disabled user-event response runs no updates",
     "Limited sustained feedback stays within elapsed-time rate bound"
   ],
-  "local_unit_tests": "Three focused scheduler tests pass; all-target/all-feature strict desktop Clippy passed before test-only shutdown-strengthening; full desktop suite in progress.",
+  "local_unit_tests": "1,073 desktop library tests passed, 0 failed, 13 existing explicit exclusions ignored. Includes all three new scheduler regressions. Final all-target/all-feature strict Clippy and desktop formatting passed.",
   "limits": [
     "Windows pending Jeff test request",
     "No physical UI/compositor responsiveness or full application CPU/GPU benchmark",
     "Measured marker latency is not a worst-case guarantee",
     "Caps only CAD explicit service wakes, not all Bevy updates or externally emitted wakes"
   ],
-  "design": "First request after idle promptly wakes a sleeping worker. One pending bit coalesces a burst; a Condvar trailing timer guarantees delivery after cooldown even without OS redraw. Send completion starts 16 ms cooldown. Final owner joins worker; event-loop closure stops it. Native input/redraw and existing Bevy starvation patch are unchanged."
+  "design": "First request after idle promptly wakes a sleeping worker. One pending bit coalesces a burst; a Condvar trailing timer guarantees delivery after cooldown even without OS redraw. Send completion starts 16 ms cooldown. Final owner joins worker; event-loop closure stops it. Native input/redraw and existing Bevy starvation patch are unchanged.",
+  "implementation_revision": "06a2b8ac",
+  "bevy_production_upgrade_integration": "git merge-tree combines this branch and PR386 (476b7b6d) without conflicts; combined tree e361c1bd83fda34fef173f5dbd16f0d16bab7b26. This is a mergeability check, not an additional combined-build claim.",
+  "windows_test_request": "https://github.com/limo-cad/Limo-CAD/pull/387#issuecomment-6152407866",
+  "ci_status": "Pending on PR387 at this checkpoint; no all-green hosted CI claim."
 }
