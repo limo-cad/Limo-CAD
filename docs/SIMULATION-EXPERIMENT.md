@@ -160,7 +160,7 @@ critical pockets, so compare proxies to the OCCT source at detent scale.
 [Primary source](https://github.com/dimforge/parry).
 
 Published `bevy_rapier3d` 0.36.0 depends on Bevy 0.19.0 and Rapier
-`=0.35.0-glamx0.2`; this application's branch is Bevy 0.20.0-rc.2. That is a real
+`=0.35.0-glamx0.2`; this application's branch is Bevy 0.20.0. That is a real
 compatibility mismatch, verified from the downloaded crate manifests. Use direct
 Rapier behind a small adapter initially; investigate updating the official plugin
 once its versions fit. Do not pull a second Bevy runtime into the app.

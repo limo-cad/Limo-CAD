@@ -1,6 +1,6 @@
 # Bevy 0.20 UI and code reduction experiment
 
-Historical experiment notes. The current desktop uses Bevy `0.20.0-rc.2` by
+Historical experiment notes. The current desktop uses Bevy `0.20.0` by
 default and has retired the old shell. See [native transition status](native-transition-status.md)
 for current implementation and package evidence.
 

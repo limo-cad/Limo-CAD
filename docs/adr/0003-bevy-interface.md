@@ -8,7 +8,7 @@
 For the current branch state, known failures, and validation limits, read the
 [transition status](../native-transition-status.md). This ADR's implementation
 record contains historical checkpoints; later evidence supersedes earlier
-pending or passing results. The default desktop uses Bevy `=0.20.0-rc.2`;
+pending or passing results. The default desktop uses Bevy `=0.20.0`;
 physical-device and platform qualification is limited to retained evidence.
 
 ## Decision

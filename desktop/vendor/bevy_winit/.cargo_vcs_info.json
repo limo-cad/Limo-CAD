@@ -1,6 +1,6 @@
 {
   "git": {
-    "sha1": "343a0233d6788a49f224a3684c8995e246663df3"
+    "sha1": "b3bdd75becaffe9a16677cf5bae5bd6d198f052b"
   },
   "path_in_vcs": "crates/bevy_winit"
 }

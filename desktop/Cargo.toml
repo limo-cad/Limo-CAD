@@ -59,7 +59,7 @@ limo-cad-mcp = { package = "limo-cad-mcp", path = "../mcp-server" }
 earcutr = "=0.5.0"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
-bevy = { version = "=0.20.0-rc.2", default-features = false, features = [
+bevy = { version = "=0.20.0", default-features = false, features = [
   "bevy_winit",
   "bevy_input_focus",
   "bevy_ui_widgets",
@@ -99,9 +99,9 @@ bevy = { version = "=0.20.0-rc.2", default-features = false, features = [
   # Keep compressed KTX2/tonemapping support using the native zstd backend.
   "zstd_c",
 ] }
-bevy_ecs = "=0.20.0-rc.2"
-bevy_gizmos = "=0.20.0-rc.2"
-bevy_reflect = "=0.20.0-rc.2"
+bevy_ecs = "=0.20.0"
+bevy_gizmos = "=0.20.0"
+bevy_reflect = "=0.20.0"
 # Native renderers share a device across threads. Bevy disables wgpu's default
 # features; std is required for wgpu's documented thread-local error scopes.
 wgpu = { version = "=30.0.1", default-features = false, features = ["std"] }
