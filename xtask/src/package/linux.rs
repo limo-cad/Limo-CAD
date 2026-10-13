@@ -103,7 +103,16 @@ pub(super) fn build(package: &Package, options: &Options) -> Result<()> {
     if options.bundle.as_deref().is_none_or(|v| v == "deb") {
         stage_deb_occt(package, &sdk, &deb_root)?;
         fs::create_dir(deb_root.join("DEBIAN"))?;
-        fs::write(deb_root.join("DEBIAN/control"), format!("Package: limo-cad\nReplaces: nbcad\nConflicts: nbcad\nVersion: {}\nArchitecture: amd64\nMaintainer: Limo CAD contributors <limo-cad@users.noreply.github.com>\nSection: graphics\nPriority: optional\nDepends: {DEPENDS}\nRecommends: fonts-noto-core, fonts-noto-cjk\nDescription: Local-first mechanical CAD with a native Bevy interface\n", package.version))?;
+        let debian_version = common::debian_version(&package.version)?;
+        if debian_version != package.version {
+            common::run(package.command("dpkg").args([
+                "--compare-versions",
+                &debian_version,
+                "lt",
+                &common::numeric_version(&package.version)?,
+            ]))?;
+        }
+        fs::write(deb_root.join("DEBIAN/control"), format!("Package: limo-cad\nReplaces: nbcad\nConflicts: nbcad\nVersion: {}\nArchitecture: amd64\nMaintainer: Limo CAD contributors <limo-cad@users.noreply.github.com>\nSection: graphics\nPriority: optional\nDepends: {DEPENDS}\nRecommends: fonts-noto-core, fonts-noto-cjk\nDescription: Local-first mechanical CAD with a native Bevy interface\n", debian_version))?;
         let output = bundle.join("deb");
         fs::create_dir_all(&output)?;
         let deb = output.join(format!("Limo.CAD_{}_amd64.deb", package.version));

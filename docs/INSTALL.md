@@ -30,7 +30,7 @@ Find the installed version, source revision and build channel under
 
 ## Windows
 
-1. Download `noBS-CAD-0.2.2-windows-x64.zip` for an Intel/AMD PC.
+1. Download `noBS-CAD-0.3.0-rc.1-windows-x64.zip` for an Intel/AMD PC.
 2. Install the [Microsoft Visual C++ v14 x64 Redistributable](https://aka.ms/vc14/vc_redist.x64.exe)
    if needed.
 3. Extract **all** files into a folder you can keep, then open `noBS-CAD.exe`.
@@ -66,7 +66,7 @@ See [Windows packaging and troubleshooting](WINDOWS_PACKAGING.md) for details.
 On **Ubuntu 26.04 LTS, x86_64**, download the `.deb` and run this from its folder:
 
 ```sh
-sudo apt install ./noBS.CAD_0.2.2_amd64.deb
+sudo apt install ./noBS.CAD_0.3.0-rc.1_amd64.deb
 ```
 
 Open **Limo CAD** from the application launcher. Vulkan support is required.
@@ -76,7 +76,7 @@ To update CAD, close it, download the new `.deb`, then run this from the new
 download's folder:
 
 ```sh
-sudo apt install --reinstall ./noBS.CAD_0.2.2_amd64.deb
+sudo apt install --reinstall ./noBS.CAD_0.3.0-rc.1_amd64.deb
 ```
 
 [`--reinstall`](https://manpages.ubuntu.com/manpages/resolute/man8/apt-get.8.html)
@@ -233,8 +233,8 @@ Download the package's adjacent `.sha256` asset into the same folder.
 On Windows, compare the following values (hash letter case does not matter):
 
 ```powershell
-Get-FileHash .\noBS-CAD-0.2.2-windows-x64.zip -Algorithm SHA256
-Get-Content .\noBS-CAD-0.2.2-windows-x64.zip.sha256
+Get-FileHash .\noBS-CAD-0.3.0-rc.1-windows-x64.zip -Algorithm SHA256
+Get-Content .\noBS-CAD-0.3.0-rc.1-windows-x64.zip.sha256
 ```
 
 On Ubuntu use `sha256sum -c PACKAGE.sha256`, substituting the downloaded

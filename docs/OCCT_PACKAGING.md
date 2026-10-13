@@ -105,7 +105,7 @@ The results are:
 
 ```text
 desktop/target/release/bundle/macos/Limo CAD.app
-desktop/target/release/bundle/dmg/Limo.CAD_0.2.2_aarch64.dmg
+desktop/target/release/bundle/dmg/Limo.CAD_0.3.0-rc.1_aarch64.dmg
 ```
 
 Useful manual release audit:

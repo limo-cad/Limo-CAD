@@ -7,6 +7,48 @@ use std::{
     process::{Command, Stdio},
 };
 
+/// Apple bundle fields contain only the numeric release version; the executable
+/// and archive retain the full SemVer prerelease and source identity.
+pub(super) fn numeric_version(version: &str) -> Result<String> {
+    let version: semver::Version = version.parse().context("package version must be SemVer")?;
+    Ok(format!(
+        "{}.{}.{}",
+        version.major, version.minor, version.patch
+    ))
+}
+
+/// Debian's tilde sorts a prerelease before the final release. A SemVer hyphen
+/// would instead introduce a Debian revision that sorts after the final build.
+pub(super) fn debian_version(version: &str) -> Result<String> {
+    let parsed: semver::Version = version.parse().context("package version must be SemVer")?;
+    if parsed.pre.is_empty() {
+        Ok(version.to_owned())
+    } else {
+        Ok(format!("{}~{}", numeric_version(version)?, parsed.pre))
+    }
+}
+
+#[cfg(test)]
+mod version_tests {
+    use super::*;
+
+    #[test]
+    fn prerelease_metadata_uses_native_platform_version_formats() {
+        assert_eq!(numeric_version("0.2.2").unwrap(), "0.2.2");
+        assert_eq!(debian_version("0.2.2").unwrap(), "0.2.2");
+        for (version, debian) in [
+            ("0.3.0-rc.1", "0.3.0~rc.1"),
+            ("0.3.0-rc.2", "0.3.0~rc.2"),
+            ("0.3.0-beta.2", "0.3.0~beta.2"),
+        ] {
+            assert_eq!(numeric_version(version).unwrap(), "0.3.0");
+            assert_eq!(debian_version(version).unwrap(), debian);
+        }
+        assert!(numeric_version("v0.3.0").is_err());
+        assert!(debian_version("v0.3.0").is_err());
+    }
+}
+
 /// Reject redirected runtime paths, including redirects in their parent directories.
 pub(crate) fn ordinary_directory(path: &Path) -> Result<()> {
     for ancestor in path.ancestors() {
