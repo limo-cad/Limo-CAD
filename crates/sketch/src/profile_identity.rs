@@ -6,7 +6,7 @@
 //! unchanged geometry; guessing by area/centroid could cut the wrong material.
 use std::collections::{BTreeMap, BTreeSet};
 
-use nbcad_solid::{Point2Dto, ProfileCurveDto, ProfileLoopDto};
+use limo_cad_solid::{Point2Dto, ProfileCurveDto, ProfileLoopDto};
 use serde::{Deserialize, Serialize};
 
 use crate::dto::{EntityDto, SketchDto};
@@ -24,9 +24,6 @@ struct Record {
     shape: Vec<(i64, i64)>,
 }
 
-// Discovery assigns projected curves temporary reserved-range slots. Those
-// slots can change, or be reused by a different edge after a topology edit.
-// Persist the actual body edge identity in a separate namespace instead.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum SourceIdentity {
@@ -120,11 +117,7 @@ fn key(sketch: &SketchDto, profile: &ProfileLoopDto) -> Vec<(Vec<SourceIdentity>
                     entity_id,
                     source_entity_ids,
                     ..
-                } =>
-                // Unknown orientation: duplicate cycles are handled fail-closed.
-                {
-                    (*entity_id, source_entity_ids, 0)
-                }
+                } => (*entity_id, source_entity_ids, 0),
             };
             let mut sources: Vec<_> = sources
                 .iter()
@@ -217,7 +210,7 @@ impl ProfileIdentities {
 mod tests {
     use super::*;
     use crate::{ProjectedEdgeDto, SketchSession, Vec2};
-    use nbcad_core::{EdgeId, FaceId, FeatureId, OriginPlane, PlaneRef};
+    use limo_cad_core::{EdgeId, FaceId, FeatureId, OriginPlane, PlaneRef};
 
     #[test]
     fn projected_identity_uses_body_edges_not_transient_catalog_positions() {
@@ -254,7 +247,6 @@ mod tests {
         let before = session.profile_catalog(FeatureId(1)).profiles;
         assert_eq!(before.len(), 2);
 
-        // Unrelated support edges can change every temporary discovery id.
         edges.reverse();
         for (i, edge) in edges.iter_mut().enumerate() {
             edge.id = (1 << 40) + 10 + i as u64;
@@ -273,8 +265,6 @@ mod tests {
             );
         }
 
-        // Conversely, new body edges at the same coordinates must not steal
-        // the old selection just because discovery reuses its numeric slots.
         for edge in &mut edges {
             edge.edge_id = EdgeId(edge.edge_id.0 + 100);
         }
@@ -285,7 +275,6 @@ mod tests {
             .iter()
             .all(|p| before.iter().all(|old| p.index != old.index)));
 
-        // The new namespaced keys are part of the saved project contract.
         let sketch = session.dto();
         let mut registry = ProfileIdentities::default();
         let mut profiles = session.profile_catalog(FeatureId(1)).profiles;

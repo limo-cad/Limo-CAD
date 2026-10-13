@@ -39,12 +39,9 @@ impl SlicerTarget {
 
     pub fn application_metadata(self) -> &'static str {
         match self {
-            // One Application name. Do not include "BambuStudio" or "OrcaSlicer":
-            // those tokens make the slicer treat the file as its own project and
-            // then reject the profile.
-            Self::Standard | Self::BambuStudio | Self::OrcaSlicer => "noBS CAD",
-            Self::PrusaSlicer => "noBS CAD (PrusaSlicer-compatible)",
-            Self::Cura => "noBS CAD (Cura-compatible)",
+            Self::Standard | Self::BambuStudio | Self::OrcaSlicer => "Limo CAD",
+            Self::PrusaSlicer => "Limo CAD (PrusaSlicer-compatible)",
+            Self::Cura => "Limo CAD (Cura-compatible)",
         }
     }
 

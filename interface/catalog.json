@@ -228,7 +228,9 @@
             "solid_hole",
             "solid_edit_hole",
             "solid_external_thread",
-            "solid_edit_external_thread"
+            "solid_edit_external_thread",
+            "solid_shell",
+            "solid_edit_shell"
           ]
         },
         {
@@ -380,8 +382,6 @@
             }
           ],
           "operations": [
-            "solid_shell",
-            "solid_edit_shell",
             "solid_move_copy",
             "solid_edit_move_copy",
             "solid_combine",
@@ -493,7 +493,7 @@
               "id": "sectionAnalysis",
               "labelKey": "ribbon.solid.sectionAnalysis",
               "icon": "section",
-              "enabled": false
+              "enabled": true
             },
             {
               "type": "item",
@@ -520,7 +520,8 @@
             "solid_tessellate",
             "solid_body_feature_definitions",
             "solid_recompute",
-            "cad_compare_solids"
+            "cad_compare_solids",
+            "solid_section_review"
           ]
         },
         {
@@ -1091,6 +1092,7 @@
             "sketch_edit_dimension",
             "sketch_move_dimension",
             "sketch_delete_dimension",
+            "sketch_set_dimension_mode",
             "sketch_eval_expression",
             "sketch_set_dimension_style"
           ]
@@ -1350,6 +1352,7 @@
           "operations": [
             "sketch_add_constraint",
             "sketch_add_constraints",
+            "sketch_delete_constraint",
             "sketch_toggle_fix"
           ]
         },
@@ -1401,7 +1404,12 @@
             "drawing_create_sheet",
             "drawing_select_sheet",
             "drawing_delete_sheet",
-            "drawing_set_bom"
+            "drawing_set_bom",
+            "drawing_create_template",
+            "drawing_apply_template",
+            "drawing_delete_template",
+            "drawing_add_revision",
+            "drawing_set_release"
           ]
         },
         {
@@ -1545,6 +1553,8 @@
           ],
           "operations": [
             "drawing_add_view",
+            "drawing_update_view",
+            "drawing_delete_view",
             "drawing_projection"
           ]
         },
@@ -1674,7 +1684,10 @@
           "operations": [
             "drawing_add_linear_dimension",
             "drawing_add_radial_dimension",
-            "drawing_add_angular_dimension"
+            "drawing_add_angular_dimension",
+            "drawing_add_annotation",
+            "drawing_update_annotation",
+            "drawing_delete_annotation"
           ]
         },
         {
@@ -1976,6 +1989,8 @@
             "assembly_create_component",
             "assembly_update_component",
             "assembly_create_occurrence",
+            "assembly_duplicate_occurrence",
+            "assembly_remove_occurrence",
             "assembly_update_occurrence",
             "assembly_set_occurrence_pose",
             "assembly_set_occurrence_grounded",
@@ -1984,6 +1999,10 @@
             "assembly_delete_joint",
             "assembly_set_joint_enabled",
             "assembly_set_joint_motion",
+            "assembly_set_joint_coordinates",
+            "assembly_preview_joint_coordinates",
+            "assembly_preview_mechanism_drag",
+            "assembly_apply_joint_motions",
             "assembly_create_gear_relation",
             "assembly_update_gear_relation",
             "assembly_delete_gear_relation"
@@ -2184,6 +2203,7 @@
     }
   ],
   "groups": [
+    {"id":"assembly/motion","labelKey":"assembly.browser.motionStudy","operations":["assembly_create_position","assembly_update_position","assembly_delete_position","assembly_apply_position","assembly_create_motion_study","assembly_update_motion_study","assembly_delete_motion_study","assembly_evaluate_motion_study","assembly_sample_motion_study","assembly_export_motion_path_csv"]},
     {
       "id": "solid/primitives",
       "labelKey": "solid/primitives",
@@ -2207,7 +2227,7 @@
     {
       "id": "assembly/inspect",
       "labelKey": "ribbon.solid.interference",
-      "operations": ["assembly_interference_check"]
+      "operations": ["assembly_interference_check", "assembly_swept_collision_check", "assembly_create_contact_set", "assembly_update_contact_set", "assembly_delete_contact_set"]
     },
     {
       "id": "document/files",
@@ -2233,6 +2253,8 @@
         "cad_help",
         "cad_cancel_recompute",
         "cad_list_sessions",
+        "cad_computer_control",
+        "cad_route",
         "cad_interface",
         "cad_attach",
         "cad_refresh",
@@ -2247,6 +2269,7 @@
       "labelKey": "document/history",
       "operations": [
         "solid_set_rollback",
+        "solid_rename_feature",
         "solid_delete_feature",
         "solid_reorder_feature"
       ]
@@ -2255,12 +2278,14 @@
       "id": "document/appearance",
       "labelKey": "document/appearance",
       "operations": [
+        "printer_catalog",
         "material_catalog",
         "body_appearances",
         "set_body_appearance",
         "project_visibility",
         "project_set_visibility",
         "named_views",
+        "named_view_solution",
         "set_named_views",
         "upsert_named_view",
         "rename_named_view",
@@ -2270,10 +2295,43 @@
       ]
     },
     {
+      "id": "document/print-intent",
+      "labelKey": "document/print-intent",
+      "operations": [
+        "print_intent_get",
+        "print_intent_effective",
+        "print_intent_set_part",
+        "print_intent_reset_part",
+        "print_intent_copy_part",
+        "print_intent_set_document",
+        "print_intent_upsert_preset",
+        "print_intent_remove_preset",
+        "print_intent_upsert_handoff",
+        "print_intent_remove_handoff",
+        "print_modifier_create",
+        "print_modifier_update",
+        "print_modifier_remove",
+        "print_modifier_copy",
+        "print_modifier_reset",
+        "print_modifier_effective",
+        "print_intent_height_binding",
+        "print_intent_upsert_height_range",
+        "print_intent_upsert_layer_profile",
+        "print_intent_remove_height",
+        "print_intent_rebind_height"
+      ]
+    },
+    {
       "id": "document/export",
       "labelKey": "document/export",
       "operations": [
         "solid_export_step",
+        "bambu_template_inspect",
+        "bambu_local_verification_start",
+        "bambu_local_verification_poll",
+        "bambu_local_verification_cancel",
+        "bambu_project_preview",
+        "solid_export_bambu_project",
         "solid_export_stl",
         "solid_export_3mf",
         "solid_export_preflight",

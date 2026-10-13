@@ -7,28 +7,31 @@
 
 # 砺模 CAD
 
-> **砺模，求理解之设计。** *砺模 CAD（Limo CAD），原名 noBS CAD。*
+> **砺模，求理解之设计。**
 
 **易用的参数化 CAD，免费开源，并将永远如此。**
 在你自己的电脑上设计机械零件、装配体和工程图，可以亲手操作，也可以交给 AI 智能体，
 每一个草图和特征都保持可编辑。
 
-[![最新版本](https://img.shields.io/github/v/release/limo-cad/Limo-CAD?label=release)](https://github.com/limo-cad/Limo-CAD/releases/latest)
+[![Bevy 预览版](https://img.shields.io/badge/Bevy-0.20.0--rc.2-blue)](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)
 [![许可证：LGPL 2.1+](https://img.shields.io/badge/license-LGPL%202.1%2B-blue)](LICENSE)
 [![Discussions](https://img.shields.io/github/discussions/limo-cad/Limo-CAD?label=discussions)](https://github.com/limo-cad/Limo-CAD/discussions)
 
-**早期预览版（Pre-alpha）· 0.2.2 版**
-· [发布说明与检查结果](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.2.2)
+**早期预览版（Pre-alpha）· Bevy rc.2 · 应用版本 0.2.2**
+· [预览版说明、源码版本与检查结果](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)
 · [安装帮助（英文）](docs/INSTALL.md)
 
 | 平台 | 下载 |
 |---|---|
-| Windows 11 | [x64 ZIP](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS-CAD-0.2.2-windows-x64.zip) · [ARM64 ZIP](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS-CAD-0.2.2-windows-arm64.zip) |
-| macOS（Apple 芯片） | [DMG](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS.CAD_0.2.2_aarch64.dmg)，已签名并经过公证 |
-| Linux | [Ubuntu 26.04 DEB](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS.CAD_0.2.2_amd64.deb) · [AppImage](https://github.com/limo-cad/Limo-CAD/releases/download/v0.2.2/noBS.CAD_0.2.2_amd64.AppImage) |
+| Windows 11 | [x64 ZIP](https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS-CAD-0.2.2-windows-x64.zip) |
+| Linux | [Ubuntu 26.04 x64 DEB](https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS.CAD_0.2.2_amd64.deb) |
 
-Windows 代码签名正在办理中。在此之前，首次启动时 SmartScreen 可能会发出警告，
-请选择 **更多信息 → 仍要运行**。应用仍处于早期预览阶段，请为重要项目做好备份。
+这些包使用源码版本 `9b082687`，尚未包含后续集成修复。Windows ARM64、macOS 和
+AppImage 仍待验证。Bevy 浏览器界面尚在开发中。已发布的文件名保留原产品名称。
+详情见[迁移状态（英文）](docs/native-transition-status.md)。
+
+Windows 包尚未签名。首次启动时 SmartScreen 可能会发出警告，请选择
+**更多信息 → 仍要运行**。请为重要的早期预览项目做好备份。
 
 > **语言说明：** 本页为简体中文。下方链接的文档、示例和知识库目前仅有英文版，
 > 以“（英文）”标注或直接指向英文页面；欢迎熟悉相关内容的贡献者帮助审校和翻译。
@@ -40,7 +43,7 @@ Windows 代码签名正在办理中。在此之前，首次启动时 SmartScreen
 - **易于上手。** 易用性与可靠性、性能并列为项目的三项优先事项。
   [第一个零件教程](#做出你的第一个零件)只需几分钟。
 - **本地运行，属于你自己。** 无需账号、订阅或云服务。整个项目（零件、装配体和工程图）
-  保存在一个 `.nbcad` 文件中。
+  保存在一个 `.limo` 文件中。
 - **真正的参数化历史。** 约束草图驱动实体特征；修改一个尺寸，下游所有内容随之重建。
 - **智能体就绪。** 内置的 MCP 服务器让任何兼容 MCP 的智能体都能构建和编辑模型，
   所生成的内容与你亲手做出的可编辑历史完全一致。
@@ -73,7 +76,7 @@ Windows 代码签名正在办理中。在此之前，首次启动时 SmartScreen
 <td align="center">
 <a href="https://limo-cad.github.io/Limo-CAD/showcase.html#garden-bench"><b>观看</b></a>
 · <a href="https://limo-cad.github.io/Limo-CAD/open.html#garden-bench">打开配方</a><br>
-<a href="examples/scripts/garden-bench.nbcad.jsonc">源码</a>
+<a href="examples/scripts/garden-bench.limo.jsonc">源码</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/bench.nbcad">.nbcad</a>
 · <a href="docs/assets/showcase/bench-loop.gif">建模循环</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/bench-build-full.mp4">MP4</a>
@@ -81,7 +84,7 @@ Windows 代码签名正在办理中。在此之前，首次启动时 SmartScreen
 <td align="center">
 <a href="https://limo-cad.github.io/Limo-CAD/showcase.html#d-screw-vise"><b>观看</b></a>
 · <a href="https://limo-cad.github.io/Limo-CAD/open.html#d-screw-vise">打开配方</a><br>
-<a href="examples/scripts/d-screw-vise.nbcad.jsonc">源码</a>
+<a href="examples/scripts/d-screw-vise.limo.jsonc">源码</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/vise.nbcad">.nbcad</a>
 · <a href="docs/assets/showcase/vise-loop.gif">建模循环</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/vise-build-full.mp4">MP4</a>
@@ -89,7 +92,7 @@ Windows 代码签名正在办理中。在此之前，首次启动时 SmartScreen
 <td align="center">
 <a href="https://limo-cad.github.io/Limo-CAD/showcase.html#vertical-axis-turbine"><b>观看</b></a>
 · <a href="https://limo-cad.github.io/Limo-CAD/open.html#vertical-axis-turbine">打开配方</a><br>
-<a href="examples/scripts/vertical-axis-turbine.nbcad.jsonc">源码</a>
+<a href="examples/scripts/vertical-axis-turbine.limo.jsonc">源码</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/turbine.nbcad">.nbcad</a>
 · <a href="docs/assets/showcase/turbine-loop.gif">建模循环</a>
 · <a href="https://github.com/limo-cad/Limo-CAD/releases/download/showcase-v0.2.0/turbine-build-full.mp4">MP4</a>
@@ -100,7 +103,7 @@ Windows 代码签名正在办理中。在此之前，首次启动时 SmartScreen
 <!-- Print photos: add docs/assets/showcase/<design>-printed.jpg when supplied. -->
 
 配方链接会把源码载入 **脚本（Scripts）**，供你审阅后再运行。若想立即查看完成的设计，
-请下载其 `.nbcad` 文件并使用 **文件 → 打开**。
+请下载其 `.limo` 文件并使用 **文件 → 打开**。
 这些是开发示例；实物配合与承载能力的验证仍未完成。
 [设计、工程图与验证（英文）](docs/flagship-examples.md) · [全部配方（英文）](examples/scripts/README.md)
 
@@ -111,14 +114,14 @@ Windows 代码签名正在办理中。在此之前，首次启动时 SmartScreen
 该教程会建出一个 60 × 30 × 12 mm、顶部边缘带圆角的方块。
 
 完成后，在特征历史中双击拉伸特征，把 **距离（Distance）** 从 **12 改为 18 mm**。
-将结果保存为 `first-part.nbcad`，再重新打开继续编辑。
+将结果保存为 `first-part.limo`，再重新打开继续编辑。
 [分步说明（英文）](docs/INSTALL.md#make-your-first-part)
 
 ## 设计、装配、出图
 
 约束草图和参考几何驱动可编辑的实体特征。
 在装配体中复用零件，定义关节，并检查运动和干涉。
-零件、装配体和工程图都保存在同一个 `.nbcad` 项目中。
+零件、装配体和工程图都保存在同一个 `.limo` 项目中。
 
 为每个实体指定材料和颜色，然后导出 **3MF** 供切片软件使用。
 材料标签和颜色元数据只用于辅助交接；实际打印配置请在切片软件中选择。
@@ -163,10 +166,8 @@ Windows 代码签名正在办理中。在此之前，首次启动时 SmartScreen
 ## 开源基础
 
 - **[Open CASCADE Technology](https://github.com/Open-Cascade-SAS/OCCT)** — 几何与 CAD 数据交换。
-- **[Bevy](https://bevy.org/) 和 [wgpu](https://wgpu.rs/)** — 原生渲染。
+- **[Bevy](https://bevy.org/) 和 [wgpu](https://wgpu.rs/)** — 原生界面与渲染。
 - **[Rust](https://rust-lang.org/)** — 建模、装配和配方执行。
-- **[Tauri](https://tauri.app/) 和 [React](https://react.dev/)** — 桌面外壳与界面。
-- **[OpenCascade.js](https://github.com/donalffons/opencascade.js)** — 浏览器开发构建。
 
 同时感谢 [FreeCAD](https://www.freecad.org/) 和更广泛的开源 CAD 社区。
 
@@ -181,7 +182,7 @@ Windows 代码签名正在办理中。在此之前，首次启动时 SmartScreen
 图标来源记录在[图标来源](docs/ICON_PROVENANCE.md)。
 其他 CAD 项目有各自的许可证；请参阅[贡献指南](CONTRIBUTING.md#license--borrow)。
 
-砺模 CAD 支持 3Dconnexion SpaceMouse 设备。可选的浏览器开发驱动桥接仅在用户启用后加载。
+Bevy 桌面通过原生 HID 输入支持 3Dconnexion SpaceMouse 设备。
 砺模 CAD 是独立项目，与 3Dconnexion 没有隶属、认可或认证关系。
 3Dconnexion 和 SpaceMouse 是 3Dconnexion 的商标或注册商标。
 3D 输入设备开发工具及相关技术由 3Dconnexion 授权提供。© 3Dconnexion 1992–2020。保留所有权利。

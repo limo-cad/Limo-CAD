@@ -1,0 +1,63 @@
+name: Set up checked OCCT 7.9 SDK
+description: Build or verify the pinned native kernel and checked storage through Rust xtask.
+inputs:
+  directory:
+    description: Checkout containing the Rust SDK builder
+    default: '.'
+outputs:
+  root:
+    description: Verified SDK prefix
+    value: ${{ runner.temp }}/limo-cad-occt-sdk
+runs:
+  using: composite
+  steps:
+    - name: Install native compiler, font and X11 prerequisites
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "$RUNNER_OS" == Linux ]]; then
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends build-essential ca-certificates cmake ninja-build pkg-config libfontconfig-dev libfreetype6-dev libx11-dev
+        elif [[ "$RUNNER_OS" == macOS ]]; then
+          brew install cmake ninja freetype
+        else
+          echo "The Unix SDK action requires Linux or macOS" >&2
+          exit 1
+        fi
+    - name: Fingerprint compiler, FreeType and checked source
+      id: key
+      shell: bash
+      working-directory: ${{ inputs.directory }}
+      env:
+        LIMO_CAD_BUILD_CACHE: ${{ runner.temp }}/limo-cad-occt-cache
+      run: cargo xtask build-occt --prefix "$RUNNER_TEMP/limo-cad-occt-sdk" --github-key
+    - name: Restore compatible native SDK and build objects
+      id: cache
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ${{ runner.temp }}/limo-cad-occt-sdk
+          ${{ runner.temp }}/limo-cad-occt-cache
+        key: checked-occt-${{ runner.os }}-${{ runner.arch }}-${{ steps.key.outputs.sdk_key }}
+    - name: Build or verify actual checked runtime
+      id: build
+      shell: bash
+      working-directory: ${{ inputs.directory }}
+      env:
+        LIMO_CAD_BUILD_CACHE: ${{ runner.temp }}/limo-cad-occt-cache
+      run: cargo xtask build-occt --prefix "$RUNNER_TEMP/limo-cad-occt-sdk"
+    - name: Retain verified SDK before application checks
+      if: steps.cache.outputs.cache-hit != 'true' && steps.build.outcome == 'success'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ${{ runner.temp }}/limo-cad-occt-sdk
+          ${{ runner.temp }}/limo-cad-occt-cache
+        key: ${{ steps.cache.outputs.cache-primary-key }}
+    - name: Select verified SDK for downstream builds
+      shell: bash
+      run: |
+        echo "OCCT_ROOT=$RUNNER_TEMP/limo-cad-occt-sdk" >> "$GITHUB_ENV"
+        if [[ "$RUNNER_OS" == Linux ]]; then
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/limo-cad-occt-sdk/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        fi

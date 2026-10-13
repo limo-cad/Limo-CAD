@@ -26,7 +26,7 @@ dims, fastener patterns, bearing seats, and snap class.
    Caps: search default 5 / max 10, snippet ~280 chars, get 12 KiB, topics
    page 50.
 2. **Full page only after selection** — `resources/read` on the selected
-   `nbcad://knowledge/...` URI when complete markdown is needed; resources are
+   `limo-cad://knowledge/...` URI when complete markdown is needed; resources are
    not the first search surface.
 3. **Product docs / recipes** — fit coupons (`turbine-fit-coupons`,
    `d-screw-vise-fit`), agent workflow ([MCP workflow](agent-mcp-workflow.md)).

@@ -15,19 +15,19 @@ panel yet** — humans and agents share one Markdown corpus; doors differ.
 |------|-------------------|-------------------|
 | **OKF index** | Open [`knowledge/index.md`](../../knowledge/index.md) — topic list → page titles | Source of truth |
 | **Taxonomy** | Open [`knowledge/machine-design/taxonomy.md`](../../knowledge/machine-design/taxonomy.md) — seeded vs planned map with links | Source of truth |
-| **MCP `cad_help`** | In an MCP client: `topics` → labels; `search` → snippets; `get` by id | `nbcad-help` |
-| **MCP resources** | `resources/list` / `resources/read` on `nbcad://knowledge/...` (start at `nbcad://knowledge/index.md`) | Embedded at MCP build |
+| **MCP `cad_help`** | In an MCP client: `topics` → labels; `search` → snippets; `get` by id | `limo-cad-help` |
+| **MCP resources** | `resources/list` / `resources/read` on `limo-cad://knowledge/...` (start at `limo-cad://knowledge/index.md`) | Embedded at MCP build |
 | **GitHub Pages** | Browse hosted knowledge HTML (when published) | Same markdown; prefer `cad_help` / resources for automation |
 | **Checkout** | Read files under `knowledge/**` in a clone | Same files |
 
-Future **desktop Help** should call the **same** `nbcad-help` crate (search /
+Future **desktop Help** should call the **same** `limo-cad-help` crate (search /
 get / topics) and render the same pages — not a second corpus. Until that UI
 lands, the index + taxonomy + MCP/Pages are the human browse path.
 
 ## Scripts / demos (unchanged)
 
 Recipe chips and presentation deep-links still open **Scripts** /
-`.nbcad.jsonc` demos. Help does **not** embed a Bevy viewport. Agents and
+`.limo.jsonc` demos. Help does **not** embed a Bevy viewport. Agents and
 humans use the same recipe ids from page frontmatter (`related_recipes`).
 
 ## Shared corpus, different doors
@@ -39,7 +39,7 @@ humans use the same recipe ids from page frontmatter (`related_recipes`).
 
 ## MCP prompts
 
-As of 2026-09-20, `nbcad-mcp` advertises `prompts` and ships one template:
+As of 2026-09-20, `limo-cad-mcp` advertises `prompts` and ships one template:
 **`help_search`** (optional argument `query` / alias `context`). It steers
 agents to form a contextual query and call `cad_help` (`search` → `get` 1–2
 ids; optional `resources/read` for the full OKF page). Design-flow prompts

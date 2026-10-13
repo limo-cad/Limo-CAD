@@ -12,7 +12,6 @@ permissions:
   contents: read
 
 concurrency:
-  # Standalone and Desktop packages' preflight must not cancel each other.
   group: version-guard-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
@@ -22,31 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check out noBS CAD
+      - name: Check out Limo CAD
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
 
-      # A v* tag builds and publishes a release from its own commit, so refuse
-      # one that does not name the VERSION on that commit or that points at a
-      # commit main never merged. Desktop packages calls this workflow as its
-      # preflight, so a bad tag fails here in seconds, before any package job.
-      # The caller's ref decides: inside a called workflow github.event_name
-      # may read workflow_call rather than push.
       - name: Refuse a release tag that does not name VERSION on main
         if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-        run: node scripts/ci/check-release-tag.mjs "$GITHUB_REF_NAME" "$GITHUB_SHA"
+        run: cargo xtask check-release-tag "$GITHUB_REF_NAME" "$GITHUB_SHA"
 
-      # No `npm ci`: the guard reads VERSION and the manifests directly, so it
-      # stays a fast, always-reporting gate for every pull request.
       - name: Check every version carrier
-        run: node scripts/sync-version.mjs --check
+        run: cargo xtask version --check
 
       - name: Unit-test the version carriers
-        run: node --test scripts/sync-version.test.mjs
-
-      - name: Test CI orchestration and artifact safety
-        run: node --test scripts/ci/*.test.mjs
+        run: cargo test --locked -p xtask 'release_tooling::'

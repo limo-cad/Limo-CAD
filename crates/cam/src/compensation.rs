@@ -5,7 +5,7 @@ use crate::{CamPlanError, Point2Dto as P};
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
 
 const EPS: f64 = 1e-7;
-const JOIN_EPS: f64 = 5e-6; // Five nanometres in canonical mm; output-rounding guard, not machining tolerance.
+const JOIN_EPS: f64 = 5e-6;
 const CHORD_ERROR: f64 = 0.0025;
 const MAX_CHORDS: usize = 200_000;
 
@@ -191,9 +191,7 @@ pub(crate) fn intersection_path(
         .collect::<Result<Vec<_>, _>>()?;
     for i in 1..offsets.len() {
         let turn = angle(originals[i - 1].tangent(true), originals[i].tangent(false));
-        // Very pointed corners can invoke controller machine-data-dependent
-        // round transitions even with G451. The supported post subset stops
-        // at 90 degrees; commissioning must verify the control's switch limit.
+
         if turn * distance < 0.0 && turn.abs() > FRAC_PI_2 + 1e-5 {
             return Err(err(
                 "outside turn exceeds the supported 90-degree intersection policy",
@@ -202,8 +200,6 @@ pub(crate) fn intersection_path(
         let a = offsets[i - 1];
         let b = offsets[i];
         let join = if len(sub(a.end, b.start)) <= JOIN_EPS && turn.abs() < 1e-5 {
-            // Tangential joins may differ by output rounding. Retain a point
-            // on the circular primitive instead of bending its start tangent.
             if b.circle.is_some() {
                 b.start
             } else {
@@ -451,8 +447,7 @@ mod tests {
             },
         ];
         let (points, source) = intersection_path(P::new(5.0, -5.0), &path, 1.0, true).unwrap();
-        // x²+(y+5)²=16 and (x-5)²+y²=16 imply y=-x,
-        // with the nearby solution x=(5-sqrt(7))/2.
+
         let x = (5.0 - 7.0_f64.sqrt()) / 2.0;
         let joint = source.iter().position(|index| *index == 1).unwrap();
         near(points[joint], P::new(x, -x));

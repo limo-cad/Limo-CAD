@@ -31,8 +31,7 @@ Each page uses the product name, copy, and banner for its selected language.
 The Chinese name belongs on Chinese pages. English, Spanish, and German pages
 use **Limo CAD**.
 
-The application already supports these four UI languages, as defined in
-[the locale registry](../src/i18n/locales.ts):
+Use these four localized product presentations:
 
 - **English (`en`): Limo CAD**, shortened to **Limo** in context.
 - **简体中文 — Simplified Chinese (`zh-CN`): 砺模 CAD**, shortened to **砺模**
@@ -46,12 +45,9 @@ Public banners use the name and copy for the selected language.
 
 ### Carry the existing localization into the public pages
 
-The app currently checks a saved language preference first, then the browser
-language, then defaults to English. Its settings picker uses the languages'
-own names, and missing translations fall back to English. Chinese, Spanish,
-and German are community translations that may be incomplete. See the
-[translation provider](../src/i18n/index.tsx) and
-[settings language picker](../src/components/AppearanceDialog.tsx).
+Preserve the user's saved language preference. The language picker uses each
+language's own name, and missing translations fall back to English. Chinese,
+Spanish, and German are community translations that may be incomplete.
 
 A project site should extend that approach to all four languages:
 

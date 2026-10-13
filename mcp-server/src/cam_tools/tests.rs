@@ -104,12 +104,11 @@ fn advertised_document_contract_round_trips_empty_and_populated_documents() {
     );
 
     let mut cam = drill_job();
-    // A disabled, incompatible tool assignment supplies real read diagnostics.
-    // Both diagnostics and unexecuted height/link intent must fit the schema.
+
     let mut face = fixture("face-inner-bounds-low-feed")["setups"][0]["operations"][0].clone();
     face["id"] = json!(2);
     face["enabled"] = json!(false);
-    face["tool_id"] = json!(1); // Drill cannot face; retained as a repairable warning.
+    face["tool_id"] = json!(1);
     cam["setups"][0]["operations"]
         .as_array_mut()
         .unwrap()
@@ -199,7 +198,7 @@ fn advertised_cam_simulation_contract_accepts_modeled_stock_target_and_playback_
     args["target"] = json!({"cache_key":"mcp-cam-contract","tolerance_mm":0.0});
     let cached = checked_call(&mut server, "cam_simulate_setup", args.clone()).unwrap();
     assert_eq!(cached["comparison"], measured["comparison"]);
-    // Null and omitted optional fields are both legal DTO forms.
+
     args["completed_steps"] = Value::Null;
     args["playback_time_seconds"] = Value::Null;
     let cut = checked_call(&mut server, "cam_simulate_setup", args.clone()).unwrap();
@@ -256,7 +255,7 @@ fn nc_simulation_and_post_events_use_the_advertised_grouped_contract() {
     assert!(ungenerated.contains("regenerat"), "{ungenerated}");
     checked_call(&mut server, "cam_regenerate_setup", json!({"setup_id":1})).unwrap();
     let events = checked_call(&mut server, "cam_post_events", json!({"setup_id":1})).unwrap();
-    assert_eq!(events["format"], "nbcad-post-events");
+    assert_eq!(events["format"], "limo-cad-post-events");
     assert!(
         events["warnings"]
             .as_array()
@@ -274,7 +273,7 @@ fn nc_simulation_and_post_events_use_the_advertised_grouped_contract() {
         .unwrap()
         .iter()
         .any(|event| event["callback"] == "onToolChange"));
-    // Both the legacy whole-setup request and the UI's optional scope work.
+
     let whole = checked_call(&mut server, "cam_plan_setup", json!({"setup_id":1})).unwrap();
     let nullable = checked_call(
         &mut server,

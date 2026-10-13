@@ -1,6 +1,10 @@
 # Windows native viewport debugging
 
-Status: Windows-only field notes from the August 2026 Bevy viewport bring-up.
+Status: Historical field notes from the August 2026 embedded viewport bring-up.
+The desktop no longer uses Tauri, WebView2, child-window composition or these
+legacy test commands. For the native-only build and current checks, use
+[Development](DEVELOPMENT.md) and [transition status](native-transition-status.md).
+The material below records the retired architecture, not current instructions.
 
 This runbook records failure signatures, root causes, diagnostic techniques,
 and validation commands that are specific to the Tauri + WebView2 + embedded
@@ -31,13 +35,13 @@ Primary code owners:
 
 | Concern | Source |
 |---|---|
-| Win32 child, input relay, Bevy runtime | `src-tauri/src/native_viewport/platform.rs` |
+| Win32 child, input relay, Bevy runtime | `desktop/src/native_viewport/platform.rs` |
 | DOM/native layout and camera IPC | `src/components/viewport/nativeViewportBridge.ts` |
 | Camera and interaction kernel | `src/components/viewport/Viewport.tsx` |
 | Pointer jump filtering | `src/components/viewport/cadInteraction.ts` |
 | SpaceMouse transport policy | `src/input/sixDofMouse.ts` |
 | 3DxWare Navigation Library bridge | `src/input/threeDConnexionBridge.ts` |
-| Native raw-HID fallback | `src-tauri/src/six_dof_mouse.rs` |
+| Native raw-HID fallback | `desktop/src/six_dof_mouse.rs` |
 | Windows interaction regressions | `scripts/e2e-bevy-interaction-kernel.mjs` and `scripts/e2e-six-dof-mouse.mjs` |
 
 ## Reliable local launch
@@ -304,7 +308,7 @@ child class, client size, visibility, and startup probe.
 
 When querying a development process manually, inspect:
 
-- top-level process title `noBS CAD`;
+- top-level process title `Limo CAD`;
 - child class `noBS.CAD.BevyViewport`;
 - child visibility;
 - client width and height greater than 100 pixels;
@@ -350,7 +354,7 @@ Native tests:
 $env:OCCT_ROOT = (Resolve-Path 'vcpkg_installed\x64-windows-release').Path
 $env:VCPKG_TARGET_TRIPLET = 'x64-windows-release'
 $env:Path = "$env:OCCT_ROOT\bin;$env:Path"
-cargo.exe test --manifest-path src-tauri\Cargo.toml --lib
+cargo.exe test --manifest-path desktop\Cargo.toml --lib
 ```
 
 Regression coverage should include:

@@ -49,8 +49,6 @@ mod windows {
         }
 
         pub(crate) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
-            // A process can legitimately exit with STILL_ACTIVE (259). Its
-            // signaled handle, rather than that exit code, determines completion.
             match unsafe { WaitForSingleObject(self.process.as_raw_handle(), 0) } {
                 WAIT_TIMEOUT => Ok(None),
                 WAIT_OBJECT_0 => {
@@ -83,18 +81,14 @@ mod windows {
     pub(crate) fn spawn(path: &Path) -> io::Result<DesktopChild> {
         let application = wide(path)?;
         let directory = path.parent().map(wide).transpose()?;
-        // The canonical executable is also argv[0]. There are no arguments or
-        // shell interpolation; Windows file names cannot contain a quote.
+
         let mut command = vec![b'"' as u16];
         command.extend_from_slice(&application[..application.len() - 1]);
         command.extend_from_slice(&[b'"' as u16, 0]);
         let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
         startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
         let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
-        // Stable std::process::Command currently inherits *all* inheritable
-        // handles, even with null stdio. A surviving CAD process would retain
-        // MCP/PowerShell pipes and prevent their readers from observing EOF.
-        // Block inheritance at creation, without racing global handle flags.
+
         let created = unsafe {
             CreateProcessW(
                 application.as_ptr(),
@@ -103,7 +97,7 @@ mod windows {
                 ptr::null(),
                 0,
                 CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
-                ptr::null(), // Preserve the configured SDK/session environment.
+                ptr::null(),
                 directory.as_ref().map_or(ptr::null(), |v| v.as_ptr()),
                 &startup,
                 &mut process,
@@ -112,8 +106,7 @@ mod windows {
         if created == 0 {
             return Err(io::Error::last_os_error());
         }
-        // Both handles are valid after successful CreateProcessW. Dropping the
-        // launcher closes handles, and deliberately does not terminate CAD.
+
         let process_handle = unsafe { OwnedHandle::from_raw_handle(process.hProcess) };
         let thread_handle = unsafe { OwnedHandle::from_raw_handle(process.hThread) };
         drop(thread_handle);

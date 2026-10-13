@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-10-12T00:01:56.403831+00:00",
+  "source_revision": "333a414ad2fc05996c6d52b206c01f9c1f17a307",
+  "source_file_sha256": {
+    "desktop/src/native_viewport/viewport_renderer.rs": "385fa66e6b5be71f85b29614b7fc446f5a1c8599f1c2c02725d69078b4f3e9df",
+    "desktop/src/native_viewport/viewport_renderer/surface_submission.rs": "93feec6a7355cb89a61f5fafa60b72a51837ba85a23836138b8a1dd4b7f2015a",
+    "desktop/src/native_viewport/viewport_renderer/tests.rs": "82d3d35c16a749c0e071b07febf05f0b19262bffb3bdf55393b3de27df673fa0",
+    "desktop/src/session_bridge/native_interface/view/navigation.rs": "9aea6ebb6d3637fcdacd392805467ea04b3a6f50abc20f24b6c667149848fdb9",
+    "desktop/src/session_bridge/native_interface/view/navigation/tests.rs": "ce748db8e69429368a4ef7dff5ad1cb3291446ae2b682601f018a41c668cd51a"
+  },
+  "merge_topology": {
+    "pr124_base": "f41b9240579dc9a33ad62bb7c73cf53b244778ed",
+    "pr367_head": "450949a09aba6efafb91bac411c9abb3c88f1748",
+    "pr372_head": "f3bb0b168dfc28f548c21c08d4cbae5cb44c91ea",
+    "feature_tree": "af314e74c08c4190608505a994bcacc8e5846460",
+    "both_orders_same_combined_base": true,
+    "orders": {
+      "367_then_372": {
+        "combined_base_commit": "8b0e4aa0b978f18919b299e627419b2ee8834ee3",
+        "combined_base_tree": "a85e73ba5f9b6cc4567b0b508b8ef8e88cbca5fe",
+        "pr373_merge_tree": "af314e74c08c4190608505a994bcacc8e5846460",
+        "conflicts": [],
+        "tree_preserves_complete_pr373": true
+      },
+      "372_then_367": {
+        "combined_base_commit": "ee263229be1f15519465d7a090ccb02329dc5e32",
+        "combined_base_tree": "a85e73ba5f9b6cc4567b0b508b8ef8e88cbca5fe",
+        "pr373_merge_tree": "af314e74c08c4190608505a994bcacc8e5846460",
+        "conflicts": [],
+        "tree_preserves_complete_pr373": true
+      }
+    },
+    "simulation_scope": "Merge commits using the resolved PR124/PR372 renderer integration; no remote PR merged or base branch changed."
+  },
+  "pr367_ledger_merge": {
+    "base": "bd17a49e6b4931439b20f371b0d48325ddf79d40",
+    "parents": [
+      "92c555f750a3db54b1a938f3a0589f62beaecc82",
+      "450949a09aba6efafb91bac411c9abb3c88f1748"
+    ],
+    "semantic_union_preserves_both_parents": true,
+    "additional_leaf_case_count": 340,
+    "run_state": "paused",
+    "ledger_sha256": "f1d60bf8dc11c1c5241ce7abdf1b09c7c1f3dfee1f4b61e35e2cb246b5e5581e"
+  },
+  "additional_leaf_case_counts": [
+    {
+      "declared": 340,
+      "actual": 340
+    }
+  ],
+  "renderer_resolution": [
+    "One shared PR124 surface guard retains original Bevy function ordering sets, thread routing, prewarming, recovery and error policy.",
+    "PR372 strict GPU phase order and surface setup after asset preparation are retained.",
+    "PR372 stopped-worker queue cancellation applies to GPU extraction, render updates and final polling; existing main-thread shutdown servicing is preserved.",
+    "PR372 compiler-pause handshake now pauses the actual CAD queue processor outside the shared guard.",
+    "PR372 continuous orbit and PR367 sketch/chamfer changes remain included; Measure labels and detached queries are preserved."
+  ],
+  "results": {
+    "focused_source_checks_passed": 10,
+    "windowless_native_gpu_checks_passed": 1,
+    "strict_desktop_all_targets_all_features_clippy": "passed",
+    "root_desktop_mcp_format": "passed",
+    "diff_whitespace": "passed"
+  },
+  "receipt": "docs/qualification/measure-sibling-merge-20261011-receipt.txt",
+  "logs": [
+    {
+      "path": "/private/tmp/measure-sibling-merge-tests.log",
+      "sha256": "036ccc59e3f289c1f262c4a1c3c9bd9698490d84858bc0dd2ebe7537463e1298"
+    },
+    {
+      "path": "/private/tmp/measure-sibling-merge-gpu.log",
+      "sha256": "b04d6a07fb499cb25cfc6c607eb01c83661423fe7f9c37539b4e344e9fb1399d"
+    },
+    {
+      "path": "/private/tmp/measure-sibling-merge-clippy.log",
+      "sha256": "a5869c21ad4befec44164101e3db566251e1b1ff5fd385f17e9fa666a1179e6a"
+    }
+  ],
+  "windowless_gpu_evidence": "/private/tmp/measure-sibling-merge-gpu-proofs",
+  "new_live_ui_passes": 0,
+  "new_manual_mcp_passes": 0,
+  "broader_run_state": "paused",
+  "scope": "Merge-commit simulations at the pinned heads, with the documented PR124/PR372 renderer resolution. No remote sibling PR or PR124 was merged. Source/windowless checks preserve the pending live UI/MCP gate."
+}

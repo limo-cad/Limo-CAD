@@ -24,7 +24,7 @@ scrap.
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/);
 and Gagnon & Bearman, *[Design for Manufacture and Assembly](https://pressbooks.palni.org/designmanufactureassembly/)* (PALNI),
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-Rewritten for noBS CAD help — not a chapter mirror. Prefer distill + link over copying Boothroyd
+Rewritten for Limo CAD help — not a chapter mirror. Prefer distill + link over copying Boothroyd
 proprietary timing tables.
 
 ## CAD-time habits
@@ -59,7 +59,7 @@ Concept → **process selection** → detail under that process’s rules →
 coupon/prototype → feedback → release. Talk to manufacturing early; write down
 trade-offs.
 
-## In noBS CAD
+## In Limo CAD
 
 Flagship recipes are manufacturing **candidates**. Replay and drawings are
 software evidence. Fit coupons bridge to a specific printer and material

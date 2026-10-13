@@ -8,10 +8,12 @@ use std::{
 };
 mod includes;
 mod manufacturing;
+mod source_navigation;
 pub use includes::{
     flatten_includes, has_unresolved_includes, parse_with_includes, resolve_include_path,
     validate_include_path, MAX_INCLUDE_DEPTH,
 };
+pub use source_navigation::authored_chapters;
 
 /// Shared limit for files, source text, the desktop picker and MCP.
 pub const MAX_SCRIPT_BYTES: usize = 16 * 1024 * 1024;
@@ -645,8 +647,6 @@ fn validate_presentation_step(step: &Value) -> Result<(), String> {
         }
         for key in ["body_id", "component_id"] {
             if let Some(value) = step.get(key) {
-                // Result references are resolved and type-checked by the host;
-                // malformed literal IDs fail even during a fast replay.
                 if value.as_u64().is_none()
                     && !value.as_object().is_some_and(|object| {
                         object
@@ -735,15 +735,14 @@ pub(crate) fn strip_jsonc(source: &str) -> Result<String, String> {
             }
         } else if bytes[i] == b'"' {
             string = true;
-        } else if bytes[i] == b',' {
-            if bytes[i + 1..]
+        } else if bytes[i] == b','
+            && bytes[i + 1..]
                 .iter()
                 .copied()
                 .find(|c| !c.is_ascii_whitespace())
                 .is_some_and(|c| c == b']' || c == b'}')
-            {
-                bytes[i] = b' ';
-            }
+        {
+            bytes[i] = b' ';
         }
     }
     String::from_utf8(bytes).map_err(|e| e.to_string())
@@ -1202,9 +1201,7 @@ where
             } else {
                 completed += 1;
             }
-            // Native command results can contain a complete triangulated scene.
-            // Release snapshots after their last reference instead of keeping
-            // hundreds of copies alive throughout a long assembly replay.
+
             let mut consumed = BTreeMap::new();
             references(step, &mut consumed);
             for (name, count) in consumed {
@@ -1242,7 +1239,7 @@ mod tests {
     #[test]
     fn garden_bench_notches_select_geometry_not_profile_order() {
         let script = Script::parse(include_str!(
-            "../../../examples/scripts/garden-bench.nbcad.jsonc"
+            "../../../examples/scripts/garden-bench.limo.jsonc"
         ))
         .unwrap();
         for (part, area, outside_area) in [
@@ -1260,10 +1257,7 @@ mod tests {
                 let args = &step["call"]["arguments"];
                 let selection = &args["profile_indices"];
                 let binding = format!("seat_{part}_profiles_{side}");
-                // Projecting a face through a rectangle produces the stock
-                // remainder, the in-stock notch and an out-of-stock strip.
-                // Neither catalog position nor a recorded index identifies
-                // which of those the recipe intends to remove.
+
                 for selected_id in [17, 91] {
                     let intended = json!({"index":selected_id,"area":area});
                     let mut profiles = vec![

@@ -1,6 +1,6 @@
-# Edge-Case Hunt — break noBS CAD on purpose
+# Edge-Case Hunt — break Limo CAD on purpose
 
-noBS CAD is pre-alpha mechanical CAD. The fastest way to make it reliable is
+Limo CAD is pre-alpha mechanical CAD. The fastest way to make it reliable is
 for people to try **real parts** and **weird geometry** and tell us where it
 breaks. Every report becomes a regression test, so the bug stays fixed.
 
@@ -51,7 +51,7 @@ report as "it broke".
 - **History editing**: delete, reorder, or drag a feature in the timeline;
   edit a sketch that an extrude depends on; undo across feature boundaries;
   reorder a feature before its sketch.
-- **Project files**: save, close, reopen; open a `.nbcad` after editing it in
+- **Project files**: save, close, reopen; open a `.limo` after editing it in
   another tool; import odd STEP files; model with mm vs inch units.
 
 ## How to report well
@@ -61,8 +61,8 @@ A good report takes five minutes and saves us an hour:
 - **Steps from a new project** — File → New, then the exact clicks and values.
 - **What you expected vs what happened.**
 - **A screenshot or short recording** for anything visual.
-- **The `.nbcad` file** (if safe to share) **plus a STEP backup** — STEP
-  survives even if the `.nbcad` format changes in pre-alpha.
+- **The `.limo` file** (if safe to share) **plus a STEP backup** — STEP
+  survives even if the `.limo` format changes in pre-alpha.
 - **OS + build info** — e.g. *Windows 11, main @ 5071ec2*.
 
 Use the [bug template](../.github/ISSUE_TEMPLATE/bug_report.yml) (open an
@@ -91,7 +91,7 @@ Thank you to everyone who has broken things on purpose:
 "user error" reports are useful — they show where the UX misleads people.
 
 **Is my data safe?** Export a STEP copy of anything you care about (the README
-recommends this for all pre-alpha projects). `.nbcad` files are ZIP archives —
+recommends this for all pre-alpha projects). `.limo` files are ZIP archives —
 you can inspect them with any unzip tool.
 
 **Can I stay anonymous?** Yes. Just don't ask for Hall of Fame credit.

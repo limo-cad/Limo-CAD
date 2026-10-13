@@ -36,15 +36,14 @@ jobs:
             project: d-screw-vise
     env:
       OCCT_ROOT: ${{ inputs.platform == 'windows' && format('{0}/vcpkg_installed/x64-windows', github.workspace) || '/usr' }}
-      NBCAD_RECIPE_ARTIFACT_DIR: ${{ github.workspace }}/target/mcp-recipe-evidence
+      LIMO_CAD_RECIPE_ARTIFACT_DIR: ${{ github.workspace }}/target/mcp-recipe-evidence
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-      - uses: dtolnay/rust-toolchain@stable
+          fetch-depth: ${{ matrix.shard == 'core' && '0' || '1' }}
+      - uses: ./.github/actions/setup-rust
         with:
-          targets: ${{ inputs.platform == 'windows' && 'x86_64-pc-windows-msvc' || 'x86_64-unknown-linux-gnu' }}
+          target: ${{ inputs.platform == 'windows' && 'x86_64-pc-windows-msvc' || 'x86_64-unknown-linux-gnu' }}
 
       - name: Validate platform inputs
         shell: pwsh
@@ -85,45 +84,47 @@ jobs:
             "$name=$([Environment]::GetEnvironmentVariable($name))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           }
 
-      - name: Install OpenCASCADE 7.9 SDK (Ubuntu packages)
-        if: inputs.platform == 'linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential \
-            ca-certificates \
-            clang \
-            cmake \
-            libocct-data-exchange-7.9 \
-            libocct-foundation-dev \
-            libocct-modeling-algorithms-dev \
-            libocct-modeling-data-dev \
-            ninja-build
-
-          # Retain exact STEP headers without the unused VTK/IVTK SDK.
-          pushd "$RUNNER_TEMP"
-          apt-get download libocct-data-exchange-dev
-          package="$(find . -maxdepth 1 -name 'libocct-data-exchange-dev_*.deb' -print -quit)"
-          test -n "$package"
-          sudo dpkg-deb --extract "$package" /
-          popd
-
-      - name: MCP server tests
-        id: native-tests
+      - name: Qualify downloaded Windows SDK
+        if: inputs.platform == 'windows'
         shell: pwsh
         run: |
-          node scripts/ci/run-mcp-tests.mjs ${{ matrix.shard }}
-          if ($LASTEXITCODE -ne 0) { throw 'MCP server tests failed' }
+          cargo xtask verify-occt-storage --prefix $env:OCCT_ROOT
+          if ($LASTEXITCODE -ne 0) { throw 'Downloaded SDK runtime qualification failed' }
 
-      - name: Native geometry integration regressions
+      - name: Install checked OpenCASCADE 7.9 SDK
+        if: inputs.platform == 'linux'
+        uses: ./.github/actions/setup-unix-occt
+
+      - name: Install recipe evidence fonts
+        if: inputs.platform == 'linux'
+        run: sudo apt-get install --yes --no-install-recommends clang fonts-noto-core fonts-noto-cjk
+
+      - name: Lint native Rust workspaces
+        id: native-lint
         if: matrix.shard == 'core'
         shell: pwsh
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/mcp-server/target
         run: |
-          cargo test --locked -p nbcad-occt --features native-occt --tests -- --test-threads=1
+          cargo clippy --locked --workspace --all-targets --all-features --no-deps -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Native workspace lint failed' }
+          cargo clippy --locked --manifest-path mcp-server/Cargo.toml --all-targets --all-features --no-deps -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'MCP lint failed' }
+
+      - name: MCP server tests
+        id: native-tests
+        shell: pwsh
+        run: |
+          cargo xtask ci mcp-shard ${{ matrix.shard }}
+          if ($LASTEXITCODE -ne 0) { throw 'MCP server tests failed' }
+
+      - name: Native geometry integration regressions
+        if: ${{ !cancelled() && matrix.shard == 'core' && steps.native-lint.outcome == 'success' }}
+        shell: pwsh
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/mcp-server/target
+        run: |
+          cargo test --locked -p limo-cad-occt --features native-occt --tests -- --test-threads=1
           if ($LASTEXITCODE -ne 0) { throw 'native integration tests failed' }
 
       - name: Collect bounded native recipe failure evidence
@@ -168,12 +169,12 @@ jobs:
         run: |
           cargo build --locked --manifest-path mcp-server/Cargo.toml
           if ($LASTEXITCODE -ne 0) { throw 'MCP binary build failed' }
-          $server = if ($IsWindows) { './mcp-server/target/debug/nbcad-mcp.exe' } else { './mcp-server/target/debug/nbcad-mcp' }
+          $server = if ($IsWindows) { './mcp-server/target/debug/limo-cad-mcp.exe' } else { './mcp-server/target/debug/limo-cad-mcp' }
           cargo xtask test-mcp bench --server $server --workshop all --out ./target/mcp-workshop
           if ($LASTEXITCODE -ne 0) { throw 'MCP workshop failed' }
           cargo xtask test-mcp drawing --server $server --out ./target/mcp-workshop/drawing-report.json
           if ($LASTEXITCODE -ne 0) { throw 'MCP drawing example failed' }
-          cargo xtask run-script --recipe garden-bench --repeat 2 --server $server --out ./target/mcp-workshop/garden-bench --save ./target/mcp-recipe-evidence/garden-bench.nbcad
+          cargo xtask run-script --recipe garden-bench --repeat 2 --server $server --out ./target/mcp-workshop/garden-bench --save ./target/mcp-recipe-evidence/garden-bench.limo
           if ($LASTEXITCODE -ne 0) { throw 'Parametric garden bench failed' }
           cargo xtask run-script --recipe fillet-basics --repeat 2 --server $server --out ./target/mcp-workshop/fillet-basics
           if ($LASTEXITCODE -ne 0) { throw 'Parametric fillet lesson failed' }
@@ -189,7 +190,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mcp-demo-${{ inputs.platform }}-${{ matrix.shard }}
-          path: target/mcp-recipe-evidence/${{ matrix.project }}.nbcad
+          path: target/mcp-recipe-evidence/${{ matrix.project }}.limo
           if-no-files-found: error
           overwrite: true
           retention-days: 7

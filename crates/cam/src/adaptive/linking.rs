@@ -7,10 +7,8 @@ pub(super) fn roll(
     builder: &mut ProgramBuilder,
     setup: &CamSetupDto,
     cleared: &Cleared,
-    anchor: Point2Dto,
-    tangent: Point2Dto,
-    depth: f64,
-    r: f64,
+    (anchor, tangent): (Point2Dto, Point2Dto),
+    (depth, r): (f64, f64),
     entry: bool,
     plunge: f64,
 ) -> Result<bool, CamPlanError> {
@@ -174,7 +172,7 @@ pub(super) fn exit_lap(
         let a = xy(from);
         if (from.z - depth).abs() < EPS && (dist(a, c) - q).abs() < 1e-6 {
             let t = Point2Dto::new(-(a.y - c.y) / q, (a.x - c.x) / q);
-            roll(builder, setup, cleared, a, t, depth, r, false, 1.0)?;
+            roll(builder, setup, cleared, (a, t), (depth, r), false, 1.0)?;
         }
     }
     Ok(())

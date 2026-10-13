@@ -1,11 +1,11 @@
 //! Exercise saved presentation metadata against real OCCT replay and exports.
 #![cfg(feature = "native-occt")]
 
-use nbcad_core::{OriginPlane, PlaneRef};
-use nbcad_export::MeshExportRequest;
-use nbcad_occt::OcctKernel;
-use nbcad_sketch::{host, SketchManager};
-use nbcad_solid::{CommitKernelRequest, RecomputePlanDto};
+use limo_cad_core::{OriginPlane, PlaneRef};
+use limo_cad_export::MeshExportRequest;
+use limo_cad_occt::OcctKernel;
+use limo_cad_sketch::{host, SketchManager};
+use limo_cad_solid::{CommitKernelRequest, RecomputePlanDto};
 
 fn value(json: String) -> serde_json::Value {
     let envelope: serde_json::Value = serde_json::from_str(&json).unwrap();
@@ -47,12 +47,17 @@ fn named_views_preserve_native_geometry_and_migrate_schema_nine() {
     let mut legacy: serde_json::Value =
         serde_json::from_str(&manager.export_project_model().unwrap()).unwrap();
     legacy["schema_version"] = serde_json::json!(9);
+    legacy["format"] = serde_json::json!("nbcad-project");
     legacy.as_object_mut().unwrap().remove("views");
+    legacy.as_object_mut().unwrap().remove("print_intent");
     let plan = manager.prepare_load_project(legacy.to_string()).unwrap();
     replay(&mut manager, &mut kernel, plan);
     let migrated: serde_json::Value =
         serde_json::from_str(&manager.export_project_model().unwrap()).unwrap();
-    assert_eq!(migrated["schema_version"], 10);
+    assert_eq!(
+        migrated["schema_version"],
+        limo_cad_sketch::PROJECT_SCHEMA_VERSION
+    );
     assert_eq!(migrated["views"], serde_json::json!([]));
     assert_eq!(
         serde_json::to_value(manager.solid_scene()).unwrap(),

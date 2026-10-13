@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Length unit system of a document.
 ///
 /// Defaults to millimeters. Serializes as a plain snake_case string (`"mm"`)
-/// for IPC with the frontend.
+/// for IPC with the UI.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UnitSystem {

@@ -52,13 +52,6 @@ pub fn line_line(l1: &LineSeg, l2: &LineSeg) -> Option<(Pt, f64, f64)> {
     let rhs_x = l2.a.x - l1.a.x;
     let rhs_y = l2.a.y - l1.a.y;
 
-    // t is parameter on l1, u is parameter on l2
-    // P = A1 + t * D1 = A2 + u * D2
-    // t * D1 - u * D2 = A2 - A1
-
-    // 2D Cross product (a x b) = ax*by - ay*bx
-    // t = ((A2 - A1) x D2) / (D1 x D2)
-
     let det_val = dx1 * dy2 - dy1 * dx2;
 
     if approx_eq(det_val, 0.0) {
@@ -80,15 +73,6 @@ pub fn line_circle(l: &LineSeg, c: &Circle) -> Vec<(Pt, f64)> {
     let dx = l.b.x - l.a.x;
     let dy = l.b.y - l.a.y;
 
-    // Line equation: P = A + t * D
-    // Circle: |P - C|^2 = r^2
-    // |A + tD - C|^2 = r^2
-    // Let V = A - C
-    // |V + tD|^2 = r^2
-    // (V + tD) . (V + tD) = r^2
-    // V.V + 2t(V.D) + t^2(D.D) = r^2
-    // t^2(D.D) + 2t(V.D) + (V.V - r^2) = 0
-
     let vx = l.a.x - c.center.x;
     let vy = l.a.y - c.center.y;
 
@@ -102,11 +86,7 @@ pub fn line_circle(l: &LineSeg, c: &Circle) -> Vec<(Pt, f64)> {
         return Vec::new();
     }
 
-    if discriminant < 0.0 {
-        // Treat as 0 for tangent
-    }
-
-    let sqrt_disc = discriminant.sqrt();
+    let sqrt_disc = discriminant.max(0.0).sqrt();
     let mut results = Vec::new();
 
     let t1 = (-b - sqrt_disc) / (2.0 * a);
@@ -136,7 +116,6 @@ pub fn circle_circle(c1: &Circle, c2: &Circle) -> Vec<Pt> {
     let d_sq = dx * dx + dy * dy;
     let d = d_sq.sqrt();
 
-    // Concentric or same center
     if approx_eq(d, 0.0) {
         return Vec::new();
     }
@@ -144,7 +123,6 @@ pub fn circle_circle(c1: &Circle, c2: &Circle) -> Vec<Pt> {
     let r1 = c1.radius;
     let r2 = c2.radius;
 
-    // No intersection if too far apart or one inside other
     if d > r1 + r2 + EPS {
         return Vec::new();
     }
@@ -152,26 +130,18 @@ pub fn circle_circle(c1: &Circle, c2: &Circle) -> Vec<Pt> {
         return Vec::new();
     }
 
-    // Law of cosines to find distance from c1 to the chord line
-    // a^2 + h^2 = r1^2
-    // (d-a)^2 + h^2 = r2^2
-    // a = (r1^2 - r2^2 + d^2) / (2d)
-
     let a_val = (r1 * r1 - r2 * r2 + d_sq) / (2.0 * d);
     let h_sq = r1 * r1 - a_val * a_val;
 
-    // Point P2 is the intersection of the line connecting centers and the chord
     let x2 = c1.center.x + a_val * (dx / d);
     let y2 = c1.center.y + a_val * (dy / d);
 
     let h = if h_sq < 0.0 { 0.0 } else { h_sq.sqrt() };
 
-    // Offset from P2 perpendicular to the line connecting centers
     let rx = -dy / d * h;
     let ry = dx / d * h;
 
     if h < EPS {
-        // Tangent
         vec![Pt { x: x2, y: y2 }]
     } else {
         vec![
@@ -196,14 +166,12 @@ pub fn nearest_param_on_line(l: &LineSeg, p: Pt) -> f64 {
         return 0.0;
     }
 
-    let t = ((p.x - l.a.x) * dx + (p.y - l.a.y) * dy) / len_sq;
-    t
+    ((p.x - l.a.x) * dx + (p.y - l.a.y) * dy) / len_sq
 }
 
 pub fn trim_line_parts(l: &LineSeg, click: Pt, cuts: &[Pt]) -> Option<LineTrim> {
     let click_t = nearest_param_on_line(l, click);
 
-    // Filter cuts that are strictly inside (0, 1)
     let mut valid_cuts: Vec<f64> = cuts
         .iter()
         .map(|c| nearest_param_on_line(l, *c))
@@ -217,11 +185,6 @@ pub fn trim_line_parts(l: &LineSeg, click: Pt, cuts: &[Pt]) -> Option<LineTrim> 
     valid_cuts.sort_by(|a, b| a.partial_cmp(b).unwrap());
     valid_cuts.dedup_by(|a, b| (*a - *b).abs() <= EPS);
 
-    // We need to remove the interval containing the click param, bounded by the nearest inside-cut params on each side (or the segment ends).
-    // "The interval containing the click param, bounded by the nearest inside-cut params on each side (or the segment ends), is REMOVED."
-
-    // Find the lower bound of the removal interval
-    // Lower bound is the largest cut param <= click_t, or 0 if no such cut
     let lower_bound = valid_cuts
         .iter()
         .rev()
@@ -229,8 +192,6 @@ pub fn trim_line_parts(l: &LineSeg, click: Pt, cuts: &[Pt]) -> Option<LineTrim> 
         .copied()
         .unwrap_or(0.0);
 
-    // Find the upper bound of the removal interval
-    // Upper bound is the smallest cut param >= click_t, or 1 if no such cut
     let upper_bound = valid_cuts
         .iter()
         .find(|&&t| t >= click_t - EPS)
@@ -287,24 +248,22 @@ pub fn extend_line_to(l: &LineSeg, targets: &[Curve]) -> Option<LineSeg> {
 
     let max_ext = 100.0 * len;
 
-    // Direction vector
     let dx = l.b.x - l.a.x;
     let dy = l.b.y - l.a.y;
 
-    let mut best_extension: Option<(f64, f64, f64)> = None; // (extension_len, new_a_t, new_b_t)
+    let mut best_extension: Option<(f64, f64, f64)> = None;
 
-    // Check targets for extension of b (t > 1.0)
     for target in targets {
         match target {
             Curve::Line(l2) => {
                 if let Some((_, t, _)) = line_line(l, l2) {
                     if t > 1.0 + EPS {
                         let ext_len = (t - 1.0) * len;
-                        if ext_len <= max_ext + EPS {
-                            if best_extension.is_none() || ext_len < best_extension.unwrap().0 - EPS
-                            {
-                                best_extension = Some((ext_len, 0.0, t));
-                            }
+                        if ext_len <= max_ext + EPS
+                            && (best_extension.is_none()
+                                || ext_len < best_extension.unwrap().0 - EPS)
+                        {
+                            best_extension = Some((ext_len, 0.0, t));
                         }
                     }
                 }
@@ -313,11 +272,11 @@ pub fn extend_line_to(l: &LineSeg, targets: &[Curve]) -> Option<LineSeg> {
                 for (_pt, t) in line_circle(l, c) {
                     if t > 1.0 + EPS {
                         let ext_len = (t - 1.0) * len;
-                        if ext_len <= max_ext + EPS {
-                            if best_extension.is_none() || ext_len < best_extension.unwrap().0 - EPS
-                            {
-                                best_extension = Some((ext_len, 0.0, t));
-                            }
+                        if ext_len <= max_ext + EPS
+                            && (best_extension.is_none()
+                                || ext_len < best_extension.unwrap().0 - EPS)
+                        {
+                            best_extension = Some((ext_len, 0.0, t));
                         }
                     }
                 }
@@ -325,13 +284,12 @@ pub fn extend_line_to(l: &LineSeg, targets: &[Curve]) -> Option<LineSeg> {
         }
     }
 
-    // Check targets for extension of a (t < 0.0)
     for target in targets {
         match target {
             Curve::Line(l2) => {
                 if let Some((_, t, _)) = line_line(l, l2) {
                     if t < -EPS {
-                        let ext_len = (-t) * len; // Distance from a (t=0) to intersection (t)
+                        let ext_len = (-t) * len;
                         if ext_len <= max_ext + EPS {
                             let current_best = best_extension.unwrap_or((f64::MAX, 0.0, 1.0));
                             if ext_len < current_best.0 - EPS {
@@ -443,7 +401,6 @@ mod tests {
         let res = line_circle(&l, &c);
         assert_eq!(res.len(), 2);
 
-        // Sorted by param ascending
         let (pt1, t1) = res[0];
         let (pt2, t2) = res[1];
 
@@ -452,6 +409,36 @@ mod tests {
 
         assert_pt_eq(pt2, Pt { x: 2.0, y: 0.0 });
         assert_f64_eq(t2, 0.2);
+    }
+
+    #[test]
+    fn line_circle_tolerance_keeps_near_tangent_intersections_finite() {
+        let circle = Circle {
+            center: Pt { x: 0.0, y: 0.0 },
+            radius: 1.0,
+        };
+        for y in [1.0, 1.0 + EPS / 64.0] {
+            let line = LineSeg {
+                a: Pt { x: -1.0, y },
+                b: Pt { x: 1.0, y },
+            };
+            let intersections = line_circle(&line, &circle);
+            assert_eq!(intersections.len(), 1);
+            let (point, parameter) = intersections[0];
+            assert_pt_eq(point, Pt { x: 0.0, y });
+            assert_f64_eq(parameter, 0.5);
+        }
+        let miss = LineSeg {
+            a: Pt {
+                x: -1.0,
+                y: 1.0 + EPS,
+            },
+            b: Pt {
+                x: 1.0,
+                y: 1.0 + EPS,
+            },
+        };
+        assert!(line_circle(&miss, &circle).is_empty());
     }
 
     #[test]
@@ -468,7 +455,6 @@ mod tests {
         let res = circle_circle(&c1, &c2);
         assert_eq!(res.len(), 2);
 
-        // Points should be (3, 4) and (3, -4) in any order
         let mut pts = res;
         pts.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap());
 
@@ -540,7 +526,7 @@ mod tests {
         assert!(res.is_some());
         let seg = res.unwrap();
         assert_pt_eq(seg.a, Pt { x: 0.0, y: 0.0 });
-        assert_pt_eq(seg.b, Pt { x: 8.0, y: 0.0 }); // 10 - 2 = 8
+        assert_pt_eq(seg.b, Pt { x: 8.0, y: 0.0 });
     }
 
     #[test]
@@ -558,7 +544,7 @@ mod tests {
         let res = extend_line_to(&l, &targets);
         assert!(res.is_some());
         let seg = res.unwrap();
-        assert_pt_eq(seg.a, Pt { x: 0.0, y: 0.0 }); // Extended back to x=0
+        assert_pt_eq(seg.a, Pt { x: 0.0, y: 0.0 });
         assert_pt_eq(seg.b, Pt { x: 10.0, y: 0.0 });
     }
 }

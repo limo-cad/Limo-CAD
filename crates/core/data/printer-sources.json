@@ -1,0 +1,16 @@
+{
+  "sources": [
+    {
+      "id": "bambu-studio-x2d",
+      "repository": "bambulab/BambuStudio",
+      "revision": "da8b44ee34dd349f2ae0df3f1cbae366df482354",
+      "profile": "resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json"
+    },
+    {
+      "id": "orca-slicer-x2d",
+      "repository": "OrcaSlicer/OrcaSlicer",
+      "revision": "a80c323614e4e4e6beb885499afc3b4e886c4457",
+      "profile": "resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json"
+    }
+  ]
+}

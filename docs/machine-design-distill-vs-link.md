@@ -140,7 +140,7 @@ Agents may **read** these when the user is learning; we still do not **ship** th
 
 ---
 
-## How this maps to noBS CAD topics
+## How this maps to Limo CAD topics
 
 | Topic | Distill from | Link out to |
 |-------|--------------|-------------|

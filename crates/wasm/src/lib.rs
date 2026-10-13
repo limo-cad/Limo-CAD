@@ -1,18 +1,24 @@
-//! nbcad-wasm — WASM host of the noBS CAD engine.
+//! limo-cad-wasm — WASM host of the Limo CAD engine.
 //!
 //! Thin wasm-bindgen facade over [`SketchManager`]: one exported function
 //! per engine API method, JSON-string in / JSON-string out, dispatching
-//! through `nbcad_sketch::host::handle` — the exact same code path the
-//! Tauri commands use, so browser and native behavior are identical by
-//! construction. All payloads are the shared envelope
+//! through `limo_cad_sketch::host::handle` — the exact same code path the
+//! native desktop commands use. Native solid geometry additionally requires
+//! the OCCT host; this facade supplies the host-neutral engine API. Payloads use
+//! the shared envelope
 //! (`{"ok":true,"value":...}` / `{"ok":false,"error":"..."}`).
 
 use wasm_bindgen::prelude::*;
 
-use nbcad_sketch::host;
-use nbcad_sketch::SketchManager;
+use limo_cad_sketch::host;
+use limo_cad_sketch::SketchManager;
 
-/// Engine instance held by the frontend `WasmEngine` adapter.
+mod browser_data;
+#[cfg(test)]
+mod smoke;
+pub use browser_data::{project_archive_decode, project_archive_encode, triangulate_profile};
+
+/// Host-neutral engine instance exposed through wasm-bindgen.
 #[wasm_bindgen]
 pub struct WasmEngine {
     manager: SketchManager,
@@ -34,6 +40,10 @@ impl WasmEngine {
 
     pub fn document_set_name(&mut self, payload: &str) -> String {
         host::handle(&mut self.manager, "document_set_name", payload)
+    }
+
+    pub fn solid_rename_feature(&mut self, payload: &str) -> String {
+        host::handle(&mut self.manager, "solid_rename_feature", payload)
     }
 
     pub fn project_export_model(&mut self, payload: Option<String>) -> String {
@@ -169,6 +179,10 @@ impl WasmEngine {
 
     pub fn assembly_duplicate_occurrence(&mut self, payload: &str) -> String {
         host::handle(&mut self.manager, "assembly_duplicate_occurrence", payload)
+    }
+
+    pub fn assembly_remove_occurrence(&mut self, payload: &str) -> String {
+        host::handle(&mut self.manager, "assembly_remove_occurrence", payload)
     }
 
     pub fn assembly_set_occurrence_grounded(&mut self, payload: &str) -> String {

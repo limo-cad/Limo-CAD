@@ -28,7 +28,7 @@ related_recipes: turbine-fit-coupons
 | Units / multi-body | Better package semantics | Easy to mis-scale in slicers |
 | When | Default AM export when available | Legacy slicer or explicit request |
 
-Keep `.nbcad` for editable history and **STEP** for CAD interchange. Mesh
+Keep `.limo` for editable history and **STEP** for CAD interchange. Mesh
 export is not a substitute for either. Prefer millimetre project units; confirm
 slicer import scale after export.
 

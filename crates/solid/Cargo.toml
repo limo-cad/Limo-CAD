@@ -1,14 +1,14 @@
 [package]
-name = "nbcad-solid"
+name = "limo-cad-solid"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 description = "Host-neutral solid feature history, stable topology ids, and kernel DTOs"
 license = "LGPL-2.1-or-later"
-repository = "https://github.com/limo-cad/Limo-CAD"
+repository.workspace = true
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-nbcad-core = { path = "../core" }
+serde = { workspace = true, features = ["derive"] }
+limo-cad-core = { path = "../core" }
 
 [dev-dependencies]
-serde_json = "1"
+serde_json.workspace = true

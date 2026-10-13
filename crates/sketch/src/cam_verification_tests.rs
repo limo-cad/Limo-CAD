@@ -1,5 +1,5 @@
 use super::*;
-use nbcad_cam::{CamToolKind, Point2Dto, PostDialect};
+use limo_cad_cam::{CamToolKind, Point2Dto, PostDialect};
 
 fn thread_job(with_bore: bool, drill_bottom: f64) -> CamDocumentDto {
     let data: serde_json::Value =
@@ -45,7 +45,7 @@ fn thread_job(with_bore: bool, drill_bottom: f64) -> CamDocumentDto {
     doc.next_operation_id = 3;
     doc.next_tool_id = 3;
     doc.post_defaults.dialect = PostDialect::LinuxCnc;
-    doc.setups[0].machine = Some(nbcad_cam::CamMachineAssignmentDto::three_axis(
+    doc.setups[0].machine = Some(limo_cad_cam::CamMachineAssignmentDto::three_axis(
         doc.post_defaults.clone(),
     ));
     doc
@@ -92,8 +92,7 @@ fn current_thread_cannot_export_without_an_actually_cleared_entry() {
             .any(|w| w.contains("UNVERIFIED")),
         "no CAD target must never be called clearance verified"
     );
-    // A drilled point at the nominal thread bottom does not clear the full
-    // thread cutter's cylinder. The changed input must invalidate evidence.
+
     manager.set_cam_document(thread_job(true, -3.0)).unwrap();
     manager.cam_regenerate_setup(1).unwrap();
     assert!(manager
@@ -131,7 +130,7 @@ fn moving_bore_after_thread_keeps_motion_current_but_blocks_unverified_nc_entry(
 fn individual_regeneration_retains_enabled_incoming_face_evidence() {
     let mut doc = thread_job(true, -6.0);
     doc.setups[0].operations.truncate(1);
-    let stock = doc.setups[0].stock.clone();
+    let stock = doc.setups[0].stock;
     let mut face_tool = doc.tools[0].clone();
     face_tool.id = 3;
     face_tool.number = Some(3);

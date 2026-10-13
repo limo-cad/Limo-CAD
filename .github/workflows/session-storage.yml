@@ -1,0 +1,40 @@
+name: Private session transport
+
+on:
+  push:
+    branches: [main]
+    paths: ['crates/session-storage/**', 'mcp-server/src/inbox.rs', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**', '.github/actions/setup-rust/**', '.github/workflows/session-storage.yml']
+  pull_request:
+    paths: ['crates/session-storage/**', 'mcp-server/src/inbox.rs', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**', '.github/actions/setup-rust/**', '.github/workflows/session-storage.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-session-transport-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  storage:
+    name: Storage policy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/setup-rust
+      - run: cargo fmt -p limo-cad-session-storage -- --check
+      - run: cargo clippy --locked -p limo-cad-session-storage --all-targets -- -D warnings
+      - run: cargo test --locked -p limo-cad-session-storage
+      - name: Exercise privileged Unix ownership checks on disposable fixtures
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cargo test --locked -p limo-cad-session-storage --no-run --message-format=json > "$RUNNER_TEMP/session-tests.json"
+          executable=$(jq -r 'select(.reason == "compiler-artifact" and .profile.test and .target.name == "limo_cad_session_storage") | .executable // empty' "$RUNNER_TEMP/session-tests.json")
+          test -n "$executable"
+          sudo "$executable" --test-threads=1

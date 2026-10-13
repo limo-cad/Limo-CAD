@@ -1,0 +1,570 @@
+{
+  "scope": "Normal macOS startup and targeted renderer regression checks; not broad UI/MCP qualification",
+  "date": "2026-10-11",
+  "source_revision": "9bc7ac070b9b587caef9c6330a853b9b93e1b260",
+  "base_revision": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+  "user_report": "Menus took several seconds to appear in the Bevy app the user opened.",
+  "user_app": {
+    "path": "/Users/jack/Code/noBS-CAD/artifacts/sketch-annotation-repairs-a7ecee2f/Limo CAD.app",
+    "revision": "a7ecee2fb0d92b9447ba2e2295f9155bf0c000b0",
+    "channel": "development",
+    "modified": false,
+    "executable_bytes": 195290496,
+    "bundle_bytes": 243734351,
+    "executable_sha256": "8bc287b8fd62efa67f86d3843eedd9885cab0947bc86534831ba14a0eea838f0",
+    "symbols": "retained",
+    "preserved": true
+  },
+  "cause": {
+    "finding": "Slow normal startup waits for Metal compute compilation. Bevy default functionality settings request all adapter capabilities; even a blank CAD scene eagerly queues environment filtering, SSAO and occlusion-culling shaders.",
+    "profile": "artifacts/bevy-normal-startup-20261011/observations/user-build-fresh-profile/sample.txt",
+    "diagnostic_inventory": "artifacts/bevy-normal-startup-20261011/tests/gpu-builder-startup-labels.log",
+    "original_gpu_compute_descriptors": 34,
+    "selected_gpu_compute_descriptor_upper_bound": 10,
+    "inventory_scope": "Same native scene in an isolated preview; original GPU instance setting with clustering already disabled versus final portable profile.",
+    "sampling_limit": "Sample counts identify stacks, not independent elapsed times. Profiled samples are excluded from latency comparisons."
+  },
+  "fix": {
+    "commit": "fc474933",
+    "behavior": [
+      "Desktop and offscreen previews share the standard WebGPU GPU feature/limit priority.",
+      "Default GPU instance preparation retained after CPU mode failed the custom-stock image check.",
+      "CAD ambient/two-directional-light scene disables GPU clustering; both cameras use ClusterConfig::None.",
+      "Existing submission receipt waits for queued shaders; no new redraw poller or startup timer.",
+      "Original synchronous compilation policy retained."
+    ],
+    "dependency_changes": false,
+    "new_pollers_or_startup_timers": false,
+    "failed_experiments_retained": [
+      {
+        "revision": "5bd9d1d5",
+        "failure": "CPU instance building makes custom stock material invisible; GPU stock removal image differs by zero pixels.",
+        "log": "tests/stock-removal-packaged-libs.log"
+      },
+      {
+        "revision": "5bd9d1d5",
+        "failure": "The blanket zero-compute assertion is invalid: 17 other Bevy compute pipelines still compile with CPU instances.",
+        "log": "tests/preview-packaged-libs.log"
+      },
+      {
+        "scope": "diagnostic original GPU setting",
+        "result": "Stock removal passes; startup pipeline inventory has 34 compute descriptors.",
+        "log": "tests/gpu-builder-startup-labels.log"
+      },
+      {
+        "scope": "initial test-process start",
+        "result": "CODESIGNING Invalid Page before tests ran with temporary staging libraries; same runner works using verified packaged libraries.",
+        "log": "tests/initial-process-termination.json"
+      }
+    ]
+  },
+  "release": {
+    "bundle": "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app",
+    "dmg": "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/Limo.CAD_0.2.2_aarch64-9bc7ac07.dmg",
+    "source_revision": "9bc7ac070b9b587caef9c6330a853b9b93e1b260",
+    "expected_modified": false,
+    "selected": true,
+    "channel": "preview",
+    "profile": "standard release; opt-level=3; strip=symbols",
+    "bundle_bytes": 169015654,
+    "executable_bytes": 120571872,
+    "executable_sha256": "8d738cda41171d81b05b07caff4144ed5a661621d56474f1d4e532c86dc94a30",
+    "dmg_bytes": 65712403,
+    "dmg_sha256": "50d844ee2181beebdb2706ecee3803b8237180ad93a17c187dc0fddb699f3a45",
+    "signature": "local ad-hoc; deep strict verification passed",
+    "packaging": "standard cargo xtask package; checked OCCT SDK/probe; verified DMG; actual payload extracted before first normal launch"
+  },
+  "old_release": {
+    "version": "0.2.2",
+    "identifier": "org.nbcad.desktop",
+    "executable_sha256": "21a4a3587ef18ede022610a51a5c6eeca82e36da529a7880cd68fbca6f50cd69",
+    "bundle_bytes": 129956207,
+    "bundle": "/private/tmp/limo-bevy-normal-startup-20261011/old-release-fresh-copy/noBS CAD.app",
+    "source": "Published v0.2.2, source1549560e; extracted app from previously SHA-verified official DMG"
+  },
+  "measurements": {
+    "measurement": "Normal macOS LaunchServices launch, default user settings, empty Untitled; menus plus browser plus viewport visibly populated",
+    "clock": "Swift system uptime from native launch_requested event",
+    "limitations": [
+      "Fresh app copies, not OS cold cache; Metal, dyld, filesystem and WebKit caches were not cleared.",
+      "Other users' workloads continued; high-CPU processes at each launch are retained.",
+      "Capture polling and API latency included; observed upper bounds, not exact first-pixel times.",
+      "Profiled samples are retained but excluded from latency comparisons.",
+      "user-build-first has observer-relative timing only; original erroneous cross-process clock retained with invalid filename.",
+      "Main process memory excludes old-release WebKit helper processes.",
+      "Portable offscreen GPU checks ran before the final packaged normal launch; they may have populated shared Metal caches. The exact packaged executable was not launched or initialized before its recorded first normal GUI launch."
+    ],
+    "runs": [
+      {
+        "run": "user-build-first",
+        "variant": "user_build_a7ecee2f",
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": false,
+        "first_complete_menu_seconds": null,
+        "first_complete_menu_file": "observations/user-build-first/frame-002.png",
+        "first_capture_seconds": null,
+        "timing_note": "First sequence measured against observer start only; cross-process clock origins differed. Normal launch requested after observer ready and before process discovery, so event seconds bound launch latency by process-discovery offset. Use subsequent native launch-clock runs for exact reported timing.",
+        "background_cpu_percent": [
+          20.2,
+          30.5,
+          98.2,
+          98.9,
+          98.9,
+          18.3
+        ],
+        "main_process_rss_kib": 303408,
+        "evidence": "observations/user-build-first/result.json",
+        "selected_variant": false
+      },
+      {
+        "run": "user-build-profile",
+        "variant": "user_build_a7ecee2f",
+        "profiled": true,
+        "normal_launch": true,
+        "fresh_copy": false,
+        "first_complete_menu_seconds": 2.8372297915630043,
+        "first_complete_menu_file": "observations/user-build-profile/frame-003.png",
+        "first_capture_seconds": 2.3220442915335298,
+        "timing_note": null,
+        "background_cpu_percent": [
+          27.6,
+          94.6,
+          99.5,
+          99.4,
+          99.4,
+          17.1
+        ],
+        "main_process_rss_kib": 306352,
+        "evidence": "observations/user-build-profile/result.json",
+        "selected_variant": false
+      },
+      {
+        "run": "user-build-fresh-first",
+        "variant": "user_build_a7ecee2f",
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 9.055165541823953,
+        "first_complete_menu_file": "observations/user-build-fresh-first/frame-038.png",
+        "first_capture_seconds": 2.677078166976571,
+        "timing_note": null,
+        "background_cpu_percent": [
+          31.9,
+          21.3,
+          88.7,
+          88.3,
+          87.7,
+          16.7,
+          41.5
+        ],
+        "main_process_rss_kib": 305504,
+        "evidence": "observations/user-build-fresh-first/result.json",
+        "selected_variant": false
+      },
+      {
+        "run": "user-build-fresh-profile",
+        "variant": "user_build_a7ecee2f",
+        "profiled": true,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 10.32568862522021,
+        "first_complete_menu_file": "observations/user-build-fresh-profile/frame-039.png",
+        "first_capture_seconds": 3.619236375205219,
+        "timing_note": null,
+        "background_cpu_percent": [
+          29.5,
+          86.9,
+          81.9,
+          82.8,
+          80.7,
+          15.6,
+          15.6,
+          15.1,
+          15.5,
+          40.5,
+          35.6
+        ],
+        "main_process_rss_kib": 305312,
+        "evidence": "observations/user-build-fresh-profile/result.json",
+        "selected_variant": false
+      },
+      {
+        "run": "fixed-release-first",
+        "variant": "cpu_instances_0e19db3f",
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 7.049025416839868,
+        "first_complete_menu_file": "observations/fixed-release-first/frame-029.png",
+        "first_capture_seconds": 2.2316951248794794,
+        "timing_note": null,
+        "background_cpu_percent": [
+          21.9,
+          98.7,
+          99.2,
+          98.7,
+          98.7
+        ],
+        "main_process_rss_kib": 287472,
+        "evidence": "observations/fixed-release-first/result.json",
+        "selected_variant": false,
+        "variant_rejected": true,
+        "rejection_reason": "CPU instance preparation makes custom stock material invisible; not the delivered fix."
+      },
+      {
+        "run": "serial-release-second-first",
+        "variant": "cpu_instances_0e19db3f",
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 7.126130499877036,
+        "first_complete_menu_file": "observations/serial-release-second-first/frame-030.png",
+        "first_capture_seconds": 2.145197458565235,
+        "timing_note": null,
+        "background_cpu_percent": [
+          24.8,
+          54.4,
+          50.9,
+          194.9,
+          353.4
+        ],
+        "main_process_rss_kib": 290576,
+        "evidence": "observations/serial-release-second-first/result.json",
+        "selected_variant": false,
+        "variant_rejected": true,
+        "rejection_reason": "CPU instance preparation makes custom stock material invisible; not the delivered fix."
+      },
+      {
+        "run": "old-release-first",
+        "variant": "published_v0.2.2",
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 9.512188666965812,
+        "first_complete_menu_file": "observations/old-release-first/frame-028.png",
+        "first_capture_seconds": 4.603419958613813,
+        "timing_note": null,
+        "background_cpu_percent": [
+          30.6,
+          104.0,
+          97.8,
+          97.5,
+          97.8,
+          21.4
+        ],
+        "main_process_rss_kib": 286848,
+        "evidence": "observations/old-release-first/result.json",
+        "selected_variant": false
+      },
+      {
+        "run": "old-release-second-first",
+        "variant": "published_v0.2.2",
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 2.9378640833310783,
+        "first_complete_menu_file": "observations/old-release-second-first/frame-003.png",
+        "first_capture_seconds": 2.4427600000053644,
+        "timing_note": null,
+        "background_cpu_percent": [
+          23.5,
+          95.0,
+          99.7,
+          85.8
+        ],
+        "main_process_rss_kib": 292368,
+        "evidence": "observations/old-release-second-first/result.json",
+        "selected_variant": false
+      },
+      {
+        "run": "final-release-first",
+        "variant": "rejected_parallel_9f079649",
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 8.950969083234668,
+        "first_complete_menu_file": "observations/final-release-first/frame-034.png",
+        "first_capture_seconds": 2.4583014165982604,
+        "timing_note": null,
+        "background_cpu_percent": [
+          19.5,
+          67.3,
+          65.2,
+          537.2,
+          131.2
+        ],
+        "main_process_rss_kib": 281744,
+        "evidence": "observations/final-release-first/result.json",
+        "selected_variant": false,
+        "variant_rejected": true,
+        "rejection_reason": "CPU instance preparation makes custom stock material invisible; not the delivered fix."
+      },
+      {
+        "run": "parallel-release-second-first",
+        "variant": "rejected_parallel_9f079649",
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 8.23045299993828,
+        "first_complete_menu_file": "observations/parallel-release-second-first/frame-018.png",
+        "first_capture_seconds": 2.5556382085196674,
+        "timing_note": null,
+        "background_cpu_percent": [
+          25.7,
+          68.8,
+          90.6,
+          91.3,
+          19.1,
+          44.1,
+          85.8,
+          90.8
+        ],
+        "main_process_rss_kib": 214352,
+        "evidence": "observations/parallel-release-second-first/result.json",
+        "selected_variant": false,
+        "variant_rejected": true,
+        "rejection_reason": "CPU instance preparation makes custom stock material invisible; not the delivered fix."
+      },
+      {
+        "run": "selected-release-first",
+        "variant": "selected_5bd9d1d5",
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 1.9279014165513217,
+        "first_complete_menu_file": "observations/selected-release-first/frame-001.png",
+        "first_capture_seconds": 1.7706864583306015,
+        "timing_note": null,
+        "background_cpu_percent": [
+          22.1,
+          252.9,
+          78.3,
+          76.3,
+          19.3
+        ],
+        "main_process_rss_kib": 290896,
+        "evidence": "observations/selected-release-first/result.json",
+        "selected_variant": false,
+        "variant_rejected": true,
+        "rejection_reason": "CPU instance preparation makes custom stock material invisible; not the delivered fix."
+      },
+      {
+        "run": "portable-release-first",
+        "variant": "selected_portable_9bc7ac07",
+        "selected_variant": true,
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 2.6953807082027197,
+        "first_complete_menu_file": "observations/portable-release-first/frame-002.png",
+        "first_capture_seconds": 2.3876777915284038,
+        "background_cpu_percent": [
+          49.0,
+          98.7,
+          98.9,
+          23.0,
+          15.0,
+          99.0
+        ],
+        "main_process_rss_kib": 291776,
+        "evidence": "observations/portable-release-first/result.json"
+      },
+      {
+        "run": "old-release-final-comparison-first",
+        "variant": "published_v0.2.2",
+        "selected_variant": false,
+        "profiled": false,
+        "normal_launch": true,
+        "fresh_copy": true,
+        "first_complete_menu_seconds": 3.0448530833236873,
+        "first_complete_menu_file": "observations/old-release-final-comparison-first/frame-003.png",
+        "first_capture_seconds": 2.5430670003406703,
+        "background_cpu_percent": [
+          98.5,
+          99.9,
+          35.6,
+          98.3
+        ],
+        "main_process_rss_kib": 290912,
+        "evidence": "observations/old-release-final-comparison-first/result.json"
+      }
+    ],
+    "delivered_variant": "selected_portable_9bc7ac07"
+  },
+  "comparison": {
+    "adjacent_final_package_first_copy_seconds": 2.6953807082027197,
+    "adjacent_old_release_first_copy_seconds": 3.0448530833236873,
+    "reported_user_build_fresh_copy_seconds": 9.055165541823953,
+    "old_release_observations_seconds": [
+      9.512188666965812,
+      2.9378640833310783,
+      3.0448530833236873
+    ],
+    "size_reduction_vs_user_build_percent": 30.65579254357955,
+    "size_increase_vs_old_release_percent": 30.055853353737838,
+    "interpretation": "First normal GUI launches of fresh app copies under existing caches and background workloads. Final adjacent comparison favors the new package; no controlled OS-cold improvement or guaranteed launch time is claimed. CPU experiment timings are retained as rejected variants and do not describe the delivered fix."
+  },
+  "package_validation": {
+    "standard_xtask_release_package": "passed",
+    "checked_occt_sdk_probe": "passed",
+    "dmg_checksum_verification": "passed",
+    "payload_matches_packager_app": "passed",
+    "codesign_deep_strict": "passed",
+    "build_identity_initialize_only": "passed; clean preview 0.2.2 at 9bc7ac070b9b587caef9c6330a853b9b93e1b260",
+    "bundled_runtime_libraries": "passed; 28 CAD/font dylibs loaded from Contents/Frameworks",
+    "normal_default_settings_launch": "passed; complete toolbar/browser/viewport",
+    "first_menu_image_stability": "passed; toolbar/browser pixels match later settled frames"
+  },
+  "tests": {
+    "source_revision": "9bc7ac070b9b587caef9c6330a853b9b93e1b260",
+    "fix_commit": "fc474933",
+    "source_hashes": {
+      "desktop/src/native_viewport/platform.rs": "3f40049fe5b135de2c01289f5fed3760443cd3d68b5562ff5a8d11d16cd966ea",
+      "desktop/src/native_viewport/script_preview.rs": "86f67a23b7b38c69e3aaef36c1a243547c1c87a9e7a60488e5c1406cfc5b9d3a",
+      "desktop/src/native_viewport/winit_host.rs": "c3dc36bef0088f9af4ec11db0b25acb61f7ea88d4d9c16f41cc99f9a02c5f469",
+      "desktop/src/native_viewport/winit_host/submission.rs": "79c85f5b250cde9407ad7e92a6e0ce7b7d93ff14cd39575166cff2e622e0ddb0"
+    },
+    "cases": [
+      {
+        "name": "native_preview_startup_uses_only_cad_gpu_capabilities",
+        "result": "pass",
+        "log": "tests/portable-preview.log"
+      },
+      {
+        "name": "native_preview_gpu_renders_real_kernel_frames_and_orbit",
+        "result": "pass",
+        "log": "tests/portable-preview.log"
+      },
+      {
+        "name": "native_gpu_stock_removal_cuts_behind_the_cutter",
+        "result": "pass",
+        "log": "tests/portable-stock-removal.log"
+      },
+      {
+        "name": "viewport_cameras_use_portable_msaa",
+        "result": "historical contract pass retained; changed scene setup was not rerun by this retained check",
+        "log": "tests/camera-policy.log"
+      },
+      {
+        "name": "scene_only_changes_require_a_new_submission_without_rebinding_controls",
+        "result": "historical contract pass retained; changed pipeline-pending receipt guard was not rerun by this retained check",
+        "log": "tests/submission-revision.log"
+      }
+    ],
+    "compiler_configuration": "Release dependencies; portable-profile test harness/app compiled with opt-level=0 to keep iteration bounded. Earlier two retained contract checks used the default release optimization. Actual delivered app is built separately with the standard opt-level=3 release profile.",
+    "runtime": "Verified release Frameworks dylibs; isolated configuration and session registry; no live GUI CAD input",
+    "rejected_experiments": [
+      {
+        "revision": "5bd9d1d5",
+        "failure": "CPU instance building makes custom stock material invisible; GPU stock removal image differs by zero pixels.",
+        "log": "tests/stock-removal-packaged-libs.log"
+      },
+      {
+        "revision": "5bd9d1d5",
+        "failure": "The blanket zero-compute assertion is invalid: 17 other Bevy compute pipelines still compile with CPU instances.",
+        "log": "tests/preview-packaged-libs.log"
+      },
+      {
+        "scope": "diagnostic original GPU setting",
+        "result": "Stock removal passes; startup pipeline inventory has 34 compute descriptors.",
+        "log": "tests/gpu-builder-startup-labels.log"
+      },
+      {
+        "scope": "initial test-process start",
+        "result": "CODESIGNING Invalid Page before tests ran with temporary staging libraries; same runner works using verified packaged libraries.",
+        "log": "tests/initial-process-termination.json"
+      }
+    ]
+  },
+  "limits": [
+    "Ad-hoc signed optimized release package; official distribution notarization is not claimed.",
+    "macOS arm64 only; Windows/Linux startup not measured.",
+    "No OS cache purge or reboot; shared system and shader caches remain.",
+    "Background workloads continued; all first samples and high-CPU observations retained.",
+    "Large-model throughput is not benchmarked by these empty-startup and focused renderer checks.",
+    "Broad UI phase and manual MCP mutation phase remain paused; coverage ledger unchanged."
+  ],
+  "evidence_root": "artifacts/bevy-normal-startup-20261011",
+  "saved_data": "Original app, projects, recovery data and private pre-test backups preserved; test apps used empty Untitled documents; headless identity and GPU tests use isolated settings.",
+  "saved_data_verification": {
+    "existing_files": 223,
+    "identical": 223,
+    "changed": 0,
+    "missing": 0,
+    "changed_suffixes": {},
+    "original_app_sha256": "8bc287b8fd62efa67f86d3843eedd9885cab0947bc86534831ba14a0eea838f0"
+  },
+  "release_build_identity": {
+    "executable": "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/MacOS/limo-cad",
+    "build": {
+      "channel": "preview",
+      "modified": false,
+      "revision": "9bc7ac070b9b587caef9c6330a853b9b93e1b260",
+      "version": "0.2.2"
+    },
+    "request": "initialize only; no tools or model mutations",
+    "isolated_settings": true,
+    "exit_code": 0
+  },
+  "release_runtime": {
+    "source_revision": "9bc7ac070b9b587caef9c6330a853b9b93e1b260",
+    "first_complete_menus_seconds": 2.6953807082027197,
+    "first_capture_seconds": 2.3876777915284038,
+    "stable_region_changed_pixels": {
+      "toolbar": 0,
+      "browser": 0
+    },
+    "loaded_cad_dylibs": [
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKBO.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKBRep.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKBool.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKCAF.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKCDF.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKDE.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKDESTEP.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKFillet.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKG2d.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKG3d.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKGeomAlgo.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKGeomBase.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKHLR.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKLCAF.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKMath.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKMesh.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKOffset.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKPrim.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKService.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKShHealing.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKTopAlgo.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKV3d.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKVCAF.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKXCAF.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKXSBase.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libTKernel.7.9.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libfreetype.6.dylib",
+      "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/release-9bc7ac07/Limo CAD.app/Contents/Frameworks/libpng16.16.dylib"
+    ],
+    "proof": "/Users/jack/Code/noBS-CAD/artifacts/bevy-normal-startup-20261011/portable-first-menu-proof-9bc7ac07.png"
+  },
+  "hosted_ci_snapshot": {
+    "source_head": "9bc7ac070b9b587caef9c6330a853b9b93e1b260",
+    "buckets": {
+      "skipping": 6,
+      "pending": 23,
+      "pass": 1
+    },
+    "failure_names": [],
+    "evidence": "artifacts/bevy-normal-startup-20261011/pr124-checks-final-package.json",
+    "full_ci_green_claimed": false
+  },
+  "validation": {
+    "format_check": "passed",
+    "diff_whitespace_check": "passed",
+    "selected_gpu_checks": 3,
+    "retained_unchanged_contract_checks": 2,
+    "broader_ui": "paused",
+    "manual_mcp_mutations": "paused",
+    "saved_data": "223 original app-data files unchanged; original app hash unchanged"
+  }
+}

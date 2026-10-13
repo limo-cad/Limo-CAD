@@ -63,7 +63,7 @@ fn project_tabs(inspected: &Value) -> Vec<String> {
         .filter(|control| control["role"] == "tab" && control["surface"] == "file-and-project-tabs")
         .filter_map(|control| {
             let label = control["label"].as_str()?;
-            // Active tabs append a rename hint; compare the document labels.
+
             Some(
                 if control["selected"] == true {
                     label
@@ -80,8 +80,6 @@ fn project_tabs(inspected: &Value) -> Vec<String> {
 }
 
 fn control(client: &mut Client, label: &str, value: Option<&str>) -> Result<Value> {
-    // A different client may inspect while the script is running. Explicit
-    // stale-ID rejection is safe to retry; successful clicks are never retried.
     for attempt in 0..5 {
         let inspected = ui(client, json!({"action":"inspect"}))?;
         let controls = controls(&inspected)
@@ -116,8 +114,6 @@ fn new_design(client: &mut Client) -> Result<String> {
 }
 
 fn active_sketch(client: &mut Client) -> Result<Value> {
-    // The live read endpoint returns the active sketch rather than the last
-    // completed project snapshot; a paused in-progress sketch is intentional.
     client.call("sketch_active", json!({}))
 }
 
@@ -158,8 +154,6 @@ fn save(client: &mut Client, path: &Path) -> Result<()> {
     Ok(())
 }
 
-// This small fixture exercises the adapter, independently of a bundled catalog.
-// Real geometry checks for authored lessons belong alongside those recipes.
 fn workspace_source(completed_chapter: &str) -> Result<String> {
     let source = json!({"version":1,"name":"Scripts workspace regression","starting_state":"empty","steps":[
         {"chapter":"Locate the test profile","note":"Load this source without executing it, then run in its own design tab.","duration_ms":10000},
@@ -186,7 +180,6 @@ fn load_workspace_source(
     original: &Value,
     original_tabs: &[String],
 ) -> Result<Value> {
-    // Textareas normalize all line endings to LF; comments and final lines stay.
     let expected = fs::read_to_string(path)?
         .replace("\r\n", "\n")
         .replace('\r', "\n");
@@ -247,7 +240,7 @@ fn workspace_inner(args: &[String]) -> Result<()> {
     let out = options
         .get("--out")
         .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("nbcad-scripts-workspace-proof"));
+        .unwrap_or_else(|| std::env::temp_dir().join("limo-cad-scripts-workspace-proof"));
     fs::create_dir_all(&out)?;
     let out = fs::canonicalize(out)?;
     let out = PathBuf::from(
@@ -258,10 +251,10 @@ fn workspace_inner(args: &[String]) -> Result<()> {
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
     let completed_chapter = format!("Workspace regression complete {stamp}");
     let source = workspace_source(&completed_chapter)?;
-    let source_path = out.join(format!("workspace-{stamp}.nbcad.jsonc"));
+    let source_path = out.join(format!("workspace-{stamp}.limo.jsonc"));
     fs::write(&source_path, &source)?;
 
-    let mut client = Client::start(server)?;
+    let mut client = Client::start_worker(server)?;
     client.call("cad_attach", json!({"session_id":original_session}))?;
     let initial_ui = ui(&mut client, json!({"action":"inspect"}))?;
     ensure!(
@@ -302,7 +295,7 @@ fn workspace_inner(args: &[String]) -> Result<()> {
     )?;
     control(&mut client, "Script run mode", Some("present"))?;
     control(&mut client, "Script speed", Some("2"))?;
-    // Exercise the actual adapter, not cad_interface/action:script.
+
     control(&mut client, "Run in new design", None)?;
     let finished = (|| -> Result<(String, Value, Value)> {
         let running = wait_until("a retained new design tab", || {
@@ -492,7 +485,7 @@ fn workspace_inner(args: &[String]) -> Result<()> {
         model(&mut client)? == final_model,
         "Closing/reopening controls changed the finished model"
     );
-    save(&mut client, &out.join(format!("workspace-{stamp}.nbcad")))?;
+    save(&mut client, &out.join(format!("workspace-{stamp}.limo")))?;
     let report = json!({"passed":true,"original_session_id":original_session,"final_session_id":final_session,
         "cases":["semantic-scripts-button","path-load-with-comments","load-preserves-model-and-tabs","native-run-in-new-design",
             "live-speed-mode-agreement","paused-speed-change","retained-launch-preferences",
@@ -535,18 +528,17 @@ fn run_inner(args: &[String]) -> Result<()> {
     let out = options
         .get("--out")
         .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("nbcad-playback-proof"));
+        .unwrap_or_else(|| std::env::temp_dir().join("limo-cad-playback-proof"));
     fs::create_dir_all(&out)?;
     let out = fs::canonicalize(out)?;
-    // Native save accepts ordinary absolute paths; remove Windows verbatim
-    // path syntax only after canonicalization (no filesystem deletion here).
+
     let out = PathBuf::from(
         out.to_string_lossy()
             .trim_start_matches(r"\\?\")
             .to_string(),
     );
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
-    let mut client = Client::start(&server)?;
+    let mut client = Client::start_worker(&server)?;
     client.call("cad_attach", json!({"session_id":original_session}))?;
     let original_model = model(&mut client)?;
     let original_active = active_sketch(&mut client)?;
@@ -559,7 +551,7 @@ fn run_inner(args: &[String]) -> Result<()> {
         serde_json::to_vec_pretty(&original_active)?,
     )?;
     ensure!(original_active.is_null(), "Original window has an in-progress sketch; preserved it for review without changing the window");
-    save(&mut client, &out.join(format!("original-{stamp}.nbcad")))?;
+    save(&mut client, &out.join(format!("original-{stamp}.limo")))?;
 
     let session = new_design(&mut client)?;
     fs::write(out.join("active-session.txt"), &session)?;
@@ -576,7 +568,7 @@ fn run_inner(args: &[String]) -> Result<()> {
     let (send, receive) = mpsc::channel();
     let worker = thread::spawn(move || {
         let result = (|| {
-            let mut worker = Client::start(&worker_server)?;
+            let mut worker = Client::start_worker(&worker_server)?;
             worker.call("cad_attach", json!({"session_id":worker_session}))?;
             worker.call("cad_interface", json!({"action":"script","source":source,"mode":"present","speed":1,"validate":true}))
         })();
@@ -673,7 +665,7 @@ fn run_inner(args: &[String]) -> Result<()> {
     let stepped = stepped?;
     save(
         &mut client,
-        &out.join(format!("completed-rectangle-{stamp}.nbcad")),
+        &out.join(format!("completed-rectangle-{stamp}.limo")),
     )?;
     println!(
         "PASS live caption, native speed control, pause, exactly-one-operation Step, and Resume"

@@ -1,4 +1,4 @@
-use nbcad_core::{BodyId, DocumentDto, EdgeId, FaceId, FeatureId, PlaneBasis, PlaneRef};
+use limo_cad_core::{BodyId, DocumentDto, EdgeId, FaceId, FeatureId, PlaneBasis, PlaneRef};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -189,17 +189,13 @@ pub struct SketchPointRefDto {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ExtrudeOperation {
+    #[default]
     NewBody,
     Join,
     Cut,
     Intersect,
-}
-
-impl Default for ExtrudeOperation {
-    fn default() -> Self {
-        Self::NewBody
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -430,6 +426,10 @@ pub struct SolidChamferRequest {
     pub body_id: BodyId,
     pub edge_ids: Vec<EdgeId>,
     pub distance: f64,
+    /// Acute angle in degrees from the first adjacent face. Missing values
+    /// retain the equal-distance chamfer used by existing callers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle_deg: Option<f64>,
     #[serde(default)]
     pub tangent_chain: bool,
 }
@@ -455,31 +455,21 @@ impl Default for HoleExtent {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum HoleStyle {
+    #[default]
     Simple,
     Counterbore,
     Countersink,
 }
 
-impl Default for HoleStyle {
-    fn default() -> Self {
-        Self::Simple
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum HoleBottomStyle {
+    #[default]
     Flat,
     DrillPoint,
-}
-
-impl Default for HoleBottomStyle {
-    fn default() -> Self {
-        // Legacy project files described cylindrical cutters, so their
-        // omitted value must preserve a flat bottom.
-        Self::Flat
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -856,6 +846,8 @@ pub struct SolidChamferDefinitionDto {
     #[serde(default)]
     pub edge_keys: Vec<String>,
     pub distance: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle_deg: Option<f64>,
     #[serde(default)]
     pub tangent_chain: bool,
 }
@@ -889,8 +881,6 @@ pub struct HoleDefinitionDto {
     #[serde(default)]
     pub face_basis: Option<PlaneBasis>,
 }
-
-// --- Construction planes -------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -942,8 +932,6 @@ pub struct DatumPlaneUpdateDto {
     pub document: DocumentDto,
     pub planes: Vec<DatumPlaneDefinitionDto>,
 }
-
-// --- Body-level history features ----------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ShellRequest {
@@ -1155,6 +1143,20 @@ pub enum BodyFeatureDefinitionDto {
 }
 
 impl BodyFeatureDefinitionDto {
+    pub(crate) fn name_mut(&mut self) -> &mut String {
+        match self {
+            Self::ExternalThread { name, .. }
+            | Self::Shell { name, .. }
+            | Self::MoveCopy { name, .. }
+            | Self::Mirror { name, .. }
+            | Self::RectangularPattern { name, .. }
+            | Self::CircularPattern { name, .. }
+            | Self::Combine { name, .. }
+            | Self::SplitBody { name, .. }
+            | Self::ImportStep { name, .. } => name,
+        }
+    }
+
     pub fn feature_id(&self) -> FeatureId {
         match self {
             Self::ExternalThread { feature_id, .. }
@@ -1397,6 +1399,8 @@ pub struct KernelChamferJobDto {
     pub target_body_id: BodyId,
     pub edge_keys: Vec<String>,
     pub distance: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle_deg: Option<f64>,
     pub tangent_chain: bool,
 }
 
@@ -1501,6 +1505,20 @@ pub struct KernelFaceDto {
     /// Actual B-rep boundary membership (all wires), not triangle adjacency.
     #[serde(default)]
     pub edge_keys: Vec<String>,
+    /// Exact face-scoped B-rep seams whose 3D curve is an analytic line.
+    /// Empty for legacy/unsupported producers; never infer this from samples.
+    #[serde(default)]
+    pub linear_seam_edge_keys: Vec<String>,
+    /// Exact complete single-circle inner wires on a proven native outer-shell
+    /// planar face. Only these keys are affirmative evidence; empty or missing
+    /// metadata remains unknown and says nothing about other boundaries.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub planar_inner_ring_edge_keys: Vec<String>,
+    /// Exact membership in the outer shell of one valid, closed, outward
+    /// oriented native solid. None for legacy or unsupported producers.
+    /// An inner cavity's faces carry Some(false), never exterior evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outer_shell: Option<bool>,
     #[serde(default)]
     pub cone: Option<ConicalSurfaceDto>,
 }
@@ -1549,6 +1567,9 @@ pub struct KernelBodyDto {
     /// Exact native connectivity, without dimensional coordinates.
     #[serde(default)]
     pub topology_signature: String,
+    /// Incomplete display tessellation of retained exact imported geometry.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub display_warnings: Vec<DisplayMeshWarningDto>,
     pub positions: Vec<f32>,
     pub normals: Vec<f32>,
     pub indices: Vec<u32>,
@@ -1575,6 +1596,15 @@ pub struct CommitKernelRequest {
     pub scene: KernelSceneDto,
 }
 
+/// Internal support query evaluated against an exact recompute prefix, never
+/// against the final (possibly consuming) feature's topology.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistorySupportQuery {
+    pub sketch_id: FeatureId,
+    pub after_feature: FeatureId,
+    pub face_id: FaceId,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MeshDto {
     pub positions: Vec<f32>,
@@ -1595,6 +1625,18 @@ pub struct FaceDto {
     pub cylinder: Option<CylindricalSurfaceDto>,
     #[serde(default)]
     pub edge_keys: Vec<String>,
+    /// Exact face-scoped B-rep seams whose 3D curve is an analytic line.
+    /// Empty for legacy/unsupported producers; never infer this from samples.
+    #[serde(default)]
+    pub linear_seam_edge_keys: Vec<String>,
+    /// Exact complete single-circle inner wires on a proven native outer-shell
+    /// planar face. Empty or missing metadata supplies no opening evidence.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub planar_inner_ring_edge_keys: Vec<String>,
+    /// Exact membership in the outer shell of one valid, closed, outward
+    /// oriented native solid. None does not establish exterior passage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outer_shell: Option<bool>,
     #[serde(default)]
     pub cone: Option<ConicalSurfaceDto>,
 }
@@ -1615,10 +1657,18 @@ fn default_true() -> bool {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DisplayMeshWarningDto {
+    pub face_key: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BodyDto {
     pub id: BodyId,
     #[serde(default)]
     pub topology_signature: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub display_warnings: Vec<DisplayMeshWarningDto>,
     pub name: String,
     pub feature_id: FeatureId,
     pub mesh: MeshDto,
@@ -1630,6 +1680,23 @@ pub struct BodyDto {
 pub struct SolidSceneDto {
     pub bodies: Vec<BodyDto>,
     pub errors: Vec<KernelFeatureErrorDto>,
+}
+
+impl SolidSceneDto {
+    /// Display-only omissions must never become printable/exported mesh geometry.
+    /// Exact STEP export and document saving do not use this check.
+    pub fn require_complete_display_mesh(&self, selected: &[BodyId]) -> Result<(), String> {
+        if let Some(body) = self.bodies.iter().find(|body| {
+            (selected.is_empty() || selected.contains(&body.id))
+                && !body.display_warnings.is_empty()
+        }) {
+            return Err(format!(
+                "Body {} has {} imported STEP faces without display triangles. Mesh export and printing require complete tessellation; exact STEP geometry is retained.",
+                body.id.0, body.display_warnings.len()
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

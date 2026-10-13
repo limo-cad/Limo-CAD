@@ -74,7 +74,7 @@ pub fn specs() -> Vec<ToolSpec> {
             "Return the complete machining document, including tools, setups, machine/post settings, generation stamps and associative height/linking intent. Preserve these fields when editing with cam_set_document.",
             "cam_document", Payload::Empty, empty_schema()),
         ToolSpec::direct("cam_set_document", "Write CAM document",
-            "Replace the whole machining document after validation, not a partial patch. Start from cam_get_document and preserve unedited fields. Supports face, adaptive3d (High Speed Roughing), contour2d, pocket2d, chamfer2d, drill and thread operations; tools and setups are never auto-created. Geometry/tool compatibility and generation freshness remain engine-owned.",
+            "Replace the whole machining document after validation, not a partial patch. Start from cam_get_document and preserve unedited fields. Supports face, adaptive3d (High Speed Roughing), flat3d (Flat finishing), contour2d, pocket2d, chamfer2d, drill and thread operations; tools and setups are never auto-created. Geometry/tool compatibility and generation freshness remain engine-owned.",
             "cam_set_document", Payload::Object, document_schema()),
         ToolSpec::direct("cam_toolpath_statuses", "Inspect CAM toolpath safety",
             "Compare saved generation signatures against current CAD, setup, tool and operation dependencies. Returns current, never_generated, stale or invalid with actionable reasons.",

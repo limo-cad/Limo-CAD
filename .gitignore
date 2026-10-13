@@ -1,16 +1,12 @@
-node_modules
 dist
-dist-ssr
-public/__bevy_ui__/
 target
-src-tauri/target
-src-tauri/gen
-src/engine-wasm/pkg
-src-tauri/occt-libs
-src-tauri/tauri.occt.conf.json
-src-tauri/linux-licenses
+desktop/target
+web/engine
+desktop/occt-libs
+desktop/linux-licenses
 vcpkg_installed
 .vcpkg
+/.cache/
 *.local
 .DS_Store
 .env
@@ -20,7 +16,6 @@ vcpkg_installed
 __pycache__/
 *.py[cod]
 
-# Secrets / key material (belt-and-suspenders).
 *.pem
 *.p12
 *.pfx
@@ -35,7 +30,6 @@ credentials.json
 **/secrets.json
 **/secrets.toml
 
-# Local AI-assistant instructions and continuity state (kept internal for now).
 **/CLAUDE.md
 **/AGENTS.md
 **/CODEX.md
@@ -44,12 +38,10 @@ credentials.json
 .codex/
 .cursor/
 
-# Editor local settings.
 .vscode/*
 !.vscode/extensions.json
 .idea/
 
-# Internal development memory used to resume and steer agent work.
 docs/HANDOFF.md
 docs/DEVELOPMENT_HISTORY.md
 docs/DECISIONS.md
@@ -61,29 +53,24 @@ docs/SKETCH_CONSTRAINT_AUDIT.md
 docs/SKETCH_CONSTRAINT_AUDIT_FIX_FEEDBACK.md
 docs/SKETCH_CAD_BRANCH_REVIEW.md
 
-# Local acceptance evidence and bug-report captures.
 docs/qa/
 docs/reference/
 scripts/probe-*.mjs
 
-# Local reference material (screenshots etc.), never committed.
 reference/
 
-# User-owned post sources and machine customizations belong in OS user storage.
 *.cps
 *.nbpost
 /cam-posts/
 /private-posts/
 
-# Local test applications, jobs and NC output (portable fixtures live with tests)
 *.app/
 *.dmg
-/*.nbcad
+/*.limo
 /*.nc
 /*.mpf
 /.worktrees/
 
-# Internal review, handoff, feedback and design-evidence files are not public docs
 docs/**/*HANDOFF*.md
 docs/**/*REVIEW*.md
 docs/**/*FEEDBACK*.md
@@ -94,6 +81,7 @@ docs/**/*handoff*.md
 docs/**/*review*.md
 docs/**/*feedback*.md
 docs/**/*draft*.md
+!docs/release-notes/*.md
 docs/icon-drafts/
 docs/cam/history/
 docs/community/DISCUSSIONS_WELCOME.md

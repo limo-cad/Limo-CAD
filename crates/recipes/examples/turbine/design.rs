@@ -23,8 +23,7 @@ pub(super) const D: Design = Design {
     guard_diameter: 132.,
     guard_wall: 3.,
     guard_bolt_radius: 61.,
-    // These are explicitly provisional specimen inputs, never dimensions
-    // inferred from Vernier's approximate total envelope or performance data.
+
     motor_case_diameter: 32.,
     motor_case_length: 28.,
     motor_shaft_length: 6.,

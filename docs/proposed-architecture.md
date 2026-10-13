@@ -18,7 +18,7 @@ Accepted product directions (without binding IPC/UI architecture) live in
 
 ## 1. Focus-scoped MCP tools — Proposed
 
-**Problem today:** `nbcad-mcp` advertises `tools.listChanged: false` and returns
+**Problem today:** `limo-cad-mcp` advertises `tools.listChanged: false` and returns
 a large static tool list (~100 tools), which floods agent context.
 
 **Proposal:** when modeling **focus** changes (document / sketch / solid /
@@ -98,9 +98,9 @@ When proposing engine work, keep these boundaries clear:
 
 | Crate | Role |
 |-------|------|
-| `nbcad-core`, `nbcad-sketch`, `nbcad-solid` | Host-neutral model logic (document, sketches, features, history, planning) |
-| `nbcad-occt` | Native geometry adapter (OCCT) |
-| `nbcad-wasm` | Browser adapter path (WASM host + OpenCascade.js for solids in the browser build) |
+| `limo-cad-core`, `limo-cad-sketch`, `limo-cad-solid` | Host-neutral model logic (document, sketches, features, history, planning) |
+| `limo-cad-occt` | Native geometry adapter (OCCT) |
+| `limo-cad-wasm` | Browser adapter path (WASM host + OpenCascade.js for solids in the browser build) |
 
 UI (React/Three.js/Tauri) displays and commands; geometry truth stays in the
 Rust model + kernel adapters.

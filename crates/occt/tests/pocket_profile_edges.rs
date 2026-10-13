@@ -7,19 +7,19 @@
 //! cannot silently drop the edge while the renderer is being fixed.
 #![cfg(feature = "native-occt")]
 
-use nbcad_core::{OriginPlane, PlaneRef};
-use nbcad_occt::OcctKernel;
-use nbcad_sketch::{
+use limo_cad_core::{OriginPlane, PlaneRef};
+use limo_cad_occt::OcctKernel;
+use limo_cad_sketch::{
     ArcCenterRequest, RectangleMode, RectangleRequest, SegmentRequest, SketchManager, Vec2,
 };
-use nbcad_solid::{CommitKernelRequest, ExtrudeExtent, ExtrudeOperation, ExtrudeRequest};
+use limo_cad_solid::{CommitKernelRequest, ExtrudeExtent, ExtrudeOperation, ExtrudeRequest};
 
 fn extrusion(
     sketch: &str,
     profiles: Vec<u32>,
     operation: ExtrudeOperation,
     distance: f64,
-    targets: Vec<nbcad_core::BodyId>,
+    targets: Vec<limo_cad_core::BodyId>,
 ) -> ExtrudeRequest {
     ExtrudeRequest {
         source_face: None,
@@ -34,7 +34,7 @@ fn extrusion(
 }
 
 /// Circular edges at one depth, with the tessellated point count.
-fn circular_edges_at(body: &nbcad_solid::KernelBodyDto, z: f64) -> Vec<usize> {
+fn circular_edges_at(body: &limo_cad_solid::KernelBodyDto, z: f64) -> Vec<usize> {
     body.edges
         .iter()
         .filter(|edge| edge.circle.is_some())
@@ -56,7 +56,7 @@ fn a_semicircular_pocket_keeps_its_opening_and_floor_arcs() {
         })
         .unwrap();
     manager
-        .set_grid_snap(nbcad_sketch::SetGridSnapRequest { enabled: false })
+        .set_grid_snap(limo_cad_sketch::SetGridSnapRequest { enabled: false })
         .unwrap();
     manager
         .add_rectangle(RectangleRequest {
@@ -93,7 +93,6 @@ fn a_semicircular_pocket_keeps_its_opening_and_floor_arcs() {
         .expect("the extrusion cap")
         .id;
 
-    // Half-disc drawn against the face boundary, exactly as reported.
     manager
         .begin_sketch(PlaneRef::PlanarFace { face_id })
         .unwrap();
@@ -151,7 +150,6 @@ fn a_semicircular_pocket_keeps_its_opening_and_floor_arcs() {
         .expect("the projected boundary must seal the half disc")
         .index;
 
-    // Pocket, cut into the material.
     let mut request = extrusion(
         "Sketch2",
         vec![index],
@@ -165,7 +163,6 @@ fn a_semicircular_pocket_keeps_its_opening_and_floor_arcs() {
     assert!(scene.errors.is_empty(), "{:?}", scene.errors);
     let body = &scene.bodies[0];
 
-    // Opening arc on the top face (z = 10) and floor arc at the pocket depth.
     for (label, z) in [("opening", 10.0), ("floor", 5.0)] {
         let arcs = circular_edges_at(body, z);
         assert_eq!(

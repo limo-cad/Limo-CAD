@@ -6,7 +6,7 @@ Tiny golden set for harness regression. Expand later; keep hermetic.
 
 | ID | Task | Pass |
 |----|------|------|
-| E1 | `cad_help` search/get first, then `resources/read` `nbcad://knowledge/...` when the full page is needed | Search selects a page; full-page markdown is non-empty via true MCP resources |
+| E1 | `cad_help` search/get first, then `resources/read` `limo-cad://knowledge/...` when the full page is needed | Search selects a page; full-page markdown is non-empty via true MCP resources |
 | E2 | `fillet-basics` recipe `mode:fast` headless | All recipe checks pass |
 | E3 | After E2, edit stock extrude 12→18 mm via `solid_edit_extrude` | `solid_extrude_definitions` distance 18 |
 | E4 | Replay E2 twice independently (fresh MCP processes) | Matching checks_completed + body presence |
@@ -15,7 +15,7 @@ Tiny golden set for harness regression. Expand later; keep hermetic.
 Repo-reproducible coverage (from repository root):
 
 ```bash
-cargo test -p nbcad-help
+cargo test -p limo-cad-help
 cargo test --manifest-path mcp-server/Cargo.toml -- --nocapture
 cargo xtask install-mcp --dry-run
 ```
@@ -25,15 +25,15 @@ Record: server revision, elapsed_ms, pass/fail/skip, tool error strings. Prefer 
 ## Help MCP wire (H1–H8 core; H9–H46 corpus; ops merged)
 
 In-process BM25 unit tests live in `crates/help`. MCP unit coverage for `cad_help`
-(direct tool calls and `cad_interface` execute) lives in `nbcad-mcp`.
+(direct tool calls and `cad_interface` execute) lives in `limo-cad-mcp`.
 
 ```bash
-cargo test -p nbcad-help
+cargo test -p limo-cad-help
 cargo test --manifest-path mcp-server/Cargo.toml cad_help -- --nocapture
-npm run check:knowledge
+cargo xtask knowledge check
 ```
 
-Optional stdio wire checks against a freshly built `nbcad-mcp` binary
+Optional stdio wire checks against a freshly built `limo-cad-mcp` binary
 (`cargo xtask install-mcp`) should exercise the same H1–H8 expectations below.
 
 | ID | Call | Pass |

@@ -109,8 +109,6 @@ pub(super) fn check_hardware_paths(exports: &Value) {
     let mut client = Client::restore(&exports["final_model"]);
     release_joints(&mut client, exports);
 
-    // Load the trapped frame nuts from underneath before placing the vise on
-    // its board. The bridge then lowers around ordinary top-access M6 bolts.
     for side in ["left", "right"] {
         let nut = format!("bridge_nut_{side}");
         let bolt = format!("bridge_screw_{side}");
@@ -132,8 +130,6 @@ pub(super) fn check_hardware_paths(exports: &Value) {
         );
     }
 
-    // The jaw is parked forward while the thrust fitting and bolt are added.
-    // Load the shaft nut after screw installation, while its flat is exposed.
     displaced(&mut client, exports, "jaw", [85., 0., 0.]);
     clear_path(
         &mut client,
@@ -151,7 +147,7 @@ pub(super) fn check_hardware_paths(exports: &Value) {
         [1., 0., 0.],
         &[35., 25., 15., 5., 0.],
     );
-    // A nut that can slide straight out under bolt tension is not captive.
+
     displaced(
         &mut client,
         exports,
@@ -191,9 +187,7 @@ pub(super) fn check_hardware_paths(exports: &Value) {
     );
 
     let witness = driver(&mut client, exports);
-    // 50 mm of straight driver access beyond the thrust head is available
-    // only in the service position. Socket details use supplier hardware;
-    // the witness starts outside the modeled solid screw-head envelope.
+
     driver_clearance(
         &mut client,
         exports,
@@ -205,8 +199,6 @@ pub(super) fn check_hardware_paths(exports: &Value) {
     displaced(&mut client, exports, "jaw", [0.; 3]);
     assert!(has_overlap(&client.call("assembly_interference_check",json!({"occurrence_ids":[witness,part(exports,"jaw")["occurrence_id"]],"clearance_threshold_mm":0.}))), "driver witness must detect the inaccessible assembled jaw position");
 
-    // With the jaw returned and keeper lowered, both cross-pin ends remain
-    // accessible. No ideal mate is allowed to hide an insertion obstruction.
     clear_path(
         &mut client,
         exports,
@@ -243,9 +235,6 @@ pub(super) fn check_hardware_paths(exports: &Value) {
         );
     }
 
-    // Optional tabletop hardware is checked in its actual outboard slots.
-    // This checks access against the vise; the board and its drilled holes
-    // are installation inputs, not printed parts or a rated clamp condition.
     for i in 0..2 {
         for j in 0..2 {
             let stem = format!("mount_{i}_{j}");

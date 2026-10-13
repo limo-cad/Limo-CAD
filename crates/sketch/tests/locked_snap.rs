@@ -1,4 +1,4 @@
-use nbcad_sketch::{
+use limo_cad_sketch::{
     EntityDto, LockedSegmentRequest, OriginPlane, PlaneRef, PointRequest, SetGridSnapRequest,
     SketchManager, Vec2,
 };

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use nbcad_core::EdgeId;
+use limo_cad_core::EdgeId;
 
 use crate::entity::EntityId;
 use crate::geometry::Vec2;
@@ -35,7 +35,6 @@ pub enum ArcEndpoint {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Constraint {
-    // --- Geometric (M1 set) ---
     Horizontal {
         entity: EntityId,
     },
@@ -152,7 +151,6 @@ pub enum Constraint {
         b: EntityId,
     },
 
-    // --- Dimensional ---
     /// Distance between two entities, or from an entity to the sketch origin
     /// when `to` is `None`.
     Distance {
@@ -362,8 +360,7 @@ impl Constraint {
             Constraint::Collinear { .. } => "collinear",
             Constraint::Symmetry { .. } => "symmetry",
             Constraint::ArcEndpointCoincident { .. } => "arc_endpoint_coincident",
-            // Surfaced as an angle dimension: the viewport anchors it at the
-            // arc's centre when the dimension names a single arc.
+
             Constraint::ArcAngle { .. } => "angle",
             Constraint::EqualDistance { .. } => "equal_distance",
             Constraint::Distance { .. } => "distance",

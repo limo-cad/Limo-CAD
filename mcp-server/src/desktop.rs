@@ -1,6 +1,5 @@
 use serde_json::{json, Value};
 use std::{
-    fs,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -27,7 +26,7 @@ pub fn open_recipe(recipe: &str) -> Result<bool, String> {
         }),
         None,
     )?;
-    // A queued receipt acknowledges delivery, not source replacement or playback.
+
     Ok(recipe_was_queued(&reply))
 }
 
@@ -35,53 +34,20 @@ fn recipe_was_queued(reply: &Value) -> bool {
     reply["status"] == "applied" && reply["recipe"]["status"] == "queued"
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn recipe_handoff_never_guesses_between_windows() {
-        assert_eq!(unique_recipe_window(&json!({"windows":[]})), None);
-        assert_eq!(
-            unique_recipe_window(&json!({"windows":[{"active_session_id":"a"}]})),
-            Some("a")
-        );
-        assert_eq!(
-            unique_recipe_window(
-                &json!({"windows":[{"active_session_id":"a"},{"active_session_id":"b"}]})
-            ),
-            None
-        );
-        assert_eq!(unique_recipe_window(&json!({"windows":[{}]})), None);
-    }
-
-    #[test]
-    fn older_desktop_rejection_falls_back_to_the_current_recipe_window() {
-        for reply in [
-            json!({"status":"failed","error":"Unknown UI action: open_recipe"}),
-            json!({"status":"applied","ui":{}}),
-            json!({"status":"timeout"}),
-        ] {
-            assert!(
-                !recipe_was_queued(&reply),
-                "No queued receipt: the launcher must retain the URL for a new window"
-            );
-        }
-        assert!(recipe_was_queued(
-            &json!({"status":"applied","recipe":{"status":"queued"}})
-        ));
-    }
-}
-
-/// Launch only the explicitly configured CAD executable, without a shell or
+/// Managed desktop workers launch their own installed runtime. Standalone
+/// workers retain explicit artifact selection, without a shell or
 /// inherited stdio handles. Correlate readiness with the child's PID lease.
 pub fn launch(arguments: &Value) -> Result<Value, String> {
-    let configured = arguments
-        .get("executable")
-        .and_then(Value::as_str)
-        .map(str::to_owned)
-        .or_else(|| std::env::var("NBCAD_DESKTOP_BIN").ok())
-        .ok_or("Set NBCAD_DESKTOP_BIN or provide the CAD executable path")?;
+    let configured = std::env::var("LIMO_CAD_LOCAL_RUNTIME")
+        .ok()
+        .or_else(|| {
+            arguments
+                .get("executable")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+                .or_else(|| std::env::var("LIMO_CAD_DESKTOP_BIN").ok())
+        })
+        .ok_or("Set LIMO_CAD_DESKTOP_BIN or provide the CAD executable path")?;
     let path = PathBuf::from(configured)
         .canonicalize()
         .map_err(|e| format!("CAD executable: {e}"))?;
@@ -97,9 +63,9 @@ pub fn launch(arguments: &Value) -> Result<Value, String> {
             return Err(format!("CAD exited before becoming ready: {status}"));
         }
         let dir = crate::session::session_dir().join("_ui/processes");
-        if let Ok(entries) = fs::read_dir(dir) {
+        if let Ok(entries) = limo_cad_session_storage::read_dir(dir) {
             for entry in entries.filter_map(Result::ok) {
-                let Ok(body) = fs::read_to_string(entry.path()) else {
+                let Ok(body) = limo_cad_session_storage::read_to_string(entry.path()) else {
                     continue;
                 };
                 let Ok(lease) = serde_json::from_str::<Value>(&body) else {
@@ -139,7 +105,45 @@ pub fn launch(arguments: &Value) -> Result<Value, String> {
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    // Do not kill the application on timeout: it may be displaying recovery UI.
+
     Ok(json!({"status":"starting","pid":pid,"executable":path,
         "hint":"Launch is not yet acknowledged. Inspect sessions; do not launch a duplicate automatically."}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recipe_handoff_never_guesses_between_windows() {
+        assert_eq!(unique_recipe_window(&json!({"windows":[]})), None);
+        assert_eq!(
+            unique_recipe_window(&json!({"windows":[{"active_session_id":"a"}]})),
+            Some("a")
+        );
+        assert_eq!(
+            unique_recipe_window(
+                &json!({"windows":[{"active_session_id":"a"},{"active_session_id":"b"}]})
+            ),
+            None
+        );
+        assert_eq!(unique_recipe_window(&json!({"windows":[{}]})), None);
+    }
+
+    #[test]
+    fn older_desktop_rejection_falls_back_to_the_current_recipe_window() {
+        for reply in [
+            json!({"status":"failed","error":"Unknown UI action: open_recipe"}),
+            json!({"status":"applied","ui":{}}),
+            json!({"status":"timeout"}),
+        ] {
+            assert!(
+                !recipe_was_queued(&reply),
+                "No queued receipt: the launcher must retain the URL for a new window"
+            );
+        }
+        assert!(recipe_was_queued(
+            &json!({"status":"applied","recipe":{"status":"queued"}})
+        ));
+    }
 }

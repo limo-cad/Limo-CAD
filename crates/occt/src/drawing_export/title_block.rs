@@ -93,8 +93,7 @@ pub(super) fn fit_text(
     {
         return Err(format!("Invalid title block cell for '{field}'"));
     }
-    // A single line cannot exceed the cell height. This also bounds work for
-    // an unusually large, otherwise valid user-specified text height.
+
     let mut height = requested_height.clamp(MIN_HEIGHT, 5.).min(available_height);
     loop {
         if let Some(lines) = wrap(value, height, width) {

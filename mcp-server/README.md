@@ -1,4 +1,4 @@
-# noBS CAD MCP server
+# Limo CAD MCP server
 
 The MCP server drives native sketches, solid features, assemblies and drawings
 through the same grouped product operations used by the application. It runs
@@ -26,7 +26,7 @@ available for source builds.
 
 **Local help:** MCP tool `cad_help` (`search` → `get` / `topics`) is the first retrieval surface over the bundled corpus (locked caps in `docs/machine-design-help-search.md`). **Engineering knowledge:** standard `resources/list` discovers the existing
 Markdown knowledge bundle; `resources/read` returns a listed URI such as
-`nbcad://knowledge/concepts/gears.md`. Start with `nbcad://knowledge/index.md`
+`limo-cad://knowledge/concepts/gears.md`. Start with `limo-cad://knowledge/index.md`
 for design and workholding guidance. The corpus is compiled into the server,
 available offline, and read-only; rebuild after updating `knowledge/`.
 
@@ -35,7 +35,7 @@ available offline, and read-only; rebuild after updating `knowledge/`.
 Follow [Install → Connect an MCP agent](../docs/INSTALL.md#connect-an-mcp-agent)
 for packaged executable paths, exact Cursor/VS Code configuration files and a
 first-part prompt. Use the installed application's `--headless` argument when the
-agent should start without an extra window. A separately built `nbcad-mcp`
+agent should start without an extra window. A separately built `limo-cad-mcp`
 executable is always headless and needs no arguments. Closing stdin exits a
 headless worker; closing that input on a visible CAD app leaves it open.
 
@@ -126,7 +126,7 @@ with `cad_list_sessions` and bind its intended document with `cad_attach`.
 Ordinary tools and `cad_interface` grouped execution route modeling edits to that
 desktop owner and await its ordered receipts. MCP does not write the live
 `model.json`; the desktop applies operations and publishes completed snapshots
-under `NBCAD_SESSION_DIR`. An unattached MCP process owns its own document.
+under `LIMO_CAD_SESSION_DIR`. An unattached MCP process owns its own document.
 
 `cad_submit`, `cad_await_apply` and `cad_refresh` remain lower-level diagnostics,
 not extra calls required after each edit. Old desktops that do not support the
@@ -201,7 +201,7 @@ the bodies' lower-left corner is the print origin.
 
 Use `cad_interface` with `action: "recipes"` to discover the Rust-owned catalog.
 Run a selected source with `{"action":"script","recipe":"mounting-plate"}`;
-an explicit `source` or absolute `.nbcad.jsonc` `path` is also accepted instead
+an explicit `source` or absolute `.limo.jsonc` `path` is also accepted instead
 of a recipe ID. These choices all use one interpreter and the ordinary grouped
 operations. The app and `cargo xtask run-script` consume the same catalog.
 

@@ -1,0 +1,41 @@
+{
+  "date_utc": "2026-10-11",
+  "scope": "PR124 viewport grid controls: source and headless native regression validation",
+  "base_revision": "bd17a49e6b4931439b20f371b0d48325ddf79d40",
+  "branch": "fix/viewport-grid-controls",
+  "integration_pr": "https://github.com/limo-cad/Limo-CAD/pull/124",
+  "behavior": [
+    "The bottom Show Grid control is enabled and selected while the current grid is visible.",
+    "Solid/plane-picking/CAM ground-grid visibility and sketch-grid visibility retain independent transient choices.",
+    "The Sketch Palette and bottom toolbar edit the same sketch presentation flag.",
+    "Grid visibility does not change grid snap, sketch geometry, camera, model revision or document history.",
+    "Native activation rejects a mismatched rendered document."
+  ],
+  "monitor_investigation": {
+    "label": "Display Settings",
+    "legacy_source": "src/components/viewport/NavBar.tsx at 1ec90207",
+    "legacy_behavior": "onClick: undefined; disabled placeholder",
+    "native_source": "desktop/src/session_bridge/native_interface/controller/workbench/viewport.rs",
+    "native_behavior": "disabled Command::Menu(\"display\") placeholder; no display menu implementation",
+    "conclusion": "Reserved for display settings; no prior implemented action or defined menu options were found. The monitor remains disabled."
+  },
+  "validation": {
+    "command": "cargo test --locked --manifest-path desktop/Cargo.toml --release --lib viewport_grid --config 'profile.release.package.limo-cad.opt-level=0' -- --nocapture",
+    "test_profile": "Unoptimized desktop library test harness with optimized release dependencies; application build profiles unchanged.",
+    "result": "4 passed; 0 failed; 1052 filtered out",
+    "tests": [
+      "native_editor::snapping::tests::midpoint_commit_keeps_the_viewport_grid_instead_of_the_script_default",
+      "native_viewport::platform::tests::viewport_grid_visibility_removes_and_restores_rendered_grid_lines",
+      "session_bridge::native_interface::controller::workbench::tests::grid::viewport_grid_and_sketch_palette_share_visibility_without_changing_snap_or_geometry",
+      "session_bridge::native_interface::controller::workbench::tests::grid::viewport_grid_button_activates_and_rejects_a_mismatched_rendered_document"
+    ],
+    "evidence": "docs/qualification/viewport-grid-controls-20261011-test-output.txt",
+    "initial_compile_failure": "A test-only ComputedStackIndex import was missing. Added the import, retained assertions, then all focused tests passed.",
+    "strict_lint": "Passed: cargo clippy --locked --manifest-path desktop/Cargo.toml --release --lib --tests --config 'profile.release.package.limo-cad.opt-level=0' -- -D warnings",
+    "formatting": "Touched Rust files passed rustfmt --check; diff whitespace check and all four locale JSON parses passed."
+  },
+  "limits": [
+    "No packaged desktop launch, GPU scanout or human UI acceptance was performed; renderer regression inspects actual generated gizmo line buffers.",
+    "No live MCP mutation or broad UI/MCP qualification was performed; the existing paused run state and prior evidence remain unchanged."
+  ]
+}

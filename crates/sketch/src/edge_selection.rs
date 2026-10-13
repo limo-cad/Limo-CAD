@@ -1,10 +1,10 @@
 //! Scene adapters for the shared geometry chain solver. Queries are read-only.
 use crate::SketchDto;
-use nbcad_core::{
+use limo_cad_core::{
     edge_chain::{self, Chain, Edge, JOIN_TOLERANCE},
     BodyId,
 };
-use nbcad_solid::SolidSceneDto;
+use limo_cad_solid::SolidSceneDto;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::TAU;
 
@@ -194,8 +194,7 @@ pub fn resolve(
         .filter(|e| e.scope == seed.scope && coplanar(e))
         .cloned()
         .collect::<Vec<_>>();
-    // Prefer exact face membership. This separates touching faces and inner
-    // wires without asking a shortest-path heuristic to invent intent.
+
     let mut alternatives = Vec::new();
     if request.source == ChainSource::Model {
         for body in &scene.bodies {

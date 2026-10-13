@@ -1,9 +1,9 @@
-// Independent section-wise checks: a rounded/beveled cutter is NOT a full
-// cylinder at its floor, even when axial engagement is below the corner.
+
+
 #[test]
 fn corner_lap_certificate_keeps_floor_residue_and_proves_matching_links() {
     let origin = Point2Dto::new(0., 0.);
-    let mut cleared = Cleared::new(5., origin); // q=1, flat land=4, OD radius=6
+    let mut cleared = Cleared::new(5., origin);
     cleared.corner_loss = 2.;
     cleared.add(origin);
     assert!(cleared.contains(Point2Dto::new(4.9, 0.)));
@@ -14,7 +14,7 @@ fn corner_lap_certificate_keeps_floor_residue_and_proves_matching_links() {
     assert!(cleared.contains_cutter_capsule(Point2Dto::new(-1., 0.), Point2Dto::new(1., 0.), 6.));
     assert!(!cleared.contains_cutter_capsule(origin, Point2Dto::new(1.01, 0.), 6.));
     assert!(!cleared.contains_cutter_capsule(origin, Point2Dto::new(1., 0.), 6.01));
-    // Check the accepted link across every intermediate cutting section.
+
     for i in 0..=100 {
         let s = 4. + 2. * i as f64 / 100.;
         assert!(1. + s <= 5. + (s - 4.) + EPS);
@@ -38,7 +38,7 @@ fn corner_engagement_bounds_dense_sections_in_box_cylinder_and_hex_stock() {
         let mut setup = doc.setups[0].clone();
         setup.resolved_stock = shape;
         let e = Envelope::new(&setup, 0.2, 6.).unwrap();
-        // q=.6, f=1, R=2; every cleared disk grows from1.6 to2.6.
+
         let mut cleared = Cleared::new(1.6, xy(setup.stock.min));
         cleared.corner_loss = 1.;
         cleared.add(Point2Dto::new(5., 7.));
@@ -67,8 +67,8 @@ fn corner_engagement_bounds_dense_sections_in_box_cylinder_and_hex_stock() {
             }
         }
     }
-    // Neither endpoint section touches this small cylinder. The interior
-    // extremum must still detect stock contact, not certify the move as air.
+
+
     let mut setup = doc.setups[0].clone();
     setup.resolved_stock = CamResolvedStockDto::Cylinder {
         center: Point2Dto::new(5., 0.),
@@ -117,7 +117,7 @@ fn corner_roughing_supports_exterior_and_cavity_and_roundtrips_actual_stock() {
                 if let CamOperationDto::Adaptive3d { bottom_z, .. } =
                     &mut candidate.setups[0].operations[0]
                 {
-                    *bottom_z = -0.5; // Actual axial engagement is below the .6 corner.
+                    *bottom_z = -0.5;
                 }
                 assert_adaptive_nc_roundtrip(candidate);
             }
@@ -129,12 +129,12 @@ fn corner_roughing_supports_exterior_and_cavity_and_roundtrips_actual_stock() {
 fn corner_roughing_rejects_a_lap_that_leaves_an_uncleared_center_boss() {
     let mut doc = cavity_fixture();
     doc.tools[0].kind = CamToolKind::BullNoseEndMill;
-    doc.tools[0].corner_radius = Some(1.5); // R2, flat .5, requested lap .8
+    doc.tools[0].corner_radius = Some(1.5);
     assert!(plan_setup(&doc, 1)
         .unwrap_err()
         .0
         .contains("uncleared center boss"));
-    // A real end mill, not a drill/chamfer mill with center_cutting checked.
+
     for kind in [
         CamToolKind::Drill,
         CamToolKind::ChamferMill,

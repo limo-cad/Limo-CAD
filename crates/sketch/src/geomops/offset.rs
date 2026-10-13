@@ -50,8 +50,7 @@ pub fn offset_curve(c: &Curve, distance: f64) -> Result<Curve, OffsetError> {
             }
 
             let len = len_sq.sqrt();
-            // Normal vector pointing 90 deg CCW from direction (dx, dy) is (-dy, dx)
-            // Normalize it
+
             let nx = -dy / len;
             let ny = dx / len;
 

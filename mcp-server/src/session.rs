@@ -1,9 +1,9 @@
-//! Headless session directories under `NBCAD_SESSION_DIR` (or temp `nbcad-sessions`).
+//! Headless session directories selected by the shared private Rust transport.
 //!
 //! Snapshot publish is **UI-owned**. MCP may `cad_attach` (copy) and `cad_submit`
 //! an inbox op; it must **not** write `model.json` back (no last-writer-wins).
 //! The desktop/engine applies inbox ops via the same `host::handle` path as
-//! Tauri IPC, then the existing publisher writes a new snapshot. This is still
+//! native host requests, then the existing publisher writes a new snapshot. This is still
 //! **not** in-process shared memory.
 //!
 //! Layout: `<session_dir>/<uuid>/{model.json,active-sketch.json?,focus.json,heartbeat.json,closed.json?,inbox/<seq>.json,inbox/applied/<seq>.json?,inbox/failed/<seq>.json?}`.
@@ -88,13 +88,15 @@ fn validate_presentation(arguments: &Value) -> Result<(), String> {
     {
         return Err("presentation step_index must not exceed step_count".into());
     }
-    // Reading both enums here ensures their spelling is validated even when
-    // the command does not need an additional setting.
+
     let _ = (request.command, request.mode);
     Ok(())
 }
 
 fn validate_view(arguments: &Value) -> Result<(), String> {
+    if arguments.get("named_view").is_some() {
+        return Err("action view does not accept named_view; use recall_named_view with name to recall a saved camera, visibility and display offsets".into());
+    }
     if let Some(angle) = arguments.get("orbit_degrees") {
         if !angle
             .as_f64()
@@ -147,12 +149,7 @@ pub const HEARTBEAT_STALE_MS: u64 = 30_000;
 pub const PROCESS_LEASE_STALE_MS: u64 = 90_000;
 
 pub fn session_dir() -> PathBuf {
-    if let Ok(custom) = std::env::var("NBCAD_SESSION_DIR") {
-        if !custom.trim().is_empty() {
-            return PathBuf::from(custom);
-        }
-    }
-    std::env::temp_dir().join("nbcad-sessions")
+    limo_cad_session_storage::root()
 }
 
 pub fn now_ms() -> u64 {
@@ -163,30 +160,16 @@ pub fn now_ms() -> u64 {
 }
 
 /// A separate expiring UI request; never part of the modeling inbox or script.
-pub fn request_ui(arguments: &Value, attached: Option<&str>) -> Result<Value, String> {
+fn validate_ui(arguments: &Value) -> Result<bool, String> {
     let action = arguments
         .get("action")
         .and_then(Value::as_str)
         .unwrap_or("inspect");
     if action == "view" {
         validate_view(arguments)?;
-        return request_control(arguments, attached, false, None);
+        return Ok(false);
     }
-    if !matches!(
-        action,
-        "inspect"
-            | "click"
-            | "double_click"
-            | "context_menu"
-            | "set_value"
-            | "key"
-            | "window"
-            | "file"
-            | "history"
-            | "viewport"
-            | "presentation"
-            | "open_recipe"
-    ) {
+    if !is_ui_action(action) {
         return Err("unknown UI action".into());
     }
     if action == "presentation" {
@@ -196,7 +179,7 @@ pub fn request_ui(arguments: &Value, attached: Option<&str>) -> Result<Value, St
         return Err("history requires command undo or redo".into());
     }
     if action == "open_recipe" {
-        nbcad_recipes::find(
+        limo_cad_recipes::find(
             arguments["recipe"]
                 .as_str()
                 .ok_or("open_recipe requires a built-in recipe ID")?,
@@ -217,7 +200,97 @@ pub fn request_ui(arguments: &Value, attached: Option<&str>) -> Result<Value, St
             return Err("pace_ms must be an integer from 0 to 2000".into());
         }
     }
-    request_control(arguments, attached, true, None)
+    Ok(true)
+}
+
+pub(super) fn is_ui_action(action: &str) -> bool {
+    matches!(
+        action,
+        "inspect"
+            | "click"
+            | "double_click"
+            | "context_menu"
+            | "set_value"
+            | "key"
+            | "window"
+            | "file"
+            | "history"
+            | "viewport"
+            | "presentation"
+            | "open_recipe"
+            | "capture"
+            | "view"
+    )
+}
+
+pub fn request_ui(arguments: &Value, attached: Option<&str>) -> Result<Value, String> {
+    request_control(arguments, attached, validate_ui(arguments)?, None)
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct ControlTicket {
+    pub session_id: String,
+    pub request_id: String,
+    pub expires_ms: u64,
+    /// Captured at publication, never reconstructed from a later active tab.
+    pub route: Option<Value>,
+}
+
+pub(crate) fn submit_ui(arguments: &Value, owner: &Value) -> Result<ControlTicket, String> {
+    publish_control(arguments, None, validate_ui(arguments)?, None, Some(owner))
+}
+
+pub(crate) fn submit_engine_query(
+    method: &str,
+    payload: &str,
+    owner: &Value,
+) -> Result<ControlTicket, String> {
+    if !limo_cad_mcp_mutate::is_routed_engine_query(method) {
+        return Err("unsupported live engine query".into());
+    }
+    publish_control(
+        &json!({"session_id":owner["session_id"]}),
+        None,
+        true,
+        Some(json!({"method":method,"payload":payload})),
+        Some(owner),
+    )
+}
+
+/// Optional broker fences preserve compatibility with existing control clients.
+/// A present owner must match completely before the desktop dispatches work.
+pub fn control_owner_error(
+    request: &Value,
+    session_id: &str,
+    window_id: &str,
+    document_id: Option<&str>,
+    process_instance_id: &str,
+    generation: u64,
+) -> Option<String> {
+    let owner = request.get("owner")?;
+    if !owner.is_object()
+        || owner["session_id"].as_str() != Some(session_id)
+        || owner["window_id"].as_str() != Some(window_id)
+        || owner["document_id"].as_str() != document_id
+        || owner["process_instance_id"].as_str() != Some(process_instance_id)
+    {
+        return Some(
+            json!({"code":"control_owner_mismatch","expected":owner,
+            "actual":{"session_id":session_id,"window_id":window_id,
+                "document_id":document_id,"process_instance_id":process_instance_id}})
+            .to_string(),
+        );
+    }
+    if let Some(base) = owner.get("base_generation") {
+        if base.as_u64() != Some(generation) {
+            return Some(generation_conflict_error(
+                session_id,
+                base.as_u64().unwrap_or(u64::MAX),
+                Some(generation),
+            ));
+        }
+    }
+    None
 }
 
 fn request_control(
@@ -226,6 +299,49 @@ fn request_control(
     ui: bool,
     query: Option<Value>,
 ) -> Result<Value, String> {
+    let ticket = publish_control(arguments, attached, ui, query, None)?;
+    let remaining = ticket
+        .expires_ms
+        .saturating_sub(now_ms())
+        .saturating_add(1000);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(remaining);
+    await_control(ticket, deadline)
+}
+
+pub(super) fn await_control(
+    ticket: ControlTicket,
+    deadline: std::time::Instant,
+) -> Result<Value, String> {
+    let session_id = &ticket.session_id;
+    let request_name = format!("controls/{}.request.json", ticket.request_id);
+    let result_name = format!("controls/{}.result.json", ticket.request_id);
+    while std::time::Instant::now() < deadline {
+        if let Ok(body) = read_session_file(session_id, &result_name) {
+            let result: Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+            let _ = fs::remove_file(session_path(session_id, &result_name)?);
+            let _ = fs::remove_file(session_path(session_id, &request_name)?);
+            return Ok(result);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let _ = fs::remove_file(session_path(session_id, &request_name)?);
+    let mut timeout = json!({"status":"timeout","request_id":ticket.request_id,"session_id":session_id,
+        "applied":Value::Null,
+        "hint":"No UI completion acknowledgement before timeout. An operation that started may already have changed CAD; inspect the target window and model before retrying."});
+    if let Some(route) = &ticket.route {
+        timeout["ticket"] = super::broker::retained_control_ticket(route, &ticket)?;
+        timeout["hint"] = json!("No UI completion acknowledgement before timeout. Poll this original cad_route ticket before retrying; an operation which started may already have changed CAD.");
+    }
+    Ok(timeout)
+}
+
+fn publish_control(
+    arguments: &Value,
+    attached: Option<&str>,
+    ui: bool,
+    query: Option<Value>,
+    owner: Option<&Value>,
+) -> Result<ControlTicket, String> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let session_id = arguments
@@ -247,18 +363,46 @@ fn request_control(
     {
         return Err("invalid camera view".into());
     }
-    let heartbeat = heartbeat_meta(session_id);
+    let snapshot = read_heartbeat_snapshot(session_id);
+    let heartbeat = heartbeat_meta_from_snapshot(snapshot.as_ref());
     if heartbeat.get("stale").and_then(Value::as_bool) != Some(false) {
         return Err("desktop heartbeat is stale; refresh cad_list_sessions".into());
     }
+    if let Some(owner) = owner {
+        let identity = session_identity(session_id);
+        if let Some(error) = control_owner_error(
+            &json!({"owner":owner}),
+            session_id,
+            identity.window_id.as_deref().unwrap_or(""),
+            identity.document_id.as_deref(),
+            heartbeat_process_instance_id(session_id)
+                .as_deref()
+                .unwrap_or(""),
+            read_heartbeat_generation(session_id)?,
+        ) {
+            return Err(error);
+        }
+    }
+    let route = if let Some(owner) = owner {
+        Some(
+            json!({"session_id":session_id,"window_id":owner["window_id"],
+            "document_id":owner["document_id"],"process_instance_id":owner["process_instance_id"]}),
+        )
+    } else {
+        snapshot.as_ref().filter(|snapshot| snapshot["interface_version"] == 1)
+            .and_then(|snapshot| Some(json!({"session_id":session_id,
+                "window_id":optional_id(snapshot,"window_id")?,
+                "document_id":optional_id(snapshot,"document_id").or_else(|| optional_id(snapshot,"project_session_id"))?,
+                "process_instance_id":optional_id(snapshot,"process_instance_id")?})))
+    };
     let id = format!(
-        "{}-{}-{}",
+        "{:020}-{:010}-{:020}",
         now_ms(),
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
     );
     let request_name = format!("controls/{id}.request.json");
-    let result_name = format!("controls/{id}.result.json");
+
     let slow_drawing = query.as_ref().is_some_and(|query| {
         matches!(
             query["method"].as_str(),
@@ -302,22 +446,16 @@ fn request_control(
         request["sketch_query"] = query;
         request.as_object_mut().unwrap().remove("ui");
     }
-    write_session(session_id, &request_name, &request.to_string())?;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(lifetime + 1000);
-    while std::time::Instant::now() < deadline {
-        if let Ok(body) = read_session_file(session_id, &result_name) {
-            let result: Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
-            let _ = fs::remove_file(session_path(session_id, &result_name)?);
-            let _ = fs::remove_file(session_path(session_id, &request_name)?);
-            return Ok(result);
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
+    if let Some(owner) = owner {
+        request["owner"] = owner.clone();
     }
-    let _ = fs::remove_file(session_path(session_id, &request_name)?);
-    Ok(
-        json!({"status":"timeout","request_id":id,"session_id":session_id,
-        "hint":"No UI acknowledgement. Check that the target tab is active and the desktop supports cad_interface."}),
-    )
+    write_session(session_id, &request_name, &request.to_string())?;
+    Ok(ControlTicket {
+        session_id: session_id.into(),
+        request_id: id,
+        expires_ms: request["expires_ms"].as_u64().unwrap(),
+        route,
+    })
 }
 
 pub fn request_engine_query(
@@ -325,7 +463,7 @@ pub fn request_engine_query(
     method: &str,
     payload: &str,
 ) -> Result<Value, String> {
-    if !nbcad_mcp_mutate::is_live_engine_query(method) {
+    if !limo_cad_mcp_mutate::is_live_engine_query(method) {
         return Err("unsupported live engine query".into());
     }
     let result = request_control(
@@ -389,12 +527,13 @@ pub fn require_valid_session_id(session_id: &str) -> Result<(), String> {
 
 /// List attachable session directories. Skips control dirs (`_*`) and non-UUID names.
 pub fn list_sessions() -> Result<Vec<String>, String> {
+    limo_cad_session_storage::validate_root().map_err(|error| error.to_string())?;
     let root = session_dir();
     if !root.exists() {
         return Ok(Vec::new());
     }
     let mut sessions = Vec::new();
-    for entry in fs::read_dir(&root).map_err(|error| error.to_string())? {
+    for entry in limo_cad_session_storage::read_dir(&root).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
         if entry
             .file_type()
@@ -414,7 +553,8 @@ pub fn list_sessions() -> Result<Vec<String>, String> {
 
 pub fn read_session_file(session_id: &str, filename: &str) -> Result<String, String> {
     let path = session_path(session_id, filename)?;
-    fs::read_to_string(&path).map_err(|error| format!("could not read {}: {error}", path.display()))
+    limo_cad_session_storage::read_to_string(&path)
+        .map_err(|error| format!("could not read {}: {error}", path.display()))
 }
 
 /// Require `model.json` for the session. Missing file → hard error (Jack §3).
@@ -428,32 +568,8 @@ pub fn require_model_json(session_id: &str) -> Result<String, String> {
 /// Write a session file via temp + rename so readers never see a partial file.
 pub fn write_session(session_id: &str, filename: &str, content: &str) -> Result<(), String> {
     let path = session_path(session_id, filename)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let temporary = path.with_extension(format!(
-        "{}.tmp.{}",
-        path.extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("json"),
-        std::process::id()
-    ));
-    {
-        let mut file = fs::OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(&temporary)
-            .map_err(|error| format!("could not create temp {}: {error}", temporary.display()))?;
-        file.write_all(content.as_bytes())
-            .map_err(|error| format!("could not write temp {}: {error}", temporary.display()))?;
-        file.sync_all()
-            .map_err(|error| format!("could not flush temp {}: {error}", temporary.display()))?;
-    }
-    fs::rename(&temporary, &path).map_err(|error| {
-        let _ = fs::remove_file(&temporary);
-        format!("could not replace {}: {error}", path.display())
-    })
+    limo_cad_session_storage::atomic_write(&path, content.as_bytes())
+        .map_err(|error| format!("could not publish {}: {error}", path.display()))
 }
 
 /// Heartbeat age / staleness for a session directory (no auto-delete).
@@ -670,7 +786,7 @@ fn parse_process_lease(parsed: &Value, accepts_unlisted_windows: bool) -> Option
 }
 
 fn read_process_lease(path: &Path, accepts_unlisted_windows: bool) -> Option<ProcessLease> {
-    let body = fs::read_to_string(path).ok()?;
+    let body = limo_cad_session_storage::read_to_string(path).ok()?;
     let parsed: Value = serde_json::from_str(&body).ok()?;
     parse_process_lease(&parsed, accepts_unlisted_windows)
 }
@@ -701,6 +817,42 @@ fn desktop_not_ready() -> String {
         "hint":"This desktop has not published one unambiguous active document. Retry after startup, or select a document explicitly with cad_attach."}).to_string()
 }
 
+/// OS input is restricted to the process lease's current active document.
+#[cfg(all(windows, feature = "native-computer-control"))]
+pub(super) fn computer_control_owner(session_id: &str) -> Result<Value, String> {
+    require_valid_session_id(session_id)?;
+    require_open_session(session_id)?;
+    let heartbeat = heartbeat_meta(session_id);
+    let identity = session_identity(session_id);
+    let process =
+        heartbeat_process_instance_id(session_id).ok_or("Session has no desktop owner")?;
+    let registry = process_registry();
+    let lease = registry
+        .leases
+        .get(&process)
+        .ok_or("Desktop process lease has expired")?;
+    let window = identity
+        .window_id
+        .as_deref()
+        .ok_or("Session has no window identity")?;
+    let active = lease
+        .windows
+        .get(window)
+        .ok_or("Desktop window is no longer live")?;
+    if heartbeat["stale"] != false
+        || heartbeat["interface_version"] != 1
+        || active.active_session_id != session_id
+        || identity.document_id.as_deref() != Some(active.active_document_id.as_str())
+    {
+        return Err("Computer control requires the current active desktop document; observe again after switching tabs".into());
+    }
+    Ok(
+        json!({"session_id":session_id,"window_id":window,"document_id":active.active_document_id,
+        "process_instance_id":process,"pid":lease.pid.ok_or("Desktop lease has no PID")?,
+        "generation":read_heartbeat_generation(session_id)?}),
+    )
+}
+
 fn desktop_default_from_registry(
     process_id: u32,
     registry: &ProcessRegistry,
@@ -725,6 +877,12 @@ fn desktop_default_from_registry(
 }
 
 fn process_registry() -> ProcessRegistry {
+    if limo_cad_session_storage::validate_root().is_err() {
+        return ProcessRegistry {
+            present: false,
+            leases: BTreeMap::new(),
+        };
+    }
     let ui_dir = session_dir().join("_ui");
     let processes_dir = ui_dir.join("processes");
     let legacy_path = ui_dir.join("process.json");
@@ -733,7 +891,7 @@ fn process_registry() -> ProcessRegistry {
         leases: BTreeMap::new(),
     };
 
-    if let Ok(entries) = fs::read_dir(&processes_dir) {
+    if let Ok(entries) = limo_cad_session_storage::read_dir(&processes_dir) {
         for entry in entries.flatten() {
             if !entry
                 .file_type()
@@ -748,12 +906,42 @@ fn process_registry() -> ProcessRegistry {
         }
     }
 
-    // Read the old singleton only as a migration fallback. Its timestamp must
-    // be fresh, so a pre-registry crash cannot keep sessions live forever.
     if let Some(lease) = read_process_lease(&legacy_path, true) {
         registry.insert(lease);
     }
     registry
+}
+
+/// A control's original document may have intentionally closed or been replaced.
+/// Only the original process/window lease is relevant to advisory in-flight
+/// status. A missing/stale lease means unavailable, not proven process death.
+pub(super) fn native_admission_desktop_available(marker: &super::NativeControlAdmission) -> bool {
+    process_registry()
+        .leases
+        .get(&marker.process_instance_id)
+        .is_some_and(|lease| {
+            lease.accepts_unlisted_windows || lease.windows.contains_key(&marker.window_id)
+        })
+}
+
+pub(super) fn read_control_admission(
+    session_id: &str,
+    request_id: &str,
+) -> Result<Option<super::NativeControlAdmission>, String> {
+    let path = session_path(session_id, &format!("controls/{request_id}.admitted.json"))?;
+    let body = match limo_cad_session_storage::read_to_string_bounded(
+        &path,
+        super::NATIVE_CONTROL_ADMISSION_MAX_BYTES,
+    ) {
+        Ok(body) => body,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => {
+            return Err(
+                "Native admission marker is unavailable or exceeds its private read limit".into(),
+            )
+        }
+    };
+    super::NativeControlAdmission::decode(&body).map(Some)
 }
 
 fn heartbeat_process_instance_id(session_id: &str) -> Option<String> {
@@ -779,7 +967,6 @@ fn is_live_for_windows(session_id: &str, registry: &ProcessRegistry) -> bool {
         return false;
     }
     if !registry.present {
-        // Backward-compatible headless/legacy roots have no UI lease registry.
         return true;
     }
     heartbeat_process_window(session_id).is_some_and(|(process_id, window_id)| {
@@ -791,7 +978,7 @@ fn is_live_for_windows(session_id: &str, registry: &ProcessRegistry) -> bool {
 
 /// Resolve attach target to a UUID session dir.
 ///
-/// Accepts `session_id` (UUID), `window_id` (Tauri label), and/or `document_id`
+/// Accepts `session_id` (UUID), `window_id` (stable desktop window id), and/or `document_id`
 /// (native project-session id). UUID `document_id` remains an alias for
 /// `session_id` for compatibility. All provided selectors are intersected;
 /// ambiguity is reported only after every supplied filter is applied. Closed
@@ -821,9 +1008,6 @@ pub fn resolve_attach_target(
         }
         vec![id.to_string()]
     } else {
-        // Window/document matching uses the live set only. UI-managed roots
-        // require a fresh owning process lease; explicit UUID remains the
-        // recovery path for closed or prior-run sessions.
         let registry = process_registry();
         list_sessions()?
             .into_iter()
@@ -842,7 +1026,6 @@ pub fn resolve_attach_target(
     }
 
     if let Some(document) = document_id {
-        // Compat: UUID document_id still means the session directory name.
         if is_valid_session_id(document) && list_sessions()?.iter().any(|id| id == document) {
             candidates.retain(|id| id == document);
         } else {
@@ -1014,6 +1197,7 @@ pub fn sessions_list_json() -> Value {
 
 fn session_path(session_id: &str, filename: &str) -> Result<PathBuf, String> {
     require_valid_session_id(session_id)?;
+    limo_cad_session_storage::validate_root().map_err(|error| error.to_string())?;
     if filename.is_empty() || filename.contains('\\') || filename.contains("..") {
         return Err("invalid filename".to_string());
     }
@@ -1047,7 +1231,7 @@ pub struct InboxOp {
     pub session_id: Option<String>,
     pub window_id: Option<String>,
     pub document_id: Option<String>,
-    pub script_progress: Option<nbcad_script::RunProgress>,
+    pub script_progress: Option<limo_cad_script::RunProgress>,
 }
 
 impl InboxOp {
@@ -1100,7 +1284,7 @@ impl InboxOp {
         value
     }
 
-    pub fn with_script_progress(mut self, progress: Option<nbcad_script::RunProgress>) -> Self {
+    pub fn with_script_progress(mut self, progress: Option<limo_cad_script::RunProgress>) -> Self {
         self.script_progress = progress;
         self
     }
@@ -1125,7 +1309,7 @@ impl InboxOp {
             window_id: optional_id(value, "window_id"),
             document_id: optional_id(value, "document_id"),
             script_progress: value.get("script_progress").and_then(|progress| {
-                Some(nbcad_script::RunProgress {
+                Some(limo_cad_script::RunProgress {
                     steps_completed: progress["steps_completed"].as_u64()?.try_into().ok()?,
                     step_count: progress["step_count"].as_u64()?.try_into().ok()?,
                 })
@@ -1164,14 +1348,11 @@ pub fn read_model_publication_generation(session_id: &str) -> Option<u64> {
 }
 
 fn model_publication_generation_from_heartbeat(parsed: &Value) -> Option<u64> {
-    // A present but null model fence means the completed model is unknown.
-    // An active-sketch publication must never stand in for that model fence.
     if parsed.get("model_generation").is_some() {
         read_optional_u64(parsed, "model_generation")
     } else if parsed.get("published_generation").is_some() {
         read_optional_u64(parsed, "published_generation")
     } else {
-        // Legacy heartbeats carried only the publication generation.
         read_optional_u64(parsed, "generation")
     }
 }
@@ -1296,6 +1477,7 @@ pub(crate) fn write_inbox_op_within(
     let body = serde_json::to_string_pretty(&op.to_json())
         .map_err(|error| format!("encode inbox op: {error}"))?;
     crate::inbox::publish_with_timeout(
+        &session_dir(),
         &session_dir().join(session_id).join("inbox"),
         timeout,
         |file| file.write_all(body.as_bytes()),
@@ -1316,12 +1498,12 @@ fn archive_inbox_op(session_id: &str, seq: u64) -> Result<(), String> {
     let src = session_path(session_id, &format!("inbox/{seq}.json"))?;
     let dest = session_path(session_id, &format!("inbox/applied/{seq}.json"))?;
     if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        limo_cad_session_storage::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
     match fs::rename(&src, &dest) {
         Ok(()) => Ok(()),
         Err(_) => {
-            let body = fs::read_to_string(&src)
+            let body = limo_cad_session_storage::read_to_string(&src)
                 .map_err(|error| format!("archive read inbox/{seq}.json: {error}"))?;
             write_session(session_id, &format!("inbox/applied/{seq}.json"), &body)?;
             fs::remove_file(&src).map_err(|error| format!("remove applied inbox op: {error}"))
@@ -1333,9 +1515,9 @@ fn archive_inbox_op(session_id: &str, seq: u64) -> Result<(), String> {
 fn dead_letter_inbox_op(session_id: &str, seq: u64, error: &str) -> Result<(), String> {
     let src = session_path(session_id, &format!("inbox/{seq}.json"))?;
     if let Some(parent) = session_path(session_id, "inbox/failed")?.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        limo_cad_session_storage::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let original = fs::read_to_string(&src).unwrap_or_default();
+    let original = limo_cad_session_storage::read_to_string(&src).unwrap_or_default();
     let body = match serde_json::from_str::<Value>(&original) {
         Ok(mut parsed) => {
             if let Some(object) = parsed.as_object_mut() {
@@ -1392,31 +1574,26 @@ where
         Ok(generation) => generation,
         Err(_) => {
             let error = generation_conflict_error(session_id, op.base_generation, None);
-            // Match native apply: generation_conflict (including a missing /
-            // unreadable heartbeat generation) must not wedge later seqs.
-            // Age-only stale heartbeats still apply when generation matches —
-            // listing staleness is not a writer lock.
+
             dead_letter_inbox_op(session_id, seq, &error)?;
             return Err(error);
         }
     };
     if op.base_generation != current {
         let error = generation_conflict_error(session_id, op.base_generation, Some(current));
-        // Match native apply: a stale head must not wedge later seqs.
+
         dead_letter_inbox_op(session_id, seq, &error)?;
         return Err(error);
     }
-    if nbcad_mcp_mutate::lookup_mutate(&op.name).is_none() {
+    if limo_cad_mcp_mutate::lookup_mutate(&op.name).is_none() {
         let error = format!("unsupported inbox mutate '{}'", op.name);
-        // Match native apply: reject before host so inspect/unknown names
-        // cannot archive as applied.
+
         dead_letter_inbox_op(session_id, seq, &error)?;
         return Err(error);
     }
     let host_result = match host_apply(&op.name, op.arguments.clone()) {
         Ok(result) => result,
         Err(error) => {
-            // Match native apply: a failed head must not wedge later seqs.
             dead_letter_inbox_op(session_id, seq, &error)?;
             return Err(error);
         }
@@ -1459,7 +1636,7 @@ fn read_optional_string(value: &Value, key: &str) -> Option<String> {
 }
 
 fn parse_receipt_file(path: &Path) -> Result<Value, String> {
-    let body = fs::read_to_string(path)
+    let body = limo_cad_session_storage::read_to_string(path)
         .map_err(|error| format!("could not read inbox receipt {}: {error}", path.display()))?;
     let parsed: Value = serde_json::from_str(&body)
         .map_err(|error| format!("invalid inbox receipt {}: {error}", path.display()))?;
@@ -1565,13 +1742,20 @@ pub fn snapshot_publication_after(
     session_id: &str,
     base_generation: u64,
 ) -> Option<SnapshotPublication> {
+    snapshot_publication_at_least(session_id, base_generation.checked_add(1)?)
+}
+
+fn snapshot_publication_at_least(
+    session_id: &str,
+    minimum_generation: u64,
+) -> Option<SnapshotPublication> {
     let Ok(body) = read_session_file(session_id, "heartbeat.json") else {
         return None;
     };
     let parsed: Value = serde_json::from_str(&body).unwrap_or(json!({}));
     let engine_generation = parsed.get("generation").and_then(Value::as_u64)?;
     let published_generation = parsed.get("published_generation").and_then(Value::as_u64)?;
-    if published_generation <= base_generation || published_generation != engine_generation {
+    if published_generation < minimum_generation || published_generation != engine_generation {
         return None;
     }
     if parsed
@@ -1586,6 +1770,28 @@ pub fn snapshot_publication_after(
         model_generation: read_optional_u64(&parsed, "model_generation"),
         active_sketch_generation: read_optional_u64(&parsed, "active_sketch_generation"),
     })
+}
+
+fn receipt_publication(session_id: &str, receipt: &InboxReceipt) -> Option<SnapshotPublication> {
+    let InboxReceipt::Applied {
+        base_generation,
+        name,
+        replacement_session_id,
+    } = receipt
+    else {
+        return None;
+    };
+    let read_only = name
+        .as_deref()
+        .and_then(limo_cad_mcp_mutate::lookup_mutate)
+        .is_some_and(limo_cad_mcp_mutate::MutateSpec::is_read_only);
+    if replacement_session_id.is_some() {
+        snapshot_publication_after(session_id, 0)
+    } else if read_only {
+        snapshot_publication_at_least(session_id, *base_generation)
+    } else {
+        snapshot_publication_after(session_id, *base_generation)
+    }
 }
 
 fn empty_publication_fields() -> Value {
@@ -1615,6 +1821,7 @@ fn clamp_await_timeout_ms(timeout_ms: u64) -> u64 {
 /// Poll disk until the inbox seq has an applied/failed receipt and (for
 /// applied) an explicit publisher generation has caught up to the engine, or
 /// until `timeout_ms` elapses. `timeout_ms == 0` is a single observation.
+/// Waiting uses monotonic time independently of publisher wall-clock timestamps.
 ///
 /// Does **not** write `model.json`. Does **not** claim in-process co-link.
 pub fn await_inbox_apply(
@@ -1635,12 +1842,12 @@ fn await_inbox_apply_observing(
 ) -> Result<Value, String> {
     require_valid_session_id(session_id)?;
     let timeout_ms = clamp_await_timeout_ms(timeout_ms);
-    let poll_ms = poll_ms.max(1).min(1_000);
-    let started = now_ms();
-    let deadline = started.saturating_add(timeout_ms);
+    let poll_ms = poll_ms.clamp(1, 1_000);
+    let started = std::time::Instant::now();
+    let timeout = std::time::Duration::from_millis(timeout_ms);
 
     loop {
-        let elapsed_ms = now_ms().saturating_sub(started);
+        let elapsed_ms = started.elapsed().as_millis() as u64;
         let receipt = inbox_op_receipt(session_id, seq)?;
         let replacement_session_id = match &receipt {
             InboxReceipt::Applied {
@@ -1649,54 +1856,21 @@ fn await_inbox_apply_observing(
             } => replacement_session_id.as_deref(),
             _ => None,
         };
-        // Only this sequence's explicit replacement receipt can follow the new
-        // publisher. Other pending work remains owned by the retired document.
+
         let publication_session = replacement_session_id.unwrap_or(session_id);
         let current_generation = read_heartbeat_generation(publication_session).ok();
-        let publication = match &receipt {
-            InboxReceipt::Applied {
-                base_generation, ..
-            } => snapshot_publication_after(
-                publication_session,
-                if replacement_session_id.is_some() {
-                    0
-                } else {
-                    *base_generation
-                },
-            ),
-            _ => None,
-        };
+        let publication = receipt_publication(publication_session, &receipt);
         after_receipt();
-        // A replacement cannot publish any more work for the retired identity.
-        // Keep completed/failed receipts inspectable, but do not make an active
-        // interpreter wait for its full timeout on a now-unreachable publisher.
+
         if is_session_closed(publication_session)
             && publication.is_none()
             && !matches!(&receipt, InboxReceipt::Failed { .. })
         {
-            // Receipt and tombstone are separate atomic files. A native
-            // replacement can publish its receipt after our first read and
-            // close the old session before this observation. Recheck behind
-            // that closure fence before declaring its work unreachable.
             if inbox_op_receipt(session_id, seq)? != receipt {
                 continue;
             }
-            if let InboxReceipt::Applied {
-                base_generation, ..
-            } = &receipt
-            {
-                if snapshot_publication_after(
-                    publication_session,
-                    if replacement_session_id.is_some() {
-                        0
-                    } else {
-                        *base_generation
-                    },
-                )
-                .is_some()
-                {
-                    continue;
-                }
+            if receipt_publication(publication_session, &receipt).is_some() {
+                continue;
             }
             let (applied, name, base_generation) = match &receipt {
                 InboxReceipt::Applied {
@@ -1790,9 +1964,8 @@ fn await_inbox_apply_observing(
                     }
                     return Ok(result);
                 }
-                // Applied, but the explicit publisher generation has not caught
-                // up to the current engine generation yet.
-                if timeout_ms == 0 || now_ms() >= deadline {
+
+                if timeout_ms == 0 || started.elapsed() >= timeout {
                     let mut result = json!({
                         "status": "timeout",
                         "timed_out": true,
@@ -1820,7 +1993,7 @@ fn await_inbox_apply_observing(
                 }
             }
             InboxReceipt::Pending => {
-                if timeout_ms == 0 || now_ms() >= deadline {
+                if timeout_ms == 0 || started.elapsed() >= timeout {
                     let status = if timeout_ms == 0 {
                         "pending"
                     } else {
@@ -1847,7 +2020,7 @@ fn await_inbox_apply_observing(
             }
         }
 
-        let remaining = deadline.saturating_sub(now_ms());
+        let remaining = timeout.saturating_sub(started.elapsed()).as_millis() as u64;
         let sleep_ms = poll_ms.min(remaining.max(1));
         std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
     }
@@ -1959,7 +2132,6 @@ pub fn session_status_json(
     let heartbeat_stale = heartbeat["stale"].as_bool().unwrap_or(true);
     let heartbeat_age_ms = heartbeat["age_ms"].clone();
 
-    // Unknown attachment fence is not fresh (recovery attach without heartbeat).
     let stale = match (attached_generation, live_generation) {
         (Some(attached), Some(live)) => attached != live,
         (Some(_), None) => true,
@@ -2039,10 +2211,10 @@ pub fn test_session_uuid() -> String {
     )
 }
 
-/// Serialize tests that mutate `NBCAD_SESSION_DIR`.
+/// Serialize tests that mutate `LIMO_CAD_SESSION_DIR`.
 ///
 /// A test that fails while holding the guard poisons the mutex. Every holder
-/// points `NBCAD_SESSION_DIR` at its own fresh directory before touching it,
+/// points `LIMO_CAD_SESSION_DIR` at its own fresh directory before touching it,
 /// so nothing the failed test left behind is observed: recover the guard
 /// instead of turning one failure into a `PoisonError` in every later test.
 #[cfg(test)]
@@ -2171,9 +2343,9 @@ mod tests {
     fn recipe_link_handoff_uses_live_control_without_reading_or_writing_model() {
         let _guard = env_lock();
         let id = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-recipe-link-{id}"));
-        let previous = std::env::var_os("NBCAD_SESSION_DIR");
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-recipe-link-{id}"));
+        let previous = std::env::var_os("LIMO_CAD_SESSION_DIR");
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_process_lease(
             &dir,
             "recipe-test",
@@ -2186,7 +2358,7 @@ mod tests {
             "updated_ms":now_ms(), "generation":1, "process_instance_id":"recipe-test",
             "window_id":"main", "document_id":"retained-document", "project_session_id":"retained-document"
         }).to_string()).unwrap();
-        // Deliberately unreadable as a model: opening source must not hydrate it.
+
         let model = "user's unsaved model stays byte-for-byte unchanged";
         write_session(&id, "model.json", model).unwrap();
         let controls = dir.join(&id).join("controls");
@@ -2194,7 +2366,7 @@ mod tests {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
             while std::time::Instant::now() < deadline {
                 if let Ok(entries) = fs::read_dir(&controls) {
-                    for entry in entries.flatten().filter(|entry| {
+                    if let Some(entry) = entries.flatten().find(|entry| {
                         entry
                             .file_name()
                             .to_string_lossy()
@@ -2222,9 +2394,9 @@ mod tests {
         assert_eq!(read_session_file(&id, "model.json").unwrap(), model);
         assert!(!dir.join(&id).join("inbox").exists());
         if let Some(value) = previous {
-            std::env::set_var("NBCAD_SESSION_DIR", value);
+            std::env::set_var("LIMO_CAD_SESSION_DIR", value);
         } else {
-            std::env::remove_var("NBCAD_SESSION_DIR");
+            std::env::remove_var("LIMO_CAD_SESSION_DIR");
         }
         let _ = fs::remove_dir_all(dir);
     }
@@ -2290,12 +2462,24 @@ mod tests {
     }
 
     #[test]
+    fn view_rejects_named_camera_instead_of_silently_dropping_it() {
+        for duration in [0, 300] {
+            let error = validate_view(
+                &json!({"view":"current", "named_view":"Review", "duration_ms":duration}),
+            )
+            .unwrap_err();
+            assert!(error.contains("recall_named_view"));
+            assert!(error.contains("does not accept named_view"));
+        }
+    }
+
+    #[test]
     fn view_request_needs_live_ui_ack_but_no_model() {
         let _guard = env_lock();
         let id = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-view-{}-{id}", std::process::id()));
-        let previous = std::env::var_os("NBCAD_SESSION_DIR");
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-view-{}-{id}", std::process::id()));
+        let previous = std::env::var_os("LIMO_CAD_SESSION_DIR");
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(
             &id,
             "heartbeat.json",
@@ -2356,9 +2540,9 @@ mod tests {
         write_session(&id, "heartbeat.json", r#"{"updated_ms":0,"generation":1}"#).unwrap();
         assert!(request_ui(&json!({"action":"view","session_id":id,"view":"top"}), None).is_err());
         if let Some(value) = previous {
-            std::env::set_var("NBCAD_SESSION_DIR", value);
+            std::env::set_var("LIMO_CAD_SESSION_DIR", value);
         } else {
-            std::env::remove_var("NBCAD_SESSION_DIR");
+            std::env::remove_var("LIMO_CAD_SESSION_DIR");
         }
         let _ = fs::remove_dir_all(dir);
     }
@@ -2367,9 +2551,9 @@ mod tests {
     fn slow_drawing_queries_retain_the_live_result() {
         let _guard = env_lock();
         let id = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-slow-drawing-{id}"));
-        let previous = std::env::var_os("NBCAD_SESSION_DIR");
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-slow-drawing-{id}"));
+        let previous = std::env::var_os("LIMO_CAD_SESSION_DIR");
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         let mut results = Vec::new();
         for method in ["drawing_projection", "drawing_export"] {
             write_session(
@@ -2395,8 +2579,7 @@ mod tests {
                                 serde_json::from_str(&fs::read_to_string(entry.path()).unwrap())
                                     .unwrap();
                             assert_eq!(request["sketch_query"]["method"], method);
-                            // Precise helical hidden-line removal can exceed a normal
-                            // control's deadline. Exercise the real transport wait.
+
                             std::thread::sleep(std::time::Duration::from_secs(32));
                             let still_pending = entry.path().is_file()
                                 && request["expires_ms"].as_u64().unwrap() > now_ms();
@@ -2422,9 +2605,9 @@ mod tests {
             results.push((method, result, responder.join().unwrap()));
         }
         if let Some(previous) = previous {
-            std::env::set_var("NBCAD_SESSION_DIR", previous);
+            std::env::set_var("LIMO_CAD_SESSION_DIR", previous);
         } else {
-            std::env::remove_var("NBCAD_SESSION_DIR");
+            std::env::remove_var("LIMO_CAD_SESSION_DIR");
         }
         let _ = fs::remove_dir_all(&dir);
         for (method, result, still_pending) in results {
@@ -2441,7 +2624,7 @@ mod tests {
 
     fn write_process_lease(root: &Path, process_id: &str, updated_ms: u64, windows: Value) {
         let processes = root.join("_ui").join("processes");
-        fs::create_dir_all(&processes).unwrap();
+        limo_cad_session_storage::create_dir_all(&processes).unwrap();
         fs::write(
             processes.join(format!("{process_id}.json")),
             serde_json::to_string_pretty(&json!({
@@ -2457,7 +2640,7 @@ mod tests {
     #[test]
     fn uuid_v4_validation_accepts_and_rejects() {
         assert!(is_valid_session_id("123e4567-e89b-42d3-a456-426614174000"));
-        assert!(!is_valid_session_id("123e4567-e89b-12d3-a456-426614174000")); // not version 4
+        assert!(!is_valid_session_id("123e4567-e89b-12d3-a456-426614174000"));
         assert!(!is_valid_session_id("My Document"));
         assert!(!is_valid_session_id("../escape"));
         assert!(!is_valid_session_id(""));
@@ -2467,8 +2650,8 @@ mod tests {
     fn session_snapshot_roundtrip_skips_control_and_non_uuid() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-test-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-test-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -2476,8 +2659,8 @@ mod tests {
             &format!(r#"{{"updated_ms":{},"generation":1}}"#, now_ms()),
         )
         .unwrap();
-        fs::create_dir_all(dir.join("_ui")).unwrap();
-        fs::create_dir_all(dir.join("document-name")).unwrap();
+        limo_cad_session_storage::create_dir_all(dir.join("_ui")).unwrap();
+        limo_cad_session_storage::create_dir_all(dir.join("document-name")).unwrap();
         let listed = list_sessions().unwrap();
         assert_eq!(listed, vec![unique.clone()]);
         assert!(!listed.iter().any(|session| session == "_ui"));
@@ -2487,7 +2670,7 @@ mod tests {
         assert_eq!(list["sessions"][0], unique);
         assert_eq!(list["session_details"][0]["has_model"], true);
         assert_eq!(list["session_details"][0]["heartbeat"]["stale"], false);
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -2499,8 +2682,8 @@ mod tests {
             "00000000-0000-4000-8000-{:012x}",
             (now_ms().wrapping_add(7)) & 0xffffffffffff
         );
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-mw-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-mw-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_process_lease(
             &dir,
             "proc-list",
@@ -2572,7 +2755,7 @@ mod tests {
         assert!(resolve_attach_target(None, Some("missing-window"), None).is_err());
         assert!(resolve_attach_target(None, None, None).is_err());
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -2584,8 +2767,8 @@ mod tests {
             "00000000-0000-4000-8000-{:012x}",
             (now_ms().wrapping_add(11)) & 0xffffffffffff
         );
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-intersect-{tab_a}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-intersect-{tab_a}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         for (sid, doc) in [(&tab_a, "tab-a"), (&tab_b, "tab-b")] {
             write_session(sid, "model.json", r#"{"version":1}"#).unwrap();
             write_session(
@@ -2599,11 +2782,9 @@ mod tests {
             .unwrap();
         }
 
-        // window_id alone is ambiguous with two tabs in main.
         let err = resolve_attach_target(None, Some("main"), None).expect_err("ambiguous window");
         assert!(err.contains("ambiguous"), "{err}");
 
-        // Combined window + document selects exactly one.
         let hit = resolve_attach_target(None, Some("main"), Some("tab-a")).unwrap();
         assert_eq!(hit.session_id, tab_a);
         assert_eq!(hit.document_id.as_deref(), Some("tab-a"));
@@ -2614,7 +2795,7 @@ mod tests {
         assert_eq!(main["window_id"], "main");
         assert_eq!(main["documents"].as_array().unwrap().len(), 2);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -2630,8 +2811,8 @@ mod tests {
             "00000000-0000-4000-8000-{:012x}",
             (now_ms().wrapping_add(17)) & 0xffffffffffff
         );
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-tombstone-{live}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-tombstone-{live}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_process_lease(
             &dir,
             "proc-live",
@@ -2683,17 +2864,16 @@ mod tests {
         assert_eq!(list["windows"][0]["documents"].as_array().unwrap().len(), 1);
         assert_eq!(list["windows"][0]["active_document_id"], "open");
 
-        // Closed / prior-run tabs are not window-selectable.
         assert!(resolve_attach_target(None, Some("main"), Some("gone")).is_err());
         assert!(resolve_attach_target(None, None, Some("old-run")).is_err());
-        // Explicit session_id still resolves the closed dir for recovery.
+
         let recovered = resolve_attach_target(Some(&closed), None, None).unwrap();
         assert_eq!(recovered.session_id, closed);
 
         clear_closed_tombstone(&closed).unwrap();
         assert!(!is_session_closed(&closed));
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -2705,8 +2885,8 @@ mod tests {
             "00000000-0000-4000-8000-{:012x}",
             (now_ms().wrapping_add(19)) & 0xffffffffffff
         );
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-lease-{active}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-lease-{active}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
 
         write_process_lease(
             &dir,
@@ -2745,13 +2925,9 @@ mod tests {
             .iter()
             .all(|detail| detail["live_for_windows"] == true));
 
-        // The active document is authoritative state in the process lease. A
-        // newer inactive-tab heartbeat must never steal it.
         let picked = resolve_attach_target(None, Some("main"), Some("tab-a")).unwrap();
         assert_eq!(picked.session_id, active);
 
-        // A live process with no lease entry for this window means the window
-        // was destroyed; its retained session directories must not reappear.
         write_process_lease(&dir, "proc-tabs", now_ms(), json!([]));
         assert!(sessions_list_json()["windows"]
             .as_array()
@@ -2771,7 +2947,7 @@ mod tests {
         let expired = sessions_list_json();
         assert!(expired["windows"].as_array().unwrap().is_empty());
         assert!(resolve_attach_target(None, Some("main"), Some("tab-a")).is_err());
-        // Explicit UUID remains a recovery path after process exit/crash.
+
         assert_eq!(
             resolve_attach_target(Some(&active), None, None)
                 .unwrap()
@@ -2779,7 +2955,7 @@ mod tests {
             active
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -2791,8 +2967,8 @@ mod tests {
             "00000000-0000-4000-8000-{:012x}",
             (now_ms().wrapping_add(23)) & 0xffffffffffff
         );
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-processes-{first}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-processes-{first}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
 
         for (process_id, session_id, document_id) in
             [("proc-a", &first, "doc-a"), ("proc-b", &second, "doc-b")]
@@ -2845,7 +3021,7 @@ mod tests {
             .unwrap_err()
             .contains("ambiguous"));
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -2853,9 +3029,9 @@ mod tests {
     fn legacy_singleton_is_a_freshness_checked_migration_fallback() {
         let _guard = env_lock();
         let session_id = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-legacy-{session_id}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
-        fs::create_dir_all(dir.join("_ui")).unwrap();
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-legacy-{session_id}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        limo_cad_session_storage::create_dir_all(dir.join("_ui")).unwrap();
         fs::write(
             dir.join("_ui").join("process.json"),
             serde_json::to_string(&json!({
@@ -2894,17 +3070,17 @@ mod tests {
             .unwrap()
             .is_empty());
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn write_session_rejects_non_uuid() {
         let _guard = env_lock();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-bad-{}", now_ms()));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-bad-{}", now_ms()));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         assert!(write_session("not-a-uuid", "model.json", "{}").is_err());
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -2912,8 +3088,8 @@ mod tests {
     fn inbox_write_and_stale_apply_are_generation_locked() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-inbox-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-inbox-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -2940,8 +3116,7 @@ mod tests {
             &format!(r#"{{"updated_ms":{},"generation":4}}"#, now_ms()),
         )
         .unwrap();
-        // Valid follow-up at the new generation. After seq 1 dead-letters,
-        // the next apply_inbox_op must take the lowest remaining pending.
+
         let seq2 = write_inbox_op(
             &unique,
             &InboxOp::unstamped(
@@ -2980,7 +3155,7 @@ mod tests {
         assert_eq!(applied.seq, 2);
         assert_eq!(applied.op.name, "cad_set_document_name");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -2988,8 +3163,8 @@ mod tests {
     fn concurrent_inbox_alloc_gives_distinct_durable_entries() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-inbox-race-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-inbox-race-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -3000,12 +3175,7 @@ mod tests {
 
         const THREADS: usize = 16;
         const PER_THREAD: usize = 8;
-        // This tests exclusive reservation under contention, not whether the
-        // OS lock schedules 128 durable publications fairly within production's
-        // five-second wait: a loaded Windows runner starved two of the sixteen
-        // pollers for that long while the others kept publishing. All threads
-        // share one stress budget instead, like the `inbox` stress fixture;
-        // production's bounded wait keeps its own tests there.
+
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
         let session_id = unique.clone();
         let reserve = |thread: usize, index: usize| -> Result<(u64, String), String> {
@@ -3034,8 +3204,7 @@ mod tests {
                     })
                 })
                 .collect();
-            // Join every worker before reporting, so a failure never leaves
-            // publishers running into the next test's session directory.
+
             workers
                 .into_iter()
                 .map(|worker| worker.join().expect("inbox alloc thread"))
@@ -3066,7 +3235,7 @@ mod tests {
         }
         assert_eq!(pending_inbox_seqs(&session_id).unwrap().len(), expected);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -3078,7 +3247,7 @@ mod tests {
         })
         .join();
         assert!(failed.is_err(), "the holder must have panicked");
-        // Every later test reports its own result, not this PoisonError.
+
         let _recovered = env_lock();
     }
 
@@ -3086,8 +3255,8 @@ mod tests {
     fn malformed_inbox_json_is_dead_lettered_and_unblocks_queue() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-badjson-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-badjson-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -3096,7 +3265,7 @@ mod tests {
         )
         .unwrap();
         let inbox = session_dir().join(&unique).join("inbox");
-        fs::create_dir_all(&inbox).unwrap();
+        limo_cad_session_storage::create_dir_all(&inbox).unwrap();
         fs::write(inbox.join("1.json"), "{not-json").unwrap();
         let seq = write_inbox_op(
             &unique,
@@ -3136,18 +3305,16 @@ mod tests {
         assert_eq!(applied.seq, 2);
         assert_eq!(applied.op.name, "cad_set_document_name");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn same_base_generation_second_op_is_dead_lettered() {
-        // Match native: first apply + publish advances generation; the leftover
-        // same-base head dead-letters with a reason so later seqs can run.
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-samebase-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-samebase-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -3201,18 +3368,16 @@ mod tests {
             "dead-letter must record the reason: {failed_body}"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn unsupported_inbox_mutate_is_dead_lettered_and_unblocks_queue() {
-        // Match native: a head that is not in the shared mutate map must
-        // dead-letter before host_apply so later seqs can run.
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-unsupported-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-unsupported-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -3235,7 +3400,7 @@ mod tests {
         )
         .unwrap();
         assert!(
-            nbcad_mcp_mutate::lookup_mutate("assembly_document").is_none(),
+            limo_cad_mcp_mutate::lookup_mutate("assembly_document").is_none(),
             "assembly_document is inspect-only and must not be an inbox mutate"
         );
         let err = apply_inbox_op(&unique, |_name, _args| {
@@ -3268,18 +3433,16 @@ mod tests {
         assert_eq!(applied.seq, 2);
         assert_eq!(applied.op.name, "cad_set_document_name");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn already_applied_inbox_seq_second_apply_is_noop() {
-        // applyInboxNow of an already-archived seq must not call host again.
-        // Native returns applied:false / empty; helper errors "no pending".
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-already-applied-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-already-applied-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -3328,20 +3491,16 @@ mod tests {
         );
         assert!(pending_inbox_seqs(&unique).unwrap().is_empty());
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn missing_heartbeat_generation_is_dead_lettered_and_unblocks_queue() {
-        // Leftover apply reads heartbeat.json generation. If that source is
-        // missing/unreadable, treat it as generation_conflict and dead-letter
-        // so later seqs are not wedged. Native apply uses in-memory
-        // engine_revision and never waits on the file.
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-no-hb-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-no-hb-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -3390,7 +3549,6 @@ mod tests {
             "dead-letter must record the reason: {failed_body}"
         );
 
-        // Restore a matching generation so the leftover helper can apply seq 2.
         write_session(
             &unique,
             "heartbeat.json",
@@ -3406,18 +3564,16 @@ mod tests {
         assert_eq!(applied.seq, 2);
         assert_eq!(applied.op.name, "cad_set_document_name");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn age_stale_heartbeat_with_matching_generation_still_applies() {
-        // Listing staleness (age > HEARTBEAT_STALE_MS) is not a writer lock.
-        // Matching generation must apply, leftover and native alike.
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-age-stale-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-age-stale-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         let stale_ms = now_ms().saturating_sub(HEARTBEAT_STALE_MS + 5_000);
         write_session(
@@ -3457,17 +3613,16 @@ mod tests {
         let archived = session_dir().join(&unique).join("inbox/applied/1.json");
         assert!(archived.exists(), "expected inbox/applied/1.json");
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn apply_takes_lowest_pending_seq_even_when_higher_exists() {
-        // Out-of-order: seq 2 must not apply while seq 1 is still pending.
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-seq-order-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-seq-order-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -3503,7 +3658,7 @@ mod tests {
         assert_eq!(first.seq, 1);
         assert_eq!(pending_inbox_seqs(&unique).unwrap(), vec![2]);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -3515,8 +3670,8 @@ mod tests {
             "00000000-0000-4000-8000-{:012x}",
             (now_ms().wrapping_add(31)) & 0xffffffffffff
         );
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-id-mismatch-{session_a}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-id-mismatch-{session_a}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
 
         for (sid, window, doc, marker) in [
             (&session_a, "main", "tab-a", "model-a"),
@@ -3539,7 +3694,6 @@ mod tests {
             .unwrap();
         }
 
-        // A's stamped op copied into B's inbox — must not apply against B.
         write_inbox_op(
             &session_b,
             &InboxOp::unstamped(
@@ -3554,7 +3708,7 @@ mod tests {
             }),
         )
         .unwrap();
-        // Matching B op behind the mismatched head — must stay unwedged.
+
         write_inbox_op(
             &session_b,
             &InboxOp::unstamped(
@@ -3594,7 +3748,7 @@ mod tests {
         .expect("matching B op must apply after dead-letter");
         assert_eq!(applied.seq, 2);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -3602,8 +3756,8 @@ mod tests {
     fn unstamped_inbox_op_still_applies_compat() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-unstamped-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-unstamped-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -3638,7 +3792,80 @@ mod tests {
         assert!(applied.op.session_id.is_none());
         assert!(applied.op.window_id.is_none());
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn completed_cam_reads_use_the_existing_snapshot_but_mutations_wait_for_a_new_one() {
+        let _guard = env_lock();
+        let unique = test_session_uuid();
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-cam-read-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        let heartbeat = |generation, published_generation| {
+            write_session(&unique, "heartbeat.json", &json!({
+                "updated_ms":now_ms(), "generation":generation,
+                "published_generation":published_generation, "model_generation":published_generation,
+                "session_id":unique,
+            }).to_string()).unwrap();
+        };
+        for name in [
+            "cam_plan_setup",
+            "cam_post_setup",
+            "cam_post_events",
+            "cam_simulate_setup",
+            "cam_simulate_gcode",
+        ] {
+            heartbeat(7, 7);
+            write_session(
+                &unique,
+                "inbox/applied/1.json",
+                &json!({"name":name,"base_generation":7}).to_string(),
+            )
+            .unwrap();
+            let read = await_inbox_apply(&unique, 1, 0, 1).unwrap();
+            assert_eq!(read["status"], "applied", "{name}: {read}");
+            assert_eq!(read["published_generation"], 7);
+            assert_eq!(read["model_published"], true);
+            heartbeat(8, 7);
+            assert_eq!(
+                await_inbox_apply(&unique, 1, 0, 1).unwrap()["status"],
+                "timeout",
+                "An intervening edit still needs publication"
+            );
+            heartbeat(8, 8);
+            assert_eq!(
+                await_inbox_apply(&unique, 1, 0, 1).unwrap()["status"],
+                "applied"
+            );
+            heartbeat(6, 6);
+            assert_eq!(
+                await_inbox_apply(&unique, 1, 0, 1).unwrap()["status"],
+                "timeout",
+                "A snapshot older than the query cannot satisfy its receipt"
+            );
+        }
+        heartbeat(7, 7);
+        for name in [
+            "cam_set_document",
+            "cam_regenerate_operation",
+            "cam_regenerate_setup",
+            "solid_extrude",
+            "unknown_future_operation",
+        ] {
+            write_session(
+                &unique,
+                "inbox/applied/1.json",
+                &json!({"name":name,"base_generation":7,"model_changed":false}).to_string(),
+            )
+            .unwrap();
+            assert_eq!(
+                await_inbox_apply(&unique, 1, 0, 1).unwrap()["status"],
+                "timeout",
+                "{name} must still require a newer revision, regardless of untrusted receipt flags"
+            );
+        }
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -3646,8 +3873,8 @@ mod tests {
     fn malformed_inbox_receipts_cannot_acknowledge_published_work() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-corrupt-receipt-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-corrupt-receipt-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(
             &unique,
             "heartbeat.json",
@@ -3658,8 +3885,7 @@ mod tests {
             .to_string(),
         )
         .unwrap();
-        // Even a fresh, fully published snapshot cannot make missing command
-        // metadata or a corrupt receipt evidence that this operation applied.
+
         for invalid in [
             "",
             "{\"name\":",
@@ -3688,8 +3914,7 @@ mod tests {
             write_session(&unique, "inbox/failed/2.json", invalid).unwrap();
             assert!(inbox_op_receipt(&unique, 2).is_err());
         }
-        // A dead-letter for malformed input legitimately has no command name
-        // or generation. Preserve that failure instead of hiding its reason.
+
         write_session(
             &unique,
             "inbox/failed/2.json",
@@ -3704,7 +3929,7 @@ mod tests {
                 base_generation: None,
             }
         );
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -3712,9 +3937,9 @@ mod tests {
     fn inbox_op_receipt_pending_applied_failed() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-receipt-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
-        fs::create_dir_all(dir.join(&unique)).unwrap();
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-receipt-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        limo_cad_session_storage::create_dir_all(dir.join(&unique)).unwrap();
         write_session(
             &unique,
             "heartbeat.json",
@@ -3770,7 +3995,7 @@ mod tests {
             other => panic!("expected Failed, got {other:?}"),
         }
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -3778,9 +4003,9 @@ mod tests {
     fn snapshot_publication_rejects_engine_and_keepalive_until_snapshot() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-pubready-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
-        fs::create_dir_all(dir.join(&unique)).unwrap();
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-pubready-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        limo_cad_session_storage::create_dir_all(dir.join(&unique)).unwrap();
 
         write_session(
             &unique,
@@ -3796,8 +4021,6 @@ mod tests {
             "engine_revision heartbeat must not count as published"
         );
 
-        // The lightweight keepalive overwrites kind but preserves the last
-        // completed publication fence. It must not unblock await.
         write_session(
             &unique,
             "heartbeat.json",
@@ -3831,7 +4054,7 @@ mod tests {
             "generation must advance past base"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -3840,8 +4063,8 @@ mod tests {
         let _guard = env_lock();
         let original = test_session_uuid();
         let replacement = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-replacement-closure-{original}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-replacement-closure-{original}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(
             &original,
             "heartbeat.json",
@@ -3852,8 +4075,8 @@ mod tests {
         let result = await_inbox_apply_observing(&original,1,0,1,|| {
             if scheduled { return; }
             scheduled = true;
-            // Exact native order, deliberately between the receipt and closed
-            // observations instead of relying on a timing-sensitive thread.
+
+
             write_session(&original,"inbox/applied/1.json",&json!({
                 "name":"cad_new_project","base_generation":1,"project_replaced":true,
                 "previous_session_id":original,"active_session_id":replacement,"document_id":"same-tab"
@@ -3868,7 +4091,7 @@ mod tests {
             await_inbox_apply(&original, 2, 0, 1).unwrap()["status"],
             "closed"
         );
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -3876,8 +4099,8 @@ mod tests {
     fn retired_session_ends_unpublished_awaits_and_retains_completed_receipts() {
         let _guard = env_lock();
         let id = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-retired-await-{id}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-retired-await-{id}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(
             &id,
             "heartbeat.json",
@@ -3901,8 +4124,6 @@ mod tests {
         assert_eq!(pending["applied"], false);
         assert_eq!(pending_inbox_seqs(&id).unwrap(), vec![seq]);
 
-        // An operation can finish just before replacement but lose its final
-        // publication. Keep that distinction instead of claiming it never ran.
         archive_inbox_op(&id, seq).unwrap();
         let applied = await_inbox_apply(&id, seq, 0, 5).unwrap();
         assert_eq!(applied["status"], "closed");
@@ -3914,7 +4135,7 @@ mod tests {
         assert_eq!(completed["status"], "applied");
         assert_eq!(completed["model_published"], true);
         assert_eq!(require_model_json(&id).unwrap(), "original completed model");
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -3922,8 +4143,8 @@ mod tests {
     fn retired_session_rejects_new_live_work_but_delivers_its_open_reply() {
         let _guard = env_lock();
         let id = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-retired-control-{id}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-retired-control-{id}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(
             &id,
             "heartbeat.json",
@@ -3964,8 +4185,7 @@ mod tests {
                             serde_json::from_str(&fs::read_to_string(entry.path()).unwrap())
                                 .unwrap();
                         write_closed_tombstone(&target).unwrap();
-                        // The desktop must be allowed to acknowledge the Open
-                        // that retired this session after hydrating its new model.
+
                         std::thread::sleep(std::time::Duration::from_millis(25));
                         write_session(
                             &target,
@@ -3984,7 +4204,7 @@ mod tests {
         let reply = request_ui(&json!({"action":"file","command":"open"}), Some(&id)).unwrap();
         peer.join().unwrap();
         assert_eq!(reply["active_session_id"], "replacement");
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -3992,9 +4212,9 @@ mod tests {
     fn await_inbox_apply_sees_publish_after_delayed_host() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-await-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
-        fs::create_dir_all(dir.join(&unique)).unwrap();
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-await-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        limo_cad_session_storage::create_dir_all(dir.join(&unique)).unwrap();
         write_session(&unique, "model.json", r#"{"version":1,"name":"before"}"#).unwrap();
         write_session(
             &unique,
@@ -4018,8 +4238,7 @@ mod tests {
         let session_for_worker = unique.clone();
         let worker = std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(80));
-            // OCC still sees generation 1; archive the op, then simulate the native
-            // engine_revision heartbeat bump, then the TS publisher snapshot.
+
             apply_inbox_op(&session_for_worker, |_name, _args| Ok(json!({"ok": true}))).unwrap();
             write_session(
                 &session_for_worker,
@@ -4058,7 +4277,7 @@ mod tests {
         assert_eq!(result["writeback"], false);
         assert!(result["current_generation"].as_u64().unwrap() > 1);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -4066,9 +4285,9 @@ mod tests {
     fn await_inbox_apply_reports_active_sketch_without_model_publish() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-await-sketch-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
-        fs::create_dir_all(dir.join(&unique)).unwrap();
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-await-sketch-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        limo_cad_session_storage::create_dir_all(dir.join(&unique)).unwrap();
         write_session(&unique, "model.json", r#"{"version":1,"name":"Completed"}"#).unwrap();
         write_session(
             &unique,
@@ -4116,7 +4335,7 @@ mod tests {
         assert_eq!(result["snapshot_kind"], "active_sketch");
         assert_eq!(result["refreshed"], false);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -4124,9 +4343,9 @@ mod tests {
     fn await_inbox_apply_timeout_while_pending() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-await-to-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
-        fs::create_dir_all(dir.join(&unique)).unwrap();
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-await-to-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        limo_cad_session_storage::create_dir_all(dir.join(&unique)).unwrap();
         write_session(
             &unique,
             "heartbeat.json",
@@ -4152,7 +4371,7 @@ mod tests {
         assert_eq!(probe["status"], "pending");
         assert_eq!(probe["timed_out"], false);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -4160,9 +4379,9 @@ mod tests {
     fn await_inbox_apply_reports_failed_receipt() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-await-fail-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
-        fs::create_dir_all(dir.join(&unique)).unwrap();
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-await-fail-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+        limo_cad_session_storage::create_dir_all(dir.join(&unique)).unwrap();
         write_session(
             &unique,
             "heartbeat.json",
@@ -4189,7 +4408,7 @@ mod tests {
         assert_eq!(result["applied"], false);
         assert_eq!(result["timed_out"], false);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -4197,8 +4416,8 @@ mod tests {
     fn session_status_reports_attach_vs_live_and_pending_inbox() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-status-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-status-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -4248,7 +4467,6 @@ mod tests {
         assert_eq!(stale["pending_inbox_count"], 1);
         assert!(stale["last_apply_receipt"].is_null());
 
-        // Apply then bump — last receipt should surface.
         let _ = apply_inbox_op(&unique, |_n, _a| Ok(json!({}))).expect_err("stale base");
         let after_fail = session_status_json(&unique, Some(1)).unwrap();
         assert_eq!(after_fail["pending_inbox_count"], 0);
@@ -4260,7 +4478,7 @@ mod tests {
         assert_eq!(detached["code"], "not_attached");
         assert_eq!(detached["writeback"], false);
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -4268,8 +4486,8 @@ mod tests {
     fn session_status_derives_all_fields_from_one_heartbeat_snapshot() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-status-one-hb-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-status-one-hb-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -4296,7 +4514,7 @@ mod tests {
             "publication fence prefers model_generation over live generation"
         );
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -4329,8 +4547,8 @@ mod tests {
     fn session_status_unknown_attached_generation_is_stale_not_fresh() {
         let _guard = env_lock();
         let unique = test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("nbcad-sessions-status-unknown-{unique}"));
-        std::env::set_var("NBCAD_SESSION_DIR", &dir);
+        let dir = std::env::temp_dir().join(format!("limo-cad-sessions-status-unknown-{unique}"));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
         write_session(&unique, "model.json", r#"{"version":1}"#).unwrap();
         write_session(
             &unique,
@@ -4353,14 +4571,13 @@ mod tests {
         );
         assert!(!hint.contains("matches live"));
 
-        // Recovery attach with no heartbeat at all.
         let orphan = test_session_uuid();
         write_session(&orphan, "model.json", r#"{"version":1}"#).unwrap();
         let orphan_status = session_status_json(&orphan, None).unwrap();
         assert_eq!(orphan_status["stale"], true);
         assert!(orphan_status["generation"].is_null());
 
-        std::env::remove_var("NBCAD_SESSION_DIR");
+        std::env::remove_var("LIMO_CAD_SESSION_DIR");
         let _ = fs::remove_dir_all(&dir);
     }
 }

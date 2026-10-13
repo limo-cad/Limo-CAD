@@ -107,7 +107,7 @@ target for ordinary entity selection; creation tools can acquire it as a referen
 
 The Sketch Palette **Projected Geometries** row toggles it. Browser
 (`src/components/viewport/Viewport.tsx`) and native (`draw_projected_edges` in
-`src-tauri/src/native_viewport/platform.rs`) renderers both honor the toggle;
+`desktop/src/native_viewport/platform.rs`) renderers both honor the toggle;
 the native side receives it as `hide_projected_geometry` on the presentation
 payload, inverted so an older payload keeps the reference geometry visible.
 Both renderers follow the supplied polyline, including clockwise circular
@@ -158,27 +158,27 @@ preserved conservatively. Undo/redo and save/reopen retain ownership.
 
 ## Tests
 
-- `cargo test -p nbcad-solid profile::tests` — derived segments seal loops,
+- `cargo test -p limo-cad-solid profile::tests` — derived segments seal loops,
   projected-only faces report zero authored edges, and overlapping authored
   geometry keeps its provenance.
-- `cargo test -p nbcad-sketch --test projected_face_boundary` — a face sketch
+- `cargo test -p limo-cad-sketch --test projected_face_boundary` — a face sketch
   projects its four boundary edges; a semicircle drawn against the boundary
   becomes a depth-0 profile; a rectangle drawn inside a face stays the only
   profile; projections survive save/reload through the recompute; and geometry
   snaps exactly onto the projected boundary.
-- `cargo test -p nbcad-occt --features native-occt --test projected_boundary_history --test pocket_profile_edges`
+- `cargo test -p limo-cad-occt --features native-occt --test projected_boundary_history --test pocket_profile_edges`
   — completed pockets save/reopen with their consumers; upstream depth edits,
   sketch reopening and rollback preserve profile meaning; legacy corner
   rectangles keep index 0; circular samples retain both face orientations.
-- `cargo test -p nbcad-sketch --test creation_regressions --test native_projection_contract`
+- `cargo test -p limo-cad-sketch --test creation_regressions --test native_projection_contract`
   — acquired arc endpoints, formula/literal edit data, reference dimensions,
   full turns, generated-point ownership, trim, undo/redo and native drawing.
 - `npm run test:arc-sweep` — initial-direction latch, jitter, explicit signs,
   full turns, resolved-outline tessellation and mutation-gate ownership.
-- `cargo test -p nbcad-sketch --test creation_intent --test transform_lifecycle --test profile_identity --test reference_edges`
+- `cargo test -p limo-cad-sketch --test creation_intent --test transform_lifecycle --test profile_identity --test reference_edges`
   — preview/commit lock matrices, invalid inputs, Ctrl behavior, connected
   transformed geometry, identity changes and sliding external-edge relations.
-- `cargo test -p nbcad-sketch --lib projected_identity_uses_body_edges_not_transient_catalog_positions`
+- `cargo test -p limo-cad-sketch --lib projected_identity_uses_body_edges_not_transient_catalog_positions`
   — persistent profile keys use stable body-edge IDs, not temporary discovery
   slots; renumbering keeps selections and replacement edges cannot inherit them.
 - `npm run e2e:creation-snap` — rectangle/circle midpoint and boundary previews
@@ -186,12 +186,12 @@ preserved conservatively. Undo/redo and save/reopen retain ownership.
 - `npm run test:viewport-theme` — the projected color token matches both
   themes, stays legible, and is distinct from authored sketch geometry.
 - `node scripts/run-e2e.mjs e2e-face-boundary-profile.mjs` — browser-engine
-  check of the picker behavior (requires `npm run build:wasm`).
+  check of the picker behavior (requires `cargo xtask build-wasm`).
 - `npm run e2e:sketch-smoke` — creation snapping, arc entry, duplicate submits,
   failed-operation retry, late replies, signed offset drift and face profiles.
 - `npm run e2e:sketch-regression` — the broader arc, point, slot, spline,
   constraints, dimensions, modify-tool and adaptive-grid interaction suites.
-- `NBCAD_PREVIEW_PROOF_DIR=/absolute/output/path cargo test --manifest-path src-tauri/Cargo.toml --lib native_sketch_boundary_visual_matrix -- --ignored`
+- `LIMO_CAD_PREVIEW_PROOF_DIR=/absolute/output/path cargo test --manifest-path desktop/Cargo.toml --lib native_sketch_boundary_visual_matrix -- --ignored`
   — real native GPU screenshots for both face normals, both themes, face/close/
   grazing views, and hidden-edge comparisons at three zoom levels. Requires a
   functioning GPU; it is not a browser screenshot test. Current native cameras

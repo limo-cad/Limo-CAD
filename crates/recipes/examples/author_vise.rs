@@ -1,5 +1,5 @@
 //! Author the readable native command source; this does not create geometry.
-//! Run from the repository root: cargo run -p nbcad-recipes --example author_vise
+//! Run from the repository root: cargo run -p limo-cad-recipes --example author_vise
 //! Geometry is produced only when the ordinary Rust MCP interpreter replays it.
 #![recursion_limit = "256"]
 use serde_json::{json, Map, Value};
@@ -7,7 +7,6 @@ use std::collections::BTreeMap;
 mod vise_demo;
 mod vise_drawings;
 
-// All manufacturing mates derive from this one authored parameter set.
 const D: Design = Design {
     deck: 14.,
     frame_length: 230.,
@@ -147,9 +146,11 @@ struct Author {
 }
 impl Author {
     fn call(&mut self, id: &str, group: &str, operation: &str, arguments: Value) {
+        let name = limo_cad_recipes::authoring::feature_name_step(id, operation, &arguments);
         self.steps.push(
             json!({"id":id,"call":{"group":group,"operation":operation,"arguments":arguments}}),
         );
+        self.steps.extend(name);
     }
     fn bind(&mut self, name: &str, value: Value) {
         self.steps.push(json!({"let":{name:value}}));
@@ -194,7 +195,7 @@ impl Author {
             "project_visibility",
             json!({}),
         );
-        // Every new body here is extruded; reuse the prior response's IDs.
+
         let scene = self
             .last_build_scene
             .clone()
@@ -331,9 +332,7 @@ impl Author {
                 "",
             ),
         );
-        // The profile is visible while it is drawn and extruded. Retain its
-        // editable references in the Browser without layering old profiles
-        // over every later feature in the presentation.
+
         self.call(
             &format!("{id}_hide_references"),
             "solid/reference",
@@ -368,8 +367,7 @@ impl Author {
     fn cylinder_z(
         &mut self,
         id: &str,
-        start: f64,
-        end: f64,
+        (start, end): (f64, f64),
         center: [f64; 2],
         radius: f64,
         operation: &str,
@@ -379,9 +377,7 @@ impl Author {
         self.circle(id, center, 2. * radius);
         self.extrude(id, end - start, operation, part);
     }
-    // Locate the first vertex, drive the chain edges from d1, and close the
-    // final edge by coincidence. Chain from the returned endpoint rather than
-    // repeating rounded coordinates, and suppress extra inferred relations.
+
     fn equal_edge_profile(&mut self, id: &str, vertices: &[[f64; 2]], side_length: f64) {
         let count = vertices.len();
         for i in 0..count {
@@ -460,9 +456,7 @@ impl Author {
     fn joint(&mut self, id: &str, kind: &str, a: &str, b: &str, origin: [f64; 3], limits: Value) {
         let ca = self.connector(a, origin);
         let cb = self.connector(b, origin);
-        // The male side starts at the stub, axis -X, radial basis +Y;
-        // the female starts at the bridge rear, axis +X, radial basis +Z.
-        // Register crest/groove phase including the cutter start allowance.
+
         let phase =
             (270. + (D.stub_start() - (D.bridge_start - 0.0001)) / D.lead * 360.).rem_euclid(360.);
         let home_twist = match id {
@@ -513,8 +507,6 @@ impl Author {
                 args["from"] = json!({"$select":{"from":reference(&format!("{id}_edge_{}",i-1),"/sketch"),"path":"/entities","where":{"/kind":"line"},"take":"last","pointer":"/end"}});
             }
             if i + 1 < vertices.len() {
-                // The numeric UI lock is display-rounded. Expression text keeps
-                // the authored precision while retaining editable dimensions.
                 args["angle_text"] = json!(format!(
                     "{:.15}",
                     (to[1] - from[1]).atan2(to[0] - from[0]).to_degrees()
@@ -577,8 +569,7 @@ impl Author {
     fn bore_x(
         &mut self,
         id: &str,
-        start: f64,
-        end: f64,
+        (start, end): (f64, f64),
         center: [f64; 2],
         radius: f64,
         operation: &str,
@@ -591,8 +582,7 @@ impl Author {
     fn bore_y(
         &mut self,
         id: &str,
-        start: f64,
-        end: f64,
+        (start, end): (f64, f64),
         center: [f64; 2],
         radius: f64,
         operation: &str,
@@ -606,12 +596,10 @@ impl Author {
         &mut self,
         id: &str,
         axis: &str,
-        start: f64,
-        end: f64,
+        (start, end): (f64, f64),
         center: [f64; 2],
         af: f64,
-        operation: &str,
-        part: &str,
+        (operation, part): (&str, &str),
     ) {
         let r = af / 3_f64.sqrt();
         let points: Vec<_> = (0..6)
@@ -633,9 +621,9 @@ impl Author {
             part,
         );
     }
-    // These sideways bores have a 45-degree roof in the X-end-down print pose.
+
     fn teardrop_z(&mut self, id: &str, start: f64, end: f64, c: [f64; 2], r: f64, part: &str) {
-        self.cylinder_z(id, start, end, c, r, "cut", part);
+        self.cylinder_z(id, (start, end), c, r, "cut", part);
         let t = r * std::f64::consts::FRAC_1_SQRT_2;
         let roof = format!("{id} / print roof");
         self.begin(&roof, "xy", start);
@@ -650,7 +638,7 @@ impl Author {
         self.extrude(&roof, end - start, "cut", part);
     }
     fn teardrop_y(&mut self, id: &str, start: f64, end: f64, c: [f64; 2], r: f64, part: &str) {
-        self.bore_y(id, start, end, c, r, "cut", part);
+        self.bore_y(id, (start, end), c, r, "cut", part);
         let t = r * std::f64::consts::FRAC_1_SQRT_2;
         self.prism_y(
             &format!("{id} / print roof"),
@@ -751,9 +739,9 @@ fn write_script(
     exports: Map<String, Value>,
     checks: Vec<Value>,
 ) {
-    let doc = json!({"$schema":"./nbcad-script.schema.json","version":1,"name":name,"starting_state":"empty","steps":a.steps,"checks":checks,"exports":exports});
+    let doc = json!({"$schema":"./limo-cad-script.schema.json","version":1,"name":name,"starting_state":"empty","steps":a.steps,"checks":checks,"exports":exports});
     let text=format!("// Native editable manufacturing candidate. Millimetres.\n// Authored by crates/recipes/examples/author_vise.rs; geometry is built only by native MCP replay.\n// Print poses and clearances are design intent; physical fit/load/creep and slicer qualification remain required.\n{}\n",serde_json::to_string_pretty(&doc).unwrap());
-    nbcad_script::Script::parse(&text).expect("authored script preflight");
+    limo_cad_script::Script::parse(&text).expect("authored script preflight");
     std::fs::write(path, text).unwrap();
 }
 
@@ -824,8 +812,7 @@ fn main() {
         );
         a.cylinder_z(
             &format!("Bridge bolt {side} / frame clearance"),
-            -0.1,
-            D.deck + 0.1,
+            (-0.1, D.deck + 0.1),
             [(D.bridge_start + D.bridge_end) / 2., sign * D.bridge_bolt_y],
             3.3,
             "cut",
@@ -834,12 +821,10 @@ fn main() {
         a.hex(
             &format!("Bridge nut {side} / underside captive pocket"),
             "xy",
-            0.,
-            10.,
+            (0., 10.),
             [(D.bridge_start + D.bridge_end) / 2., sign * D.bridge_bolt_y],
             10.6,
-            "cut",
-            "frame",
+            ("cut", "frame"),
         );
     }
     for (i, x) in [70., 155.].into_iter().enumerate() {
@@ -870,9 +855,7 @@ fn main() {
         "join",
         "jaw",
     );
-    // Keep the 15 mm gussets inset from the gripping wall's side planes.
-    // Otherwise widening the wall splits formerly coplanar faces and changes
-    // the topology of every drawing reference on this body.
+
     let gusset_outer = D.jaw_width / 2. - 2.;
     for (side, lo, hi) in [
         ("left", -gusset_outer, -gusset_outer + 15.),
@@ -934,8 +917,7 @@ fn main() {
         "cut",
         "jaw",
     );
-    // The rear opening remains open instead of closing a 62 mm span while
-    // printing from the gripping face. Its side shoulders grow at 45 degrees.
+
     a.box_shape(
         "Jaw / open keeper rear relief",
         [D.rear() - 1., -D.keeper_ear_inner, D.axis - 16.4],
@@ -960,8 +942,7 @@ fn main() {
             "jaw",
         );
     }
-    // Extend tool access beyond the full carriage envelope, so an ordinary
-    // gripping-width edit cannot turn these openings into blind cavities.
+
     let jaw_access_outer = D.carriage_width / 2. + 1.;
     a.teardrop_y(
         "Jaw / keeper pin clearance",
@@ -982,12 +963,10 @@ fn main() {
     a.hex(
         "Jaw / keeper nut pocket",
         "xz",
-        40.3,
-        jaw_access_outer,
+        (40.3, jaw_access_outer),
         [D.pin_x(), 70.],
         8.5,
-        "cut",
-        "jaw",
+        ("cut", "jaw"),
     );
     a.show("jaw");
 
@@ -1060,7 +1039,7 @@ fn main() {
         json!({"/refinable":true,"$every":{"path":"/points","where":{"/z":D.jaw_top}}}),
         3.,
     );
-    // Defer the expensive female thread until all simple stock is complete.
+
     a.bind(
         "nut_start_face",
         select(
@@ -1125,8 +1104,7 @@ fn main() {
             4.,
         );
     }
-    // These convex transitions go from a 45-degree underside to a vertical
-    // wall. Their rounds preserve the minimum underside angle and bed flat.
+
     for (i, y) in [-22., 22.].into_iter().enumerate() {
         a.fillet(
             &format!("Grip / rounded lower wing {i}"),
@@ -1135,10 +1113,7 @@ fn main() {
             2.5,
         );
     }
-    // Select the exposed grip perimeter, including the rounded corners, before
-    // the helix is built. The front plane also has concave R12 shaft junction
-    // arcs; those are structural roots, not touch rims to chamfer.
-    // Small 45-degree rim breaks retain the central coplanar print surface.
+
     for (end, x) in [("rear", grip_start), ("front", grip_end)] {
         a.chamfer(
             &format!("Grip / {end} touch rim"),
@@ -1150,8 +1125,7 @@ fn main() {
     a.note("Rounded contact surfaces, deliberate running fits", "The grip has R4 upper blends, R2.5 lower-wing blends and 0.6 mm end-rim chamfers. Its central print flat stays intact. Frame, jaw and bridge top rims are softened, while the dovetail running faces and assembly datums retain their designed dimensions. Inspect the toolpaths and printed touch edges before use.");
     a.bore_x(
         "Screw / axial M5 clearance",
-        D.stub_start() - 7.,
-        D.stub_end() + 1.,
+        (D.stub_start() - 7., D.stub_end() + 1.),
         [0., D.axis],
         2.75,
         "cut",
@@ -1160,12 +1134,10 @@ fn main() {
     a.hex(
         "Screw / captive fitting nut",
         "yz",
-        D.stub_start() + 1.,
-        D.stub_start() + 6.3,
+        (D.stub_start() + 1., D.stub_start() + 6.3),
         [0., D.axis],
         8.5,
-        "cut",
-        "screw",
+        ("cut", "screw"),
     );
     a.box_shape(
         "Screw / nut loading throat from print flat",
@@ -1174,8 +1146,7 @@ fn main() {
         "cut",
         "screw",
     );
-    // A matching ledge on the removable fitting slides along this shallow
-    // channel and supports the captive nut without opening its axial stop.
+
     a.box_shape(
         "Screw / sliding nut-support keyway",
         [D.stub_start() + 0.8, -4.25, D.flat() - 1.],
@@ -1213,11 +1184,11 @@ fn main() {
         "join",
         "thrust",
     );
-    // Cut only the D-keyed interior; the outer bearing remains a complete circle.
+
     let r = 9. + D.radial_relief;
     let chord = (r * r - (D.flat_below_axis + D.radial_relief).powi(2)).sqrt();
     a.begin("Thrust fitting / D socket", "yz", sleeve_start - 0.1);
-    // Circular bore followed by a keyed floor is authored as a separate stock join.
+
     a.circle("Thrust fitting / D socket", [0., D.axis], 2. * r);
     a.extrude(
         "Thrust fitting / D socket",
@@ -1225,7 +1196,7 @@ fn main() {
         "cut",
         "thrust",
     );
-    // This circular segment restores the socket's flat without extending the exterior.
+
     a.prism_x(
         "Thrust fitting / D key bearing",
         sleeve_start,
@@ -1248,8 +1219,7 @@ fn main() {
     );
     a.bore_x(
         "Thrust fitting / axial retaining screw",
-        D.stub_end(),
-        D.head_front() + 1.,
+        (D.stub_end(), D.head_front() + 1.),
         [0., D.axis],
         2.75,
         "cut",
@@ -1257,8 +1227,7 @@ fn main() {
     );
     a.bore_x(
         "Thrust fitting / recessed M5 socket head",
-        D.head_front() - 5.,
-        D.head_front() + 1.,
+        (D.head_front() - 5., D.head_front() + 1.),
         [0., D.axis],
         4.6,
         "cut",
@@ -1275,8 +1244,6 @@ fn main() {
         "keeper",
     );
     for (side, sign) in [("left", -1.), ("right", 1.)] {
-        // The ears overlap the plate by 0.4 mm for a robust native union.
-        // Only Y = 24.6..30 mm meets the jaw's retained rear-wall stock.
         a.prism_z(
             &format!("Keeper / diagonal opening-load ear {side}"),
             D.axis - 16.4,
@@ -1348,8 +1315,7 @@ fn main() {
         let bolt = format!("bridge_screw_{side}");
         a.cylinder_z(
             &format!("{bolt} / M6 x 35 shaft"),
-            D.bridge_top() - 35.,
-            D.bridge_top(),
+            (D.bridge_top() - 35., D.bridge_top()),
             center,
             3.,
             "new_body",
@@ -1357,8 +1323,7 @@ fn main() {
         );
         a.cylinder_z(
             &format!("{bolt} / socket head"),
-            D.bridge_top(),
-            D.bridge_top() + 6.,
+            (D.bridge_top(), D.bridge_top() + 6.),
             center,
             5.,
             "join",
@@ -1373,17 +1338,14 @@ fn main() {
         a.hex(
             &format!("{nut} / M6 envelope"),
             "xy",
-            5.,
-            10.,
+            (5., 10.),
             center,
             10.,
-            "new_body",
-            &nut,
+            ("new_body", &nut),
         );
         a.cylinder_z(
             &format!("{nut} / thread envelope"),
-            4.9,
-            10.1,
+            (4.9, 10.1),
             center,
             3.,
             "cut",
@@ -1393,8 +1355,7 @@ fn main() {
     }
     a.bore_y(
         "Keeper pin / M5 x 90 shaft",
-        -45.,
-        45.,
+        (-45., 45.),
         [D.pin_x(), 70.],
         2.5,
         "new_body",
@@ -1402,8 +1363,7 @@ fn main() {
     );
     a.bore_y(
         "Keeper pin / recessed socket head",
-        -50.,
-        -45.,
+        (-50., -45.),
         [D.pin_x(), 70.],
         4.25,
         "join",
@@ -1417,17 +1377,14 @@ fn main() {
     a.hex(
         "Keeper pin / trapped M5 nut",
         "xz",
-        40.3,
-        45.,
+        (40.3, 45.),
         [D.pin_x(), 70.],
         8.,
-        "new_body",
-        "retainer_nut",
+        ("new_body", "retainer_nut"),
     );
     a.bore_y(
         "Keeper pin nut / thread envelope",
-        40.2,
-        45.1,
+        (40.2, 45.1),
         [D.pin_x(), 70.],
         2.5,
         "cut",
@@ -1440,8 +1397,7 @@ fn main() {
     ));
     a.bore_x(
         "Thrust screw / M5 x 25 shaft",
-        D.head_front() - 30.,
-        D.head_front() - 5.,
+        (D.head_front() - 30., D.head_front() - 5.),
         [0., D.axis],
         2.5,
         "new_body",
@@ -1449,8 +1405,7 @@ fn main() {
     );
     a.bore_x(
         "Thrust screw / recessed socket head",
-        D.head_front() - 5.,
-        D.head_front(),
+        (D.head_front() - 5., D.head_front()),
         [0., D.axis],
         4.25,
         "join",
@@ -1464,17 +1419,14 @@ fn main() {
     a.hex(
         "Thrust screw / captive M5 nut",
         "yz",
-        D.stub_start() + 1.3,
-        D.stub_start() + 6.,
+        (D.stub_start() + 1.3, D.stub_start() + 6.),
         [0., D.axis],
         8.,
-        "new_body",
-        "thrust_nut",
+        ("new_body", "thrust_nut"),
     );
     a.bore_x(
         "Thrust nut / thread envelope",
-        D.stub_start() + 1.2,
-        D.stub_start() + 6.1,
+        (D.stub_start() + 1.2, D.stub_start() + 6.1),
         [0., D.axis],
         2.5,
         "cut",
@@ -1497,8 +1449,7 @@ fn main() {
             let bolt = format!("{stem}_bolt");
             a.cylinder_z(
                 &format!("{bolt} / M6 x 45 shaft"),
-                D.deck + 1.6 - 45.,
-                D.deck + 1.6,
+                (D.deck + 1.6 - 45., D.deck + 1.6),
                 c,
                 3.,
                 "new_body",
@@ -1506,8 +1457,7 @@ fn main() {
             );
             a.cylinder_z(
                 &format!("{bolt} / socket head"),
-                D.deck + 1.6,
-                D.deck + 7.6,
+                (D.deck + 1.6, D.deck + 7.6),
                 c,
                 5.,
                 "join",
@@ -1522,8 +1472,7 @@ fn main() {
                 let part = format!("{stem}_{label}");
                 a.cylinder_z(
                     &format!("{part} / broad washer"),
-                    z,
-                    z + 1.6,
+                    (z, z + 1.6),
                     c,
                     9.,
                     "new_body",
@@ -1531,8 +1480,7 @@ fn main() {
                 );
                 a.cylinder_z(
                     &format!("{part} / clearance"),
-                    z - 0.1,
-                    z + 1.7,
+                    (z - 0.1, z + 1.7),
                     c,
                     3.3,
                     "cut",
@@ -1555,17 +1503,14 @@ fn main() {
             a.hex(
                 &format!("{nut} / M6 envelope"),
                 "xy",
-                -24.6,
-                -19.6,
+                (-24.6, -19.6),
                 c,
                 10.,
-                "new_body",
-                &nut,
+                ("new_body", &nut),
             );
             a.cylinder_z(
                 &format!("{nut} / thread envelope"),
-                -24.7,
-                -19.5,
+                (-24.7, -19.5),
                 c,
                 3.,
                 "cut",
@@ -1574,7 +1519,7 @@ fn main() {
             hardware.push((nut, format!("M6 mounting nut / {location}"), "frame".into()));
         }
     }
-    // Build dense helical meshes only after the simple hardware stock.
+
     a.call("nut_thread", "solid/refine", "solid_hole", female);
     a.refresh_body("nut_thread", "nut");
     a.call(
@@ -1593,7 +1538,7 @@ fn main() {
         "screw",
     );
     a.show("screw");
-    // Print plates already isolate their part and retain their own framing.
+
     a.present_construction = false;
 
     let printed = [
@@ -1695,8 +1640,6 @@ fn main() {
 
     vise_demo::run(&mut a);
 
-    // One deliberately oriented plate per large part. Hardware remains in the
-    // saved assembly for inspection but is excluded from every native export.
     a.call(
         "assembled_visibility",
         "document/appearance",
@@ -1794,8 +1737,7 @@ fn main() {
             "project_set_visibility",
             reference("assembled_visibility", ""),
         );
-        // The plate camera belongs to one small part. Reframe the restored
-        // assembly before the next chapter or joint-restoration calls run.
+
         a.steps
             .push(json!({"id":format!("restore_{part}_assembly_fit"),
             "view":"isometric","fit":true,"duration_ms":650}));
@@ -1850,7 +1792,7 @@ fn main() {
     exports.insert("assembly_paths".into(),json!({"jaw_rear_entry_translation_x_mm":-D.home()-5.,"jaw_service_translation_x_mm":85.,"bridge_install_axis":[0,0,-1],"thrust_install_axis":[-1,0,0],"thrust_front_approach_mm":35.,"keeper_install_axis":[0,0,-1],"keeper_pin_install_axis":[0,1,0],"shaft_install_axis":[1,0,0],"shaft_install_requires_coupled_thread_rotation":true,"sleeve_requires_axial_bolt_before_jaw_returns":true,"order":["load bridge nuts from underneath","rear-feed jaw with bridge absent","park jaw at plus 85 mm","lower keyed bridge and install two M6 bolts","turn bare shaft through bridge, then load M5 nut into exposed stub","slide complete thrust fitting to trap and support nut, then install axial M5","slide jaw rearward over secured fitting","lower keeper and insert transverse M5","install outboard mounting bolts or use clamp lands"]}));
     let checks = final_checks(&a);
     write_script(
-        "examples/scripts/d-screw-vise.nbcad.jsonc",
+        "examples/scripts/d-screw-vise.limo.jsonc",
         "100 mm captured-slide printed vise",
         a,
         exports,
@@ -1986,9 +1928,7 @@ fn author_fit_coupon() {
         "assembly_set_occurrence_grounded",
         json!({"occurrence_id":reference("screw_occurrence",""),"grounded":true}),
     );
-    // There is one grounded occurrence. Rigid connectors express the same
-    // print layout in each part's local frame, so all four poses persist as
-    // a solved assembly instead of leaving three freely drifting components.
+
     for (part, origin, primary) in [
         ("nut", [0., -5., -D.flat()], [1., 0., 0.]),
         (
@@ -2058,7 +1998,7 @@ fn author_fit_coupon() {
     exports.insert("guide_profile".into(),json!({"base_width_mm":D.guide_base,"head_width_mm":D.guide_head,"height_mm":D.guide_height,"clearance_mm":D.guide_clearance,"engagement_mm":40.}));
     let checks = final_checks(&a);
     write_script(
-        "examples/scripts/d-screw-vise-fit.nbcad.jsonc",
+        "examples/scripts/d-screw-vise-fit.limo.jsonc",
         "100 mm vise / thread and captured-slide fit coupons",
         a,
         exports,

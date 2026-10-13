@@ -5,10 +5,9 @@ use crate::feature::Feature;
 use crate::units::DocumentSettings;
 use crate::Document;
 
-/// Serializable snapshot of a [`Document`] for IPC with the frontend.
+/// Serializable snapshot of a [`Document`] shared by native UI and MCP hosts.
 ///
-/// This is the wire contract of the `get_document` Tauri command; the
-/// frontend TypeScript types in `src/types/document.ts` mirror it 1:1.
+/// This is the shared `get_document` engine contract.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentDto {
     pub name: String,

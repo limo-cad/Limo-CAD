@@ -1,9 +1,6 @@
 //! Select part coordinates or solved assembly placement without retessellating.
-use crate::{
-    mesh_weld::validate_mesh_buffers, weld_triangle_mesh, ExportError, MeshExportScope,
-    TriangleMesh, DEFAULT_WELD_EPSILON,
-};
-use nbcad_core::BodyId;
+use crate::{mesh_weld::validate_mesh_buffers, ExportError, MeshExportScope, TriangleMesh};
+use limo_cad_core::BodyId;
 
 pub struct MeshInstance {
     pub body_id: BodyId,
@@ -20,15 +17,12 @@ pub fn prepare_export_meshes(
     scope: MeshExportScope,
 ) -> Result<Vec<TriangleMesh>, ExportError> {
     if scope == MeshExportScope::Definition {
-        return meshes
-            .iter()
-            .map(|mesh| weld_triangle_mesh(mesh, DEFAULT_WELD_EPSILON))
-            .collect();
+        for mesh in meshes {
+            validate_mesh_buffers(mesh)?;
+        }
+        return Ok(meshes.to_vec());
     }
-    // The solved occurrence list is authoritative, including an empty list.
-    // Legacy body-only projects are promoted to root occurrences by the
-    // assembly solver before reaching export. A missing placement here means
-    // an unused definition, not a standalone part at its authoring origin.
+
     let mut output = Vec::new();
     for source in meshes {
         let placements: Vec<_> = instances
@@ -38,8 +32,10 @@ pub fn prepare_export_meshes(
         if placements.is_empty() {
             continue;
         }
-        // Weld in part coordinates before f32 assembly placement can amplify seam rounding.
-        let indexed = weld_triangle_mesh(source, DEFAULT_WELD_EPSILON)?;
+
+        // Placement preserves native triangles. Format-specific welding belongs
+        // to the 3MF writer; STL must retain distinct nearby source vertices.
+        validate_mesh_buffers(source)?;
         for p in placements.into_iter().filter(|p| p.visible) {
             let norm = p.rotation.iter().map(|x| x * x).sum::<f64>().sqrt();
             if !norm.is_finite() || norm < 1e-12 || p.translation.iter().any(|x| !x.is_finite()) {
@@ -49,24 +45,24 @@ pub fn prepare_export_meshes(
                 )));
             }
             let [x, y, z, w] = p.rotation.map(|x| x / norm);
-            let mut mesh = indexed.clone();
+            let mut mesh = source.clone();
             mesh.name = format!("{} (instance {})", source.name, p.occurrence_id);
-            for v in mesh.positions.chunks_exact_mut(3) {
-                let a = f64::from(v[0]);
-                let b = f64::from(v[1]);
-                let c = f64::from(v[2]);
-                v[0] = ((1. - 2. * (y * y + z * z)) * a
+            for v in mesh.positions.as_chunks_mut::<3>().0 {
+                let a = v[0];
+                let b = v[1];
+                let c = v[2];
+                v[0] = (1. - 2. * (y * y + z * z)) * a
                     + 2. * (x * y - z * w) * b
                     + 2. * (x * z + y * w) * c
-                    + p.translation[0]) as f32;
-                v[1] = (2. * (x * y + z * w) * a
+                    + p.translation[0];
+                v[1] = 2. * (x * y + z * w) * a
                     + (1. - 2. * (x * x + z * z)) * b
                     + 2. * (y * z - x * w) * c
-                    + p.translation[1]) as f32;
-                v[2] = (2. * (x * z - y * w) * a
+                    + p.translation[1];
+                v[2] = 2. * (x * z - y * w) * a
                     + 2. * (y * z + x * w) * b
                     + (1. - 2. * (x * x + y * y)) * c
-                    + p.translation[2]) as f32;
+                    + p.translation[2];
             }
             validate_mesh_buffers(&mesh)?;
             output.push(mesh);
@@ -115,7 +111,7 @@ mod tests {
         for mesh in &out {
             crate::validate_3mf_model_mesh(mesh).unwrap();
         }
-        assert_eq!(out[1].body_id, source.body_id); // Material lookup retains definition identity.
+        assert_eq!(out[1].body_id, source.body_id);
         assert_eq!(source, tetra());
     }
     #[test]

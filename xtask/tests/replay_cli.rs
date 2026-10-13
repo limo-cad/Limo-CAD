@@ -15,11 +15,10 @@ impl TestDirectory {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        // Parallel tests can observe the same clock tick. Never reuse another
-        // test's directory (including its cleanup responsibility).
+
         for _ in 0..100 {
             let path = std::env::temp_dir().join(format!(
-                "nbcad replay cli {} {nonce} {}",
+                "limo-cad replay cli {} {nonce} {}",
                 std::process::id(),
                 SEQUENCE.fetch_add(1, Ordering::Relaxed)
             ));
@@ -46,12 +45,14 @@ impl Drop for OwnedChild {
 }
 
 fn command(executable: impl AsRef<std::ffi::OsStr>) -> Command {
-    let mut command = Command::new(executable);
+    let command = Command::new(executable);
     #[cfg(windows)]
-    {
+    let command = {
         use std::os::windows::process::CommandExt;
+        let mut command = command;
         command.creation_flags(0x08000000);
-    }
+        command
+    };
     command
 }
 
@@ -60,8 +61,8 @@ fn replay(server: &Path, mode: &str, args: &[&str], heartbeat: &Path) -> Output 
         .args(["run-script", "--recipe", "fixture", "--server"])
         .arg(server)
         .args(args)
-        .env("NBCAD_FIXTURE_MODE", mode)
-        .env("NBCAD_FIXTURE_HEARTBEAT", heartbeat)
+        .env("LIMO_CAD_FIXTURE_MODE", mode)
+        .env("LIMO_CAD_FIXTURE_HEARTBEAT", heartbeat)
         .output()
         .unwrap()
 }
@@ -102,7 +103,7 @@ fn headless_save_reopens_the_archive_and_preserves_existing_files_on_failure() {
             .output()
             .unwrap(),
     );
-    let save = temp.0.join("nested/bench.nbcad");
+    let save = temp.0.join("nested/bench.limo");
     let requests = temp.0.join("requests.jsonl");
     let out = temp.0.join("reports");
     let run = |mode: &str, extra: &[&str]| {
@@ -116,8 +117,8 @@ fn headless_save_reopens_the_archive_and_preserves_existing_files_on_failure() {
             .args(extra)
             .env_remove("DISPLAY")
             .env_remove("WAYLAND_DISPLAY")
-            .env("NBCAD_FIXTURE_MODE", mode)
-            .env("NBCAD_FIXTURE_REQUESTS", &requests)
+            .env("LIMO_CAD_FIXTURE_MODE", mode)
+            .env("LIMO_CAD_FIXTURE_REQUESTS", &requests)
             .output()
             .unwrap()
     };
@@ -167,7 +168,7 @@ fn headless_save_reopens_the_archive_and_preserves_existing_files_on_failure() {
             "{mode} overwrote an existing project"
         );
     }
-    // Live save still delegates to the selected desktop instead of forking it.
+
     fs::remove_file(&requests).unwrap();
     succeeded(&run("", &["--session", "chosen-document"]));
     let calls = fs::read_to_string(&requests).unwrap();
@@ -213,7 +214,7 @@ fn packaged_replay_arguments_initialization_deadline_and_owned_cleanup() {
         run.args(["--server-arg", argument]);
     }
     let output = run
-        .env("NBCAD_FIXTURE_ARGUMENTS", &captured)
+        .env("LIMO_CAD_FIXTURE_ARGUMENTS", &captured)
         .output()
         .unwrap();
     succeeded(&output);
@@ -224,13 +225,12 @@ fn packaged_replay_arguments_initialization_deadline_and_owned_cleanup() {
         vec![forwarded.join("\0"); 2]
     );
 
-    // Omitting server arguments retains the standalone server behavior.
     let standalone = temp.0.join("standalone.txt");
     let output = command(env!("CARGO_BIN_EXE_xtask"))
         .args(["cad-call", "--server"])
         .arg(&fixture)
         .args(["--args", "{\"action\":\"catalog\"}"])
-        .env("NBCAD_FIXTURE_ARGUMENTS", &standalone)
+        .env("LIMO_CAD_FIXTURE_ARGUMENTS", &standalone)
         .output()
         .unwrap();
     succeeded(&output);
@@ -245,14 +245,12 @@ fn packaged_replay_arguments_initialization_deadline_and_owned_cleanup() {
             "--args",
             "{\"action\":\"catalog\"}",
         ])
-        .env("NBCAD_FIXTURE_ARGUMENTS", &cad_call)
+        .env("LIMO_CAD_FIXTURE_ARGUMENTS", &cad_call)
         .output()
         .unwrap();
     succeeded(&output);
     assert_eq!(fs::read_to_string(&cad_call).unwrap(), "--headless\n");
 
-    // A response slower than the initialization bound still succeeds once the
-    // handshake has finished; long native construction must retain that behavior.
     let slow = temp.0.join("slow.heartbeat");
     succeeded(&replay(
         &fixture,
@@ -265,8 +263,8 @@ fn packaged_replay_arguments_initialization_deadline_and_owned_cleanup() {
     let sentinel_path = temp.0.join("sentinel.heartbeat");
     let mut sentinel = OwnedChild(
         command(&fixture)
-            .env("NBCAD_FIXTURE_MODE", "sentinel")
-            .env("NBCAD_FIXTURE_HEARTBEAT", &sentinel_path)
+            .env("LIMO_CAD_FIXTURE_MODE", "sentinel")
+            .env("LIMO_CAD_FIXTURE_HEARTBEAT", &sentinel_path)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())

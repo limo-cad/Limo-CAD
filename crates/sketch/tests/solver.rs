@@ -3,11 +3,11 @@
 //! conflict reports (D4.2), locked dynamic-input endpoint math, and
 //! drag-with-constraints cases.
 
-use nbcad_sketch::{
+use limo_cad_sketch::{
     CircleMode, Constraint, CurveCrossingRequest, DragPhase, EntityDto, EntityId,
     LineIntersectionRequest, LineTrackingRequest, LockedCircleRequest, LockedSegmentRequest,
-    MovePointRequest, OriginPlane, PlaneRef, RectangleMode, SketchSession, SnapTarget,
-    TrackingAxis, Vec2,
+    MovePointRequest, OriginPlane, PlaneRef, RectangleMode, SessionError, SketchSession,
+    SnapTarget, TrackingAxis, Vec2,
 };
 
 fn v(x: f64, y: f64) -> Vec2 {
@@ -44,7 +44,7 @@ fn session() -> SketchSession {
     SketchSession::new("Sketch1", XY, XY.basis().unwrap(), false)
 }
 
-fn move_req(point_id: nbcad_sketch::EntityId, to: Vec2) -> MovePointRequest {
+fn move_req(point_id: limo_cad_sketch::EntityId, to: Vec2) -> MovePointRequest {
     MovePointRequest {
         point_id,
         to_raw: to,
@@ -53,21 +53,21 @@ fn move_req(point_id: nbcad_sketch::EntityId, to: Vec2) -> MovePointRequest {
     }
 }
 
-fn line(dto: &nbcad_sketch::SketchDto, id: nbcad_sketch::EntityId) -> (Vec2, Vec2) {
+fn line(dto: &limo_cad_sketch::SketchDto, id: limo_cad_sketch::EntityId) -> (Vec2, Vec2) {
     match dto.entities.iter().find(|e| e.id() == id) {
         Some(EntityDto::Line { start, end, .. }) => (*start, *end),
         other => panic!("expected line, got {other:?}"),
     }
 }
 
-fn point(dto: &nbcad_sketch::SketchDto, id: nbcad_sketch::EntityId) -> Vec2 {
+fn point(dto: &limo_cad_sketch::SketchDto, id: limo_cad_sketch::EntityId) -> Vec2 {
     match dto.entities.iter().find(|entity| entity.id() == id) {
         Some(EntityDto::Point { position, .. }) => *position,
         other => panic!("expected point, got {other:?}"),
     }
 }
 
-fn circle(dto: &nbcad_sketch::SketchDto, id: nbcad_sketch::EntityId) -> (Vec2, f64) {
+fn circle(dto: &limo_cad_sketch::SketchDto, id: limo_cad_sketch::EntityId) -> (Vec2, f64) {
     match dto.entities.iter().find(|entity| entity.id() == id) {
         Some(EntityDto::Circle { center, radius, .. }) => (*center, *radius),
         other => panic!("expected circle, got {other:?}"),
@@ -78,24 +78,19 @@ fn close(a: Vec2, b: Vec2) -> bool {
     a.distance(b) < 1e-7
 }
 
-// --- DOF counting (rank analysis) ----------------------------------------
-
 #[test]
 fn dof_counts_free_line_then_h_then_fixed_rectangle() {
     let mut s = session();
-    // Free line: 2 points × 2 = 4 DOF.
+
     let l = s.add_line(v(3.0, 7.0), v(53.0, 37.0), true).unwrap();
     assert_eq!(l.sketch.dof.value, 4);
 
-    // +Horizontal → 3 DOF.
     let r = s.add_constraint(Constraint::Horizontal {
         entity: l.entity_id,
     });
     assert!(r.is_ok(), "H on free line is consistent: {:?}", r.err());
     assert_eq!(s.dto().dof.value, 3);
 
-    // Fixed rectangle: 4 lines + 2H + 2V + one corner Fixed + distance
-    // anchors → fully defined.
     let mut s = session();
     let rect = s
         .add_rectangle(RectangleMode::TwoPoint, v(5.0, 7.0), v(45.0, 27.0))
@@ -108,12 +103,12 @@ fn dof_counts_free_line_then_h_then_fixed_rectangle() {
         .map(|e| e.id())
         .collect();
     assert_eq!(lines.len(), 4);
-    // 8 vars − 4 constraints (2H + 2V) = 4 DOF before Fix.
+
     assert_eq!(rect.sketch.dof.value, 4);
     let corner = rect.entities[0];
-    s.toggle_fix(corner).unwrap(); // Fix point: −2
+    s.toggle_fix(corner).unwrap();
     assert_eq!(s.dto().dof.value, 2);
-    // Fix the opposite corner → 0 DOF, fully defined.
+
     let opposite = rect.entities[2];
     s.toggle_fix(opposite).unwrap();
     let dto = s.dto();
@@ -125,8 +120,6 @@ fn dof_counts_free_line_then_h_then_fixed_rectangle() {
         _ => true,
     }));
 }
-
-// --- Constraint equations --------------------------------------------------
 
 #[test]
 fn parallel_and_perpendicular_hold_and_count_dof() {
@@ -141,7 +134,7 @@ fn parallel_and_perpendicular_hold_and_count_dof() {
     let dto = s.dto();
     let (a0, a1) = line(&dto, l1.entity_id);
     let (b0, b1) = line(&dto, l2.entity_id);
-    // Parallel: the solver leveled l2 to l1's direction.
+
     let da = a1 - a0;
     let db = b1 - b0;
     assert!((da.x * db.y - da.y * db.x).abs() < 1e-7);
@@ -151,10 +144,7 @@ fn parallel_and_perpendicular_hold_and_count_dof() {
 #[test]
 fn adding_parallel_preserves_authored_line_lengths_without_persisting_a_length_lock() {
     let mut s = session();
-    // Reproduce the live failure: a fixed L-shaped reference and a third line
-    // sharing its fixed origin. The old direction-only solve could reduce the
-    // angular residual by sending the third endpoint thousands of millimetres
-    // away instead of rotating the finite segment.
+
     let vertical = s
         .add_line(v(0.0, 0.0), v(0.0, 40.094_115_730_976), true)
         .unwrap();
@@ -213,8 +203,6 @@ fn adding_parallel_preserves_authored_line_lengths_without_persisting_a_length_l
     );
     assert_eq!(solved.dof.value, 2, "temporary stays must not consume DOF");
 
-    // The preservation equation is operation-local. A later explicit drag is
-    // still allowed to change the undimensioned line's length.
     let moved = s
         .move_point(move_req(bottom.end_point_id, v(60.0, 0.0)))
         .unwrap()
@@ -536,8 +524,6 @@ fn equal_changes_size_only_and_uses_the_first_selection_as_reference() {
 
 #[test]
 fn position_constraints_preserve_carrier_shape_and_curve_size() {
-    // Point-on-line coincidence and midpoint placement own position, not the
-    // carrier line's size or angle.
     for midpoint in [false, true] {
         let mut s = session();
         let carrier = s.add_line(v(2.0, 5.0), v(43.0, 18.0), true).unwrap();
@@ -566,7 +552,6 @@ fn position_constraints_preserve_carrier_shape_and_curve_size() {
         );
     }
 
-    // Point-on-circle coincidence keeps the authored radius.
     let mut s = session();
     let curve = s
         .add_circle(CircleMode::CenterDiameter, v(10.0, 10.0), v(18.0, 10.0))
@@ -927,7 +912,7 @@ fn midpoint_constraint_moves_point_to_midpoint() {
         b: l.entity_id,
     })
     .unwrap();
-    // Relation must hold (which side moves is the solver's choice).
+
     let dto = s.dto();
     let (a, b) = line(&dto, l.entity_id);
     match dto
@@ -968,7 +953,7 @@ fn tangent_line_circle_solves() {
     let mut s = session();
     let c = s
         .add_circle(CircleMode::CenterDiameter, v(50.0, 50.0), v(60.0, 50.0))
-        .unwrap(); // r = 10
+        .unwrap();
     let l = s.add_line(v(0.0, 30.0), v(80.0, 30.0), true).unwrap();
     s.add_constraint(Constraint::Tangent {
         a: l.entity_id,
@@ -984,7 +969,6 @@ fn tangent_line_circle_solves() {
     let (a, b) = line(&dto, l.entity_id);
     match circle {
         EntityDto::Circle { center, radius, .. } => {
-            // Distance from center to line equals radius.
             let d = ((b.x - a.x) * (center.y - a.y) - (b.y - a.y) * (center.x - a.x)).abs()
                 / a.distance(b);
             assert!((d - radius).abs() < 1e-6, "d={d} r={radius}");
@@ -1023,9 +1007,8 @@ fn concentric_circles_share_a_center() {
 #[test]
 fn symmetry_of_two_points_about_a_line() {
     let mut s = session();
-    let axis = s.add_line(v(0.0, 0.0), v(0.0, 50.0), true).unwrap(); // x = 0
-                                                                     // Fix the axis so the POINTS must adjust (otherwise the blue axis
-                                                                     // would simply move onto the segment midpoint — also valid).
+    let axis = s.add_line(v(0.0, 0.0), v(0.0, 50.0), true).unwrap();
+
     s.toggle_fix(axis.start_point_id).unwrap();
     s.toggle_fix(axis.end_point_id).unwrap();
     let p1 = s.add_point(v(10.0, 20.0)).unwrap();
@@ -1042,7 +1025,7 @@ fn symmetry_of_two_points_about_a_line() {
         _ => panic!("expected point"),
     };
     let (a, b) = (pos(p1.entities[0]), pos(p2.entities[0]));
-    // Midpoint on the axis (x = 0) and segment perpendicular to it.
+
     assert!(
         ((a.x + b.x) / 2.0).abs() < 1e-7,
         "midpoint x = {}",
@@ -1128,17 +1111,73 @@ fn circle_tangent_converges_without_inflating_unconstrained_radii() {
 }
 
 #[test]
+fn off_axis_unequal_circles_keep_external_tangency_after_projection_and_history() {
+    let mut s = session();
+    let support = s.add_line(v(-26., 12.), v(-2., 12.), true).unwrap();
+    s.add_constraint(Constraint::Horizontal {
+        entity: support.entity_id,
+    })
+    .unwrap();
+    let first = s
+        .add_circle(CircleMode::CenterDiameter, v(-10., 6.), v(-4., 6.))
+        .unwrap()
+        .entities[0];
+    s.add_constraint(Constraint::Tangent {
+        a: support.entity_id,
+        b: first,
+    })
+    .unwrap();
+    let center = v(15.809719827477455, -10.961402263097117);
+    let second = s
+        .add_circle(
+            CircleMode::CenterDiameter,
+            center,
+            center + v(4.215921294620028, 0.),
+        )
+        .unwrap()
+        .entities[0];
+    let before = s.dto();
+    let (first_center, first_radius) = circle(&before, first);
+    let (_, second_radius) = circle(&before, second);
+    s.add_constraint(Constraint::Tangent {
+        a: first,
+        b: second,
+    })
+    .unwrap();
+    let applied = s.dto();
+    let (a, ra) = circle(&applied, first);
+    let (b, rb) = circle(&applied, second);
+    assert!(close(a, first_center));
+    assert!((ra - first_radius).abs() < 1e-9 && (rb - second_radius).abs() < 1e-9);
+    assert!(
+        (a.distance(b) - ra - rb).abs() < 1e-9,
+        "disjoint circles must retain the external branch: {a:?}, {b:?}, {ra}, {rb}"
+    );
+    assert!(b.distance(center) < first_center.distance(center) - (ra - rb).abs());
+    assert_eq!(s.undo().unwrap().sketch.entities, before.entities);
+    assert_eq!(s.redo().unwrap().sketch.entities, applied.entities);
+}
+
+#[test]
 fn fix_pins_geometry_and_blocks_conflicting_moves() {
     let mut s = session();
     let l = s.add_line(v(0.0, 0.0), v(50.0, 0.0), true).unwrap();
     s.toggle_fix(l.start_point_id).unwrap();
-    // Dragging the fixed point is rejected (clamped to last good state).
-    let r = s
+
+    let before = s.dto();
+    let error = s
         .move_point(move_req(l.start_point_id, v(10.0, 10.0)))
-        .unwrap();
-    let (start, _) = line(&r.sketch, l.entity_id);
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        SessionError::InvalidConstraint(ref message)
+            if message.contains("could not move this point")
+                && message.contains("review the point's constraints")
+    ));
+    assert_eq!(s.dto(), before);
+    let (start, _) = line(&s.dto(), l.entity_id);
     assert!(close(start, v(0.0, 0.0)), "fixed point must not move");
-    // Unfix frees it again.
+
     s.toggle_fix(l.start_point_id).unwrap();
     let r = s
         .move_point(move_req(l.start_point_id, v(10.0, 10.0)))
@@ -1146,8 +1185,6 @@ fn fix_pins_geometry_and_blocks_conflicting_moves() {
     let (start, _) = line(&r.sketch, l.entity_id);
     assert!(close(start, v(10.0, 10.0)));
 }
-
-// --- Over-constraint rejection (D4.2) ---------------------------------------
 
 #[test]
 fn perpendicular_conflicting_with_parallel_is_rejected_and_named() {
@@ -1168,7 +1205,7 @@ fn perpendicular_conflicting_with_parallel_is_rejected_and_named() {
         .unwrap_err();
     let msg = err.to_string();
     match err {
-        nbcad_sketch::SessionError::OverConstrained {
+        limo_cad_sketch::SessionError::OverConstrained {
             rejected,
             conflicts_with,
         } => {
@@ -1181,7 +1218,7 @@ fn perpendicular_conflicting_with_parallel_is_rejected_and_named() {
         }
         other => panic!("expected OverConstrained, got {other:?}"),
     }
-    // The sketch is untouched by the rejection.
+
     let dto = s.dto();
     assert_eq!(dto.constraints.len(), 1);
     assert_eq!(dto.constraints[0].constraint.kind_str(), "parallel");
@@ -1250,8 +1287,6 @@ fn narrow_axis_inference_does_not_flatten_a_deliberate_shallow_diagonal() {
 
 #[test]
 fn conflicting_fix_is_rejected() {
-    // Two fully-fixed lines of different lengths: Equal cannot be satisfied
-    // (nothing may move) → reject (D4.2).
     let mut s = session();
     let l1 = s.add_line(v(0.0, 0.0), v(50.0, 0.0), true).unwrap();
     let l2 = s.add_line(v(0.0, 20.0), v(30.0, 20.0), true).unwrap();
@@ -1271,12 +1306,10 @@ fn conflicting_fix_is_rejected() {
         })
         .unwrap_err();
     assert!(
-        matches!(err, nbcad_sketch::SessionError::OverConstrained { .. }),
+        matches!(err, limo_cad_sketch::SessionError::OverConstrained { .. }),
         "got {err:?}"
     );
 }
-
-// --- Locked dynamic-input endpoint math -------------------------------------
 
 #[test]
 fn locked_length_and_angle_produce_an_exact_point() {
@@ -1290,7 +1323,7 @@ fn locked_length_and_angle_produce_an_exact_point() {
         ))
         .unwrap();
     let (_, end) = line(&r.sketch, r.entity_id);
-    let expect = v(50.0 * 30f64.cos().to_radians().cos(), 0.0); // placeholder replaced below
+    let expect = v(50.0 * 30f64.cos().to_radians().cos(), 0.0);
     let _ = expect;
     let want = v(
         50.0 * (30.0_f64.to_radians()).cos(),
@@ -1302,13 +1335,13 @@ fn locked_length_and_angle_produce_an_exact_point() {
 #[test]
 fn locked_length_only_projects_onto_the_circle() {
     let mut s = session();
-    // Cursor at (10, 40): direction ≈ 76°; length locked to 50.
+
     let r = s
         .add_line_locked(&locked_seg(v(0.0, 0.0), v(10.0, 40.0), Some(50.0), None))
         .unwrap();
     let (_, end) = line(&r.sketch, r.entity_id);
     assert!((end.length() - 50.0).abs() < 1e-7);
-    // Direction preserved from the cursor.
+
     let d = v(10.0, 40.0);
     assert!((end.x * d.y - end.y * d.x).abs() < 1e-7);
 }
@@ -1325,7 +1358,7 @@ fn locked_angle_only_projects_onto_the_ray() {
 
 #[test]
 fn locked_endpoint_overrides_grid_snap_and_hv_inference() {
-    let mut s = SketchSession::new("Sketch1", XY, XY.basis().unwrap(), true); // grid ON
+    let mut s = SketchSession::new("Sketch1", XY, XY.basis().unwrap(), true);
     let r = s
         .add_line_locked(&locked_seg(
             v(0.0, 0.0),
@@ -1340,9 +1373,7 @@ fn locked_endpoint_overrides_grid_snap_and_hv_inference() {
         37.5 * (10.0_f64.to_radians()).sin(),
     );
     assert!(close(end, want), "locks must beat grid snap");
-    // No H/V constraint was inferred (angle 10° is outside the cone, and
-    // the lock suppresses inference regardless). The typed value DID
-    // auto-create a driving dimension (D9): one Distance + one Angle dim.
+
     let kinds: Vec<_> = r
         .sketch
         .constraints
@@ -1353,8 +1384,6 @@ fn locked_endpoint_overrides_grid_snap_and_hv_inference() {
     assert_eq!(kinds.iter().filter(|k| **k == "angle").count(), 1);
     assert!(!kinds.iter().any(|k| *k == "horizontal" || *k == "vertical"));
 }
-
-// --- Drag with constraints (D4.4) ---------------------------------------------
 
 /// Rectangle with H/V reshapes when a corner is dragged; adjacent corners
 /// follow so all four constraints keep holding.
@@ -1373,7 +1402,7 @@ fn dragging_a_rectangle_corner_keeps_it_rectangle_shaped() {
             _ => None,
         })
         .collect();
-    // Corner (40, 20) = third point.
+
     let corner = rect.entities[2];
     let r = s.move_point(move_req(corner, v(55.0, 35.0))).unwrap();
     let dto = r.sketch;
@@ -1385,7 +1414,7 @@ fn dragging_a_rectangle_corner_keeps_it_rectangle_shaped() {
             "line {id:?} must stay axis-aligned: {a:?}-{b:?}"
         );
     }
-    // The dragged corner reached the cursor.
+
     let c = dto.entities.iter().find(|e| e.id() == corner).unwrap();
     match c {
         EntityDto::Point { position, .. } => assert!(close(*position, v(55.0, 35.0))),
@@ -1450,8 +1479,6 @@ fn dragging_a_chained_right_angle_follows_the_free_axis() {
     );
 }
 
-// --- New tool ops --------------------------------------------------------------
-
 #[test]
 fn rectangle_creates_four_hv_constrained_lines_in_one_undo_step() {
     let mut s = session();
@@ -1515,7 +1542,7 @@ fn circle_modes_and_locked_diameter() {
         }
         _ => panic!("expected circle"),
     }
-    // 2-Point: diameter endpoints define center + radius.
+
     let r2 = s
         .add_circle(CircleMode::TwoPoint, v(0.0, 0.0), v(40.0, 0.0))
         .unwrap();
@@ -1757,8 +1784,6 @@ fn carrier_endpoint_contradiction_names_the_actual_constraint() {
     assert_eq!(s.dto().constraints.len(), 1);
 }
 
-// --- Undo covers solver motion --------------------------------------------------
-
 #[test]
 fn undo_restores_pre_constraint_state_including_solver_motion() {
     let mut s = session();
@@ -1770,7 +1795,7 @@ fn undo_restores_pre_constraint_state_including_solver_motion() {
     })
     .unwrap();
     let solved = s.dto();
-    // Parallelism must hold (which line moves is the solver's choice).
+
     let (a0, a1) = line(&solved, l1.entity_id);
     let (b0, b1) = line(&solved, l2.entity_id);
     let da = a1 - a0;
@@ -1792,14 +1817,10 @@ fn typed_angle_snaps_its_free_distance_to_the_active_grid() {
     s.set_grid_step(5.0).unwrap();
     let preview = s.preview_segment_locked(
         v(5.0, 10.0),
-        None,
-        Some(-45.0),
+        (None, Some(-45.0)),
         v(15.16, -0.16),
         false,
-        None,
-        None,
-        None,
-        None,
+        (None, None, None, None),
     );
     assert_eq!(preview.snap, SnapTarget::Grid);
     assert!(close(preview.snapped_to, v(15.0, 0.0)));
@@ -1875,14 +1896,10 @@ fn vertical_curve_intersection_beats_grid_and_persists_on_the_carrier() {
     };
     let preview = s.preview_segment_locked(
         v(24.5, 0.0),
-        None,
-        None,
+        (None, None),
         v(24.48, 0.54),
         false,
-        None,
-        Some(request),
-        None,
-        None,
+        (None, Some(request), None, None),
     );
     assert_eq!(
         preview.snap,
@@ -1893,10 +1910,10 @@ fn vertical_curve_intersection_beats_grid_and_persists_on_the_carrier() {
     assert!(close(preview.snapped_to, v(24.5, 0.5)));
     assert!(preview
         .inferences
-        .contains(&nbcad_sketch::Inference::Vertical));
+        .contains(&limo_cad_sketch::Inference::Vertical));
     assert!(preview
         .inferences
-        .contains(&nbcad_sketch::Inference::Coincident));
+        .contains(&limo_cad_sketch::Inference::Coincident));
 
     let result = s
         .add_line_locked(&LockedSegmentRequest {
@@ -1947,9 +1964,6 @@ fn exact_crossing_start_survives_a_half_mm_chain_and_vertical_turn() {
 
     let short = s
         .add_line_locked(&LockedSegmentRequest {
-            // Both hints are deliberately off the exact crossing/grid. The
-            // stable carrier ids, not either approximate coordinate, own the
-            // start location.
             from: v(20.17, -0.13),
             to_hint: v(19.4, 0.2),
             from_crossing: Some(crossing),
@@ -1981,18 +1995,14 @@ fn exact_crossing_start_survives_a_half_mm_chain_and_vertical_turn() {
 
     let vertical_preview = s.preview_segment_locked(
         end,
-        None,
-        None,
+        (None, None),
         v(19.53, 4.7),
         false,
-        None,
-        None,
-        None,
-        None,
+        (None, None, None, None),
     );
     assert!(vertical_preview
         .inferences
-        .contains(&nbcad_sketch::Inference::Vertical));
+        .contains(&limo_cad_sketch::Inference::Vertical));
     assert!((vertical_preview.snapped_to.x - 19.5).abs() < 1e-9);
 
     let upright = s

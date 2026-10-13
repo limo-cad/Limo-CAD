@@ -59,8 +59,7 @@ impl Author {
                 ),
             );
             let projection = format!("{name}_{kind}_projection");
-            // Match the native sheet export's paper-space curve tolerance so
-            // the exact projection serves both association picks and output.
+
             self.call(&projection,"drawing/views","drawing_projection",json!({"body_ids":[body_ref(name)],"direction":direction,"up":up,"include_hidden":true,"deflection":(0.08_f64/scale).max(0.01)}));
             views.push((view_id, projection));
         }
@@ -77,8 +76,7 @@ impl Author {
                 ),
             );
             let id = self.uid("diameter");
-            // Keep the label ink clear of the bucket lips, carrier wall and
-            // pinion teeth without changing the associated circular feature.
+
             let (leader_angle, offset) = match (name, i) {
                 ("stage", 1) => (180., 22.),
                 ("tower", 1) => (110., 22.),
@@ -90,14 +88,11 @@ impl Author {
         let make_anchor = |z: f64| {
             let source = r(&views[1].1);
             let pred = if z == 0. {
-                // The split carrier and wire-exit cradle have curved outer
-                // silhouettes whose extrema are not BRep edge endpoints.
-                // Anchor the dimension to actual feature endpoints instead.
                 let x = match name {
-                    "tower" => json!(23.7),           // RH mounting-bore rim at X22 + R1.7
-                    "bearing_coupon" => json!(11.15), // lower bearing-seat rim
-                    "motor_mount" => json!(13.5),     // rear adjustment-tab corner
-                    "motor_bracket" => json!(13.5),   // rounded upright tangent
+                    "tower" => json!(23.7),
+                    "bearing_coupon" => json!(11.15),
+                    "motor_mount" => json!(13.5),
+                    "motor_bracket" => json!(13.5),
                     _ => at(&views[1].1, "/bounds/2"),
                 };
                 json!({"/model_point/2":z,"/point/0":x})
@@ -114,8 +109,6 @@ impl Author {
                 json!({"body_id":body_ref(name),"edge_id":select(r(&views[0].1),"/anchors",pred.clone(),"first","/edge_id"),"edge_key":select(r(&views[0].1),"/anchors",pred.clone(),"first","/edge_key"),"endpoint":select(r(&views[0].1),"/anchors",pred.clone(),"first","/endpoint"),"fallback_point":select(r(&views[0].1),"/anchors",pred,"first","/model_point")})
             };
             for (label, first, second, mode) in [
-                // Use real tangent endpoints of the rounded outer corners.
-                // Each dimension still spans the full manufactured envelope.
                 ("width", corner(-75., -66.), corner(95., -66.), "horizontal"),
                 ("depth", corner(91., -70.), corner(91., 70.), "vertical"),
             ] {

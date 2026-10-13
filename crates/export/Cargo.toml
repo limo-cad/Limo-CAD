@@ -1,16 +1,23 @@
 [package]
-name = "nbcad-export"
+name = "limo-cad-export"
 version.workspace = true
-edition = "2021"
-description = "noBS CAD manufacturing mesh writers (STL, 3MF)"
+edition.workspace = true
+description = "Limo CAD manufacturing mesh writers (STL, 3MF)"
 license = "LGPL-2.1-or-later"
-repository = "https://github.com/limo-cad/Limo-CAD"
+repository.workspace = true
 
 [dependencies]
-nbcad-core = { path = "../core" }
-nbcad-solid = { path = "../solid" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+roxmltree.workspace = true
+limo-cad-core = { path = "../core" }
+limo-cad-assembly = { path = "../assembly" }
+limo-cad-solid = { path = "../solid" }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+zip = { workspace = true, features = ["deflate"] }
+
+[features]
+test-utils = []
 
 [dev-dependencies]
+limo-cad-sketch = { path = "../sketch" }

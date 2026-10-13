@@ -1,9 +1,9 @@
-use nbcad_core::{BodyId, FeatureStatus, PlaneBasis};
-use nbcad_sketch::{
+use limo_cad_core::{BodyId, FeatureStatus, PlaneBasis};
+use limo_cad_sketch::{
     BeginSketchRequest, FaceSketchOrigin, OriginPlane, PlaneRef, RectangleMode, RectangleRequest,
     SketchManager, Vec2,
 };
-use nbcad_solid::{
+use limo_cad_solid::{
     BodyFeatureRequestDto, CommitKernelRequest, ExtrudeExtent, ExtrudeOperation, ExtrudeRequest,
     KernelBodyDto, KernelFaceDto, KernelJobDto, KernelSceneDto, Point3Dto, SetRollbackRequest,
     SplitBodyRequest,
@@ -40,11 +40,15 @@ fn extrusion(sketch_name: &str) -> ExtrudeRequest {
 fn planar_body(body_id: BodyId, key: &str, z: f64) -> KernelBodyDto {
     KernelBodyDto {
         topology_signature: String::new(),
+        display_warnings: Vec::new(),
         body_id,
         positions: vec![0.0, 0.0, z as f32, 20.0, 0.0, z as f32, 0.0, 20.0, z as f32],
         normals: vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0],
         indices: vec![0, 1, 2],
         faces: vec![KernelFaceDto {
+            linear_seam_edge_keys: Vec::new(),
+            planar_inner_ring_edge_keys: Vec::new(),
+            outer_shell: None,
             key: key.to_string(),
             first_index: 0,
             index_count: 3,
@@ -54,7 +58,7 @@ fn planar_body(body_id: BodyId, key: &str, z: f64) -> KernelBodyDto {
                 v: [0.0, 1.0, 0.0],
                 normal: [0.0, 0.0, 1.0],
             }),
-            signature: Some(nbcad_solid::PlanarFaceSignatureDto {
+            signature: Some(limo_cad_solid::PlanarFaceSignatureDto {
                 centroid: Point3Dto {
                     x: 20.0 / 3.0,
                     y: 20.0 / 3.0,
@@ -154,9 +158,54 @@ fn rectangular_extrude_face_sketch_and_broken_reference_recompute_are_integrated
         })
         .unwrap();
 
-    // The planner validates against the last good scene. The simulated
-    // kernel result then changes the support topology key, exercising the
-    // post-recompute broken-reference overlay on both Sketch2 and Extrude2.
+    let queries = manager.history_support_queries();
+    assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].after_feature, first_plan.jobs[0].feature_id());
+    assert_eq!(queries[0].face_id, support_face);
+    // A consuming downstream feature legitimately removes the old support.
+    let consumed_plan = manager.prepare_recompute().unwrap();
+    let consumed = manager
+        .commit_solid_with_verified_supports(
+            CommitKernelRequest {
+                transaction_id: consumed_plan.transaction_id,
+                scene: KernelSceneDto {
+                    bodies: vec![planar_body(second_body, "top", 20.0)],
+                    errors: Vec::new(),
+                },
+            },
+            &std::collections::BTreeSet::from([queries[0].sketch_id]),
+        )
+        .unwrap();
+    assert!(consumed
+        .document
+        .features
+        .iter()
+        .all(|f| f.status == FeatureStatus::Ok));
+    // Conversely, final-scene existence cannot substitute for missing prefix
+    // evidence. A later feature could introduce the same topology key.
+    let missing_plan = manager.prepare_recompute().unwrap();
+    let missing = manager
+        .commit_solid_with_verified_supports(
+            CommitKernelRequest {
+                transaction_id: missing_plan.transaction_id,
+                scene: KernelSceneDto {
+                    bodies: vec![
+                        planar_body(first_body, "support", 10.0),
+                        planar_body(second_body, "top", 20.0),
+                    ],
+                    errors: Vec::new(),
+                },
+            },
+            &std::collections::BTreeSet::new(),
+        )
+        .unwrap();
+    assert!(missing
+        .document
+        .features
+        .iter()
+        .filter(|f| matches!(f.name.as_str(), "Sketch2" | "Extrude2"))
+        .all(|f| matches!(f.status, FeatureStatus::Error { .. })));
+
     let broken_plan = manager.prepare_recompute().unwrap();
     let broken = manager
         .commit_solid(CommitKernelRequest {
@@ -252,8 +301,6 @@ fn split_body_is_inserted_at_the_build_cursor() {
         })
         .unwrap();
 
-    // This later sketch represents the External Thread/Hole features that
-    // were present after the user's marker in the reported project.
     manager.begin_sketch(XY).unwrap();
     manager.end_sketch().unwrap();
     let rollback_plan = manager

@@ -1,0 +1,22 @@
+{
+  "annotation": {
+    "kind":"hole_note","id":1,"view_id":1,
+    "feature":{"body_id":1,"edge_id":1,"edge_key":"circle-1","occurrence_id":null,"topology_signature":"feature:7:two-closed-circles","fallback_center":[999,999,999],"fallback_normal":[0,0,1],"fallback_radius":999,"closed":true},
+    "position":[180,110],"quantity":1,"diameter":6,"depth":null,"thread":"","note":"",
+    "source_feature_id":null,"feature_name":"","hole_style":"simple","counterbore_diameter":null,"counterbore_depth":null,
+    "countersink_diameter":null,"countersink_angle_deg":null,"thread_depth":null,"pattern_note":""
+  },
+  "cases": [
+    {"name":"unknown circle","changes":{},"standard":"iso","units":"mm","expected":"⌀6"},
+    {"name":"source id alone","changes":{"source_feature_id":42},"standard":"iso","units":"mm","expected":"⌀6"},
+    {"name":"explicit through with note","changes":{"through_all":true,"note":"Deburr\nInspect"},"standard":"iso","units":"mm","expected":"⌀6 THRU\nDeburr\nInspect"},
+    {"name":"legacy authored through","changes":{"note":" THRU "},"standard":"iso","units":"mm","expected":"⌀6 THRU"},
+    {"name":"explicit false overrides legacy","changes":{"through_all":false,"note":"THRU"},"standard":"iso","units":"mm","expected":"⌀6"},
+    {"name":"finite depth wins legacy","changes":{"depth":8,"note":"THRU"},"standard":"iso","units":"mm","expected":"⌀6 ↧8"},
+    {"name":"unknown thread depth","changes":{"thread":"M6 x 1 - 6H"},"standard":"iso","units":"mm","expected":"M6 x 1 - 6H"},
+    {"name":"thread through","changes":{"thread":"M6 x 1 - 6H","through_all":true},"standard":"iso","units":"mm","expected":"M6 x 1 - 6H THRU"},
+    {"name":"pattern counterbore","changes":{"quantity":2,"depth":8,"through_all":false,"hole_style":"counterbore","counterbore_diameter":10,"counterbore_depth":2,"pattern_note":"2 HOLES","note":"Deburr"},"standard":"iso","units":"mm","expected":"2× ⌀6 ↧8\n⌴ ⌀10 ↧2\nDeburr"},
+    {"name":"inch through","changes":{"diameter":6.35,"quantity":2,"through_all":true},"standard":"ansi","units":"in","expected":"2X ⌀.25 THRU"},
+    {"name":"centimetre countersink","changes":{"depth":15,"hole_style":"countersink","countersink_diameter":12,"countersink_angle_deg":90},"standard":"iso","units":"cm","expected":"⌀0.6 ↧1.5\n⌵ ⌀1.2 × 90°"}
+  ]
+}

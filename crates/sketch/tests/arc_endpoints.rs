@@ -1,5 +1,5 @@
 //! Issue #137: arcs expose usable endpoints and accept tangency at both ends.
-use nbcad_sketch::{
+use limo_cad_sketch::{
     BreakRequest, Constraint, DragPhase, EntityDto, EntityId, MoveCopyRequest, MovePointRequest,
     OriginPlane, PlaneRef, ScaleRequest, SketchDto, SketchSession, SnapTarget, TrimRequest, Vec2,
 };

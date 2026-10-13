@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-  "name": "nbcad-native-dependencies",
-  "version-string": "0.2.2",
+  "name": "limo-cad-native-dependencies",
+  "version-string": "0.3.0-rc.1",
   "builtin-baseline": "716b42043743cdceabed9c8e2e6cf80ddae1e0c1",
   "dependencies": [
     "opencascade"
@@ -10,7 +10,7 @@
     {
       "name": "opencascade",
       "version": "7.9.3",
-      "port-version": 1
+      "port-version": 2
     }
   ]
 }

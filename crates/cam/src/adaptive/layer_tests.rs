@@ -91,9 +91,6 @@ fn upward_exterior_uses_full_width_stock_only_above_the_previous_corner() {
             }
         }
         let radius = first_radius.expect("shoulder must be machined");
-        // Floor -2 + R0.4 = -1.6. Above that, no R0.4 phantom ring;
-        // below that, retain the conservative corner-stock envelope. The
-        // first ring cuts Ae = 1 into that stock bound: R2 + bound - 1.
         assert!((radius - (expected_stock_radius + 1.)).abs() < 0.015,
             "shoulder {shoulder}: start radius {radius}");
         assert_adaptive_nc_roundtrip(doc);
@@ -129,8 +126,8 @@ fn rounded_major_bands_start_deep_and_overlap_the_corner_height() {
     for (actual, expected) in levels.iter().zip(expected) {
         assert!((actual - expected).abs() < EPS, "{levels:?}");
     }
-    // Across a straight lower wall, each new major cut needs the preceding
-    // full-diameter section (floor + R), not merely the rounded floor.
+
+
     let mut deepest = 0.;
     for z in levels {
         if z < deepest - EPS {
@@ -146,7 +143,7 @@ fn rounded_major_bands_start_deep_and_overlap_the_corner_height() {
 #[test]
 fn full_radius_removal_cannot_be_used_below_its_corner_height() {
     let origin = Point2Dto::new(0., 0.);
-    // A floor at -1 with R0.4 has a full-width certificate only from -0.6.
+
     let history = vec![layers::Removal {
         depth: -0.6,
         exterior: None,
@@ -238,8 +235,8 @@ fn stepped_cavity_and_mixed_job_reuse_the_deep_entry_without_recutting_exterior(
                 .warnings
                 .iter()
                 .any(|w| w.contains("continuous exterior passes")));
-            // Every cutting move above the deep pass remains inside the
-            // initial target's bounding rectangle: no repeated exterior lap.
+
+
             for c in &program.commands {
                 if let CamCommandDto::Circular { to, feed, .. } = c {
                     if (*feed - 600.).abs() < EPS && to.z > -2. + EPS {
@@ -314,8 +311,8 @@ fn exterior_removal_does_not_erase_a_disabled_pocket_or_bypass_a_narrow_neck() {
             unreachable!()
         };
         if narrow_neck {
-            // A wide lower cavity behind a 4 mm opening cannot accept the
-            // 4 mm tool plus allowance, let alone its minimum helix.
+
+
             g.targets.extend([
                 cuboid([2., 2., -1.], [6., 12., 0.]),
                 cuboid([10., 2., -1.], [14., 12., 0.]),
@@ -358,7 +355,7 @@ fn short_tools_add_safe_bands_for_lowered_top_and_keep_upward_cleanup() {
         doc.tools[0].maximum_axial_depth = Some(0.8);
         let CamOperationDto::Adaptive3d { top_z, parameters, geometry: Some(g), .. } = &mut doc.setups[0].operations[0] else { unreachable!() };
         *top_z = -0.5;
-        parameters.maximum_stepdown = 3.; // Both flute and tool Ap are smaller.
+        parameters.maximum_stepdown = 3.;
         let meshes = g.targets.clone();
         let original = doc.clone();
         let program = plan_setup(&doc, 1).unwrap();
@@ -378,13 +375,13 @@ fn short_tools_add_safe_bands_for_lowered_top_and_keep_upward_cleanup() {
         assert!(short.collisions.is_empty(), "{:?}", short.collisions);
         assert_eq!(short.comparison.as_ref().unwrap().gouged_voxels, 0);
         assert_adaptive_nc_roundtrip(doc.clone());
-        // The same path with an extended cutting envelope must not remove
-        // additional stock above the actual flute at any motion step.
+
+
         doc.tools[0].flute_length = 10.;
         if let CamOperationDto::Adaptive3d { parameters, .. } = &mut doc.setups[0].operations[0] {
             parameters.maximum_stepdown = 0.8;
         }
-        // Match the short-tool helix pitch when checking the same commands.
+
         doc.linking[0].ramp_stepdown = doc.linking[0].ramp_stepdown.min(
             if kind == CamToolKind::BullNoseEndMill { 0.6 } else { 0.8 });
         assert_eq!(program.commands, plan_setup(&doc, 1).unwrap().commands);
@@ -397,8 +394,6 @@ fn short_tools_add_safe_bands_for_lowered_top_and_keep_upward_cleanup() {
 
 #[test]
 fn corner_radius_at_or_above_stepdown_still_cuts_every_band() {
-    // Top-down bands with a corner no smaller than Ap: each preceding
-    // full-diameter certificate sits one corner height above its floor.
     let center = Point2Dto::new(8., 7.);
     for (corner, stepdown) in [(0.5, 0.5), (0.8, 0.5)] {
         let mut doc = with_linking(fixture(vec![cylinder(center, 2.5, -3., -0.3)]));
@@ -434,7 +429,6 @@ fn corner_radius_at_or_above_stepdown_still_cuts_every_band() {
 fn end_mill_roughing_depth_must_fit_the_declared_tool_length() {
     let center = Point2Dto::new(8., 7.);
     let mut doc = with_linking(fixture(vec![cylinder(center, 2.5, -3., -0.3)]));
-    // Ap 1 fits the flutes; the 2 mm total depth does not fit the tool.
     doc.tools[0].flute_length = 1.2;
     doc.tools[0].overall_length = 1.5;
     let error = plan_setup(&doc, 1).unwrap_err();
@@ -445,8 +439,6 @@ fn end_mill_roughing_depth_must_fit_the_declared_tool_length() {
 
 #[test]
 fn model_shelves_above_the_selected_top_are_not_cut() {
-    // Top selects the lower shelf; neither it nor the boss top above it may
-    // become a cut level even though Ap bands start at the incoming stock.
     let center = Point2Dto::new(8., 7.);
     let mut doc = with_linking(fixture(vec![
         cylinder(center, 5., -3., -1.4),
@@ -467,8 +459,6 @@ fn model_shelves_above_the_selected_top_are_not_cut() {
         }
     }
     assert!(!levels.iter().any(|z| (z + 0.2).abs() < EPS), "boss top cut: {levels:?}");
-    // The shelf picked as Top bounds the operation; its allowance level
-    // (-1.3) lies above Top and is not cut either.
     assert!(!levels.iter().any(|z| (z + 1.3).abs() < EPS), "Top shelf cut: {levels:?}");
     assert!(levels.iter().all(|z| *z <= -1.4 + EPS), "{levels:?}");
     assert_adaptive_nc_roundtrip(doc);
@@ -476,8 +466,6 @@ fn model_shelves_above_the_selected_top_are_not_cut() {
 
 #[test]
 fn later_roughing_starts_from_what_earlier_operations_left() {
-    // A repeated roughing pass finds the first one's work done: it must not
-    // re-cut the cleared exterior, and an empty result is not an error.
     let center = Point2Dto::new(8., 7.);
     let mut doc = with_linking(fixture(vec![
         cylinder(center, 5., -3., -1.4),

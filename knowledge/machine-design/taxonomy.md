@@ -9,7 +9,7 @@ searchable: false
 
 # Machine-design taxonomy
 
-Open help for **design-time** decisions in noBS CAD. Product/architecture
+Open help for **design-time** decisions in Limo CAD. Product/architecture
 concepts stay in [the OKF index](../index.md).
 
 **Browse:** use this page as the topic map (seeded → link; planned → web /

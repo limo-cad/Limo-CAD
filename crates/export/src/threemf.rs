@@ -2,7 +2,7 @@
 
 use std::io::{Cursor, Write};
 
-use nbcad_core::{BodyAppearance, BodyId};
+use limo_cad_core::{BodyAppearance, BodyId};
 use zip::write::SimpleFileOptions;
 use zip::CompressionMethod;
 use zip::ZipWriter;
@@ -17,6 +17,19 @@ pub fn write_3mf(
     include_appearance: bool,
     target: SlicerTarget,
 ) -> Result<Vec<u8>, ExportError> {
+    write_package(meshes, appearances, include_appearance, target, None)
+}
+
+pub(crate) fn write_package(
+    meshes: &[TriangleMesh],
+    appearances: &[BodyAppearance],
+    include_appearance: bool,
+    target: SlicerTarget,
+    scene: Option<(
+        &limo_cad_assembly::ComponentStructureDto,
+        &limo_cad_assembly::AssemblySolutionDto,
+    )>,
+) -> Result<Vec<u8>, ExportError> {
     if meshes.is_empty() {
         return Err(ExportError("There are no active bodies to export.".into()));
     }
@@ -29,7 +42,17 @@ pub fn write_3mf(
         validate_3mf_model_mesh(mesh)?;
     }
 
-    let model_xml = build_3mf_model_xml(&welded, appearances, include_appearance, target)?;
+    let model_xml = match scene {
+        Some((structure, solution)) => crate::scene::build_scene_xml(
+            &welded,
+            appearances,
+            include_appearance,
+            target,
+            structure,
+            solution,
+        )?,
+        None => build_3mf_model_xml(&welded, appearances, include_appearance, target)?,
+    };
     let mut cursor = Cursor::new(Vec::new());
     {
         let mut zip = ZipWriter::new(&mut cursor);
@@ -56,8 +79,6 @@ pub fn write_3mf(
 
         if include_appearance {
             match target {
-                // Bambu and Orca read a standard 3MF as a model. A project_settings
-                // stub is one slicer's profile and is what Studio rejects.
                 SlicerTarget::Standard | SlicerTarget::BambuStudio | SlicerTarget::OrcaSlicer => {}
                 SlicerTarget::PrusaSlicer => {
                     write_prusa_metadata(&mut zip, options, &welded, appearances)?;
@@ -118,7 +139,7 @@ fn write_cura_metadata(
         })
         .collect();
     let payload = serde_json::json!({
-        "generator": "noBS CAD",
+        "generator": "Limo CAD",
         "note": "Cura reads per-body colors from 3MF basematerials; this file is a material hint list.",
         "materials": materials,
     });
@@ -140,7 +161,7 @@ fn write_prusa_metadata(
     appearances: &[BodyAppearance],
 ) -> Result<(), ExportError> {
     let mut config = String::from(
-        "; noBS CAD → PrusaSlicer-compatible filament hints\n\
+        "; Limo CAD → PrusaSlicer-compatible filament hints\n\
          ; generated for multi-material plate import\n",
     );
     let colours: Vec<String> = meshes
@@ -195,8 +216,6 @@ fn write_prusa_metadata(
         .map_err(zip_err)?;
     zip.write_all(config.as_bytes()).map_err(io_err)?;
 
-    // PrusaSlicer ignores consortium basematerials; object/volume extruder
-    // lives in Metadata/Slic3r_PE_model.config (see PrusaSlicer 3mf.cpp).
     let mut model_config = String::from(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <config>
@@ -235,7 +254,7 @@ fn write_prusa_metadata(
     Ok(())
 }
 
-fn build_3mf_model_xml(
+pub(crate) fn build_3mf_model_xml(
     meshes: &[TriangleMesh],
     appearances: &[BodyAppearance],
     include_appearance: bool,
@@ -246,7 +265,7 @@ fn build_3mf_model_xml(
 <model unit="millimeter" xml:lang="en-US"
   xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
   <metadata name="Application">{}</metadata>
-  <metadata name="Title">noBS CAD export</metadata>
+  <metadata name="Title">Limo CAD export</metadata>
   <resources>
 "#,
         xml_escape(target.application_metadata())
@@ -295,7 +314,7 @@ fn build_3mf_model_xml(
                 mesh.body_id.0
             )));
         }
-        for chunk in mesh.positions.chunks_exact(3) {
+        for chunk in mesh.positions.as_chunks::<3>().0 {
             xml.push_str(&format!(
                 r#"          <vertex x="{}" y="{}" z="{}"/>"#,
                 chunk[0], chunk[1], chunk[2]
@@ -310,7 +329,7 @@ fn build_3mf_model_xml(
             )));
         }
         let vertex_count = mesh.positions.len() / 3;
-        for tri in mesh.indices.chunks_exact(3) {
+        for tri in mesh.indices.as_chunks::<3>().0 {
             let (v1, v2, v3) = (tri[0] as usize, tri[1] as usize, tri[2] as usize);
             if v1 >= vertex_count || v2 >= vertex_count || v3 >= vertex_count {
                 return Err(ExportError(format!(
@@ -365,7 +384,7 @@ fn nonempty(value: &str, fallback: &str) -> String {
     }
 }
 
-fn xml_escape(value: &str) -> String {
+pub(crate) fn xml_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
         .replace('<', "&lt;")

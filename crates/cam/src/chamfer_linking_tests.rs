@@ -1,5 +1,5 @@
-// Included in planner::tests. Explicit machining intent must survive both
-// generation and posting, independently of the Automatic fitting policy.
+
+
 fn manual_chamfer_fixture(hole: bool) -> CamDocumentDto {
     let path = if hole {
         (0..96)
@@ -197,7 +197,7 @@ fn chamfer_disabled_and_same_as_entry_are_independent_of_exit_enable() {
         .commands
         .iter()
         .any(|c| matches!(c, CamCommandDto::Circular { .. })));
-    // Disabled geometry (including vertical radii) cannot produce motion.
+
     assert!(plan
         .commands
         .iter()
@@ -364,8 +364,8 @@ fn chamfer_manual_feeds_and_rounding_roundtrip_to_nc_and_stock() {
     let mut doc = manual_chamfer_fixture(true);
     crate::post::tests::bind_test_names(&mut doc, &[(3, "ChamferTool")]);
     doc.tools[0].number = Some(3);
-    // The shared rapid policy is applied to chamfer too, including fed
-    // withdrawals. There must be no UI-only feed or motion setting.
+
+
     doc.linking[0].allow_rapid_retract = false;
     doc.linking[0].high_feed_mode = CamHighFeedMode::Always;
     let plan = plan_setup(&doc, 1).unwrap();

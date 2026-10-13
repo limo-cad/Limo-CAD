@@ -1,17 +1,17 @@
 [package]
-name = "nbcad-help"
+name = "limo-cad-help"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 license = "LGPL-2.1-or-later"
 description = "Shared help catalog and BM25 search for MCP cad_help and desktop Help"
-repository = "https://github.com/limo-cad/Limo-CAD"
+repository.workspace = true
 
 [[bin]]
-name = "nbcad-help"
-path = "src/bin/nbcad-help.rs"
+name = "limo-cad-help"
+path = "src/bin/limo-cad-help.rs"
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["float_roundtrip"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 
 [dev-dependencies]

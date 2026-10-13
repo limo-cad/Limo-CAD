@@ -2,7 +2,7 @@
 
 ## Architecture constraints (do not violate)
 
-1. **`nbcad-script` is host-neutral** — no filesystem, no MCP session, no window. It only
+1. **`limo-cad-script` is host-neutral** — no filesystem, no MCP session, no window. It only
    strips JSONC, validates, resolves `$ref`/`$select`/`$project`/`$count`, and sequences
    host calls. Filesystem loading stays in the host (`mcp-server/src/interface.rs` today).
 2. **Version 1 scripts remain data + expressions only** — no embedded JS/shell. Includes
@@ -27,7 +27,7 @@
 | 1 | Script collections / part isolation | Top-level `includes` → flatten fragment `steps`/`checks` into one document |
 | 2 | Round-trip export distinct from `cad_script` | New `cad_interface` action `export_script` |
 | 3 | Agent / fast path | Document + test that `mode: "fast"` + includes skips presentation |
-| 4 | Tests + docs | Unit tests in `nbcad-script`; MCP test for export→replay; docs |
+| 4 | Tests + docs | Unit tests in `limo-cad-script`; MCP test for export→replay; docs |
 
 Non-goals (explicit): full bi-directional UI feature-history → commented JSONC with
 `$select`; rewriting INJS2065; Python factories; changing `cad_script` semantics.
@@ -64,7 +64,7 @@ Root script may declare:
 }
 ```
 
-Recommended filename suffix: `.collection.jsonc`. An included `.nbcad.jsonc` may be a
+Recommended filename suffix: `.collection.jsonc`. An included `.limo.jsonc` may be a
 full script; only its `steps` and `checks` are composed. `version`,
 `starting_state`, `verification`, `exports`, and `$schema` are ignored.
 
@@ -90,7 +90,7 @@ When expanding from a root **file path**:
 - Resolve each include relative to the file that declares it, then join that
   root-relative path against the root file’s parent directory. After
   `canonicalize`, the resolved file must stay under that base directory.
-- Extension must be `.nbcad.jsonc` or `.collection.jsonc` (case-insensitive).
+- Extension must be `.limo.jsonc` or `.collection.jsonc` (case-insensitive).
 - Reject once the running total of loaded source bytes exceeds `MAX_SCRIPT_BYTES`
   (16 MiB), not only after every fragment has been read.
 
@@ -162,7 +162,7 @@ Response:
 
 ```json
 {
-  "format": "nbcad.jsonc",
+  "format": "limo.jsonc",
   "version": 1,
   "fidelity": "lossless_authored" | "lossy_session_trace",
   "source": "{\n  \"version\": 1, ...\n}\n",
@@ -226,7 +226,7 @@ fn session_trace_to_v1_source(calls: &[Value], name: &str) -> Result<String, Str
 
 ### Recommended agent workflow (docs)
 
-1. Author / compose `.nbcad.jsonc` (+ collections) as SoT.
+1. Author / compose `.limo.jsonc` (+ collections) as SoT.
 2. Replay with `cad_interface {action:script, path, mode:fast}`.
 3. Tiny live tweaks via MCP execute — **then either** re-edit JSONC by hand **or**
    accept `export_script` lossy_trace for a scratch replay (not for publishing).
@@ -237,7 +237,7 @@ fn session_trace_to_v1_source(calls: &[Value], name: &str) -> Result<String, Str
 
 ## Part C — Tests
 
-### `nbcad-script` (no OCCT)
+### `limo-cad-script` (no OCCT)
 
 1. `flatten_includes` concatenates steps/checks; root name preserved.
 2. Cycle → error; `..` / absolute → error from loader contract tests.
@@ -268,7 +268,7 @@ Fixtures under `crates/script/tests/fixtures/collections/`.
    - Agent rebuilds: always `mode:fast`; presentation is optional teaching chrome
 2. **Short agentic note** — `docs/agentic/jsonc-workflow.md` (1–2 pages): SoT = JSONC,
    compose parts via includes, replay fast, export caveats.
-3. Schema: `examples/scripts/nbcad-script.schema.json` — add `includes` + fragment
+3. Schema: `examples/scripts/limo-cad-script.schema.json` — add `includes` + fragment
    `$defs/collection`.
 4. Optional example: `examples/scripts/collections/` minimal split of a toy part
    (keep fillet-basics monolithic; add `compose-two-boxes` or similar tiny demo).
@@ -282,7 +282,7 @@ Fixtures under `crates/script/tests/fixtures/collections/`.
 | `crates/script/src/includes.rs` | **NEW** — flatten/parse_with_includes |
 | `crates/script/src/lib.rs` | mod includes; reject unresolved includes in `parse` |
 | `crates/script/tests/fixtures/collections/*` | **NEW** fixtures |
-| `examples/scripts/nbcad-script.schema.json` | `includes` + collection def |
+| `examples/scripts/limo-cad-script.schema.json` | `includes` + collection def |
 | `examples/scripts/collections/*` | optional tiny demo |
 | `mcp-server/src/interface.rs` | expand includes when `path` load |
 | `mcp-server/src/lib.rs` | `export_script` action; retain `last_script_source`; tests |
@@ -292,7 +292,7 @@ Fixtures under `crates/script/tests/fixtures/collections/`.
 
 ## Apply order for parent
 
-1. Land `includes.rs` + `lib.rs` reject + unit tests (green `cargo test -p nbcad-script`).
+1. Land `includes.rs` + `lib.rs` reject + unit tests (green `cargo test -p limo-cad-script`).
 2. Schema + docs (can parallel).
 3. `interface.rs` path expansion.
 4. `export_script` in `lib.rs` + MCP tests.

@@ -40,7 +40,7 @@ here.
 | **Proof load** | Literature install ceiling (often ~¾ of theoretical yield) to leave margin for torque scatter |
 | **Running torque** | Extra torque from a locking feature before clamp develops — add when the datasheet says so |
 
-Modeled ISO/UN holes in noBS CAD are geometry aids. Prefer handbook/coupon
+Modeled ISO/UN holes in Limo CAD are geometry aids. Prefer handbook/coupon
 strength ratings; treat CAD as geometry, not a load certificate.
 
 ## Golden path (CAD-time)

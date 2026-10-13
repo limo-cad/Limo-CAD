@@ -28,8 +28,6 @@ pub(super) fn key(
 ) -> Result<Vec<u8>, CamPlanError> {
     let mut normalized = request.clone();
     if let Some(target) = &mut normalized.target {
-        // A non-empty opaque key is the host's promise that target geometry
-        // is unchanged. Subsequent frames intentionally omit those meshes.
         if target
             .cache_key
             .as_ref()
@@ -38,8 +36,7 @@ pub(super) fn key(
             target.meshes.clear();
         }
     }
-    // Exact identity, not only a hash: tool, stock, WCS, rest-source and CAD
-    // changes cannot alias an old result. Metadata keys are also byte-bounded.
+
     serde_json::to_vec(&(crate::machine::motion_document(document), normalized))
         .map_err(|error| CamPlanError(error.to_string()))
 }
@@ -56,7 +53,6 @@ pub(super) fn get(key: &[u8]) -> Option<CamSimulationResultDto> {
 }
 
 pub(super) fn insert(key: Vec<u8>, result: &CamSimulationResultDto) {
-    // Transient playback frames must not evict useful operation end-states.
     if result.completed_steps.is_some() && result.completed_steps != Some(0) {
         return;
     }

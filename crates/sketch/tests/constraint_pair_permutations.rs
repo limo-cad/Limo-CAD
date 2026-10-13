@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 use std::f64::consts::PI;
 
-use nbcad_sketch::{
+use limo_cad_sketch::{
     CircleMode, Constraint, DimensionMode, DimensionRequest, EntityDto, EntityId, OriginPlane,
     PlaneRef, SketchDto, SketchSession, Vec2,
 };
@@ -733,9 +733,6 @@ fn assert_operation_invariants(
             assert_line_length_unchanged(before, after, fixture.line_a, context);
         }
         Operation::HorizontalPoints | Operation::VerticalPoints => {
-            // Applying both orthogonal point-pair alignments to the same two
-            // points deliberately makes them coincident, so their former
-            // separation cannot also be preserved.
             let complementary_alignment = matches!(
                 (first, operation),
                 (Operation::HorizontalPoints, Operation::VerticalPoints)
@@ -756,11 +753,6 @@ fn assert_operation_invariants(
             );
         }
         Operation::Coincident | Operation::Midpoint | Operation::PointLineDistance => {
-            // Position relations do not own carrier size. They may have to
-            // rotate an undimensioned carrier when an earlier relation fixes
-            // the requested point's coordinate. A prior point-distance
-            // dimension can also mathematically determine the carrier length
-            // once that point is placed at its midpoint.
             if !(first == Operation::PointDistance && operation == Operation::Midpoint) {
                 assert_line_length_unchanged(before, after, fixture.line_b, context);
             }
@@ -875,10 +867,6 @@ fn assert_operation_invariants(
             );
         }
         Operation::LineOffset => {
-            // The direct equation is also exercised on nonparallel carriers;
-            // unlike the public parallel-line offset dimension, that system
-            // may need to rotate or translate either carrier. It must never
-            // resize either one.
             assert_line_length_unchanged(before, after, fixture.line_a, context);
             assert_line_length_unchanged(before, after, fixture.line_b, context);
         }

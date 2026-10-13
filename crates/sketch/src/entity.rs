@@ -93,11 +93,11 @@ impl Entity {
     #[allow(dead_code)]
     pub(crate) fn dof_contribution(&self) -> i32 {
         match self {
-            Entity::Point { .. } => 2,  // x, y
-            Entity::Line { .. } => 0,   // geometry owned by endpoint points
-            Entity::Arc { .. } => 5,    // cx, cy, r, a0, a1
-            Entity::Circle { .. } => 3, // cx, cy, r
-            // Fit points are independent solver variables.
+            Entity::Point { .. } => 2,
+            Entity::Line { .. } => 0,
+            Entity::Arc { .. } => 5,
+            Entity::Circle { .. } => 3,
+
             Entity::Spline { points } => points.len() as i32 * 2,
         }
     }

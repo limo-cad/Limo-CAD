@@ -120,8 +120,6 @@ pub enum Ast {
     Call(Func, Vec<Ast>),
 }
 
-// --- Tokenizer ---
-
 #[derive(Debug, Clone, PartialEq)]
 enum Tok {
     Num(f64),
@@ -202,8 +200,6 @@ fn tokenize(input: &str) -> Result<Vec<Tok>, ExprError> {
     toks.push(Tok::End);
     Ok(toks)
 }
-
-// --- Parser (recursive descent) ---
 
 struct Parser {
     toks: Vec<Tok>,
@@ -290,7 +286,7 @@ impl Parser {
         let base = self.parse_primary()?;
         if *self.peek() == Tok::Op('^') {
             self.next();
-            // Right-associative and tighter than unary minus.
+
             let exp = self.parse_unary()?;
             return Ok(Ast::Bin(Op::Pow, Box::new(base), Box::new(exp)));
         }

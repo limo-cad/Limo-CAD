@@ -31,9 +31,7 @@ pub(super) fn plan(
             tool.label()
         )));
     }
-    // Cutting depth comes from tool data. An indexable insert's programming
-    // radius is a profile approximation, not additional axial engagement or
-    // a declaration of the non-cutting body's diameter/relief.
+
     if builder.incoming_top - bottom_z > tool.overall_length + EPS {
         return Err(CamPlanError(
             "Face-mill roughing depth exceeds the declared tool length.".into(),
@@ -85,15 +83,10 @@ pub(super) fn plan(
         passes += front.clear_exterior(
             builder,
             setup,
-            r,
-            floor_r,
-            depth,
+            (r, floor_r, depth),
             p,
-            cutting.feed_xy,
-            cutting.feed_z,
-            &mut work,
-            &envelope,
-            &[],
+            (cutting.feed_xy, cutting.feed_z),
+            (&mut work, &envelope, &[]),
         )?;
         builder.retract_to_clearance();
         front.mark_completed_cap(floor_r, p);
@@ -102,7 +95,6 @@ pub(super) fn plan(
         layers += 1;
     }
     if passes == 0 {
-        // Remaining stock from earlier operations can legitimately be gone.
         if builder.rest_stock.is_some() {
             builder.warnings.push(format!("Face-mill roughing '{name}' found no remaining stock to cut; the operation is empty."));
             return Ok(());

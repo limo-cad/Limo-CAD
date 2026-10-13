@@ -5,20 +5,36 @@ on:
     branches: [main]
     paths:
       - 'crates/**'
+      - 'desktop/**'
+      - 'interface/**'
+      - 'scripts/ci/**'
       - 'knowledge/**'
       - 'examples/scripts/**'
       - 'xtask/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'VERSION'
+      - 'REPOSITORY'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - '.github/actions/setup-rust/**'
       - '.github/workflows/linux-engine-tests.yml'
   pull_request:
     paths:
       - 'crates/**'
+      - 'desktop/**'
+      - 'interface/**'
+      - 'scripts/ci/**'
       - 'knowledge/**'
       - 'examples/scripts/**'
       - 'xtask/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'VERSION'
+      - 'REPOSITORY'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - '.github/actions/setup-rust/**'
       - '.github/workflows/linux-engine-tests.yml'
 
 permissions:
@@ -26,7 +42,8 @@ permissions:
 
 concurrency:
   group: linux-engine-tests-${{ github.ref }}
-  cancel-in-progress: true
+  # Preserve main/manual receipts; cancel only superseded PR checks.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -37,14 +54,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Check out noBS CAD
+      - name: Check out Limo CAD
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check packaged viewport fixture isolation
+        run: bash scripts/ci/verify-linux-viewport.test.sh
+
+      - name: Check native refinement resource limits
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -I crates/occt/include crates/occt/tests/refinement_budget.cpp -o "$RUNNER_TEMP/refinement-budget"
+          "$RUNNER_TEMP/refinement-budget"
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: ./.github/actions/setup-rust
+
+      - name: Check default Windows publication identity guard
+        run: python3 scripts/ci/verify-default-windows-package.test.py
 
       - name: Cache Rust workspace
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+
+      - name: Install fonts for actual Unicode drawing export
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends fonts-noto-core fonts-noto-cjk
+
+      - name: Fetch and verify embedded material catalog
+        run: cargo xtask materials --fetch --check
+      - name: Fetch and verify embedded printer profiles
+        run: cargo xtask printer-profiles --fetch --check
 
       - name: Test complete host-neutral workspace
         run: cargo test --locked --workspace

@@ -1,6 +1,6 @@
 # ADR 0002 — Native Bevy viewport boundary
 
-- Status: Accepted
+- Status: Accepted viewport contract; shell/composition ownership superseded by [ADR 0003](0003-bevy-interface.md)
 - Date: 2026-07-30
 - Tracking: [#20](https://github.com/limo-cad/Limo-CAD/issues/20)
 
@@ -68,7 +68,7 @@ sufficient regressions.
 Bevy UI is built from the stable core `bevy_ui` flex/grid primitives. The
 experimental, unstyled `bevy_ui_widgets` crate is not a production dependency.
 `ViewportUiTheme` and the component builders in
-`src-tauri/src/native_viewport/ui.rs` are the canonical style implementation
+`desktop/src/native_viewport/ui.rs` are the canonical style implementation
 for native viewport UI.
 
 The bridge sends explicit palette, HUD, interaction, camera, and presentation
@@ -105,6 +105,15 @@ and transient-mesh changes receive a second Bevy update to settle the extracted
 render world. Camera and presentation-only changes render exactly once on both
 macOS and Windows; duplicating those updates adds pointer latency without
 creating a new GPU pipeline.
+
+The native interface and windowless CAD worker share a GPU device and queue.
+Window configuration and frame acquisition exclude queue operations in the
+interface's render world. CAD extraction/recovery and GPU render updates share
+the same submission guard with those window operations. Mesh rebuilding and
+pipeline prewarming/compilation run outside the guard, preserving menu rendering
+while geometry and shaders prepare. On shutdown, a stopped worker cancels its
+pending submission wait so the interface can finish its last frame.
+Teardown also services any pending main-thread surface work.
 
 The Extrude tool volume is a translucent fill without a duplicate edge cage;
 the source sketch remains visible in its normal retained sketch layer. Its DOM
@@ -149,23 +158,28 @@ back to manufacturing a polygonal face from tessellation.
 
 ## Document tabs and memory retention
 
-Each open desktop tab normally retains three coordinated layers: its Rust
-document plus OCCT kernel/B-reps, its Bevy mesh entities, and a reference to its
-last frontend document mirror. A normal tab switch activates those retained
-layers; it does not replay the feature tree, serialize the tessellation back
-through JavaScript, or reconstruct unchanged Bevy meshes.
+Each warm desktop tab retains its Rust document plus OCCT kernel/B-reps and
+Bevy model meshes. A normal tab switch activates those retained layers; it
+does not replay the feature tree or reconstruct unchanged Bevy meshes.
 
 The serialized parametric model remains the durable recovery and eviction
 boundary. The active tab is never evicted. An inactive tab becomes cold after
 60 minutes without use, or earlier under a portable physical-memory pressure
 estimate. Constrained pressure releases the least-recently-used inactive tab;
-critical pressure releases every inactive tab. Releasing a tab drops its OCCT
-context, Bevy mesh cache, and frontend mesh mirror while retaining its model
-snapshot and save target. Selecting a cold tab performs one transactional
-recompute and then makes it warm again.
+critical pressure releases every eligible inactive tab. Active tabs, unfinished
+sketches and saves in progress are protected. Releasing a tab drops its OCCT
+context, Bevy mesh handles and drawing projection/raster caches while retaining
+its model snapshot, file/archive state, document ownership and Undo/Redo history.
+Selecting a cold tab performs one transactional recompute, checks body identities
+and feature errors against the retained baseline, and verifies the rebuilt
+sketch state before restoring its retained editing sessions and making it warm.
+Finished-sketch command stacks stay in a separate in-memory record; project
+files do not acquire session Undo/Redo data.
+A failed reconstruction preserves the snapshot and previously active tab.
 
-The pressure probe uses the same `sysinfo` system backend on macOS and Windows
-with deliberately conservative thresholds (10%/1 GiB constrained and
+The existing native watcher probes memory every 30 seconds through `sysinfo`
+on Windows, Linux and macOS, away from the UI thread. It uses
+deliberately conservative thresholds (10%/1 GiB constrained and
 5%/512 MiB critical, whichever threshold is larger). This is a safety valve,
 not a fixed resident-tab cap or an instruction to discard useful filesystem
 caches.
@@ -177,6 +191,12 @@ view**. Touchpad orbit and 3D-mouse rotation share the center of the visible
 OCCT tessellation as their pivot. That presentation pivot is independent from
 the camera target reported to a 3Dconnexion driver; a driver-side automatic
 pivot update must not move it.
+
+Mouse orbit, Shift+trackpad swipes, the Orbit tool and orientation-dial drags
+rotate around the view's right and up axes without a vertical angle limit.
+The camera orientation turns with its position, so repeated full rotations
+pass smoothly through the top, bottom and inverted views. Pan follows the
+current screen axes, and zoom retains the current orientation.
 
 The macOS installed-driver path was calibrated against real cap motions on
 2026-07-31. Device input is canonicalized once at the adapter boundary:
@@ -221,7 +241,7 @@ using the same production UI builders as the embedded viewport. The capture is
 served by a development-only Vite route beside a React reference surface:
 
 ```text
-npm run dev:bevy-ui:capture
+cargo run --locked --manifest-path desktop/Cargo.toml --features dev-ui-lab --bin bevy-ui-lab -- public/__bevy_ui__/native.png
 npm run dev
 http://127.0.0.1:5173/?bevy-ui-lab=compare
 ```

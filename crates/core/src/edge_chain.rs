@@ -244,7 +244,7 @@ pub fn resolve(edges: &[Edge], keys: &[String], reversed: bool) -> Result<Chain,
     } else {
         Graph::new(&picked)?.walk(&(0..picked.len()).collect(), 0)?
     };
-    chain.keys = keys.to_vec(); // The first picked edge remains the orientation seed on reopen.
+    chain.keys = keys.to_vec();
     if reversed {
         chain.points.reverse();
     }

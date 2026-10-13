@@ -1,8 +1,9 @@
 //! Shared MCP mutate name → engine method + payload mapping.
 //!
-//! Used by `nbcad-mcp` (`cad_submit` accept-list / ToolSpec sync tests) and by
-//! the Tauri session bridge inbox dispatcher so both sides agree on every
-//! modeling mutate. Inspect/export/control tools are intentionally absent.
+//! Used by `limo-cad-mcp` (`cad_submit` accept-list / ToolSpec sync tests) and by
+//! the native session bridge inbox dispatcher so both sides agree on every
+//! modeling command. A few CAM reads use the same owning-engine inbox; their
+//! state effect is explicit below. Other inspect/export/control tools are absent.
 
 use serde_json::{json, Value};
 
@@ -15,9 +16,31 @@ pub fn is_live_engine_query(method: &str) -> bool {
         "active_sketch"
             | "project_visibility"
             | "named_views"
+            | "named_view_solution"
+            | "print_intent_get"
+            | "print_intent_height_binding"
+            | "print_intent_effective"
+            | "print_modifier_effective"
+            | "bambu_template_inspect"
+            | "bambu_local_verification_start"
+            | "bambu_local_verification_poll"
+            | "bambu_local_verification_cancel"
+            | "bambu_project_preview"
+            | "solid_export_bambu_project"
+            | "printer_catalog"
+            | "solid_export_3mf"
+            | "solid_export_stl"
+            | "solid_export_preflight"
             | "drawing_export"
             | "drawing_projection"
+            | "solid_section_review"
             | "assembly_document"
+            | "assembly_swept_collision_check"
+            | "assembly_preview_joint_coordinates"
+            | "assembly_preview_mechanism_drag"
+            | "assembly_evaluate_motion_study"
+            | "assembly_sample_motion_study"
+            | "assembly_export_motion_path_csv"
             | "eval_expression"
             | "preview_segment"
             | "preview_segment_locked"
@@ -26,6 +49,51 @@ pub fn is_live_engine_query(method: &str) -> bool {
             | "offset_preview"
             | "trim_preview"
     )
+}
+
+/// Owner-fenced broker reads can inspect current document/scene data directly.
+/// Existing snapshot-attached tools retain their completed-model read contract.
+pub fn is_routed_engine_query(method: &str) -> bool {
+    is_live_engine_query(method)
+        || matches!(
+            method,
+            "document"
+                | "project_export_model"
+                | "finished_sketches"
+                | "profile_catalog"
+                | "solid_scene"
+                | "body_appearances"
+                | "drawing_document"
+                | "assembly_solution"
+                | "assembly_preview_joint"
+                | "assembly_preview_joint_update"
+                | "assembly_preview_joint_motion"
+                | "assembly_interference_check"
+                | "geometry_edge_chain"
+                | "cam_chamfer_geometry"
+                | "cam_document"
+                | "cam_toolpath_statuses"
+                | "cam_cutter_mesh"
+                | "cam_plan"
+                | "cam_post"
+                | "cam_analyze_nbpost"
+                | "cam_simulate"
+                | "cam_simulate_gcode"
+                | "cam_post_events"
+                | "extrude_definitions"
+                | "revolve_definitions"
+                | "sweep_definitions"
+                | "loft_definitions"
+                | "rib_definitions"
+                | "fillet_definitions"
+                | "chamfer_definitions"
+                | "hole_definitions"
+                | "datum_plane_definitions"
+                | "body_feature_definitions"
+                | "preview_rectangle_locked"
+                | "preview_circle_locked"
+                | "chamfer_preview"
+        )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,23 +122,127 @@ pub struct MutateSpec {
     pub execution: ExecutionKind,
 }
 
-/// Every modeling mutate that `cad_submit` may enqueue and the UI inbox may apply.
+impl MutateSpec {
+    /// The inbox route is not evidence that an operation edits the document.
+    /// These five methods take `&self` on SketchManager: they return a plan,
+    /// generated NC/event data or a simulation, without saving toolpaths, an
+    /// NC file, or project state. Verification may populate a bounded cache.
+    /// Keep unknown/new methods conservative; regeneration remains a mutation.
+    pub fn is_read_only(&self) -> bool {
+        matches!(
+            self.engine_method,
+            "cam_plan" | "cam_post" | "cam_simulate" | "cam_simulate_gcode" | "cam_post_events"
+        )
+    }
+}
+
+/// Every owning-engine command that `cad_submit` may enqueue and the UI inbox may apply.
 pub static MUTATES: &[MutateSpec] = &[
     MutateSpec {
-        name: "project_set_visibility",
-        engine_method: "project_set_visibility",
+        name: "print_intent_upsert_height_range",
+        engine_method: "print_intent_upsert_height_range",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_upsert_layer_profile",
+        engine_method: "print_intent_upsert_layer_profile",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_remove_height",
+        engine_method: "print_intent_remove_height",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_rebind_height",
+        engine_method: "print_intent_rebind_height",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_modifier_create",
+        engine_method: "print_modifier_create",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_modifier_update",
+        engine_method: "print_modifier_update",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_modifier_remove",
+        engine_method: "print_modifier_remove",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_modifier_copy",
+        engine_method: "print_modifier_copy",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_modifier_reset",
+        engine_method: "print_modifier_reset",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_set_part",
+        engine_method: "print_intent_set_part",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_reset_part",
+        engine_method: "print_intent_reset_part",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_copy_part",
+        engine_method: "print_intent_copy_part",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_set_document",
+        engine_method: "print_intent_set_document",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_upsert_preset",
+        engine_method: "print_intent_upsert_preset",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_remove_preset",
+        engine_method: "print_intent_remove_preset",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_upsert_handoff",
+        engine_method: "print_intent_upsert_handoff",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "print_intent_remove_handoff",
+        engine_method: "print_intent_remove_handoff",
         payload: PayloadKind::Object,
         execution: ExecutionKind::Direct,
     },
     MutateSpec {
         name: "set_named_views",
         engine_method: "set_named_views",
-        payload: PayloadKind::Object,
-        execution: ExecutionKind::Direct,
-    },
-    MutateSpec {
-        name: "recall_named_view",
-        engine_method: "recall_named_view",
         payload: PayloadKind::Object,
         execution: ExecutionKind::Direct,
     },
@@ -93,9 +265,63 @@ pub static MUTATES: &[MutateSpec] = &[
         execution: ExecutionKind::Direct,
     },
     MutateSpec {
+        name: "recall_named_view",
+        engine_method: "recall_named_view",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
         name: "clear_named_view",
         engine_method: "clear_named_view",
         payload: PayloadKind::Empty,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_create_position",
+        engine_method: "assembly_create_position",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_update_position",
+        engine_method: "assembly_update_position",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_delete_position",
+        engine_method: "assembly_delete_position",
+        payload: PayloadKind::Field("position_id"),
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_apply_position",
+        engine_method: "assembly_apply_position",
+        payload: PayloadKind::Field("position_id"),
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_create_motion_study",
+        engine_method: "assembly_create_motion_study",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_update_motion_study",
+        engine_method: "assembly_update_motion_study",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_delete_motion_study",
+        engine_method: "assembly_delete_motion_study",
+        payload: PayloadKind::Field("study_id"),
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "project_set_visibility",
+        engine_method: "project_set_visibility",
+        payload: PayloadKind::Object,
         execution: ExecutionKind::Direct,
     },
     MutateSpec {
@@ -119,6 +345,66 @@ pub static MUTATES: &[MutateSpec] = &[
     MutateSpec {
         name: "drawing_delete_sheet",
         engine_method: "drawing_delete_sheet",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_update_view",
+        engine_method: "drawing_update_view",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_delete_view",
+        engine_method: "drawing_delete_view",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_add_annotation",
+        engine_method: "drawing_add_annotation",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_update_annotation",
+        engine_method: "drawing_update_annotation",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_delete_annotation",
+        engine_method: "drawing_delete_annotation",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_create_template",
+        engine_method: "drawing_create_template",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_apply_template",
+        engine_method: "drawing_apply_template",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_delete_template",
+        engine_method: "drawing_delete_template",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_add_revision",
+        engine_method: "drawing_add_revision",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "drawing_set_release",
+        engine_method: "drawing_set_release",
         payload: PayloadKind::Object,
         execution: ExecutionKind::Direct,
     },
@@ -165,6 +451,12 @@ pub static MUTATES: &[MutateSpec] = &[
         execution: ExecutionKind::Direct,
     },
     MutateSpec {
+        name: "solid_rename_feature",
+        engine_method: "solid_rename_feature",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
         name: "cad_load_project_model",
         engine_method: "project_prepare_load",
         payload: PayloadKind::Field("model_json"),
@@ -191,7 +483,7 @@ pub static MUTATES: &[MutateSpec] = &[
     MutateSpec {
         name: "sketch_edit",
         engine_method: "edit_sketch",
-        payload: PayloadKind::Field("name"),
+        payload: PayloadKind::Object,
         execution: ExecutionKind::Direct,
     },
     MutateSpec {
@@ -275,6 +567,18 @@ pub static MUTATES: &[MutateSpec] = &[
     MutateSpec {
         name: "sketch_add_constraints",
         engine_method: "add_constraints",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "sketch_delete_constraint",
+        engine_method: "delete_constraint",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "sketch_set_dimension_mode",
+        engine_method: "set_dimension_mode",
         payload: PayloadKind::Object,
         execution: ExecutionKind::Direct,
     },
@@ -705,6 +1009,18 @@ pub static MUTATES: &[MutateSpec] = &[
         execution: ExecutionKind::Direct,
     },
     MutateSpec {
+        name: "assembly_duplicate_occurrence",
+        engine_method: "assembly_duplicate_occurrence",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_remove_occurrence",
+        engine_method: "assembly_remove_occurrence",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
         name: "assembly_update_occurrence",
         engine_method: "assembly_update_occurrence",
         payload: PayloadKind::Object,
@@ -753,6 +1069,36 @@ pub static MUTATES: &[MutateSpec] = &[
         execution: ExecutionKind::Direct,
     },
     MutateSpec {
+        name: "assembly_set_joint_coordinates",
+        engine_method: "assembly_set_joint_coordinates",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_apply_joint_motions",
+        engine_method: "assembly_apply_joint_motions",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_create_contact_set",
+        engine_method: "assembly_create_contact_set",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_update_contact_set",
+        engine_method: "assembly_update_contact_set",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "assembly_delete_contact_set",
+        engine_method: "assembly_delete_contact_set",
+        payload: PayloadKind::Field("contact_id"),
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
         name: "assembly_create_gear_relation",
         engine_method: "assembly_create_gear_relation",
         payload: PayloadKind::Object,
@@ -776,10 +1122,6 @@ pub static MUTATES: &[MutateSpec] = &[
         payload: PayloadKind::BodyAppearance,
         execution: ExecutionKind::Direct,
     },
-    // CAM: writing the machining document mutates the project; plan/post/
-    // simulate read live engine state through the same inbox so an attached
-    // session always works on the current document. cam_get_document is a
-    // pure read and lives on the read-safe list instead.
     MutateSpec {
         name: "cam_set_document",
         engine_method: "cam_set_document",
@@ -849,7 +1191,7 @@ pub fn encode_payload(kind: PayloadKind, arguments: &Value) -> Result<String, St
         PayloadKind::Object => serde_json::to_string(arguments)
             .map_err(|error| format!("could not encode arguments: {error}")),
         PayloadKind::BodyAppearance => {
-            serde_json::to_string(&nbcad_export::resolve_body_appearance(arguments)?)
+            serde_json::to_string(&limo_cad_export::resolve_body_appearance(arguments)?)
                 .map_err(|error| format!("could not encode body appearance: {error}"))
         }
         PayloadKind::Field(field) => {
@@ -913,6 +1255,45 @@ pub fn encode_payload(kind: PayloadKind, arguments: &Value) -> Result<String, St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owning_cam_reads_are_distinct_from_edits_and_preview_queries() {
+        let reads: Vec<_> = MUTATES
+            .iter()
+            .filter(|spec| spec.is_read_only())
+            .map(|spec| spec.name)
+            .collect();
+        assert_eq!(
+            reads,
+            [
+                "cam_plan_setup",
+                "cam_post_setup",
+                "cam_simulate_setup",
+                "cam_simulate_gcode",
+                "cam_post_events"
+            ]
+        );
+        for name in [
+            "cam_set_document",
+            "cam_regenerate_operation",
+            "cam_regenerate_setup",
+            "solid_extrude",
+            "drawing_add_view",
+        ] {
+            assert!(!lookup_mutate(name).unwrap().is_read_only(), "{name}");
+        }
+        for method in [
+            "assembly_preview_joint_coordinates",
+            "assembly_preview_mechanism_drag",
+            "preview_segment",
+            "fillet_preview",
+            "offset_preview",
+            "trim_preview",
+        ] {
+            assert!(is_live_engine_query(method), "{method}");
+            assert!(lookup_mutate(method).is_none(), "{method}");
+        }
+    }
 
     #[test]
     fn mutate_names_are_unique_and_nonempty() {
@@ -1040,6 +1421,7 @@ mod tests {
         for name in [
             "assembly_update_component",
             "assembly_create_occurrence",
+            "assembly_remove_occurrence",
             "assembly_update_occurrence",
             "assembly_set_occurrence_pose",
             "assembly_set_occurrence_grounded",

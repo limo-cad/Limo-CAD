@@ -135,7 +135,7 @@ pub fn analyze_nbpost(
         || lowercase.contains("all rights reserved")
         || lowercase.contains("spdx-license-identifier");
     let mut warnings = vec![
-        "Analysis only: noBS CAD does not execute .nbpost scripts yet. The compatibility runtime and sandbox must fail closed before posts can generate NC code."
+        "Analysis only: Limo CAD does not execute .nbpost scripts yet. The compatibility runtime and sandbox must fail closed before posts can generate NC code."
             .to_string(),
     ];
     if rights_notice_detected {

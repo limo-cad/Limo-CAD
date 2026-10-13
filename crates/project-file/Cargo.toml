@@ -1,0 +1,16 @@
+[package]
+name = "limo-cad-project-file"
+version.workspace = true
+edition.workspace = true
+description = "Host-neutral Limo CAD project archives and atomic file I/O"
+license = "LGPL-2.1-or-later"
+repository.workspace = true
+publish = false
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+zip = { workspace = true, features = ["deflate"] }
+
+[dev-dependencies]
+zip = { workspace = true, features = ["unreserved"] }

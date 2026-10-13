@@ -22,7 +22,7 @@ pub(super) fn surface(stock: &VoxelStock, budget: usize) -> Option<CamSimulation
     let (center, stock_radius) = stock.display_cuts.initial.as_ref()?.cylinder()?;
     let [nx, ny, nz] = stock.dimensions;
     let [dx, dy, dz] = stock.cell_size;
-    // Do not turn sub-grid slivers into convincing machined surfaces.
+
     let tolerance = dx.max(dy);
     if stock_radius < tolerance * 8. {
         return None;
@@ -69,8 +69,7 @@ pub(super) fn surface(stock: &VoxelStock, budget: usize) -> Option<CamSimulation
         if ring.inner > 0. && ring.outer - ring.inner < tolerance * 4. {
             return None;
         }
-        // Exhaustive agreement, including internal voids and the seam. This
-        // is not an angular subsample that could miss a narrow radial slot.
+
         for (i, &r) in radii.iter().enumerate() {
             let occupied = stock.is_occupied_index(z * nx * ny + i);
             if occupied {
@@ -84,8 +83,7 @@ pub(super) fn surface(stock: &VoxelStock, budget: usize) -> Option<CamSimulation
         }
         rings.push(Some(ring));
     }
-    // Interpolate only sub-cell changes (rounded corners). A real shoulder,
-    // bore opening, or end of the part remains a sharp planar annulus.
+
     let blend = |a: Ring, b: Option<Ring>| -> Ring {
         let value = |x: f64, y: f64| {
             if (x - y).abs() <= tolerance && (x == 0.) == (y == 0.) {
@@ -152,7 +150,7 @@ pub(super) fn surface(stock: &VoxelStock, budget: usize) -> Option<CamSimulation
             let blend_slope = |other: Option<Slab>, at: f64, top: bool| {
                 other
                     .filter(|s| r(if top { s.lo } else { s.hi }) == at)
-                    .map(|s| slope(s))
+                    .map(slope)
                     .filter(|s| (s - current).abs() < 0.5)
                     .map_or(current, |s| (s + current) * 0.5)
             };
@@ -278,7 +276,7 @@ mod tests {
                 radius: 12.,
             },
         ));
-        stock.display_cuts.limited = true; // long histories must not force square walls
+        stock.display_cuts.limited = true;
         stock
     }
 
@@ -296,8 +294,10 @@ mod tests {
         let mut flats = 0;
         for (p, n) in mesh
             .positions
-            .chunks_exact(9)
-            .zip(mesh.normals.chunks_exact(9))
+            .as_chunks::<9>()
+            .0
+            .iter()
+            .zip(mesh.normals.as_chunks::<9>().0.iter())
         {
             let vertex: [[u32; 3]; 3] = std::array::from_fn(|i| {
                 std::array::from_fn(|k| {
@@ -344,8 +344,6 @@ mod tests {
             mesh
         );
         assert!(warnings.iter().any(|s| s.contains("Round-stock display")));
-        // While recorded sweeps are available they show sub-voxel facing
-        // passes and flats; ring fitting must not replace them.
         let mut exact = fixture(|_| false);
         exact.display_cuts.limited = false;
         let mut warnings = vec![];

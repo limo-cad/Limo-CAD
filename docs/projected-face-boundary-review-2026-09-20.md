@@ -109,7 +109,7 @@ of assuming a fixed grid spacing despite the adaptive grid.
 
 ### Fix verification
 
-- `cargo test -p nbcad-sketch -p nbcad-solid -p nbcad-occt --features nbcad-occt/native-occt --quiet`:
+- `cargo test -p limo-cad-sketch -p limo-cad-solid -p limo-cad-occt --features limo-cad-occt/native-occt --quiet`:
   510 tests passed (453 sketch/solid, 57 native kernel/integration).
 - Full frontend regression suite, TypeScript checking, workspace/MCP formatting
   checks and `git diff --check` passed.
@@ -172,7 +172,7 @@ Required: map the acquisitions and their eligibility checks to the corresponding
 
 [pocket_profile_edges.rs:135](https://github.com/limo-cad/Limo-CAD/blob/126b75bc984e141ad6283cfeb9106500727d4986/crates/occt/tests/pocket_profile_edges.rs#L135)
 
-The new feature-gated test initializes `ArcCenterRequest.clockwise`, which was removed by a later commit. `cargo test -p nbcad-occt --features native-occt --test pocket_profile_edges --no-run` fails with E0560; the compiler lists `angle_text` and `sweep_rad` as the available missing fields. Native-OCCT test builds including this integration target cannot complete. The ordinary sketch/solid suite does not compile it.
+The new feature-gated test initializes `ArcCenterRequest.clockwise`, which was removed by a later commit. `cargo test -p limo-cad-occt --features native-occt --test pocket_profile_edges --no-run` fails with E0560; the compiler lists `angle_text` and `sweep_rad` as the available missing fields. Native-OCCT test builds including this integration target cannot complete. The ordinary sketch/solid suite does not compile it.
 
 Required: update this call and run the native-feature integration test against the final branch, not only an earlier commit.
 
@@ -228,9 +228,9 @@ The broad default gizmo depth bias also affects grids, and the one-pixel camera-
 
 Passed:
 
-- `cargo test -p nbcad-sketch -p nbcad-solid --quiet`: 441 tests, zero failures.
+- `cargo test -p limo-cad-sketch -p limo-cad-solid --quiet`: 441 tests, zero failures.
 - `npm run test:frontend` and `npx tsc --noEmit`.
-- `cargo check --manifest-path src-tauri/Cargo.toml --tests --locked --offline`.
+- `cargo check --manifest-path desktop/Cargo.toml --tests --locked --offline`.
 - Fresh WebAssembly engine build and matching wasm-bindgen generation.
 - Browser suites: `e2e-face-boundary-profile`, `e2e-center-arc-input`, `e2e-arc-endpoints`, and `e2e-point-extension`.
 - `git diff --check origin/main...HEAD`.

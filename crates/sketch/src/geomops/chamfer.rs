@@ -23,6 +23,8 @@ pub enum ChamferError {
     Degenerate,
     DistanceTooLarge,
     NotPositive,
+    AngleOutOfRange,
+    IncompatibleAngle,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -81,12 +83,12 @@ fn line_intersection(l1: &LineSeg, l2: &LineSeg) -> Option<Pt> {
 
     let rxs = cross2d(r, s);
     if rxs.abs() < 1e-15 {
-        return None; // Parallel or collinear
+        return None;
     }
 
     let q = pt_sub(p2, p1);
     let t = cross2d(q, s) / rxs;
-    // Intersection point = p1 + t * r
+
     Some(pt_add(p1, pt_mul(r, t)))
 }
 
@@ -96,51 +98,39 @@ pub fn chamfer_lines(
     d1: f64,
     d2: f64,
 ) -> Result<ChamferResult, ChamferError> {
-    // Check positive distances
-    if d1 <= 0.0 || d2 <= 0.0 {
+    if !d1.is_finite() || !d2.is_finite() || d1 <= 0.0 || d2 <= 0.0 {
         return Err(ChamferError::NotPositive);
     }
 
-    // Check degenerate segments
     let len1 = pt_len(pt_sub(l1.b, l1.a));
     let len2 = pt_len(pt_sub(l2.b, l2.a));
     if len1 < 1e-15 || len2 < 1e-15 {
         return Err(ChamferError::Degenerate);
     }
 
-    // Find intersection
     let v = match line_intersection(l1, l2) {
         Some(v) => v,
         None => return Err(ChamferError::Parallel),
     };
 
-    // Determine direction for l1: from V toward the endpoint farther from V
-    // Endpoints of l1 are l1.a and l1.b
     let dist_va = pt_len(pt_sub(l1.a, v));
     let dist_vb = pt_len(pt_sub(l1.b, v));
 
-    // Tie-break: toward b if distances are equal (or very close)
-    // "tie-break: toward b" means if dist_va == dist_vb, choose b.
-    // So we choose b if dist_vb >= dist_va (within epsilon)
     let dir1 = if dist_vb >= dist_va - 1e-15 {
         pt_norm(pt_sub(l1.b, v))
     } else {
         pt_norm(pt_sub(l1.a, v))
     };
 
-    // Determine direction for l2: from V toward the endpoint farther from V
     let dist_va2 = pt_len(pt_sub(l2.a, v));
     let dist_vb2 = pt_len(pt_sub(l2.b, v));
 
-    // Tie-break: toward b if distances are equal (or very close)
     let dir2 = if dist_vb2 >= dist_va2 - 1e-15 {
         pt_norm(pt_sub(l2.b, v))
     } else {
         pt_norm(pt_sub(l2.a, v))
     };
 
-    // Check if distance exceeds segment length from V to the chosen endpoint
-    // For l1: the chosen endpoint is the one farther from V (or b on tie)
     let max_dist1 = if dist_vb >= dist_va - 1e-15 {
         dist_vb
     } else {
@@ -159,9 +149,6 @@ pub fn chamfer_lines(
         return Err(ChamferError::DistanceTooLarge);
     }
 
-    // A preceding constrained operation can leave an intended 20 mm edge as
-    // 19.999999999999996 mm. Clamp only that numerical sliver so equality
-    // consumes the carrier without creating a microscopically reversed line.
     let p1 = pt_add(v, pt_mul(dir1, d1.min(max_dist1)));
     let p2 = pt_add(v, pt_mul(dir2, d2.min(max_dist2)));
 
@@ -169,6 +156,40 @@ pub fn chamfer_lines(
         point_on_l1: p1,
         point_on_l2: p2,
     })
+}
+
+/// Distance along the first carrier and acute chamfer angle measured from it.
+/// The sine rule also handles corners whose carrier angle is not 90 degrees.
+pub fn chamfer_lines_with_angle(
+    l1: &LineSeg,
+    l2: &LineSeg,
+    distance: f64,
+    angle_deg: f64,
+) -> Result<ChamferResult, ChamferError> {
+    if !angle_deg.is_finite() || angle_deg <= 0.0 || angle_deg >= 90.0 {
+        return Err(ChamferError::AngleOutOfRange);
+    }
+    if !distance.is_finite() || distance <= 0.0 {
+        return Err(ChamferError::NotPositive);
+    }
+    let vertex = line_intersection(l1, l2).ok_or(ChamferError::Parallel)?;
+    let ray = |line: &LineSeg| {
+        let a = pt_sub(line.a, vertex);
+        let b = pt_sub(line.b, vertex);
+        pt_norm(if pt_len(b) >= pt_len(a) - 1e-15 { b } else { a })
+    };
+    let first = ray(l1);
+    let second = ray(l2);
+    let corner_angle = cross2d(first, second)
+        .abs()
+        .atan2(first.x * second.x + first.y * second.y);
+    let angle = angle_deg.to_radians();
+    let remaining_angle = std::f64::consts::PI - corner_angle - angle;
+    if remaining_angle <= 0.0 {
+        return Err(ChamferError::IncompatibleAngle);
+    }
+    let second_distance = distance * angle.sin() / remaining_angle.sin();
+    chamfer_lines(l1, l2, distance, second_distance)
 }
 
 #[cfg(test)]
@@ -196,12 +217,6 @@ mod tests {
 
     #[test]
     fn test_chamfer_tiebreak() {
-        // l1=(-5,0)-(5,0), l2=(0,-5)-(0,5), d1=1, d2=1
-        // Intersection is (0,0)
-        // For l1: dist to a(-5,0) is 5, dist to b(5,0) is 5. Tie-break toward b.
-        // So dir1 is toward (5,0), i.e., (1,0). point_on_l1 = (0,0) + 1*(1,0) = (1,0)
-        // For l2: dist to a(0,-5) is 5, dist to b(0,5) is 5. Tie-break toward b.
-        // So dir2 is toward (0,5), i.e., (0,1). point_on_l2 = (0,0) + 1*(0,1) = (0,1)
         let l1 = LineSeg {
             a: Pt { x: -5.0, y: 0.0 },
             b: Pt { x: 5.0, y: 0.0 },

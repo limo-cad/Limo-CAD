@@ -1,0 +1,10 @@
+[package]
+name = "limo-cad-build-info"
+version.workspace = true
+edition.workspace = true
+description = "Compiled application identity without invalidating the CAD engine dependency graph"
+license = "LGPL-2.1-or-later"
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }

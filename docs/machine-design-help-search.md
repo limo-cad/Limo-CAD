@@ -13,7 +13,7 @@ Tracked on branch `docs/machine-design-kb` (PR #145).
 
 ## Status (2026-09-19)
 
-**Ship BM25-first** in `crates/help` (`nbcad-help`). Unified product plan:
+**Ship BM25-first** in `crates/help` (`limo-cad-help`). Unified product plan:
 this document plus [`machine-design-kb.md`](machine-design-kb.md). One corpus, many doors
 (`cad_help`, desktop Help, Pages). No separate agent ranker. Tantivy remains
 the scale path behind `SearchIndex` when growth bars trip — not day-one.
@@ -35,9 +35,9 @@ harness (or successor) over anecdotes.
 **Repo-reproducible checks** (from repository root):
 
 ```bash
-cargo test -p nbcad-help
+cargo test -p limo-cad-help
 cargo test --manifest-path mcp-server/Cargo.toml cad_help -- --nocapture
-npm run check:knowledge
+cargo xtask knowledge check
 cargo xtask install-mcp --dry-run
 ```
 
@@ -52,11 +52,11 @@ re-Add the MCP client (restart alone can leave a stale server).
 | Layer | Role |
 |-------|------|
 | `knowledge/machine-design/**/*.md` | **Only** authored source (OKF + frontmatter) |
-| `scripts/build-help-index.mjs` → `search-index.json` | CI freshness + Pages interchange (not the product ranker) |
-| **`nbcad-help` (`crates/help`)** | Catalog + search + get; owns ranking |
-| MCP | Thin `cad_help` over `nbcad-help` |
+| `cargo xtask knowledge index` → `search-index.json` | CI freshness + Pages interchange (not the product ranker) |
+| **`limo-cad-help` (`crates/help`)** | Catalog + search + get; owns ranking |
+| MCP | Thin `cad_help` over `limo-cad-help` |
 | Tauri Help | Same crate via `invoke` + markdown → safe HTML panel |
-| Browser / wasm | **No** heavy index in `nbcad-wasm`; desktop Help or JSON approx |
+| Browser / wasm | **No** heavy index in `limo-cad-wasm`; desktop Help or JSON approx |
 | GitHub Pages | Same markdown (+ optional client search over JSON) |
 
 Do **not** maintain separate agent vs user articles.
@@ -79,7 +79,7 @@ tool cad_help  (MCP spine: search | get | topics)
 prompt help_search  (optional; frames a contextual query → cad_help)
         │
         ▼
-   nbcad_help::HelpStore
+   limo_cad_help::HelpStore
         │
         ├── Catalog (id → Page meta + body)
         └── dyn SearchIndex  ◄── BM25 (ship)  /  Tantivy (scale)
@@ -118,7 +118,7 @@ run from the catalog). Still no daemon. Still **not** in wasm.
 | Meilisearch / Typesense / ES | Extra process; anti local-first |
 | ripgrep shell-out | Bad MCP product path |
 | Embeddings / vector DB | Later only if keyword fails on CAD jargon |
-| Help inside `nbcad-wasm` | Keep wasm lean |
+| Help inside `limo-cad-wasm` | Keep wasm lean |
 | Shipping Tantivy on day one for 6 pages | Complexity without payoff — **but** the trait + file layout must make the swap boring |
 
 SQLite FTS5: fine if the app later gains a general local DB; not required for
@@ -151,11 +151,11 @@ the HTML path. One source file; two presentations.
 
 ## Workspace placement
 
-Three Cargo workspaces: **root**, **`mcp-server`**, **`src-tauri`**.
+Three Cargo workspaces: **root**, **`mcp-server`**, **`desktop`**.
 
-1. `crates/help` as a **root** workspace member (`nbcad-help`)
-2. `mcp-server` path-deps it (like `nbcad-recipes`)
-3. `src-tauri` path-deps it for search + render helpers
+1. `crates/help` as a **root** workspace member (`limo-cad-help`)
+2. `mcp-server` path-deps it (like `limo-cad-recipes`)
+3. `desktop` path-deps it for search + render helpers
 4. Keep the index crate **out of** `crates/wasm`
 
 ## MCP surface
@@ -198,7 +198,7 @@ Optional: boost `related_recipes` when the caller passes active recipe context.
 ## Acceptance sketch
 
 - [ ] One markdown tree for UI, MCP, Pages
-- [ ] MCP + Tauri call the same `nbcad_help::search`
+- [ ] MCP + Tauri call the same `limo_cad_help::search`
 - [ ] Help UI: sanitized article render + recipe chips + stub visibility
 - [ ] Agent `get` returns markdown/plain, not HTML
 - [ ] No index/nucleo in wasm
@@ -217,6 +217,6 @@ Optional: boost `related_recipes` when the caller passes active recipe context.
 - [x] Agent doctrine page `concepts/agent-mcp-workflow`
 - [x] MCP initialize instructions mention tenacity / `cad_help`
 - [ ] Tauri Help panel (later)
-- [x] CI: `cargo test --workspace` (linux-engine-tests, includes `nbcad-help`); MCP acceptance also runs on `crates/help/**`; `npm run check:knowledge` + `search-index.json` freshness on the Pages knowledge workflow
+- [x] CI: `cargo test --workspace` (linux-engine-tests, includes `limo-cad-help`); MCP acceptance also runs on `crates/help/**`; `cargo xtask knowledge check` + `search-index.json` freshness on the Pages knowledge workflow
 - [ ] Tantivy when growth bar trips
 

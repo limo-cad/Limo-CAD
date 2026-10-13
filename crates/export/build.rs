@@ -1,6 +1,5 @@
 //! Rebuild when the filament catalog changes.
-//! Source of truth remains `presets/catalog.json`; use the ignored
-//! `regen_frontend_catalog_mirror` test to sync `src/materials/catalog.json`.
+//! Source of truth remains `presets/catalog.json`, embedded by the Rust engine.
 
 use std::env;
 use std::path::PathBuf;

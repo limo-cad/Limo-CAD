@@ -61,4 +61,4 @@ body:
     id: artifacts
     attributes:
       label: Artifacts
-      description: Screenshot, short recording, or a safe .nbcad file — plus a STEP backup if the geometry matters
+      description: Screenshot, short recording, or a safe .limo file — plus a STEP backup if the geometry matters

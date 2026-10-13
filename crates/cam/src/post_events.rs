@@ -110,8 +110,7 @@ pub fn post_event_stream(document: &CamDocumentDto, program: &CamProgramDto) -> 
                 rpm: *rpm,
             },
             CamCommandDto::Coolant { mode } => PostEventDto::OnCoolant { mode: *mode },
-            // Simulator-only state record. Planner-produced programs never
-            // contain it, and a post callback must not turn it into motion.
+
             CamCommandDto::SetPosition { .. } => continue,
             CamCommandDto::Rapid { to } => PostEventDto::OnRapid {
                 x: to.x,
@@ -147,7 +146,7 @@ pub fn post_event_stream(document: &CamDocumentDto, program: &CamProgramDto) -> 
         events.push(event);
     }
     PostEventStreamDto {
-        format: "nbcad-post-events".to_string(),
+        format: "limo-cad-post-events".to_string(),
         version: 1,
         units: "millimeters".to_string(),
         program_name: program.name.clone(),
@@ -187,7 +186,7 @@ mod tests {
             warnings: vec!["Part-gouge clearance is UNVERIFIED".into()],
         };
         let events = post_event_stream(&CamDocumentDto::default(), &program);
-        assert_eq!(events.format, "nbcad-post-events");
+        assert_eq!(events.format, "limo-cad-post-events");
         assert!(matches!(events.events[0], PostEventDto::OnOpen));
         assert!(matches!(
             events.events[1],
@@ -207,8 +206,6 @@ mod tests {
         assert_eq!(events.warnings, program.warnings);
         assert_eq!(serialized["warnings"][0], program.warnings[0]);
 
-        // Existing version-1 streams remain readable; newly exported streams
-        // always disclose the findings rather than losing them at projection.
         let mut legacy = serialized;
         legacy.as_object_mut().unwrap().remove("warnings");
         let legacy: PostEventStreamDto = serde_json::from_value(legacy).unwrap();

@@ -155,13 +155,6 @@ impl CutterProfile {
             Tip::Round { corner } => corner,
             Tip::Cone { height, .. } | Tip::Bevel { height, .. } => height,
         };
-        // An indexable face/high-feed mill's declared cutting length is its
-        // maximum depth of cut (APMX), not where its edge ends: the physical
-        // corner and peripheral edge continue to the full diameter above it
-        // (Tungaloy DoFeed LNMU03: APMX 1, RE 1.2, programmed as R1.5). A
-        // vendor programming radius encloses that real edge, so remove
-        // material with the whole programming corner. Per-pass engagement
-        // stays limited by maximum axial depth.
         if tip_height > g.flute_length + 1e-9 && g.kind != CamToolKind::FaceMill {
             return Err("Tool flute length must contain its tip or corner profile; check Flute length and Corner radius/angle".into());
         }
@@ -289,9 +282,6 @@ impl CutterProfile {
                     ((radial - land - z * tangent) * nr, [nr, -tangent * nr])
                 }
                 Tip::Round { corner } => {
-                    // Quarter-round offset of the flat land. Clamping each
-                    // component gives the tangent continuation onto the floor
-                    // and cylinder, not a complete torus that invents a lip.
                     let q = [radial - (self.radius - corner), corner - z];
                     let positive = q.map(|v| v.max(0.));
                     let length = positive[0].hypot(positive[1]);
@@ -344,8 +334,6 @@ impl CutterProfile {
         match self.tip {
             Tip::Flat => {}
             Tip::Round { corner } => {
-                // Quarter-circle meridian, with analytic normals. The flat
-                // disk and curved flank have separate normals at their join.
                 let ring = |i: usize| {
                     let a = i as f64 / 24. * std::f64::consts::FRAC_PI_2;
                     Ring {
@@ -494,9 +482,6 @@ mod tests {
     use super::*;
     #[test]
     fn shallow_face_insert_cuts_with_its_whole_programming_corner() {
-        // A 1 mm APMX high-feed insert still reaches its full diameter at the
-        // top of the programming corner, so stacked shallow layers clean the
-        // wall instead of each leaving a corner-sized step.
         for radius in [1.2, 1.5] {
             let mut g = geometry(CamToolKind::FaceMill);
             g.diameter = 16.;
@@ -513,12 +498,16 @@ mod tests {
             assert!(mesh
                 .cutter
                 .positions
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .all(|p| f64::from(p[2]) <= radius + 1e-6));
             assert!(mesh
                 .shank
                 .positions
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .all(|p| f64::from(p[2]) >= radius - 1e-6));
             assert_eq!(g.flute_length, 1., "tool data is not rewritten");
             g.kind = CamToolKind::BullNoseEndMill;
@@ -738,15 +727,16 @@ mod tests {
             assert!((mesh.cutter.positions.len() + mesh.shank.positions.len()) / 9 < 4000);
             for part in [&mesh.cutter, &mesh.shank] {
                 assert_eq!(part.positions.len(), part.normals.len());
-                for n in part.normals.chunks_exact(3) {
+                for n in part.normals.as_chunks::<3>().0 {
                     assert!((n.iter().map(|n| n * n).sum::<f32>() - 1.).abs() < 1e-5);
                 }
-                // Every triangle points outwards; zero-area apex triangles
-                // would hide the tip or make shading unreliable.
+
                 for (p, n) in part
                     .positions
-                    .chunks_exact(9)
-                    .zip(part.normals.chunks_exact(9))
+                    .as_chunks::<9>()
+                    .0
+                    .iter()
+                    .zip(part.normals.as_chunks::<9>().0.iter())
                 {
                     let u = [p[3] - p[0], p[4] - p[1], p[5] - p[2]];
                     let v = [p[6] - p[0], p[7] - p[1], p[8] - p[2]];
@@ -763,16 +753,18 @@ mod tests {
                     );
                 }
             }
-            for p in mesh.cutter.positions.chunks_exact(3) {
+            for p in mesh.cutter.positions.as_chunks::<3>().0 {
                 let r = (p[0] as f64).hypot(p[1] as f64);
                 let z = p[2] as f64;
-                // Float mesh transport, not the double-precision simulator.
+
                 assert!(r <= profile.radius_at_height(z.min(g.flute_length)).unwrap() + 2e-5);
             }
             near(
                 mesh.cutter
                     .positions
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .map(|p| p[2] as f64)
                     .fold(f64::INFINITY, f64::min),
                 0.,

@@ -1,0 +1,75 @@
+{
+  "purpose": "Bounded matched switching inputs; not a reproduction of reported latency",
+  "generator": {
+    "binary_sha256": "d204b5eb8dc0ad23c660cfcc7dea27c7b90d31c513773db68647b7ec89587a17",
+    "source_sha": "not independently attested",
+    "initialize": {
+      "capabilities": {
+        "prompts": {
+          "listChanged": false
+        },
+        "resources": {
+          "listChanged": false,
+          "subscribe": false
+        },
+        "tools": {
+          "listChanged": true
+        }
+      },
+      "instructions": "This is one persistent headless CAD document. Attach explicitly to control a running desktop. Begin and finish sketches before creating solid features. Use returned stable entity/body/face/edge ids in later calls. Dynamic tool disclosure is enabled; out-of-focus tools remain callable. Prefer cad_help (search/get/topics) before web search for design guidance; use resources/list and resources/read on nbcad://knowledge/... when the full page is needed (start at nbcad://knowledge/index.md). Be tenacious: use cad_list_all_tools or soft focus when the list looks thin; inspect (solid_scene/cad_document) between mutates; run recipe scripts on a blank document.",
+      "protocolVersion": "2025-06-18",
+      "serverInfo": {
+        "_meta": {
+          "nbcad/build": {
+            "channel": "development",
+            "modified": true,
+            "revision": "33b5aed93bcf8cb8e7af719775c6650f2b162213",
+            "version": "0.2.1"
+          }
+        },
+        "name": "nbcad",
+        "title": "noBS CAD",
+        "version": "0.2.1+33b5aed93bcf8cb8e7af719775c6650f2b162213.modified"
+      }
+    }
+  },
+  "verification": {
+    "independent_replays_per_script": 2,
+    "exact_semantic_model_and_geometry_match": true,
+    "each_archive_reopened_in_fresh_engine": true
+  },
+  "inputs": [
+    {
+      "file": "part-a.nbcad.jsonc",
+      "bytes": 3698,
+      "sha256": "78d90f0103acacf3500573d89e276904b74b2a2e4f609b9abb2048db8854e780"
+    },
+    {
+      "file": "part-a.nbcad",
+      "bytes": 2054,
+      "sha256": "3fd9de9ea88e4fb1e8e9e18c918224161be32c3be296197b90dad8d07ad457c2"
+    },
+    {
+      "file": "part-b.nbcad.jsonc",
+      "bytes": 14215,
+      "sha256": "572ca74b0ed2e4ebda6216c6a8afe2bf70fb5dae7c77961cbf227e8ef5c6a242"
+    },
+    {
+      "file": "part-b.nbcad",
+      "bytes": 2954,
+      "sha256": "d68412444f45a835f44e92d557e6a4725ff8c23fa77ecc61b9997c61c52c826b"
+    }
+  ],
+  "expected": {
+    "part-a": {
+      "bodies": 1,
+      "sketches": 1,
+      "history_features": 2
+    },
+    "part-b": {
+      "bodies": 6,
+      "sketches": 6,
+      "history_features": 12
+    }
+  }
+}

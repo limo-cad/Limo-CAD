@@ -4,7 +4,7 @@
 //! operation. These tests cover dependency circuits, which need three or more
 //! relations and therefore cannot be exposed by pairwise tests alone.
 
-use nbcad_sketch::{
+use limo_cad_sketch::{
     CircleMode, Constraint, DimensionMode, DimensionRequest, DragPhase, EntityDto, EntityId,
     MovePointRequest, OriginPlane, PlaneRef, RectangleMode, SessionError, SetDimensionModeRequest,
     SketchDto, SketchSession, Vec2,
@@ -108,7 +108,6 @@ fn two_right_angles_reject_the_implied_parallel_relation() {
 
 #[test]
 fn transitive_relation_families_reject_the_closing_edge() {
-    // Parallel transitivity.
     let mut s = session();
     let a = line(&mut s, v(0.0, 0.0), v(20.0, 0.0));
     let b = line(&mut s, v(0.0, 10.0), v(20.0, 10.0));
@@ -118,7 +117,6 @@ fn transitive_relation_families_reject_the_closing_edge() {
         .unwrap();
     assert_redundant(&mut s, Constraint::Parallel { a, b: c }, &["parallel"]);
 
-    // Equal-length transitivity.
     let mut s = session();
     let a = line(&mut s, v(0.0, 0.0), v(10.0, 0.0));
     let b = line(&mut s, v(0.0, 10.0), v(10.0, 10.0));
@@ -127,7 +125,6 @@ fn transitive_relation_families_reject_the_closing_edge() {
     s.add_constraint(Constraint::Equal { a: b, b: c }).unwrap();
     assert_redundant(&mut s, Constraint::Equal { a, b: c }, &["equal"]);
 
-    // Collinear transitivity.
     let mut s = session();
     let a = line(&mut s, v(0.0, 0.0), v(10.0, 0.0));
     let b = line(&mut s, v(15.0, 0.0), v(25.0, 0.0));
@@ -137,7 +134,6 @@ fn transitive_relation_families_reject_the_closing_edge() {
         .unwrap();
     assert_redundant(&mut s, Constraint::Collinear { a, b: c }, &["collinear"]);
 
-    // Coincident-point transitivity.
     let mut s = session();
     let a = point(&mut s, v(0.0, 0.0));
     let b = point(&mut s, v(10.0, 3.0));
@@ -147,7 +143,6 @@ fn transitive_relation_families_reject_the_closing_edge() {
         .unwrap();
     assert_redundant(&mut s, Constraint::Coincident { a, b: c }, &["coincident"]);
 
-    // Concentric-curve transitivity.
     let mut s = session();
     let a = circle(&mut s, v(0.0, 0.0), 4.0);
     let b = circle(&mut s, v(15.0, 2.0), 6.0);
@@ -160,7 +155,6 @@ fn transitive_relation_families_reject_the_closing_edge() {
 
 #[test]
 fn mixed_relations_reject_equivalent_direction_and_incidence() {
-    // Horizontal + Vertical already establishes a right angle.
     let mut s = session();
     let horizontal = line(&mut s, v(0.0, 0.0), v(20.0, 0.0));
     let vertical = line(&mut s, v(30.0, 0.0), v(30.0, 20.0));
@@ -177,7 +171,6 @@ fn mixed_relations_reject_equivalent_direction_and_incidence() {
         &["horizontal", "vertical"],
     );
 
-    // A parallel follower of a horizontal carrier is already horizontal.
     let mut s = session();
     let reference = line(&mut s, v(0.0, 0.0), v(20.0, 0.0));
     let follower = line(&mut s, v(0.0, 10.0), v(20.0, 10.0));
@@ -194,7 +187,6 @@ fn mixed_relations_reject_equivalent_direction_and_incidence() {
         &["horizontal", "parallel"],
     );
 
-    // Midpoint already includes point-on-line incidence.
     let mut s = session();
     let carrier = line(&mut s, v(0.0, 0.0), v(20.0, 0.0));
     let midpoint = point(&mut s, v(8.0, 5.0));
@@ -215,7 +207,6 @@ fn mixed_relations_reject_equivalent_direction_and_incidence() {
 
 #[test]
 fn symmetry_rejects_relations_already_carried_by_the_mirror_equations() {
-    // Mirrored lines necessarily have equal length.
     let mut s = session();
     let axis = line(&mut s, v(0.0, -20.0), v(0.0, 30.0));
     let a = line(&mut s, v(8.0, 2.0), v(15.0, 18.0));
@@ -224,7 +215,6 @@ fn symmetry_rejects_relations_already_carried_by_the_mirror_equations() {
         .unwrap();
     assert_redundant(&mut s, Constraint::Equal { a, b }, &["symmetry"]);
 
-    // Mirrored endpoints make their carrier perpendicular to the mirror axis.
     let mut s = session();
     let axis = line(&mut s, v(0.0, -20.0), v(0.0, 30.0));
     let carrier = s.add_line(v(-8.0, 5.0), v(11.0, 7.0), true).unwrap();
@@ -246,8 +236,6 @@ fn symmetry_rejects_relations_already_carried_by_the_mirror_equations() {
 
 #[test]
 fn tangent_and_center_acquisition_circuits_reject_their_implied_relations() {
-    // Collinear carriers share an infinite support line, so tangency of one
-    // carrier to a circle determines tangency of the other.
     let mut s = session();
     let a = line(&mut s, v(-15.0, 8.0), v(15.0, 8.0));
     let b = line(&mut s, v(-10.0, 14.0), v(12.0, 14.0));
@@ -261,7 +249,6 @@ fn tangent_and_center_acquisition_circuits_reject_their_implied_relations() {
         &["collinear", "tangent"],
     );
 
-    // Two curves acquired to the same center point are already concentric.
     let mut s = session();
     let _center = point(&mut s, v(3.0, 4.0));
     let a = circle(&mut s, v(3.0, 4.0), 5.0);
@@ -281,7 +268,6 @@ fn tangent_and_center_acquisition_circuits_reject_their_implied_relations() {
         &["center_coincident"],
     );
 
-    // Fixing a point already tied to the origin contributes no information.
     let mut s = session();
     let at_origin = point(&mut s, Vec2::ZERO);
     assert_redundant(
@@ -545,13 +531,22 @@ fn tangent_point_cannot_leave_the_line_until_its_new_incidence_is_removed() {
         .unwrap()
         .constraint_id;
     let target = v(10.0, 15.0);
-    s.move_point(MovePointRequest {
-        point_id: p,
-        to_raw: target,
-        phase: DragPhase::Single,
-        ctrl_held: true,
-    })
-    .unwrap();
+    let before = s.dto();
+    let error = s
+        .move_point(MovePointRequest {
+            point_id: p,
+            to_raw: target,
+            phase: DragPhase::Single,
+            ctrl_held: true,
+        })
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        SessionError::InvalidConstraint(ref message)
+            if message.contains("could not move this point")
+                && message.contains("review the point's constraints")
+    ));
+    assert_eq!(s.dto(), before);
     assert!(s.sketch().point_position(p).unwrap().distance(contact) < 1e-7);
     s.delete_constraint(attached).unwrap();
     s.move_point(MovePointRequest {
@@ -638,7 +633,6 @@ fn a_variable_measurement_at_a_stationary_pose_stays_driving() {
 
 #[test]
 fn implied_dimensions_become_reference_instead_of_adding_solver_rows() {
-    // Equal line lengths: one driving length determines the peer length.
     let mut s = session();
     let a = line(&mut s, v(0.0, 0.0), v(20.0, 0.0));
     let b = line(&mut s, v(0.0, 10.0), v(20.0, 10.0));
@@ -661,7 +655,6 @@ fn implied_dimensions_become_reference_instead_of_adding_solver_rows() {
     assert_eq!(result.dimensions[0].mode, DimensionMode::Driving);
     assert_eq!(result.dimensions[1].mode, DimensionMode::Reference);
 
-    // A 90-degree angle is already driven by Perpendicular.
     let mut s = session();
     let a = line(&mut s, v(0.0, 0.0), v(20.0, 0.0));
     let b = line(&mut s, v(30.0, 0.0), v(30.0, 20.0));
@@ -678,7 +671,6 @@ fn implied_dimensions_become_reference_instead_of_adding_solver_rows() {
     assert_eq!(result.dimensions.len(), 1);
     assert_eq!(result.dimensions[0].mode, DimensionMode::Reference);
 
-    // Equal curve radii: one driving diameter determines the peer diameter.
     let mut s = session();
     let a = circle(&mut s, v(0.0, 0.0), 6.0);
     let b = circle(&mut s, v(20.0, 0.0), 9.0);

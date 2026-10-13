@@ -37,7 +37,7 @@ opens the same editor; there is no independent dialect override in Post NC.
 this panel. The directory is `<app-config>/cam-posts`, separate from both app
 bundles and project files. On macOS it is:
 
-    ~/Library/Application Support/org.nbcad.desktop/cam-posts
+    ~/Library/Application Support/org.limocad.desktop/cam-posts
 
 It is a sibling of the default central library, not inside it. Changing the
 central-library location does not relocate posts. The native platform config

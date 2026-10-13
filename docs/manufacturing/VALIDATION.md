@@ -3,7 +3,7 @@
 ## Automated (required before merge)
 
 ```sh
-cargo test -p nbcad-core -p nbcad-export -p nbcad-sketch --lib
+cargo test -p limo-cad-core -p limo-cad-export -p limo-cad-sketch --lib
 ```
 
 Expect:
@@ -11,7 +11,7 @@ Expect:
 - appearance serde defaults + round-trip
 - STL header + triangle count
 - 3MF `unit="millimeter"` + basematerials name (filament type, color name) and display color
-- Standard, Bambu, and Orca packages have Application `noBS CAD` and no `project_settings.config`
+- Standard, Bambu, and Orca packages have Application `Limo CAD` and no `project_settings.config`
 - Prusa `Metadata/Slic3r_PE.config`
 - Cura `Metadata/cura_materials.json` + basematerials
 - catalog JSON parse + Bambu/Prusa/Sunlu/eSun/Anycubic presets (≥40 entries)
@@ -22,11 +22,11 @@ command in [DEVELOPMENT.md](../DEVELOPMENT.md#verify-changes).
 
 ## Manual slicer smoke (KR3.6)
 
-Regenerate fixtures: `cargo test -p nbcad-export --lib tests::regen_manual_smoke_fixtures -- --ignored --exact`
+Regenerate fixtures: `cargo test -p limo-cad-export --lib tests::regen_manual_smoke_fixtures -- --ignored --exact`
 
 The committed smoke fixtures under `crates/export/fixtures/smoke/` were regenerated
 for the portable-model export (no `project_settings.config`; Application
-`noBS CAD`). The slicer imports below have not been re-run against them yet;
+`Limo CAD`). The slicer imports below have not been re-run against them yet;
 record what each slicer shows rather than the expected result.
 
 Then open from `crates/export/fixtures/smoke/`:

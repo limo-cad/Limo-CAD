@@ -49,17 +49,15 @@ pub fn flatten_includes(
 /// climb above the root directory.
 pub fn resolve_include_path(from_file: &str, include_path: &str) -> Result<String, String> {
     validate_include_path(include_path)?;
-    if from_file.contains('\\')
+    if (from_file.contains('\\')
         || from_file
             .split('/')
-            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+            .any(|segment| segment.is_empty() || segment == "." || segment == ".."))
+        && !from_file.is_empty()
     {
-        // An empty from_file is the root and splits into one empty segment.
-        if !from_file.is_empty() {
-            return Err(format!(
-                "Include base must be a relative forward-slash path: {from_file}"
-            ));
-        }
+        return Err(format!(
+            "Include base must be a relative forward-slash path: {from_file}"
+        ));
     }
     let parent = match from_file.rsplit_once('/') {
         Some((dir, _)) if !from_file.is_empty() => dir,
@@ -193,9 +191,12 @@ pub fn validate_include_path(path: &str) -> Result<(), String> {
         ));
     }
     let lower = path.to_ascii_lowercase();
-    if !(lower.ends_with(".nbcad.jsonc") || lower.ends_with(".collection.jsonc")) {
+    if !(lower.ends_with(".limo.jsonc")
+        || lower.ends_with(".nbcad.jsonc")
+        || lower.ends_with(".collection.jsonc"))
+    {
         return Err(format!(
-            "Include path must end with .nbcad.jsonc or .collection.jsonc: {path}"
+            "Include path must end with .limo.jsonc or .collection.jsonc: {path}"
         ));
     }
     for segment in path.split('/') {
@@ -217,12 +218,12 @@ fn append_fragment(
     let object = fragment
         .as_object()
         .ok_or_else(|| format!("Include {path} must be a JSON object"))?;
-    let full_script = path.to_ascii_lowercase().ends_with(".nbcad.jsonc");
+    let lower = path.to_ascii_lowercase();
+    let full_script = lower.ends_with(".limo.jsonc") || lower.ends_with(".nbcad.jsonc");
     let allowed: BTreeSet<&str> = ["$schema", "name", "steps", "checks", "includes"]
         .into_iter()
         .collect();
-    // A full script's root owns version, starting state, verification, exports
-    // and the editor schema. An include contributes steps and checks only.
+
     let ignored: BTreeSet<&str> = [
         "$schema",
         "version",
@@ -392,14 +393,14 @@ mod tests {
     fn included_full_script_contributes_steps_and_ignores_root_fields() {
         let root = r#"{
           "version":1,"name":"Assembly",
-          "includes":["part.nbcad.jsonc"],
+          "includes":["part.limo.jsonc"],
           "steps":[{"id":"mate","note":"mate"}]
         }"#;
         let mut files = BTreeMap::new();
         files.insert(
-            "part.nbcad.jsonc",
+            "part.limo.jsonc",
             r#"{
-              "$schema":"./nbcad-script.schema.json",
+              "$schema":"./limo-cad-script.schema.json",
               "version":1,
               "name":"Part",
               "starting_state":"empty",

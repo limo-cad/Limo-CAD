@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-11",
+  "base_revision": "c11a51cd41239ad4e8f5a7ce2e32e3d971fa8ea8",
+  "reported_app_revision": "f96e9b322b5395a8cf0c91b4d5689824850dca93",
+  "scope": "Reported Section Analysis slider produces no viewport cut; finite source repair and app-only test build. Broad UI/MCP qualification remains paused.",
+  "reproduction": {
+    "timeline": "Revolve1, failed Chamfer1 on Body1, successful Chamfer2 on Body3",
+    "reported_plane": "yz",
+    "reported_offset_mm": 10.352999773025513,
+    "reported_model_sha256": "045ef0d6388398f0355998e8750360ce24981764cb5cc4e9b8d8e9c15472780d",
+    "model_handling": "Read the published snapshot and retain a private scratch copy. No live model, saved file, recovery state or session inbox was modified; authored geometry is not added to the repository.",
+    "causes": [
+      "The section source validator rejected the entire scene when any timeline feature failed, despite retaining a genuine available B-rep for the selected visible body.",
+      "Selecting the 2D diagram disabled cutaway requests and cleared the 3D viewport section."
+    ]
+  },
+  "result": {
+    "available_geometry": "Section the selected committed available native body, retain its timeline errors in the report and SVG, and show an explicit panel notice.",
+    "geometry_guards": "Current body existence, finite coordinates, successful native copy, original document/revision/scene-pointer/native-geometry identity and completion ownership checks remain active.",
+    "diagram": "The viewport cut remains active. Show/Hide 2D diagram controls a companion raster independently; completions cannot cross diagram presentation scopes.",
+    "exports": "Manufacturing and geometry export timeline-error policies are unchanged.",
+    "close": "Production Close still retires its worker without waiting for an in-flight query. The test waits for the retired native copy to be freed before OCCT process teardown."
+  },
+  "checks": {
+    "native_rendered_images": {
+      "center": "artifacts/section-slider-fix-20261011/viewport-center.png",
+      "reported_offset_and_diagram": "artifacts/section-slider-fix-20261011/viewport-slider-and-diagram.png",
+      "source": "Private read-only copy of the reported three-body revolved/chamfered model",
+      "observed": "Orange capped YZ cut at X0; visibly moved cut at X10.352999773025513 with the diagram open. Both show available-geometry/one-timeline-error notice. Production scene/panel builders rendered by the standalone native GPU fixture; no human-input acceptance claimed."
+    },
+    "native_regression": {
+      "name": "host::section_snapshot::tests::failed_chamfer_keeps_available_body_inspectable_and_preserves_source_proof",
+      "passed": 1,
+      "evidence": "artifacts/section-slider-fix-20261011/native-regression.log",
+      "assertions": "A real oversized chamfer fails; exact capped sections move through Z2/Z4/Z6; source errors and SVG notice remain; model/revision/scene identity are unchanged; missing bodies and replaced source completions reject."
+    },
+    "desktop_section_suite": {
+      "passed": 10,
+      "evidence": "artifacts/section-slider-fix-20261011/desktop-regressions-final.log",
+      "reported_path": "Rapid slider changes coalesce to the latest position with a genuine failed chamfer. The open diagram and cutaway both complete, input guards remain free, source data stays unchanged, and Close returns without waiting."
+    },
+    "strict_clippy": {
+      "profile": "release, all desktop targets, warnings denied",
+      "result": "passed",
+      "evidence": "artifacts/section-slider-fix-20261011/strict-clippy-final.log",
+      "incoming_warning": "The existing macOS guarded Bevy surface wrapper has eight required system parameters. A targeted too_many_arguments allowance preserves that parameter list and behavior."
+    },
+    "initial_failures_retained": {
+      "desktop": "artifacts/section-slider-fix-20261011/desktop-regressions-initial.log",
+      "clippy": "artifacts/section-slider-fix-20261011/strict-clippy-initial.log",
+      "details": "Two assertions still assumed exclusive 2D/3D presentation. Explicit diagram ownership and fixture setup repaired them. The initial optimized test process also exited while a retired native worker was still alive; the test now observes complete retirement."
+    }
+  },
+  "qualification_limits": {
+    "ui": "Source route and native rendered-image evidence only; physical human dragging in the replacement app remains pending.",
+    "mcp": "No new live/manual MCP mutation or full-surface acceptance claimed.",
+    "affected_case": "ui/feature-forms/section-analysis-exact180",
+    "affected_case_status": "needs_recheck",
+    "unrelated_passes": "retained"
+  }
+}

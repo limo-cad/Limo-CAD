@@ -1,6 +1,6 @@
 # Showcase media
 
-The images and loops come from actual native noBS CAD renders. Compact GIFs live
+The images and loops come from actual native Limo CAD renders. Compact GIFs live
 in this directory so the README previews work on GitHub; the longer MP4s are
 assets of the companion
 [showcase media release](https://github.com/limo-cad/Limo-CAD/releases/tag/showcase-v0.2.0).

@@ -19,8 +19,6 @@ mod platform {
     };
 
     pub(crate) fn retire_stdout_pipe() -> io::Result<()> {
-        // These handles are process-owned. Replacement precedes disposal, as
-        // required by GetStdHandle's documented handle-disposal contract.
         let output = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
         let error = unsafe { GetStdHandle(STD_ERROR_HANDLE) };
         retire_pipe(output, error, |stream, handle| {
@@ -33,8 +31,6 @@ mod platform {
         Ok(())
     }
 
-    // On success the returned NUL handle belongs to the process standard-handle
-    // table. Tests use private handle tables and explicitly dispose that sink.
     fn retire_pipe(
         output: HANDLE,
         error: HANDLE,
@@ -51,14 +47,10 @@ mod platform {
             && (error == output || unsafe { CompareObjectHandles(output, error) } != 0);
         let sink = File::options().write(true).open("NUL")?.into_raw_handle();
         if let Err(error) = install(STD_OUTPUT_HANDLE, sink) {
-            // No standard-handle table entry adopted the sink.
             drop(unsafe { File::from_raw_handle(sink) });
             return Err(error);
         }
         if aliased_error {
-            // Duplicating this pipe for stderr would itself prevent EOF. Move
-            // only aliases to the sink; separately routed stderr is unchanged.
-            // If installation fails, retain both valid handles until exit.
             install(STD_ERROR_HANDLE, sink)?;
         }
         if unsafe { CloseHandle(output) } == 0 {
@@ -200,9 +192,6 @@ mod platform {
     }
 
     fn inspect(fd: c_int) -> io::Result<Option<File>> {
-        // Stdio may be absent. Only construct an owned descriptor after the
-        // OS returns a valid duplicate; never borrow a possibly closed fd.
-        // Atomic CLOEXEC prevents even inspection from leaking into helpers.
         match descriptor_control(fd, libc::F_DUPFD_CLOEXEC, 3) {
             Ok(duplicate) => Ok(Some(unsafe { File::from_raw_fd(duplicate) })),
             Err(error) if error.raw_os_error() == Some(libc::EBADF) => Ok(None),
@@ -274,8 +263,7 @@ mod platform {
         if aliased_error {
             replace(&sink, error.unwrap())?;
         }
-        // The inspection duplicates drop here too, so no writer retains the
-        // original pipe. dup2 atomically leaves each standard fd occupied.
+
         Ok(true)
     }
 
@@ -365,11 +353,9 @@ mod platform {
             }
         }
 
-        // Re-enter only this test in a separate process so its standard fd
-        // changes cannot affect concurrently running tests or the test host.
         #[test]
         fn subprocess_stdio_helper() {
-            let Ok(mode) = std::env::var("NBCAD_STDIO_PIPE_HELPER") else {
+            let Ok(mode) = std::env::var("LIMO_CAD_STDIO_PIPE_HELPER") else {
                 return;
             };
             let mut diagnostics = inspect(libc::STDERR_FILENO).unwrap().unwrap();
@@ -380,9 +366,7 @@ mod platform {
                 );
             }
             prepare_stdout_pipe().unwrap();
-            // Like a GUI helper, this child inherits standard descriptors and
-            // remains alive waiting for input. Spawn returns after exec, so no
-            // sleep is needed to establish the inheritance boundary.
+
             let mut helper = OwnedChild(
                 Command::new("/bin/sh")
                     .args(["-c", "IFS= read -r release || :"])
@@ -417,7 +401,7 @@ mod platform {
                 let mut desktop = OwnedChild(
                     Command::new(std::env::current_exe().unwrap())
                         .args(["subprocess_stdio_helper", "--nocapture"])
-                        .env("NBCAD_STDIO_PIPE_HELPER", mode)
+                        .env("LIMO_CAD_STDIO_PIPE_HELPER", mode)
                         .stdin(Stdio::piped())
                         .stdout(Stdio::piped())
                         .stderr(Stdio::piped())

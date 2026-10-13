@@ -1,17 +1,18 @@
 use cxx::UniquePtr;
-use nbcad_core::BodyAppearance;
-use nbcad_export::{self, MeshExportRequest, TriangleMesh};
+use limo_cad_core::BodyAppearance;
+use limo_cad_export::{self, MeshExportRequest, TriangleMesh};
 #[cfg(test)]
-use nbcad_solid::StepOccurrencePlacementDto;
-use nbcad_solid::{
+use limo_cad_solid::StepOccurrencePlacementDto;
+use limo_cad_solid::{
     iso_metric_thread_envelope, rounded_thread_diameters, CombineOperation, ExtrudeOperation,
     HoleBottomStyle, HoleExtent, HoleStyle, HoleThreadHand, HoleThreadRepresentation,
     KernelBodyDto, KernelCurveDto, KernelEdgeDto, KernelFaceDto, KernelFeatureErrorDto,
     KernelJobDto, KernelProfileDto, KernelSceneDto, KernelTransformDto, LoftContinuity, Point3Dto,
     RecomputePlanDto, StepExportRequest, SweepOrientation, SweepTransition, ThreadFit,
 };
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use crate::OcctError;
@@ -20,13 +21,31 @@ use crate::{
     PlacedBodyQueryDto,
 };
 
-#[cxx::bridge(namespace = "nbcad_occt")]
+#[cxx::bridge(namespace = "limo_cad_occt")]
 mod ffi {
-    struct FfiDrawingOccurrence {
+    struct FfiBodyGeneration {
+        body_id: u64,
+        generation: u64,
+    }
+    struct FfiBodyPlacement {
         body_id: u64,
         translation: [f64; 3],
         rotation: [f64; 4],
     }
+    struct FfiDrawingOptions {
+        assembly_scope: bool,
+        direction: [f64; 3],
+        up: [f64; 3],
+        include_hidden: bool,
+        include_tangent_edges: bool,
+        deflection: f64,
+        has_section_plane: bool,
+        section_point: [f64; 3],
+        section_normal: [f64; 3],
+        has_section_depth: bool,
+        section_depth: f64,
+    }
+
     struct FfiJob {
         feature_id: u64,
         kind: u8,
@@ -74,6 +93,9 @@ mod ffi {
         transform_kinds: Vec<u8>,
         transform_values: Vec<f64>,
         radius: f64,
+        /// Explicit angle in degrees; ignored when has_chamfer_angle is false.
+        chamfer_angle_deg: f64,
+        has_chamfer_angle: bool,
         diameter: f64,
         secondary_diameter: f64,
         secondary_depth: f64,
@@ -104,7 +126,11 @@ mod ffi {
     struct FfiMesh {
         body_id: u64,
         topology_signature: String,
+        display_warning_face_indices: Vec<u32>,
+        display_warning_messages: Vec<String>,
         positions: Vec<f32>,
+        /// Native export precision; empty for ordinary display meshes.
+        export_positions: Vec<f64>,
         normals: Vec<f32>,
         indices: Vec<u32>,
         face_first_indices: Vec<u32>,
@@ -120,6 +146,13 @@ mod ffi {
         face_cone_data: Vec<f64>,
         face_edge_offsets: Vec<u32>,
         face_edge_indices: Vec<u32>,
+        /// One flag per face-edge incidence: exact closed-on-face analytic line.
+        face_edge_linear_seams: Vec<u8>,
+        /// One flag per face-edge incidence: proven complete circular inner wire
+        /// on a planar face in a valid closed outward native solid's outer shell.
+        face_edge_planar_inner_rings: Vec<u8>,
+        /// Per face: 0 unknown, 1 proven outer shell, 2 proven inner shell.
+        face_outer_shell: Vec<u8>,
         /// Prefix offsets into `edge_points`, measured in 3D points.
         edge_point_offsets: Vec<u32>,
         /// Flat xyz edge polyline coordinates.
@@ -140,6 +173,26 @@ mod ffi {
         section_points: Vec<f64>,
     }
 
+    struct FfiSectionOptions {
+        axis: u8,
+        offset: f64,
+        keep_positive: bool,
+        deflection: f64,
+        include_cutaway: bool,
+        retain_unintersected: bool,
+        timeout_ms: u64,
+        contour_points: u32,
+        vertices: u32,
+        edge_points: u32,
+    }
+    struct FfiSectionGeometry {
+        outcome: u8,
+        offsets: Vec<u32>,
+        points: Vec<f64>,
+        has_cutaway: bool,
+        cutaway: FfiMesh,
+    }
+
     struct FfiInterferenceResult {
         minimum_clearance_mm: f64,
         overlap_volume_mm3: f64,
@@ -151,15 +204,81 @@ mod ffi {
         closest_point_b_z: f64,
     }
 
+    struct FfiMeasurementSelection {
+        placement: FfiBodyPlacement,
+        kind: u8,
+        index: u32,
+    }
+    struct FfiMeasurementProperties {
+        flags: u32,
+        length: f64,
+        area: f64,
+        loop_length: f64,
+        volume: f64,
+        radius: f64,
+        position: [f64; 3],
+        center: [f64; 3],
+        size: [f64; 3],
+        direction_kind: u8,
+        direction: [f64; 3],
+    }
+    struct FfiMeasurementResult {
+        selections: Vec<FfiMeasurementProperties>,
+        flags: u32,
+        distance: f64,
+        point_a: [f64; 3],
+        point_b: [f64; 3],
+        angle_degrees: f64,
+        center_distance: f64,
+        maximum_distance: f64,
+        maximum_point_a: [f64; 3],
+        maximum_point_b: [f64; 3],
+    }
+
+    // Native primitives exercise the same clearance helper without changing a model.
+    // cxx-build generates ordinary C++ linkage before Rust unit-test compilation,
+    // so the private qualification declarations must also exist in normal builds.
+    #[allow(
+        dead_code,
+        reason = "private native qualification bridge is called only by unit tests"
+    )]
+    struct FfiClearanceRegression {
+        legacy_inner_solution: bool,
+        legacy_minimum_clearance_mm: f64,
+        legacy_point_a: [f64; 3],
+        legacy_point_b: [f64; 3],
+        reversed_disjoint: FfiInterferenceResult,
+        swapped_disjoint: FfiInterferenceResult,
+        contact: FfiInterferenceResult,
+        contained: FfiInterferenceResult,
+        partial_overlap: FfiInterferenceResult,
+        overlapping_envelopes: FfiInterferenceResult,
+        measure_reversed_disjoint: FfiMeasurementResult,
+        measure_swapped_disjoint: FfiMeasurementResult,
+    }
+
     unsafe extern "C++" {
         include!("shim.hpp");
 
         type Kernel;
         fn new_kernel() -> UniquePtr<Kernel>;
+        #[allow(
+            dead_code,
+            reason = "private native qualification bridge is called only by unit tests"
+        )]
+        fn clearance_regression_probe() -> Result<FfiClearanceRegression>;
         fn reset(self: Pin<&mut Kernel>);
         fn apply_job(self: Pin<&mut Kernel>, job: &FfiJob) -> Result<()>;
         fn body_ids(self: &Kernel) -> Vec<u64>;
+        fn drawing_snapshot(self: &Kernel, body_ids: &Vec<u64>) -> Result<UniquePtr<Kernel>>;
+        fn body_generations(self: &Kernel) -> Result<Vec<FfiBodyGeneration>>;
+        fn planar_face_keys(self: &Kernel) -> Result<Vec<u64>>;
         fn mesh(self: &Kernel, body_id: u64) -> Result<FfiMesh>;
+        fn section_geometry(
+            self: &Kernel,
+            body_id: u64,
+            options: &FfiSectionOptions,
+        ) -> Result<FfiSectionGeometry>;
         fn mesh_with_deflection(
             self: &Kernel,
             body_id: u64,
@@ -175,60 +294,30 @@ mod ffi {
         fn drawing_projection(
             self: &Kernel,
             body_ids: &Vec<u64>,
-            occurrences: &Vec<FfiDrawingOccurrence>,
-            assembly_scope: bool,
-            direction_x: f64,
-            direction_y: f64,
-            direction_z: f64,
-            up_x: f64,
-            up_y: f64,
-            up_z: f64,
-            include_hidden: bool,
-            include_tangent_edges: bool,
-            deflection: f64,
-            has_section_plane: bool,
-            section_point_x: f64,
-            section_point_y: f64,
-            section_point_z: f64,
-            section_normal_x: f64,
-            section_normal_y: f64,
-            section_normal_z: f64,
-            has_section_depth: bool,
-            section_depth: f64,
+            occurrences: &Vec<FfiBodyPlacement>,
+            options: &FfiDrawingOptions,
         ) -> Result<FfiDrawingProjection>;
         fn exact_interference(
             self: &Kernel,
-            body_a: u64,
-            translation_a_x: f64,
-            translation_a_y: f64,
-            translation_a_z: f64,
-            rotation_a_x: f64,
-            rotation_a_y: f64,
-            rotation_a_z: f64,
-            rotation_a_w: f64,
-            body_b: u64,
-            translation_b_x: f64,
-            translation_b_y: f64,
-            translation_b_z: f64,
-            rotation_b_x: f64,
-            rotation_b_y: f64,
-            rotation_b_z: f64,
-            rotation_b_w: f64,
+            placement_a: &FfiBodyPlacement,
+            placement_b: &FfiBodyPlacement,
         ) -> Result<FfiInterferenceResult>;
+        fn measure(
+            self: &Kernel,
+            selections: &Vec<FfiMeasurementSelection>,
+        ) -> Result<FfiMeasurementResult>;
     }
 }
 
-// The C++ Kernel is never accessed concurrently: both the native shell and
-// tests serialize all calls through `&mut OcctKernel` (the shell additionally
-// holds it inside a Mutex). OCCT objects owned by this instance never escape
-// the bridge, so moving the opaque pointer between command threads is safe.
 unsafe impl Send for ffi::Kernel {}
 
 pub struct OcctKernel {
     inner: UniquePtr<ffi::Kernel>,
+    geometry_owner: u64,
     /// Only a fully successful replay may seed the next append. The jobs
     /// include all resolved geometry inputs, not just feature IDs/revisions.
     successful_jobs: Option<Vec<KernelJobDto>>,
+    support_cache: BTreeMap<(usize, limo_cad_core::FaceId), bool>,
     /// Exact projection is independent of paper styling and export format.
     /// Full requests include authoritative occurrence poses and section intent.
     projection_cache: Mutex<VecDeque<(DrawingProjectionRequest, DrawingProjectionDto)>>,
@@ -238,6 +327,135 @@ pub struct OcctKernel {
     projection_calculations: std::sync::atomic::AtomicUsize,
 }
 
+/// Independent projection-only shapes; cannot mint live body generations,
+/// mutate a document, or qualify native viewport geometry reuse.
+pub struct DetachedDrawingKernel(OcctKernel);
+/// Independent export shapes with no document mutation or geometry authority.
+pub struct DetachedMeshKernel(OcctKernel);
+/// Independent selected-body sections, without live document authority.
+pub struct DetachedSectionKernel(OcctKernel);
+/// Independent selected shapes for static and sampled occurrence interference.
+pub struct DetachedInterferenceKernel(OcctKernel);
+/// Independent topology used only for read-only measurement.
+pub struct DetachedMeasurementKernel(OcctKernel);
+impl DetachedMeasurementKernel {
+    pub fn inspect(
+        &self,
+        selections: &[crate::measurement::ResolvedMeasurementSelection],
+    ) -> Result<crate::measurement::MeasurementReport, OcctError> {
+        use crate::measurement::{MeasurementProperties, MeasurementReport};
+        let selections = selections
+            .iter()
+            .map(|s| ffi::FfiMeasurementSelection {
+                placement: ffi::FfiBodyPlacement {
+                    body_id: s.body_id.0,
+                    translation: s.translation,
+                    rotation: s.rotation,
+                },
+                kind: s.kind,
+                index: s.index,
+            })
+            .collect();
+        let raw = self
+            .0
+            .inner
+            .measure(&selections)
+            .map_err(|e| OcctError(e.to_string()))?;
+        let properties: Vec<_> = raw
+            .selections
+            .iter()
+            .map(|p| MeasurementProperties {
+                length: (p.flags & 1 != 0).then_some(p.length),
+                area: (p.flags & 2 != 0).then_some(p.area),
+                loop_length: (p.flags & 4 != 0).then_some(p.loop_length),
+                volume: (p.flags & 8 != 0).then_some(p.volume),
+                radius: (p.flags & 16 != 0).then_some(p.radius),
+                position: (p.flags & 32 != 0).then_some(p.position),
+                center: (p.flags & 64 != 0).then_some(p.center),
+                size: (p.flags & 128 != 0).then_some(p.size),
+            })
+            .collect();
+        let center_points =
+            (raw.flags & 4 != 0).then(|| [raw.selections[0].center, raw.selections[1].center]);
+        Ok(MeasurementReport {
+            selections: properties,
+            distance: (raw.flags & 1 != 0).then_some(raw.distance),
+            closest_points: (raw.flags & 1 != 0).then_some([raw.point_a, raw.point_b]),
+            angle_degrees: (raw.flags & 2 != 0).then_some(raw.angle_degrees),
+            center_distance: (raw.flags & 4 != 0).then_some(raw.center_distance),
+            center_points,
+            maximum_distance: (raw.flags & 8 != 0).then_some(raw.maximum_distance),
+            maximum_points: (raw.flags & 8 != 0)
+                .then_some([raw.maximum_point_a, raw.maximum_point_b]),
+        })
+    }
+}
+impl DetachedInterferenceKernel {
+    pub fn evaluate_motion(
+        &self,
+        assembly: &limo_cad_sketch::AssemblyDocumentDto,
+        scene: &limo_cad_solid::SolidSceneDto,
+        request: &limo_cad_sketch::EvaluateMotionStudyRequestDto,
+    ) -> Result<limo_cad_sketch::MotionStudyEvaluationDto, String> {
+        crate::evaluate_motion_study_document(assembly, scene, &self.0, request)
+    }
+
+    pub fn inspect_swept(
+        &self,
+        assembly: &limo_cad_sketch::AssemblyDocumentDto,
+        scene: &limo_cad_solid::SolidSceneDto,
+        request: &limo_cad_sketch::SweptCollisionRequestDto,
+    ) -> Result<limo_cad_sketch::SweptCollisionReportDto, String> {
+        crate::exact_swept_collision_document(assembly, scene, &self.0, request)
+    }
+
+    pub fn inspect(
+        &self,
+        scene: &limo_cad_solid::SolidSceneDto,
+        poses: &[limo_cad_assembly::InstanceBodyPoseDto],
+        request: &limo_cad_assembly::InterferenceCheckRequestDto,
+    ) -> Result<limo_cad_assembly::InterferenceReportDto, String> {
+        crate::exact_interference_report(&self.0, scene, poses, request)
+    }
+}
+impl DetachedSectionKernel {
+    pub fn inspect(
+        &self,
+        request: &crate::section_review::SectionReviewRequest,
+    ) -> Result<crate::section_review::SectionReview, crate::section_review::SectionReviewError>
+    {
+        crate::section_review::inspect_kernel(&self.0, request)
+    }
+    /// Viewport clipping includes whole retained solids and empty discarded sides.
+    /// The single-body inspection API keeps its contact-only report semantics.
+    pub fn inspect_retained(
+        &self,
+        request: &crate::section_review::SectionReviewRequest,
+    ) -> Result<crate::section_review::SectionReview, crate::section_review::SectionReviewError>
+    {
+        crate::section_review::inspect_retained_kernel(&self.0, request)
+    }
+}
+impl DetachedMeshKernel {
+    /// Exact AP242 output from independently owned selected B-reps.
+    pub fn export_step(&self, request: &StepExportRequest) -> Result<Vec<u8>, OcctError> {
+        self.0.export_step(request)
+    }
+    pub fn tessellate(&self, request: &MeshExportRequest) -> Result<Vec<TriangleMesh>, OcctError> {
+        self.0.tessellate_bodies(request)
+    }
+}
+impl DetachedDrawingKernel {
+    pub fn project(
+        &self,
+        scene: &limo_cad_solid::SolidSceneDto,
+        assembly: &limo_cad_assembly::AssemblyDocumentDto,
+        request: &DrawingProjectionRequest,
+    ) -> Result<DrawingProjectionDto, OcctError> {
+        crate::project_drawing(&self.0, scene, assembly, request)
+    }
+}
+
 impl std::fmt::Debug for OcctKernel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OcctKernel").finish_non_exhaustive()
@@ -245,14 +463,68 @@ impl std::fmt::Debug for OcctKernel {
 }
 
 impl OcctKernel {
+    pub(crate) fn section_geometry(
+        &self,
+        request: &crate::section_review::SectionReviewRequest,
+    ) -> Result<crate::section_review::SectionGeometry, OcctError> {
+        self.section_geometry_retained(request, false)
+    }
+    pub(crate) fn section_geometry_retained(
+        &self,
+        request: &crate::section_review::SectionReviewRequest,
+        retain_unintersected: bool,
+    ) -> Result<crate::section_review::SectionGeometry, OcctError> {
+        request.validate().map_err(OcctError)?;
+        let raw = self
+            .inner
+            .section_geometry(
+                request.body_id.0,
+                &ffi::FfiSectionOptions {
+                    axis: request.plane.axis() as u8,
+                    offset: request.offset_mm,
+                    keep_positive: request.keep_positive,
+                    deflection: request.deflection_mm,
+                    include_cutaway: request.include_cutaway,
+                    retain_unintersected,
+                    timeout_ms: 30_000,
+                    contour_points: 100_000,
+                    vertices: 1_000_000,
+                    edge_points: 100_000,
+                },
+            )
+            .map_err(|e| OcctError(e.to_string()))?;
+        use crate::section_review::{SectionGeometry, SectionOutcome};
+        let outcome = match raw.outcome {
+            0 => SectionOutcome::NoIntersection,
+            1 => SectionOutcome::BoundaryContact,
+            2 => SectionOutcome::MaterialSection,
+            _ => return Err(OcctError("Unknown native section outcome".into())),
+        };
+        Ok(SectionGeometry {
+            outcome,
+            section: projection_polylines(&raw.offsets, &raw.points)?,
+            cutaway: raw
+                .has_cutaway
+                .then(|| from_ffi_mesh(raw.cutaway))
+                .transpose()?,
+        })
+    }
     pub fn new() -> Result<Self, OcctError> {
+        static NEXT_GEOMETRY_OWNER: AtomicU64 = AtomicU64::new(1);
+        let geometry_owner = NEXT_GEOMETRY_OWNER
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |owner| {
+                owner.checked_add(1)
+            })
+            .map_err(|_| OcctError("OCCT kernel owner space exhausted".into()))?;
         let inner = ffi::new_kernel();
         if inner.is_null() {
             return Err(OcctError("OCCT kernel allocation failed".to_string()));
         }
         Ok(Self {
             inner,
+            geometry_owner,
             successful_jobs: None,
+            support_cache: BTreeMap::new(),
             projection_cache: Mutex::new(VecDeque::new()),
             #[cfg(test)]
             last_applied_jobs: 0,
@@ -262,27 +534,148 @@ impl OcctKernel {
     }
 
     pub fn recompute(&mut self, plan: &RecomputePlanDto) -> Result<KernelSceneDto, OcctError> {
-        // Invalidate before touching the kernel. A conversion, native Boolean,
-        // or tessellation failure can leave a partial native state; the next
-        // request must rebuild it even when that request matches an old plan.
+        self.recompute_with_supports(plan, &[])
+            .map(|(scene, _)| scene)
+    }
+
+    /// Owned exact shapes for one cold drawing job, without meshes, feature
+    /// history or live-kernel aliases. This is deliberately a geometry copy,
+    /// not a geometry-generation authority or a document reconstruction.
+    pub fn detached_drawing_snapshot(
+        &self,
+        ids: &[limo_cad_core::BodyId],
+    ) -> Result<DetachedDrawingKernel, OcctError> {
+        let ids = ids.iter().map(|id| id.0).collect();
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| OcctError("OCCT kernel was released".into()))?
+            .drawing_snapshot(&ids)
+            .map_err(|error| OcctError(error.to_string()))?;
+        let mut result = Self::new()?;
+        result.inner = inner;
+        Ok(DetachedDrawingKernel(result))
+    }
+
+    pub fn detached_interference_snapshot(
+        &self,
+        ids: &[limo_cad_core::BodyId],
+    ) -> Result<DetachedInterferenceKernel, OcctError> {
+        self.detached_drawing_snapshot(ids)
+            .map(|snapshot| DetachedInterferenceKernel(snapshot.0))
+    }
+
+    pub fn detached_measurement_snapshot(
+        &self,
+        ids: &[limo_cad_core::BodyId],
+    ) -> Result<DetachedMeasurementKernel, OcctError> {
+        self.detached_drawing_snapshot(ids)
+            .map(|snapshot| DetachedMeasurementKernel(snapshot.0))
+    }
+
+    pub fn detached_section_snapshot(
+        &self,
+        id: limo_cad_core::BodyId,
+    ) -> Result<DetachedSectionKernel, OcctError> {
+        self.detached_drawing_snapshot(&[id])
+            .map(|snapshot| DetachedSectionKernel(snapshot.0))
+    }
+
+    pub fn detached_mesh_snapshot(
+        &self,
+        ids: &[limo_cad_core::BodyId],
+    ) -> Result<DetachedMeshKernel, OcctError> {
+        self.detached_drawing_snapshot(ids)
+            .map(|snapshot| DetachedMeshKernel(snapshot.0))
+    }
+
+    pub fn active_body_ids(&self) -> Result<Vec<limo_cad_core::BodyId>, OcctError> {
+        let kernel = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| OcctError("OCCT kernel was released".into()))?;
+        Ok(kernel
+            .body_ids()
+            .into_iter()
+            .map(limo_cad_core::BodyId)
+            .collect())
+    }
+
+    /// Authoritative live B-rep generations. Existing bodies mentioned as job
+    /// inputs or outputs, including their prior job-connected native subshape
+    /// dependency groups, are conservatively invalidated before mutation even
+    /// on failure. Independent bodies survive successful append unchanged.
+    /// This does not enable reuse of serialized scene/mesh data by itself.
+    pub fn body_geometry_identities(
+        &self,
+    ) -> Result<BTreeMap<limo_cad_core::BodyId, crate::KernelBodyGeometryIdentity>, OcctError> {
+        let generations = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| OcctError("OCCT kernel was released".into()))?
+            .body_generations()
+            .map_err(|error| OcctError(error.to_string()))?;
+        Ok(generations
+            .into_iter()
+            .map(|body| {
+                (
+                    limo_cad_core::BodyId(body.body_id),
+                    crate::KernelBodyGeometryIdentity {
+                        kernel_owner: self.geometry_owner,
+                        generation: body.generation,
+                    },
+                )
+            })
+            .collect())
+    }
+
+    /// Proofs belong only to this returned scene/transaction. Failed replay
+    /// produces none; cached answers survive only an identical job prefix.
+    pub fn recompute_with_supports(
+        &mut self,
+        plan: &RecomputePlanDto,
+        queries: &[limo_cad_solid::HistorySupportQuery],
+    ) -> Result<(KernelSceneDto, BTreeSet<limo_cad_core::FeatureId>), OcctError> {
+        let queries = queries
+            .iter()
+            .filter_map(|query| {
+                plan.jobs
+                    .iter()
+                    .rposition(|job| job.feature_id() == query.after_feature)
+                    .map(|index| (index, *query))
+            })
+            .collect::<Vec<_>>();
         let previous = self.successful_jobs.take();
         if !plan.errors.is_empty() || previous.as_ref() != Some(&plan.jobs) {
             self.projection_cache.get_mut().unwrap().clear();
         }
-        let reused = previous
+        let mut reused = previous
             .as_ref()
             .filter(|jobs| plan.errors.is_empty() && plan.jobs.starts_with(jobs))
             .map_or(0, Vec::len);
+        if queries.iter().any(|(index, query)| {
+            *index < reused && !self.support_cache.contains_key(&(*index, query.face_id))
+        }) {
+            reused = 0;
+        }
+        // Cache only the current document's requests, not every face ever
+        // selected while editing an otherwise unchanged job prefix.
+        self.support_cache.retain(|key, _| {
+            queries
+                .iter()
+                .any(|(index, query)| *key == (*index, query.face_id))
+        });
         let mut pinned = self.inner.pin_mut();
         if reused == 0 {
             pinned.as_mut().reset();
+            self.support_cache.clear();
         }
         #[cfg(test)]
         {
             self.last_applied_jobs = 0;
         }
         let mut errors = plan.errors.clone();
-        for job in &plan.jobs[reused..] {
+        for (index, job) in plan.jobs.iter().enumerate().skip(reused) {
             let ffi_job = match to_ffi_job(job) {
                 Ok(job) => job,
                 Err(error) => {
@@ -304,6 +697,27 @@ impl OcctKernel {
                 });
                 break;
             }
+            if queries.iter().any(|(at, _)| *at == index) {
+                let keys = pinned
+                    .as_ref()
+                    .planar_face_keys()
+                    .map_err(|error| OcctError(error.to_string()))?;
+                let faces = keys
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|key| {
+                        limo_cad_solid::stable_face_id(
+                            limo_cad_core::BodyId(key[0]),
+                            &format!("face:{}", key[1]),
+                        )
+                    })
+                    .collect::<BTreeSet<_>>();
+                for (_, query) in queries.iter().filter(|(at, _)| *at == index) {
+                    self.support_cache
+                        .insert((index, query.face_id), faces.contains(&query.face_id));
+                }
+            }
         }
 
         let body_ids = self
@@ -321,10 +735,18 @@ impl OcctKernel {
                 .map_err(|error| OcctError(error.to_string()))?;
             bodies.push(from_ffi_mesh(raw)?);
         }
+        let mut verified = BTreeSet::new();
         if errors.is_empty() {
             self.successful_jobs = Some(plan.jobs.clone());
+            for (index, query) in queries {
+                if self.support_cache.get(&(index, query.face_id)) == Some(&true) {
+                    verified.insert(query.sketch_id);
+                }
+            }
+        } else {
+            self.support_cache.clear();
         }
-        Ok(KernelSceneDto { bodies, errors })
+        Ok((KernelSceneDto { bodies, errors }, verified))
     }
 
     /// Serialize selected (or all) live B-reps as an AP242 STEP exchange
@@ -434,7 +856,7 @@ impl OcctKernel {
                 ));
             }
         }
-        let assembly_scope = request.scope == nbcad_sketch::DrawingViewScope::Assembly;
+        let assembly_scope = request.scope == limo_cad_sketch::DrawingViewScope::Assembly;
         if assembly_scope
             && request
                 .resolved_occurrences
@@ -445,17 +867,6 @@ impl OcctKernel {
                 "Assembly drawing requires nonempty host-resolved occurrences".into(),
             ));
         }
-        let occurrences = request
-            .resolved_occurrences
-            .iter()
-            .flatten()
-            .map(|pose| ffi::FfiDrawingOccurrence {
-                body_id: pose.body_id.0,
-                translation: pose.translation,
-                rotation: pose.rotation,
-            })
-            .collect::<Vec<_>>();
-        let body_ids = request.body_ids.iter().map(|id| id.0).collect::<Vec<_>>();
         if let Some((_, projection)) = self
             .projection_cache
             .lock()
@@ -465,6 +876,20 @@ impl OcctKernel {
         {
             return Ok(projection.clone());
         }
+        // These buffers belong to the native HLR call, not cache lookup.
+        // A retained projection must not copy every occurrence pose and body
+        // ID merely to discard those buffers on the read-only hit path.
+        let occurrences = request
+            .resolved_occurrences
+            .iter()
+            .flatten()
+            .map(|pose| ffi::FfiBodyPlacement {
+                body_id: pose.body_id.0,
+                translation: pose.translation,
+                rotation: pose.rotation,
+            })
+            .collect::<Vec<_>>();
+        let body_ids = request.body_ids.iter().map(|id| id.0).collect::<Vec<_>>();
         #[cfg(test)]
         self.projection_calculations
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -475,55 +900,42 @@ impl OcctKernel {
             .drawing_projection(
                 &body_ids,
                 &occurrences,
-                assembly_scope,
-                request.direction[0],
-                request.direction[1],
-                request.direction[2],
-                request.up[0],
-                request.up[1],
-                request.up[2],
-                request.include_hidden,
-                request.include_tangent_edges,
-                request.deflection.clamp(1.0e-4, 10.0),
-                request.section_plane.is_some(),
-                request
-                    .section_plane
-                    .as_ref()
-                    .map_or(0.0, |plane| plane.point[0]),
-                request
-                    .section_plane
-                    .as_ref()
-                    .map_or(0.0, |plane| plane.point[1]),
-                request
-                    .section_plane
-                    .as_ref()
-                    .map_or(0.0, |plane| plane.point[2]),
-                request
-                    .section_plane
-                    .as_ref()
-                    .map_or(0.0, |plane| plane.normal[0]),
-                request
-                    .section_plane
-                    .as_ref()
-                    .map_or(0.0, |plane| plane.normal[1]),
-                request
-                    .section_plane
-                    .as_ref()
-                    .map_or(1.0, |plane| plane.normal[2]),
-                request
-                    .section_plane
-                    .as_ref()
-                    .and_then(|plane| plane.depth)
-                    .is_some(),
-                request
-                    .section_plane
-                    .as_ref()
-                    .and_then(|plane| plane.depth)
-                    .unwrap_or(0.0),
+                &ffi::FfiDrawingOptions {
+                    assembly_scope,
+                    direction: request.direction,
+                    up: request.up,
+                    include_hidden: request.include_hidden,
+                    include_tangent_edges: request.include_tangent_edges,
+                    deflection: request.deflection.clamp(1.0e-4, 10.0),
+                    has_section_plane: request.section_plane.is_some(),
+                    section_point: request
+                        .section_plane
+                        .as_ref()
+                        .map_or([0.0; 3], |plane| plane.point),
+                    section_normal: request
+                        .section_plane
+                        .as_ref()
+                        .map_or([0.0, 0.0, 1.0], |plane| plane.normal),
+                    has_section_depth: request
+                        .section_plane
+                        .as_ref()
+                        .and_then(|plane| plane.depth)
+                        .is_some(),
+                    section_depth: request
+                        .section_plane
+                        .as_ref()
+                        .and_then(|plane| plane.depth)
+                        .unwrap_or(0.0),
+                },
             )
-            .map_err(|error| OcctError(error.to_string()))?;
+            .map_err(|error| {
+                OcctError(format!(
+                    "Drawing projection for bodies {:?}, section {:?}: {error}",
+                    request.body_ids, request.section_plane
+                ))
+            })?;
         let projection = projection_from_ffi(raw)?;
-        // Bound retained work both by view count and actual linework size.
+
         let weight = |projection: &DrawingProjectionDto| {
             projection
                 .visible
@@ -560,22 +972,16 @@ impl OcctKernel {
             .as_ref()
             .ok_or_else(|| OcctError("OCCT kernel was released".to_string()))?
             .exact_interference(
-                a.body_id.0,
-                a.translation[0],
-                a.translation[1],
-                a.translation[2],
-                a.rotation[0],
-                a.rotation[1],
-                a.rotation[2],
-                a.rotation[3],
-                b.body_id.0,
-                b.translation[0],
-                b.translation[1],
-                b.translation[2],
-                b.rotation[0],
-                b.rotation[1],
-                b.rotation[2],
-                b.rotation[3],
+                &ffi::FfiBodyPlacement {
+                    body_id: a.body_id.0,
+                    translation: a.translation,
+                    rotation: a.rotation,
+                },
+                &ffi::FfiBodyPlacement {
+                    body_id: b.body_id.0,
+                    translation: b.translation,
+                    rotation: b.rotation,
+                },
             )
             .map_err(|error| OcctError(error.to_string()))?;
         Ok(ExactInterferenceResultDto {
@@ -624,25 +1030,34 @@ impl OcctKernel {
         };
         let mut meshes = Vec::with_capacity(selected.len());
         for body_id in selected {
-            let raw = kernel
+            let mut raw = kernel
                 .mesh_with_deflection(
                     body_id,
                     request.linear_deflection,
                     request.angular_deflection,
                 )
                 .map_err(|error| OcctError(error.to_string()))?;
+            let export_positions = std::mem::take(&mut raw.export_positions);
+            if export_positions.len() != raw.positions.len()
+                || export_positions
+                    .iter()
+                    .any(|coordinate| !coordinate.is_finite())
+            {
+                return Err(OcctError(
+                    "OCCT bridge returned malformed native export positions".into(),
+                ));
+            }
             let body = from_ffi_mesh(raw)?;
-            meshes.push(TriangleMesh::from_kernel_body(
-                &body,
-                format!("Body{}", body_id),
-            ));
+            let mut mesh = TriangleMesh::from_kernel_body(&body, format!("Body{}", body_id));
+            mesh.positions = export_positions;
+            meshes.push(mesh);
         }
         Ok(meshes)
     }
 
     pub fn export_stl(&self, request: &MeshExportRequest) -> Result<Vec<u8>, OcctError> {
         let meshes = self.tessellate_bodies(request)?;
-        nbcad_export::write_stl(&meshes).map_err(|error| OcctError(error.to_string()))
+        limo_cad_export::write_stl(&meshes).map_err(|error| OcctError(error.to_string()))
     }
 
     pub fn export_3mf(
@@ -651,7 +1066,7 @@ impl OcctKernel {
         appearances: &[BodyAppearance],
     ) -> Result<Vec<u8>, OcctError> {
         let meshes = self.tessellate_bodies(request)?;
-        nbcad_export::ExportFacade::export_3mf(&meshes, appearances, request)
+        limo_cad_export::ExportFacade::export_3mf(&meshes, appearances, request)
             .map_err(|error| OcctError(error.to_string()))
     }
 }
@@ -925,6 +1340,8 @@ fn empty_ffi_job(feature_id: u64, kind: u8) -> ffi::FfiJob {
         transform_kinds: Vec::new(),
         transform_values: Vec::new(),
         radius: 0.0,
+        chamfer_angle_deg: 0.0,
+        has_chamfer_angle: false,
         diameter: 0.0,
         secondary_diameter: 0.0,
         secondary_depth: 0.0,
@@ -1092,13 +1509,18 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
             edge_indices(&source.edge_keys),
             source.radius,
         ),
-        KernelJobDto::Chamfer(source) => refinement_ffi_job(
-            source.feature_id.0,
-            6,
-            source.target_body_id.0,
-            edge_indices(&source.edge_keys),
-            source.distance,
-        ),
+        KernelJobDto::Chamfer(source) => {
+            let mut job = refinement_ffi_job(
+                source.feature_id.0,
+                6,
+                source.target_body_id.0,
+                edge_indices(&source.edge_keys),
+                source.distance,
+            );
+            job.chamfer_angle_deg = source.angle_deg.unwrap_or(0.0);
+            job.has_chamfer_angle = source.angle_deg.is_some();
+            job
+        }
         KernelJobDto::Hole(source) => {
             let mut job = empty_ffi_job(source.feature_id.0, 7);
             job.operation = 2;
@@ -1327,13 +1749,13 @@ fn decode_base64(value: &str) -> Result<Vec<u8>, OcctError> {
     }
 
     let bytes = value.as_bytes();
-    if bytes.is_empty() || bytes.len() % 4 != 0 {
+    if bytes.is_empty() || !bytes.len().is_multiple_of(4) {
         return Err(OcctError(
             "STEP import contains invalid base64 data".to_string(),
         ));
     }
     let mut output = Vec::with_capacity(bytes.len() / 4 * 3);
-    for (chunk_index, chunk) in bytes.chunks_exact(4).enumerate() {
+    for (chunk_index, chunk) in bytes.as_chunks::<4>().0.iter().enumerate() {
         let last = chunk_index + 1 == bytes.len() / 4;
         let padding = usize::from(chunk[3] == b'=') + usize::from(chunk[2] == b'=');
         if padding > 0 && !last || chunk[2] == b'=' && chunk[3] != b'=' {
@@ -1415,11 +1837,39 @@ fn combine_operation_code(operation: CombineOperation) -> u8 {
 }
 
 fn from_ffi_mesh(raw: ffi::FfiMesh) -> Result<KernelBodyDto, OcctError> {
+    if raw.display_warning_face_indices.len() != raw.display_warning_messages.len()
+        || raw.display_warning_face_indices.iter().any(|index| {
+            *index as usize >= raw.face_first_indices.len()
+                || raw.face_index_counts.get(*index as usize) != Some(&0)
+        })
+    {
+        return Err(OcctError(
+            "OCCT bridge returned malformed display warnings".into(),
+        ));
+    }
+    let display_warnings = raw
+        .display_warning_face_indices
+        .iter()
+        .zip(&raw.display_warning_messages)
+        .map(|(index, message)| limo_cad_solid::DisplayMeshWarningDto {
+            face_key: format!("face:{index}"),
+            message: message.chars().take(1024).collect(),
+        })
+        .collect();
     if raw.face_first_indices.len() != raw.face_index_counts.len()
         || raw.face_plane_data.len() != raw.face_first_indices.len() * 13
         || raw.face_signature_data.len() != raw.face_first_indices.len() * 8
         || raw.face_cylinder_data.len() != raw.face_first_indices.len() * 11
         || raw.face_cone_data.len() != raw.face_first_indices.len() * 5
+        || raw.face_edge_linear_seams.len() != raw.face_edge_indices.len()
+        || raw.face_edge_linear_seams.iter().any(|flag| *flag > 1)
+        || raw.face_edge_planar_inner_rings.len() != raw.face_edge_indices.len()
+        || raw
+            .face_edge_planar_inner_rings
+            .iter()
+            .any(|flag| *flag > 1)
+        || raw.face_outer_shell.len() != raw.face_first_indices.len()
+        || raw.face_outer_shell.iter().any(|flag| *flag > 2)
         || raw.face_edge_offsets.len() != raw.face_first_indices.len() + 1
         || raw.face_edge_offsets.first() != Some(&0)
         || raw.face_edge_offsets.windows(2).any(|w| w[0] > w[1])
@@ -1450,13 +1900,28 @@ fn from_ffi_mesh(raw: ffi::FfiMesh) -> Result<KernelBodyDto, OcctError> {
                 y: signature[offset + 1],
                 z: signature[offset + 2],
             };
-            let plane = (data[0] != 0.0).then(|| nbcad_core::PlaneBasis {
+            let plane = (data[0] != 0.0).then(|| limo_cad_core::PlaneBasis {
                 origin: point(1),
                 u: point(4),
                 v: point(7),
                 normal: point(10),
             });
             KernelFaceDto {
+                outer_shell: match raw.face_outer_shell[index] {
+                    1 => Some(true),
+                    2 => Some(false),
+                    _ => None,
+                },
+                linear_seam_edge_keys: (raw.face_edge_offsets[index] as usize
+                    ..raw.face_edge_offsets[index + 1] as usize)
+                    .filter(|slot| raw.face_edge_linear_seams[*slot] == 1)
+                    .map(|slot| format!("edge:{}", raw.face_edge_indices[slot]))
+                    .collect(),
+                planar_inner_ring_edge_keys: (raw.face_edge_offsets[index] as usize
+                    ..raw.face_edge_offsets[index + 1] as usize)
+                    .filter(|slot| raw.face_edge_planar_inner_rings[*slot] == 1)
+                    .map(|slot| format!("edge:{}", raw.face_edge_indices[slot]))
+                    .collect(),
                 key: format!("face:{index}"),
                 first_index: *first_index,
                 index_count: *index_count,
@@ -1466,7 +1931,7 @@ fn from_ffi_mesh(raw: ffi::FfiMesh) -> Result<KernelBodyDto, OcctError> {
                     .iter()
                     .map(|index| format!("edge:{index}"))
                     .collect(),
-                cone: (cone[0] != 0.0).then(|| nbcad_solid::ConicalSurfaceDto {
+                cone: (cone[0] != 0.0).then(|| limo_cad_solid::ConicalSurfaceDto {
                     axis: Point3Dto {
                         x: cone[1],
                         y: cone[2],
@@ -1474,7 +1939,7 @@ fn from_ffi_mesh(raw: ffi::FfiMesh) -> Result<KernelBodyDto, OcctError> {
                     },
                     semi_angle: cone[4],
                 }),
-                signature: (signature[0] != 0.0).then(|| nbcad_solid::PlanarFaceSignatureDto {
+                signature: (signature[0] != 0.0).then(|| limo_cad_solid::PlanarFaceSignatureDto {
                     centroid: signature_point(1),
                     normal: Point3Dto::from(plane.expect("signature requires plane").normal),
                     area: signature[4],
@@ -1482,7 +1947,7 @@ fn from_ffi_mesh(raw: ffi::FfiMesh) -> Result<KernelBodyDto, OcctError> {
                     wire_count: signature[6].round().max(0.0) as u32,
                     edge_count: signature[7].round().max(0.0) as u32,
                 }),
-                cylinder: (cylinder[0] != 0.0).then(|| nbcad_solid::CylindricalSurfaceDto {
+                cylinder: (cylinder[0] != 0.0).then(|| limo_cad_solid::CylindricalSurfaceDto {
                     origin: Point3Dto {
                         x: cylinder[1],
                         y: cylinder[2],
@@ -1536,7 +2001,7 @@ fn from_ffi_mesh(raw: ffi::FfiMesh) -> Result<KernelBodyDto, OcctError> {
             KernelEdgeDto {
                 key: format!("edge:{index}"),
                 points,
-                circle: (circle[0] != 0.0).then(|| nbcad_solid::CircularCurveDto {
+                circle: (circle[0] != 0.0).then(|| limo_cad_solid::CircularCurveDto {
                     center: Point3Dto {
                         x: circle[1],
                         y: circle[2],
@@ -1561,8 +2026,9 @@ fn from_ffi_mesh(raw: ffi::FfiMesh) -> Result<KernelBodyDto, OcctError> {
         .collect();
 
     Ok(KernelBodyDto {
-        body_id: nbcad_core::BodyId(raw.body_id),
+        body_id: limo_cad_core::BodyId(raw.body_id),
         topology_signature: raw.topology_signature,
+        display_warnings,
         positions: raw.positions,
         normals: raw.normals,
         indices: raw.indices,
@@ -1574,8 +2040,9 @@ fn from_ffi_mesh(raw: ffi::FfiMesh) -> Result<KernelBodyDto, OcctError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nbcad_core::{BodyId, FaceId, FeatureId};
-    use nbcad_solid::{
+
+    use limo_cad_core::{BodyId, FaceId, FeatureId};
+    use limo_cad_solid::{
         iso_metric_grade6_envelope, CylindricalSurfaceDto, HoleBottomStyle, HoleExtent, HoleStyle,
         HoleThreadDto, HoleThreadHand, HoleThreadRepresentation, HoleThreadSeries,
         HoleThreadStandard, KernelChamferJobDto, KernelCombineJobDto, KernelCurveDto,
@@ -1671,6 +2138,507 @@ mod tests {
         })
     }
 
+    #[test]
+    fn native_body_generations_follow_append_partial_failure_deletion_replay_and_owner() {
+        let mut kernel = OcctKernel::new().unwrap();
+        assert!(kernel.body_geometry_identities().unwrap().is_empty());
+        let mut plan = RecomputePlanDto {
+            transaction_id: 1,
+            jobs: vec![box_job(1, 1), box_job(2, 2)],
+            errors: vec![],
+        };
+        let initial = kernel.recompute(&plan).unwrap();
+        assert!(initial.errors.is_empty());
+        let identities = kernel.body_geometry_identities().unwrap();
+        assert_eq!(identities.len(), 2);
+        assert_eq!(kernel.recompute(&plan).unwrap(), initial);
+        assert_eq!(kernel.body_geometry_identities().unwrap(), identities);
+        plan.jobs.push(box_job(3, 3));
+        let appended = kernel.recompute(&plan).unwrap();
+        assert!(appended.errors.is_empty());
+        let append_ids = kernel.body_geometry_identities().unwrap();
+        assert_eq!(append_ids[&BodyId(1)], identities[&BodyId(1)]);
+        assert_eq!(append_ids[&BodyId(2)], identities[&BodyId(2)]);
+        assert_eq!(appended.bodies[0], initial.bodies[0]);
+        assert_eq!(appended.bodies[1], initial.bodies[1]);
+
+        let cut_job = |feature, targets, start, end| {
+            let KernelJobDto::Extrude(mut job) = box_job(feature, 1) else {
+                unreachable!()
+            };
+            job.operation = ExtrudeOperation::Cut;
+            job.target_body_ids = targets;
+            job.result_body_ids.clear();
+            job.profiles = vec![rectangle_profile(0, start, end, start, end)];
+            job.end_offset = 3.;
+            KernelJobDto::Extrude(job)
+        };
+        plan.jobs.push(cut_job(4, vec![BodyId(1)], -2., 2.));
+        let edited = kernel.recompute(&plan).unwrap();
+        assert!(edited.errors.is_empty());
+        let edited_ids = kernel.body_geometry_identities().unwrap();
+        assert_ne!(edited_ids[&BodyId(1)], append_ids[&BodyId(1)]);
+        assert_eq!(edited_ids[&BodyId(2)], append_ids[&BodyId(2)]);
+        assert_eq!(edited_ids[&BodyId(3)], append_ids[&BodyId(3)]);
+        assert_ne!(edited.bodies[0], appended.bodies[0]);
+        let good = plan.clone();
+        // The first target really changes before the second, absent target
+        // throws. Partial failure must not lend its old geometry identity.
+        plan.jobs
+            .push(cut_job(5, vec![BodyId(1), BodyId(99)], 3., 7.));
+        let failed = kernel.recompute(&plan).unwrap();
+        assert!(!failed.errors.is_empty());
+        let failed_ids = kernel.body_geometry_identities().unwrap();
+        assert_ne!(failed_ids[&BodyId(1)], edited_ids[&BodyId(1)]);
+        assert_ne!(failed.bodies[0], edited.bodies[0]);
+        assert_eq!(failed_ids[&BodyId(2)], edited_ids[&BodyId(2)]);
+        assert_eq!(failed_ids[&BodyId(3)], edited_ids[&BodyId(3)]);
+        assert!(!failed_ids.contains_key(&BodyId(99)));
+        assert_eq!(kernel.recompute(&good).unwrap(), edited);
+        let replayed_ids = kernel.body_geometry_identities().unwrap();
+        for body in [BodyId(1), BodyId(2), BodyId(3)] {
+            assert_ne!(replayed_ids[&body], failed_ids[&body]);
+        }
+        plan = good;
+        plan.jobs.push(KernelJobDto::Combine(KernelCombineJobDto {
+            feature_id: FeatureId(6),
+            target_body_id: BodyId(1),
+            tool_body_ids: vec![BodyId(2)],
+            operation: CombineOperation::Intersect,
+            keep_tools: false,
+        }));
+        let combined = kernel.recompute(&plan).unwrap();
+        assert!(combined.errors.is_empty());
+        let combined_ids = kernel.body_geometry_identities().unwrap();
+        assert!(!combined_ids.contains_key(&BodyId(2)));
+        assert_ne!(combined_ids[&BodyId(1)], replayed_ids[&BodyId(1)]);
+        assert_eq!(combined_ids[&BodyId(3)], replayed_ids[&BodyId(3)]);
+        let mut replacement = OcctKernel::new().unwrap();
+        assert_eq!(replacement.recompute(&plan).unwrap(), combined);
+        let replacement_ids = replacement.body_geometry_identities().unwrap();
+        assert_ne!(
+            replacement_ids[&BodyId(1)].kernel_owner,
+            combined_ids[&BodyId(1)].kernel_owner
+        );
+        let mut moved = kernel;
+        assert_eq!(moved.body_geometry_identities().unwrap(), combined_ids);
+        let empty = RecomputePlanDto {
+            transaction_id: 9,
+            jobs: vec![],
+            errors: vec![],
+        };
+        assert!(moved.recompute(&empty).unwrap().bodies.is_empty());
+        assert!(moved.body_geometry_identities().unwrap().is_empty());
+        assert_eq!(moved.recompute(&plan).unwrap(), combined);
+        let reborn = moved.body_geometry_identities().unwrap();
+        assert_ne!(reborn[&BodyId(1)], combined_ids[&BodyId(1)]);
+        assert_eq!(
+            reborn[&BodyId(1)].kernel_owner,
+            combined_ids[&BodyId(1)].kernel_owner
+        );
+    }
+
+    #[test]
+    fn native_body_generations_invalidate_kept_tool_dependencies_and_unknown_dispatch() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let mut plan = RecomputePlanDto {
+            transaction_id: 1,
+            jobs: vec![box_job(1, 1), box_job(2, 2), box_job(3, 3)],
+            errors: vec![],
+        };
+        assert!(kernel.recompute(&plan).unwrap().errors.is_empty());
+        let independent = kernel.body_geometry_identities().unwrap();
+        plan.jobs.push(KernelJobDto::Combine(KernelCombineJobDto {
+            feature_id: FeatureId(4),
+            target_body_id: BodyId(1),
+            tool_body_ids: vec![BodyId(2)],
+            operation: CombineOperation::Intersect,
+            keep_tools: true,
+        }));
+        let connected = kernel.recompute(&plan).unwrap();
+        assert!(connected.errors.is_empty() && connected.bodies.len() == 3);
+        let connected_ids = kernel.body_geometry_identities().unwrap();
+        assert_ne!(connected_ids[&BodyId(1)], independent[&BodyId(1)]);
+        assert_ne!(connected_ids[&BodyId(2)], independent[&BodyId(2)]);
+        assert_eq!(connected_ids[&BodyId(3)], independent[&BodyId(3)]);
+        let KernelJobDto::Extrude(mut cut) = box_job(5, 1) else {
+            unreachable!()
+        };
+        cut.operation = ExtrudeOperation::Cut;
+        cut.target_body_ids = vec![BodyId(1)];
+        cut.result_body_ids.clear();
+        cut.profiles = vec![rectangle_profile(0, -2., 2., -2., 2.)];
+        cut.end_offset = 3.;
+        plan.jobs.push(KernelJobDto::Extrude(cut));
+        let edited = kernel.recompute(&plan).unwrap();
+        assert!(edited.errors.is_empty());
+        assert_ne!(edited.bodies[0], connected.bodies[0]);
+        let edited_ids = kernel.body_geometry_identities().unwrap();
+        assert_ne!(edited_ids[&BodyId(1)], connected_ids[&BodyId(1)]);
+        assert_ne!(edited_ids[&BodyId(2)], connected_ids[&BodyId(2)]);
+        assert_eq!(edited_ids[&BodyId(3)], connected_ids[&BodyId(3)]);
+        assert_eq!(edited.bodies[2], connected.bodies[2]);
+        // No currently supported dispatch produces this job. Exercise the
+        // native fail-closed guard itself, including all independent roots.
+        let unknown = empty_ffi_job(99, u8::MAX);
+        assert!(kernel.inner.pin_mut().apply_job(&unknown).is_err());
+        let unknown_ids = kernel.body_geometry_identities().unwrap();
+        for body in [BodyId(1), BodyId(2), BodyId(3)] {
+            assert_ne!(unknown_ids[&body], edited_ids[&body]);
+        }
+        assert_eq!(unknown_ids.len(), edited_ids.len());
+    }
+
+    #[test]
+    fn section_material_region_excludes_exact_pocket_endpoint_without_selecting_a_side() {
+        use crate::section_review::{SectionOutcome, SectionPlane, SectionReviewRequest};
+
+        let mut stock = box_job(1, 1);
+        let KernelJobDto::Extrude(job) = &mut stock else {
+            unreachable!()
+        };
+        job.profiles = vec![rectangle_profile(0, 0., 12., 0., 12.)];
+        job.end_offset = 8.;
+        let mut pocket = box_job(2, 1);
+        let KernelJobDto::Extrude(job) = &mut pocket else {
+            unreachable!()
+        };
+        job.operation = ExtrudeOperation::Cut;
+        job.target_body_ids = vec![BodyId(1)];
+        job.profiles = vec![rectangle_profile(0, 8., 14., 0., 6.)];
+        job.end_offset = 4.;
+        let plan = RecomputePlanDto {
+            transaction_id: 1,
+            errors: vec![],
+            jobs: vec![stock, pocket],
+        };
+        let mut kernel = OcctKernel::new().unwrap();
+        let source = kernel.recompute(&plan).unwrap();
+        assert!(source.errors.is_empty(), "{:?}", source.errors);
+        assert!((mesh_volume(&source.bodies[0]) - 1056.).abs() < 1e-5);
+        for keep_positive in [false, true] {
+            let request = SectionReviewRequest {
+                body_id: BodyId(1),
+                plane: SectionPlane::Xz,
+                offset_mm: 6.,
+                probe_mm: Some(2.),
+                deflection_mm: 0.01,
+                include_cutaway: true,
+                keep_positive,
+            };
+            let geometry = kernel.section_geometry(&request).unwrap();
+            assert_eq!(geometry.outcome, SectionOutcome::MaterialSection);
+            assert!((simply_connected_section_area(&geometry.section) - 80.).abs() < 1e-6);
+            assert_section_probe(&geometry.section, 2., 0., 8.);
+            assert_section_probe(&geometry.section, 6., 0., 12.);
+            // The positive retained cap also contains the old 16 mm² exterior
+            // pocket-end face. It must not become cut-material hatching.
+            let half = geometry.cutaway.as_ref().unwrap();
+            let expected = if keep_positive { 576. } else { 480. };
+            assert!((mesh_volume(half) - expected).abs() < 1e-5);
+            assert!(half.positions.as_chunks::<3>().0.iter().all(|point| {
+                if keep_positive {
+                    f64::from(point[1]) >= 6. - 1e-6
+                } else {
+                    f64::from(point[1]) <= 6. + 1e-6
+                }
+            }));
+            let report = crate::section_review::present(
+                &request,
+                section_projection(geometry.section),
+                geometry.outcome,
+            )
+            .unwrap();
+            assert!(
+                !report.svg.is_empty(),
+                "The exact endpoint must hatch successfully"
+            );
+            assert_eq!(report.probe_spans.len(), 1);
+            assert!((report.probe_spans[0].length_mm - 8.).abs() < 1e-6);
+            assert_eq!(kernel.recompute(&plan).unwrap(), source);
+            assert_eq!(
+                kernel.last_applied_jobs, 0,
+                "Verification must read the retained source"
+            );
+
+            let mut boundary = request;
+            for offset in [0., 12.] {
+                boundary.offset_mm = offset;
+                let geometry = kernel.section_geometry(&boundary).unwrap();
+                assert_eq!(geometry.outcome, SectionOutcome::BoundaryContact);
+                assert!(geometry.cutaway.is_none());
+                let report = crate::section_review::present(
+                    &boundary,
+                    section_projection(geometry.section),
+                    geometry.outcome,
+                )
+                .unwrap();
+                assert!(report.probe_spans.is_empty());
+            }
+        }
+        for normal_y in [-1., 1.] {
+            let mut request = DrawingProjectionRequest {
+                scope: Default::default(),
+                occurrence_ids: vec![],
+                resolved_occurrences: None,
+                body_ids: vec![BodyId(1)],
+                direction: [0., -1., 0.],
+                up: [0., 0., 1.],
+                include_hidden: true,
+                include_tangent_edges: false,
+                deflection: 0.01,
+                section_plane: Some(crate::DrawingSectionPlaneDto {
+                    point: [0., 6., 0.],
+                    normal: [0., normal_y, 0.],
+                    depth: None,
+                }),
+            };
+            let projection = kernel.drawing_projection(&request).unwrap();
+            assert!((simply_connected_section_area(&projection.section) - 80.).abs() < 1e-6);
+            assert_section_probe(&projection.section, 2., 0., 8.);
+            assert_section_probe(&projection.section, 6., 0., 12.);
+            for offset in [0., 12.] {
+                request.section_plane.as_mut().unwrap().point[1] = offset;
+                let contact = kernel.drawing_projection(&request).unwrap();
+                assert!(
+                    contact.section.is_empty(),
+                    "Exterior contact must not hatch"
+                );
+                assert!(
+                    !contact.visible.is_empty(),
+                    "Keep exterior contact outlines visible"
+                );
+            }
+        }
+        assert_eq!(kernel.recompute(&plan).unwrap(), source);
+        assert_eq!(kernel.last_applied_jobs, 0);
+    }
+
+    #[test]
+    fn section_compound_end_face_does_not_remove_another_solids_interior() {
+        use crate::section_review::{SectionOutcome, SectionPlane, SectionReviewRequest};
+
+        let mut crossing = box_job(1, 1);
+        let KernelJobDto::Extrude(job) = &mut crossing else {
+            unreachable!()
+        };
+        job.profiles = vec![rectangle_profile(0, 0., 12., 0., 12.)];
+        job.end_offset = 8.;
+        let mut contact = box_job(2, 2);
+        let KernelJobDto::Extrude(job) = &mut contact else {
+            unreachable!()
+        };
+        job.profiles = vec![rectangle_profile(0, 2., 6., 0., 6.)];
+        job.start_offset = 2.;
+        job.end_offset = 4.;
+        let mut overlap = box_job(3, 3);
+        let KernelJobDto::Extrude(job) = &mut overlap else {
+            unreachable!()
+        };
+        job.profiles = vec![rectangle_profile(0, 8., 16., 0., 12.)];
+        job.start_offset = 2.;
+        job.end_offset = 6.;
+        let mut exporter = OcctKernel::new().unwrap();
+        let source = exporter
+            .recompute(&RecomputePlanDto {
+                transaction_id: 1,
+                errors: vec![],
+                jobs: vec![crossing, contact, overlap],
+            })
+            .unwrap();
+        assert!(source.errors.is_empty());
+        assert_eq!(source.bodies.len(), 3);
+        // Preserve all overlapping members as one imported compound; a
+        // modeling Join would merge them and fail to exercise the mask bug.
+        let step = exporter.export_step(&StepExportRequest::default()).unwrap();
+        let plan = RecomputePlanDto {
+            transaction_id: 2,
+            errors: vec![],
+            jobs: vec![KernelJobDto::ImportStep(KernelImportStepJobDto {
+                feature_id: FeatureId(4),
+                result_body_id: BodyId(4),
+                data_base64: encode_base64(&step),
+            })],
+        };
+        let mut kernel = OcctKernel::new().unwrap();
+        let source = kernel.recompute(&plan).unwrap();
+        assert!(source.errors.is_empty(), "{:?}", source.errors);
+        for keep_positive in [false, true] {
+            let request = SectionReviewRequest {
+                body_id: BodyId(4),
+                plane: SectionPlane::Xz,
+                offset_mm: 6.,
+                probe_mm: Some(3.),
+                deflection_mm: 0.01,
+                include_cutaway: false,
+                keep_positive,
+            };
+            let geometry = kernel.section_geometry(&request).unwrap();
+            assert_eq!(geometry.outcome, SectionOutcome::MaterialSection);
+            assert!(geometry.cutaway.is_none());
+            // Union the two crossing members, including their overlapping
+            // strip, without subtracting the contact-only member's end face.
+            assert!((simply_connected_section_area(&geometry.section) - 112.).abs() < 1e-6);
+            assert_section_probe(&geometry.section, 3., 0., 16.);
+            assert_section_probe(&geometry.section, 7., 0., 12.);
+            let report = crate::section_review::present(
+                &request,
+                section_projection(geometry.section),
+                geometry.outcome,
+            )
+            .unwrap();
+            assert!(!report.svg.is_empty());
+            assert_eq!(report.probe_spans.len(), 1);
+        }
+        assert_eq!(kernel.recompute(&plan).unwrap(), source);
+        assert_eq!(kernel.last_applied_jobs, 0);
+    }
+
+    fn section_projection(section: Vec<DrawingPolylineDto>) -> DrawingProjectionDto {
+        DrawingProjectionDto {
+            topology_signatures: Default::default(),
+            visible: vec![],
+            hidden: vec![],
+            anchors: vec![],
+            circles: vec![],
+            section,
+            bounds: [0.; 4],
+        }
+    }
+
+    fn assert_section_probe(lines: &[DrawingPolylineDto], at: f64, start: f64, end: f64) {
+        let spans = crate::section_review::probe_spans(lines, at).unwrap();
+        assert_eq!(spans.len(), 1, "Probe {at}: {spans:?}");
+        assert!((spans[0].start_mm - start).abs() < 1e-6, "{spans:?}");
+        assert!((spans[0].end_mm - end).abs() < 1e-6, "{spans:?}");
+    }
+
+    // These analytic fixtures have one simply connected, straight-edged
+    // region. Reconstruct its complete closed boundary; reject leftover lines.
+    fn simply_connected_section_area(lines: &[DrawingPolylineDto]) -> f64 {
+        let near =
+            |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() < 1e-8 && (a[1] - b[1]).abs() < 1e-8;
+        let mut segments = lines
+            .iter()
+            .flat_map(|line| line.points.windows(2).map(|p| (p[0], p[1])))
+            .collect::<Vec<_>>();
+        assert!(
+            segments.len() <= 64,
+            "Unexpected analytic boundary complexity"
+        );
+        let (first, mut current) = segments.pop().expect("Missing material boundary");
+        let mut twice_area = first[0] * current[1] - current[0] * first[1];
+        while !near(first, current) {
+            let index = segments
+                .iter()
+                .position(|(a, b)| near(*a, current) || near(*b, current))
+                .expect("Material boundary is not a closed region");
+            let (a, b) = segments.swap_remove(index);
+            let next = if near(a, current) { b } else { a };
+            twice_area += current[0] * next[1] - next[0] * current[1];
+            current = next;
+        }
+        assert!(
+            segments.is_empty(),
+            "Material region has unexpected seams or extra loops"
+        );
+        twice_area.abs() / 2.
+    }
+
+    #[test]
+    fn section_native_limits_and_deadline_fail_without_changing_source() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let plan = RecomputePlanDto {
+            transaction_id: 1,
+            errors: vec![],
+            jobs: vec![box_job(1, 1)],
+        };
+        let source = kernel.recompute(&plan).unwrap();
+        let options = || ffi::FfiSectionOptions {
+            axis: 2,
+            offset: 5.,
+            keep_positive: false,
+            deflection: 0.01,
+            include_cutaway: true,
+            retain_unintersected: false,
+            timeout_ms: 30_000,
+            contour_points: 100_000,
+            vertices: 1_000_000,
+            edge_points: 100_000,
+        };
+        for kind in ["deadline", "contour", "vertices", "edges"] {
+            let mut limited = options();
+            match kind {
+                "deadline" => limited.timeout_ms = 0,
+                "contour" => limited.contour_points = 3,
+                "vertices" => limited.vertices = 2,
+                "edges" => limited.edge_points = 2,
+                _ => unreachable!(),
+            }
+            let error = kernel
+                .inner
+                .section_geometry(1, &limited)
+                .err()
+                .unwrap()
+                .to_string();
+            assert!(
+                error.contains(if kind == "deadline" {
+                    "timed out"
+                } else {
+                    "budget"
+                }),
+                "{error}"
+            );
+            assert_eq!(kernel.recompute(&plan).unwrap(), source);
+        }
+        let mut diagram = options();
+        diagram.include_cutaway = false;
+        diagram.vertices = 0;
+        diagram.edge_points = 0;
+        let result = kernel.inner.section_geometry(1, &diagram).unwrap();
+        assert_eq!(result.outcome, 2);
+        assert!(!result.has_cutaway);
+        assert!(result.cutaway.positions.is_empty());
+        assert_eq!(
+            kernel
+                .projection_calculations
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+        assert!(kernel.projection_cache.lock().unwrap().is_empty());
+        assert_eq!(kernel.recompute(&plan).unwrap(), source);
+        let mut compound_plan = plan.clone();
+        let mut upper = box_job(2, 2);
+        if let KernelJobDto::Extrude(job) = &mut upper {
+            job.start_offset = 20.;
+            job.end_offset = 30.;
+        }
+        compound_plan.jobs.push(upper);
+        compound_plan
+            .jobs
+            .push(KernelJobDto::Combine(limo_cad_solid::KernelCombineJobDto {
+                feature_id: limo_cad_core::FeatureId(3),
+                target_body_id: BodyId(1),
+                tool_body_ids: vec![BodyId(2)],
+                operation: CombineOperation::Join,
+                keep_tools: false,
+            }));
+        let compound = kernel.recompute(&compound_plan).unwrap();
+        assert!(compound.errors.is_empty());
+        for positive in [false, true] {
+            let mut contact = options();
+            contact.offset = 10.;
+            contact.keep_positive = positive;
+            let result = kernel.inner.section_geometry(1, &contact).unwrap();
+            assert_eq!(
+                result.outcome, 1,
+                "Separating whole disjoint solids is boundary contact"
+            );
+            assert!(!result.has_cutaway);
+            assert_eq!(kernel.recompute(&compound_plan).unwrap(), compound);
+        }
+    }
+
     fn assert_m6_6h_modeled_thread_go_no_go_envelope(scene: &KernelSceneDto, stage: &str) {
         let limits = iso_metric_grade6_envelope(6.0, 1.0, ThreadFit::Internal).unwrap();
         assert_eq!(limits.modeled_major, limits.major_min);
@@ -1682,7 +2650,7 @@ mod tests {
         let wall_samples = scene
             .bodies
             .iter()
-            .flat_map(|body| body.positions.chunks_exact(3))
+            .flat_map(|body| body.positions.as_chunks::<3>().0.iter())
             .filter_map(|point| {
                 let radius = (f64::from(point[0]).powi(2) + f64::from(point[1]).powi(2)).sqrt();
                 (point[2] > 0.1 && point[2] < 9.9 && radius > 1.0 && radius < 4.0).then_some((
@@ -1753,7 +2721,9 @@ mod tests {
             .iter()
             .map(|body| {
                 body.indices
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .filter(|triangle| {
                         let point = |index: u32| {
                             let offset = index as usize * 3;
@@ -1926,6 +2896,10 @@ mod tests {
             .faces
             .iter()
             .all(|face| face.plane.is_some()));
+        assert!(scene.bodies[0]
+            .faces
+            .iter()
+            .all(|face| face.outer_shell == Some(true)));
 
         let step = kernel.export_step(&StepExportRequest::default()).unwrap();
         let text = String::from_utf8(step).unwrap();
@@ -1967,7 +2941,9 @@ mod tests {
             .unwrap();
         let minimum_x = placed_scene.bodies[0]
             .positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|point| point[0])
             .fold(f32::INFINITY, f32::min);
         assert!((minimum_x - 125.0).abs() < 1.0e-3);
@@ -2006,7 +2982,7 @@ mod tests {
             .chars()
             .filter(|character| !character.is_whitespace())
             .collect::<String>();
-        assert!(compact_metadata.contains("NBCAD_THREAD_METADATA_V1_HEX="));
+        assert!(compact_metadata.contains("LIMO_CAD_THREAD_METADATA_V1_HEX="));
         assert!(compact_metadata.contains("4d3620782031202d203648"));
 
         let mut roundtrip_kernel = OcctKernel::new().unwrap();
@@ -2023,6 +2999,301 @@ mod tests {
             .unwrap();
         assert!(roundtrip.errors.is_empty());
         assert_eq!(roundtrip.bodies.len(), 1);
+    }
+
+    #[test]
+    fn native_shell_membership_distinguishes_sealed_cavities_compounds_and_open_surfaces() {
+        let point = |x, y| Point3Dto { x, y, z: 0. };
+        let mut cutter = box_job(2, 2);
+        if let KernelJobDto::Extrude(job) = &mut cutter {
+            job.start_offset = 2.;
+            job.end_offset = 8.;
+            job.profiles = vec![KernelProfileDto {
+                profile_index: 0,
+                points: (0..32)
+                    .map(|i| {
+                        let angle = std::f64::consts::TAU * i as f64 / 32.;
+                        point(2. * angle.cos(), 2. * angle.sin())
+                    })
+                    .collect(),
+                curves: vec![KernelCurveDto::Circle {
+                    entity_id: 1,
+                    center: point(0., 0.),
+                    axis_point: point(2., 0.),
+                    normal: Point3Dto {
+                        x: 0.,
+                        y: 0.,
+                        z: 1.,
+                    },
+                }],
+                holes: vec![],
+            }];
+        }
+        let mut kernel = OcctKernel::new().unwrap();
+        let scene = kernel
+            .recompute(&RecomputePlanDto {
+                transaction_id: 1,
+                errors: vec![],
+                jobs: vec![
+                    box_job(1, 1),
+                    cutter,
+                    KernelJobDto::Combine(KernelCombineJobDto {
+                        feature_id: FeatureId(3),
+                        target_body_id: BodyId(1),
+                        tool_body_ids: vec![BodyId(2)],
+                        operation: CombineOperation::Cut,
+                        keep_tools: false,
+                    }),
+                ],
+            })
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        // The Boolean cut retains OCCT's single-solid compound wrapper. It
+        // must still distinguish an exterior shell from a sealed inner cavity.
+        let native = &scene.bodies[0];
+        assert_eq!(
+            native
+                .faces
+                .iter()
+                .filter(|face| face.outer_shell == Some(true))
+                .count(),
+            6
+        );
+        assert_eq!(
+            native
+                .faces
+                .iter()
+                .filter(|face| face.outer_shell == Some(false))
+                .count(),
+            3
+        );
+        assert_eq!(
+            native
+                .faces
+                .iter()
+                .find(|face| face.cylinder.is_some())
+                .unwrap()
+                .outer_shell,
+            Some(false)
+        );
+        let step = kernel.export_step(&StepExportRequest::default()).unwrap();
+        let mut imported = OcctKernel::new().unwrap();
+        let scene = imported
+            .recompute(&RecomputePlanDto {
+                transaction_id: 2,
+                errors: vec![],
+                jobs: vec![KernelJobDto::ImportStep(KernelImportStepJobDto {
+                    feature_id: FeatureId(4),
+                    result_body_id: BodyId(1),
+                    data_base64: encode_base64(&step),
+                })],
+            })
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        let body = &scene.bodies[0];
+        assert_eq!(
+            body.faces
+                .iter()
+                .filter(|face| face.outer_shell == Some(true))
+                .count(),
+            6,
+            "only the six outer box faces border the exterior shell"
+        );
+        assert_eq!(
+            body.faces
+                .iter()
+                .filter(|face| face.outer_shell == Some(false))
+                .count(),
+            3,
+            "the sealed cylinder and both disks belong to an inner shell"
+        );
+        assert_eq!(
+            body.faces
+                .iter()
+                .find(|face| face.cylinder.is_some())
+                .unwrap()
+                .outer_shell,
+            Some(false)
+        );
+
+        // Two solids in one imported assembly cannot share one body-level
+        // exterior classification, even when both are individually closed.
+        let compound = kernel
+            .export_step(&StepExportRequest {
+                occurrences: [0., 40.]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, x)| StepOccurrencePlacementDto {
+                        occurrence_id: index as u64 + 1,
+                        component_id: 1,
+                        body_id: BodyId(1),
+                        name: format!("Cavity {index}"),
+                        translation: [x, 0., 0.],
+                        rotation: [0., 0., 0., 1.],
+                    })
+                    .collect(),
+                ..StepExportRequest::default()
+            })
+            .unwrap();
+        let scene = imported
+            .recompute(&RecomputePlanDto {
+                transaction_id: 3,
+                errors: vec![],
+                jobs: vec![KernelJobDto::ImportStep(KernelImportStepJobDto {
+                    feature_id: FeatureId(5),
+                    result_body_id: BodyId(1),
+                    data_base64: encode_base64(&compound),
+                })],
+            })
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        assert_eq!(scene.bodies.len(), 1);
+        assert_eq!(
+            scene.bodies[0]
+                .faces
+                .iter()
+                .filter(|face| face.cylinder.is_some())
+                .count(),
+            2,
+            "the two native solids must both be present in the unsupported compound"
+        );
+        assert!(scene.bodies[0]
+            .faces
+            .iter()
+            .all(|face| face.outer_shell.is_none()));
+        // Use the production STEP writer's exact box faces to form a valid
+        // five-face surface shell, rather than an invalid unclosed solid.
+        let mut box_kernel = OcctKernel::new().unwrap();
+        let boxed = box_kernel
+            .recompute(&RecomputePlanDto {
+                transaction_id: 4,
+                errors: vec![],
+                jobs: vec![box_job(1, 1)],
+            })
+            .unwrap();
+        assert!(boxed.errors.is_empty());
+        let box_step = String::from_utf8(
+            box_kernel
+                .export_step(&StepExportRequest::default())
+                .unwrap(),
+        )
+        .unwrap();
+        let compact: String = box_step.chars().filter(|c| !c.is_whitespace()).collect();
+        let statements: Vec<String> = compact
+            .split(';')
+            .map(|statement| {
+                if let Some((label, entity)) = statement.split_once('=') {
+                    if let Some(args) = entity.strip_prefix("MANIFOLD_SOLID_BREP('',") {
+                        let shell = args.strip_suffix(')').unwrap();
+                        return format!("{label}=SHELL_BASED_SURFACE_MODEL('',({shell}))");
+                    }
+                    if let Some(args) = entity.strip_prefix("CLOSED_SHELL('',(") {
+                        let face_refs = args.strip_suffix("))").unwrap();
+                        let faces: Vec<_> = face_refs.split(',').collect();
+                        assert_eq!(faces.len(), 6);
+                        return format!("{label}=OPEN_SHELL('',({}))", faces[1..].join(","));
+                    }
+                }
+                statement.replace(
+                    "ADVANCED_BREP_SHAPE_REPRESENTATION",
+                    "MANIFOLD_SURFACE_SHAPE_REPRESENTATION",
+                )
+            })
+            .collect();
+        let open_step = statements.join(";");
+        assert!(open_step.contains("OPEN_SHELL('',("));
+        assert!(open_step.contains("SHELL_BASED_SURFACE_MODEL('',("));
+        let scene = imported
+            .recompute(&RecomputePlanDto {
+                transaction_id: 5,
+                errors: vec![],
+                jobs: vec![KernelJobDto::ImportStep(KernelImportStepJobDto {
+                    feature_id: FeatureId(6),
+                    result_body_id: BodyId(1),
+                    data_base64: encode_base64(open_step.as_bytes()),
+                })],
+            })
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        assert_eq!(scene.bodies[0].faces.len(), 5);
+        assert!(!scene.bodies[0].indices.is_empty());
+        assert!(scene.bodies[0]
+            .faces
+            .iter()
+            .all(|face| face.outer_shell.is_none()));
+        let section = imported
+            .drawing_projection(&DrawingProjectionRequest {
+                scope: Default::default(),
+                occurrence_ids: vec![],
+                resolved_occurrences: None,
+                body_ids: vec![BodyId(1)],
+                direction: [0., -1., 0.],
+                up: [0., 0., 1.],
+                include_hidden: true,
+                include_tangent_edges: false,
+                deflection: 0.01,
+                section_plane: Some(crate::DrawingSectionPlaneDto {
+                    point: [0., 0., 5.],
+                    normal: [0., 1., 0.],
+                    depth: None,
+                }),
+            })
+            .unwrap();
+        assert!(
+            section.section.is_empty(),
+            "Open surfaces have no cut-material area"
+        );
+        assert!(
+            !section.visible.is_empty(),
+            "Keep open-surface section outlines visible"
+        );
+
+        // Export two real native shapes: a closed cavity solid and the open
+        // five-face shell above. A mixed container cannot inherit the solid's
+        // evidence merely because it has only one SOLID descendant.
+        let mut mixed = OcctKernel::new().unwrap();
+        let members = mixed
+            .recompute(&RecomputePlanDto {
+                transaction_id: 6,
+                errors: vec![],
+                jobs: vec![
+                    KernelJobDto::ImportStep(KernelImportStepJobDto {
+                        feature_id: FeatureId(7),
+                        result_body_id: BodyId(1),
+                        data_base64: encode_base64(&step),
+                    }),
+                    KernelJobDto::ImportStep(KernelImportStepJobDto {
+                        feature_id: FeatureId(8),
+                        result_body_id: BodyId(2),
+                        data_base64: encode_base64(open_step.as_bytes()),
+                    }),
+                ],
+            })
+            .unwrap();
+        assert!(members.errors.is_empty(), "{:?}", members.errors);
+        assert_eq!(members.bodies.len(), 2);
+        let mixed_step = mixed.export_step(&StepExportRequest::default()).unwrap();
+        let scene = imported
+            .recompute(&RecomputePlanDto {
+                transaction_id: 7,
+                errors: vec![],
+                jobs: vec![KernelJobDto::ImportStep(KernelImportStepJobDto {
+                    feature_id: FeatureId(9),
+                    result_body_id: BodyId(1),
+                    data_base64: encode_base64(&mixed_step),
+                })],
+            })
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        assert_eq!(scene.bodies.len(), 1);
+        assert_eq!(scene.bodies[0].faces.len(), 14);
+        assert!(scene.bodies[0]
+            .faces
+            .iter()
+            .any(|face| face.cylinder.is_some()));
+        assert!(scene.bodies[0].faces.iter().all(|face| {
+            face.outer_shell.is_none() && face.planar_inner_ring_edge_keys.is_empty()
+        }));
     }
 
     #[test]
@@ -2059,6 +3330,35 @@ mod tests {
         let mut kernel = OcctKernel::new().unwrap();
         let initial = kernel.recompute(&plan).unwrap();
         assert!(initial.errors.is_empty());
+        let request = crate::section_review::SectionReviewRequest {
+            body_id: BodyId(1),
+            plane: crate::section_review::SectionPlane::Xy,
+            offset_mm: 5.,
+            probe_mm: None,
+            deflection_mm: 0.01,
+            include_cutaway: true,
+            keep_positive: false,
+        };
+        let section = kernel.section_geometry(&request).unwrap();
+        assert_eq!(
+            section.outcome,
+            crate::section_review::SectionOutcome::MaterialSection
+        );
+        for line in &section.section {
+            for pair in line.points.windows(2) {
+                let midpoint = [
+                    (pair[0][0] + pair[1][0]) / 2.,
+                    (pair[0][1] + pair[1][1]) / 2.,
+                ];
+                let radius = midpoint[0].hypot(midpoint[1]);
+                assert!(
+                    10. - radius <= 0.010001,
+                    "Section chord must respect sampling deflection: {radius}"
+                );
+            }
+        }
+        assert!(!section.cutaway.unwrap().indices.is_empty());
+        assert_eq!(kernel.recompute(&plan).unwrap(), initial);
         let fine_request = MeshExportRequest {
             linear_deflection: 0.01,
             angular_deflection: 0.05,
@@ -2101,6 +3401,78 @@ mod tests {
     }
 
     #[test]
+    fn support_proofs_use_exact_prefix_and_invalidate_on_edit_or_failure() {
+        use limo_cad_solid::{stable_face_id, HistorySupportQuery, KernelCombineJobDto};
+        let mut kernel = OcctKernel::new().unwrap();
+        let mut plan = RecomputePlanDto {
+            transaction_id: 1,
+            jobs: vec![
+                box_job(1, 1),
+                box_job(2, 2),
+                KernelJobDto::Combine(KernelCombineJobDto {
+                    feature_id: FeatureId(3),
+                    target_body_id: BodyId(1),
+                    tool_body_ids: vec![BodyId(2)],
+                    operation: CombineOperation::Intersect,
+                    keep_tools: false,
+                }),
+            ],
+            errors: vec![],
+        };
+        let query = HistorySupportQuery {
+            sketch_id: FeatureId(99),
+            after_feature: FeatureId(2),
+            face_id: stable_face_id(BodyId(2), "face:0"),
+        };
+        // A previously unqueried prefix must be inspected, not inferred from
+        // the current final scene or a remembered sketch basis.
+        kernel.recompute(&plan).unwrap();
+        let (scene, proofs) = kernel.recompute_with_supports(&plan, &[query]).unwrap();
+        assert!(scene.errors.is_empty());
+        assert!(scene.bodies.iter().all(|body| body.body_id != BodyId(2)));
+        assert_eq!(proofs, BTreeSet::from([query.sketch_id]));
+        assert_eq!(kernel.last_applied_jobs, 3);
+        assert_eq!(
+            kernel.recompute_with_supports(&plan, &[query]).unwrap().1,
+            proofs
+        );
+        assert_eq!(kernel.last_applied_jobs, 0);
+
+        // Even when the queried prefix succeeds, a failed transaction cannot
+        // lend its proofs to a later commit or cached append.
+        let good = plan.clone();
+        plan.jobs.push(KernelJobDto::Combine(KernelCombineJobDto {
+            feature_id: FeatureId(4),
+            target_body_id: BodyId(1),
+            tool_body_ids: vec![BodyId(999)],
+            operation: CombineOperation::Join,
+            keep_tools: false,
+        }));
+        let (failed, proofs) = kernel.recompute_with_supports(&plan, &[query]).unwrap();
+        assert!(!failed.errors.is_empty());
+        assert!(proofs.is_empty());
+        assert!(kernel.support_cache.is_empty());
+        plan = good;
+        assert_eq!(
+            kernel.recompute_with_supports(&plan, &[query]).unwrap().1,
+            BTreeSet::from([query.sketch_id])
+        );
+        assert_eq!(kernel.last_applied_jobs, 3);
+
+        plan.jobs[1] = box_job(2, 7);
+        if let KernelJobDto::Combine(job) = &mut plan.jobs[2] {
+            job.tool_body_ids = vec![BodyId(7)];
+        }
+        let (edited, proofs) = kernel.recompute_with_supports(&plan, &[query]).unwrap();
+        assert!(edited.errors.is_empty());
+        assert!(
+            proofs.is_empty(),
+            "an edited prefix must not reuse its former support"
+        );
+        assert_eq!(kernel.last_applied_jobs, 3);
+    }
+
+    #[test]
     fn append_replay_matches_cold_geometry_and_rebuilds_on_edit_rollback_or_failure() {
         let mut kernel = OcctKernel::new().unwrap();
         let mut plan = RecomputePlanDto {
@@ -2131,7 +3503,7 @@ mod tests {
         );
         assert_eq!(kernel.last_applied_jobs, 1);
         plan.jobs
-            .push(KernelJobDto::Combine(nbcad_solid::KernelCombineJobDto {
+            .push(KernelJobDto::Combine(limo_cad_solid::KernelCombineJobDto {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 tool_body_ids: vec![BodyId(2)],
@@ -2146,9 +3518,9 @@ mod tests {
         );
         assert_eq!(kernel.last_applied_jobs, 1);
         let good = plan.clone();
-        // A failed append must never mark its partially changed native state as reusable.
+
         plan.jobs
-            .push(KernelJobDto::Combine(nbcad_solid::KernelCombineJobDto {
+            .push(KernelJobDto::Combine(limo_cad_solid::KernelCombineJobDto {
                 feature_id: FeatureId(4),
                 target_body_id: BodyId(1),
                 tool_body_ids: vec![BodyId(999)],
@@ -2186,8 +3558,8 @@ mod tests {
 
     #[test]
     fn exact_projection_cache_tracks_geometry_sections_and_solved_placements() {
-        use nbcad_assembly::{ComponentId, InstanceBodyPoseDto, OccurrenceId};
-        use nbcad_sketch::DrawingViewScope;
+        use limo_cad_assembly::{ComponentId, InstanceBodyPoseDto, OccurrenceId};
+        use limo_cad_sketch::DrawingViewScope;
         let mut kernel = OcctKernel::new().unwrap();
         let mut plan = RecomputePlanDto {
             transaction_id: 1,
@@ -2273,8 +3645,17 @@ mod tests {
             kernel.drawing_projection(&request).unwrap();
         }
         assert!(kernel.projection_cache.lock().unwrap().len() <= 16);
+        let retained_points: usize = kernel
+            .projection_cache
+            .lock()
+            .unwrap()
+            .iter()
+            .flat_map(|(_, p)| p.visible.iter().chain(&p.hidden).chain(&p.section))
+            .map(|line| line.points.len())
+            .sum();
+        assert!(retained_points <= 500_000);
         plan.errors.push(KernelFeatureErrorDto {
-            feature_id: nbcad_core::FeatureId(2),
+            feature_id: limo_cad_core::FeatureId(2),
             message: "missing sketch".into(),
         });
         kernel.recompute(&plan).unwrap();
@@ -2303,6 +3684,7 @@ mod tests {
             target_body_id: BodyId(1),
             edge_keys: upper,
             distance: 0.5,
+            angle_deg: None,
             tangent_chain: false,
         }));
         jobs.push(KernelJobDto::Hole(KernelHoleJobDto {
@@ -2351,6 +3733,7 @@ mod tests {
             target_body_id: BodyId(1),
             edge_keys: vec![rim],
             distance: 0.5,
+            angle_deg: None,
             tangent_chain: false,
         }));
         let scene = kernel
@@ -2362,10 +3745,12 @@ mod tests {
             .unwrap();
         assert!(scene.errors.is_empty(), "{:?}", scene.errors);
         let body = &scene.bodies[0];
-        assert!(body.faces.iter().all(|f| !f.edge_keys.is_empty()
-            && f.edge_keys
-                .iter()
-                .all(|k| body.edges.iter().any(|e| &e.key == k))));
+        assert!(body.faces.iter().all(|f| {
+            !f.edge_keys.is_empty()
+                && f.edge_keys
+                    .iter()
+                    .all(|k| body.edges.iter().any(|e| &e.key == k))
+        }));
         let top = body
             .faces
             .iter()
@@ -2473,6 +3858,259 @@ mod tests {
         assert!((projection.bounds[1] + 10.0).abs() < 1.0e-6);
         assert!((projection.bounds[2] - 10.0).abs() < 1.0e-6);
         assert!((projection.bounds[3] - 10.0).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn measure_clearance_rejects_disjoint_native_containment_shortcuts() {
+        let probe = ffi::clearance_regression_probe().unwrap();
+        let expected = (28.0_f64.powi(2) + 18.0_f64.powi(2) + 3.0_f64.powi(2)).sqrt();
+        for (label, result, point_a, point_b) in [
+            (
+                "reversed",
+                probe.measure_reversed_disjoint,
+                [30., 20., 5.],
+                [2., 2., 2.],
+            ),
+            (
+                "swapped",
+                probe.measure_swapped_disjoint,
+                [2., 2., 2.],
+                [30., 20., 5.],
+            ),
+        ] {
+            println!(
+                "Measure {label}: distance={} witnesses={:?}/{:?}",
+                result.distance, result.point_a, result.point_b
+            );
+            assert_ne!(result.flags & 1, 0);
+            assert!(
+                (result.distance - expected).abs() < 1.0e-7,
+                "Measure {label}: {} differs from analytic {expected}",
+                result.distance
+            );
+            for axis in 0..3 {
+                assert!((result.point_a[axis] - point_a[axis]).abs() < 1.0e-7);
+                assert!((result.point_b[axis] - point_b[axis]).abs() < 1.0e-7);
+            }
+        }
+    }
+
+    #[test]
+    fn exact_clearance_rejects_disjoint_native_containment_shortcuts() {
+        let probe = ffi::clearance_regression_probe().unwrap();
+        // The reversed primitive intentionally has complement material in OCCT.
+        // Its actual raw shortcut is a finite-CAD-boundary regression witness,
+        // not an attribution of the separately reported imported STEP anomaly.
+        assert!(probe.legacy_inner_solution);
+        assert_eq!(probe.legacy_minimum_clearance_mm, 0.0);
+        assert_eq!(probe.legacy_point_a, probe.legacy_point_b);
+        println!(
+            "synthetic raw InnerSolution={} clearance={} witnesses={:?}/{:?}",
+            probe.legacy_inner_solution,
+            probe.legacy_minimum_clearance_mm,
+            probe.legacy_point_a,
+            probe.legacy_point_b
+        );
+
+        let points = |result: &ffi::FfiInterferenceResult| {
+            (
+                [
+                    result.closest_point_a_x,
+                    result.closest_point_a_y,
+                    result.closest_point_a_z,
+                ],
+                [
+                    result.closest_point_b_x,
+                    result.closest_point_b_y,
+                    result.closest_point_b_z,
+                ],
+            )
+        };
+        let assert_point = |actual: [f64; 3], expected: [f64; 3]| {
+            for axis in 0..3 {
+                assert!(
+                    (actual[axis] - expected[axis]).abs() < 1.0e-7,
+                    "point {actual:?} differs from analytic {expected:?}"
+                );
+            }
+        };
+        // A 90-degree native location puts the reversed 10 mm box at
+        // [30,40] x [20,30] x [5,15]; the other box occupies [0,2]^3.
+        let analytic_clearance = (28.0_f64.powi(2) + 18.0_f64.powi(2) + 3.0_f64.powi(2)).sqrt();
+        for (label, result, expected_a, expected_b) in [
+            (
+                "reversed placed solid",
+                &probe.reversed_disjoint,
+                [30.0, 20.0, 5.0],
+                [2.0, 2.0, 2.0],
+            ),
+            (
+                "swapped placed solid",
+                &probe.swapped_disjoint,
+                [2.0, 2.0, 2.0],
+                [30.0, 20.0, 5.0],
+            ),
+        ] {
+            assert!(
+                (result.minimum_clearance_mm - analytic_clearance).abs() < 1.0e-7,
+                "{label}: clearance {} differs from {analytic_clearance}",
+                result.minimum_clearance_mm
+            );
+            assert!(result.overlap_volume_mm3.abs() < 1.0e-7);
+            let interfering = result.overlap_volume_mm3 > 1.0e-7;
+            assert!(!interfering, "{label} must not interfere");
+            let (point_a, point_b) = points(result);
+            assert_point(point_a, expected_a);
+            assert_point(point_b, expected_b);
+            println!(
+                "{label}: clearance={} volume={} witnesses={point_a:?}/{point_b:?}",
+                result.minimum_clearance_mm, result.overlap_volume_mm3
+            );
+        }
+        for (label, result, expected_volume) in [
+            ("contact", &probe.contact, 0.0),
+            ("contained", &probe.contained, 8.0),
+            ("partial overlap", &probe.partial_overlap, 1.0),
+        ] {
+            assert!(result.minimum_clearance_mm.abs() < 1.0e-7, "{label}");
+            assert!(
+                (result.overlap_volume_mm3 - expected_volume).abs() < 1.0e-7,
+                "{label}"
+            );
+            let (point_a, point_b) = points(result);
+            assert!(
+                point_a.into_iter().chain(point_b).all(f64::is_finite),
+                "{label}"
+            );
+        }
+        // A compound's envelope encloses the query box, but neither native
+        // member does. A box-bound approximation would incorrectly return zero.
+        assert!(
+            (probe.overlapping_envelopes.minimum_clearance_mm - 27.0_f64.sqrt()).abs() < 1.0e-7
+        );
+        assert!(probe.overlapping_envelopes.overlap_volume_mm3.abs() < 1.0e-7);
+        let (point_a, point_b) = points(&probe.overlapping_envelopes);
+        let close_to = |point: [f64; 3], expected: [f64; 3]| {
+            point
+                .into_iter()
+                .zip(expected)
+                .all(|(a, b)| (a - b).abs() < 1.0e-7)
+        };
+        assert!(
+            close_to(point_a, [2.0, 2.0, 2.0]) || close_to(point_a, [10.0, 10.0, 10.0]),
+            "compound witness must lie on an actual member: {point_a:?}"
+        );
+        assert!(
+            close_to(point_b, [5.0, 5.0, 5.0]) || close_to(point_b, [7.0, 7.0, 7.0]),
+            "query witness must lie on its native boundary: {point_b:?}"
+        );
+        let compound_witness_distance = point_a
+            .into_iter()
+            .zip(point_b)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+            .sqrt();
+        assert!(
+            (compound_witness_distance - probe.overlapping_envelopes.minimum_clearance_mm).abs()
+                < 1.0e-7,
+            "compound witnesses must describe the reported native clearance"
+        );
+
+        // Optional read-only local evidence in this SAME case. The private
+        // component is never bundled or published, and ordinary CI exercises
+        // the synthetic native regression above without requiring private data.
+        let Some(step_path) = std::env::var_os("LIMO_CAD_NATIVE_DISTANCE_REPRO_STEP") else {
+            println!("authenticated local STEP probe not requested");
+            return;
+        };
+        let step = std::fs::read(&step_path).unwrap();
+        let source_hash = limo_cad_export::slicer_verification::sha256(&step);
+        assert_eq!(
+            source_hash, "05cf085685dee6425f67409a4ea9853b36afd9ca05345e350b631f94164f2125",
+            "local probe must use the authenticated reported STEP"
+        );
+        let mut kernel = OcctKernel::new().unwrap();
+        let scene = kernel
+            .recompute(&RecomputePlanDto {
+                transaction_id: 1,
+                errors: Vec::new(),
+                jobs: vec![
+                    KernelJobDto::ImportStep(KernelImportStepJobDto {
+                        feature_id: FeatureId(1),
+                        result_body_id: BodyId(1),
+                        data_base64: encode_base64(&step),
+                    }),
+                    KernelJobDto::Extrude(KernelExtrudeJobDto {
+                        feature_id: FeatureId(2),
+                        operation: ExtrudeOperation::NewBody,
+                        source_face: None,
+                        profiles: vec![rectangle_profile(0, 4.4, 15.6, 57.2, 62.8)],
+                        normal: Point3Dto {
+                            x: 0.0,
+                            y: 0.0,
+                            z: 1.0,
+                        },
+                        start_offset: 9.9,
+                        end_offset: 153.1,
+                        taper_angle_deg: 0.0,
+                        target_body_ids: Vec::new(),
+                        result_body_ids: vec![BodyId(2)],
+                    }),
+                ],
+            })
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        assert_eq!(scene.bodies.len(), 2);
+        let native_identities = kernel.body_geometry_identities().unwrap();
+        let identity = |body_id| PlacedBodyQueryDto {
+            body_id: BodyId(body_id),
+            translation: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+        };
+        let result = kernel.exact_interference(identity(2), identity(1)).unwrap();
+        // Retained independent native enclosure/prism query proved this lower
+        // bound, not the screw's exact clearance. Keep the two distinct.
+        assert!(result.minimum_clearance_mm >= 148.2038368765174 - 1.0e-6);
+        assert!(result.overlap_volume_mm3.abs() < 1.0e-7);
+        let interfering = result.overlap_volume_mm3 > 1.0e-7;
+        assert!(!interfering);
+        let witness_distance = result
+            .closest_point_a
+            .into_iter()
+            .zip(result.closest_point_b)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+            .sqrt();
+        assert!((witness_distance - result.minimum_clearance_mm).abs() < 1.0e-6);
+        for (point, min, max) in [
+            (
+                result.closest_point_a,
+                [4.4, 57.2, 9.9],
+                [15.6, 62.8, 153.1],
+            ),
+            (
+                result.closest_point_b,
+                [45.772299194335936, -98.29999694824218, 119.0999969482422],
+                [53.5723014831543, -87.9, 126.9000030517578],
+            ),
+        ] {
+            for axis in 0..3 {
+                assert!(point[axis].is_finite());
+                assert!(point[axis] >= min[axis] - 1.0e-6 && point[axis] <= max[axis] + 1.0e-6);
+            }
+        }
+        assert_eq!(
+            kernel.body_geometry_identities().unwrap(),
+            native_identities
+        );
+        assert_eq!(std::fs::read(&step_path).unwrap(), step);
+        println!(
+            "authenticated local STEP {source_hash}: clearance={} volume={} witnesses={:?}/{:?}",
+            result.minimum_clearance_mm,
+            result.overlap_volume_mm3,
+            result.closest_point_a,
+            result.closest_point_b
+        );
     }
 
     #[test]
@@ -2702,8 +4340,7 @@ mod tests {
         let p = |x, y| Point3Dto { x, y, z: 0.0 };
         let profile = KernelProfileDto {
             profile_index: 0,
-            // Discovery/preview tessellation deliberately contains several
-            // samples; the analytic curve list must determine B-rep topology.
+
             points: vec![
                 p(-10.0, 0.0),
                 p(10.0, 0.0),
@@ -2834,7 +4471,7 @@ mod tests {
         {
             let begin = face.first_index as usize;
             let end = begin + face.index_count as usize;
-            for triangle in body.indices[begin..end].chunks_exact(3) {
+            for triangle in body.indices[begin..end].as_chunks::<3>().0 {
                 let centroid = triangle.iter().fold([0.0f64; 3], |mut sum, index| {
                     let offset = *index as usize * 3;
                     sum[0] += body.positions[offset] as f64 / 3.0;
@@ -2934,9 +4571,45 @@ mod tests {
 
         assert!(scene.errors.is_empty(), "{:?}", scene.errors);
         assert_eq!(scene.bodies.len(), 1);
-        assert!(scene.bodies[0].faces.iter().any(|face| face
-            .cylinder
-            .is_some_and(|cylinder| (cylinder.radius - 5.0).abs() < 1e-6)));
+        assert!(scene.bodies[0].faces.iter().any(|face| {
+            face.cylinder
+                .is_some_and(|cylinder| (cylinder.radius - 5.0).abs() < 1e-6)
+        }));
+
+        // The semicircle joins its vertical sides tangentially. Preserve the
+        // analytic domain, including the circular void, through refinement.
+        let pose = || PlacedBodyQueryDto {
+            body_id: BodyId(1),
+            translation: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+        };
+        let volume = kernel
+            .exact_interference(pose(), pose())
+            .unwrap()
+            .overlap_volume_mm3;
+        let expected_volume = (600.0 + 25.0 * std::f64::consts::PI) * 10.0;
+        assert!(
+            (volume - expected_volume).abs() < 1e-5,
+            "tangent arch volume {volume}, expected {expected_volume}"
+        );
+        // Production export enforces directed mesh closure and requested
+        // source precision; a successful display mesh alone is insufficient.
+        for request in [
+            MeshExportRequest::default(),
+            MeshExportRequest {
+                linear_deflection: 0.0375,
+                angular_deflection: 0.175,
+                ..Default::default()
+            },
+        ] {
+            let exported = kernel.export_3mf(&request, &[]);
+            assert!(
+                exported.is_ok(),
+                "tangent arch export at linear/angular deflection {}/{}: {exported:?}",
+                request.linear_deflection,
+                request.angular_deflection
+            );
+        }
     }
 
     #[test]
@@ -2977,11 +4650,36 @@ mod tests {
             .unwrap();
 
         assert!(scene.errors.is_empty(), "{:?}", scene.errors);
-        let cylinder = scene.bodies[0]
+        let wall = scene.bodies[0]
             .faces
             .iter()
-            .find_map(|face| face.cylinder.as_ref())
+            .find(|face| face.cylinder.is_some())
             .expect("the through-hole wall must retain its exact OCCT cylinder");
+        let cylinder = wall.cylinder.as_ref().unwrap();
+        assert_eq!(
+            wall.linear_seam_edge_keys.len(),
+            1,
+            "full cylindrical wall has one exact linear seam"
+        );
+        let seam = &wall.linear_seam_edge_keys[0];
+        assert!(wall.edge_keys.contains(seam));
+        let seam_edge = scene.bodies[0]
+            .edges
+            .iter()
+            .find(|edge| &edge.key == seam)
+            .unwrap();
+        assert!(
+            seam_edge.circle.is_none(),
+            "circular rims are not linear seams"
+        );
+        assert!(
+            scene.bodies[0]
+                .faces
+                .iter()
+                .filter(|face| face.plane.is_some())
+                .all(|face| face.linear_seam_edge_keys.is_empty()),
+            "ordinary planar boundary lines are not seams"
+        );
         assert!((cylinder.radius - 2.0).abs() < 1e-8);
         assert!((cylinder.axis.x.abs() + cylinder.axis.y.abs()) < 1e-8);
         assert!((cylinder.axis.z.abs() - 1.0).abs() < 1e-8);
@@ -3001,7 +4699,9 @@ mod tests {
             "the inner hole rim must remain an exact selectable OCCT circle: {closed_radii:?}"
         );
         assert!(
-            closed_radii.iter().any(|radius| (*radius - 4.0).abs() < 2e-4),
+            closed_radii
+                .iter()
+                .any(|radius| (*radius - 4.0).abs() < 2e-4),
             "the outer countersink rim must remain an exact selectable OCCT circle: {closed_radii:?}"
         );
     }
@@ -3059,9 +4759,7 @@ mod tests {
                         source_face: Some(KernelPlanarFaceSourceDto {
                             body_id: BodyId(1),
                             face_id: FaceId(42),
-                            // The ordinal is deliberately wrong. It is only a
-                            // diagnostic hint; the exact BRep signature must
-                            // resolve the intended face after face reordering.
+
                             face_key: "face:999".to_string(),
                             signature,
                         }),
@@ -3090,7 +4788,7 @@ mod tests {
         {
             let begin = face.first_index as usize;
             let end = begin + face.index_count as usize;
-            for triangle in body.indices[begin..end].chunks_exact(3) {
+            for triangle in body.indices[begin..end].as_chunks::<3>().0 {
                 let centroid = triangle.iter().fold([0.0f64; 2], |mut sum, index| {
                     let offset = *index as usize * 3;
                     sum[0] += body.positions[offset] as f64 / 3.0;
@@ -3322,7 +5020,7 @@ mod tests {
             })
             .expect("extruded shaft must expose an analytic cylinder");
         let face_key = shaft_face.key.clone();
-        let cylinder: CylindricalSurfaceDto = shaft_face.cylinder.clone().unwrap();
+        let cylinder: CylindricalSurfaceDto = shaft_face.cylinder.unwrap();
         let scene = kernel
             .recompute(&RecomputePlanDto {
                 transaction_id: 2,
@@ -3333,7 +5031,7 @@ mod tests {
                         feature_id: FeatureId(3),
                         target_body_id: BodyId(1),
                         face_key: face_key.clone(),
-                        cylinder: cylinder.clone(),
+                        cylinder,
                         thread: HoleThreadDto {
                             standard: HoleThreadStandard::IsoMetric,
                             series: HoleThreadSeries::MetricCoarse,
@@ -3365,7 +5063,9 @@ mod tests {
         );
         let wall_radii = body
             .positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .filter_map(|point| {
                 let radius = f64::from(point[0]).hypot(f64::from(point[1]));
                 (point[2] > 0.1 && point[2] < 9.9).then_some(radius)
@@ -3465,7 +5165,9 @@ mod tests {
         );
         let left_wall_radii = left_body
             .positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .filter_map(|point| {
                 let radius = f64::from(point[0]).hypot(f64::from(point[1]));
                 (point[2] > 0.1 && point[2] < 9.9).then_some(radius)
@@ -3563,7 +5265,7 @@ mod tests {
                     .is_some_and(|cylinder| (cylinder.radius - 5.0).abs() < 1e-6)
             })
             .expect("extruded M10 shaft must expose an analytic cylinder");
-        let cylinder = shaft_face.cylinder.clone().unwrap();
+        let cylinder = shaft_face.cylinder.unwrap();
         assert!(
             cylinder.axis.z < -0.99,
             "regression requires the OCCT cylinder's reversed -Z axis, got {:?}",
@@ -3612,7 +5314,9 @@ mod tests {
         );
         let wall_radii = body
             .positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .filter_map(|point| {
                 let radius = f64::from(point[0]).hypot(f64::from(point[1]));
                 (point[2] > 0.1 && point[2] < 19.9).then_some(radius)
@@ -3689,6 +5393,7 @@ mod tests {
                 target_body_id: BodyId(1),
                 edge_keys: vec!["edge:0".to_string(), "edge:1".to_string()],
                 distance: 1.0,
+                angle_deg: None,
                 tangent_chain: false,
             }),
             KernelJobDto::Hole(KernelHoleJobDto {
@@ -3910,7 +5615,9 @@ mod tests {
             ]
         };
         body.indices
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|triangle| {
                 let (a, b, c) = (point(triangle[0]), point(triangle[1]), point(triangle[2]));
                 (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
@@ -3930,6 +5637,248 @@ mod tests {
                 jobs: vec![notched_plate_job(), job],
             })
             .unwrap()
+    }
+
+    fn annular_chamfer_plan(reference_is_plane: bool) -> RecomputePlanDto {
+        // Rotating the same rectangular profile changes the adjacent-face order,
+        // letting both distance/angle reference conventions exercise a 2 mm rim.
+        let points = if reference_is_plane {
+            [(3.4, 11.), (5.4, 11.), (5.4, 0.), (3.4, 0.)]
+        } else {
+            [(5.4, 0.), (3.4, 0.), (3.4, 11.), (5.4, 11.)]
+        };
+        RecomputePlanDto {
+            transaction_id: 1,
+            errors: Vec::new(),
+            jobs: vec![KernelJobDto::Revolve(KernelRevolveJobDto {
+                feature_id: FeatureId(2),
+                operation: ExtrudeOperation::NewBody,
+                profiles: vec![KernelProfileDto {
+                    profile_index: 0,
+                    points: points
+                        .into_iter()
+                        .map(|(x, y)| Point3Dto { x, y, z: 0. })
+                        .collect(),
+                    curves: Vec::new(),
+                    holes: Vec::new(),
+                }],
+                axis_origin: Point3Dto {
+                    x: 0.,
+                    y: 0.,
+                    z: 0.,
+                },
+                axis_direction: Point3Dto {
+                    x: 0.,
+                    y: 1.,
+                    z: 0.,
+                },
+                angle_rad: std::f64::consts::TAU,
+                target_body_ids: Vec::new(),
+                result_body_ids: vec![BodyId(1)],
+            })],
+        }
+    }
+
+    fn annular_top_inner_edge(scene: &KernelSceneDto, reference_is_plane: bool) -> String {
+        let body = &scene.bodies[0];
+        let edge = body
+            .edges
+            .iter()
+            .find(|edge| {
+                edge.circle.is_some_and(|circle| {
+                    (circle.radius - 3.4).abs() < 1e-7 && (circle.center.y - 11.).abs() < 1e-7
+                })
+            })
+            .unwrap();
+        let reference = body
+            .faces
+            .iter()
+            .find(|face| face.edge_keys.contains(&edge.key))
+            .unwrap();
+        assert_eq!(reference.plane.is_some(), reference_is_plane);
+        assert_eq!(reference.cylinder.is_some(), !reference_is_plane);
+        edge.key.clone()
+    }
+
+    fn annular_chamfer(
+        base: &RecomputePlanDto,
+        key: &str,
+        distance: f64,
+        angle_deg: Option<f64>,
+    ) -> RecomputePlanDto {
+        let mut plan = base.clone();
+        plan.jobs.push(KernelJobDto::Chamfer(KernelChamferJobDto {
+            feature_id: FeatureId(3),
+            target_body_id: BodyId(1),
+            edge_keys: vec![key.to_owned()],
+            distance,
+            angle_deg,
+            tangent_chain: false,
+        }));
+        plan
+    }
+
+    #[test]
+    fn circular_chamfers_explain_insufficient_wall_and_allow_smaller_sixty_degree_cuts() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let plan = annular_chamfer_plan(false);
+        let base = kernel.recompute(&plan).unwrap();
+        assert!(base.errors.is_empty(), "{:?}", base.errors);
+        let key = annular_top_inner_edge(&base, false);
+        for (distance, angle) in [
+            (1.5, None),
+            (1.5, Some(45.)),
+            (1.5, Some(30.)),
+            (1.15, Some(60.)),
+        ] {
+            let scene = kernel
+                .recompute(&annular_chamfer(&plan, &key, distance, angle))
+                .unwrap();
+            assert!(
+                scene.errors.is_empty(),
+                "{distance} mm at {angle:?}: {:?}",
+                scene.errors
+            );
+        }
+        for (distance, required) in [(1.16, "2.009"), (1.5, "2.598")] {
+            let scene = kernel
+                .recompute(&annular_chamfer(&plan, &key, distance, Some(60.)))
+                .unwrap();
+            assert_eq!(scene.errors.len(), 1, "{:?}", scene.errors);
+            assert_eq!(scene.errors[0].feature_id, FeatureId(3));
+            let message = &scene.errors[0].message;
+            assert!(
+                message.contains(&format!("needs {required} mm across the planar face")),
+                "{message}"
+            );
+            assert!(message.contains("only 2 mm is available"), "{message}");
+            assert!(
+                message.ends_with("Reduce the distance or angle."),
+                "{message}"
+            );
+            assert_eq!(
+                scene.bodies, base.bodies,
+                "failed chamfer preserves the body"
+            );
+        }
+        // A valid retry on the same kernel must still build the requested angle
+        // and radial setback, rather than clamp the rejected chamfer.
+        let scene = kernel
+            .recompute(&annular_chamfer(&plan, &key, 1., Some(60.)))
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        let body = &scene.bodies[0];
+        let cone = body.faces.iter().find_map(|face| face.cone).unwrap();
+        assert!((cone.semi_angle.abs() - 60_f64.to_radians()).abs() < 1e-7);
+        let expected_radius = 3.4 + 60_f64.to_radians().tan();
+        assert!(body
+            .edges
+            .iter()
+            .filter_map(|edge| edge.circle)
+            .any(|circle| {
+                (circle.center.y - 11.).abs() < 1e-7
+                    && (circle.radius - expected_radius).abs() < 1e-7
+            }));
+    }
+
+    #[test]
+    fn circular_chamfers_measure_radial_distance_from_the_planar_reference_face() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let plan = annular_chamfer_plan(true);
+        let base = kernel.recompute(&plan).unwrap();
+        assert!(base.errors.is_empty(), "{:?}", base.errors);
+        let key = annular_top_inner_edge(&base, true);
+        let scene = kernel
+            .recompute(&annular_chamfer(&plan, &key, 1.5, Some(60.)))
+            .unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        let cone = scene.bodies[0]
+            .faces
+            .iter()
+            .find_map(|face| face.cone)
+            .unwrap();
+        assert!((cone.semi_angle.abs() - 30_f64.to_radians()).abs() < 1e-7);
+        let rejected = kernel
+            .recompute(&annular_chamfer(&plan, &key, 2.1, Some(60.)))
+            .unwrap();
+        assert_eq!(rejected.errors.len(), 1, "{:?}", rejected.errors);
+        let message = &rejected.errors[0].message;
+        assert!(
+            message.contains("needs 2.1 mm across the planar face"),
+            "{message}"
+        );
+        assert!(message.contains("only 2 mm is available"), "{message}");
+        assert!(message.ends_with("Reduce the distance."), "{message}");
+        assert_eq!(rejected.bodies, base.bodies);
+    }
+
+    #[test]
+    fn angled_chamfers_have_the_requested_cutback_and_volume() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let base = kernel
+            .recompute(&RecomputePlanDto {
+                transaction_id: 1,
+                errors: Vec::new(),
+                jobs: vec![notched_plate_job()],
+            })
+            .unwrap();
+        assert!(base.errors.is_empty());
+        for (x, y, sign) in [(25., 25., -1.), (20., 20., 1.)] {
+            let key = vertical_edge_key(&base, x, y);
+            for angle in [15_f64, 30., 45., 60., 75., 85.] {
+                let distance = 0.25;
+                let scene = blend_notched_plate(KernelJobDto::Chamfer(KernelChamferJobDto {
+                    feature_id: FeatureId(3),
+                    target_body_id: BodyId(1),
+                    edge_keys: vec![key.clone()],
+                    distance,
+                    angle_deg: Some(angle),
+                    tangent_chain: false,
+                }));
+                assert!(
+                    scene.errors.is_empty(),
+                    "{angle} degrees at ({x}, {y}): {:?}",
+                    scene.errors
+                );
+                assert_eq!(scene.bodies.len(), 1);
+                let expected =
+                    2625. + sign * 0.5 * distance * distance * angle.to_radians().tan() * 5.;
+                assert!(
+                    (mesh_volume(&scene.bodies[0]) - expected).abs() < 0.01,
+                    "{angle} degree chamfer volume: {}, expected {expected}",
+                    mesh_volume(&scene.bodies[0])
+                );
+                assert_eq!(scene.bodies[0].faces.len(), 9);
+                let repeat = blend_notched_plate(KernelJobDto::Chamfer(KernelChamferJobDto {
+                    feature_id: FeatureId(3),
+                    target_body_id: BodyId(1),
+                    edge_keys: vec![key.clone()],
+                    distance,
+                    angle_deg: Some(angle),
+                    tangent_chain: false,
+                }));
+                assert_eq!(
+                    scene.bodies, repeat.bodies,
+                    "same reference face and geometry after replay"
+                );
+            }
+        }
+        let key = vertical_edge_key(&base, 25., 25.);
+        for angle in [0., 90., -1., 91., f64::NAN, f64::INFINITY] {
+            let scene = blend_notched_plate(KernelJobDto::Chamfer(KernelChamferJobDto {
+                feature_id: FeatureId(3),
+                target_body_id: BodyId(1),
+                edge_keys: vec![key.clone()],
+                distance: 1.,
+                angle_deg: Some(angle),
+                tangent_chain: false,
+            }));
+            assert!(
+                !scene.errors.is_empty(),
+                "invalid angle {angle} must be rejected by the kernel"
+            );
+            assert!((mesh_volume(&scene.bodies[0]) - 2625.).abs() < 1e-3);
+        }
     }
 
     #[test]
@@ -3969,10 +5918,11 @@ mod tests {
                 target_body_id: BodyId(1),
                 edge_keys: vec![edge.to_string()],
                 distance,
+                angle_deg: None,
                 tangent_chain: false,
             })
         };
-        // Material a concave fillet adds, or a convex one removes, per mm of edge.
+
         let fillet_fill = |radius: f64| radius * radius * (1.0 - std::f64::consts::FRAC_PI_4);
         let curved_faces = |scene: &KernelSceneDto| {
             scene.bodies[0]
@@ -3982,7 +5932,6 @@ mod tests {
                 .count()
         };
 
-        // A radius inside the wall is still OCCT's own fillet.
         let inside = blend_notched_plate(fillet(&concave, 4.0));
         assert!(inside.errors.is_empty(), "{:?}", inside.errors);
         assert_eq!(inside.bodies[0].faces.len(), 9);
@@ -3991,7 +5940,6 @@ mod tests {
             (mesh_volume(&inside.bodies[0]) - (plate_volume + fillet_fill(4.0) * 5.0)).abs() < 1.0
         );
 
-        // A 5 mm radius reaches the far edge of the 5 mm wall and replaces it.
         let consumed = blend_notched_plate(fillet(&concave, 5.0));
         assert!(
             consumed.errors.is_empty(),
@@ -4010,7 +5958,6 @@ mod tests {
                 < 1.5
         );
 
-        // The same on a convex edge removes material and one wall.
         let outer = blend_notched_plate(fillet(&convex, 5.0));
         assert!(
             outer.errors.is_empty(),
@@ -4023,7 +5970,6 @@ mod tests {
             (mesh_volume(&outer.bodies[0]) - (plate_volume - fillet_fill(5.0) * 5.0)).abs() < 1.5
         );
 
-        // A chamfer that spans the 5 mm wall turns it into one flat.
         let flat = blend_notched_plate(chamfer(&concave, 5.0));
         assert!(
             flat.errors.is_empty(),
@@ -4034,7 +5980,6 @@ mod tests {
         assert_eq!(curved_faces(&flat), 0);
         assert!((mesh_volume(&flat.bodies[0]) - (plate_volume + 12.5 * 5.0)).abs() < 1e-2);
 
-        // Past the wall there is nothing left to blend against.
         let beyond = blend_notched_plate(fillet(&concave, 6.0));
         assert_eq!(beyond.errors.len(), 1, "{:?}", beyond.errors);
         assert!(
@@ -4103,6 +6048,40 @@ mod tests {
             .faces
             .iter()
             .any(|face| face.plane.is_none()));
+        let body = &scene.bodies[0];
+        let caps = body
+            .faces
+            .iter()
+            .filter_map(|face| face.plane.map(|plane| (face, plane)))
+            .collect::<Vec<_>>();
+        assert_eq!(caps.len(), 2);
+        for (face, plane) in caps {
+            let expected_y = if plane.origin[1].abs() < 1e-7 {
+                -1.
+            } else {
+                assert!((plane.origin[1] - 15.).abs() < 1e-7);
+                1.
+            };
+            assert!(
+                plane.normal[0].abs() < 1e-7
+                    && (plane.normal[1] - expected_y).abs() < 1e-7
+                    && plane.normal[2].abs() < 1e-7,
+                "Revolved cap must face outward: {plane:?}"
+            );
+            assert_eq!(face.outer_shell, Some(true));
+            assert!(face.index_count > 0);
+            // Display normals come independently from the surface derivatives;
+            // reported planar frames must agree with them on either cap.
+            let first = face.first_index as usize;
+            let last = first + face.index_count as usize;
+            for vertex in &body.indices[first..last] {
+                let offset = *vertex as usize * 3;
+                let dot = (0..3)
+                    .map(|axis| f64::from(body.normals[offset + axis]) * plane.normal[axis])
+                    .sum::<f64>();
+                assert!(dot > 1. - 1e-6, "Plane/display normal mismatch: {plane:?}");
+            }
+        }
     }
 
     #[test]
@@ -4317,3 +6296,6 @@ mod tests {
 
 #[cfg(test)]
 mod rounded_thread_tests;
+
+#[cfg(test)]
+mod drawing_quality_tests;

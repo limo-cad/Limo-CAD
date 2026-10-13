@@ -18,7 +18,7 @@ Ordinary feature branches are fine. Worktrees help when juggling multiple PRs
 or agent sessions; they are optional.
 
 ```sh
-git worktree add ../nbcad-issue-42 -b issue/42-fillet-regression origin/main
+git worktree add ../limo-cad-issue-42 -b issue/42-fillet-regression origin/main
 ```
 
 ## PR follow-through

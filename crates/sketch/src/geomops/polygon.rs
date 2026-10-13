@@ -59,8 +59,6 @@ pub fn polygon_from_edge(a: Pt, b: Pt, n: usize) -> Result<Vec<Pt>, PolyError> {
     let edge_len = ((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt();
     let angle_ab = (b.y - a.y).atan2(b.x - a.x);
 
-    // Exterior angle (turn angle) for a regular polygon is 2*PI/n
-    // To keep the interior to the left, we turn left (CCW) by this angle at each vertex.
     let turn_angle = 2.0 * std::f64::consts::PI / n as f64;
 
     let mut vertices = Vec::with_capacity(n);
@@ -130,7 +128,7 @@ mod tests {
                 y: 0.0,
             },
         );
-        // Check radius of all vertices
+
         for pt in &v {
             let r = (pt.x * pt.x + pt.y * pt.y).sqrt();
             assert!((r - expected_r).abs() < EPS);

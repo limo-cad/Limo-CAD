@@ -47,13 +47,12 @@ impl Author {
             ("m3x8low", 8., 3., 5.5, 1.65, 2.),
             ("m2x8", 8., 2., 3.8, 2., 1.5),
         ] {
-            self.cylinder(id, [0., 0.], diameter, -length, length, "new_body", None);
+            self.cylinder(id, [0., 0.], diameter, (-length, length), "new_body", None);
             self.cylinder(
                 &format!("{id}_head"),
                 [0., 0.],
                 head,
-                0.,
-                head_height,
+                (0., head_height),
                 "join",
                 Some(id),
             );
@@ -80,8 +79,7 @@ impl Author {
                 &format!("{id}_thread_envelope"),
                 [0., 0.],
                 bore,
-                0.,
-                height,
+                (0., height),
                 "cut",
                 Some(id),
             );
@@ -92,7 +90,7 @@ impl Author {
                 [0., 0., 0.],
             );
         }
-        self.cylinder("m4x4_set", [0., 0.], 4., -4., 4., "new_body", None);
+        self.cylinder("m4x4_set", [0., 0.], 4., (-4., 4.), "new_body", None);
         self.begin("collar_set_socket", "xy", -1.5);
         self.hex_profile([0., 0.], 2., 0.);
         self.extrude("collar_set_socket", 1.5, "cut", Some("m4x4_set"));
@@ -102,8 +100,7 @@ impl Author {
             false,
             [0., 0., 0.],
         );
-        // Created definitions are reused; their first occurrence is consumed
-        // by the first installed item, not left loose at the model origin.
+
         for part in &mut self.parts {
             if part["id"].as_str().is_some_and(|s| {
                 matches!(
@@ -128,11 +125,9 @@ impl Author {
         alias: &str,
         definition: &str,
         parent: &str,
-        local: [f64; 3],
-        orientation: [f64; 4],
+        (local, orientation): ([f64; 3], [f64; 4]),
         kind: &str,
-        driver: f64,
-        length: f64,
+        (driver, length): (f64, f64),
     ) {
         let (p, q) = self.poses[parent];
         let offset = rotate(q, local);
@@ -258,21 +253,17 @@ impl Author {
                     &format!("{prefix}_screw"),
                     screw,
                     &parent,
-                    [c.half_grip, c.y, c.z],
-                    [0., s, 0., s],
+                    ([c.half_grip, c.y, c.z], [0., s, 0., s]),
                     "bolt",
-                    if c.diameter < 3. { 2.2 } else { 3.2 },
-                    45.,
+                    (if c.diameter < 3. { 2.2 } else { 3.2 }, 45.),
                 );
                 self.installed_hardware(
                     &format!("{prefix}_nut"),
                     nut,
                     &parent,
-                    [-c.half_grip, c.y, c.z],
-                    [0., -s, 0., s],
+                    ([-c.half_grip, c.y, c.z], [0., -s, 0., s]),
                     "nut",
-                    0.,
-                    0.,
+                    (0., 0.),
                 );
             }
         }
@@ -285,11 +276,9 @@ impl Author {
                 &format!("{parent}_set_screw"),
                 "m4x4_set",
                 parent,
-                [0., -8., 4.],
-                [s, 0., 0., s],
+                ([0., -8., 4.], [s, 0., 0., s]),
                 "bolt",
-                2.5,
-                90.,
+                (2.5, 90.),
             );
         }
         for (i, x) in [-22., 22.].into_iter().enumerate() {
@@ -297,21 +286,17 @@ impl Author {
                 &format!("carrier_base_screw_{i}"),
                 "m3x20",
                 "base",
-                [x, 0., 3.2],
-                [1., 0., 0., 0.],
+                ([x, 0., 3.2], [1., 0., 0., 0.]),
                 "bolt",
-                3.2,
-                45.,
+                (3.2, 45.),
             );
             self.installed_hardware(
                 &format!("carrier_base_nut_{i}"),
                 "m3_nut",
                 "tower",
-                [x, 0., 6.],
-                [0., 0., 0., 1.],
+                ([x, 0., 6.], [0., 0., 0., 1.]),
                 "nut",
-                0.,
-                0.,
+                (0., 0.),
             );
         }
         let mid = D.motor_cradle() - D.base_height + 12.;
@@ -320,41 +305,33 @@ impl Author {
                 &format!("motor_base_screw_{i}"),
                 "m3x16",
                 "base",
-                [D.gear_spacing + x, 34., 3.2],
-                [1., 0., 0., 0.],
+                ([D.gear_spacing + x, 34., 3.2], [1., 0., 0., 0.]),
                 "bolt",
-                3.2,
-                45.,
+                (3.2, 45.),
             );
             self.installed_hardware(
                 &format!("motor_base_nut_{i}"),
                 "m3_nut",
                 "motor_bracket",
-                [x, 34., 4.],
-                [0., 0., 0., 1.],
+                ([x, 34., 4.], [0., 0., 0., 1.]),
                 "nut",
-                0.,
-                0.,
+                (0., 0.),
             );
             self.installed_hardware(
                 &format!("motor_adjuster_screw_{i}"),
                 "m3x12",
                 "motor_bracket",
-                [x, 29., mid],
-                [-s, 0., 0., s],
+                ([x, 29., mid], [-s, 0., 0., s]),
                 "bolt",
-                3.2,
-                45.,
+                (3.2, 45.),
             );
             self.installed_hardware(
                 &format!("motor_adjuster_nut_{i}"),
                 "m3_nut",
                 "motor_mount",
-                [x, 20., 12.],
-                product([s, 0., 0., s], rz(30.)),
+                ([x, 20., 12.], product([s, 0., 0., s], rz(30.))),
                 "nut",
-                0.,
-                0.,
+                (0., 0.),
             );
         }
         let g = D.guard_bolt_radius * std::f64::consts::FRAC_1_SQRT_2;
@@ -363,41 +340,33 @@ impl Author {
                 &format!("guard_base_screw_{i}"),
                 "m3x16",
                 "base",
-                [10. + x, y, 3.2],
-                [1., 0., 0., 0.],
+                ([10. + x, y, 3.2], [1., 0., 0., 0.]),
                 "bolt",
-                3.2,
-                45.,
+                (3.2, 45.),
             );
             self.installed_hardware(
                 &format!("guard_base_nut_{i}"),
                 "m3_nut",
                 "guard",
-                [x, y, 3.],
-                [1., 0., 0., 0.],
+                ([x, y, 3.], [1., 0., 0., 0.]),
                 "nut",
-                0.,
-                0.,
+                (0., 0.),
             );
             self.installed_hardware(
                 &format!("guard_lid_screw_{i}"),
                 "m3x8low",
                 "guard_lid",
-                [x, y, 3.],
-                [0., 0., 0., 1.],
+                ([x, y, 3.], [0., 0., 0., 1.]),
                 "bolt",
-                2.5,
-                45.,
+                (2.5, 45.),
             );
             self.installed_hardware(
                 &format!("guard_lid_nut_{i}"),
                 "m3_nut",
                 "guard",
-                [x, y, D.guard_height - 3.],
-                [0., 0., 0., 1.],
+                ([x, y, D.guard_height - 3.], [0., 0., 0., 1.]),
                 "nut",
-                0.,
-                0.,
+                (0., 0.),
             );
         }
     }
@@ -432,9 +401,7 @@ impl Author {
                 "one",
                 "",
             );
-            // Plate thickness edits move the top face. Both occurrences and
-            // their mounted hardware retain the stage's unchanged underside
-            // as their physical datum while keeping the authored mate frames.
+
             let stage = matches!(name, "stage" | "stage_upper");
             let anchor = if stage {
                 json!({"/plane/normal/2":-1.,"/plane/origin/2":0.})
@@ -463,13 +430,12 @@ impl Author {
     }
 
     pub(super) fn ring(&mut self, name: &str, outside: f64, bore: f64, height: f64) {
-        self.cylinder(name, [0., 0.], outside, 0., height, "new_body", None);
+        self.cylinder(name, [0., 0.], outside, (0., height), "new_body", None);
         self.cylinder(
             &format!("{name}_bore"),
             [0., 0.],
             bore,
-            0.,
-            height,
+            (0., height),
             "cut",
             Some(name),
         );
@@ -533,8 +499,7 @@ impl Author {
             "/id",
         );
         self.bind(&format!("{id}_edges"), edges);
-        // Demand a real edge: an unmatched selection must not turn rounding
-        // into a silent cosmetic no-op after an upstream geometry edit.
+
         self.bind(
             &format!("{id}_edge"),
             json!({"$select":{"from":r(&format!("{id}_edges")),"take":"first"}}),

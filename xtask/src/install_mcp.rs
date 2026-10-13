@@ -1,11 +1,7 @@
-//! Detect agent clients from their user config locations and upsert `nobs-cad`.
+//! Detect agent clients and migrate their CAD entry to `limo-cad`.
 //!
-//! Jack §4 hardened control flow:
-//! - `--dry-run` performs zero build / copy / write
-//! - `--clients` is required for any real install write
-//! - duplicate client names are collapsed before any config is touched
-//! - config updates use `.bak.<pid>` + portable-permission-preserving temp+rename
-//! - supported clients: cursor, vscode, claude, opencode (no Grok)
+//! Explicit clients and backups keep configuration changes reviewable. Packaged
+//! desktops can run in place, retaining their adjacent runtime libraries.
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Map, Value};
@@ -13,15 +9,18 @@ use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-pub const DEFAULT_SERVER_NAME: &str = "nobs-cad";
+pub const DEFAULT_SERVER_NAME: &str = "limo-cad";
+const RETIRED_SERVER_NAMES: &[&str] = &["nobs-cad", "noBS-CAD", "nbcad"];
 
 #[derive(Debug, Clone)]
 pub struct Options {
     pub dry_run: bool,
     pub build: bool,
     pub binary: Option<PathBuf>,
+    pub in_place: bool,
+    pub server_args: Vec<String>,
+    pub desktop: Option<PathBuf>,
     pub clients: Option<Vec<ClientKind>>,
     pub server_name: String,
 }
@@ -32,6 +31,9 @@ impl Options {
             dry_run: false,
             build: true,
             binary: None,
+            in_place: false,
+            server_args: Vec::new(),
+            desktop: None,
             clients: None,
             server_name: DEFAULT_SERVER_NAME.to_string(),
         };
@@ -41,6 +43,17 @@ impl Options {
             match arg.as_str() {
                 "--dry-run" => options.dry_run = true,
                 "--no-build" => options.build = false,
+                "--in-place" => options.in_place = true,
+                "--server-arg" => options.server_args.push(
+                    args.next()
+                        .ok_or_else(|| anyhow!("--server-arg requires a literal argument"))?,
+                ),
+                "--desktop" => {
+                    options.desktop = Some(PathBuf::from(
+                        args.next()
+                            .ok_or_else(|| anyhow!("--desktop requires a path"))?,
+                    ))
+                }
                 "--binary" => {
                     let path = args
                         .next()
@@ -69,6 +82,12 @@ impl Options {
     /// Real installs require an explicit `--clients` list. Dry-run may omit it
     /// to discover/print detected clients only.
     pub fn validate(&self) -> Result<()> {
+        if self.binary.is_some() && !self.in_place {
+            bail!("--binary requires --in-place; MCP uses the installed CAD executable without creating another copy");
+        }
+        if self.in_place && self.binary.is_none() {
+            bail!("--in-place requires --binary pointing to an installed executable");
+        }
         if !self.dry_run && self.clients.is_none() {
             bail!(
                 "--clients is required for install writes \
@@ -81,6 +100,7 @@ impl Options {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClientKind {
+    Codex,
     Cursor,
     VsCode,
     Claude,
@@ -90,6 +110,7 @@ pub enum ClientKind {
 impl ClientKind {
     fn as_str(self) -> &'static str {
         match self {
+            Self::Codex => "codex",
             Self::Cursor => "cursor",
             Self::VsCode => "vscode",
             Self::Claude => "claude",
@@ -99,6 +120,7 @@ impl ClientKind {
 
     fn parse(name: &str) -> Result<Self> {
         match name.trim().to_ascii_lowercase().as_str() {
+            "codex" => Ok(Self::Codex),
             "cursor" => Ok(Self::Cursor),
             "vscode" | "code" | "vs-code" => Ok(Self::VsCode),
             "claude" => Ok(Self::Claude),
@@ -106,7 +128,9 @@ impl ClientKind {
             "grok" | "xai" => {
                 bail!("client '{name}' is not supported (no Grok until an official MCP contract)")
             }
-            other => bail!("unknown client '{other}' (supported: cursor,vscode,claude,opencode)"),
+            other => {
+                bail!("unknown client '{other}' (supported: codex,cursor,vscode,claude,opencode)")
+            }
         }
     }
 }
@@ -131,17 +155,76 @@ fn parse_clients(list: &str) -> Result<Vec<ClientKind>> {
 #[derive(Debug, Clone)]
 struct ServerLaunch {
     command: PathBuf,
+    args: Vec<String>,
     env: Map<String, Value>,
 }
 
-pub fn run(options: Options) -> Result<()> {
+pub fn run(mut options: Options) -> Result<()> {
     options.validate()?;
 
     let repo_root = repo_root()?;
+    let managed = crate::deploy_native::managed_install_exists()?;
+    if options.binary.is_none() {
+        let binary = if options.dry_run {
+            crate::deploy_native::installed_executable()?
+        } else if options.build {
+            let source = if managed {
+                crate::deploy_native::managed_source_checkout()?
+            } else {
+                repo_root.clone()
+            };
+            crate::deploy_native::prepare_runtime(
+                &source,
+                &crate::deploy_native::BuildOptions::default(),
+            )?
+        } else {
+            crate::deploy_native::verify_installed_runtime()?
+        };
+        options.desktop = Some(binary.clone());
+        options.binary = Some(binary);
+        options.in_place = true;
+        if !options.server_args.iter().any(|arg| arg == "--headless") {
+            options.server_args.push("--headless".into());
+        }
+    }
+    if managed && !options.dry_run {
+        let canonical = crate::deploy_native::verify_installed_runtime()?;
+        if options
+            .binary
+            .as_ref()
+            .map(|path| normalize_path(path.clone()))
+            != Some(normalize_path(canonical.clone()))
+        {
+            bail!("This machine uses one managed CAD runtime; run cargo xtask deploy-native to select another source checkout");
+        }
+        if options.server_args.iter().any(|arg| arg != "--headless") {
+            bail!("The managed MCP runtime accepts only --headless");
+        }
+        options.binary = Some(canonical.clone());
+        options.desktop = Some(canonical);
+        options.server_args = vec!["--headless".into()];
+    }
     let binary = resolve_binary(&repo_root, &options)?;
+    let mut environment = Map::new();
+    if let Some(desktop) = &options.desktop {
+        if !options.dry_run && !desktop.is_file() {
+            bail!("--desktop executable does not exist: {}", desktop.display());
+        }
+        environment.insert(
+            "LIMO_CAD_DESKTOP_BIN".into(),
+            Value::String(path_string(&normalize_path(desktop.clone()))),
+        );
+        if normalize_path(desktop.clone()) == normalize_path(binary.clone()) {
+            environment.insert(
+                "LIMO_CAD_LOCAL_RUNTIME".into(),
+                Value::String(path_string(&normalize_path(binary.clone()))),
+            );
+        }
+    }
     let launch = ServerLaunch {
         command: binary,
-        env: server_env(&repo_root),
+        args: options.server_args.clone(),
+        env: environment,
     };
 
     println!("MCP binary: {}", launch.command.display());
@@ -152,6 +235,7 @@ pub fn run(options: Options) -> Result<()> {
     let discover_all = options.clients.is_none();
     let wanted = options.clients.unwrap_or_else(|| {
         vec![
+            ClientKind::Codex,
             ClientKind::Cursor,
             ClientKind::VsCode,
             ClientKind::Claude,
@@ -229,6 +313,7 @@ pub fn run(options: Options) -> Result<()> {
 
 #[derive(Debug, Clone, Copy)]
 enum ConfigFormat {
+    CodexToml,
     /// `{ "mcpServers": { "name": { command, args, env } } }`
     McpServers,
     /// VS Code `{ "servers": { "name": { type, command, args, env } } }`
@@ -240,6 +325,7 @@ enum ConfigFormat {
 impl ConfigFormat {
     fn label(self) -> &'static str {
         match self {
+            Self::CodexToml => "mcp_servers TOML",
             Self::McpServers => "mcpServers",
             Self::VsCodeServers => "servers",
             Self::OpenCodeMcp => "opencode mcp",
@@ -270,6 +356,12 @@ impl Action {
 
 fn discover_targets(kind: ClientKind) -> Vec<Target> {
     match kind {
+        ClientKind::Codex => {
+            let root = env::var_os("CODEX_HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home_path(&[".codex"]));
+            detect_json(root.join("config.toml"), &[root], ConfigFormat::CodexToml)
+        }
         ClientKind::Cursor => detect_json(
             home_path(&[".cursor", "mcp.json"]),
             &[home_path(&[".cursor"])],
@@ -293,7 +385,7 @@ fn discover_targets(kind: ClientKind) -> Vec<Target> {
                 &[home_path(&[".claude.json"]), home_path(&[".claude"])],
                 ConfigFormat::McpServers,
             ));
-            // Claude Desktop (separate app)
+
             if let Some(appdata) = env::var_os("APPDATA") {
                 let desktop = PathBuf::from(appdata)
                     .join("Claude")
@@ -354,7 +446,6 @@ fn vscode_user_dirs() -> Vec<(PathBuf, Vec<PathBuf>)> {
             dirs.push((user.clone(), vec![user, appdata.join(product)]));
         }
     } else {
-        // macOS / Linux typical locations
         dirs.push((
             home_path(&["Library", "Application Support", "Code", "User"]),
             vec![home_path(&["Library", "Application Support", "Code"])],
@@ -400,15 +491,17 @@ fn upsert_target(target: &Target, server_name: &str, launch: &ServerLaunch) -> R
     } else {
         String::new()
     };
-    refuse_jsonc_rewrite(&target.path, &original)?;
+    if !matches!(target.format, ConfigFormat::CodexToml) {
+        refuse_jsonc_rewrite(&target.path, &original)?;
+    }
 
     let next = match target.format {
+        ConfigFormat::CodexToml => upsert_codex_toml(&original, server_name, launch)?,
         ConfigFormat::McpServers => upsert_mcp_servers_json(&original, server_name, launch)?,
         ConfigFormat::VsCodeServers => upsert_vscode_servers_json(&original, server_name, launch)?,
         ConfigFormat::OpenCodeMcp => upsert_opencode_json(&original, server_name, launch)?,
     };
 
-    // Preserve trailing newline style when possible.
     let mut out = next;
     if !out.ends_with('\n') {
         out.push('\n');
@@ -482,6 +575,47 @@ pub fn atomic_write_with_backup(path: &Path, contents: &str) -> Result<()> {
     Ok(())
 }
 
+fn upsert_codex_toml(original: &str, server_name: &str, launch: &ServerLaunch) -> Result<String> {
+    let mut document = original
+        .trim_start_matches('\u{feff}')
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|_| anyhow!("invalid Codex TOML; configuration left unchanged"))?;
+    if document.get("mcp_servers").is_none() {
+        document["mcp_servers"] = toml_edit::Item::Table(toml_edit::Table::new());
+    }
+    let servers = document["mcp_servers"]
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("mcp_servers must be a TOML table"))?;
+    if server_name == DEFAULT_SERVER_NAME {
+        for retired in RETIRED_SERVER_NAMES {
+            servers.remove(retired);
+        }
+    }
+    let mut entry = toml_edit::Table::new();
+    entry["command"] = toml_edit::value(path_string(&launch.command));
+    let args = launch
+        .args
+        .iter()
+        .fold(toml_edit::Array::new(), |mut values, arg| {
+            values.push(arg.as_str());
+            values
+        });
+    entry["args"] = toml_edit::value(args);
+    if !launch.env.is_empty() {
+        let mut environment = toml_edit::Table::new();
+        for (key, value) in &launch.env {
+            environment[key] = toml_edit::value(
+                value
+                    .as_str()
+                    .ok_or_else(|| anyhow!("MCP environment values must be strings"))?,
+            );
+        }
+        entry["env"] = toml_edit::Item::Table(environment);
+    }
+    servers.insert(server_name, toml_edit::Item::Table(entry));
+    Ok(document.to_string())
+}
+
 fn upsert_mcp_servers_json(
     original: &str,
     server_name: &str,
@@ -497,6 +631,7 @@ fn upsert_mcp_servers_json(
         .or_insert_with(|| json!({}))
         .as_object_mut()
         .ok_or_else(|| anyhow!("mcpServers must be an object"))?;
+    remove_retired_servers(servers, server_name);
     servers.insert(server_name.to_string(), mcp_servers_entry(launch));
     Ok(serde_json::to_string_pretty(&root)?)
 }
@@ -516,12 +651,13 @@ fn upsert_vscode_servers_json(
         .or_insert_with(|| json!({}))
         .as_object_mut()
         .ok_or_else(|| anyhow!("servers must be an object"))?;
+    remove_retired_servers(servers, server_name);
     servers.insert(
         server_name.to_string(),
         json!({
             "type": "stdio",
             "command": path_string(&launch.command),
-            "args": [],
+            "args": launch.args,
             "env": Value::Object(launch.env.clone()),
         }),
     );
@@ -552,33 +688,43 @@ fn upsert_opencode_json(
         .as_object_mut()
         .ok_or_else(|| anyhow!("mcp must be an object"))?;
 
+    let mut command = vec![path_string(&launch.command)];
+    command.extend(launch.args.iter().cloned());
     let entry = json!({
         "type": "local",
-        "command": [path_string(&launch.command)],
+        "command": command,
         "environment": Value::Object(launch.env.clone()),
     });
 
-    // Migrate an entry written by the pre-v2 installer, then always use the
-    // OpenCode v2 `mcp.servers` schema. V2 auto-connects unless `disabled`.
     mcp.remove(server_name);
+    remove_retired_servers(mcp, server_name);
     let servers = mcp
         .entry("servers")
         .or_insert_with(|| json!({}))
         .as_object_mut()
         .ok_or_else(|| anyhow!("mcp.servers must be an object"))?;
+    remove_retired_servers(servers, server_name);
     servers.insert(server_name.to_string(), entry);
     Ok(serde_json::to_string_pretty(&root)?)
+}
+
+fn remove_retired_servers(servers: &mut Map<String, Value>, server_name: &str) {
+    if server_name == DEFAULT_SERVER_NAME {
+        for retired in RETIRED_SERVER_NAMES {
+            servers.remove(*retired);
+        }
+    }
 }
 
 fn mcp_servers_entry(launch: &ServerLaunch) -> Value {
     json!({
         "command": path_string(&launch.command),
-        "args": [],
+        "args": launch.args,
         "env": Value::Object(launch.env.clone()),
     })
 }
 
-/// Jack §4: do not silently destroy JSONC comments via pretty-print rewrite.
+/// Preserve JSONC comments by refusing a lossy pretty-print rewrite.
 ///
 /// Empty files and strict JSON are fine. If the file only parses after comment
 /// stripping, refuse and ask the user to convert to plain JSON first.
@@ -598,7 +744,7 @@ fn refuse_jsonc_rewrite(path: &Path, original: &str) -> Result<()> {
             path.display()
         );
     }
-    // Invalid even after strip — let the upsert parser surface the real error.
+
     Ok(())
 }
 
@@ -682,47 +828,14 @@ fn strip_jsonc_comments(input: &str) -> String {
 }
 
 fn path_string(path: &Path) -> String {
-    // Windows canonicalize() often yields \\?\C:\... which some MCP clients mishandle.
     let raw = path.to_string_lossy();
-    if let Some(stripped) = raw.strip_prefix(r"\\?\") {
+    if let Some(server_path) = raw.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{server_path}")
+    } else if let Some(stripped) = raw.strip_prefix(r"\\?\") {
         stripped.to_string()
     } else {
         raw.into_owned()
     }
-}
-
-/// Prepend OCCT `bin` once and keep a short, deduped PATH for MCP child processes.
-fn clean_path_with_occt_bin(occt_bin: &Path) -> String {
-    let sep = if cfg!(windows) { ';' } else { ':' };
-    let mut parts: Vec<String> = vec![path_string(occt_bin)];
-    if let Ok(existing) = env::var("PATH") {
-        for part in existing.split(sep) {
-            if part.is_empty() {
-                continue;
-            }
-            // Drop cargo/target noise and repeated OCCT bin prefixes from nested shells.
-            let lower = part.to_ascii_lowercase();
-            if lower.contains("\\target\\debug")
-                || lower.contains("/target/debug")
-                || lower.contains("vcpkg_installed")
-                    && lower.ends_with(&format!("{}bin", std::path::MAIN_SEPARATOR))
-            {
-                continue;
-            }
-            if parts
-                .iter()
-                .any(|existing_part| existing_part.eq_ignore_ascii_case(part))
-            {
-                continue;
-            }
-            parts.push(part.to_string());
-        }
-    }
-    // Cap length so client config files stay readable.
-    if parts.len() > 40 {
-        parts.truncate(40);
-    }
-    parts.join(&sep.to_string())
 }
 
 fn normalize_path(path: PathBuf) -> PathBuf {
@@ -734,203 +847,18 @@ fn normalize_path(path: PathBuf) -> PathBuf {
         .unwrap_or(path)
 }
 
-fn server_env(repo_root: &Path) -> Map<String, Value> {
-    let mut env_map = Map::new();
-    env_map.insert(
-        "NBCAD_REPO_ROOT".to_string(),
-        Value::String(path_string(repo_root)),
-    );
-    if let Some(occt) = default_occt_root(repo_root) {
-        env_map.insert(
-            "OCCT_ROOT".to_string(),
-            Value::String(occt.to_string_lossy().into_owned()),
-        );
-        let bin = occt.join("bin");
-        if bin.is_dir() {
-            env_map.insert(
-                "PATH".to_string(),
-                Value::String(clean_path_with_occt_bin(&bin)),
-            );
-        }
+/// Resolve only an explicitly selected installed executable. Default setup
+/// builds and promotes the unified desktop before reaching this boundary.
+fn resolve_binary(_repo_root: &Path, options: &Options) -> Result<PathBuf> {
+    let path = options
+        .binary
+        .as_ref()
+        .context("No installed runtime selected")?;
+    if !options.dry_run && !path.is_file() {
+        bail!("Installed executable does not exist: {}", path.display());
     }
-    env_map
+    Ok(normalize_path(path.clone()))
 }
-
-fn default_occt_root(repo_root: &Path) -> Option<PathBuf> {
-    if let Ok(explicit) = env::var("OCCT_ROOT") {
-        let path = PathBuf::from(explicit);
-        if path.is_dir() {
-            return Some(path);
-        }
-    }
-    let candidates = [
-        repo_root.join("vcpkg_installed").join("x64-windows"),
-        repo_root.join("vcpkg_installed").join("x64-linux"),
-        repo_root.join("vcpkg_installed").join("arm64-osx"),
-        repo_root.join("vcpkg_installed").join("x64-osx"),
-    ];
-    candidates.into_iter().find(|path| path.is_dir())
-}
-
-/// Resolve the MCP binary path.
-///
-/// Dry-run never builds or copies. Real installs honor `--binary`, else look for
-/// release then debug under `mcp-server/target/`, build when needed, then copy to a
-/// stable user path so clients are not pointed at `target/` (wiped by `cargo clean`).
-fn resolve_binary(repo_root: &Path, options: &Options) -> Result<PathBuf> {
-    if let Some(path) = &options.binary {
-        if options.dry_run {
-            return Ok(path.clone());
-        }
-        if !path.is_file() {
-            bail!("--binary path does not exist: {}", path.display());
-        }
-        return install_user_binary(path);
-    }
-
-    let release = mcp_binary_path(repo_root, "release");
-    let debug = mcp_binary_path(repo_root, "debug");
-
-    let found = if release.is_file() {
-        Some(release.clone())
-    } else if debug.is_file() {
-        if !options.dry_run {
-            eprintln!(
-                "warning: using debug MCP binary (release missing): {}",
-                debug.display()
-            );
-        }
-        Some(debug.clone())
-    } else {
-        None
-    };
-
-    if let Some(built) = found {
-        if options.dry_run {
-            return Ok(normalize_path(built));
-        }
-        return install_user_binary(&built);
-    }
-
-    if options.dry_run {
-        // Planned path only — no cargo build / copy.
-        let planned = user_mcp_install_dir()
-            .map(|dir| {
-                dir.join(if cfg!(windows) {
-                    "nbcad-mcp.exe"
-                } else {
-                    "nbcad-mcp"
-                })
-            })
-            .unwrap_or_else(|_| release.clone());
-        println!(
-            "note: MCP binary not found yet; would build {} and install to {}",
-            release.display(),
-            planned.display()
-        );
-        return Ok(planned);
-    }
-
-    if options.build {
-        build_mcp_server(repo_root)?;
-        if release.is_file() {
-            return install_user_binary(&release);
-        }
-        if debug.is_file() {
-            eprintln!(
-                "warning: using debug MCP binary after build (release missing): {}",
-                debug.display()
-            );
-            return install_user_binary(&debug);
-        }
-    }
-
-    bail!(
-        "MCP binary not found at {} (run without --no-build, or pass --binary)",
-        mcp_binary_path(repo_root, "release").display()
-    )
-}
-
-/// Copy the built MCP binary to a stable user path (never called on dry-run).
-fn install_user_binary(built: &Path) -> Result<PathBuf> {
-    let dir = user_mcp_install_dir()?;
-    fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
-    let name = if cfg!(windows) {
-        "nbcad-mcp.exe"
-    } else {
-        "nbcad-mcp"
-    };
-    let dest = dir.join(name);
-    let staging = dir.join(format!(".{name}.{}.tmp", std::process::id()));
-    fs::copy(built, &staging)
-        .with_context(|| format!("copy {} → {}", built.display(), staging.display()))?;
-    if dest.exists() {
-        let bak = dir.join(format!("{name}.prev"));
-        let _ = fs::remove_file(&bak);
-        let _ = fs::rename(&dest, &bak);
-    }
-    if let Err(error) = fs::rename(&staging, &dest) {
-        let _ = fs::remove_file(&staging);
-        return Err(error).with_context(|| format!("rename → {}", dest.display()));
-    }
-    Ok(normalize_path(dest))
-}
-
-fn user_mcp_install_dir() -> Result<PathBuf> {
-    if let Some(base) = env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .or_else(|| env::var_os("XDG_DATA_HOME").map(PathBuf::from))
-        .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".local").join("share")))
-    {
-        return Ok(base.join("nbcad").join("mcp"));
-    }
-    bail!("could not resolve a user install directory (LOCALAPPDATA / HOME)");
-}
-
-fn mcp_binary_path(repo_root: &Path, profile: &str) -> PathBuf {
-    let name = if cfg!(windows) {
-        "nbcad-mcp.exe"
-    } else {
-        "nbcad-mcp"
-    };
-    repo_root
-        .join("mcp-server")
-        .join("target")
-        .join(profile)
-        .join(name)
-}
-
-fn build_mcp_server(repo_root: &Path) -> Result<()> {
-    println!("building mcp-server (release)...");
-    let mut command = Command::new("cargo");
-    command.current_dir(repo_root).args([
-        "build",
-        "--release",
-        "--manifest-path",
-        "mcp-server/Cargo.toml",
-    ]);
-    if let Some(occt) = default_occt_root(repo_root) {
-        command.env("OCCT_ROOT", &occt);
-        let bin = occt.join("bin");
-        if bin.is_dir() {
-            let mut path = bin.to_string_lossy().into_owned();
-            if let Ok(existing) = env::var("PATH") {
-                let sep = if cfg!(windows) { ';' } else { ':' };
-                path.push(sep);
-                path.push_str(&existing);
-            }
-            command.env("PATH", path);
-        }
-    }
-    let status = command
-        .status()
-        .context("spawn cargo build for mcp-server")?;
-    if !status.success() {
-        bail!("cargo build --release --manifest-path mcp-server/Cargo.toml failed");
-    }
-    Ok(())
-}
-
 fn repo_root() -> Result<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let root = manifest_dir
@@ -944,11 +872,222 @@ mod tests {
     use super::*;
     use std::fs;
 
+    #[test]
+    fn product_rename_removes_retired_servers_and_preserves_other_clients() {
+        let launch = launch_fixture();
+        for (rewrite, key) in [
+            (
+                upsert_mcp_servers_json as fn(&str, &str, &ServerLaunch) -> Result<String>,
+                "mcpServers",
+            ),
+            (
+                upsert_vscode_servers_json as fn(&str, &str, &ServerLaunch) -> Result<String>,
+                "servers",
+            ),
+        ] {
+            let original = json!({key: {"nobs-cad": {"command": "old-cad"}, "nbcad": {}, "other": {"command": "other-tool"}}}).to_string();
+            let next: Value =
+                serde_json::from_str(&rewrite(&original, DEFAULT_SERVER_NAME, &launch).unwrap())
+                    .unwrap();
+            assert_eq!(next[key]["other"]["command"], "other-tool");
+            assert_eq!(
+                next[key][DEFAULT_SERVER_NAME]["command"],
+                path_string(&launch.command)
+            );
+            for retired in RETIRED_SERVER_NAMES {
+                assert!(next[key].get(*retired).is_none());
+            }
+            assert_eq!(
+                rewrite(&next.to_string(), DEFAULT_SERVER_NAME, &launch).unwrap(),
+                serde_json::to_string_pretty(&next).unwrap()
+            );
+        }
+        let original = "# retained\nmodel='user-model'\n[mcp_servers.nobs-cad]\ncommand='old-cad'\n[mcp_servers.other]\ncommand='other-tool'\n";
+        let next = upsert_codex_toml(original, DEFAULT_SERVER_NAME, &launch).unwrap();
+        assert!(next.contains("# retained"));
+        let document = next.parse::<toml_edit::DocumentMut>().unwrap();
+        assert!(document["mcp_servers"].get("nobs-cad").is_none());
+        assert_eq!(
+            document["mcp_servers"]["other"]["command"].as_str(),
+            Some("other-tool")
+        );
+        assert!(document["mcp_servers"].get(DEFAULT_SERVER_NAME).is_some());
+
+        let original = json!({"mcp": {"nobs-cad": {}, "servers": {"noBS-CAD": {}, "other": {"command": ["other-tool"]}}}}).to_string();
+        let next: Value = serde_json::from_str(
+            &upsert_opencode_json(&original, DEFAULT_SERVER_NAME, &launch).unwrap(),
+        )
+        .unwrap();
+        assert!(next["mcp"].get("nobs-cad").is_none());
+        assert!(next["mcp"]["servers"].get("noBS-CAD").is_none());
+        assert_eq!(
+            next["mcp"]["servers"]["other"]["command"],
+            json!(["other-tool"])
+        );
+        assert!(next["mcp"]["servers"].get(DEFAULT_SERVER_NAME).is_some());
+
+        let next: Value = serde_json::from_str(
+            &upsert_mcp_servers_json(r#"{"mcpServers":{"nobs-cad":{}}}"#, "custom-cad", &launch)
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(next["mcpServers"].get("nobs-cad").is_some());
+    }
+
+    #[test]
+    fn packaged_unc_paths_remain_absolute_in_every_client_configuration() {
+        let mut launch = launch_fixture();
+        launch.command = PathBuf::from(r"\\?\UNC\cad-server\printed parts\Limo-CAD.exe");
+        let expected = r"\\cad-server\printed parts\Limo-CAD.exe";
+        for (next, key) in [
+            (
+                upsert_mcp_servers_json("", "nobs-cad", &launch).unwrap(),
+                "mcpServers",
+            ),
+            (
+                upsert_vscode_servers_json("", "nobs-cad", &launch).unwrap(),
+                "servers",
+            ),
+        ] {
+            let value: Value = serde_json::from_str(&next).unwrap();
+            assert_eq!(value[key]["nobs-cad"]["command"], expected);
+        }
+        let value: Value =
+            serde_json::from_str(&upsert_opencode_json("", "nobs-cad", &launch).unwrap()).unwrap();
+        assert_eq!(value["mcp"]["servers"]["nobs-cad"]["command"][0], expected);
+        let document = upsert_codex_toml("", "nobs-cad", &launch)
+            .unwrap()
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        assert_eq!(
+            document["mcp_servers"]["nobs-cad"]["command"].as_str(),
+            Some(expected)
+        );
+        assert_eq!(
+            path_string(Path::new(r"\\?\C:\printed parts\Limo-CAD.exe")),
+            r"C:\printed parts\Limo-CAD.exe"
+        );
+    }
+
+    #[test]
+    fn packaged_options_keep_literal_server_arguments() {
+        let options = Options::parse(
+            [
+                "--clients",
+                "codex,cursor,codex",
+                "--binary",
+                "/installed/Limo-CAD",
+                "--in-place",
+                "--server-arg",
+                "--headless",
+                "--desktop",
+                "/installed/Limo-CAD",
+            ]
+            .into_iter()
+            .map(str::to_owned),
+        )
+        .unwrap();
+        assert!(options.in_place);
+        assert_eq!(options.server_args, ["--headless"]);
+        assert_eq!(
+            options.clients.unwrap(),
+            [ClientKind::Codex, ClientKind::Cursor]
+        );
+        assert!(
+            Options::parse(["--dry-run", "--in-place"].into_iter().map(str::to_owned)).is_err()
+        );
+    }
+
+    #[test]
+    fn codex_upsert_preserves_comments_and_other_configuration() {
+        let original = "# Keep this preference\nmodel = 'custom-model'\n[mcp_servers.other]\ncommand = 'other-tool'\n[mcp_servers.nobs-cad]\ncommand = 'retired-cad'\n[mcp_servers.nobs-cad.env]\nOCCT_ROOT = '/old-sdk'\n";
+        let mut launch = launch_fixture();
+        launch.args.push("--headless".into());
+        launch.env.clear();
+        launch.env.insert(
+            "LIMO_CAD_DESKTOP_BIN".into(),
+            Value::String("/installed/Limo-CAD".into()),
+        );
+        let next = upsert_codex_toml(original, "nobs-cad", &launch).unwrap();
+        let document = next.parse::<toml_edit::DocumentMut>().unwrap();
+        assert!(next.contains("# Keep this preference"));
+        assert_eq!(document["model"].as_str(), Some("custom-model"));
+        assert_eq!(
+            document["mcp_servers"]["other"]["command"].as_str(),
+            Some("other-tool")
+        );
+        assert_eq!(
+            document["mcp_servers"]["nobs-cad"]["args"][0].as_str(),
+            Some("--headless")
+        );
+        assert_eq!(
+            document["mcp_servers"]["nobs-cad"]["env"]["LIMO_CAD_DESKTOP_BIN"].as_str(),
+            Some("/installed/Limo-CAD")
+        );
+        assert!(document["mcp_servers"]["nobs-cad"]["env"]
+            .get("OCCT_ROOT")
+            .is_none());
+        assert!(upsert_codex_toml("mcp_servers = 'bad-shape'", "nobs-cad", &launch).is_err());
+        let error = upsert_codex_toml("secret = 'fixture-sensitive-value", "nobs-cad", &launch)
+            .unwrap_err();
+        assert!(!error.to_string().contains("fixture-sensitive-value"));
+    }
+
+    #[test]
+    fn every_json_client_keeps_packaged_headless_arguments() {
+        let mut launch = launch_fixture();
+        launch.args.push("--headless".into());
+        for (next, key) in [
+            (
+                upsert_mcp_servers_json("", "nobs-cad", &launch).unwrap(),
+                "mcpServers",
+            ),
+            (
+                upsert_vscode_servers_json("", "nobs-cad", &launch).unwrap(),
+                "servers",
+            ),
+        ] {
+            let value: Value = serde_json::from_str(&next).unwrap();
+            assert_eq!(value[key]["nobs-cad"]["args"], json!(["--headless"]));
+        }
+        let value: Value =
+            serde_json::from_str(&upsert_opencode_json("", "nobs-cad", &launch).unwrap()).unwrap();
+        assert_eq!(
+            value["mcp"]["servers"]["nobs-cad"]["command"],
+            json!(["/repo/mcp-server/target/release/limo-cad-mcp", "--headless"])
+        );
+    }
+
+    #[test]
+    fn in_place_resolution_does_not_copy_packaged_executable_or_libraries() {
+        let directory = tempfile::tempdir().unwrap();
+        let binary = directory.path().join("packaged-cad");
+        fs::write(&binary, b"fixture executable").unwrap();
+        fs::write(directory.path().join("runtime-library"), b"fixture library").unwrap();
+        let options = Options::parse(
+            [
+                "--clients".to_owned(),
+                "codex".to_owned(),
+                "--binary".to_owned(),
+                binary.to_string_lossy().into_owned(),
+                "--in-place".to_owned(),
+            ]
+            .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_binary(directory.path(), &options).unwrap(),
+            normalize_path(binary)
+        );
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
+    }
+
     fn launch_fixture() -> ServerLaunch {
         let mut env = Map::new();
         env.insert("OCCT_ROOT".to_string(), Value::String("/occt".into()));
         ServerLaunch {
-            command: PathBuf::from("/repo/mcp-server/target/release/nbcad-mcp"),
+            command: PathBuf::from("/repo/mcp-server/target/release/limo-cad-mcp"),
+            args: Vec::new(),
             env,
         }
     }
@@ -1034,7 +1173,7 @@ mod tests {
         assert_eq!(value["mcpServers"]["other"]["command"], "echo");
         assert_eq!(
             value["mcpServers"]["nobs-cad"]["command"],
-            "/repo/mcp-server/target/release/nbcad-mcp"
+            "/repo/mcp-server/target/release/limo-cad-mcp"
         );
         assert_eq!(value["mcpServers"]["nobs-cad"]["env"]["OCCT_ROOT"], "/occt");
     }
@@ -1072,7 +1211,7 @@ mod tests {
         assert_eq!(entry["type"], "local");
         assert_eq!(
             entry["command"][0],
-            "/repo/mcp-server/target/release/nbcad-mcp"
+            "/repo/mcp-server/target/release/limo-cad-mcp"
         );
         assert!(entry.get("enabled").is_none());
         assert!(value["mcp"].get("nobs-cad").is_none());
@@ -1094,7 +1233,7 @@ mod tests {
         assert!(value["mcp"].get("nobs-cad").is_none());
         assert_eq!(
             value["mcp"]["servers"]["nobs-cad"]["command"][0],
-            "/repo/mcp-server/target/release/nbcad-mcp"
+            "/repo/mcp-server/target/release/limo-cad-mcp"
         );
         assert!(value["mcp"]["servers"]["nobs-cad"].get("enabled").is_none());
     }
@@ -1102,7 +1241,7 @@ mod tests {
     #[test]
     fn atomic_write_with_backup_creates_bak_and_replaces() {
         let dir = std::env::temp_dir().join(format!(
-            "nbcad-xtask-atomic-{}-{}",
+            "limo-cad-xtask-atomic-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -1128,7 +1267,7 @@ mod tests {
     #[test]
     fn atomic_write_with_backup_creates_new_file_without_bak() {
         let dir = std::env::temp_dir().join(format!(
-            "nbcad-xtask-atomic-new-{}-{}",
+            "limo-cad-xtask-atomic-new-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -1153,7 +1292,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = std::env::temp_dir().join(format!(
-            "nbcad-xtask-atomic-mode-{}-{}",
+            "limo-cad-xtask-atomic-mode-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

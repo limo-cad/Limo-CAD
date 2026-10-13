@@ -45,15 +45,10 @@ fn shift(c: Point2Dto, u: Point2Dto, d: f64) -> Point2Dto {
 pub(super) fn clear(
     builder: &mut ProgramBuilder,
     footprint: &[Point2Dto],
-    center: Point2Dto,
-    protected: f64,
-    cap: bool,
-    r: f64,
-    floor_r: f64,
-    depth: f64,
+    (center, protected, cap): (Point2Dto, f64, bool),
+    (r, floor_r, depth): (f64, f64, f64),
     p: &CamAdaptiveParametersDto,
-    feed: f64,
-    plunge: f64,
+    (feed, plunge): (f64, f64),
     work: &mut Work,
 ) -> Result<usize, CamPlanError> {
     let stock = footprint
@@ -115,8 +110,7 @@ pub(super) fn clear(
             .map(|s| 2.0 * s.horizontal_radius + s.linear_distance + s.vertical_radius)
             .fold(0.0, f64::max)
     });
-    // A full disk about each air anchor contains the configured lead plus
-    // its vertical projection and the dummy tangent segment used below.
+
     let lead_length = |path_radius: f64, bound: f64| {
         ((bound + r + margin + reach + 1.0).powi(2) - path_radius.powi(2))
             .max(0.0)
@@ -141,11 +135,7 @@ pub(super) fn clear(
         }
         Ok::<_, CamPlanError>(distance)
     };
-    // Full loops from the deepest first ring, when every crossover is within
-    // the engagement limit and the whole pass is shorter.
     let first_ring = (stock + if k >= 0. { r * k } else { floor_r * k }).max(protected + r);
-    // Closer rings leave engagement slack for steeper crossovers; under a
-    // small optimal load only they let a crossover stay within the limit.
     let loops = [1.0, 0.85, 0.7, 0.55, 0.4]
         .into_iter()
         .filter_map(|fraction| {
@@ -163,8 +153,6 @@ pub(super) fn clear(
             )
         })
         .min_by(|a, b| a.length.total_cmp(&b.length))
-        // Complete rings hold constant engagement and finish with a center
-        // cut-over; prefer them to a spiral unless clearly longer.
         .filter(|loops| {
             loops.length < plan.length() - EPS
                 || (loops.moves.len() > 2 && loops.length <= plan.length() * 1.02)
@@ -177,8 +165,6 @@ pub(super) fn clear(
             ring: true,
         };
     }
-    // Fusion-style entry first: in along the radius from just outside the
-    // stock, then a quarter lead arc tangent into the first ring.
     let mut radial = radial_entry(
         builder, center, u, tangent, plan.start, stock, r, floor_r, margin, phi,
     );
@@ -189,8 +175,6 @@ pub(super) fn clear(
     };
     let mut loops = loops;
     if plan.ring && radial.is_none() {
-        // The tangent entry turns slightly toward the stock center, so its
-        // leading half can see more than the ring itself. Sample it.
         let start = shift(center, u, plan.start);
         let samples = (0..=64).map(|i| {
             (
@@ -238,8 +222,6 @@ pub(super) fn clear(
     }
     let entry = shift(start, tangent, -entry_distance);
     let exit = shift(finish, exit_tangent, exit_distance);
-    // Emit configured air leads only at the boundaries of this continuous
-    // cutting pass, independently of Keep tool down / Retraction Policy.
     if let (Some(link), Some(lead)) = (builder.linking.clone(), &radial) {
         linking_planner::entry(
             builder,
@@ -316,7 +298,6 @@ pub(super) fn clear(
             }
         }
     } else if single || plan.ring {
-        // One complete ring about C at the start radius.
         let opposite = shift(center, u, -plan.start);
         builder.circular(
             Point3Dto::new(opposite.x, opposite.y, depth),
@@ -424,7 +405,6 @@ fn radial_entry(
     }
     let ring = shift(center, u, start);
     let need = stock + r + margin;
-    // Past this run the arc and plunge are wholly in air.
     let longest = (need * need - start * start).max(0.0).sqrt() + rho;
     let steps = (longest / 0.25).ceil().max(1.0) as usize;
     (0..=steps).find_map(|i| {
@@ -432,8 +412,6 @@ fn radial_entry(
         let join = shift(ring, tangent, -x);
         let arc_center = shift(join, u, rho);
         let arc_start = shift(arc_center, tangent, -rho);
-        // Shortest radial run (at least the configured linear lead) that
-        // puts the plunge one safe distance outside every point of stock.
         let a = Point2Dto::new(arc_start.x - center.x, arc_start.y - center.y);
         let along = a.x * u.x + a.y * u.y;
         let reach = (along * along - (a.x * a.x + a.y * a.y) + need * need)
@@ -493,9 +471,6 @@ impl Plan {
         }
         let mut turns = ((start - finish) / pitch).ceil().max(1.) as usize;
         if !ring && turns == 1 {
-            // A band no wider than Ae needs just one circle, not a spiral
-            // plus cleanup half-turn. This is the common case on narrow
-            // shoulders.
             turns = 0;
             return Self {
                 start: finish,
@@ -560,13 +535,9 @@ impl Loops {
         loop {
             let ring = *rings.last().unwrap();
             let next = if cap {
-                // Cut over into the center only once that crossover is within
-                // the engagement limit: under a small optimal load the core
-                // must first shrink (a ring at the flat-land radius leaves none).
                 if ring <= 2. * floor_r + EPS && cross(u, ring, 0.).is_some() {
                     break;
                 }
-                // The center crossover's fillet needs ring >= 2 fillets.
                 (ring - pitch).max(2. * fillet + 1e-3)
             } else {
                 if ring <= last + EPS {
@@ -643,9 +614,6 @@ impl Crossover {
         if f > (ring + next) * 0.5 - EPS {
             return None;
         }
-        // Canonical frame: the crossover ends at (next, 0) heading -y,
-        // tangent to the inner ring (or through the center when next is 0);
-        // its fillet is tangent to this ring.
         let rotate = |v: Point2Dto, angle: f64| {
             let (sin, cos) = angle.sin_cos();
             Point2Dto::new(v.x * cos - v.y * sin, v.x * sin + v.y * cos)
@@ -659,7 +627,6 @@ impl Crossover {
         };
         let line_start = to(Point2Dto::new(next, m));
         let heading = rotate(Point2Dto::new(0., -1.), turn);
-        // The completed ring leaves a disk of radius ring - s at section s.
         let samples = (0..=32)
             .map(|j| {
                 let t = theta * (1. - j as f64 / 32.);
@@ -670,8 +637,6 @@ impl Crossover {
                 )
             })
             .chain((0..=32).map(|j| (shift(line_start, heading, m * j as f64 / 32.), heading)));
-        // Between close rings the fillet bulges inward past the inner ring;
-        // on the last ring that boundary protects the target.
         let inside = next > EPS
             && (0..=64).any(|j| {
                 let t = theta * j as f64 / 64.;
@@ -719,11 +684,8 @@ fn within_engagement(
             } else if d + s <= radius {
                 PI
             } else if d + radius <= s {
-                // Remaining material lies wholly inside this section.
                 0.
             } else {
-                // Arc of the section inside the disk, clipped to the half
-                // facing the direction of travel.
                 let alpha = ((s * s + d * d - radius * radius) / (2. * s * d))
                     .clamp(-1., 1.)
                     .acos();

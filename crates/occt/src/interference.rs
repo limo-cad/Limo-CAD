@@ -1,10 +1,10 @@
 //! Exact occurrence interference shared by the native UI and MCP.
 use crate::{OcctKernel, PlacedBodyQueryDto};
-use nbcad_assembly::{
+use limo_cad_assembly::{
     broad_phase_interference_pairs, InstanceBodyPoseDto, InterferenceCheckRequestDto,
     InterferencePairResultDto, InterferenceReportDto,
 };
-use nbcad_solid::SolidSceneDto;
+use limo_cad_solid::SolidSceneDto;
 
 pub fn exact_interference_report(
     kernel: &OcctKernel,
@@ -12,23 +12,7 @@ pub fn exact_interference_report(
     poses: &[InstanceBodyPoseDto],
     request: &InterferenceCheckRequestDto,
 ) -> Result<InterferenceReportDto, String> {
-    if !scene.errors.is_empty() {
-        return Err("Cannot inspect interference while the model has recompute errors".into());
-    }
-    for id in &request.occurrence_ids {
-        if !poses
-            .iter()
-            .any(|pose| pose.occurrence_id == *id && pose.visible)
-        {
-            return Err(format!(
-                "Occurrence {} is missing, hidden, or has no solid bodies",
-                id.0
-            ));
-        }
-    }
-    if !request.clearance_threshold_mm.is_finite() || request.clearance_threshold_mm < 0.0 {
-        return Err("interference clearance must be finite and non-negative".to_string());
-    }
+    validate_source(scene, poses, request)?;
     let mut pairs = Vec::new();
     for (a_index, b_index) in broad_phase_interference_pairs(scene, poses, request)? {
         pairs.push(exact_pair_result(
@@ -73,4 +57,30 @@ pub fn exact_pair_result(
         interfering: exact.overlap_volume_mm3 > 1.0e-7,
         below_clearance: exact.minimum_clearance_mm <= clearance_threshold_mm + 1.0e-7,
     })
+}
+
+/// Original source checks shared by coherent capture and exact inspection.
+pub fn validate_source(
+    scene: &SolidSceneDto,
+    poses: &[InstanceBodyPoseDto],
+    request: &InterferenceCheckRequestDto,
+) -> Result<(), String> {
+    if !scene.errors.is_empty() {
+        return Err("Cannot inspect interference while the model has recompute errors".into());
+    }
+    for id in &request.occurrence_ids {
+        if !poses
+            .iter()
+            .any(|pose| pose.occurrence_id == *id && pose.visible)
+        {
+            return Err(format!(
+                "Occurrence {} is missing, hidden, or has no solid bodies",
+                id.0
+            ));
+        }
+    }
+    if !request.clearance_threshold_mm.is_finite() || request.clearance_threshold_mm < 0.0 {
+        return Err("interference clearance must be finite and non-negative".to_string());
+    }
+    Ok(())
 }

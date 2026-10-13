@@ -2,8 +2,8 @@
 //! line tool has (support-face edge midpoints and the projected face
 //! boundary), and a typed radius locks the arc's radius while the cursor keeps
 //! aiming the two endpoint picks.
-use nbcad_core::EdgeId;
-use nbcad_sketch::{
+use limo_cad_core::EdgeId;
+use limo_cad_sketch::{
     Constraint, EditDimensionRequest, EntityDto, EntityId, OriginPlane, PlaneRef, ProjectedEdgeDto,
     SketchSession, SnapTarget, Vec2,
 };
@@ -29,7 +29,7 @@ fn face_session() -> SketchSession {
     let mut session = SketchSession::new(
         "Sketch1",
         PlaneRef::PlanarFace {
-            face_id: nbcad_core::FaceId(1),
+            face_id: limo_cad_core::FaceId(1),
         },
         XY.basis().unwrap(),
         false,
@@ -44,7 +44,7 @@ fn face_session() -> SketchSession {
     session
 }
 
-fn arc_of(session: &SketchSession, id: nbcad_sketch::EntityId) -> (Vec2, f64, f64, f64) {
+fn arc_of(session: &SketchSession, id: limo_cad_sketch::EntityId) -> (Vec2, f64, f64, f64) {
     match session.dto().entities.iter().find(|e| e.id() == id) {
         Some(EntityDto::Arc {
             center,
@@ -59,8 +59,6 @@ fn arc_of(session: &SketchSession, id: nbcad_sketch::EntityId) -> (Vec2, f64, f6
 
 #[test]
 fn arc_picks_acquire_support_edge_midpoints_and_the_projected_boundary() {
-    // The acquisition the arc tool shares with the line tool: a support-face
-    // edge midpoint (triangle marker) and any point on the projected boundary.
     let session = face_session();
     let midpoint = session.preview_segment(v(0.0, 0.0), v(10.2, 10.1), false);
     assert_eq!(
@@ -78,8 +76,6 @@ fn arc_picks_acquire_support_edge_midpoints_and_the_projected_boundary() {
         other => panic!("expected a projected-boundary acquisition, got {other:?}"),
     }
 
-    // Every arc pick lands on the acquired reference, so the drawn arc rests
-    // exactly on the face edge instead of a fraction of a millimetre away.
     let mut session = face_session();
     let result = session
         .add_arc_center(v(10.2, 10.1), v(8.0, 20.2), v(19.7, 20.1))
@@ -87,15 +83,14 @@ fn arc_picks_acquire_support_edge_midpoints_and_the_projected_boundary() {
     let (center, radius, start_angle, _) = arc_of(&session, result.entities[0]);
     assert!(
         close(center, v(10.0, 10.0)),
-        "center {} must acquire the midpoint",
-        format!("{center:?}")
+        "center {center:?} must acquire the midpoint"
     );
     let expected_radius = v(8.0, 20.0).distance(v(10.0, 10.0));
     assert!(
         (radius - expected_radius).abs() < 1e-9,
         "start acquired the projected boundary: {radius} vs {expected_radius}"
     );
-    // The start pick keeps the projected coordinate, not the raw cursor.
+
     let start = v(
         center.x + radius * start_angle.cos(),
         center.y + radius * start_angle.sin(),
@@ -108,11 +103,7 @@ fn a_typed_radius_locks_the_arc_and_adds_a_driving_dimension() {
     let mut session = face_session();
     let result = session
         .add_arc_center_locked(
-            v(0.0, 0.0),
-            // Hint 7 mm away: the lock must replace the distance and keep the
-            // direction.
-            v(7.0, 0.0),
-            v(0.0, 9.0),
+            (v(0.0, 0.0), v(7.0, 0.0), v(0.0, 9.0)),
             false,
             None,
             Some("12"),
@@ -140,9 +131,7 @@ fn a_typed_radius_locks_the_arc_and_adds_a_driving_dimension() {
     assert_eq!(dimensions[0].kind, "radius");
     assert_eq!(dimensions[0].text, "R12.00");
     assert_eq!(dimensions[0].entities, vec![arc_id]);
-    // ISO/ANSI radius dimension: the value sits just outside the arc along the
-    // leader that carries its arrowhead, not on a diagonal a whole radius away.
-    // The engine's gap is a quarter of the diameter, clamped to 2..8 mm.
+
     let gap = (radius * 0.5).clamp(2.0, 8.0);
     let mid_angle = (start_angle + end_angle) / 2.0;
     let expected = center + Vec2::new(mid_angle.cos(), mid_angle.sin()) * (radius + gap);
@@ -153,8 +142,6 @@ fn a_typed_radius_locks_the_arc_and_adds_a_driving_dimension() {
         expected
     );
 
-    // A driving radius stays parametric: editing it re-solves the arc.
-    let mut session = session;
     session
         .edit_dimension(EditDimensionRequest {
             constraint_id: dimensions[0].constraint_id,
@@ -170,9 +157,7 @@ fn a_typed_radius_expression_is_evaluated() {
     let mut session = face_session();
     let result = session
         .add_arc_center_locked(
-            v(0.0, 0.0),
-            v(7.0, 0.0),
-            v(0.0, 9.0),
+            (v(0.0, 0.0), v(7.0, 0.0), v(0.0, 9.0)),
             false,
             None,
             Some("=6*2"),
@@ -193,9 +178,7 @@ fn one_undo_removes_a_locked_arc_and_its_dimension() {
     let mut session = face_session();
     session
         .add_arc_center_locked(
-            v(0.0, 0.0),
-            v(7.0, 0.0),
-            v(0.0, 9.0),
+            (v(0.0, 0.0), v(7.0, 0.0), v(0.0, 9.0)),
             false,
             None,
             Some("12"),
@@ -212,28 +195,20 @@ fn one_undo_removes_a_locked_arc_and_its_dimension() {
 
 #[test]
 fn the_drag_direction_decides_which_half_the_arc_covers() {
-    // A pair of picks 180 degrees apart is the same rays either way round, so
-    // the pointer's own travel is the only thing that says which half the user
-    // drew. A clockwise drag from the right point through the bottom to the
-    // left must cover the LOWER half, not its mirror.
     let mut cw = face_session();
     cw.add_arc_center_locked(
-        v(0.0, 0.0),
-        v(5.0, 0.0),
-        v(-5.0, 0.0),
+        (v(0.0, 0.0), v(5.0, 0.0), v(-5.0, 0.0)),
         false,
         None,
         None,
         None,
-        // Pointer travel: 0 -> -90 -> -180 degrees.
         Some(-std::f64::consts::PI),
     )
     .unwrap();
-    let cw_id = nbcad_sketch::EntityId(1);
+    let cw_id = limo_cad_sketch::EntityId(1);
     let (_, radius, start_angle, end_angle) = arc_of(&cw, cw_id);
     assert!((radius - 5.0).abs() < 1e-9, "start pick radius {radius}");
-    // An arc entity always sweeps counter-clockwise, so the clockwise drag is
-    // stored with its angles swapped and still covers the same points.
+
     assert!(end_angle > start_angle, "{start_angle} .. {end_angle}");
     assert!(
         (end_angle - start_angle - std::f64::consts::PI).abs() < 1e-9,
@@ -245,12 +220,9 @@ fn the_drag_direction_decides_which_half_the_arc_covers() {
         "the arc must pass below the centre, got mid ray {mid}"
     );
 
-    // Same picks, no travel: the historical counter-clockwise half.
     let mut ccw = face_session();
     ccw.add_arc_center_locked(
-        v(0.0, 0.0),
-        v(5.0, 0.0),
-        v(-5.0, 0.0),
+        (v(0.0, 0.0), v(5.0, 0.0), v(-5.0, 0.0)),
         false,
         None,
         None,
@@ -265,13 +237,10 @@ fn the_drag_direction_decides_which_half_the_arc_covers() {
         "the counter-clockwise half passes above the centre, got {mid}"
     );
 
-    // A clockwise quarter turn keeps the short way round, not the long one.
     let mut quarter = face_session();
     quarter
         .add_arc_center_locked(
-            v(0.0, 0.0),
-            v(5.0, 0.0),
-            v(0.0, -5.0),
+            (v(0.0, 0.0), v(5.0, 0.0), v(0.0, -5.0)),
             false,
             None,
             None,
@@ -296,9 +265,7 @@ fn deleting_an_arc_takes_its_own_endpoints_with_it() {
     let mut session = face_session();
     let result = session
         .add_arc_center_locked(
-            v(0.0, 0.0),
-            v(5.0, 0.0),
-            v(0.0, 5.0),
+            (v(0.0, 0.0), v(5.0, 0.0), v(0.0, 5.0)),
             false,
             None,
             None,
@@ -332,13 +299,10 @@ fn deleting_an_arc_takes_its_own_endpoints_with_it() {
         );
     }
 
-    // A point the user related to something else is not the arc's to delete.
     let mut shared = face_session();
     let arc = shared
         .add_arc_center_locked(
-            v(0.0, 0.0),
-            v(5.0, 0.0),
-            v(0.0, 5.0),
+            (v(0.0, 0.0), v(5.0, 0.0), v(0.0, 5.0)),
             false,
             None,
             None,
@@ -382,13 +346,10 @@ fn a_typed_sweep_angle_becomes_a_driving_dimension() {
     let mut session = face_session();
     let result = session
         .add_arc_center_locked(
-            v(0.0, 0.0),
-            v(9.0, 0.0),
-            v(0.0, 9.0),
+            (v(0.0, 0.0), v(9.0, 0.0), v(0.0, 9.0)),
             false,
             None,
             None,
-            // A typed "90" with the pointer travelling counter-clockwise.
             Some("90"),
             Some(std::f64::consts::FRAC_PI_2),
         )
@@ -411,15 +372,11 @@ fn a_typed_sweep_angle_becomes_a_driving_dimension() {
     assert_eq!(dimensions[0].kind, "angle");
     assert_eq!(dimensions[0].entities, vec![arc_id]);
     assert_eq!(dimensions[0].text, "90.00°");
-    // A typed negative angle picks the direction, not the printed value: the
-    // stored arc always sweeps counter-clockwise, so the dimension stays
-    // positive and the solve must not flip the arc onto the other side.
+
     let mut cw = face_session();
     let cw_result = cw
         .add_arc_center_locked(
-            v(0.0, 0.0),
-            v(9.0, 0.0),
-            v(0.0, 9.0),
+            (v(0.0, 0.0), v(9.0, 0.0), v(0.0, 9.0)),
             false,
             None,
             None,
@@ -439,14 +396,13 @@ fn a_typed_sweep_angle_becomes_a_driving_dimension() {
         "the arc covers the clockwise side, got mid ray {mid}"
     );
     assert_eq!(cw.dto().dimensions[0].text, "90.00°");
-    // ISO/ANSI puts an angular dimension inside the arc it measures.
+
     let reach = dimensions[0].text_pos.distance(center);
     assert!(
         reach > 0.0 && reach < radius,
         "the angle value sits inside the arc, got {reach} for radius {radius}"
     );
 
-    // Driving: editing the dimension re-solves the arc's sweep.
     session
         .edit_dimension(EditDimensionRequest {
             constraint_id: dimensions[0].constraint_id,
@@ -462,14 +418,9 @@ fn a_typed_sweep_angle_becomes_a_driving_dimension() {
 
 #[test]
 fn a_click_that_never_moved_is_not_a_full_circle() {
-    // The pick pair sits on one ray, so the pointer described no sweep at all.
-    // This used to be read as "no direction given" and produced a whole circle
-    // out of a stray click; it must be refused instead.
     let mut session = face_session();
     let refused = session.add_arc_center_locked(
-        v(0.0, 0.0),
-        v(5.0, 0.0),
-        v(5.0, 0.0),
+        (v(0.0, 0.0), v(5.0, 0.0), v(5.0, 0.0)),
         false,
         None,
         None,
@@ -485,12 +436,9 @@ fn a_click_that_never_moved_is_not_a_full_circle() {
         "the refused arc must not be left behind"
     );
 
-    // A deliberate full turn is still a full circle.
     let mut full = face_session();
     full.add_arc_center_locked(
-        v(0.0, 0.0),
-        v(5.0, 0.0),
-        v(5.0, 0.0),
+        (v(0.0, 0.0), v(5.0, 0.0), v(5.0, 0.0)),
         false,
         None,
         None,
@@ -498,7 +446,7 @@ fn a_click_that_never_moved_is_not_a_full_circle() {
         Some(std::f64::consts::TAU),
     )
     .unwrap();
-    let (_, radius, start_angle, end_angle) = arc_of(&full, nbcad_sketch::EntityId(1));
+    let (_, radius, start_angle, end_angle) = arc_of(&full, limo_cad_sketch::EntityId(1));
     assert!((radius - 5.0).abs() < 1e-9, "radius {radius}");
     assert!(
         (end_angle - start_angle - std::f64::consts::TAU).abs() < 1e-9,

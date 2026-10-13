@@ -10,7 +10,7 @@ OKF concepts, not inside them.
   site](https://limo-cad.github.io/Limo-CAD/).
 - **Agents** — use `cad_help` **search**, then `get` on returned ids. If the
   full markdown page is needed, use `resources/read` on its selected
-  `nbcad://knowledge/...` URI; do not glob resources as the first search. Do not
+  `limo-cad://knowledge/...` URI; do not glob resources as the first search. Do not
   scrape the HTML page. For **planned** gaps, use linked further-reading / web.
   Web search is always the escape hatch.
 
@@ -27,7 +27,7 @@ OKF concepts, not inside them.
 Validate:
 
 ```sh
-npm run check:knowledge
+cargo xtask knowledge check
 ```
 
 Keep concepts **thin**. Do not paste ASME/ISO standard body text. Distill
@@ -37,7 +37,7 @@ link-only unless maintainers record an exception.
 ## Relationship to recipes
 
 On this stack, [native scripts](native-scripts.md) are the construction and
-presentation source (`note` / `view` in `.nbcad.jsonc`). Machine-design
+presentation source (`note` / `view` in `.limo.jsonc`). Machine-design
 pages name recipe ids (`turbine-fit-coupons`, `d-screw-vise`, …); human recipe
 links open the same source in **Scripts / presentation** instead of shipping a
 second demo runtime.
@@ -55,7 +55,7 @@ The shipped `cad_help` spine is the first retrieval surface:
 - `topics` — topic map, page size 50
 
 After `search` / `get` selects a page, agents may use `resources/read` on the
-corresponding `nbcad://knowledge/...` URI when they need the full markdown.
+corresponding `limo-cad://knowledge/...` URI when they need the full markdown.
 Caps are locked; sharpen the query instead of dumping pages. Recipes link to the
 existing **Scripts / presentation** path.
 
@@ -74,7 +74,7 @@ thin OKF pages; link NC courses and proprietary standards without copying.
    prompt, and the H-series wire goldens in [`agentic/EVALS.md`](agentic/EVALS.md).
 2. **B** — Fill taxonomy thin concepts; cross-link remaining recipes.
 3. **C** — Live `kb-*` recipes and the desktop Help panel (deferred; same
-   `nbcad-help` crate, no Bevy viewport inside Help).
+   `limo-cad-help` crate, no Bevy viewport inside Help).
 4. **D** — Tantivy behind `SearchIndex` when the growth bar trips; a broader
    evaluation set of design-time questions.
 

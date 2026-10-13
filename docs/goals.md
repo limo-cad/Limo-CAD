@@ -5,12 +5,12 @@ Shared directions for people and contributors. Our priorities, in order, are
 [proposed-architecture.md](proposed-architecture.md); current behavior is described
 in the product guides linked below.
 
-noBS CAD is **local** mechanical CAD. Files stay on your machine. There is no
+Limo CAD is **local** mechanical CAD. Files stay on your machine. There is no
 required cloud account or cloud control plane.
 
 ## Accepted high-level directions
 
-These broaden the original noBS CAD goal; they do not replace it.
+These broaden the original Limo CAD goal; they do not replace it.
 
 - **Mechanical design:** dependable sketches, features, history, drawings,
   assemblies and project files, with responsive interaction and clear workflows.

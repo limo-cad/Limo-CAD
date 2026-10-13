@@ -1,6 +1,6 @@
 //! Named export façade shared by UI and MCP.
 
-use nbcad_core::BodyAppearance;
+use limo_cad_core::BodyAppearance;
 
 use crate::slicer::SlicerTarget;
 use crate::stl::write_stl;

@@ -49,8 +49,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
-// ----------------------------------------------------------------------------- images
-
 #[derive(Clone, Debug)]
 pub struct Gray {
     pub w: usize,
@@ -70,7 +68,6 @@ impl Gray {
 }
 
 fn parse_pgm(data: &[u8]) -> Gray {
-    // P5 <w> <h> <maxval> then binary data; comments start with '#'
     let mut idx = 0usize;
     let mut fields: Vec<String> = Vec::new();
     while fields.len() < 4 {
@@ -101,9 +98,9 @@ fn parse_pgm(data: &[u8]) -> Gray {
 }
 
 fn cache_dir() -> PathBuf {
-    let dir = std::env::var("NBCAD_PRINT_CACHE")
+    let dir = std::env::var("LIMO_CAD_PRINT_CACHE")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| std::env::temp_dir().join("nbcad-print-cache"));
+        .unwrap_or_else(|_| std::env::temp_dir().join("limo-cad-print-cache"));
     fs::create_dir_all(&dir).ok();
     dir
 }
@@ -195,7 +192,13 @@ fn load_image(path: &Path) -> Result<Gray, String> {
     let mut reader = decoder
         .read_info()
         .map_err(|e| format!("decode {}: {e}", path.display()))?;
-    let mut buffer = vec![0; reader.output_buffer_size()];
+    let buffer_size = reader.output_buffer_size().ok_or_else(|| {
+        format!(
+            "decode {}: PNG dimensions exceed addressable memory",
+            path.display()
+        )
+    })?;
+    let mut buffer = vec![0; buffer_size];
     let info = reader
         .next_frame(&mut buffer)
         .map_err(|e| format!("decode {}: {e}", path.display()))?;
@@ -299,8 +302,6 @@ fn render_pdf(
     Ok(parse_pgm(&fs::read(&path).map_err(|e| e.to_string())?))
 }
 
-// ----------------------------------------------------------------------------- calibration
-
 const CAL_DPI: u32 = 300;
 
 #[derive(Clone, Debug)]
@@ -376,11 +377,12 @@ fn dark_counts(
 ) -> (Vec<usize>, Vec<usize>) {
     let mut rows = vec![0usize; g.h];
     let mut cols = vec![0usize; g.w];
-    for y in y0..y1 {
+    for (offset, row_count) in rows[y0..y1].iter_mut().enumerate() {
+        let y = y0 + offset;
         let row = &g.px[y * g.w..(y + 1) * g.w];
         for x in x0..x1 {
             if row[x] < thr {
-                rows[y] += 1;
+                *row_count += 1;
                 cols[x] += 1;
             }
         }
@@ -499,6 +501,8 @@ fn stroke_width(g: &Gray, fixed: usize, lo: usize, hi: usize, horizontal: bool, 
     widths[widths.len() / 2] as f64
 }
 
+type CalibrationCandidate = (f64, f64, usize, usize, usize, usize, f64, f64);
+
 /// Find the plate outline on the sheet.
 /// Candidate lines are the strongest vertical and horizontal ink lines away from the page
 /// border (the drawing frame). A candidate rectangle pairs two of each with the span ratio
@@ -518,8 +522,8 @@ pub fn calibrate(source: &Source, length: f64, width: f64) -> Result<Cal, String
     let debug = false;
     let expect: Option<Vec<usize>> = None;
     let hint: Option<(f64, f64, f64, f64)> = HINT.with(|h| *h.borrow());
-    // (strength, span, x0, x1, y0, y1, thinnest, median width)
-    let mut cands: Vec<(f64, f64, usize, usize, usize, usize, f64, f64)> = Vec::new();
+
+    let mut cands: Vec<CalibrationCandidate> = Vec::new();
     for i in 0..xc.len() {
         for j in i + 1..xc.len() {
             let (x0, x1) = (xc[i], xc[j]);
@@ -530,8 +534,7 @@ pub fn calibrate(source: &Source, length: f64, width: f64) -> Result<Cal, String
             let want = span_x * target;
             for k in 0..yc.len() {
                 let y0 = yc[k];
-                for l in k + 1..yc.len() {
-                    let y1 = yc[l];
+                for &y1 in &yc[k + 1..] {
                     let span_y = (y1 - y0) as f64;
                     if span_y < want * 0.97 {
                         continue;
@@ -539,7 +542,7 @@ pub fn calibrate(source: &Source, length: f64, width: f64) -> Result<Cal, String
                     if span_y > want * 1.03 {
                         break;
                     }
-                    let dbg = expect.as_ref().map_or(false, |v| {
+                    let dbg = expect.as_ref().is_some_and(|v| {
                         (v[0] as i64 - x0 as i64).abs() <= 6
                             && (v[1] as i64 - x1 as i64).abs() <= 6
                             && (v[2] as i64 - y0 as i64).abs() <= 6
@@ -563,7 +566,6 @@ pub fn calibrate(source: &Source, length: f64, width: f64) -> Result<Cal, String
                             continue;
                         }
                     } else {
-                        // title block: a shallow rectangle in the bottom band of the sheet
                         let (fy1, fh) = (y1 as f64 / g.h as f64, (y1 - y0) as f64 / g.h as f64);
                         if fy1 > 0.80 && fh < 0.15 {
                             if dbg {
@@ -573,7 +575,7 @@ pub fn calibrate(source: &Source, length: f64, width: f64) -> Result<Cal, String
                         }
                     }
                     let end = ((span_x * 0.06) as usize).max(8);
-                    // a scan may be rotated by up to half a degree: the ends of a long side sit off the peak row
+
                     let skew_band = 3 + (span_x * 0.005) as i64;
                     let left = tight_support(&g, x0, y0, y1, false);
                     let right = tight_support(&g, x1, y0, y1, false);
@@ -583,7 +585,7 @@ pub fn calibrate(source: &Source, length: f64, width: f64) -> Result<Cal, String
                         side_support_band(&g, y1, x0, x0 + end, true, skew_band),
                         side_support_band(&g, y1, x1 - end, x1, true, skew_band),
                     ];
-                    // stroke weight from the vertical sides at their middle third, where the peak column is exact
+
                     let mid = (y0 + y1) / 2;
                     let third = ((y1 - y0) / 3).max(4);
                     let widths = [
@@ -622,26 +624,22 @@ pub fn calibrate(source: &Source, length: f64, width: f64) -> Result<Cal, String
             );
         }
     }
-    // visible-line weight is relative to the sheet: keep the candidates whose strokes are as thick
-    // as the thickest candidate's (within 20 %), then take the strongest lines among them
+
     let max_width = cands.iter().map(|c| c.7).fold(0.0, f64::max);
     let best = cands
         .iter()
         .cloned()
         .filter(|c| c.7 >= 0.9 * max_width && c.6 >= 0.75 * max_width)
-        .fold(
-            None,
-            |acc: Option<(f64, f64, usize, usize, usize, usize, f64, f64)>, c| match acc {
-                None => Some(c),
-                Some(b) => {
-                    if c.0 > b.0 {
-                        Some(c)
-                    } else {
-                        Some(b)
-                    }
+        .fold(None, |acc: Option<CalibrationCandidate>, c| match acc {
+            None => Some(c),
+            Some(b) => {
+                if c.0 > b.0 {
+                    Some(c)
+                } else {
+                    Some(b)
                 }
-            },
-        );
+            }
+        });
     let Some((_, span_x, x0, x1, yt, yb, _, _)) = best else {
         return Err("plate outline not found on the page: check length_mm and width_mm, or pass a hint window around the plan view".into());
     };
@@ -699,8 +697,6 @@ pub fn calibrate(source: &Source, length: f64, width: f64) -> Result<Cal, String
     })
 }
 
-// ----------------------------------------------------------------------------- holes json
-
 /// A model hole in plate millimetres (plan-view frame, lower-left origin).
 #[derive(Clone, Debug)]
 pub struct Hole {
@@ -709,8 +705,6 @@ pub struct Hole {
     pub d: f64,
     pub cb: Option<f64>,
 }
-
-// ----------------------------------------------------------------------------- ring score
 
 /// Ring completeness at radius r around (cx, cy): the fraction of the 52 directions that are
 /// more than 12 degrees away from the four axes where ink (< 150) lies within +-tol px of r.
@@ -779,7 +773,7 @@ fn thick_fraction(g: &Gray, cx: f64, cy: f64, r: f64, ppm: f64, max_mm: f64) -> 
         total += 1;
         let a = (deg as f64).to_radians();
         let (ca, sa) = (a.cos(), a.sin());
-        // find a dark pixel within +-2 px of r, then measure the contiguous dark run through it
+
         let mut found = None;
         for d in -2..=2 {
             let rr = r + d as f64;
@@ -930,7 +924,7 @@ fn probe_centre(g: &Gray, cx: f64, cy: f64, ppm: f64, r_max_mm: f64) -> Probe {
             if li >= 0.5
                 && interior_light(g, cx, cy, r * 1.9) >= 0.5
                 && thick_fraction(g, cx, cy, r, ppm, (1.0f64).max(0.4 * r / ppm)) <= 0.25
-                && best_dashed.as_ref().map_or(true, |p| s > p.ring)
+                && best_dashed.as_ref().is_none_or(|p| s > p.ring)
             {
                 best_dashed = Some(Probe {
                     kind: "dashed",
@@ -945,8 +939,7 @@ fn probe_centre(g: &Gray, cx: f64, cy: f64, ppm: f64, r_max_mm: f64) -> Probe {
         }
         r += 0.05 * ppm;
     }
-    // solid dot: a disc of radius 0.6..1.6 mm that is dark throughout (at r and 0.7 r) with
-    // paper just outside it (r + 0.5 mm) off-axis, so a crossing of two lines does not count
+
     let mut r = 0.6 * ppm;
     while r <= 1.6 * ppm {
         if disc_dark(g, cx, cy, r) >= 0.9
@@ -954,7 +947,6 @@ fn probe_centre(g: &Gray, cx: f64, cy: f64, ppm: f64, r_max_mm: f64) -> Probe {
             && disc_dark(g, cx, cy, r + 0.5 * ppm) <= 0.25
             && dark_centroid_offset(g, cx, cy, r + 0.5 * ppm) <= 0.2 * ppm
         {
-            // grow to the edge of the disc
             let mut edge = r;
             while edge <= 1.8 * ppm && disc_dark(g, cx, cy, edge + 0.05 * ppm) >= 0.9 {
                 edge += 0.05 * ppm;
@@ -1147,7 +1139,11 @@ pub fn ring_score(
             px,
             py,
             ppm,
-            (h.d * 0.9).max(3.0).min(32.0),
+            if h.d.is_nan() {
+                3.0
+            } else {
+                (h.d * 0.9).clamp(3.0, 32.0)
+            },
             search_mm,
         );
         let on = p.kind != "none";
@@ -1163,8 +1159,6 @@ pub fn ring_score(
     }
     Ok(format!("{{\"ok\":true,\"dpi\":{},\"holes\":{},\"nothing_drawn_within_search\":{},\"search_mm\":{},\"legend\":\"drawn: symbol = circle with a light interior (drawn_at is its centre, offset_mm from the model hole), dot = solid dot, dashed = partial ring such as a hidden-line circle, none = nothing round within search_mm\",\"items\":[{}]}}", dpi, holes.len(), off, search_mm, items.join(",")))
 }
-
-// ----------------------------------------------------------------------------- png output
 
 /// Encode an RGB buffer as PNG bytes.
 pub fn encode_png(w: usize, h: usize, rgb: &[u8]) -> Result<Vec<u8>, String> {
@@ -1283,7 +1277,6 @@ fn draw_grid(
     step: f64,
     ppm: f64,
 ) {
-    // ticks along the four borders of the region every `step` mm (long tick every 5 steps), plus faint lines
     let (x0, y0, x1, y1) = region;
     let mut x = (x0 / step).ceil() * step;
     while x <= x1 {
@@ -1349,8 +1342,6 @@ pub fn crop(
     })
 }
 
-// ----------------------------------------------------------------------------- symbol detection
-
 #[derive(Clone, Debug)]
 struct Symbol {
     x: f64,
@@ -1367,7 +1358,6 @@ fn detect_symbols(g: &Gray, ppm: f64, to_mm: &dyn Fn(f64, f64) -> (f64, f64)) ->
     let cands = find_crossings(g, ppm);
     let mut out: Vec<Symbol> = Vec::new();
     for (cx, cy, _n) in cands {
-        // prefilter: a symbol centre has paper around it off-axis at 1.5 mm, or is a solid dot
         let near_light = interior_light(g, cx, cy, 3.0 * ppm);
         if near_light < 0.4 && interior_light(g, cx, cy, 0.6 * ppm) > 0.3 {
             continue;
@@ -1453,7 +1443,7 @@ pub fn symbols(
         .collect();
     let syms: Vec<Symbol> = all.iter().filter(|s| s.kind != "dashed").cloned().collect();
     let detect_ms = t.elapsed().as_millis();
-    // matching
+
     let mut matched: Vec<(usize, usize, f64)> = Vec::new();
     let mut used = vec![false; syms.len()];
     let mut model_only: Vec<usize> = Vec::new();
@@ -1467,7 +1457,7 @@ pub fn symbols(
                 continue;
             }
             let dist = ((h.x - s.x).powi(2) + (h.y - s.y).powi(2)).sqrt();
-            if dist <= 2.5 && best.map_or(true, |b| dist < b.0) {
+            if dist <= 2.5 && best.is_none_or(|b| dist < b.0) {
                 best = Some((dist, si));
             }
         }
@@ -1598,7 +1588,7 @@ pub mod synthetic {
                 }
             }
         };
-        // plate 200 x 80 mm at 5 px/mm: x 400..1400, y 500..900 (image rows grow downward)
+
         let (x0, x1, y0, y1) = (400i64, 1400i64, 500i64, 900i64);
         for (a, b, c, d) in [
             (x0, y0, x1, y0),
@@ -1608,21 +1598,21 @@ pub mod synthetic {
         ] {
             line(a, b, c, d, 5, 20);
         }
-        // dimension lines above and beside the plate, thin, with extension lines leaving the corners
+
         line(x0, y0 - 120, x1, y0 - 120, 2, 40);
         line(x0, y0, x0, y0 - 140, 2, 40);
         line(x1, y0, x1, y0 - 140, 2, 40);
         line(x1 + 150, y0, x1 + 150, y1, 2, 40);
         line(x1, y0, x1 + 170, y0, 2, 40);
         line(x1, y1, x1 + 170, y1, 2, 40);
-        // title block grid at the bottom right, thin
+
         for i in 0..6 {
             line(1500, 1200 + i * 60, 2300, 1200 + i * 60, 2, 40);
         }
         for i in 0..5 {
             line(1500 + i * 200, 1200, 1500 + i * 200, 1500, 2, 40);
         }
-        // drawing frame near the page border, heavy
+
         for (a, b, c, d) in [
             (60, 60, 2340, 60),
             (2340, 60, 2340, 1540),
@@ -1697,7 +1687,7 @@ mod tests {
     #[test]
     fn ring_score_sees_a_symbol_at_a_hole_and_nothing_on_blank_paper() {
         let (mut g, ppm, (ox, oy)) = sheet();
-        // hole at plate (50, 30) mm -> image (400 + 250, 900 - 150)
+
         symbol(&mut g, ox as f64 + 50.0 * ppm, oy as f64 - 30.0 * ppm, 12.0);
         let source = Source::Memory { image: g, dpi: 300 };
         let cal = calibrate(&source, 200.0, 80.0).unwrap();

@@ -27,7 +27,7 @@ fn bevel() -> SolidSceneDto {
         [0., 10., -1.],
     ];
     let q = std::f64::consts::FRAC_1_SQRT_2;
-    // Deliberately indirect normals: topology and the upper face decide accessibility.
+
     let normals = [[0., q, -q], [-q, 0., -q], [0., -q, -q], [q, 0., -q]];
     let mut edges = Vec::new();
     let mut faces = vec![face(

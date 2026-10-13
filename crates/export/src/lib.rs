@@ -1,20 +1,34 @@
-//! Manufacturing mesh export: binary STL and 3MF with materials + slicer metadata.
+//! Manufacturing mesh export: precision-preserving STL and 3MF with slicer metadata.
 //!
 //! Tessellation is owned by the OCCT (or browser) kernel. This crate turns
 //! triangle soups + [`BodyAppearance`] into file bytes so UI and MCP share one
 //! writer ([`ExportFacade`]).
 
+pub mod bambu_project;
 mod facade;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod manufacturing_report;
+mod manufacturing_request;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod slicer_verification;
+pub use manufacturing_request::BambuExportRequest;
+mod print_layout;
+mod scene;
+pub use print_layout::{analyze_print_layout, LayoutIssue, LayoutTranslation, PrintLayoutReport};
+pub use scene::write_3mf_scene;
 mod instances;
 mod materials;
 mod mesh_weld;
 mod pip_demo;
+pub mod profile_dxf;
 mod slicer;
 mod stl;
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_reader;
 mod threemf;
 
-use nbcad_core::BodyId;
-use nbcad_solid::KernelBodyDto;
+use limo_cad_core::BodyId;
+use limo_cad_solid::KernelBodyDto;
 use serde::{Deserialize, Serialize};
 
 pub use facade::ExportFacade;
@@ -59,6 +73,11 @@ pub struct MeshExportRequest {
     pub body_ids: Vec<BodyId>,
     #[serde(default)]
     pub scope: MeshExportScope,
+    /// Saved named view used for occurrence placement and visibility.
+    #[serde(default)]
+    pub named_view: Option<String>,
+    #[serde(default)]
+    pub print_bed: Option<limo_cad_core::PrintBedDto>,
     #[serde(default = "default_linear")]
     pub linear_deflection: f64,
     #[serde(default = "default_angular")]
@@ -94,6 +113,8 @@ impl Default for MeshExportRequest {
             expected_model_json: None,
             body_ids: Vec::new(),
             scope: MeshExportScope::Assembly,
+            named_view: None,
+            print_bed: None,
             linear_deflection: DEFAULT_LINEAR_DEFLECTION,
             angular_deflection: DEFAULT_ANGULAR_DEFLECTION,
             include_appearance: true,
@@ -104,7 +125,7 @@ impl Default for MeshExportRequest {
 
 impl MeshExportRequest {
     pub fn check_model_snapshot(&self, current: &str) -> Result<(), ExportError> {
-        nbcad_solid::check_export_model_snapshot(self.expected_model_json.as_deref(), current)
+        limo_cad_solid::check_export_model_snapshot(self.expected_model_json.as_deref(), current)
             .map_err(|message| ExportError(message.into()))
     }
 }
@@ -113,7 +134,7 @@ impl MeshExportRequest {
 pub struct TriangleMesh {
     pub body_id: BodyId,
     pub name: String,
-    pub positions: Vec<f32>,
+    pub positions: Vec<f64>,
     pub indices: Vec<u32>,
 }
 
@@ -122,7 +143,7 @@ impl TriangleMesh {
         Self {
             body_id: body.body_id,
             name: name.into(),
-            positions: body.positions.clone(),
+            positions: body.positions.iter().copied().map(f64::from).collect(),
             indices: body.indices.clone(),
         }
     }
@@ -146,7 +167,7 @@ impl std::error::Error for ExportError {}
 /// Convenience: write 3MF with default standard target (backward compatible).
 pub fn write_3mf_standard(
     meshes: &[TriangleMesh],
-    appearances: &[nbcad_core::BodyAppearance],
+    appearances: &[limo_cad_core::BodyAppearance],
     include_appearance: bool,
 ) -> Result<Vec<u8>, ExportError> {
     write_3mf(
@@ -160,44 +181,33 @@ pub fn write_3mf_standard(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nbcad_core::{BodyAppearance, BodyId, Rgba8};
+    use limo_cad_core::{BodyAppearance, BodyId, Rgba8};
     use std::io::Cursor;
 
     /// Closed 20 mm cube (watertight). A single quad is rejected by slicers as
     /// zero volume / no geometry.
     fn unit_cube(body_id: u64) -> TriangleMesh {
-        let s = 20.0_f32;
+        let s = 20.0_f64;
         TriangleMesh {
             body_id: BodyId(body_id),
             name: format!("Body{body_id}"),
-            // 8 corners: bottom z=0, top z=s
+
             positions: vec![
-                0.0, 0.0, 0.0, // 0
-                s, 0.0, 0.0, // 1
-                s, s, 0.0, // 2
-                0.0, s, 0.0, // 3
-                0.0, 0.0, s, // 4
-                s, 0.0, s, // 5
-                s, s, s, // 6
-                0.0, s, s, // 7
+                0.0, 0.0, 0.0, s, 0.0, 0.0, s, s, 0.0, 0.0, s, 0.0, 0.0, 0.0, s, s, 0.0, s, s, s,
+                s, 0.0, s, s,
             ],
-            // Outward CCW winding when viewed from outside.
+
             indices: vec![
-                // bottom (z=0, normal -Z)
-                0, 2, 1, 0, 3, 2, // top (z=s, normal +Z)
-                4, 5, 6, 4, 6, 7, // front (y=0, normal -Y)
-                0, 1, 5, 0, 5, 4, // back (y=s, normal +Y)
-                3, 7, 6, 3, 6, 2, // left (x=0, normal -X)
-                0, 4, 7, 0, 7, 3, // right (x=s, normal +X)
-                1, 2, 6, 1, 6, 5,
+                0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2, 0, 4, 7, 0,
+                7, 3, 1, 2, 6, 1, 6, 5,
             ],
         }
     }
 
     /// OCCT-style cube: 12 triangles × 3 unique positions each (36 verts, no shared indices).
     fn unwelded_unit_cube(body_id: u64) -> TriangleMesh {
-        let s = 20.0_f32;
-        let corners: [[f32; 3]; 8] = [
+        let s = 20.0_f64;
+        let corners: [[f64; 3]; 8] = [
             [0.0, 0.0, 0.0],
             [s, 0.0, 0.0],
             [s, s, 0.0],
@@ -268,8 +278,8 @@ mod tests {
         let mesh = unit_cube(1);
         assert_eq!(mesh.positions.len(), 8 * 3);
         assert_eq!(mesh.indices.len(), 12 * 3);
-        let (mut min_z, mut max_z) = (f32::MAX, f32::MIN);
-        for chunk in mesh.positions.chunks_exact(3) {
+        let (mut min_z, mut max_z) = (f64::MAX, f64::MIN);
+        for chunk in mesh.positions.as_chunks::<3>().0 {
             min_z = min_z.min(chunk[2]);
             max_z = max_z.max(chunk[2]);
         }
@@ -328,7 +338,7 @@ mod tests {
         let mut xml = String::new();
         std::io::Read::read_to_string(&mut model, &mut xml).unwrap();
         assert!(
-            xml.contains(r#"<metadata name="Application">noBS CAD</metadata>"#),
+            xml.contains(r#"<metadata name="Application">Limo CAD</metadata>"#),
             "standard Application metadata must be exact: {xml}"
         );
         assert!(!xml.contains("BambuStudio"));
@@ -339,8 +349,9 @@ mod tests {
     #[test]
     fn threemf_bambu_target_is_a_standard_model() {
         let blue = BodyAppearance {
+            material: None,
             body_id: BodyId(2),
-            color: nbcad_core::Rgba8::opaque(40, 90, 200),
+            color: limo_cad_core::Rgba8::opaque(40, 90, 200),
             material_name: "Bambu PLA Basic".into(),
             filament_type: "PLA".into(),
             brand: "Bambu Lab".into(),
@@ -469,7 +480,6 @@ mod tests {
     fn print_in_place_demo_meshes_are_well_formed() {
         use std::io::Cursor;
 
-        // Print-in-place drawer clip (housing + drawer + latch), AABB clearance smoke.
         let (pip_meshes, pip_apps) = print_in_place_clip();
         assert_eq!(pip_meshes.len(), 3);
         for target in [
@@ -490,7 +500,6 @@ mod tests {
             assert!(archive.by_name("3D/3dmodel.model").is_ok());
         }
 
-        // Four-body cam bolt (wedge drive + dial lock), AABB clearance smoke.
         let (cam_meshes, cam_apps) = print_in_place_cam_bolt();
         assert_eq!(cam_meshes.len(), 4);
         for target in [
@@ -513,7 +522,7 @@ mod tests {
     }
 
     /// Regenerates `fixtures/smoke/*.3mf` for manual KR3.6 slicer open checks.
-    /// Run explicitly: `cargo test -p nbcad-export --lib tests::regen_manual_smoke_fixtures -- --ignored --exact`
+    /// Run explicitly: `cargo test -p limo-cad-export --lib tests::regen_manual_smoke_fixtures -- --ignored --exact`
     #[test]
     #[ignore]
     fn regen_manual_smoke_fixtures() {
@@ -521,7 +530,6 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/smoke");
         std::fs::create_dir_all(&dir).unwrap();
 
-        // Simple closed cube (geometry sanity).
         let cube_meshes = [unit_cube(1)];
         let cube_apps = [red_pla(1)];
         for (name, target) in [
@@ -535,7 +543,6 @@ mod tests {
             std::fs::write(dir.join(name), bytes).unwrap();
         }
 
-        // Print-in-place drawer clip (housing + drawer + latch), AABB clearance smoke.
         let (pip_meshes, pip_apps) = print_in_place_clip();
         assert_eq!(pip_meshes.len(), 3);
         for (name, target) in [
@@ -543,7 +550,6 @@ mod tests {
             ("print_in_place_clip_orca.3mf", SlicerTarget::OrcaSlicer),
             ("print_in_place_clip_prusa.3mf", SlicerTarget::PrusaSlicer),
             ("print_in_place_clip_cura.3mf", SlicerTarget::Cura),
-            // Alias names kept for older smoke paths / docs links.
             ("print_in_place_latch_bambu.3mf", SlicerTarget::BambuStudio),
             ("print_in_place_latch_orca.3mf", SlicerTarget::OrcaSlicer),
             ("print_in_place_latch_prusa.3mf", SlicerTarget::PrusaSlicer),
@@ -561,7 +567,6 @@ mod tests {
         }
         assert!(dir.join("print_in_place_clip_bambu.3mf").is_file());
 
-        // Four-body cam bolt (wedge drive + dial lock), AABB clearance smoke.
         let (cam_meshes, cam_apps) = print_in_place_cam_bolt();
         assert_eq!(cam_meshes.len(), 4);
         for (name, target) in [

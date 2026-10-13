@@ -1,7 +1,7 @@
 # Assemblies, components, and joints
 
 Build reusable parts, place copies in an assembly, and connect them with joints.
-Part features and assembly placement stay editable in the same `.nbcad` file.
+Part features and assembly placement stay editable in the same `.limo` file.
 The [repeated bracket lesson](../examples/scripts/README.md) is a small starting
 example; the [vise](d-screw-vise.md) and [turbine](vertical-axis-turbine.md)
 demonstrate screw-driven motion and geared rotation.
@@ -19,9 +19,9 @@ interference checks to inspect geometry and physical tests to qualify a mechanis
 
 Part design and assembly placement are separate persisted model layers.
 
-- `nbcad-solid` owns sketches, feature history, source bodies, and stable OCCT
+- `limo-cad-solid` owns sketches, feature history, source bodies, and stable OCCT
   face/edge topology.
-- `nbcad-assembly` owns reusable component definitions, occurrence hierarchy,
+- `limo-cad-assembly` owns reusable component definitions, occurrence hierarchy,
   local coordinate systems, grounding, joint definitions, and kinematics.
 - OCCT remains the source of exact connector topology. Assembly transforms do
   not rewrite, duplicate, or recompute the part feature history.

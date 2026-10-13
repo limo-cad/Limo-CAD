@@ -1,0 +1,30 @@
+[package]
+name = "limo-cad-native-engine"
+version.workspace = true
+edition.workspace = true
+description = "Shared OCCT document host for the Bevy desktop and hosted geometry service"
+license = "LGPL-2.1-or-later"
+repository.workspace = true
+
+[features]
+default = []
+native-occt = [
+    "dep:base64",
+    "dep:limo-cad-cam", "dep:limo-cad-core", "dep:limo-cad-export", "dep:limo-cad-occt",
+    "dep:limo-cad-sketch", "dep:limo-cad-solid", "dep:serde", "dep:serde_json",
+    "limo-cad-occt/native-occt",
+]
+
+[dependencies]
+base64 = { workspace = true, optional = true }
+limo-cad-cam = { path = "../cam", optional = true }
+limo-cad-core = { path = "../core", optional = true }
+limo-cad-export = { path = "../export", optional = true }
+limo-cad-occt = { path = "../occt", optional = true }
+limo-cad-sketch = { path = "../sketch", optional = true }
+limo-cad-solid = { path = "../solid", optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, features = ["float_roundtrip"], optional = true }
+
+[dev-dependencies]
+limo-cad-export = { path = "../export", features = ["test-utils"] }

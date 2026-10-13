@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "source_revision": "1c0dc76e9bdc2c149155c583ba37f813228d4039",
+  "recorded_utc": "2026-10-11T10:54:24.3687179Z",
+  "qualification": "focused_source_checks_passed_live_acceptance_pending",
+  "integration": "PR124; no Bevy merge into main",
+  "strict_windows_checks": ["desktop", "native-engine and OCCT", "MCP"],
+  "results_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/drawing-bambu-combined-1c0dc76e-results.json",
+  "new_checks": {
+    "desktop_artifact_sha256": "974159e6ad0b32c7506988fd340ded20d8fae41b1c38d49bb26332dbdf0e69e1",
+    "desktop_filters": [
+      "session_bridge::native_interface::controller::workbench::drawing_paper::edges::tests::native_detached_paper_job_preserves_selected_geometry_and_rejects_retired_sheet_results",
+      "session_bridge::native_interface::controller::files::drawing_output::tests::drawing_pdf_export_preserves_page_intent_and_rejects_stale_or_replaced_owners",
+      "session_bridge::native_interface::controller::workbench::drawing_paper::tests::drawing_annotation_repaints_without_a_solid_revision",
+      "session_bridge::native_interface::controller::files::bambu::tests::template_inspection_runs_outside_publisher_and_rejects_changed_source_receipts",
+      "session_bridge::native_interface::controller::files::bambu::tests::native_bambu_preview_runs_detached_and_rejects_changed_or_replaced_receipts"
+    ],
+    "mcp_artifact_sha256": "21f7a4f0468d04118cf094549ba9fefe68fba7c87a7ccedce1a715a7dd1229a7",
+    "mcp_filters": ["computer_control::windows::modal_diagnostics::tests::blocked_modal_refusal_distinguishes_class_and_owner_without_foreign_text_or_authority"],
+    "exact_single_pass_count": 6,
+    "suites_run": false
+  },
+  "retained_without_repetition": {
+    "source_revision": "de62fa52313a1345237dc103b809639637ec2ab3",
+    "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/detached-drawing-de62fa52-unrun3-results.json",
+    "desktop_artifact_sha256": "3b46fb85affd9f607576c5d8a142693826222db54df2e35de751ceaa11acf58e",
+    "filters": [
+      "session_bridge::native_interface::controller::workbench::drawing_authoring::repair::tests::broken_detail_keeps_its_real_parent_pickable_and_repairs_in_one_history_entry",
+      "session_bridge::native_interface::controller::files::drawing_output::tests::drawing_files_match_engine_output_without_changing_history_or_project_destination",
+      "session_bridge::native_interface::controller::files::panel::localization_tests::file_chrome_translates_by_key_without_rebinding_actions_or_translating_document_names"
+    ]
+  },
+  "preserved_failures": [
+    {"revision":"17656101","kind":"compile","cause":"test-only paint_until_settled visibility","correction":"de62fa52","original":"detached-drawing-17656101-results.json"},
+    {"revision":"de62fa52","kind":"test adapter","cause":"serialized project model indexed before JSON decoding","correction":"9397bda2","original":"detached-drawing-de62fa52-desktop-test-0.log"},
+    {"revision":"de62fa52","kind":"product defect","cause":"PDF page and content physical size were 4/3 too large","correction":"eaf209bb","original":"detached-drawing-de62fa52-desktop-test-1.log","independent_page_size_assertion_preserved":true},
+    {"revision":"de62fa52","kind":"product defect","cause":"pending paper repaint retired the hidden paper and clip parents","correction":"21d0ccde","original":"detached-drawing-de62fa52-desktop-test-2.log","stable_parent_assertion_preserved":true},
+    {"revision":"21d0ccde","kind":"compile","cause":"prepared preview referred to an undeclared assembly crate","correction":"1c0dc76e","original":"drawing-bambu-combined-21d0ccde-results.json","correction_scope":"same type through existing sketch public reexport; no dependency or feature change"}
+  ],
+  "source_scope": {
+    "drawing":"Selected independent native copies; detached cold paper and output preparation; exact owner, geometry and resolved-intent fences; bounded finished-projection reuse; retained hidden parent identity while stale content retires",
+    "pdf":"Explicit CAD-owned Save command; parser/PDF conversion DPI aligned; independent physical page oracle passed; atomic new/overwrite and stale/replaced-owner refusal preserve document/history/save destination",
+    "bambu":"Template and post-write inspection outside publisher; detached PREVIEW native meshing and ZIP work; one dispatch admission; actual write preparation/cancellation lease is a subsequent source repair",
+    "native_control":"Bounded modal class/owner refusal diagnostics without foreign text exposure or broader input authority"
+  },
+  "limits": {
+    "installed_revision":"eb71c32dba4b15aea7973d2511466d3325dc0ff2",
+    "new_source_live_pair_claimed":false,
+    "new_source_hosted_ci_claimed":false,
+    "human_direct_pdf_export":"pending fresh deployment and visible artifact inspection",
+    "physical_print":"unqualified; Explorer-owned ProxyModalWindow correctly refused by guarded input",
+    "bambu_native_template_or_toolpath_acceptance":"not established by the generic-template refusal regression",
+    "performance_gpu_physical_dpi":"unqualified",
+    "broad_ui":"paused",
+    "manual_mcp_mutation":"paused",
+    "unrelated_ui_mcp_passes":"preserved"
+  }
+}

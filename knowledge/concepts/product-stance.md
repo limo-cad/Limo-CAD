@@ -8,7 +8,7 @@ updated: 2026-07-29
 
 # Product stance
 
-noBS CAD is **local-first, free, open-source mechanical CAD**.
+Limo CAD is **local-first, free, open-source mechanical CAD**.
 
 - Project and modeling data stay on the user's computer.
 - No account, subscription, or required cloud backend.

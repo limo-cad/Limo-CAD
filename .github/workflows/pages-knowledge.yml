@@ -5,24 +5,26 @@ on:
     paths:
       - "knowledge/**"
       - "docs/knowledge-wiki.md"
-      - "scripts/check-knowledge*"
-      - "scripts/build-help-index.mjs"
-      - "scripts/stage-showcase-media*"
-      - "scripts/repository.mjs"
-      - "scripts/retarget-repository*"
-      - "package.json"
+      - "xtask/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "REPOSITORY"
+      - ".cargo/**"
+      - ".github/actions/setup-rust/**"
+      - "rust-toolchain.toml"
       - ".github/workflows/pages-knowledge.yml"
   push:
     branches: [main]
     paths:
       - "knowledge/**"
       - "docs/knowledge-wiki.md"
-      - "scripts/check-knowledge*"
-      - "scripts/build-help-index.mjs"
-      - "scripts/stage-showcase-media*"
-      - "scripts/repository.mjs"
-      - "scripts/retarget-repository*"
-      - "package.json"
+      - "xtask/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "REPOSITORY"
+      - ".cargo/**"
+      - ".github/actions/setup-rust/**"
+      - "rust-toolchain.toml"
       - ".github/workflows/pages-knowledge.yml"
   workflow_dispatch:
 
@@ -38,37 +40,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          key: knowledge-tools
       - name: Test showcase media validation (offline)
-        run: node --test scripts/stage-showcase-media.test.mjs scripts/retarget-repository.test.mjs
+        run: cargo test --locked -p xtask 'showcase_media::'
       - name: Validate OKF bundle
         run: |
-          node --test scripts/check-knowledge.test.mjs
-          node scripts/check-knowledge.mjs
-      # The committed help search index is generated from the same articles;
-      # a stale copy fails here rather than drifting on Pages.
+          cargo test --locked -p xtask knowledge::
+          cargo xtask knowledge check
       - name: Verify the committed help search index is fresh
         run: |
-          node scripts/build-help-index.mjs
-          git diff --exit-code -- knowledge/machine-design/search-index.json
-      # Runs for pull requests too: `knowledge/**` may only pin a release that is
-      # already public, otherwise the deploy below fails later on main instead.
+          cargo xtask knowledge index --check
       - name: Verify the pinned showcase release is public
-        run: node scripts/stage-showcase-media.mjs --verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: cargo xtask knowledge media --verify
       - name: Build static knowledge site
-        run: |
-          rm -rf _site
-          mkdir -p _site
-          cp -R knowledge/. _site/
-          cp _site/home.html _site/index.html
-          touch _site/.nojekyll
-          test -f _site/index.md
-          test -f _site/index.html
+        run: cargo xtask knowledge site
       - name: Stage verified public showcase videos
         if: github.event_name != 'pull_request'
-        run: node scripts/stage-showcase-media.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: cargo xtask knowledge media
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5

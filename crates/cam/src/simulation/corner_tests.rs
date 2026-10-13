@@ -39,7 +39,7 @@ fn shallow_axial_cut_retains_the_analytic_round_or_beveled_corner_at_every_heigh
             for y in 0..spec.dimensions[1] {
                 for x in 0..spec.dimensions[0] {
                     let p = stock.center(x, y, z);
-                    let h = p.z + 0.5; // Ap=.5, four times smaller than corner radius/width.
+                    let h = p.z + 0.5;
                     let radius = if h < 0. {
                         -1.
                     } else {
@@ -49,8 +49,8 @@ fn shallow_axial_cut_retains_the_analytic_round_or_beveled_corner_at_every_heigh
                             _ => 5.,
                         }
                     };
-                    // Sampled sweeps can miss a sub-cell boundary sliver; don't
-                    // confuse that known tolerance with a sharp-cylinder regression.
+
+
                     if (p.y.abs() - radius).abs() > 0.01 {
                         assert_eq!(
                             stock.is_occupied_index(stock.index(x, y, z)),

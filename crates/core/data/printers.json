@@ -1,0 +1,383 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "id": "bambu-studio-x2d",
+      "main": {
+        "name": "Bambu X2D",
+        "size_mm": [
+          256.0,
+          256.0,
+          261.0
+        ],
+        "margin_mm": 0.0,
+        "nozzle_mode": "main",
+        "origin_mm": [
+          0.0,
+          0.0
+        ],
+        "printable_regions": [
+          [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              0.0,
+              256.0
+            ]
+          ],
+          [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              0.0,
+              256.0
+            ]
+          ]
+        ],
+        "source": {
+          "repository": "bambulab/BambuStudio",
+          "revision": "da8b44ee34dd349f2ae0df3f1cbae366df482354",
+          "profile": "resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json",
+          "files": {
+            "resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json": "7bfa994c9e0233ffac9e7bb20ea65a45aacee2d6106db9af1ff58c06ae42eabb",
+            "resources/profiles/BBL/machine/fdm_bbl_3dp_002_common.json": "98b41984e0edd3e3a80b65ff3bb7d3d8677c5e1fb265599966a2ea1d65538703",
+            "resources/profiles/BBL/machine/fdm_machine_common.json": "26ef8ee697849323e67d8e1a9026c175cebe3397e38c5091dddb5cd3fc52e94c"
+          }
+        }
+      },
+      "dual": {
+        "name": "Bambu X2D",
+        "size_mm": [
+          235.5,
+          256.0,
+          256.0
+        ],
+        "margin_mm": 0.0,
+        "nozzle_mode": "dual",
+        "origin_mm": [
+          20.5,
+          0.0
+        ],
+        "printable_regions": [
+          [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              0.0,
+              256.0
+            ]
+          ],
+          [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              0.0,
+              256.0
+            ]
+          ],
+          [
+            [
+              20.5,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              20.5,
+              256.0
+            ]
+          ]
+        ],
+        "source": {
+          "repository": "bambulab/BambuStudio",
+          "revision": "da8b44ee34dd349f2ae0df3f1cbae366df482354",
+          "profile": "resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json",
+          "files": {
+            "resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json": "7bfa994c9e0233ffac9e7bb20ea65a45aacee2d6106db9af1ff58c06ae42eabb",
+            "resources/profiles/BBL/machine/fdm_bbl_3dp_002_common.json": "98b41984e0edd3e3a80b65ff3bb7d3d8677c5e1fb265599966a2ea1d65538703",
+            "resources/profiles/BBL/machine/fdm_machine_common.json": "26ef8ee697849323e67d8e1a9026c175cebe3397e38c5091dddb5cd3fc52e94c"
+          }
+        }
+      },
+      "extruders": [
+        {
+          "printable_region": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              0.0,
+              256.0
+            ]
+          ],
+          "height_mm": 261.0
+        },
+        {
+          "printable_region": [
+            [
+              20.5,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              20.5,
+              256.0
+            ]
+          ],
+          "height_mm": 256.0
+        }
+      ]
+    },
+    {
+      "id": "orca-slicer-x2d",
+      "main": {
+        "name": "Bambu X2D",
+        "size_mm": [
+          256.0,
+          256.0,
+          261.0
+        ],
+        "margin_mm": 0.0,
+        "nozzle_mode": "main",
+        "origin_mm": [
+          0.0,
+          0.0
+        ],
+        "printable_regions": [
+          [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              0.0,
+              256.0
+            ]
+          ],
+          [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              0.0,
+              256.0
+            ]
+          ]
+        ],
+        "source": {
+          "repository": "OrcaSlicer/OrcaSlicer",
+          "revision": "a80c323614e4e4e6beb885499afc3b4e886c4457",
+          "profile": "resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json",
+          "files": {
+            "resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json": "7bfa994c9e0233ffac9e7bb20ea65a45aacee2d6106db9af1ff58c06ae42eabb",
+            "resources/profiles/BBL/machine/fdm_bbl_3dp_002_common.json": "421a6cd0016039969a00dd4dabaa0b0fae9dc5895b6c0e86eaa456c69a0af6a6",
+            "resources/profiles/BBL/machine/fdm_machine_common.json": "cee021d6dbf12c2bf0bc6e2394cb4f0fa37af78296930cc753498f7ad3341a4a"
+          }
+        }
+      },
+      "dual": {
+        "name": "Bambu X2D",
+        "size_mm": [
+          235.5,
+          256.0,
+          256.0
+        ],
+        "margin_mm": 0.0,
+        "nozzle_mode": "dual",
+        "origin_mm": [
+          20.5,
+          0.0
+        ],
+        "printable_regions": [
+          [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              0.0,
+              256.0
+            ]
+          ],
+          [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              0.0,
+              256.0
+            ]
+          ],
+          [
+            [
+              20.5,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              20.5,
+              256.0
+            ]
+          ]
+        ],
+        "source": {
+          "repository": "OrcaSlicer/OrcaSlicer",
+          "revision": "a80c323614e4e4e6beb885499afc3b4e886c4457",
+          "profile": "resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json",
+          "files": {
+            "resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json": "7bfa994c9e0233ffac9e7bb20ea65a45aacee2d6106db9af1ff58c06ae42eabb",
+            "resources/profiles/BBL/machine/fdm_bbl_3dp_002_common.json": "421a6cd0016039969a00dd4dabaa0b0fae9dc5895b6c0e86eaa456c69a0af6a6",
+            "resources/profiles/BBL/machine/fdm_machine_common.json": "cee021d6dbf12c2bf0bc6e2394cb4f0fa37af78296930cc753498f7ad3341a4a"
+          }
+        }
+      },
+      "extruders": [
+        {
+          "printable_region": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              0.0,
+              256.0
+            ]
+          ],
+          "height_mm": 261.0
+        },
+        {
+          "printable_region": [
+            [
+              20.5,
+              0.0
+            ],
+            [
+              256.0,
+              0.0
+            ],
+            [
+              256.0,
+              256.0
+            ],
+            [
+              20.5,
+              256.0
+            ]
+          ],
+          "height_mm": 256.0
+        }
+      ]
+    }
+  ]
+}

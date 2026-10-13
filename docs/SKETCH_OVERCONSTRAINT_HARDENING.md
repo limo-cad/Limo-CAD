@@ -172,7 +172,7 @@ constraint type must add:
 ## Reproduce
 
 ```sh
-cargo test -p nbcad-sketch --test constraint_pair_permutations
-cargo test -p nbcad-sketch --test overconstraint_hardening
-cargo test -p nbcad-sketch
+cargo test -p limo-cad-sketch --test constraint_pair_permutations
+cargo test -p limo-cad-sketch --test overconstraint_hardening
+cargo test -p limo-cad-sketch
 ```

@@ -46,7 +46,7 @@ session to its binaries:
 
 ```text
 nbcad.exe     17aa7aeb6a0e8bdabc27b1e2a1f3218c1232205ac8b4a307bceb8930341a15f9
-nbcad-mcp.exe b2af4e049e9b1b2bcd1e3dfcaf6c5432eee86b2e63b4127193e560a35180061a
+limo-cad-mcp.exe b2af4e049e9b1b2bcd1e3dfcaf6c5432eee86b2e63b4127193e560a35180061a
 xtask.exe     73da1d1332c7c3239d238c87a02da733fddacd7f071cdd4a68909d79bf77067f
 ```
 

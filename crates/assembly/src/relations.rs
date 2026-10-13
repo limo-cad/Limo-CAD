@@ -232,9 +232,7 @@ impl AssemblyDocumentDto {
         scene: &SolidSceneDto,
     ) -> Result<(), String> {
         self.validate_gear_relations()?;
-        // History rollback can temporarily hide bodies and their joints. Solve
-        // an active projection, then merge coordinates only; never discard
-        // retained assembly intent needed by redo or a later feature marker.
+
         let mut active = self.clone();
         active.project_active_scene(scene)?;
         let held = held
@@ -255,8 +253,7 @@ impl AssemblyDocumentDto {
         scene: &SolidSceneDto,
     ) -> Result<(), String> {
         let mut held = held.to_vec();
-        // Propagate exact unwrapped gear coordinates in both directions. The
-        // dependent gear coordinates also become fixed in the closure solve.
+
         let mut driven: HashMap<JointId, f64> = held
             .iter()
             .filter(|(_, coordinate)| *coordinate == JointCoordinate::PrimaryAngle)
@@ -326,7 +323,7 @@ impl AssemblyDocumentDto {
                 held.push((id, JointCoordinate::PrimaryAngle));
             }
         }
-        // Acyclic mechanisms and exactly propagated gears need no numerical solve.
+
         if self.solve(scene).solved {
             return Ok(());
         }

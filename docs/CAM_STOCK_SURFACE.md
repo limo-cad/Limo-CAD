@@ -119,12 +119,12 @@ ungrouped unions, inverse profile bounds, arc bounds, and cache replacement.
 Capture synthetic Rust output for visual inspection with:
 
 ```sh
-NBCAD_CAM_DETAIL_CAPTURE=/tmp/cam-stock-detail.json cargo test -p nbcad-cam --release capture_chamfers_and_fillets -- --ignored --nocapture
+LIMO_CAD_CAM_DETAIL_CAPTURE=/tmp/cam-stock-detail.json cargo test -p limo-cad-cam --release capture_chamfers_and_fillets -- --ignored --nocapture
 node scripts/capture-cam-stock-detail.mjs /tmp/cam-stock-detail.json /tmp/cam-stock-detail.png
 ```
 
 For a read-only capture of a locally supplied saved job, set
-`NBCAD_CAM_DETAIL_PROJECT` to its `.nbcad` path and run the ignored
+`LIMO_CAD_CAM_DETAIL_PROJECT` to its `.limo` path and run the ignored
 `capture_project_stock_detail` test with the same capture variable. It removes
 machine configuration only from its in-memory copy and writes just the stock
 mesh; it never saves over the project or captures private post settings.

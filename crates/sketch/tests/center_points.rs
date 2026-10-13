@@ -1,6 +1,6 @@
 //! Issue #151: circle and center-rectangle centers are selectable,
 //! constrainable, and keep their shape symmetric about that center.
-use nbcad_sketch::{
+use limo_cad_sketch::{
     CircleMode, CircularPatternRequest, Constraint, DragPhase, EntityDto, EntityId, FilletRequest,
     LockedCircleRequest, LockedRectangleRequest, MirrorRequest, MoveCopyRequest, MovePointRequest,
     OffsetRequest, OriginPlane, PlaneRef, RectangleMode, RectangularPatternRequest, ScaleRequest,
@@ -94,20 +94,16 @@ fn a_circle_exposes_one_selectable_center_without_adding_degrees_of_freedom() {
             point(&dto, handle).distance(circle_center_of(&dto, circle)) < 1e-6,
             "{mode:?}: the handle must sit on the circle center"
         );
-        // A handle is determined by the curve center, so it adds no freedom.
+
         assert_eq!(dto.dof.value, 3, "{mode:?}: circle keeps its 3 DOF");
 
-        // The handle is a real point entity, so the viewport can pick it and
-        // the engine can snap a later line onto it.
         let preview = s.preview_segment(v(60.0, 60.0), point(&dto, handle) + v(0.1, 0.1), false);
         assert_eq!(preview.snap, SnapTarget::Point { entity: handle });
 
-        // Undo then redo round-trips the handle with the sketch.
         assert!(s.undo().unwrap().sketch.entities.is_empty());
         let redone = s.redo().unwrap().sketch;
         assert_eq!(center_handles(&redone, circle).len(), 1);
 
-        // Dragging the handle moves the whole circle, radius untouched.
         drag(&mut s, handle, v(26.0, 14.0));
         let after = s.dto();
         assert!(circle_center_of(&after, circle).distance(v(26.0, 14.0)) < 1e-6);
@@ -117,8 +113,6 @@ fn a_circle_exposes_one_selectable_center_without_adding_degrees_of_freedom() {
 
 #[test]
 fn a_circle_center_can_be_constrained_to_rectangle_geometry() {
-    // The issue's first reproduction: draw a circle and a free rectangle, then
-    // pin the circle's center to a rectangle corner.
     let mut s = session();
     let circle = s
         .add_circle(CircleMode::CenterDiameter, v(70.0, 70.0), v(78.0, 70.0))
@@ -142,13 +136,12 @@ fn a_circle_center_can_be_constrained_to_rectangle_geometry() {
         center.distance(point(&dto, corner)) < 1e-6,
         "the circle center must land on the rectangle corner, got {center:?}"
     );
-    // The relation binds the center only: the circle stays a circle.
+
     match dto.entities.iter().find(|e| e.id() == circle).unwrap() {
         EntityDto::Circle { radius, .. } => assert!((*radius - 8.0).abs() < 1e-6),
         other => panic!("expected a circle, got {other:?}"),
     }
 
-    // Moving the corner carries the constrained circle center with it.
     let corner_target = v(5.0, 25.0);
     drag(&mut s, corner, corner_target);
     let dto = s.dto();
@@ -157,8 +150,6 @@ fn a_circle_center_can_be_constrained_to_rectangle_geometry() {
 
 #[test]
 fn an_acquired_circle_center_reuses_the_users_point() {
-    // Snapping the center onto an existing point reuses that point as the
-    // handle, so no redundant second point appears at the same spot.
     let mut s = session();
     let anchor = s.add_point(v(30.0, 30.0)).unwrap().entities[0];
     let circle = s
@@ -182,8 +173,6 @@ fn an_acquired_circle_center_reuses_the_users_point() {
         "no duplicate handle is created for an acquired center"
     );
 
-    // Transforming the curve carries its center attachment, so the relation
-    // stays exactly satisfied instead of the solver splitting the difference.
     s.scale_entities(&ScaleRequest {
         entity_ids: vec![circle],
         origin: v(0.0, 0.0),
@@ -219,8 +208,7 @@ fn a_center_rectangle_exposes_its_center_and_stays_symmetric() {
         point(&dto, center).distance(v(50.0, 50.0)) < 1e-6,
         "the center rectangle owns its center as a real point"
     );
-    // The center is bound to a diagonal, which is what makes the shape
-    // symmetric rather than merely rectangular.
+
     assert!(matches!(
         dto.constraints
             .iter()
@@ -229,13 +217,9 @@ fn a_center_rectangle_exposes_its_center_and_stays_symmetric() {
         Some(Constraint::SpanMidpoint { point, start, end })
             if point == center && [start, end] == [bl, tr]
     ));
-    // A center is determined by the diagonal, so it adds no freedom.
+
     assert_eq!(dto.dof.value, 4, "center rectangle keeps its 4 DOF");
 
-    // Dragging a corner resizes the rectangle *about* its center: the center
-    // holds its ground and the opposite corner mirrors the dragged one. A
-    // midpoint assertion alone would pass even if nothing else moved, so pin
-    // the intended positions of every corner.
     drag(&mut s, bl, v(30.0, 30.0));
     let after = s.dto();
     assert!(
@@ -260,8 +244,6 @@ fn a_center_rectangle_exposes_its_center_and_stays_symmetric() {
 
 #[test]
 fn a_center_on_the_origin_resizes_symmetrically_about_it() {
-    // The issue's second reproduction: place the center rectangle's center on
-    // the sketch origin, then resize it by a corner.
     let mut s = session();
     let created = s
         .add_rectangle(RectangleMode::Center, Vec2::ZERO, v(10.0, 10.0))
@@ -289,7 +271,7 @@ fn a_center_on_the_origin_resizes_symmetrically_about_it() {
         center_at.distance(Vec2::ZERO) < 1e-6,
         "the pinned center must not move, got {center_at:?}"
     );
-    // Resizing stays symmetric: every corner is mirrored through the origin.
+
     for corner in [bl, br, tr, tl] {
         let p = point(&after, corner);
         assert!(p.distance(Vec2::ZERO) > 1e-6);
@@ -356,7 +338,6 @@ fn copied_and_transformed_circles_keep_an_attached_center() {
         .unwrap()
         .entities[0];
 
-    // Move keeps the owned handle attached to the curve.
     s.move_copy_entities(&MoveCopyRequest {
         entity_ids: vec![circle],
         dx: 5.0,
@@ -368,7 +349,6 @@ fn copied_and_transformed_circles_keep_an_attached_center() {
     let handle = center_handles(&dto, circle)[0];
     assert!(point(&dto, handle).distance(v(25.0, 7.0)) < 1e-6);
 
-    // Scale keeps it attached too.
     s.scale_entities(&ScaleRequest {
         entity_ids: vec![circle],
         origin: v(0.0, 0.0),
@@ -379,7 +359,6 @@ fn copied_and_transformed_circles_keep_an_attached_center() {
     assert!(circle_center_of(&dto, circle).distance(v(50.0, 14.0)) < 1e-6);
     assert!(point(&dto, handle).distance(v(50.0, 14.0)) < 1e-6);
 
-    // A copied occurrence owns a fresh handle, not a shared one.
     let copied = s
         .move_copy_entities(&MoveCopyRequest {
             entity_ids: vec![circle],
@@ -407,10 +386,6 @@ fn copied_and_transformed_circles_keep_an_attached_center() {
 
 #[test]
 fn deleting_unrelated_geometry_keeps_a_rounded_center_rectangle_centered() {
-    // Review finding 1: the delete sweep must not retire a live relation just
-    // because the corners it anchors are no longer line endpoints. Fillet keeps
-    // a trimmed corner through its own relations, so the diagonal survives and
-    // an unrelated delete is a no-op for the rectangle.
     let mut s = session();
     let created = s
         .add_rectangle(RectangleMode::Center, Vec2::ZERO, v(20.0, 10.0))
@@ -443,8 +418,7 @@ fn deleting_unrelated_geometry_keeps_a_rounded_center_rectangle_centered() {
         after.dof.value, rounding_dof,
         "the rectangle must keep its constraint count"
     );
-    // And the relation is still enforced: the center remains the midpoint of
-    // the diagonal it was bound to.
+
     let (bl, tr) = (created.entities[0], created.entities[2]);
     let (bl, tr) = (point(&after, bl), point(&after, tr));
     assert!(
@@ -455,8 +429,6 @@ fn deleting_unrelated_geometry_keeps_a_rounded_center_rectangle_centered() {
 
 #[test]
 fn moving_a_center_rectangle_by_its_edges_carries_its_center() {
-    // Review finding 2: a center rectangle selected by its four edges must move
-    // as a whole rather than leaving its center behind for the solver to split.
     let mut s = session();
     let created = s
         .add_rectangle(RectangleMode::Center, v(50.0, 50.0), v(60.0, 56.0))
@@ -480,7 +452,6 @@ fn moving_a_center_rectangle_by_its_edges_carries_its_center() {
         point(&dto, created.entities[8])
     );
 
-    // Scale is the same contract.
     s.scale_entities(&ScaleRequest {
         entity_ids: created.entities[4..8].to_vec(),
         origin: v(0.0, 0.0),
@@ -494,8 +465,6 @@ fn moving_a_center_rectangle_by_its_edges_carries_its_center() {
 
 #[test]
 fn deleting_part_of_a_center_rectangle_drops_the_unused_corner() {
-    // Review finding 4: a partial erase must not keep a corner no line uses,
-    // exactly as it does not for a two-point rectangle.
     let mut s = session();
     let created = s
         .add_rectangle(RectangleMode::Center, v(50.0, 50.0), v(60.0, 56.0))
@@ -520,10 +489,7 @@ fn deleting_part_of_a_center_rectangle_drops_the_unused_corner() {
 }
 
 #[test]
-fn moving_a_circle_with_a_shared_center_does_not_drag_its_neighbours() {
-    // Review finding 3: only a handle the curve owns exclusively travels with
-    // it. A center acquired from other geometry is left to the solver, so an
-    // unselected rectangle is not rigidly dragged along.
+fn transforms_of_a_circle_with_a_shared_anchor_reject_without_distortion() {
     let mut s = session();
     let created = s
         .add_rectangle(RectangleMode::TwoPoint, v(10.0, 10.0), v(50.0, 40.0))
@@ -539,31 +505,93 @@ fn moving_a_circle_with_a_shared_center_does_not_drag_its_neighbours() {
         .unwrap()
         .entities[0];
     assert_eq!(center_handles(&s.dto(), circle), vec![corner]);
-    let corner_before = point(&s.dto(), corner);
-
+    let original = serde_json::to_value(s.dto().entities).unwrap();
     s.move_copy_entities(&MoveCopyRequest {
         entity_ids: vec![circle],
         dx: 100.0,
         dy: 0.0,
-        copy: false,
+        copy: true,
     })
     .unwrap();
-    let dto = s.dto();
-    let moved = point(&dto, corner).distance(corner_before);
+    let copied = serde_json::to_value(s.dto()).unwrap();
+    s.undo().unwrap();
+    assert_eq!(serde_json::to_value(s.dto().entities).unwrap(), original);
+    let before = serde_json::to_value(s.dto()).unwrap();
+
+    let moved = s
+        .move_copy_entities(&MoveCopyRequest {
+            entity_ids: vec![circle],
+            dx: 100.0,
+            dy: 0.0,
+            copy: false,
+        })
+        .unwrap_err();
+    assert!(moved.to_string().contains("conflicts"));
+    assert_eq!(serde_json::to_value(s.dto()).unwrap(), before);
+    let scaled = s
+        .scale_entities(&ScaleRequest {
+            entity_ids: vec![circle],
+            origin: v(0.0, 0.0),
+            factor_text: "2".into(),
+        })
+        .unwrap_err();
+    assert!(scaled.to_string().contains("conflicts"));
+    assert_eq!(serde_json::to_value(s.dto()).unwrap(), before);
+    s.redo().unwrap();
+    assert_eq!(serde_json::to_value(s.dto()).unwrap(), copied);
+}
+
+#[test]
+fn scaling_about_an_acquired_circle_center_preserves_unselected_geometry() {
+    let mut s = session();
+    let rectangle = s
+        .add_rectangle(RectangleMode::TwoPoint, v(10.0, 10.0), v(50.0, 40.0))
+        .unwrap();
+    let circle = s
+        .add_circle_selective(
+            CircleMode::CenterDiameter,
+            v(10.0, 10.0),
+            v(18.0, 10.0),
+            false,
+        )
+        .unwrap()
+        .entities[0];
+    let before = s.dto();
+    s.scale_entities(&ScaleRequest {
+        entity_ids: vec![circle],
+        origin: v(10.0, 10.0),
+        factor_text: "2".into(),
+    })
+    .unwrap();
+    let after = s.dto();
+    for &point_id in &rectangle.entities[..4] {
+        assert!(point(&after, point_id).distance(point(&before, point_id)) < 1e-6);
+    }
     assert!(
-        moved < 100.0 - 1e-6,
-        "unselected geometry must not be dragged the whole delta, moved {moved}"
+        circle_center_of(&after, circle).distance(point(&before, rectangle.entities[0])) < 1e-6
     );
-    assert!(
-        circle_center_of(&dto, circle).distance(point(&dto, corner)) < 1e-6,
-        "the circle must stay on the point it was snapped to"
+    let radius = |dto: &SketchDto| match dto
+        .entities
+        .iter()
+        .find(|entity| entity.id() == circle)
+        .unwrap()
+    {
+        EntityDto::Circle { radius, .. } => *radius,
+        _ => panic!("Expected a circle"),
+    };
+    assert!((radius(&after) - 2.0 * radius(&before)).abs() < 1e-6);
+    s.undo().unwrap();
+    let mut restored = s.dto();
+    assert!(restored.can_redo);
+    restored.can_redo = before.can_redo;
+    assert_eq!(
+        serde_json::to_value(restored).unwrap(),
+        serde_json::to_value(before).unwrap()
     );
 }
 
 #[test]
 fn copying_a_center_rectangle_copies_its_center() {
-    // Review finding 5: the diagonal relation has to be remapped, otherwise the
-    // occurrence is a plain rectangle with an inert center point.
     let mut s = session();
     let created = s
         .add_rectangle(RectangleMode::Center, v(20.0, 20.0), v(30.0, 26.0))
@@ -607,7 +635,6 @@ fn copying_a_center_rectangle_copies_its_center() {
 
 #[test]
 fn an_offset_circle_owns_a_center_handle() {
-    // Review finding 6: a derived circle is still a circle the user can pick.
     let mut s = session();
     let source = s
         .add_circle(CircleMode::CenterDiameter, v(20.0, 20.0), v(26.0, 20.0))
@@ -637,7 +664,6 @@ fn an_offset_circle_owns_a_center_handle() {
 
 #[test]
 fn deleting_a_center_relation_reaps_its_handle() {
-    // Review finding 7: detaching the relation must not strand the handle.
     let mut s = session();
     let circle = s
         .add_circle(CircleMode::CenterDiameter, v(20.0, 20.0), v(28.0, 20.0))
@@ -666,8 +692,6 @@ fn deleting_a_center_relation_reaps_its_handle() {
 
 #[test]
 fn a_ctrl_placed_center_reuses_an_exact_vertex() {
-    // Review finding 10: suppressing acquisition must not manufacture a second
-    // vertex at the exact same coordinate, exactly as line endpoints behave.
     let mut s = session();
     let line = s.add_line(v(10.0, 10.0), v(30.0, 10.0), true).unwrap();
     let existing = line.start_point_id;
@@ -698,9 +722,6 @@ fn a_ctrl_placed_center_reuses_an_exact_vertex() {
 
 #[test]
 fn deleting_a_filleted_center_rectangles_curves_collects_its_center() {
-    // Review finding 11: after a fillet the original corner is retained by
-    // relations rather than by line endpoints, so the delete has to treat the
-    // operands of the relations it removed as disturbed too.
     let mut s = session();
     let created = s
         .add_rectangle(RectangleMode::Center, v(20.0, 20.0), v(30.0, 26.0))
@@ -736,8 +757,6 @@ fn deleting_a_filleted_center_rectangles_curves_collects_its_center() {
 
 #[test]
 fn dragging_any_corner_resizes_a_center_rectangle_about_its_center() {
-    // Review finding 12: all four corners must resize about the center, not
-    // just the two the diagonal names.
     let moves = [
         (v(30.0, 30.0), v(70.0, 70.0)),
         (v(70.0, 30.0), v(30.0, 70.0)),
@@ -773,8 +792,6 @@ fn dragging_any_corner_resizes_a_center_rectangle_about_its_center() {
 
 #[test]
 fn a_dimensioned_center_rectangle_still_moves_when_a_corner_is_dragged() {
-    // Review finding 13: with width and height dimensions translation is the
-    // only freedom left, so holding the center would freeze the drag.
     let mut s = session();
     let created = s
         .add_rectangle_locked(&LockedRectangleRequest {
@@ -801,8 +818,6 @@ fn a_dimensioned_center_rectangle_still_moves_when_a_corner_is_dragged() {
 
 #[test]
 fn a_circle_center_snapped_onto_an_orphaned_handle_is_bound() {
-    // Review finding 14: a fresh circle's center relation is always
-    // independent, so the redundancy gate must not roll it back.
     let mut s = session();
     let arc = s
         .add_arc_center(v(30.0, 30.0), v(40.0, 30.0), v(30.0, 40.0))
@@ -820,7 +835,7 @@ fn a_circle_center_snapped_onto_an_orphaned_handle_is_bound() {
         })
         .collect();
     assert_eq!(endpoints.len(), 2);
-    // Detach one endpoint relation but keep the handle, which is deliberate.
+
     let relation = s
         .dto()
         .constraints
@@ -872,8 +887,6 @@ fn concentric_pair(s: &mut SketchSession) -> Vec<EntityId> {
 
 #[test]
 fn moving_all_circles_that_share_a_center_reaches_the_requested_position() {
-    // Review finding 2: the shared handle belongs to the selection when every
-    // one of its owners is selected, so the move must land exactly.
     let mut s = session();
     let ids = concentric_pair(&mut s);
     let dto = s.dto();
@@ -981,7 +994,6 @@ fn copied_rectangle_center_after_corner_drag(select_all: bool) -> Vec2 {
 
 #[test]
 fn copying_center_rectangle_edges_keeps_centered_resize() {
-    // Control for the whole-selection case below.
     let actual = copied_rectangle_center_after_corner_drag(false);
     assert!(
         actual.distance(v(100.0, 50.0)) < 1e-6,
@@ -991,8 +1003,6 @@ fn copying_center_rectangle_edges_keeps_centered_resize() {
 
 #[test]
 fn copying_a_whole_center_rectangle_keeps_centered_resize() {
-    // Review finding 4: ownership has to survive the copy even when the user
-    // selected the visible center explicitly.
     let actual = copied_rectangle_center_after_corner_drag(true);
     assert!(
         actual.distance(v(100.0, 50.0)) < 1e-6,
@@ -1002,8 +1012,6 @@ fn copying_a_whole_center_rectangle_keeps_centered_resize() {
 
 #[test]
 fn manually_binding_a_detached_arc_endpoint_to_a_circle_is_not_redundant() {
-    // Review finding 3: admission must judge the relation on its own equations,
-    // not assume the alias it would introduce.
     let mut s = session();
     let arc = s
         .add_arc_center(v(30.0, 30.0), v(40.0, 30.0), v(30.0, 40.0))
@@ -1048,8 +1056,6 @@ fn manually_binding_a_detached_arc_endpoint_to_a_circle_is_not_redundant() {
 
 #[test]
 fn the_vise_recipe_circle_is_located_on_its_point_without_an_explicit_step() {
-    // Review finding 1. The authored recipe step is gone because the binding is
-    // automatic; this is the sequence `author_vise::circle` now emits.
     let mut s = session();
     s.set_grid_snap(false);
     let point = s.add_point(v(20.0, 10.0)).unwrap().entities[0];
@@ -1072,8 +1078,7 @@ fn the_vise_recipe_circle_is_located_on_its_point_without_an_explicit_step() {
         "the circle owns the point it was placed on"
     );
     assert!(circle_center_of(&dto, circle).distance(v(20.0, 10.0)) < 1e-6);
-    // Which is exactly why the recipe's explicit step had to go: keeping it
-    // would now be rejected as a duplicate.
+
     assert!(s
         .add_constraint(Constraint::CenterCoincident {
             point,
@@ -1246,9 +1251,6 @@ fn mixed_center_occurrences_preserve_internal_bindings_and_cleanup() {
 
 #[test]
 fn an_unselected_rectangle_does_not_make_its_shared_center_transform_owned() {
-    // An implicitly generated shared anchor must behave like an unselected
-    // authored anchor: let the solver reconcile the other rectangle, rather
-    // than rigidly transforming its center as part of the selected rectangle.
     let mut centers = Vec::new();
     for authored_anchor in [true, false] {
         let mut s = session();

@@ -1,0 +1,294 @@
+{
+  "sources": [
+    {
+      "repository": "OrcaSlicer/OrcaSlicer",
+      "revision": "a80c323614e4e4e6beb885499afc3b4e886c4457",
+      "format": "slicer",
+      "kind": "plastic",
+      "base_path": "resources/profiles/OrcaFilamentLibrary/filament/base",
+      "family": "PLA",
+      "path": "resources/profiles/OrcaFilamentLibrary/filament/Generic PLA @System.json",
+      "merge_ids": [
+        "generic.pla.gray",
+        "generic.pla.black",
+        "generic.pla.white"
+      ]
+    },
+    {
+      "repository": "OrcaSlicer/OrcaSlicer",
+      "revision": "a80c323614e4e4e6beb885499afc3b4e886c4457",
+      "format": "slicer",
+      "kind": "plastic",
+      "base_path": "resources/profiles/OrcaFilamentLibrary/filament/base",
+      "family": "PETG",
+      "path": "resources/profiles/OrcaFilamentLibrary/filament/Generic PETG @System.json",
+      "merge_ids": [
+        "generic.petg.clear"
+      ]
+    },
+    {
+      "repository": "OrcaSlicer/OrcaSlicer",
+      "revision": "a80c323614e4e4e6beb885499afc3b4e886c4457",
+      "format": "slicer",
+      "kind": "plastic",
+      "base_path": "resources/profiles/OrcaFilamentLibrary/filament/base",
+      "family": "ABS",
+      "path": "resources/profiles/OrcaFilamentLibrary/filament/Generic ABS @System.json",
+      "merge_ids": [
+        "generic.abs.black"
+      ]
+    },
+    {
+      "repository": "OrcaSlicer/OrcaSlicer",
+      "revision": "a80c323614e4e4e6beb885499afc3b4e886c4457",
+      "format": "slicer",
+      "kind": "plastic",
+      "base_path": "resources/profiles/OrcaFilamentLibrary/filament/base",
+      "family": "ASA",
+      "path": "resources/profiles/OrcaFilamentLibrary/filament/Generic ASA @System.json",
+      "merge_ids": [
+        "generic.asa.black"
+      ]
+    },
+    {
+      "repository": "OrcaSlicer/OrcaSlicer",
+      "revision": "a80c323614e4e4e6beb885499afc3b4e886c4457",
+      "format": "slicer",
+      "kind": "plastic",
+      "base_path": "resources/profiles/OrcaFilamentLibrary/filament/base",
+      "family": "TPU",
+      "path": "resources/profiles/OrcaFilamentLibrary/filament/Generic TPU @System.json",
+      "merge_ids": [
+        "generic.tpu.black"
+      ]
+    },
+    {
+      "repository": "OrcaSlicer/OrcaSlicer",
+      "revision": "a80c323614e4e4e6beb885499afc3b4e886c4457",
+      "format": "slicer",
+      "kind": "plastic",
+      "base_path": "resources/profiles/OrcaFilamentLibrary/filament/base",
+      "family": "PA",
+      "path": "resources/profiles/OrcaFilamentLibrary/filament/Generic PA @System.json",
+      "merge_ids": [
+        "generic.pa.natural"
+      ]
+    },
+    {
+      "repository": "OrcaSlicer/OrcaSlicer",
+      "revision": "a80c323614e4e4e6beb885499afc3b4e886c4457",
+      "format": "slicer",
+      "kind": "plastic",
+      "base_path": "resources/profiles/OrcaFilamentLibrary/filament/base",
+      "family": "PC",
+      "path": "resources/profiles/OrcaFilamentLibrary/filament/Generic PC @System.json",
+      "merge_ids": [
+        "generic.pc.clear"
+      ]
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "PLA",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/PLA-Generic.FCMat",
+      "merge_ids": [
+        "generic.pla.gray",
+        "generic.pla.black",
+        "generic.pla.white"
+      ]
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "ABS",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/ABS-Generic.FCMat",
+      "merge_ids": [
+        "generic.abs.black"
+      ]
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "PA",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/PA6-Generic.FCMat",
+      "merge_ids": [
+        "generic.pa.natural"
+      ]
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "PC",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/PC-Molded.FCMat",
+      "merge_ids": [
+        "generic.pc.clear"
+      ]
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "PEEK",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/PEEK-Generic.FCMat",
+      "new_id": "material.peek"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "PET",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/PET-Generic.FCMat",
+      "new_id": "material.pet"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "PP",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/PP-Generic.FCMat",
+      "new_id": "material.pp"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "POM",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/POM-Copolymer-Generic.FCMat",
+      "new_id": "material.pom-copolymer"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "POM",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/POM-Homopolymer-Generic.FCMat",
+      "new_id": "material.pom-homopolymer"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "PTFE",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/PTFE-Generic.FCMat",
+      "new_id": "material.ptfe"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "PMMA",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/PMMA-Generic.FCMat",
+      "new_id": "material.pmma"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "plastic",
+      "family": "PVC",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Thermoplast/PVC-Generic.FCMat",
+      "new_id": "material.pvc"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "metal",
+      "family": "Aluminum",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Metal/Aluminum/Aluminum-6061-T6.FCMat",
+      "new_id": "material.aluminum-6061-t6"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "metal",
+      "family": "Aluminum",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Metal/Aluminum/Aluminum-7075-T6.FCMat",
+      "new_id": "material.aluminum-7075-t6"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "metal",
+      "family": "Aluminum",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Metal/Aluminum/Aluminum-Generic.FCMat",
+      "new_id": "material.aluminum"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "metal",
+      "family": "Steel",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Metal/Steel/Steel-Generic.FCMat",
+      "new_id": "material.steel"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "metal",
+      "family": "Steel",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Metal/Steel/Steel-S235JR.FCMat",
+      "new_id": "material.steel-s235jr"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "metal",
+      "family": "Copper",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Metal/Copper/Copper-Generic.FCMat",
+      "new_id": "material.copper"
+    },
+    {
+      "repository": "FreeCAD/FreeCAD",
+      "revision": "c1c0b506213e072d6f1498739abb1c3890159426",
+      "format": "freecad",
+      "kind": "metal",
+      "family": "Titanium",
+      "path": "src/Mod/Material/Resources/Materials/Standard/Metal/Titanium/Ti-6Al-4V.FCMat",
+      "new_id": "material.titanium-ti6al4v"
+    },
+    {
+      "repository": "bambulab/BambuStudio",
+      "revision": "da8b44ee34dd349f2ae0df3f1cbae366df482354",
+      "format": "slicer",
+      "kind": "plastic",
+      "family": "PLA",
+      "base_path": "resources/profiles/BBL/filament",
+      "path": "resources/profiles/BBL/filament/Bambu PLA Basic @base.json",
+      "merge_ids": [
+        "bambu.pla.basic.jade_white",
+        "bambu.pla.basic.black",
+        "bambu.pla.basic.red",
+        "bambu.pla.basic.blue",
+        "bambu.pla.basic.orange",
+        "bambu.pla.basic.green",
+        "bambu.pla.basic.yellow"
+      ]
+    }
+  ],
+  "parents": {
+    "d1f317f0-5ffa-4798-8ab3-af2ff0b5182c": "src/Mod/Material/Resources/Materials/Appearance/Aluminum.FCMat",
+    "4b849c55-6b3a-4f75-a055-40c0d0324596": "src/Mod/Material/Resources/Materials/Appearance/Steel.FCMat",
+    "524cad9b-b841-4037-9851-badeca7dcee2": "src/Mod/Material/Resources/Materials/Appearance/Copper.FCMat"
+  }
+}

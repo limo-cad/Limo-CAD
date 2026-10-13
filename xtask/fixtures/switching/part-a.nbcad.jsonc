@@ -1,0 +1,179 @@
+// Small deterministic input for switching measurements, not a user-latency reproduction.
+{
+  "version": 1,
+  "name": "Switching A - one block",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "id": "title",
+      "call": {
+        "group": "document/files",
+        "operation": "cad_set_document_name",
+        "arguments": {
+          "name": "Switching A - one block"
+        }
+      }
+    },
+    {
+      "id": "block_1_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Block 1",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "id": "block_1_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": 0,
+            "y": 0
+          },
+          "corner_hint": {
+            "x": 18,
+            "y": 12
+          },
+          "width_mm": 18,
+          "height_mm": 12,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "block_1_anchor",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "block_1_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": 0,
+                "/position/y": 0
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "block_1_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "block_1_extrude",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "Block 1",
+          "profile_indices": [
+            0
+          ],
+          "operation": "new_body",
+          "extent": {
+            "type": "distance",
+            "distance": 8
+          },
+          "target_body_ids": []
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "final_sketches",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finished",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_sketches"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "final_model",
+      "call": {
+        "group": "document/files",
+        "operation": "cad_project_model",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_model",
+          "pointer": "/document/history/features"
+        }
+      },
+      "equals": 2
+    },
+    {
+      "assert": {
+        "$ref": "final_sketches",
+        "pointer": "/0/dof/value"
+      },
+      "equals": 0
+    }
+  ],
+  "exports": {
+    "final_model": {
+      "$ref": "final_model"
+    },
+    "final_scene": {
+      "$ref": "final_scene"
+    },
+    "final_sketches": {
+      "$ref": "final_sketches"
+    }
+  }
+}

@@ -57,8 +57,6 @@ pub fn canonicalize_profile_curves(
         .filter_map(|curve| normalize_profile_curve(curve, tolerance))
         .collect::<Vec<_>>();
 
-    // Merge in boundary order, then across the cyclic vector boundary. Repeat
-    // because four quarter arcs may successively become one full circle.
     loop {
         let mut changed = false;
         let mut merged = Vec::with_capacity(canonical.len());
@@ -287,9 +285,6 @@ fn merge_same_circle_arcs(
     sources.dedup();
     let entity_id = *sources.first()?;
 
-    // Endpoint coincidence alone is not enough to prove a full circle: an
-    // invalid/retraced pair of arcs can also close on itself.  Only collapse
-    // to Circle when the accumulated analytic sweep is actually 2π.
     if (combined_sweep.abs() - std::f64::consts::TAU).abs() <= angular_tolerance {
         return Some(ProfileCurveDto::Circle {
             entity_id,
@@ -353,7 +348,7 @@ fn merge_collinear_lines(
     if left_length <= tolerance || right_length <= tolerance {
         return None;
     }
-    // Cross/dot are normalized by lengths so the decision is scale neutral.
+
     let normalized_cross = cross(left_vector, right_vector) / (left_length * right_length);
     let normalized_dot = (left_vector.x * right_vector.x + left_vector.y * right_vector.y)
         / (left_length * right_length);
@@ -519,13 +514,9 @@ fn node_segments_impl(
                 let right_vector = Point2Dto::new(right.b.x - right.a.x, right.b.y - right.a.y);
                 let right_length = dist2(right.a, right.b).sqrt();
                 let denominator = cross(left_vector, right_vector);
-                // Cross product has squared-length units. Scaling the
-                // parallel threshold by both carrier lengths keeps the same
-                // geometric tolerance from microscopic to large sketches.
+
                 let parallel_tolerance = tolerance * (left_length + right_length);
                 if denominator.abs() <= parallel_tolerance {
-                    // Collinear overlaps are already completely handled by
-                    // projecting all endpoints onto every carrier above.
                     continue;
                 }
                 let delta = Point2Dto::new(right.a.x - left.a.x, right.a.y - left.a.y);
@@ -586,11 +577,6 @@ fn node_segments_impl(
         }
     }
 
-    // Partial overlaps become identical pieces after the endpoint split
-    // above. Keep only one undirected copy for planar-face discovery:
-    // coincident sketch curves do not bound a second material region. Without
-    // this normalization, the two zero-width half-edge walks can consume the
-    // carrier edges and hide a valid surrounding profile.
     let mut unique = Vec::<Segment2>::new();
     for segment in noded {
         let duplicate = unique.iter_mut().find(|candidate| {
@@ -887,21 +873,15 @@ pub fn extract_bounded_faces(
         }
     }
 
-    // Keep only edges which actually bound a region. This strips dangling
-    // construction/path geometry as well as bridges connecting two closed
-    // regions, without requiring the sketch entity itself to be deleted.
     remove_bridges(&mut active, &endpoints, vertices.len());
 
     if !active.iter().any(|keep| *keep) {
         return Err(ProfileError::Empty);
     }
 
-    // Half-edge 2n follows the stored endpoint order for segment n; 2n+1 is
-    // its reverse. Sorting outgoing half-edges counter-clockwise gives a
-    // deterministic planar embedding at every clustered endpoint.
     let half_endpoints = |half_edge: usize| {
         let [a, b] = endpoints[half_edge / 2];
-        if half_edge % 2 == 0 {
+        if half_edge.is_multiple_of(2) {
             (a, b)
         } else {
             (b, a)
@@ -952,9 +932,6 @@ pub fn extract_bounded_faces(
             let (from, to) = half_endpoints(current);
             points.push(vertices[from]);
 
-            // The reverse half-edge points back toward `from`. Taking the
-            // immediately clockwise outgoing edge keeps the current face on
-            // the left of the walk.
             let reverse = current ^ 1;
             let incident = &outgoing[to];
             let reverse_index = incident
@@ -971,8 +948,7 @@ pub fn extract_bounded_faces(
         }
 
         let area = signed_area(&points);
-        // Bounded faces are CCW with this walk. The unbounded exterior face is
-        // clockwise, and coincident duplicate edges produce zero-area walks.
+
         if area <= tol2 {
             continue;
         }
@@ -1310,9 +1286,6 @@ mod tests {
 
     #[test]
     fn closed_loop_survives_a_partially_coincident_attached_chain() {
-        // The second chain segment overlaps the lower half of the rectangle's
-        // left carrier. This is redundant sketch geometry, but it must not
-        // erase the otherwise unambiguous rectangular profile.
         let loops = extract_closed_loops_allow_open(
             &[
                 s(1, p(0.0, 0.0), p(-15.0, 0.0)),
@@ -1332,9 +1305,6 @@ mod tests {
 
     #[test]
     fn adjacent_regions_sharing_an_edge_are_distinct_faces() {
-        // Two bounded regions share edge 3. Their shared endpoints have degree
-        // three, which is valid for a planar sketch even though it is not a
-        // collection of disjoint degree-two loops.
         let loops = extract_closed_loops_allow_open(
             &[
                 s(1, p(0.0, 1.0), p(1.0, 2.0)),
@@ -1398,19 +1368,14 @@ mod tests {
         let square = boundary_square();
         let boundary = projected(&[900, 901, 902, 903]);
 
-        // A support boundary alone is a real face of the subdivision but has no
-        // authored geometry, so callers can drop it.
         let boundary_only = extract_bounded_faces(&square, 1e-6, &boundary).unwrap();
         assert_eq!(boundary_only.len(), 1);
         assert_eq!(boundary_only[0].authored_edges, 0);
 
-        // The same square without projections is entirely authored.
         let authored = extract_bounded_faces(&square, 1e-6, &projected(&[])).unwrap();
         assert_eq!(authored.len(), 1);
         assert_eq!(authored[0].authored_edges, 4);
 
-        // A semicircle drawn between two points of the projected boundary
-        // seals the region the user drew against it.
         let mut sealed = square;
         sealed.extend(arc_segments(
             4,
@@ -1436,11 +1401,8 @@ mod tests {
 
     #[test]
     fn authored_geometry_overlapping_a_projected_edge_stays_authored() {
-        // The noding dedupe keeps the smaller id. Projected ids live in a
-        // reserved high range, so a piece shared with authored geometry keeps
-        // the authored id and counts as authored.
         let mut segments = boundary_square();
-        // A drawn line covering the first half of the projected bottom edge.
+
         segments.push(s(4, p(0.0, 0.0), p(5.0, 0.0)));
         let faces =
             extract_bounded_faces(&segments, 1e-6, &projected(&[900, 901, 902, 903])).unwrap();
@@ -1476,9 +1438,6 @@ mod tests {
 
     #[test]
     fn endpoint_on_edge_junctions_subdivide_an_outer_profile() {
-        // The two inner lines form an L whose endpoints lie in the interiors
-        // of the top and right carrier edges. Profile discovery must node
-        // those carrier edges even though the sketch entities remain whole.
         let loops = extract_closed_loops_allow_open(
             &[
                 s(1, p(0.0, 0.0), p(4.0, 0.0)),
@@ -1503,9 +1462,6 @@ mod tests {
 
     #[test]
     fn interior_curve_crossings_are_noded_into_selectable_regions() {
-        // A rectangle crossed by two full-span sketch lines has no explicit
-        // points at the interior crossing. Face discovery must still expose
-        // all four bounded regions, as desktop CAD sketchers do.
         let loops = extract_closed_loops_allow_open(
             &[
                 s(1, p(0.0, 0.0), p(4.0, 0.0)),
@@ -1575,8 +1531,6 @@ mod tests {
                 s(6, p(1.0, -1.0), p(1.0, 1.0)),
                 s(7, p(1.0, 1.0), p(-1.0, 1.0)),
                 s(8, p(-1.0, 1.0), p(-1.0, -1.0)),
-                // A center/construction line whose endpoints are noded into
-                // both closed regions. It is a graph bridge, not material.
                 s(9, p(0.0, 4.0), p(0.0, 1.0)),
             ],
             1e-6,

@@ -1,6 +1,7 @@
 //! One stdio transport for rendered and headless CAD. The desktop owns its
 //! lifetime: a disconnected client never exits or closes the application.
 use std::io::{self, BufRead, Write};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::thread;
@@ -13,7 +14,45 @@ use crate::{error_response, handle_message, idle_due_messages, CadServer, Deskto
 #[path = "stdio_output.rs"]
 mod output_pipe;
 
+/// What the desktop title bar can say about the stdio agent.
+///
+/// Headless `run_stdio` does not change this. A desktop worker is `Waiting`
+/// until `initialize` succeeds, then `Attached` until that worker returns.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum DesktopMcpPresence {
+    Off = 0,
+    Waiting = 1,
+    Attached = 2,
+}
+
+static DESKTOP_MCP_PRESENCE: AtomicU8 = AtomicU8::new(0);
+
+pub fn desktop_mcp_presence() -> DesktopMcpPresence {
+    match DESKTOP_MCP_PRESENCE.load(Ordering::Relaxed) {
+        1 => DesktopMcpPresence::Waiting,
+        2 => DesktopMcpPresence::Attached,
+        _ => DesktopMcpPresence::Off,
+    }
+}
+
+fn set_desktop_mcp_presence(presence: DesktopMcpPresence) {
+    DESKTOP_MCP_PRESENCE.store(presence as u8, Ordering::Relaxed);
+}
+
+struct ClearDesktopMcpPresence;
+
+impl Drop for ClearDesktopMcpPresence {
+    fn drop(&mut self) {
+        set_desktop_mcp_presence(DesktopMcpPresence::Off);
+    }
+}
+
 pub fn run_stdio() -> Result<(), String> {
+    #[cfg(all(windows, feature = "native-computer-control"))]
+    if let Some(result) = crate::computer_control::run_worker_if_requested() {
+        return result;
+    }
     run(CadServer::new, None)
 }
 
@@ -29,6 +68,8 @@ pub fn prepare_desktop_stdio() -> Result<(), String> {
 /// Run on a worker while the native event loop remains on the main thread.
 /// Merely opening CAD does not allocate a second kernel or document.
 pub fn run_desktop_stdio() -> Result<(), String> {
+    set_desktop_mcp_presence(DesktopMcpPresence::Waiting);
+    let _clear = ClearDesktopMcpPresence;
     let result = run(
         || {
             let mut server = CadServer::new()?;
@@ -40,10 +81,7 @@ pub fn run_desktop_stdio() -> Result<(), String> {
         },
         Some(DESKTOP_TRANSPORT.get_or_init(DesktopTransport::default)),
     );
-    // Unlocking Rust stdout does not close the process-owned pipe. Retire it
-    // after the final response so the host sees EOF while the CAD window lives.
-    // Keep an inert handle/descriptor in its slot; never leave it available for
-    // reuse by a later file open. Separate diagnostic stderr stays available.
+
     let retired = {
         let _stdout = io::stdout().lock();
         let _stderr = io::stderr().lock();
@@ -122,20 +160,25 @@ pub(super) fn instructions(desktop: bool) -> String {
     format!(
         "{mode} Finish sketches before creating solid features; reuse returned entity/body/face/edge ids. \
          Out-of-focus tools remain callable; discover them with cad_list_all_tools or soft focus. \
-         Prefer cad_help and nbcad://knowledge resources before web search for design guidance. \
+         Prefer cad_help and limo-cad://knowledge resources before web search for design guidance. \
          Build and iterate start to finish through MCP using cad_interface execute or individual tools; inspect solid_scene/cad_document between changes. \
-         Save the working design as .nbcad. Use upsert_named_view/rename_named_view/delete_named_view/recall_named_view/clear_named_view for review configurations. \
+         Use cad_route action batch for small ordered groups of literal typed operations on an explicit live route. Inspect its individual receipts; completed calls remain applied and pending calls must be polled with cad_route action status before any retry. \
+         Before qualifying a desktop/MCP pair, inspect and require build_pair.status matched. Different, unknown or modified identities require explicit provenance checks. \
+         Save the working design as .limo. Use upsert_named_view/rename_named_view/delete_named_view/recall_named_view/clear_named_view for review configurations. \
          Attached cad_interface inspect returns view_state; camera is null without a mounted modeling viewport. \
-         For headless persistence use cad_project_model/cad_load_project_model. On desktop use cad_interface action file, command save, with an absolute .nbcad path; set overwrite true only to replace that file. \
+         For headless persistence use cad_project_model/cad_load_project_model. On desktop use cad_interface action file, command save, with an absolute .limo path; set overwrite true only to replace that file. \
          For desktop Undo/Redo use cad_interface action history, command undo or redo; inspect state.history for availability. \
          Require status applied receipts for all UI actions. \
+         A completed launch, UI action or modeling apply retains its ready/applied receipt if snapshot loading fails: snapshot_error explains the failure and model_commands_blocked prevents stale-document commands. Recover with cad_attach/cad_refresh; do not repeat the completed action. \
          Recipe scripts are for explicitly requested teaching or replay on a blank document."
     )
 }
 
 pub(super) fn independent_of_default_document(name: &str, arguments: &Value) -> bool {
     match name {
+        "cad_computer_control" => arguments["session_id"].is_string(),
         "cad_attach"
+        | "cad_route"
         | "cad_detach"
         | "cad_list_sessions"
         | "cad_get_focus"
@@ -145,20 +188,29 @@ pub(super) fn independent_of_default_document(name: &str, arguments: &Value) -> 
         | "cad_set_tool_disclosure_mode"
         | "cad_list_all_tools"
         | "cad_help"
-        | "material_catalog" => true,
+        | "material_catalog"
+        | "printer_catalog" => true,
         "cad_interface" => {
             let action = arguments["action"].as_str();
-            let grouped_help = action == Some("execute")
-                && arguments["operation"] == "cad_help"
-                && crate::interface::group_for("cad_help")
+            let grouped_global_read = action == Some("execute")
+                && arguments["operation"].as_str().is_some_and(|operation| {
+                    matches!(
+                        operation,
+                        "cad_help" | "material_catalog" | "printer_catalog"
+                    )
+                })
+                && arguments["operation"]
+                    .as_str()
+                    .and_then(crate::interface::group_for)
                     .is_some_and(|group| arguments["group"] == group);
+            let explicit_computer_control = action == Some("execute")
+                && arguments["operation"] == "cad_computer_control"
+                && arguments["group"] == "document/session"
+                && arguments["arguments"]["session_id"].is_string();
             arguments["action"].is_null()
                 || matches!(action, Some("catalog" | "recipes" | "launch"))
-                // Help does not select a document through either entry point.
-                || grouped_help
-                // Scripts select their supplied session themselves. Other UI
-                // controls already validate and use their explicit session.
-                // Other execute operations have no selector and use the attachment.
+                || grouped_global_read
+                || explicit_computer_control
                 || (action != Some("execute") && arguments.get("session_id").is_some())
         }
         _ => false,
@@ -191,11 +243,9 @@ fn run(
     create: impl FnOnce() -> Result<CadServer, String>,
     desktop: Option<&DesktopTransport>,
 ) -> Result<(), String> {
-    // The reader must not block disclosure expiry notifications, and must not
-    // be joined on GUI shutdown: a connected host can keep stdin open forever.
     let (tx, rx) = mpsc::channel();
     thread::Builder::new()
-        .name("nbcad-mcp-input".into())
+        .name("limo-cad-mcp-input".into())
         .spawn(move || read_lines(io::stdin().lock(), tx))
         .map_err(|error| format!("MCP input worker: {error}"))?;
     serve_events(rx, &mut io::stdout().lock(), create, desktop)
@@ -273,10 +323,20 @@ fn serve_events(
         };
         let outgoing = match serde_json::from_str::<Value>(&line) {
             Ok(message) => {
+                let initialized = desktop.is_some()
+                    && message.get("method").and_then(Value::as_str) == Some("initialize");
                 if server.is_none() {
                     server = Some(create.take().expect("server initialized once")()?);
                 }
-                handle_message(server.as_mut().unwrap(), message)
+                let outgoing = handle_message(server.as_mut().unwrap(), message);
+                if initialized
+                    && outgoing
+                        .iter()
+                        .all(|message| message.get("error").is_none())
+                {
+                    set_desktop_mcp_presence(DesktopMcpPresence::Attached);
+                }
+                outgoing
             }
             Err(error) => vec![error_response(
                 Value::Null,
@@ -416,6 +476,8 @@ mod tests {
             ("cad_list_sessions", json!({})),
             ("cad_attach", json!({"session_id":"explicit"})),
             ("cad_help", json!({"action":"topics"})),
+            ("material_catalog", json!({})),
+            ("printer_catalog", json!({})),
             ("cad_interface", json!({"action":"catalog"})),
             ("cad_interface", json!({"action":"recipes"})),
             (
@@ -467,5 +529,15 @@ mod tests {
         }
         assert!(instructions(true).contains("desktop_not_ready"));
         assert!(!instructions(true).contains("persistent headless"));
+    }
+
+    #[test]
+    fn desktop_presence_is_off_until_a_worker_marks_it() {
+        let previous = desktop_mcp_presence();
+        set_desktop_mcp_presence(DesktopMcpPresence::Waiting);
+        assert_eq!(desktop_mcp_presence(), DesktopMcpPresence::Waiting);
+        set_desktop_mcp_presence(DesktopMcpPresence::Attached);
+        assert_eq!(desktop_mcp_presence(), DesktopMcpPresence::Attached);
+        set_desktop_mcp_presence(previous);
     }
 }

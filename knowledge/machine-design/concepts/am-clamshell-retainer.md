@@ -74,7 +74,7 @@ seats stay on [AM snap-fits](am-snap-fit.md).
 
 ## CAD / knowledge
 
-Prefer local `cad_help` / `nbcad://knowledge/...` before inventing geometry
+Prefer local `cad_help` / `limo-cad://knowledge/...` before inventing geometry
 ([research before commit](../../concepts/research-before-commit.md)). Prove the
 joint with section/inner shots and
 [adversarial mesh audit](../../concepts/adversarial-mesh-audit.md) before export.

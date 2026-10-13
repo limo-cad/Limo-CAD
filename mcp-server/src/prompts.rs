@@ -51,7 +51,7 @@ fn help_search_prompt(arguments: Option<&Value>) -> Value {
 Golden path:
 1. Call cad_help with action "search" and the query above (default limit 5, max 10). Prefer sharp, task-specific wording.
 2. From the hits, pick 1–2 strongest ids and call cad_help with action "get" for each (id-only).
-3. When the full markdown page is useful after selection, resources/read the matching nbcad://knowledge/... URI (start from resources/list / nbcad://knowledge/index.md when browsing).
+3. When the full markdown page is useful after selection, resources/read the matching limo-cad://knowledge/... URI (start from resources/list / limo-cad://knowledge/index.md when browsing).
 4. cad_help topics is available when you want label discovery before searching.
 
 Prefer cad_help and the OKF corpus first. Datasheets, recipes, and web search remain available after local retrieval when the task needs them.

@@ -1,6 +1,6 @@
 //! Derived geometry must have the same topology and ownership as drawn geometry.
-use nbcad_sketch::ArcEndpoint;
-use nbcad_sketch::{
+use limo_cad_sketch::ArcEndpoint;
+use limo_cad_sketch::{
     CircularPatternRequest, Constraint, DragPhase, Entity, EntityDto, EntityId, MirrorRequest,
     MoveCopyRequest, MovePointRequest, OriginPlane, PlaneRef, RectangularPatternRequest, Sketch,
     SketchDto, SketchSession, Vec2,
@@ -146,8 +146,7 @@ fn connected_arc_occurrences_keep_handles_through_edit_delete_undo_and_serializa
         reopened.restore(serde_json::from_str(&encoded).unwrap());
         assert_handles(&reopened, copied);
         reopened.remove_entity(copied);
-        // Connected lines still own the handles; deleting the last owner
-        // releases every generated point in the occurrence, not the axis.
+
         for (point, _) in &points {
             assert!(reopened.entity(*point).is_some());
         }
@@ -173,9 +172,11 @@ fn mirror_flips_arc_winding_and_preserves_major_and_full_sweeps() {
         let center = v(30., 30.);
         let arc = s
             .add_arc_center_locked(
-                center,
-                center + v(10., 0.),
-                center + v(10. * sweep.cos(), 10. * sweep.sin()),
+                (
+                    center,
+                    center + v(10., 0.),
+                    center + v(10. * sweep.cos(), 10. * sweep.sin()),
+                ),
                 true,
                 None,
                 None,

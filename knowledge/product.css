@@ -55,6 +55,18 @@ nav {
   font-size: .9rem;
 }
 
+.languages {
+  flex-basis: 100%;
+  font-size: .8rem;
+  gap: .75rem;
+}
+
+.languages [aria-current="page"] {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 h1,h2,h3 {
   line-height: 1.15;
   letter-spacing: -.035em;

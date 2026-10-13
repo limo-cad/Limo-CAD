@@ -1,0 +1,33 @@
+{
+  "date_utc": "2026-10-11",
+  "scope": "PR375/PR124 grid restoration after a visibility toggle, without pointer motion",
+  "base_revision": "4df51465e920e0b79dc98ac9469fe6d0f1fc9ead",
+  "branch": "fix/viewport-grid-controls",
+  "user_report": "After turning the grid off, turning it on does not display it until the mouse moves.",
+  "cause": "The default gizmo group lost its asset when an empty solid viewport hid the grid. Restoring the grid allocated an asset that was absent from the completed idle render; subsequent pointer-driven scene work made it visible.",
+  "fix": "Retain the default gizmo asset with the existing transparent zero-length sentinel used by other transient line groups. Restoring the grid reuses its uploaded asset; no added scene requests or rendering loops.",
+  "validation": {
+    "native_gpu_before": "Reproduced on Metal: first restored completed frame differed from the original visible grid at 35,892 pixels.",
+    "native_gpu_after": "Passed three off/on cycles. Each restored completed frame matches the original at all pixels; no pointer events, camera changes or extra scene requests occurred.",
+    "affected_regressions": "4 passed; 0 failed; GPU case separately executed rather than treated as a pass from its ignored listing.",
+    "asset_lifecycle": "Solid, Sketch and PickPlane grid line buffers hide/restore and retain the same asset identity.",
+    "ci_contract": "1 passed: exact suite inventory rejects empty, renamed and duplicate selections, including grid-redraw.",
+    "strict_lint": "Passed: desktop release lib/tests with Rust warnings denied.",
+    "formatting": "Touched Rust files passed rustfmt --check and diff whitespace check.",
+    "test_profile": "Desktop and xtask test harnesses use opt-level=0 with optimized release dependencies. Delivered application profile remains standard optimized release.",
+    "evidence": "docs/qualification/viewport-grid-redraw-20261011-test-output.txt",
+    "source_sha256": {
+      "desktop/src/native_viewport/platform.rs": "ff40dbf2e5ab6a7c766aaa1fe16ce7dfb108d849e4fa6a04d8c723283eb07b26",
+      "desktop/src/native_viewport/viewport_renderer/tests.rs": "ce8316445350cfea7d80c70a9361ffd2bdc9119ca37c90319f52431af7abfb21",
+      "xtask/src/repository_ci.rs": "11740d698d844a8a65a069c87725a30a379c40d40daf54733b8db65f7bcd8c12",
+      ".github/workflows/native-visual.yml": "4bce8ce91399090bb3158762122e398e5df5b4c6838474dacb86f9cdf77f7948"
+    },
+    "setup_failures_retained": "Initial attempts could not load the unbundled test runtime, did not launch with raw staging libraries, or lacked sandbox GPU access. The successful reproduction and repair use signed packaged libraries and permitted native GPU access."
+  },
+  "ci": "Required native visual workflow explicitly executes the guarded grid-redraw suite on macOS.",
+  "limits": [
+    "GPU pixel validation covers an isolated blank Solid viewport. Sketch and plane-picking visibility/resource identity are covered by the CPU renderer regression.",
+    "No user GUI document was opened or mutated, no live MCP mutation was performed, and broad UI/MCP qualification remains paused.",
+    "Updated packaged-app human acceptance remains pending."
+  ]
+}

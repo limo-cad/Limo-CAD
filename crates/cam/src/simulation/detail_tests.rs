@@ -101,8 +101,8 @@ fn cutter_refined_chamfers_and_floor_fillets_follow_actual_sweeps() {
     let mut perimeter = 0;
     for (p, n) in mesh
         .positions
-        .chunks_exact(3)
-        .zip(mesh.normals.chunks_exact(3))
+        .as_chunks::<3>().0.iter()
+        .zip(mesh.normals.as_chunks::<3>().0.iter())
     {
         let [x, y, z] = [p[0] as f64, p[1] as f64, p[2] as f64];
         let r = (x - 12.).hypot(y - 12.);
@@ -115,8 +115,8 @@ fn cutter_refined_chamfers_and_floor_fillets_follow_actual_sweeps() {
             chamfer += 1;
         }
         if (5.0..35.0).contains(&x) && (-9.95..-9.25).contains(&z) && (-0.8..0.05).contains(&y) {
-            // Tool center Y=-3, R=3, corner=.8: the retained outer floor
-            // blends along the circle centered at Y=-.8, Z=-9.2.
+
+
             assert!(
                 ((y + 0.8).hypot(z + 9.2) - 0.8).abs() < 0.015,
                 "floor fillet: {p:?}"
@@ -130,9 +130,9 @@ fn cutter_refined_chamfers_and_floor_fillets_follow_actual_sweeps() {
         }
     }
     assert!(chamfer > 100, "missing small hole bevel ({chamfer})");
-    // Long straight features are intentionally compressed. Check an interior
-    // cross-section as well as the few vertices retained along the extrusion.
-    for triangle in mesh.positions.chunks_exact(9) {
+
+
+    for triangle in mesh.positions.as_chunks::<9>().0 {
         let p: [[f64; 3]; 3] =
             std::array::from_fn(|i| std::array::from_fn(|k| triangle[i * 3 + k] as f64));
         for i in 0..3 {
@@ -164,12 +164,12 @@ fn cutter_refined_chamfers_and_floor_fillets_follow_actual_sweeps() {
     assert!(perimeter > 0, "missing perimeter bevel ({perimeter})");
     for (p, n) in mesh
         .positions
-        .chunks_exact(9)
-        .zip(mesh.normals.chunks_exact(9))
+        .as_chunks::<9>().0.iter()
+        .zip(mesh.normals.as_chunks::<9>().0.iter())
     {
         if [p[2], p[5], p[8]].iter().all(|z| z.abs() < 1e-6) {
-            // A triangle on the untouched top must not inherit a cone normal
-            // from its rim vertex: that makes fine dark flecks on a flat face.
+
+
             assert!(
                 [n[2], n[5], n[8]].iter().all(|z| *z > 0.999),
                 "top-face normals: {p:?}, {n:?}"
@@ -212,9 +212,9 @@ fn shallow_corner_display_retains_stock_instead_of_using_the_full_diameter() {
             .presentation_mesh(MAX_SURFACE_TRIANGLES, &mut vec![])
             .unwrap();
         let mut tested = 0;
-        // Test the interior cross-section; stock side faces at X=+/-2 also
-        // contain valid vertices outside the cutter's radius at this height.
-        for triangle in mesh.positions.chunks_exact(9) {
+
+
+        for triangle in mesh.positions.as_chunks::<9>().0 {
             let points: [[f64; 3]; 3] =
                 std::array::from_fn(|i| std::array::from_fn(|k| triangle[i * 3 + k] as f64));
             for i in 0..3 {
@@ -349,19 +349,19 @@ fn multi_operation_faced_stock_keeps_detailed_chamfers_at_the_default_work_budge
     for i in 0..4 {
         cut(&mut stock, &tool, loop_points[i], loop_points[(i + 1) % 4]);
     }
-    // Do not let a successful coarse fallback make this quality test pass.
+
     let mesh = stock
         .surface_mesh_with_refinement(MAX_SURFACE_TRIANGLES, true)
         .expect("detailed mesh must finish inside the unmodified work and triangle budgets");
     let mut chamfer_vertices = 0;
-    for p in mesh.positions.chunks_exact(3) {
+    for p in mesh.positions.as_chunks::<3>().0 {
         let r = (p[0] as f64 - 8.).hypot(p[1] as f64);
         if (2.85..3.1).contains(&r) && (11.6..11.9).contains(&(p[2] as f64)) {
             chamfer_vertices += 1;
         }
     }
     assert!(chamfer_vertices > 60);
-    for triangle in mesh.positions.chunks_exact(9) {
+    for triangle in mesh.positions.as_chunks::<9>().0 {
         let center: [f64; 3] =
             std::array::from_fn(|i| (triangle[i] + triangle[i + 3] + triangle[i + 6]) as f64 / 3.);
         if center[0].abs() < 13.
@@ -393,7 +393,7 @@ fn capture_chamfers_and_fillets() {
         .presentation_mesh(MAX_SURFACE_TRIANGLES, &mut warnings)
         .unwrap();
     eprintln!("CAM detailed display: {:?} cells, {} triangles, cut {:.1} ms, mesh {:.1} ms, warnings {:?}", stock.dimensions, mesh.triangle_count, cut_time.as_secs_f64() * 1000., begin_mesh.elapsed().as_secs_f64() * 1000., warnings);
-    if let Some(path) = std::env::var_os("NBCAD_CAM_DETAIL_CAPTURE") {
+    if let Some(path) = std::env::var_os("LIMO_CAD_CAM_DETAIL_CAPTURE") {
         std::fs::write(path, serde_json::to_vec(&mesh).unwrap()).unwrap();
     }
 }
@@ -401,8 +401,8 @@ fn capture_chamfers_and_fillets() {
 #[test]
 #[ignore = "read-only capture of a locally supplied project; never a committed job fixture"]
 fn capture_project_stock_detail() {
-    let path = std::env::var("NBCAD_CAM_DETAIL_PROJECT").expect("set NBCAD_CAM_DETAIL_PROJECT");
-    let contents = if path.ends_with(".nbcad") {
+    let path = std::env::var("LIMO_CAD_CAM_DETAIL_PROJECT").expect("set LIMO_CAD_CAM_DETAIL_PROJECT");
+    let contents = if path.ends_with(".limo") {
         let output = std::process::Command::new("unzip")
             .args(["-p", &path, "model.json"])
             .output()
@@ -414,8 +414,8 @@ fn capture_project_stock_detail() {
     };
     let model: serde_json::Value = serde_json::from_slice(&contents).unwrap();
     let mut document: CamDocumentDto = serde_json::from_value(model["cam"].clone()).unwrap();
-    // Machine configuration is unrelated to stock display; never emit private
-    // post settings into a captured artifact or rely on commissioning state.
+
+
     for setup in &mut document.setups {
         setup.machine = None;
     }
@@ -461,7 +461,7 @@ fn capture_project_stock_detail() {
         mesh.triangle_count,
         warnings
     );
-    if let Some(path) = std::env::var_os("NBCAD_CAM_DETAIL_CAPTURE") {
+    if let Some(path) = std::env::var_os("LIMO_CAD_CAM_DETAIL_CAPTURE") {
         std::fs::write(path, serde_json::to_vec(&mesh).unwrap()).unwrap();
     }
 }

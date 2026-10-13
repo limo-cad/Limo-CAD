@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-10",
+  "status": "passed",
+  "case": "shared_refinement_budget_helper",
+  "source_revision": "f2f079580c70182159fb4fec1640aad3ba34c6c0",
+  "source_files": {
+    "crates/occt/include/refinement_budget.hpp": "ebb3e05ba349173259f77f8543bdcdedf4ccfa78803e41b72c24cd409e939f32",
+    "crates/occt/tests/refinement_budget.cpp": "0f8c6fde993c63047ebf28e003a0bd7192c09de651f82f4ff6d7ed9a4aec3038"
+  },
+  "method": "Compile the standalone production-header helper check once with clang++ -std=c++17 -Wall -Wextra -Werror, then execute it once.",
+  "compile_exit_code": 0,
+  "execution_exit_code": 0,
+  "temporary_directory": "D:/limo-cad-maintenance/backlog-autonomous-20261010/refinement-budget-f2f07958",
+  "scope": "Shared comparison/sample allowances, typed exhaustion and overflow/storage accounting in the standalone budget helper.",
+  "limitations": [
+    "Does not execute the OCCT shim or prove a native junction-recovery path was reached.",
+    "Does not qualify CAD geometry, packages, GUI input or manual MCP coverage.",
+    "No application runtime was built, deployed, restarted or controlled."
+  ]
+}

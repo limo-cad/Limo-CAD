@@ -16,11 +16,15 @@ use crate::planner::{
     RAPID_FEED_ESTIMATE_MM_PER_MIN,
 };
 use crate::simulation::{
-    simulate_program, CamSimulationRequestDto, CamSimulationResultDto, CamSimulationSourceDto,
-    CamSimulationTargetDto, CamStockMeshDto,
+    CamSimulationCancellation, CamSimulationRequestDto, CamSimulationResultDto,
+    CamSimulationSourceDto, CamSimulationTargetDto, CamStockMeshDto,
 };
 
-const MAX_GCODE_BYTES: usize = 8 * 1024 * 1024;
+mod native;
+pub use native::simulate_gcode_with_cancellation;
+
+/// Shared bound for NC source input, including native file reads.
+pub const MAX_GCODE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_GCODE_LINES: usize = 500_000;
 const MAX_GCODE_COMMANDS: usize = 300_000;
 const EPSILON: f64 = 1.0e-9;
@@ -60,32 +64,7 @@ pub fn simulate_gcode(
     document: &CamDocumentDto,
     request: &CamGcodeSimulationRequestDto,
 ) -> Result<CamSimulationResultDto, CamPlanError> {
-    document.validate().map_err(CamPlanError)?;
-    let setup = document.setup(request.setup_id).ok_or_else(|| {
-        CamPlanError(format!(
-            "CAM setup {} does not exist for G-code simulation",
-            request.setup_id
-        ))
-    })?;
-    let parsed = parse_gcode(document, setup, request)?;
-    let simulation_request = CamSimulationRequestDto {
-        setup_id: request.setup_id,
-        voxel_size: request.voxel_size,
-        max_voxels: request.max_voxels,
-        stock_mesh: request.stock_mesh.clone(),
-        target: request.target.clone(),
-        through_operation_id: None,
-        completed_steps: request.completed_steps,
-        playback_time_seconds: None,
-    };
-    simulate_program(
-        document,
-        setup,
-        &parsed.program,
-        &simulation_request,
-        CamSimulationSourceDto::GCode,
-        &parsed.source_lines,
-    )
+    simulate_gcode_with_cancellation(document, request, None)
 }
 
 struct ParsedGcode {
@@ -146,11 +125,24 @@ struct Interpreter<'a> {
     siemens_normal_approach: bool,
 }
 
+#[cfg(test)]
 fn parse_gcode(
     document: &CamDocumentDto,
     setup: &CamSetupDto,
     request: &CamGcodeSimulationRequestDto,
 ) -> Result<ParsedGcode, CamPlanError> {
+    parse_gcode_with_cancellation(document, setup, request, None)
+}
+
+fn parse_gcode_with_cancellation(
+    document: &CamDocumentDto,
+    setup: &CamSetupDto,
+    request: &CamGcodeSimulationRequestDto,
+    cancellation: Option<&CamSimulationCancellation>,
+) -> Result<ParsedGcode, CamPlanError> {
+    if let Some(cancellation) = cancellation {
+        cancellation.check()?;
+    }
     if request.source.len() > MAX_GCODE_BYTES {
         return Err(CamPlanError(format!(
             "G-code source exceeds the {MAX_GCODE_BYTES}-byte safety limit"
@@ -216,6 +208,9 @@ fn parse_gcode(
 
     let mut comment_depth = 0usize;
     for (index, raw) in request.source.lines().enumerate() {
+        if let Some(cancellation) = cancellation {
+            cancellation.check()?;
+        }
         let physical_line = u32::try_from(index + 1).unwrap_or(u32::MAX);
         if comment_depth == 0
             && interpreter.interpret_siemens_cycle_control(physical_line, raw.trim())?
@@ -232,7 +227,14 @@ fn parse_gcode(
             "G-code source ends inside a parenthesized comment".to_string(),
         ));
     }
-    interpreter.finish(program_name)
+    if let Some(cancellation) = cancellation {
+        cancellation.check()?;
+    }
+    let parsed = interpreter.finish(program_name)?;
+    if let Some(cancellation) = cancellation {
+        cancellation.check()?;
+    }
+    Ok(parsed)
 }
 
 fn resolve_dialect(request: &CamGcodeSimulationRequestDto) -> CamGcodeDialectDto {
@@ -269,10 +271,12 @@ fn generated_post_dialect(source: &str) -> Result<Option<CamGcodeDialectDto>, Ca
     for line in source.lines() {
         let line = line.trim();
         let found = match line {
+            "(LIMO CAD POST FANUC)" | "(LIMO CAD POST MITSUBISHI)" |
+            "(LIMO CAD POST MAZAK)" | "(LIMO CAD POST SYNTEC)" |
             "(NOBS CAD POST FANUC)" | "(NOBS CAD POST MITSUBISHI)" |
             "(NOBS CAD POST MAZAK)" | "(NOBS CAD POST SYNTEC)" => Some(CamGcodeDialectDto::Fanuc),
-            "(NOBS CAD POST HAAS)" => Some(CamGcodeDialectDto::Haas),
-            "(NOBS CAD POST OSP)" => return Err(CamPlanError("The NC simulator does not yet interpret OSP. CAM simulation is available; do not replay OSP as ISO G-code.".into())),
+            "(LIMO CAD POST HAAS)" | "(NOBS CAD POST HAAS)" => Some(CamGcodeDialectDto::Haas),
+            "(LIMO CAD POST OSP)" | "(NOBS CAD POST OSP)" => return Err(CamPlanError("The NC simulator does not yet interpret OSP. CAM simulation is available; do not replay OSP as ISO G-code.".into())),
             _ if line.to_ascii_uppercase().split_whitespace().any(|word| word == "BEGIN") && line.to_ascii_uppercase().contains("BEGIN PGM") => {
                 return Err(CamPlanError("The NC simulator does not yet interpret TNC conversational programs. CAM simulation is available; it is not NC replay.".into()));
             }
@@ -605,7 +609,6 @@ impl Interpreter<'_> {
             }
         }
 
-        // Even an excluded SUPA/G53 block must not hide a controller call.
         if unknown.iter().any(|name| {
             name.contains('_')
                 || words
@@ -670,8 +673,8 @@ impl Interpreter<'_> {
                     let offset = WorkOffset::from_index(index as u8)
                         .expect("First six work offsets map directly");
                     if offset != self.active_offset {
-                        // No fixture-to-fixture transform is available. Do not
-                        // join a known old-frame point to the new frame.
+
+
                         self.known_axes = [false; 3];
                     }
                     self.active_offset = offset;
@@ -773,10 +776,10 @@ impl Interpreter<'_> {
                         Some(source_line),
                     );
                     self.active_tool_id = Some(tool_id);
-                    // Tool-change station motion and the new length offset are
-                    // machine responsibilities. Re-establish the workpiece
-                    // tool-tip pose from subsequent programmed XYZ instead of
-                    // inventing a sweep across that hidden machine motion.
+
+
+
+
                     self.known_axes = [false; 3];
                 }
                 7 => self.push(
@@ -809,10 +812,6 @@ impl Interpreter<'_> {
             }
         }
 
-        // G40/G41/G42 are modal in NC input. A safety-header G40 while
-        // already off must not become a second semantic cancellation. Apply
-        // a real cancellation even when this block's machine motion itself
-        // is excluded from the workpiece simulation.
         if let Some(change) = comp_change {
             if change.is_some()
                 && self.dialect == CamGcodeDialectDto::Siemens828d
@@ -936,8 +935,6 @@ impl Interpreter<'_> {
         if !had_complete_pose {
             self.position = target;
             if self.known_axes.iter().all(|known| *known) {
-                // Establish the workpiece pose without inventing a physical
-                // sweep across excluded machine/tool-change motion.
                 self.push(CamCommandDto::SetPosition { to: target }, Some(source_line));
             }
             self.warn_once(
@@ -1592,7 +1589,7 @@ mod tests {
     fn native_dimensional_switches_keep_physical_feed_and_dwell_independent() {
         let doc = document();
         let mut input = request("G700 G90 G94\nT3 M6\nG0 X0 Y0 Z1\nG1 X1 F60\nG710\nG1 X50.8\nG1 X76.2 F1524\nG70\nG1 X4\nG71\nG1 X127\nG4 F0.5\nM30");
-        input.file_name = None; // G700 alone must identify the native dialect.
+        input.file_name = None;
         let parsed = parse_gcode(&doc, &doc.setups[0], &input).unwrap();
         let feeds: Vec<_> = parsed
             .program
@@ -1906,6 +1903,39 @@ mod tests {
         assert_eq!(a.remaining_voxels, b.remaining_voxels);
         assert_eq!(a.steps.len(), b.steps.len());
         assert!((a.estimated_seconds - b.estimated_seconds).abs() < EPSILON);
+    }
+
+    #[test]
+    fn renamed_post_headers_preserve_dwell_units_and_reject_conflicts() {
+        for brand in ["LIMO CAD", "NOBS CAD"] {
+            let source = format!(
+                "({brand} POST FANUC)\nG21 G90\nT3 M6\nG0 X0 Y0 Z2\nG1 Z0 F100\nG4 P1500\nM30"
+            );
+            let doc = document();
+            let input = request(&source);
+            let parsed = parse_gcode(&doc, &doc.setups[0], &input).unwrap();
+            assert!(parsed
+                .program
+                .commands
+                .iter()
+                .any(|command| matches!(command,
+                CamCommandDto::Dwell { seconds } if (*seconds - 1.5).abs() < EPSILON)));
+            let mut conflicting = input;
+            conflicting.dialect = CamGcodeDialectDto::Iso;
+            assert!(parse_gcode(&doc, &doc.setups[0], &conflicting).is_err());
+            for post in ["MITSUBISHI", "MAZAK", "SYNTEC"] {
+                assert_eq!(
+                    generated_post_dialect(&format!("({brand} POST {post})")).unwrap(),
+                    Some(CamGcodeDialectDto::Fanuc)
+                );
+            }
+            assert_eq!(
+                generated_post_dialect(&format!("({brand} POST HAAS)")).unwrap(),
+                Some(CamGcodeDialectDto::Haas)
+            );
+            assert!(generated_post_dialect(&format!("({brand} POST OSP)")).is_err());
+        }
+        assert!(generated_post_dialect("(NOBS CAD POST FANUC)\n(LIMO CAD POST HAAS)").is_err());
     }
 
     #[test]

@@ -8,7 +8,7 @@ updated: 2026-09-20
 
 # MCP harness
 
-`mcp-server/` provides `nbcad-mcp`: a **stdio** MCP server for local
+`mcp-server/` provides `limo-cad-mcp`: a **stdio** MCP server for local
 automation and testing (no required cloud).
 
 Canonical notes: [MCP harness](../../docs/mcp-harness.md).
@@ -27,7 +27,7 @@ Proposals: [proposed architecture](../../docs/proposed-architecture.md).
 - Prefer MCP tool **`cad_help`** (`search` → `get` / `topics`) before designing;
   optional prompt **`help_search`** frames a contextual query. Standard
   `resources/list` and `resources/read` expose the same offline Markdown bundle
-  (`nbcad://knowledge/...`, start at `index.md` when browsing full pages).
+  (`limo-cad://knowledge/...`, start at `index.md` when browsing full pages).
   Guidance is not an execution tool.
 
 These notes describe the branch that bundles them. Older snapshots may predate

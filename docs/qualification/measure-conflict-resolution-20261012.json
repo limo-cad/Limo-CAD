@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-10-12T13:52:07.677671+00:00",
+  "source_revision": "6a094982dfce0819411d5607d7c87e301bf909a1",
+  "integrated_pr124_base": "153a1eb6aa996f77aa213936d4946584e13d53b5",
+  "integrated_pr372_head": "4476c15311e9fcf0829699b867e3af2472d1406f",
+  "merged_pr367_commit": "b4fb29e6b80ea150f9b1674cc888868fa2a47011",
+  "source_file_sha256": {
+    "crates/occt/include/shim.hpp": "14d375d1ae05840f2c9a6941cfe39ea968e54eeba7960f0e537dc724cae46892",
+    "crates/occt/src/native.rs": "1e5ae621e0ec025459306f3d3ce024c0b2ef33cffa727e95ec458bc2554044a5",
+    "crates/occt/src/shim.cpp": "1de678cdeca98fa6d42cc9702eec5689d542f59ba5caa2ec3b36f4b2b4d56b4f",
+    "desktop/src/native_viewport/viewport_renderer.rs": "952779458e3aaea30109652c083536ca85790b1f80f315f6cceb9d7b94f96057",
+    "desktop/src/native_viewport/viewport_renderer/surface_submission.rs": "ab8dca9d8091c27d6867cc08714e3b2ae8d66e831ec6d102b07bb1194a7148eb"
+  },
+  "native_bridge_preservation": {
+    "measurement_method_preserved_byte_for_byte": true,
+    "method_sha256": "5d9adf3aaefc77bf85aaed28d66f8ce895a5f25eadca8b0d51e96ec9b6362827",
+    "new_clearance_helpers_and_probe_preserved": true,
+    "clearance_helpers_and_probe_preserved_byte_for_byte": true,
+    "clearance_block_sha256": "d87de467a9af46eaa1214afddc826f2fc96ac2e516c272b33c10cc79f4e53cf8"
+  },
+  "merge_topology": {
+    "pr124_base": "153a1eb6aa996f77aa213936d4946584e13d53b5",
+    "pr372_head": "4476c15311e9fcf0829699b867e3af2472d1406f",
+    "feature_tree": "f3a04483debcd146edd288b6eaa0060cc6701497",
+    "combined_base_commit": "9c90ef89b1601b755f4ba004c95eb26b9b4fa088",
+    "combined_base_tree": "5f84344dbd287f27dbc2afb82a189a3b8b1a392e",
+    "merge_after_pr372_conflict_free": true,
+    "complete_feature_tree_preserved": true,
+    "scope": "Actual current PR372 head merges with PR124 without custom resolution; merge-commit scenario only. No remote PR merged."
+  },
+  "resolution": [
+    "Keep both Measure and clearance bridge declarations and complete C++ methods.",
+    "Align the surface coordinator with PR372 current head, retaining current base argument lint enforcement.",
+    "Preserve metric labels, main-thread shutdown servicing and immediate exit after a stopped update.",
+    "The previous strict phase chain and its fixture remain historical evidence; current surface queue exclusion follows PR372."
+  ],
+  "checks": {
+    "native_measurement_tests_passed": 4,
+    "native_clearance_tests_passed": 1,
+    "desktop_source_tests_passed": 6,
+    "windowless_native_gpu_tests_passed": 1,
+    "strict_native_engine_and_occt_all_targets": "passed",
+    "strict_desktop_all_targets_all_features": "passed",
+    "root_desktop_mcp_format": "passed",
+    "diff_whitespace": "passed"
+  },
+  "receipt": "docs/qualification/measure-conflict-resolution-20261012-receipt.txt",
+  "local_logs": [
+    {
+      "path": "/private/tmp/measure-current-conflicts-kernel-tests.log",
+      "sha256": "1adad303e9c39f6dc33c5dbbb6d173dda7763fb83419fddc6b7ec48ac9ae0d39"
+    },
+    {
+      "path": "/private/tmp/measure-current-conflicts-clearance-test.log",
+      "sha256": "df79d79274852fa30b4715903d13c4cb2affdfca860ca9d071fae09bc2034026"
+    },
+    {
+      "path": "/private/tmp/measure-current-conflicts-native-clippy.log",
+      "sha256": "9000d798670c70e5c63e1522e6bab57b6d4685b404a33f8208ef187e4d51d3c6"
+    },
+    {
+      "path": "/private/tmp/measure-current-conflicts-desktop-tests.log",
+      "sha256": "ff46942c4a2d8f1cb6957930a983016a7aa861a4b5fc88f6742f80662169dc71"
+    },
+    {
+      "path": "/private/tmp/measure-current-conflicts-desktop-clippy.log",
+      "sha256": "bf34d36b66c12535448b5a28ee965fada0c95788d6b3f1e68655ffe729b69a94"
+    }
+  ],
+  "windowless_gpu_proofs": "/private/tmp/measure-current-conflicts-gpu-proofs",
+  "existing_coverage_statuses_preserved": true,
+  "new_live_ui_passes": 0,
+  "new_manual_mcp_passes": 0,
+  "broader_run_state": "paused",
+  "limits": [
+    "Source/windowless checks leave packaged appearance and physical pointer/clipboard acceptance pending.",
+    "Hosted CI on the pushed resolution remains pending."
+  ]
+}

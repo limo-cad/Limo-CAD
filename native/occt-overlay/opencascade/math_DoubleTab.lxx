@@ -1,0 +1,67 @@
+// Copyright (c) 1997-1999 Matra Datavision
+// Copyright (c) 1999-2014 OPEN CASCADE SAS
+//
+// This file is part of Open CASCADE Technology software library.
+//
+// This library is free software; you can redistribute it and/or modify it under
+// the terms of the GNU Lesser General Public License version 2.1 as published
+// by the Free Software Foundation, with special exception defined in the file
+// OCCT_LGPL_EXCEPTION.txt. Consult the file LICENSE_LGPL_21.txt included in OCCT
+// distribution for complete text of the license and disclaimer of any warranty.
+//
+// Alternatively, this file may be used under the terms of Open CASCADE
+// commercial license or contractual agreement.
+// Modified for Limo CAD on 2026-10-06: checked matrix storage.
+
+#include <cstring>
+#include <cstdint>
+#include <limits>
+#include <Standard_OutOfRange.hxx>
+
+namespace math_DoubleTabChecked
+{
+inline std::size_t Extent(Standard_Integer lower, Standard_Integer upper)
+{
+  const std::int64_t extent = std::int64_t(upper) - std::int64_t(lower) + 1;
+  if (extent < 0 || extent > (std::numeric_limits<Standard_Integer>::max)())
+    Standard_OutOfRange::Raise("math_DoubleTab dimension is outside its index range");
+  return static_cast<std::size_t>(extent);
+}
+
+inline std::size_t Count(Standard_Integer lowRow, Standard_Integer upperRow,
+                         Standard_Integer lowCol, Standard_Integer upperCol)
+{
+  const std::size_t rows = Extent(lowRow, upperRow);
+  const std::size_t cols = Extent(lowCol, upperCol);
+  const std::size_t maxCount = (std::numeric_limits<Standard_Integer>::max)();
+  if (cols != 0 && (rows > maxCount / cols
+                   || rows > (std::numeric_limits<std::size_t>::max)() / sizeof(Standard_Real) / cols))
+    Standard_OutOfRange::Raise("math_DoubleTab storage exceeds its index or byte range");
+  return rows * cols;
+}
+
+inline Standard_Integer Rebase(Standard_Integer lower, Standard_Integer upper,
+                               Standard_Integer nextLower)
+{
+  const std::int64_t nextUpper = std::int64_t(upper) - std::int64_t(lower) + nextLower;
+  if (nextUpper < (std::numeric_limits<Standard_Integer>::min)()
+      || nextUpper > (std::numeric_limits<Standard_Integer>::max)())
+    Standard_OutOfRange::Raise("math_DoubleTab rebased dimension is outside its index range");
+  return static_cast<Standard_Integer>(nextUpper);
+}
+}
+
+inline Standard_Real& math_DoubleTab::Value(const Standard_Integer RowIndex,
+                                           const Standard_Integer ColIndex) const
+{
+  return ((Standard_Real*)Addr)[(UppC - LowC + 1) * (RowIndex - LowR) + (ColIndex - LowC)];
+}
+
+inline void math_DoubleTab::Copy(math_DoubleTab& Other) const
+{
+  const std::size_t count = math_DoubleTabChecked::Count(LowR, UppR, LowC, UppC);
+  if (count > math_DoubleTabChecked::Count(Other.LowR, Other.UppR, Other.LowC, Other.UppC))
+    Standard_OutOfRange::Raise("math_DoubleTab copy destination is too small");
+  if (count != 0)
+    std::memmove(Other.Addr, Addr, count * sizeof(Standard_Real));
+}

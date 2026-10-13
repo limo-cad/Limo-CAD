@@ -116,7 +116,6 @@ fn flat_finishes_every_floor_at_its_own_z_and_keeps_radial_stock_off_walls() {
             vec![tool(2, CamToolKind::FlatEndMill, 6.0)],
         );
         let program = plan_setup(&doc, 1).unwrap();
-        // Only the two floors are machined, and nothing below the step.
         let feed_z = program
             .commands
             .iter()
@@ -129,7 +128,6 @@ fn flat_finishes_every_floor_at_its_own_z_and_keeps_radial_stock_off_walls() {
         let step = cuts_at(&program.commands, -5.0);
         let top = cuts_at(&program.commands, 0.0);
         assert!(!step.is_empty() && !top.is_empty());
-        // The cutter never comes closer than radius + stock to the boss...
         let closest = step
             .iter()
             .flat_map(|&(a, b)| {
@@ -144,13 +142,10 @@ fn flat_finishes_every_floor_at_its_own_z_and_keeps_radial_stock_off_walls() {
             closest >= 3.0 + stock - 1e-6,
             "stock {stock}: wall pass {closest}"
         );
-        // ...and the wall pass is on it, not a cell away.
         assert!(
             closest <= 3.0 + stock + 0.005,
             "stock {stock}: wall pass {closest}"
         );
-        // Every point of the step floor the cutter can reach is swept by its
-        // flat bottom.
         for i in 0..=80 {
             for j in 0..=60 {
                 let p = Point2Dto::new(i as f64 * 0.5, j as f64 * 0.5);
@@ -183,7 +178,6 @@ fn climb_runs_with_the_wall_on_the_right_and_conventional_reverses() {
             vec![tool(2, CamToolKind::FlatEndMill, 6.0)],
         );
         let program = plan_setup(&doc, 1).unwrap();
-        // The wall pass: the moves hugging the boss.
         for (a, b) in cuts_at(&program.commands, -5.0) {
             let mid = Point2Dto::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
             if to_boss(mid) > 3.0 + 0.01 || ((b.x - a.x).hypot(b.y - a.y)) < 0.5 {
@@ -191,7 +185,6 @@ fn climb_runs_with_the_wall_on_the_right_and_conventional_reverses() {
             }
             let center = Point2Dto::new(20.0, 15.0);
             let cross = (b.x - a.x) * (center.y - a.y) - (b.y - a.y) * (center.x - a.x);
-            // Boss to the right of travel <=> cross product negative.
             assert_eq!(cross < 0.0, wall_right, "{direction:?}");
         }
     }
@@ -203,8 +196,7 @@ fn flat_rejects_flutes_that_cannot_reach_the_detected_floor() {
     short.flute_length = 1.0;
     let doc = document(vec![flat(0.0, MillingDirection::Climb)], vec![short]);
     let error = plan_setup(&doc, 1)
-        .err()
-        .expect("a one-millimeter flute cannot finish the five-millimeter step");
+        .expect_err("a one-millimeter flute cannot finish the five-millimeter step");
     assert!(error.0.contains("flute length"), "{}", error.0);
 }
 
@@ -252,7 +244,6 @@ fn ring_floor(hole: f64) -> CamOperationDto {
     }
     let v = |ring: usize, i: usize| (ring * n + i % n) as u32;
     for i in 0..n {
-        // top (up), bottom (down), outer wall (out), hole wall (into the hole)
         mesh.indices.extend([
             v(0, i),
             v(1, i),
@@ -286,8 +277,7 @@ fn ring_floor(hole: f64) -> CamOperationDto {
             v(1, i + 1),
         ]);
     }
-    // The lists above wind inward; reverse every triangle.
-    for tri in mesh.indices.chunks_exact_mut(3) {
+    for tri in mesh.indices.as_chunks_mut::<3>().0 {
         tri.swap(1, 2);
     }
     let mut op = flat(0.0, MillingDirection::Climb);
@@ -302,19 +292,16 @@ fn ring_floor(hole: f64) -> CamOperationDto {
 
 #[test]
 fn ring_floor_finishes_around_the_hole_first_with_every_pass_climbing() {
-    // The Ø14 hole is wider than 2 D, so it is not machined over.
     let doc = document(
         vec![ring_floor(7.0)],
         vec![tool(2, CamToolKind::FlatEndMill, 6.0)],
     );
     let program = plan_setup(&doc, 1).unwrap();
     let c = Point2Dto::new(20.0, 15.0);
-    // Split the Z0 cuts into closed passes.
     let mut passes: Vec<Vec<Point2Dto>> = vec![];
     let mut current: Vec<Point2Dto> = vec![];
     for (a, b) in cuts_at(&program.commands, 0.0) {
         if current.is_empty() && !passes.is_empty() && passes.last().unwrap()[0] == a {
-            // A stay-down link from the closed pass to the next one.
             current = vec![b];
             continue;
         }
@@ -345,9 +332,6 @@ fn ring_floor_finishes_around_the_hole_first_with_every_pass_climbing() {
             .sum::<f64>()
             < 0.0
     };
-    // Inside first: every pass around the hole (clockwise, uncut toward the
-    // hole on the right) runs before any pass on the outside (counter-
-    // clockwise, uncut outside on the right).
     let first_outer = passes
         .iter()
         .position(|p| !clockwise(p))
@@ -357,7 +341,6 @@ fn ring_floor_finishes_around_the_hole_first_with_every_pass_climbing() {
         passes[first_outer..].iter().all(|p| !clockwise(p)),
         "back inside after leaving"
     );
-    // Inner chain works toward the hole, outer chain toward the edge.
     let radii: Vec<f64> = passes.iter().map(|p| mean(p)).collect();
     assert!(
         radii[..first_outer].windows(2).all(|w| w[1] < w[0]),
@@ -367,9 +350,7 @@ fn ring_floor_finishes_around_the_hole_first_with_every_pass_climbing() {
         radii[first_outer..].windows(2).all(|w| w[1] > w[0]),
         "{radii:?}"
     );
-    // No pass only re-sweeps the hole or the outer overhang ...
     assert!(radii.iter().all(|&r| r > 7.0 && r < 15.0), "{radii:?}");
-    // ... and the whole floor is still swept by the 3 mm flat land.
     let segments: Vec<(Point2Dto, Point2Dto)> = passes
         .iter()
         .flat_map(|p| p.windows(2).map(|w| (w[0], w[1])).collect::<Vec<_>>())
@@ -395,8 +376,6 @@ fn ring_floor_finishes_around_the_hole_first_with_every_pass_climbing() {
 
 #[test]
 fn a_hole_up_to_two_diameters_is_machined_over_so_no_stub_stays_on_it() {
-    // Ø8 hole, Ø6 cutter: the floor is finished as if the hole were not
-    // there, so stock left standing over the hole is cut away too.
     let doc = document(
         vec![ring_floor(4.0)],
         vec![tool(2, CamToolKind::FlatEndMill, 6.0)],

@@ -4,7 +4,7 @@
 
 | Target | Package contents |
 |--------|------------------|
-| `standard` (default) | `3D/3dmodel.model`: millimetres, `basematerials` name from filament type and color name, `displaycolor` for viewing. Application is `noBS CAD`. |
+| `standard` (default) | `3D/3dmodel.model`: millimetres, `basematerials` name from filament type and color name, `displaycolor` for viewing. Application is `Limo CAD`. |
 | `bambu_studio` | Same package as `standard`. |
 | `orca_slicer` | Same package as `standard`. |
 | `prusa_slicer` | + `Metadata/Slic3r_PE.config` filament arrays + `Slic3r_PE_model.config` object/volume extruder metadata (required — PS ignores basematerials) |
