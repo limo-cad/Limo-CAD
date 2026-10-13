@@ -42,6 +42,7 @@ pub(crate) use platform::{
 };
 #[cfg(test)]
 pub(crate) use platform::{interface_geometry_fixture_snapshot, interface_scene_fixture};
+mod service_wake;
 #[cfg(all(
     any(target_os = "macos", target_os = "windows", target_os = "linux"),
     feature = "dev-ui-lab"

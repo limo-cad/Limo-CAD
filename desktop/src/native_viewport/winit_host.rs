@@ -267,9 +267,11 @@ pub(crate) fn build(configure: impl FnOnce(&mut App, NativeInterfaceHandle)) -> 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     window_icon::install(&mut app);
     let wake = (**app.world().resource::<EventLoopProxyWrapper>()).clone();
-    let handle = NativeInterfaceHandle::new(move || {
-        let _ = wake.send_event(WinitUserEvent::WakeUp);
-    });
+    let wake = super::service_wake::ServiceWake::new(move || {
+        wake.send_event(WinitUserEvent::WakeUp).is_ok()
+    })
+    .expect("start CAD service-wake worker");
+    let handle = NativeInterfaceHandle::new(move || wake.request());
     app.insert_resource(WinitSettings {
         focused_mode: UpdateMode::reactive_low_power(Duration::MAX),
         unfocused_mode: UpdateMode::reactive_low_power(Duration::MAX),
