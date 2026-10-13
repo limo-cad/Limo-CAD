@@ -13,7 +13,7 @@ test('core keeps all targets and excludes only the two exact flagship names', ()
 test('each heavy shard runs its one exact recipe serially with unchanged assertions', () => {
   for (const [shard, name] of Object.entries(flagshipTests)) {
     assert.deepEqual(testArguments(shard), ['test', '--locked', '--manifest-path', 'mcp-server/Cargo.toml',
-      '--test', 'recipes', name, '--', '--exact', '--test-threads=1']);
+      '--test', 'recipes', name, '--', '--exact', '--test-threads=1', '--nocapture']);
   }
   assert.throws(() => testArguments('typo'), /Unknown MCP shard/);
   assert.throws(() => testArguments('toString'), /Unknown MCP shard/);

@@ -6,9 +6,10 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { flagshipTests } from './run-mcp-tests.mjs';
 
-const read = file => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
+const read = file => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const desktop = read('.github/workflows/desktop-packages.yml');
 const mcp = read('.github/workflows/mcp-server.yml');
+const acceptance = read('.github/workflows/mcp-acceptance.yml');
 const version = read('.github/workflows/version-guard.yml');
 const warmer = read('.github/workflows/windows-occt-cache.yml');
 const sdk = read('.github/actions/setup-windows-occt/action.yml');
@@ -35,19 +36,28 @@ test('every package job requires both successful cheap preflights, including tag
   assert.match(version, /node --test scripts\/ci\/\*.test.mjs/);
 });
 
-test('SDK warmer is default-branch-only and shares exact ARM architecture/cache setup', () => {
+test('SDK warmer is default-branch-only and shares exact architecture/cache setup', () => {
   assert.match(warmer, /^  push:\n    branches: \[main\]/m);
   assert.match(warmer, /^  workflow_dispatch:/m);
   assert.match(warmer, /^  schedule:/m);
   assert.doesNotMatch(warmer, /^  pull_request(?:_target)?:/m);
   assert.match(job(warmer, 'warm-arm64'), /if: github.ref == format\('refs\/heads\/\{0\}', github.event.repository.default_branch\)/);
-  for (const source of [desktop, mcp, warmer]) {
+  assert.match(job(warmer, 'warm-x64'), /if: github.ref == format\('refs\/heads\/\{0\}', github.event.repository.default_branch\)/);
+  assert.match(warmer, /cancel-in-progress: false/);
+  assert(read('.gitattributes').includes('vcpkg.json text eol=lf'));
+  for (const source of [desktop, job(mcp, 'prepare-windows-sdk'), warmer]) {
     assert.match(source, /uses: \.\/\.github\/actions\/setup-windows-occt/);
   }
   for (const value of ['windows-11-vs2026-arm', 'windows-11-vs2026-arm-arm64-windows-msvc',
     'arm64-windows', 'Microsoft.VisualStudio.Component.VC.Tools.ARM64']) {
     assert(desktop.includes(value));
     assert(warmer.includes(value));
+  }
+  for (const value of ['windows-2025', 'windows-2025-x64-windows-msvc',
+    'x64-windows', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64']) {
+    assert(desktop.includes(value));
+    assert(mcp.includes(value));
+    assert(job(warmer, 'warm-x64').includes(value));
   }
   assert.doesNotMatch(warmer, /run:.*(?:cargo|npm|tauri)/);
   assert.match(sdk, /default: 716b42043743cdceabed9c8e2e6cf80ddae1e0c1/);
@@ -59,22 +69,51 @@ test('SDK warmer is default-branch-only and shares exact ARM architecture/cache 
 });
 
 test('both native platforms run every shard and all CI inputs trigger native acceptance', () => {
-  assert.match(job(mcp, 'mcp-windows'), /strategy: &acceptance-shards\n      fail-fast: false/);
-  assert.match(job(mcp, 'mcp-linux'), /strategy: \*acceptance-shards/);
-  for (const [shard, project] of [['core', 'garden-bench'], ['turbine', 'vertical-axis-turbine'], ['vise', 'd-screw-vise']]) {
-    assert(mcp.includes(`- shard: ${shard}\n            project: ${project}`));
+  assert.match(job(acceptance, 'acceptance'), /strategy:\n      fail-fast: false/);
+  for (const platform of ['windows', 'linux']) {
+    const caller = job(mcp, `mcp-${platform}`);
+    assert.match(caller, /uses: \.\/\.github\/workflows\/mcp-acceptance.yml/);
+    assert.match(caller, new RegExp(`platform: ${platform}`));
   }
-  for (const name of ['mcp-windows', 'mcp-linux']) {
-    const config = job(mcp, name);
+  for (const [shard, project] of [['core', 'garden-bench'], ['turbine', 'vertical-axis-turbine'], ['vise', 'd-screw-vise']]) {
+    assert(acceptance.includes(`- shard: ${shard}\n            project: ${project}`));
+  }
+  for (const name of ['acceptance']) {
+    const config = job(acceptance, name);
     assert.match(config, /node scripts\/ci\/run-mcp-tests.mjs \$\{\{ matrix.shard \}\}/);
     assert.match(config, /name: MCP bench and complete feature workshop\n        if: matrix.shard == 'core'/);
     assert.match(config, /name: Upload successful demo input[\s\S]*?if-no-files-found: error\n          overwrite: true/);
   }
-  for (const input of ['crates/cam/**', 'crates/help/**', 'scripts/ci/**', '.github/actions/setup-windows-occt/**']) {
+  for (const input of ['crates/cam/**', 'crates/help/**', 'scripts/ci/**', '.github/actions/setup-windows-occt/**', '.github/workflows/mcp-acceptance.yml', '.gitattributes']) {
     assert.equal(mcp.split(`- '${input}'`).length - 1, 2, `${input} must be in both event filters`);
   }
   assert(read('mcp-server/tests/recipes.rs').includes(`fn ${flagshipTests.turbine}()`));
   assert(read('mcp-server/tests/recipes/vise.rs').includes(`fn ${flagshipTests.vise.split('::')[1]}()`));
+});
+
+test('one Windows SDK producer supplies exact same-run artifacts and Linux remains independent', () => {
+  const producer = job(mcp, 'prepare-windows-sdk');
+  const windows = job(mcp, 'mcp-windows');
+  const linux = job(mcp, 'mcp-linux');
+  const shared = job(acceptance, 'acceptance');
+  assert.match(producer, /timeout-minutes: 180/);
+  assert.equal(mcp.split('uses: ./.github/actions/setup-windows-occt').length - 1, 1);
+  assert.doesNotMatch(acceptance, /setup-windows-occt|vcpkg\.exe install/);
+  assert.match(producer, /sdk-artifact-id: \$\{\{ steps\.artifact\.outputs\.artifact-id \}\}/);
+  assert.match(producer, /sdk-toolset: \$\{\{ steps\.occt\.outputs\.toolset \}\}/);
+  assert.match(producer, /path: vcpkg_installed\/x64-windows\//);
+  assert.match(producer, /if-no-files-found: error\n          overwrite: true\n          retention-days: 7/);
+  assert.match(producer, /cargo fmt --all -- --check/);
+  assert.match(producer, /cargo fmt --manifest-path mcp-server\/Cargo.toml -- --check/);
+  assert.match(windows, /needs: prepare-windows-sdk/);
+  assert.match(windows, /sdk-artifact-id: \$\{\{ needs\.prepare-windows-sdk\.outputs\.sdk-artifact-id \}\}/);
+  assert.match(windows, /sdk-toolset: \$\{\{ needs\.prepare-windows-sdk\.outputs\.sdk-toolset \}\}/);
+  assert.doesNotMatch(linux, /needs:|sdk-artifact-id:|sdk-toolset:/);
+  assert.match(shared, /artifact-ids: \$\{\{ inputs\.sdk-artifact-id \}\}/);
+  assert.match(shared, /path: vcpkg_installed\/x64-windows/);
+  assert.doesNotMatch(shared, /run-id:|repository:|github-token:/);
+  assert.match(shared, /if \(\$toolset -ne \$env:SDK_TOOLSET\) \{ throw/);
+  assert.doesNotMatch(shared, /continue-on-error:/);
 });
 
 test('the AppImage is built on the oldest supported glibc and run on the newest Ubuntu', () => {
@@ -150,8 +189,8 @@ test('a release tag must name VERSION on main before anything builds or publishe
 });
 
 test('native geometry regressions remain required once per platform in the core shard', () => {
-  for (const name of ['mcp-windows', 'mcp-linux']) {
-    const config = job(mcp, name);
+  for (const name of ['acceptance']) {
+    const config = job(acceptance, name);
     const steps = config.match(/      - name: Native geometry integration regressions\n[\s\S]*?(?=\n      -|$)/g);
     assert.equal(steps?.length, 1, `${name} must retain native geometry coverage`);
     const step = steps[0];
@@ -159,12 +198,8 @@ test('native geometry regressions remain required once per platform in the core 
     assert.match(step, /CARGO_TARGET_DIR: \$\{\{ github.workspace \}\}\/mcp-server\/target/);
     assert.match(step, /cargo test --locked -p nbcad-occt --features native-occt --tests -- --test-threads=1/);
     assert.doesNotMatch(step, /continue-on-error:/);
-    if (name === 'mcp-windows') {
-      assert.match(step, /OCCT_ROOT: \$\{\{ steps.occt.outputs.root \}\}/);
-      assert.match(step, /if \(\$LASTEXITCODE -ne 0\) \{ throw "native integration tests failed" \}/);
-    } else {
-      assert.match(step, /OCCT_ROOT: \/usr/);
-    }
+    assert.match(step, /if \(\$LASTEXITCODE -ne 0\) \{ throw 'native integration tests failed' \}/);
+    assert.match(config, /OCCT_ROOT: \$\{\{ inputs\.platform == 'windows'/);
     assert(config.indexOf('Native geometry integration regressions') > config.indexOf('name: MCP server tests'));
     assert(config.indexOf('Native geometry integration regressions') < config.indexOf('name: Upload successful demo input'));
   }

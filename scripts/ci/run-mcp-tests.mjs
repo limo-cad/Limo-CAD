@@ -16,7 +16,8 @@ export function testArguments(shard) {
       ...Object.values(flagshipTests).flatMap(name => ['--skip', name])];
   }
   assert(Object.hasOwn(flagshipTests, shard), `Unknown MCP shard: ${shard}`);
-  return [...cargoTest, '--test', 'recipes', flagshipTests[shard], '--', '--exact', '--test-threads=1'];
+  // Retain existing slow-RPC timings on success so geometry cost is visible.
+  return [...cargoTest, '--test', 'recipes', flagshipTests[shard], '--', '--exact', '--test-threads=1', '--nocapture'];
 }
 
 export function verifyInventory(output) {

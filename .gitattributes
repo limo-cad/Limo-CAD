@@ -1,0 +1,2 @@
+# Keep the SDK cache manifest identical on Windows and Unix checkouts.
+vcpkg.json text eol=lf
