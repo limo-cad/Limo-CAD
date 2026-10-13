@@ -43,7 +43,7 @@ serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 dirs = "7.0.0"
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 base64 = "0.23.1"
-resvg = { version = "=0.45.1", default-features = false, features = ["text", "system-fonts"] }
+resvg = { version = "=0.48.1", default-features = false, features = ["text", "system-fonts"] }
 uuid = { version = "1.26.1", features = ["v4"] }
 limo-cad-core = { path = "../crates/core" }
 limo-cad-interface = { path = "../crates/interface" }
@@ -107,7 +107,7 @@ bevy_reflect = "=0.20.0-rc.2"
 wgpu = { version = "=30.0.1", default-features = false, features = ["std"] }
 raw-window-handle = "0.6.2"
 accesskit = { version = "=0.24.1" }
-svg2pdf = { version = "=0.13.0", default-features = false, features = ["text"] }
+svg2pdf = { version = "=0.13.0", default-features = false }
 winit = { version = "=0.30.13", default-features = false }
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
 

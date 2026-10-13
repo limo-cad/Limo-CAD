@@ -11,6 +11,7 @@ use std::{
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+mod pdf;
 #[cfg(target_os = "windows")]
 mod windows;
 
@@ -63,17 +64,7 @@ impl Page {
         {
             return Err("Drawing paper size is outside the supported print range".into());
         }
-        let pdf = svg2pdf::to_pdf(
-            &tree,
-            svg2pdf::ConversionOptions {
-                embed_text: false,
-                ..Default::default()
-            },
-            // usvg resolves millimetres to 96-DPI pixels. PDF points are 72-DPI;
-            // use the same parser DPI for both page bounds and content scaling.
-            svg2pdf::PageOptions { dpi: options.dpi },
-        )
-        .map_err(|e| e.to_string())?;
+        let pdf = pdf::to_pdf(&tree, options.dpi)?;
         if pdf.len() > 64 * 1024 * 1024 {
             return Err("Prepared drawing exceeds the print spool limit".into());
         }
