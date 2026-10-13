@@ -39,7 +39,7 @@ limo-cad-session-storage = { path = "../crates/session-storage" }
 limo-cad-build-info = { path = "../crates/build-info" }
 time = { version = "=0.3.55", features = ["formatting"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 dirs = "7.0.0"
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 base64 = "0.23.1"

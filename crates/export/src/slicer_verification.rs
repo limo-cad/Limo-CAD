@@ -1990,7 +1990,7 @@ mod tests {
             let mut entry = archive.by_index(index).unwrap();
             let mut data = Vec::new();
             entry.read_to_end(&mut data).unwrap();
-            entries.insert(entry.name().to_string(), data);
+            entries.insert(entry.name().unwrap().into_owned(), data);
         }
         edit(&mut entries);
         let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));

@@ -35,10 +35,10 @@ pub fn read_package(bytes: &[u8]) -> Result<Vec<ModelMesh>, String> {
     let mut build = String::new();
     for i in 0..zip.len() {
         let mut file = zip.by_index(i).map_err(|e| e.to_string())?;
-        if !file.name().ends_with(".model") {
+        if !file.name().map_err(|e| e.to_string())?.ends_with(".model") {
             continue;
         }
-        let path = format!("/{}", file.name());
+        let path = format!("/{}", file.name().map_err(|e| e.to_string())?);
         let mut text = String::new();
         file.read_to_string(&mut text).map_err(|e| e.to_string())?;
         let doc = roxmltree::Document::parse(&text).map_err(|e| e.to_string())?;
