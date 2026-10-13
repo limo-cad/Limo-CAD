@@ -3,9 +3,9 @@
 // Prevents an extra console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod startup;
-
 fn main() -> std::process::ExitCode {
+    nbcad_lib::startup_metrics::begin();
+    use nbcad_lib::startup;
     use startup::Startup;
     let startup = match startup::parse(std::env::args_os().skip(1)) {
         Ok(startup) => startup,
@@ -19,13 +19,28 @@ fn main() -> std::process::ExitCode {
         return std::process::ExitCode::SUCCESS;
     }
 
-    // Browser URL launches may reuse one live window without loading its model
-    // or suppressing ordinary independent launches. Validate before GUI init.
-    if let Startup::Recipe(recipe) = startup {
-        if matches!(nbcad_mcp::open_recipe_in_running_desktop(recipe), Ok(true)) {
-            return std::process::ExitCode::SUCCESS;
+    // Only this artifact/profile can receive a relaunch. Never attach older
+    // installed desktops through the general MCP session registry.
+    let launch_requests = if let Startup::Desktop(ref launch) = startup {
+        match nbcad_lib::launch_requests::prepare(
+            launch.new_window,
+            launch.reuse_window,
+            &launch.targets,
+        ) {
+            Ok(nbcad_lib::launch_requests::Relaunch::Forwarded) => {
+                return std::process::ExitCode::SUCCESS
+            }
+            Ok(nbcad_lib::launch_requests::Relaunch::Primary(state)) => Some(state),
+            Err(error) => {
+                eprintln!("Could not reuse an existing window: {error}");
+                Some(nbcad_lib::launch_requests::LaunchRequestsState::standalone(
+                    &launch.targets,
+                ))
+            }
         }
-    }
+    } else {
+        None
+    };
 
     if std::env::var_os("NBCAD_DESKTOP_BIN").is_none() {
         if let Ok(executable) = std::env::current_exe() {
@@ -71,6 +86,6 @@ fn main() -> std::process::ExitCode {
     {
         eprintln!("Could not start local stdio MCP: {error}");
     }
-    nbcad_lib::run();
+    nbcad_lib::run_with_launch_requests(launch_requests.unwrap_or_default());
     std::process::ExitCode::SUCCESS
 }

@@ -13,11 +13,16 @@
     "windows": [
       {
         "label": "main",
-        "title": "noBS CAD",
-        "width": 1440,
-        "height": 900,
-        "minWidth": 1200,
-        "minHeight": 760,
+        "title": "Limo CAD",
+        "width": 560,
+        "height": 380,
+        "minWidth": 560,
+        "minHeight": 380,
+        "center": true,
+        "decorations": false,
+        "shadow": true,
+        "resizable": false,
+        "maximizable": false,
         "acceptFirstMouse": true,
         "backgroundColor": "#23262b"
       }

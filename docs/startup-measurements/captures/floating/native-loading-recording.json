@@ -1,0 +1,311 @@
+{
+  "kind": "Actual native empty launch with private fresh profile; sampled window-only screenshots, not a performance benchmark",
+  "executableSha256": "4c9a708a52b756965cb25abd7cbde71f469e2b8d804b286c6daa5576be0845af",
+  "frames": [
+    {
+      "file": "frame-00.jpg",
+      "requestedMs": 0.00909999999566935,
+      "completedMs": 185.25819999999658,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 70,
+        "native-loading-slow.gif": 200
+      }
+    },
+    {
+      "file": "frame-01.jpg",
+      "requestedMs": 185.26720000000205,
+      "completedMs": 251.32029999999213,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 90,
+        "native-loading-slow.gif": 270
+      }
+    },
+    {
+      "file": "frame-02.jpg",
+      "requestedMs": 251.32699999999022,
+      "completedMs": 342.0771999999997,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 70,
+        "native-loading-slow.gif": 220
+      }
+    },
+    {
+      "file": "frame-03.jpg",
+      "requestedMs": 342.0819999999949,
+      "completedMs": 414.4195999999938,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 80,
+        "native-loading-slow.gif": 240
+      }
+    },
+    {
+      "file": "frame-04.jpg",
+      "requestedMs": 414.42439999998896,
+      "completedMs": 493.9170000000013,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 80,
+        "native-loading-slow.gif": 250
+      }
+    },
+    {
+      "file": "frame-05.jpg",
+      "requestedMs": 493.9219999999914,
+      "completedMs": 576.7507999999943,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 60,
+        "native-loading-slow.gif": 180
+      }
+    },
+    {
+      "file": "frame-06.jpg",
+      "requestedMs": 576.7546000000002,
+      "completedMs": 635.8147000000026,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 50,
+        "native-loading-slow.gif": 160
+      }
+    },
+    {
+      "file": "frame-07.jpg",
+      "requestedMs": 635.8187999999936,
+      "completedMs": 690.7561999999889,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 70,
+        "native-loading-slow.gif": 210
+      }
+    },
+    {
+      "file": "frame-08.jpg",
+      "requestedMs": 690.7599999999948,
+      "completedMs": 759.4911999999895,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 70,
+        "native-loading-slow.gif": 200
+      }
+    },
+    {
+      "file": "frame-09.jpg",
+      "requestedMs": 759.497000000003,
+      "completedMs": 826.6290000000008,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 70,
+        "native-loading-slow.gif": 210
+      }
+    },
+    {
+      "file": "frame-10.jpg",
+      "requestedMs": 826.6631999999954,
+      "completedMs": 896.141300000003,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 60,
+        "native-loading-slow.gif": 170
+      }
+    },
+    {
+      "file": "frame-11.jpg",
+      "requestedMs": 896.1468000000023,
+      "completedMs": 953.6799000000028,
+      "width": 562,
+      "height": 382,
+      "sourcePixelWidth": 562,
+      "sourcePixelHeight": 382,
+      "presentedWidth": 562,
+      "presentedHeight": 382,
+      "left": 169,
+      "top": 109,
+      "playbackDelayMs": {
+        "native-loading.gif": 190,
+        "native-loading-slow.gif": 580
+      }
+    },
+    {
+      "file": "frame-12.jpg",
+      "requestedMs": 953.6821999999956,
+      "completedMs": 1146.568499999994,
+      "width": 1442,
+      "height": 932,
+      "sourcePixelWidth": 1442,
+      "sourcePixelHeight": 932,
+      "presentedWidth": 900,
+      "presentedHeight": 582,
+      "left": 0,
+      "top": 9,
+      "playbackDelayMs": {
+        "native-loading.gif": 70,
+        "native-loading-slow.gif": 210
+      }
+    },
+    {
+      "file": "frame-13.jpg",
+      "requestedMs": 1146.6321000000025,
+      "completedMs": 1216.9014000000025,
+      "width": 1442,
+      "height": 932,
+      "sourcePixelWidth": 1442,
+      "sourcePixelHeight": 932,
+      "presentedWidth": 900,
+      "presentedHeight": 582,
+      "left": 0,
+      "top": 9,
+      "playbackDelayMs": {
+        "native-loading.gif": 60,
+        "native-loading-slow.gif": 190
+      }
+    },
+    {
+      "file": "frame-14.jpg",
+      "requestedMs": 1216.907699999996,
+      "completedMs": 1280.7920999999915,
+      "width": 1442,
+      "height": 932,
+      "sourcePixelWidth": 1442,
+      "sourcePixelHeight": 932,
+      "presentedWidth": 900,
+      "presentedHeight": 582,
+      "left": 0,
+      "top": 9,
+      "playbackDelayMs": {
+        "native-loading.gif": 1000,
+        "native-loading-slow.gif": 1000
+      }
+    }
+  ],
+  "capturedUtc": "2026-10-12T11:09:39.693Z",
+  "files": [
+    {
+      "name": "native-loading.gif",
+      "playbackTimeScale": 1,
+      "bytes": 295903,
+      "frameCount": 15,
+      "delaysMs": [
+        70,
+        90,
+        70,
+        80,
+        80,
+        60,
+        50,
+        70,
+        70,
+        70,
+        60,
+        190,
+        70,
+        60,
+        1000
+      ]
+    },
+    {
+      "name": "native-loading-slow.gif",
+      "playbackTimeScale": 3,
+      "bytes": 295903,
+      "frameCount": 15,
+      "delaysMs": [
+        200,
+        270,
+        220,
+        240,
+        250,
+        180,
+        160,
+        210,
+        200,
+        210,
+        170,
+        580,
+        210,
+        190,
+        1000
+      ]
+    }
+  ],
+  "presentation": "Window-only native screenshots; small card centered on neutral 900x600 canvas; workspace scaled to fit. Sample timing preserved in native-loading.gif; native-loading-slow.gif is 3x slower. Both hold the final workspace for 1 second and loop. Capture starts after window discovery, is sampled rather than continuous video, and is not a startup benchmark."
+}

@@ -3,6 +3,7 @@ import type {DrawingProjectionDto, DrawingProjectionRequest} from '../engine/typ
 import {projectTransitions} from '../files/projectTransitions';
 import {presentation} from '../operationPlayback';
 import {useAppStore} from '../store/appStore';
+import {beginRuntimeActivity} from '../runtimeActivity';
 
 /** UI linework always comes from the normal native projection path. A running
  * script supplies its completed explicit projections in the existing control
@@ -113,14 +114,19 @@ export function observeDrawingProjection(request: DrawingProjectionRequest,
     if (cached) { if (cached !== delivered) { delivered = cached; receive(cached); } return; }
     if (delivered || failedRead || automaticRunning || !automaticAllowed()) return;
     automaticRunning = true;
+    let activity: ReturnType<typeof beginRuntimeActivity> | null = null;
     void getEngine().then(async engine => {
       // A script/transition can start while the adapter is being loaded.
       if (cancelled || !current(captured) || !automaticAllowed()) return;
+      activity = beginRuntimeActivity({kind: 'drawing', target: useAppStore.getState().document?.name});
+      activity.setPhase('geometry');
       const result = await engine.drawingProjection(request);
-      if (!cancelled && current(captured)) remember(requestKey, result);
+      if (!cancelled && current(captured)) { remember(requestKey, result); activity.finish(); }
+      else activity.discard();
     }).catch(error => {
-      if (!cancelled && current(captured)) { failedRead = true; failed(error); }
-    }).finally(() => { automaticRunning = false; notify(); });
+      if (!cancelled && current(captured)) { activity?.fail(error); failedRead = true; failed(error); }
+      else activity?.discard();
+    }).finally(() => { activity?.discard(); automaticRunning = false; notify(); });
   };
   listeners.add(pump);
   const unsubscribeTransitions = projectTransitions.subscribe(pump);

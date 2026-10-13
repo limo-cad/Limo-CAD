@@ -61,7 +61,6 @@ import {
 } from './files/projectFiles';
 import {
   hasUnsavedProjects,
-  initializeProjectTabs,
   installProjectTabRetention,
 } from './files/projectTabs';
 import { SYSTEM_DARK_QUERY } from './theme';
@@ -78,11 +77,15 @@ import { createExitController } from './files/applicationExit';
 import { waitForExitEdits } from './files/exitSettlement';
 import { UnsavedChangesDialog } from './components/UnsavedChangesDialog';
 import { MeshExportDialog } from './components/MeshExportDialog';
+import { StartupScreen } from './components/StartupScreen';
+import { usesNativeStartup, useStartupStore } from './startup';
+import { initializeStartupDocument } from './startupInitialization';
+import { installNativeLaunchRequests } from './nativeLaunchRequests';
 
 export default function App() {
   useEffect(installRecipeLinks, []);
   useEffect(installOperationFeedback, []);
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const mode = useAppStore((s) => s.mode);
   const activeTab = useAppStore((s) => s.activeTab);
   const drawingWorkspace = activeTab === 'drawing';
@@ -91,34 +94,33 @@ export default function App() {
   const resolvedTheme = useAppStore((s) => s.resolvedTheme);
   const themePreference = useAppStore((s) => s.themePreference);
   const syncResolvedTheme = useAppStore((s) => s.syncResolvedTheme);
-  const loadDocument = useAppStore((s) => s.loadDocument);
+  const nativeStartup = usesNativeStartup(isTauriRuntime(), import.meta.env.MODE);
+  const nativeStartupReady = useStartupStore((s) => s.completed);
+  const startupReady = !nativeStartup || nativeStartupReady;
   const initialized = useRef(false);
 
   useEffect(() => {
+    // A desktop bundle opened as a web preview has no native host. Keep the
+    // loading screen's localized desktop-required explanation intact.
+    if (import.meta.env.MODE === 'desktop' && !isTauriRuntime()) return;
     if (initialized.current) return;
     initialized.current = true;
-    void loadDocument()
-      .then(async () => {
-        // A new application launch always begins with one clean Untitled
-        // document. Previous emergency snapshots are retained as a fallback,
-        // but are never reopened as the user's active workspace.
-        await initializeProjectTabs();
-      })
-      .catch((error) => {
-        useAppStore.getState().setConstraintDialog({
-          titleKey: 'file.errorTitle',
-          message: error instanceof Error ? error.message : String(error),
-        });
+    void initializeStartupDocument().catch((error) => {
+      if (!nativeStartup) useAppStore.getState().setConstraintDialog({
+        titleKey: 'file.errorTitle',
+        message: error instanceof Error ? error.message : String(error),
       });
-  }, [loadDocument]);
+    });
+  }, []);
 
   useEffect(() => installProjectRecovery(), []);
 
   useEffect(() => installProjectTabRetention(), []);
 
-  useEffect(() => installNativeEditMenu(), []);
+  useEffect(() => startupReady ? installNativeEditMenu() : undefined, [startupReady]);
 
-  useEffect(() => installNativeFileMenu(), []);
+  useEffect(() => startupReady ? installNativeFileMenu() : undefined, [startupReady]);
+  useEffect(() => startupReady ? installNativeLaunchRequests() : undefined, [startupReady]);
 
   useEffect(() => {
     const media = window.matchMedia(SYSTEM_DARK_QUERY);
@@ -211,10 +213,16 @@ export default function App() {
 
   useEffect(() => {
     window.document.title = t('app.name');
-  }, [t]);
+    if (isTauriRuntime()) {
+      void import('@tauri-apps/api/core')
+        .then(({ invoke }) => invoke('native_window_set_locale', { locale }))
+        .catch((error) => console.warn('Could not update window language', error));
+    }
+  }, [t, locale]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (usesNativeStartup(isTauriRuntime(), import.meta.env.MODE) && !useStartupStore.getState().completed) return;
       // Never steal keys from text inputs.
       if (isTextEditingTarget(e.target)) {
         // The custom native menu delegates text Undo/Redo back to WebKit. If
@@ -446,7 +454,9 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-panel text-ink">
+    <>
+    <div className="flex h-screen flex-col overflow-hidden bg-panel text-ink" aria-hidden={!startupReady}
+      ref={(element) => { if (element) element.inert = !startupReady; }}>
       {/* Project tabs are the window-level row: each project owns the
           workspace stage (modeling/drawing) rendered below it. */}
       <div className="contents" data-mcp-surface="file-and-project-tabs"><ProjectTabBar /></div>
@@ -504,5 +514,7 @@ export default function App() {
       <UnsavedChangesDialog />
       <MeshExportDialog />
     </div>
+    {nativeStartup && <StartupScreen />}
+    </>
   );
 }

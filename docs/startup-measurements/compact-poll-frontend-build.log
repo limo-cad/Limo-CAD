@@ -1,0 +1,107 @@
+
+> nbcad@0.2.2 build:desktop
+> tsc && vite build --mode desktop && node scripts/verify-desktop-assets.mjs
+
+vite v6.4.3 building for desktop...
+transforming...
+✓ 1789 modules transformed.
+rendering chunks...
+npm.cmd : [plugin vite:reporter] 
+At line:2 char:98
++ ... s.log 2>&1; npm.cmd run build:desktop > D:\limo-startup-results-compa ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([plugin vite:reporter] :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(!) C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/core.js is dynamically imported 
+by C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/App.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/App.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/App.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/files/projectTabs.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/input/sixDofMouse.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/input/sixDofMouse.ts but also statically imported by 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/dpi.js, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/event.js, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/image.js, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/webview.js, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/window.js, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/plugin-dialog/dist-js/index.js, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/cam/library.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/cam/posts.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/AppearanceDialog.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/StartupScreen.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/viewport/nativeViewportBridge.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/engine/tauri.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/files/fileIO.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/liveUiBridge.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/nativeEditMenu.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/nativeFileMenu.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/scripts/recipeLinks.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/scripts/workspace.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/sessionBridge.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/startupInitialization.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/startupMeasurement.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/uiFiles.ts, dynamic import will not move module into another 
+chunk.
+
+[plugin vite:reporter] 
+(!) C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/event.js is dynamically 
+imported by C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/App.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/input/sixDofMouse.ts but also statically imported by 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/webview.js, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/window.js, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/cam/CamToolDialog.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/nativeEditMenu.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/nativeFileMenu.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/scripts/recipeLinks.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/sessionBridge.ts, dynamic import will not move module into 
+another chunk.
+
+[plugin vite:reporter] 
+(!) C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/window.js is dynamically 
+imported by C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/App.tsx but also statically imported by 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/api/webview.js, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/viewport/nativeViewportBridge.ts, dynamic import 
+will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/drawing/document.ts is dynamically imported by 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/store/appStore.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/store/appStore.ts but also statically imported by 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/App.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/drawing/DrawingBrowser.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/drawing/DrawingSheetSetup.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/drawing/DrawingWorkspace.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/engine/controller.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/files/projectTabs.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/liveUiBridge.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/ribbon/dispatch.ts, dynamic import will not move module into 
+another chunk.
+
+[plugin vite:reporter] 
+(!) C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/node_modules/@tauri-apps/plugin-dialog/dist-js/index.js is 
+dynamically imported by C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/files/fileIO.ts, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/files/fileIO.ts but also statically imported by 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/cam/CamLibrarySettings.tsx, 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/cam/CamPostSettings.tsx, dynamic import will not 
+move module into another chunk.
+
+[plugin vite:reporter] 
+(!) C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/materials/index.ts is dynamically imported by 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/files/projectFiles.ts but also statically imported by 
+C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-028ff4c7/src/components/BodyAppearancePanel.tsx, dynamic import will not 
+move module into another chunk.
+
+computing gzip size...
+dist/index.html                     3.08 kB │ gzip:   1.09 kB
+dist/assets/index-AETUVMaa.css     52.50 kB │ gzip:  10.66 kB
+dist/assets/tauri-B3qPZdSo.js      14.97 kB │ gzip:   3.31 kB
+dist/assets/index-DG1a8uxa.js   2,374.94 kB │ gzip: 678.60 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: 
+https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 26.80s
+Desktop frontend contains no browser WASM assets.

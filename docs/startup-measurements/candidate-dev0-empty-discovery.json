@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "label": "candidate-empty-discovery",
+  "executable": "D:\\limo-startup-candidate-runtime\\nbcad.exe",
+  "executableSha256": "1ec1c10d61040ea46364b343b1ba805abf5f0461ce8bef72a13804855c5fcc50",
+  "profile": "dev",
+  "cacheCondition": "first",
+  "locale": "en",
+  "document": null,
+  "documentSha256": null,
+  "hardware": {
+    "platform": "win32",
+    "architecture": "x64",
+    "cpu": "AMD Ryzen 7 5800X3D 8-Core Processor           ",
+    "logicalCpus": 16,
+    "memoryBytes": 34266349568
+  },
+  "startedAt": "2026-10-11T16:57:55.204Z",
+  "userDataDirectory": "D:\\limo-startup-runs\\candidate-empty-discovery-v1\\webview2-user-data",
+  "warmups": [],
+  "runs": [
+    {
+      "index": 1,
+      "pid": 41620,
+      "launchUnixMs": 1791737875360,
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 41620,
+          "processElapsedMs": 1003.4396000000002,
+          "processStartedUnixMs": 1791737876654,
+          "webElapsedMs": 68.30000001192093
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 41620,
+          "processElapsedMs": 5092.9888,
+          "processStartedUnixMs": 1791737876654,
+          "webElapsedMs": 4149
+        },
+        {
+          "detail": null,
+          "durationMs": 25.400000035762787,
+          "phase": "interaction",
+          "pid": 41620,
+          "processElapsedMs": 5123.0783,
+          "processStartedUnixMs": 1791737876654,
+          "webElapsedMs": 4190.400000035763
+        },
+        {
+          "detail": null,
+          "durationMs": 2148.899999976158,
+          "phase": "cadInteraction",
+          "pid": 41620,
+          "processElapsedMs": 7450.2047,
+          "processStartedUnixMs": 1791737876654,
+          "webElapsedMs": 6358.600000023842
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 8769.3801,
+      "beforeMainMs": 1294,
+      "firstFeedbackMs": 2297.4396,
+      "usableWorkspaceMs": 6386.9888,
+      "firstInteractionMs": 25.400000035762787,
+      "firstCadInteractionMs": 2148.899999976158
+    }
+  ]
+}

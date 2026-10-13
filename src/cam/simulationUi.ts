@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { beginRuntimeActivity } from '../runtimeActivity';
 import type { CamDocumentDto, SolidSceneDto } from '../engine/types';
 
 export interface SimulationIntent {
@@ -36,11 +37,13 @@ export function inheritCamSimulationInputs(before: CamDocumentDto, after: CamDoc
 export function camSimulationInputKey(cam: CamDocumentDto, scene: SolidSceneDto, setupId: number, detail: string, tolerance: number) {
   return `cam-${inputNamespace}-${inputId(cam)}-${inputId(scene)}-${setupId}-${detail}-${tolerance}`;
 }
-export function beginCamActivity(label: string): () => void {
+export function beginCamActivity(label: string): (() => void) & { fail(error: unknown): void; discard(): void } {
   const id = ++sequence;
+  const activity = beginRuntimeActivity({kind: 'cam', target: label});
+  activity.setPhase('running');
   useCamActivity.setState(({ jobs }) => ({ jobs: new Map(jobs).set(id, label) }));
   let ended = false;
-  return () => {
+  const remove = () => {
     if (ended) return;
     ended = true;
     useCamActivity.setState(({ jobs }) => {
@@ -49,6 +52,10 @@ export function beginCamActivity(label: string): () => void {
       return { jobs: next };
     });
   };
+  const finish = () => { activity.finish(); remove(); };
+  finish.fail = (error: unknown) => { activity.fail(error); remove(); };
+  finish.discard = () => { activity.discard(); remove(); };
+  return finish;
 }
 
 export function requestCamSimulation(kind: 'cam' | 'nc', setupId: number, operationId: number | null) {

@@ -22,6 +22,7 @@ import { useAppStore } from './store/appStore';
 
 const FILE_COMMANDS = [
   'new',
+  'new-window',
   'open',
   'open-script',
   'save',
@@ -82,6 +83,11 @@ function run(action: () => Promise<unknown> | void): void {
 
 function dispatch(command: NativeFileCommand): void {
   switch (command) {
+    case 'new-window':
+      void invoke('native_new_window').catch((error) => useAppStore.getState().setConstraintDialog({
+        titleKey: 'file.errorTitle', message: error instanceof Error ? error.message : String(error),
+      }));
+      return;
     case 'new':
       return run(newProject);
     case 'open':

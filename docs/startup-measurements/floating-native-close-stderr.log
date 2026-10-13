@@ -1,0 +1,4 @@
+native Bevy viewport installed (Bevy 0.19 / wgpu DX12-Vulkan / embedded HWND, 1.00x scale)
+React native-viewport bridge connected (ready=false)
+native Bevy viewport ready: 560x380 logical, 560x380 physical, 1.00x scale
+[1011/191253.889:ERROR:ui\gfx\win\window_impl.cc:172] Failed to unregister class Chrome_WidgetWin_0. Error = 1412

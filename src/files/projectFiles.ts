@@ -38,6 +38,10 @@ import { projectTransitions } from './projectTransitions';
 import type { EngineOperationOwner } from '../engine/activity';
 import { captureProjectOwner } from './projectOwnership';
 import { requestProjectFraming, type ProjectFramingOwner } from './projectFraming';
+import { beginDocumentLoad } from './documentLoadProgress';
+import { waitForDocumentFrame } from './documentFrameReadiness';
+import { beginRuntimeActivity } from '../runtimeActivity';
+import { withParentGeometryActivity } from '../engine/runtimeFeedback';
 
 const PROJECT_TYPE: SaveType = {
   description: 'noBS CAD Project',
@@ -185,50 +189,59 @@ export async function saveProject(saveAs = false, targetOverride?: SaveTarget): 
   if (state.activeSketch) {
     throw new Error(translate('file.finishBeforeSave'));
   }
-  await owner.assertCurrent();
-  const engine = await getEngine();
-  const expectedModelJson = await exportProjectModelWithVisibility(engine, owner.assertSettled);
-  const existingTarget = !saveAs ? getCurrentProjectTarget() : null;
-  const target =
-    targetOverride ?? existingTarget ??
-    (await chooseSaveTarget(currentSuggestedName(), PROJECT_TYPE));
-  if (!target) return false;
+  const activity = beginRuntimeActivity({ kind: 'save', target: state.projectFileName ?? state.document.name, notifySuccess: true });
+  try {
+    activity.setPhase('reading');
+    await owner.assertCurrent();
+    const engine = await getEngine();
+    const expectedModelJson = await exportProjectModelWithVisibility(engine, owner.assertSettled);
+    const existingTarget = !saveAs ? getCurrentProjectTarget() : null;
+    if (!targetOverride && !existingTarget) activity.setPhase('choosing');
+    const target =
+      targetOverride ?? existingTarget ??
+      (await chooseSaveTarget(currentSuggestedName(), PROJECT_TYPE));
+    if (!target) { activity.discard(); return false; }
 
-  await owner.assertCurrent();
-  // An explicit Rename Project changes model identity without moving the
-  // file. Only a new destination (first Save or Save As) derives the model
-  // name from the filename selected by the user.
-  const designName = existingTarget
-    ? state.document.name
-    : withoutExtension(target.name);
-  let modelJson: string;
-  const capture = projectTransitions.beginSnapshot();
-  try {
-    capture.assertCurrent(); owner.assertSettled();
-    modelJson = await engine.exportProjectModel({expected_model_json: expectedModelJson, save_name: designName});
-    capture.assertCurrent(); owner.assertSettled();
-  } finally { capture.release(); }
-  // Rename a serialized copy under the engine lock. A failed write never
-  // renames the live model, and captured bytes cannot turn into another tab.
-  await writeSaveTarget(target, createNbcadArchive(modelJson));
-  await owner.assertCurrent();
-  const adoption = projectTransitions.beginSnapshot();
-  try {
-    adoption.assertCurrent(); owner.assertSettled();
-    const document = await engine.setDocumentName(designName, expectedModelJson);
-    adoption.assertOwned(); owner.assertUnchanged();
-    const reusableTarget = target.kind === 'download' ? null : target;
-    await recordActiveProjectSave(modelJson, reusableTarget, owner.assertUnchanged);
-    adoption.assertOwned(); owner.assertUnchanged();
-    useAppStore.setState({
-      document,
-      dirty: false,
-      projectFileName: target.name,
-    });
-    recordActiveProjectMetadata();
-    if (!hasUnsavedProjects()) clearProjectRecovery();
-    return true;
-  } finally { adoption.release(); }
+    await owner.assertCurrent();
+    // An explicit Rename Project changes model identity without moving the
+    // file. Only a new destination (first Save or Save As) derives the model
+    // name from the filename selected by the user.
+    const designName = existingTarget
+      ? state.document.name
+      : withoutExtension(target.name);
+    let modelJson: string;
+    activity.setPhase('adopting');
+    const capture = projectTransitions.beginSnapshot();
+    try {
+      capture.assertCurrent(); owner.assertSettled();
+      modelJson = await engine.exportProjectModel({expected_model_json: expectedModelJson, save_name: designName});
+      capture.assertCurrent(); owner.assertSettled();
+    } finally { capture.release(); }
+    // Rename a serialized copy under the engine lock. A failed write never
+    // renames the live model, and captured bytes cannot turn into another tab.
+    activity.setPhase('writing');
+    await writeSaveTarget(target, createNbcadArchive(modelJson));
+    await owner.assertCurrent();
+    activity.setPhase('adopting');
+    const adoption = projectTransitions.beginSnapshot();
+    try {
+      adoption.assertCurrent(); owner.assertSettled();
+      const document = await engine.setDocumentName(designName, expectedModelJson);
+      adoption.assertOwned(); owner.assertUnchanged();
+      const reusableTarget = target.kind === 'download' ? null : target;
+      await recordActiveProjectSave(modelJson, reusableTarget, owner.assertUnchanged);
+      adoption.assertOwned(); owner.assertUnchanged();
+      useAppStore.setState({
+        document,
+        dirty: false,
+        projectFileName: target.name,
+      });
+      recordActiveProjectMetadata();
+      if (!hasUnsavedProjects()) clearProjectRecovery();
+      activity.finish();
+      return true;
+    } finally { adoption.release(); }
+  } catch (error) { activity.fail(error); throw error; }
 }
 
 /** Open a fresh untitled design in a new window-level document tab. */
@@ -293,98 +306,143 @@ export async function saveAllUnsavedProjects(): Promise<boolean> {
   return !hasUnsavedProjects();
 }
 
-export async function openProject(options?: { filePath: string; discardChanges?: boolean }): Promise<boolean> {
+export async function openProject(options?: { filePath: string; discardChanges?: boolean; interactive?: boolean }): Promise<boolean> {
   assertNoFeatureEdit();
-  const state = useAppStore.getState();
-  if (state.dirty && options && !options.discardChanges) throw new Error(translate('file.errorReplaceNeedsSaveOrDiscard'));
-  if (state.dirty && !options) {
+  let consentedOwner = captureProjectOwner();
+  const state = consentedOwner.state;
+  // An explicit agent Open may queue behind a Save/Rename snapshot already in
+  // flight. Its name/clean-state publication may finish before replacement;
+  // this does not authorize edits or native/tab changes during file reading.
+  const pendingNameAdoption = options?.discardChanges === true && !options.interactive
+    && projectTransitions.hasSnapshots();
+  const assertOpenOwner = () => {
+    try {
+      consentedOwner.assertReplacementSource(pendingNameAdoption);
+      const current = useAppStore.getState();
+      const before = consentedOwner.state;
+      const allowedDirtyPublication = pendingNameAdoption && (
+        before.dirty && !current.dirty
+        || before.document?.name !== current.document?.name
+      );
+      if (current.dirty !== before.dirty && !allowedDirtyPublication) throw new Error('Dirtiness changed');
+    } catch { throw new Error(translate('file.errorDocumentChangedDuringOpen')); }
+  };
+  if (state.dirty && options && !options.discardChanges && !options.interactive) throw new Error(translate('file.errorReplaceNeedsSaveOrDiscard'));
+  if (state.dirty && (!options || options.interactive)) {
     const decision = await requestUnsavedDecision(
       'replace',
       state.document?.name ?? null,
     );
     if (decision === 'cancel') return false;
+    assertOpenOwner();
     if (decision === 'save' && !(await saveProject(false))) return false;
+    // A successful Save may legitimately adopt a new name/file target.
+    consentedOwner = captureProjectOwner();
   }
-  const opened = await chooseOpenFile(OPEN_TYPE, options?.filePath);
-  if (!opened) return false;
-  // A STEP file opens as a new project whose only feature embeds the exchange
-  // bytes. Its path is never a Save target: the first Save writes a .nbcad.
-  const step = isStepFile(opened.name, opened.bytes);
-  if (step && opened.bytes.byteLength > MAX_STEP_IMPORT_BYTES) {
-    throw new Error(translate('file.stepImportTooLarge'));
-  }
-  const modelJson = step ? null : readNbcadArchive(opened.bytes).modelJson;
-  // Native replacement precedes the store update below. Keep ownership held
-  // throughout both so another export cannot capture B with A's UI selection.
-  const releaseTransition = projectTransitions.begin();
-  let changed = false;
-  let published = false;
-  let openedOwner: ProjectFramingOwner;
+  const loading = { current: null as ReturnType<typeof beginDocumentLoad> | null };
   try {
-    await releaseTransition.waitForSnapshots();
-    const engine = await getEngine();
-    changed = true;
-    let update = modelJson === null
-      ? await openStepAsProject(engine, opened.name, opened.bytes)
-      : await engine.loadProjectModel(modelJson).catch((error: unknown) => {
-        // Only an explicit pre-mutation rejection proves the prior native model
-        // and geometry are intact. IPC, recompute and post-load repair failures
-        // remain unverified, even when the frontend still shows the old document.
-        changed = !(error instanceof ProjectLoadError && error.engineState === 'unchanged');
-        throw error;
-      });
-    const [finishedSketches, datumPlanes, bodyAppearances, drawingDocument, assemblyDocument, assemblySolution, projectVisibility, camDocument] = await Promise.all([
-      engine.finishedSketches(),
-      engine.datumPlaneDefinitions(),
-      engine.bodyAppearances(),
-      engine.drawingDocument(),
-      engine.assemblyDocument(),
-      engine.assemblySolution(),
-      engine.projectVisibility(),
-      engine.camDocument(),
-    ]);
-    // A project written by MCP or a script still carries the engine's
-    // placeholder name. Present it the way a first Save would: named after
-    // its file. Adopting the name is not an edit, so the tab opens clean.
-    let tabModelJson = modelJson ?? await engine.exportProjectModel();
-    const adoptedName = withoutExtension(opened.name);
-    if (!step && isPlaceholderProjectName(update.document.name) && !isPlaceholderProjectName(adoptedName)) {
-      try {
-        const document = await engine.setDocumentName(adoptedName);
-        tabModelJson = await engine.exportProjectModel();
-        update = { ...update, document };
-      } catch {
-        // The loaded model is intact; only its display name stays generic.
-      }
+    const opened = await chooseOpenFile(OPEN_TYPE, options?.filePath, (name) => { loading.current = beginDocumentLoad(name); });
+    if (!opened) return false;
+    loading.current?.setPhase('validating');
+    // A STEP file opens as a new project whose only feature embeds the exchange
+    // bytes. Its path is never a Save target: the first Save writes a .nbcad.
+    const step = isStepFile(opened.name, opened.bytes);
+    if (step && opened.bytes.byteLength > MAX_STEP_IMPORT_BYTES) {
+      throw new Error(translate('file.stepImportTooLarge'));
     }
-    // A legacy project is readable, but the next Save must choose a new
-    // `.nbcad` destination instead of silently overwriting the old container.
-    const reusableTarget = !step && opened.name.toLowerCase().endsWith(NBCAD_EXTENSION)
-      ? opened.writableTarget
-      : null;
-    useAppStore
-      .getState()
-      .loadProjectState(
-        update,
-        finishedSketches,
-        datumPlanes,
-        step ? null : opened.name,
-        bodyAppearances,
-        drawingDocument,
-        assemblyDocument,
-        projectVisibility,
-        assemblySolution,
-        camDocument,
-      );
-    published = true;
-    await recordActiveProjectOpen(tabModelJson, reusableTarget);
-    if (!hasUnsavedProjects()) clearProjectRecovery();
-    openedOwner = useAppStore.getState();
+    const modelJson = step ? null : readNbcadArchive(opened.bytes).modelJson;
+    // Native replacement precedes the store update below. Keep ownership held
+    // throughout both so another export cannot capture B with A's UI selection.
+    const releaseTransition = projectTransitions.begin();
+    let changed = false;
+    let published = false;
+    let openedOwner: ProjectFramingOwner;
+    try {
+      loading.current?.setPhase('waiting');
+      await releaseTransition.waitForSnapshots();
+      // Consent belongs to the model that was visible, not any later edit/tab
+      // that arrived while file IO or an earlier transition was pending.
+      assertOpenOwner();
+      const engine = await getEngine();
+      assertOpenOwner();
+      changed = true;
+      loading.current?.setPhase('geometry');
+      let update = modelJson === null
+        ? await openStepAsProject(engine, opened.name, opened.bytes)
+        : await engine.loadProjectModel(modelJson).catch((error: unknown) => {
+          // Only an explicit pre-mutation rejection proves the prior native model
+          // and geometry are intact. IPC, recompute and post-load repair failures
+          // remain unverified, even when the frontend still shows the old document.
+          changed = !(error instanceof ProjectLoadError && error.engineState === 'unchanged');
+          throw error;
+        });
+      loading.current?.setPhase('adopting');
+      const [finishedSketches, datumPlanes, bodyAppearances, drawingDocument, assemblyDocument, assemblySolution, projectVisibility, camDocument] = await Promise.all([
+        engine.finishedSketches(),
+        engine.datumPlaneDefinitions(),
+        engine.bodyAppearances(),
+        engine.drawingDocument(),
+        engine.assemblyDocument(),
+        engine.assemblySolution(),
+        engine.projectVisibility(),
+        engine.camDocument(),
+      ]);
+      // A project written by MCP or a script still carries the engine's
+      // placeholder name. Present it the way a first Save would: named after
+      // its file. Adopting the name is not an edit, so the tab opens clean.
+      let tabModelJson = modelJson ?? await engine.exportProjectModel();
+      const adoptedName = withoutExtension(opened.name);
+      if (!step && isPlaceholderProjectName(update.document.name) && !isPlaceholderProjectName(adoptedName)) {
+        try {
+          const document = await engine.setDocumentName(adoptedName);
+          tabModelJson = await engine.exportProjectModel();
+          update = { ...update, document };
+        } catch {
+          // The loaded model is intact; only its display name stays generic.
+        }
+      }
+      // A legacy project is readable, but the next Save must choose a new
+      // `.nbcad` destination instead of silently overwriting the old container.
+      const reusableTarget = !step && opened.name.toLowerCase().endsWith(NBCAD_EXTENSION)
+        ? opened.writableTarget
+        : null;
+      useAppStore
+        .getState()
+        .loadProjectState(
+          update,
+          finishedSketches,
+          datumPlanes,
+          step ? null : opened.name,
+          bodyAppearances,
+          drawingDocument,
+          assemblyDocument,
+          projectVisibility,
+          assemblySolution,
+          camDocument,
+        );
+      published = true;
+      await recordActiveProjectOpen(tabModelJson, reusableTarget);
+      if (!hasUnsavedProjects()) clearProjectRecovery();
+      openedOwner = useAppStore.getState();
+    } finally {
+      releaseTransition(changed, published);
+    }
+    requestProjectFraming(openedOwner);
+    // Initial launch has its own stricter expanded-frame readiness gate.
+    // Runtime Open must keep Activity alive through its actual current view.
+    if (typeof window !== 'undefined' && document.documentElement.dataset.startupReady === 'true'
+      && useAppStore.getState().activeTab !== 'drawing') {
+      loading.current?.setPhase('rendering');
+      const presented = await waitForDocumentFrame(openedOwner, { timeoutMessage: translate('runtimeActivity.renderTimeout') });
+      if (!presented) loading.current?.discard();
+    }
+    return true;
+  } catch (error) {
+    loading.current?.fail(error);
+    throw error;
   } finally {
-    releaseTransition(changed, published);
+    loading.current?.finish();
   }
-  requestProjectFraming(openedOwner);
-  return true;
 }
 
 export async function exportStep(selectedOnly: boolean): Promise<boolean> {
@@ -411,6 +469,7 @@ export async function exportStep(selectedOnly: boolean): Promise<boolean> {
   const suffix = selectedOnly && state.selectedBody !== null ? `-Body${state.selectedBody}` : '';
   const engine = await getEngine();
   return runExport({
+    activityTarget: documentName,
     assertSelectionOwner: exportSelectionOwner(transition, state),
     captureModel: () => engine.exportProjectModel(),
     chooseOptions: async () => {
@@ -529,6 +588,7 @@ async function exportMesh(format: 'stl' | '3mf', selectedOnly: boolean): Promise
   const suffix = selectedOnly && state.selectedBody !== null ? `-Body${state.selectedBody}` : '';
   const engine = await getEngine();
   return runExport({
+    activityTarget: documentName,
     assertSelectionOwner: exportSelectionOwner(transition, state),
     captureModel: () => engine.exportProjectModel(),
     chooseOptions: requestMeshExportScope,
@@ -683,13 +743,13 @@ async function openStepAsProject(
 ) {
   await engine.newProject();
   await engine.setDocumentName(withoutExtension(fileName));
-  return engine.bodyFeature({
+  return withParentGeometryActivity(() => engine.bodyFeature({
     type: 'import_step',
     request: {
       file_name: fileName,
       data_base64: bytesToBase64(bytes),
     },
-  });
+  }));
 }
 
 /** Periodic JSON recovery is intentionally separate from the user-owned

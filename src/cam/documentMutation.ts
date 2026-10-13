@@ -71,7 +71,8 @@ export function enqueueCamMutation<T>(label: string, mutate: (context: {
     } finally { snapshot.release(); }
   }));
   writeQueue = operation.then(() => undefined, () => undefined);
-  return operation.finally(() => { finish(); releaseExit(); });
+  return operation.catch((error) => { finish.fail(error); throw error; })
+    .finally(() => { finish(); releaseExit(); });
 }
 
 /** The store's explicit replacement route uses the same queue and fences. */

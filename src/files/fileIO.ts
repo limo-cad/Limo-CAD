@@ -145,7 +145,7 @@ export async function writeSaveTarget(target: SaveTarget, bytes: Uint8Array): Pr
   setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-export async function chooseOpenFile(type: SaveType, pathOverride?: string): Promise<OpenedFile | null> {
+export async function chooseOpenFile(type: SaveType, pathOverride?: string, onReading?: (name: string) => void): Promise<OpenedFile | null> {
   if (isTauriRuntime()) {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const selected = pathOverride ?? await withNativeViewportSuspended(() => open({
@@ -164,6 +164,7 @@ export async function chooseOpenFile(type: SaveType, pathOverride?: string): Pro
         ],
       }));
     if (!selected || Array.isArray(selected)) return null;
+    onReading?.(pathName(selected));
     const raw = await invoke<number[]>('read_binary_file', { path: selected });
     return {
       name: pathName(selected),
@@ -180,6 +181,7 @@ export async function chooseOpenFile(type: SaveType, pathOverride?: string): Pro
         types: [pickerType(type)],
       });
       if (!handle) return null;
+      onReading?.(handle.name);
       const file = await handle.getFile();
       if (file.size > MAX_FILE_BYTES) {
         throw new Error(translate('file.errorFileTooLarge'));
@@ -236,6 +238,7 @@ export async function chooseOpenFile(type: SaveType, pathOverride?: string): Pro
         return;
       }
       try {
+        onReading?.(file.name);
         finish({
           name: file.name,
           bytes: new Uint8Array(await file.arrayBuffer()),

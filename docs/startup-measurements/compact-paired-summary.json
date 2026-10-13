@@ -1,0 +1,1012 @@
+{
+  "schema": 1,
+  "comparisonProfile": "dev-app1-debug2-deps3-debug0",
+  "workloads": {
+    "empty": {
+      "documentSha256": null,
+      "baselineSha256": "6d6fc31655cb1e5bc1dc78fb6eccc0ffa74aaea9b3465d560291e15aabf8a67c",
+      "candidateSha256": "73143d60a2322e5fdd5ebdb86984d7c954b5d3943da93c522e8c9523230160e7",
+      "measurements": {
+        "firstFeedbackMs": {
+          "baseline": {
+            "median": 658.2835,
+            "min": 502.961,
+            "max": 682.4587,
+            "values": [
+              675.4005000000001,
+              652.2113,
+              658.2835,
+              682.4587,
+              502.961
+            ]
+          },
+          "candidate": {
+            "median": 595.7781,
+            "min": 507.95480000000003,
+            "max": 867.563,
+            "values": [
+              595.7781,
+              867.563,
+              542.1371,
+              662.7226999999999,
+              507.95480000000003
+            ]
+          },
+          "medianChangePercent": -9.495209890571466
+        },
+        "usableWorkspaceMs": {
+          "baseline": {
+            "median": 1590.3305,
+            "min": 1291.2333,
+            "max": 1623.0585,
+            "values": [
+              1469.354,
+              1611.1375,
+              1590.3305,
+              1623.0585,
+              1291.2333
+            ]
+          },
+          "candidate": {
+            "median": 1701.9096,
+            "min": 1496.7459,
+            "max": 2119.9283,
+            "values": [
+              1752.4348000000002,
+              2119.9283,
+              1636.5785,
+              1701.9096,
+              1496.7459
+            ]
+          },
+          "medianChangePercent": 7.016095082122864
+        },
+        "firstInteractionMs": {
+          "baseline": {
+            "median": 8.399999976158142,
+            "min": 5.099999964237213,
+            "max": 18,
+            "values": [
+              18,
+              5.099999964237213,
+              8.800000011920929,
+              8.399999976158142,
+              7.199999988079071
+            ]
+          },
+          "candidate": {
+            "median": 22.600000023841858,
+            "min": 9.300000011920929,
+            "max": 79.89999997615814,
+            "values": [
+              14.599999964237213,
+              79.89999997615814,
+              63.69999998807907,
+              9.300000011920929,
+              22.600000023841858
+            ]
+          },
+          "medianChangePercent": 169.04762009509295
+        },
+        "firstCadInteractionMs": {
+          "baseline": {
+            "median": 367.5,
+            "min": 272.30000001192093,
+            "max": 457.80000001192093,
+            "values": [
+              272.30000001192093,
+              400.19999998807907,
+              457.80000001192093,
+              367.5,
+              277.30000001192093
+            ]
+          },
+          "candidate": {
+            "median": 335.60000002384186,
+            "min": 262.30000001192093,
+            "max": 390.80000001192093,
+            "values": [
+              360.2999999523163,
+              335.60000002384186,
+              390.80000001192093,
+              279.0999999642372,
+              262.30000001192093
+            ]
+          },
+          "medianChangePercent": -8.680272102355957
+        },
+        "repeatedCadInteractionMs": {
+          "baseline": {
+            "median": 219.5,
+            "min": 205.69999998807907,
+            "max": 251.9000000357628,
+            "values": [
+              205.69999998807907,
+              219.5,
+              251.9000000357628,
+              209.39999997615814,
+              219.5999999642372
+            ]
+          },
+          "candidate": {
+            "median": 248.80000001192093,
+            "min": 221.80000001192093,
+            "max": 270,
+            "values": [
+              270,
+              266.10000002384186,
+              248.80000001192093,
+              241.0999999642372,
+              221.80000001192093
+            ]
+          },
+          "medianChangePercent": 13.34851936761774
+        }
+      },
+      "candidateCadTimings": [
+        {
+          "sketchCommandsMs": 78.19999998807907,
+          "sketchFrameMs": 26.5,
+          "solidCommandsMs": 96.19999998807907,
+          "solidFrameMs": 159.39999997615814,
+          "repeatedCadInteractionMs": 270,
+          "repeatedTimings": {
+            "sketchCommandsMs": 60.5,
+            "sketchFrameMs": 25.69999998807907,
+            "solidCommandsMs": 97.19999998807907,
+            "solidFrameMs": 86.60000002384186
+          }
+        },
+        {
+          "sketchCommandsMs": 62.700000047683716,
+          "sketchFrameMs": 24.69999998807907,
+          "solidCommandsMs": 105.5,
+          "solidFrameMs": 142.69999998807907,
+          "repeatedCadInteractionMs": 266.10000002384186,
+          "repeatedTimings": {
+            "sketchCommandsMs": 64.5,
+            "sketchFrameMs": 28.600000023841858,
+            "solidCommandsMs": 91.39999997615814,
+            "solidFrameMs": 81.60000002384186
+          }
+        },
+        {
+          "sketchCommandsMs": 71.19999998807907,
+          "sketchFrameMs": 43.19999998807907,
+          "solidCommandsMs": 107.60000002384186,
+          "solidFrameMs": 168.80000001192093,
+          "repeatedCadInteractionMs": 248.80000001192093,
+          "repeatedTimings": {
+            "sketchCommandsMs": 62.69999998807907,
+            "sketchFrameMs": 38.60000002384186,
+            "solidCommandsMs": 77.89999997615814,
+            "solidFrameMs": 69.60000002384186
+          }
+        },
+        {
+          "sketchCommandsMs": 49.89999997615814,
+          "sketchFrameMs": 26.30000001192093,
+          "solidCommandsMs": 70.80000001192093,
+          "solidFrameMs": 132.0999999642372,
+          "repeatedCadInteractionMs": 241.0999999642372,
+          "repeatedTimings": {
+            "sketchCommandsMs": 68.19999998807907,
+            "sketchFrameMs": 20.899999976158142,
+            "solidCommandsMs": 83.60000002384186,
+            "solidFrameMs": 68.39999997615814
+          }
+        },
+        {
+          "sketchCommandsMs": 52.39999997615814,
+          "sketchFrameMs": 24.5,
+          "solidCommandsMs": 63.30000001192093,
+          "solidFrameMs": 122.10000002384186,
+          "repeatedCadInteractionMs": 221.80000001192093,
+          "repeatedTimings": {
+            "sketchCommandsMs": 56.80000001192093,
+            "sketchFrameMs": 20,
+            "solidCommandsMs": 79.59999996423721,
+            "solidFrameMs": 65.40000003576279
+          }
+        }
+      ],
+      "baselineCadTimings": [
+        {
+          "sketchCommandsMs": 60.19999998807907,
+          "sketchFrameMs": 35.60000002384186,
+          "solidCommandsMs": 80.80000001192093,
+          "solidFrameMs": 95.69999998807907,
+          "repeatedCadInteractionMs": 205.69999998807907,
+          "repeatedTimings": {
+            "sketchCommandsMs": 49.60000002384186,
+            "sketchFrameMs": 17.099999964237213,
+            "solidCommandsMs": 72.40000003576279,
+            "solidFrameMs": 66.59999996423721
+          }
+        },
+        {
+          "sketchCommandsMs": 73.69999998807907,
+          "sketchFrameMs": 31.900000035762787,
+          "solidCommandsMs": 107.59999996423721,
+          "solidFrameMs": 187,
+          "repeatedCadInteractionMs": 219.5,
+          "repeatedTimings": {
+            "sketchCommandsMs": 73.60000002384186,
+            "sketchFrameMs": 18.099999964237213,
+            "solidCommandsMs": 67.5,
+            "solidFrameMs": 60.30000001192093
+          }
+        },
+        {
+          "sketchCommandsMs": 77.69999998807907,
+          "sketchFrameMs": 45,
+          "solidCommandsMs": 142.20000004768372,
+          "solidFrameMs": 192.89999997615814,
+          "repeatedCadInteractionMs": 251.9000000357628,
+          "repeatedTimings": {
+            "sketchCommandsMs": 68.69999998807907,
+            "sketchFrameMs": 44.200000047683716,
+            "solidCommandsMs": 91.29999995231628,
+            "solidFrameMs": 47.700000047683716
+          }
+        },
+        {
+          "sketchCommandsMs": 72.60000002384186,
+          "sketchFrameMs": 34.59999996423721,
+          "solidCommandsMs": 104.90000003576279,
+          "solidFrameMs": 155.39999997615814,
+          "repeatedCadInteractionMs": 209.39999997615814,
+          "repeatedTimings": {
+            "sketchCommandsMs": 65.09999996423721,
+            "sketchFrameMs": 21.30000001192093,
+            "solidCommandsMs": 81.30000001192093,
+            "solidFrameMs": 41.69999998807907
+          }
+        },
+        {
+          "sketchCommandsMs": 55.89999997615814,
+          "sketchFrameMs": 22.600000023841858,
+          "solidCommandsMs": 92.89999997615814,
+          "solidFrameMs": 105.90000003576279,
+          "repeatedCadInteractionMs": 219.5999999642372,
+          "repeatedTimings": {
+            "sketchCommandsMs": 52.39999997615814,
+            "sketchFrameMs": 38.69999998807907,
+            "solidCommandsMs": 64.30000001192093,
+            "solidFrameMs": 64.19999998807907
+          }
+        }
+      ],
+      "afterOnlySpans": [
+        {
+          "index": 1,
+          "events": [
+            {
+              "phase": "gpuDevice",
+              "durationMs": 267.12219999999996,
+              "processElapsedMs": 818.8223999999999,
+              "webElapsedMs": null,
+              "launchElapsedMs": 863.8223999999999,
+              "detail": null
+            },
+            {
+              "phase": "nativeFonts",
+              "durationMs": 8.062100000000001,
+              "processElapsedMs": 827.6122,
+              "webElapsedMs": null,
+              "launchElapsedMs": 872.6122,
+              "detail": null
+            },
+            {
+              "phase": "rendererInstall",
+              "durationMs": 159.81529999999998,
+              "processElapsedMs": 1009.4069999999999,
+              "webElapsedMs": null,
+              "launchElapsedMs": 1054.407,
+              "detail": null
+            },
+            {
+              "phase": "document",
+              "durationMs": 522.3000000119209,
+              "processElapsedMs": 1354.756,
+              "webElapsedMs": 871.1999999880791,
+              "launchElapsedMs": 1399.756,
+              "detail": null
+            },
+            {
+              "phase": "windowExpansion",
+              "durationMs": 152.5,
+              "processElapsedMs": 1707.0113999999999,
+              "webElapsedMs": 1218.3999999761581,
+              "launchElapsedMs": 1752.0113999999999,
+              "detail": null
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "events": [
+            {
+              "phase": "gpuDevice",
+              "durationMs": 327.96659999999997,
+              "processElapsedMs": 1118.8497,
+              "webElapsedMs": null,
+              "launchElapsedMs": 1197.8497,
+              "detail": null
+            },
+            {
+              "phase": "nativeFonts",
+              "durationMs": 8.943200000000001,
+              "processElapsedMs": 1128.5452,
+              "webElapsedMs": null,
+              "launchElapsedMs": 1207.5452,
+              "detail": null
+            },
+            {
+              "phase": "rendererInstall",
+              "durationMs": 163.7689,
+              "processElapsedMs": 1296.0536,
+              "webElapsedMs": null,
+              "launchElapsedMs": 1375.0536,
+              "detail": null
+            },
+            {
+              "phase": "document",
+              "durationMs": 627.3000000119209,
+              "processElapsedMs": 1680.0316,
+              "webElapsedMs": 1060.6000000238419,
+              "launchElapsedMs": 1759.0316,
+              "detail": null
+            },
+            {
+              "phase": "windowExpansion",
+              "durationMs": 164.39999997615814,
+              "processElapsedMs": 2040.4064,
+              "webElapsedMs": 1420.199999988079,
+              "launchElapsedMs": 2119.4064,
+              "detail": null
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "events": [
+            {
+              "phase": "gpuDevice",
+              "durationMs": 285.3681,
+              "processElapsedMs": 797.933,
+              "webElapsedMs": null,
+              "launchElapsedMs": 828.933,
+              "detail": null
+            },
+            {
+              "phase": "nativeFonts",
+              "durationMs": 10.3759,
+              "processElapsedMs": 809.2482,
+              "webElapsedMs": null,
+              "launchElapsedMs": 840.2482,
+              "detail": null
+            },
+            {
+              "phase": "rendererInstall",
+              "durationMs": 155.7189,
+              "processElapsedMs": 967.74,
+              "webElapsedMs": null,
+              "launchElapsedMs": 998.74,
+              "detail": null
+            },
+            {
+              "phase": "document",
+              "durationMs": 510,
+              "processElapsedMs": 1305.6499,
+              "webElapsedMs": 871.5999999642372,
+              "launchElapsedMs": 1336.6499,
+              "detail": null
+            },
+            {
+              "phase": "windowExpansion",
+              "durationMs": 104.30000001192093,
+              "processElapsedMs": 1605.1001999999999,
+              "webElapsedMs": 1170.199999988079,
+              "launchElapsedMs": 1636.1001999999999,
+              "detail": null
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "events": [
+            {
+              "phase": "gpuDevice",
+              "durationMs": 299.6899,
+              "processElapsedMs": 923.3968,
+              "webElapsedMs": null,
+              "launchElapsedMs": 965.3968,
+              "detail": null
+            },
+            {
+              "phase": "nativeFonts",
+              "durationMs": 6.9996,
+              "processElapsedMs": 931.197,
+              "webElapsedMs": null,
+              "launchElapsedMs": 973.197,
+              "detail": null
+            },
+            {
+              "phase": "rendererInstall",
+              "durationMs": 150.3273,
+              "processElapsedMs": 1087.281,
+              "webElapsedMs": null,
+              "launchElapsedMs": 1129.281,
+              "detail": null
+            },
+            {
+              "phase": "document",
+              "durationMs": 460.60000002384186,
+              "processElapsedMs": 1376.666,
+              "webElapsedMs": 856.8000000119209,
+              "launchElapsedMs": 1418.666,
+              "detail": null
+            },
+            {
+              "phase": "windowExpansion",
+              "durationMs": 90.20000004768372,
+              "processElapsedMs": 1659.4713,
+              "webElapsedMs": 1136.6000000238419,
+              "launchElapsedMs": 1701.4713,
+              "detail": null
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "events": [
+            {
+              "phase": "gpuDevice",
+              "durationMs": 241.10750000000002,
+              "processElapsedMs": 723.5547,
+              "webElapsedMs": null,
+              "launchElapsedMs": 750.5547,
+              "detail": null
+            },
+            {
+              "phase": "nativeFonts",
+              "durationMs": 7.2182,
+              "processElapsedMs": 731.6789,
+              "webElapsedMs": null,
+              "launchElapsedMs": 758.6789,
+              "detail": null
+            },
+            {
+              "phase": "rendererInstall",
+              "durationMs": 146.87900000000002,
+              "processElapsedMs": 900.6984,
+              "webElapsedMs": null,
+              "launchElapsedMs": 927.6984,
+              "detail": null
+            },
+            {
+              "phase": "document",
+              "durationMs": 478.39999997615814,
+              "processElapsedMs": 1220.1275,
+              "webElapsedMs": 805.7999999523163,
+              "launchElapsedMs": 1247.1275,
+              "detail": null
+            },
+            {
+              "phase": "windowExpansion",
+              "durationMs": 83.80000001192093,
+              "processElapsedMs": 1469.1035000000002,
+              "webElapsedMs": 1053.8999999761581,
+              "launchElapsedMs": 1496.1035000000002,
+              "detail": null
+            }
+          ]
+        }
+      ]
+    },
+    "document": {
+      "documentSha256": "d7e65fb222a0bb59f0ac82c3f3143a3437a487f3bbacf3a1f314b989b96de609",
+      "baselineSha256": "6d6fc31655cb1e5bc1dc78fb6eccc0ffa74aaea9b3465d560291e15aabf8a67c",
+      "candidateSha256": "73143d60a2322e5fdd5ebdb86984d7c954b5d3943da93c522e8c9523230160e7",
+      "measurements": {
+        "firstFeedbackMs": {
+          "baseline": {
+            "median": 751.2294,
+            "min": 508.4591,
+            "max": 829.3696,
+            "values": [
+              746.5654,
+              829.3696,
+              751.2294,
+              803.1483,
+              508.4591
+            ]
+          },
+          "candidate": {
+            "median": 529.0826000000001,
+            "min": 436.5088,
+            "max": 674.9841,
+            "values": [
+              529.0826000000001,
+              674.9841,
+              546.6465999999999,
+              528.1270999999999,
+              436.5088
+            ]
+          },
+          "medianChangePercent": -29.571100385581282
+        },
+        "usableWorkspaceMs": {
+          "baseline": {
+            "median": 1896.3273,
+            "min": 1525.4696,
+            "max": 2028.2489,
+            "values": [
+              1753.3646,
+              1992.2302000000002,
+              1896.3273,
+              2028.2489,
+              1525.4696
+            ]
+          },
+          "candidate": {
+            "median": 1571.6105,
+            "min": 1336.2832,
+            "max": 1692.3628999999999,
+            "values": [
+              1668.1351,
+              1692.3628999999999,
+              1571.6105,
+              1400.2381,
+              1336.2832
+            ]
+          },
+          "medianChangePercent": -17.123457538158092
+        },
+        "firstInteractionMs": {
+          "baseline": {
+            "median": 12.199999988079071,
+            "min": 10.5,
+            "max": 27.80000001192093,
+            "values": [
+              12.199999988079071,
+              13.600000023841858,
+              10.5,
+              27.80000001192093,
+              11.800000011920929
+            ]
+          },
+          "candidate": {
+            "median": 10.400000035762787,
+            "min": 10.299999952316284,
+            "max": 18.19999998807907,
+            "values": [
+              10.399999976158142,
+              18.19999998807907,
+              17.700000047683716,
+              10.400000035762787,
+              10.299999952316284
+            ]
+          },
+          "medianChangePercent": -14.754097984222215
+        },
+        "firstCadInteractionMs": {
+          "baseline": {
+            "median": 301.69999998807907,
+            "min": 286.60000002384186,
+            "max": 1665.699999988079,
+            "values": [
+              301.69999998807907,
+              286.60000002384186,
+              1665.699999988079,
+              435.30000001192093,
+              298.19999998807907
+            ]
+          },
+          "candidate": {
+            "median": 270.7000000476837,
+            "min": 226,
+            "max": 349.30000001192093,
+            "values": [
+              349.30000001192093,
+              257.19999998807907,
+              317.30000001192093,
+              226,
+              270.7000000476837
+            ]
+          },
+          "medianChangePercent": -10.275107703553276
+        },
+        "repeatedCadInteractionMs": {
+          "baseline": {
+            "median": 234.89999997615814,
+            "min": 216.70000004768372,
+            "max": 290.89999997615814,
+            "values": [
+              290.89999997615814,
+              234.89999997615814,
+              245.80000001192093,
+              233.9000000357628,
+              216.70000004768372
+            ]
+          },
+          "candidate": {
+            "median": 254.0999999642372,
+            "min": 158.5,
+            "max": 257.30000001192093,
+            "values": [
+              257.30000001192093,
+              189.5,
+              254.0999999642372,
+              158.5,
+              254.19999998807907
+            ]
+          },
+          "medianChangePercent": 8.173690928066346
+        }
+      },
+      "candidateCadTimings": [
+        {
+          "sketchCommandsMs": 112,
+          "sketchFrameMs": 62.30000001192093,
+          "solidCommandsMs": 115.80000001192093,
+          "solidFrameMs": 59.19999998807907,
+          "repeatedCadInteractionMs": 257.30000001192093,
+          "repeatedTimings": {
+            "sketchCommandsMs": 54.30000001192093,
+            "sketchFrameMs": 30.599999964237213,
+            "solidCommandsMs": 89.30000001192093,
+            "solidFrameMs": 83.10000002384186
+          }
+        },
+        {
+          "sketchCommandsMs": 65.80000001192093,
+          "sketchFrameMs": 26.599999964237213,
+          "solidCommandsMs": 115.90000003576279,
+          "solidFrameMs": 48.89999997615814,
+          "repeatedCadInteractionMs": 189.5,
+          "repeatedTimings": {
+            "sketchCommandsMs": 46.19999998807907,
+            "sketchFrameMs": 15.899999976158142,
+            "solidCommandsMs": 72.40000003576279,
+            "solidFrameMs": 55
+          }
+        },
+        {
+          "sketchCommandsMs": 72,
+          "sketchFrameMs": 34.80000001192093,
+          "solidCommandsMs": 120,
+          "solidFrameMs": 90.5,
+          "repeatedCadInteractionMs": 254.0999999642372,
+          "repeatedTimings": {
+            "sketchCommandsMs": 59.30000001192093,
+            "sketchFrameMs": 25.599999964237213,
+            "solidCommandsMs": 100.90000003576279,
+            "solidFrameMs": 68.29999995231628
+          }
+        },
+        {
+          "sketchCommandsMs": 48.299999952316284,
+          "sketchFrameMs": 30.600000023841858,
+          "solidCommandsMs": 70.10000002384186,
+          "solidFrameMs": 77,
+          "repeatedCadInteractionMs": 158.5,
+          "repeatedTimings": {
+            "sketchCommandsMs": 43.5,
+            "sketchFrameMs": 11.099999964237213,
+            "solidCommandsMs": 63,
+            "solidFrameMs": 40.90000003576279
+          }
+        },
+        {
+          "sketchCommandsMs": 49.200000047683716,
+          "sketchFrameMs": 21.299999952316284,
+          "solidCommandsMs": 124.80000001192093,
+          "solidFrameMs": 75.40000003576279,
+          "repeatedCadInteractionMs": 254.19999998807907,
+          "repeatedTimings": {
+            "sketchCommandsMs": 50.09999996423721,
+            "sketchFrameMs": 37.30000001192093,
+            "solidCommandsMs": 104.89999997615814,
+            "solidFrameMs": 61.90000003576279
+          }
+        }
+      ],
+      "baselineCadTimings": [
+        {
+          "sketchCommandsMs": 57.89999997615814,
+          "sketchFrameMs": 25.5,
+          "solidCommandsMs": 141.70000004768372,
+          "solidFrameMs": 76.59999996423721,
+          "repeatedCadInteractionMs": 290.89999997615814,
+          "repeatedTimings": {
+            "sketchCommandsMs": 62.799999952316284,
+            "sketchFrameMs": 20,
+            "solidCommandsMs": 95.40000003576279,
+            "solidFrameMs": 112.69999998807907
+          }
+        },
+        {
+          "sketchCommandsMs": 85.40000003576279,
+          "sketchFrameMs": 25.399999976158142,
+          "solidCommandsMs": 92.69999998807907,
+          "solidFrameMs": 83.10000002384186,
+          "repeatedCadInteractionMs": 234.89999997615814,
+          "repeatedTimings": {
+            "sketchCommandsMs": 58.69999998807907,
+            "sketchFrameMs": 16.100000023841858,
+            "solidCommandsMs": 90.39999997615814,
+            "solidFrameMs": 69.69999998807907
+          }
+        },
+        {
+          "sketchCommandsMs": 694.9000000357628,
+          "sketchFrameMs": 366.0999999642372,
+          "solidCommandsMs": 523.1999999880791,
+          "solidFrameMs": 81.5,
+          "repeatedCadInteractionMs": 245.80000001192093,
+          "repeatedTimings": {
+            "sketchCommandsMs": 50,
+            "sketchFrameMs": 66.10000002384186,
+            "solidCommandsMs": 76.19999998807907,
+            "solidFrameMs": 53.5
+          }
+        },
+        {
+          "sketchCommandsMs": 55.19999998807907,
+          "sketchFrameMs": 192.9000000357628,
+          "solidCommandsMs": 110,
+          "solidFrameMs": 77.19999998807907,
+          "repeatedCadInteractionMs": 233.9000000357628,
+          "repeatedTimings": {
+            "sketchCommandsMs": 53.90000003576279,
+            "sketchFrameMs": 18.399999976158142,
+            "solidCommandsMs": 103.69999998807907,
+            "solidFrameMs": 57.90000003576279
+          }
+        },
+        {
+          "sketchCommandsMs": 77.29999995231628,
+          "sketchFrameMs": 27.80000001192093,
+          "solidCommandsMs": 107.90000003576279,
+          "solidFrameMs": 85.19999998807907,
+          "repeatedCadInteractionMs": 216.70000004768372,
+          "repeatedTimings": {
+            "sketchCommandsMs": 59.700000047683716,
+            "sketchFrameMs": 19.099999964237213,
+            "solidCommandsMs": 66.10000002384186,
+            "solidFrameMs": 71.80000001192093
+          }
+        }
+      ],
+      "afterOnlySpans": [
+        {
+          "index": 1,
+          "events": [
+            {
+              "phase": "gpuDevice",
+              "durationMs": 268.8232,
+              "processElapsedMs": 771.8963,
+              "webElapsedMs": null,
+              "launchElapsedMs": 798.8963,
+              "detail": null
+            },
+            {
+              "phase": "nativeFonts",
+              "durationMs": 8.9941,
+              "processElapsedMs": 781.5782999999999,
+              "webElapsedMs": null,
+              "launchElapsedMs": 808.5782999999999,
+              "detail": null
+            },
+            {
+              "phase": "rendererInstall",
+              "durationMs": 157.2447,
+              "processElapsedMs": 941.2049000000001,
+              "webElapsedMs": null,
+              "launchElapsedMs": 968.2049000000001,
+              "detail": null
+            },
+            {
+              "phase": "document",
+              "durationMs": 625.6999999880791,
+              "processElapsedMs": 1390.5612,
+              "webElapsedMs": 966.5,
+              "launchElapsedMs": 1417.5612,
+              "detail": null
+            },
+            {
+              "phase": "windowExpansion",
+              "durationMs": 104.40000003576279,
+              "processElapsedMs": 1640.6458000000002,
+              "webElapsedMs": 1215.1000000238419,
+              "launchElapsedMs": 1667.6458000000002,
+              "detail": null
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "events": [
+            {
+              "phase": "gpuDevice",
+              "durationMs": 249.5748,
+              "processElapsedMs": 860.1699000000001,
+              "webElapsedMs": null,
+              "launchElapsedMs": 926.1699000000001,
+              "detail": null
+            },
+            {
+              "phase": "nativeFonts",
+              "durationMs": 7.8727,
+              "processElapsedMs": 868.6782,
+              "webElapsedMs": null,
+              "launchElapsedMs": 934.6782,
+              "detail": null
+            },
+            {
+              "phase": "rendererInstall",
+              "durationMs": 149.3318,
+              "processElapsedMs": 1019.7825,
+              "webElapsedMs": null,
+              "launchElapsedMs": 1085.7825,
+              "detail": null
+            },
+            {
+              "phase": "document",
+              "durationMs": 531.1999999880791,
+              "processElapsedMs": 1388.7407999999998,
+              "webElapsedMs": 862.7999999523163,
+              "launchElapsedMs": 1454.7407999999998,
+              "detail": null
+            },
+            {
+              "phase": "windowExpansion",
+              "durationMs": 88.60000002384186,
+              "processElapsedMs": 1625.9413,
+              "webElapsedMs": 1098.8999999761581,
+              "launchElapsedMs": 1691.9413,
+              "detail": null
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "events": [
+            {
+              "phase": "gpuDevice",
+              "durationMs": 240.5736,
+              "processElapsedMs": 762.3147,
+              "webElapsedMs": null,
+              "launchElapsedMs": 788.3147,
+              "detail": null
+            },
+            {
+              "phase": "nativeFonts",
+              "durationMs": 7.1875,
+              "processElapsedMs": 770.1762,
+              "webElapsedMs": null,
+              "launchElapsedMs": 796.1762,
+              "detail": null
+            },
+            {
+              "phase": "rendererInstall",
+              "durationMs": 108.5184,
+              "processElapsedMs": 890.1837,
+              "webElapsedMs": null,
+              "launchElapsedMs": 916.1837,
+              "detail": null
+            },
+            {
+              "phase": "document",
+              "durationMs": 545.8000000119209,
+              "processElapsedMs": 1304.4997,
+              "webElapsedMs": 865.6000000238419,
+              "launchElapsedMs": 1330.4997,
+              "detail": null
+            },
+            {
+              "phase": "windowExpansion",
+              "durationMs": 94.09999996423721,
+              "processElapsedMs": 1544.9568,
+              "webElapsedMs": 1103.3999999761581,
+              "launchElapsedMs": 1570.9568,
+              "detail": null
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "events": [
+            {
+              "phase": "gpuDevice",
+              "durationMs": 221.0734,
+              "processElapsedMs": 719.0651,
+              "webElapsedMs": null,
+              "launchElapsedMs": 750.0651,
+              "detail": null
+            },
+            {
+              "phase": "nativeFonts",
+              "durationMs": 6.584,
+              "processElapsedMs": 726.1529,
+              "webElapsedMs": null,
+              "launchElapsedMs": 757.1529,
+              "detail": null
+            },
+            {
+              "phase": "rendererInstall",
+              "durationMs": 112.4966,
+              "processElapsedMs": 852.5817999999999,
+              "webElapsedMs": null,
+              "launchElapsedMs": 883.5817999999999,
+              "detail": null
+            },
+            {
+              "phase": "document",
+              "durationMs": 483,
+              "processElapsedMs": 1201.9679999999998,
+              "webElapsedMs": 782.3999999761581,
+              "launchElapsedMs": 1232.9679999999998,
+              "detail": null
+            },
+            {
+              "phase": "windowExpansion",
+              "durationMs": 84.60000002384186,
+              "processElapsedMs": 1368.874,
+              "webElapsedMs": 949.8000000119209,
+              "launchElapsedMs": 1399.874,
+              "detail": null
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "events": [
+            {
+              "phase": "gpuDevice",
+              "durationMs": 210.6439,
+              "processElapsedMs": 623.9897,
+              "webElapsedMs": null,
+              "launchElapsedMs": 647.9897,
+              "detail": null
+            },
+            {
+              "phase": "nativeFonts",
+              "durationMs": 7.5114,
+              "processElapsedMs": 632.0474,
+              "webElapsedMs": null,
+              "launchElapsedMs": 656.0474,
+              "detail": null
+            },
+            {
+              "phase": "rendererInstall",
+              "durationMs": 100.46130000000001,
+              "processElapsedMs": 734.4805,
+              "webElapsedMs": null,
+              "launchElapsedMs": 758.4805,
+              "detail": null
+            },
+            {
+              "phase": "document",
+              "durationMs": 483.60000002384186,
+              "processElapsedMs": 1097.0378,
+              "webElapsedMs": 745.1000000238419,
+              "launchElapsedMs": 1121.0378,
+              "detail": null
+            },
+            {
+              "phase": "windowExpansion",
+              "durationMs": 87.39999997615814,
+              "processElapsedMs": 1311.9092,
+              "webElapsedMs": 961.1000000238419,
+              "launchElapsedMs": 1335.9092,
+              "detail": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -32,7 +32,7 @@ export function listenForModelKeys(listener: (event: KeyboardEvent) => void, cap
       if (event.key === 'Escape' && event.target.closest('[data-script-preview-pending]')) return;
       if (event.key === 'ArrowDown' && event.target.closest('[data-script-preview-trigger]')) return;
     }
-    if (event.target instanceof Element && event.target.closest('[data-script-companion]')) return;
+    if (event.target instanceof Element && event.target.closest('[data-script-companion], [data-runtime-activity-panel]')) return;
     listener(event);
   };
   window.addEventListener('keydown', route, capture);

@@ -26,3 +26,12 @@ members = [
 # `node scripts/sync-version.mjs`; every member inherits it.
 [workspace.package]
 version = "0.2.2"
+
+# Bevy's development starting point: retain development checks while avoiding
+# unoptimized solver and dependency work. Workspace members use level 1.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+debug = 0

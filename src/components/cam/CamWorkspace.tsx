@@ -19,7 +19,6 @@ import { modeledStockBodyId } from '../../cam/geometry';
 import { beginCamActivity, camSimulationInputKey, useCamActivity } from '../../cam/simulationUi';
 import { adjacentCamMove, camPlaybackRange } from '../../cam/playback';
 import { StockPlaybackBuffer } from '../../cam/stockPlaybackBuffer';
-import { CamBusyIndicator } from './CamBusyIndicator';
 import { commitLength, displayLength, lengthUnitLabel } from '../../cam/units';
 import { getEngine } from '../../engine';
 import type {
@@ -216,6 +215,7 @@ export function CamWorkspace() {
       })
       .catch((error) => {
         if (cancelled) return;
+        finish.fail(error);
         setCamProgram(null);
         setPlanError(error instanceof Error ? error.message : String(error));
       })
@@ -225,7 +225,7 @@ export function CamWorkspace() {
       });
     return () => {
       cancelled = true;
-      finish();
+      finish.discard();
     };
   }, [cam, setup?.id, generation, selectedOperationId]);
 
@@ -305,6 +305,7 @@ export function CamWorkspace() {
       })
       .catch((error) => {
         if (cancelled) return;
+        finish.fail(error);
         setCamSimulation(null);
         setSimulationError(error instanceof Error ? error.message : String(error));
       })
@@ -314,7 +315,7 @@ export function CamWorkspace() {
       });
     return () => {
       cancelled = true;
-      finish();
+      finish.discard();
     };
   }, [
     cam,
@@ -669,7 +670,6 @@ export function CamWorkspace() {
               (stock, WCS, toolpaths, simulated stock) through the viewport's
               transient preview channel. */}
           <StableViewport key={resolvedTheme} />
-          <CamBusyIndicator />
           {!inSimulationRibbon && preparationStatus}
           {pick && (
             <div className="pointer-events-none absolute left-1/2 top-3 z-10 max-w-[80%] -translate-x-1/2 rounded border border-accent/50 bg-header/90 px-3 py-1.5 text-center text-[11px] text-accent shadow-xl backdrop-blur-sm">

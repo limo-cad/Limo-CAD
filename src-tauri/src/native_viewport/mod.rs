@@ -643,6 +643,12 @@ pub struct NativePick {
 pub struct NativeViewportMetrics {
     pub available: bool,
     pub ready: bool,
+    pub renderer_initialized: bool,
+    pub startup_phase: String,
+    pub model_session_id: String,
+    pub geometry_revision: u64,
+    pub ready_pipeline_count: usize,
+    pub uploaded_mesh_count: usize,
     pub startup_error: Option<String>,
     pub backend: String,
     pub logical_width: f64,
@@ -687,6 +693,17 @@ pub struct NativeViewport {
 }
 
 impl NativeViewport {
+    pub fn start(&self) -> Result<(), String> {
+        #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+        {
+            self.inner.start()
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+        {
+            Err("the embedded native viewport is unavailable on this platform".to_string())
+        }
+    }
+
     pub fn install(app: &mut App) -> Result<Self, String> {
         #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
         {

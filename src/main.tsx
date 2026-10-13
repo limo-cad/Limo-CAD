@@ -7,6 +7,8 @@ import { useLocaleStore } from './i18n/localeStore';
 import { startSessionBridge } from './sessionBridge';
 import { useAppStore } from './store/appStore';
 import { applyUiScale, currentUiScale, DEFAULT_UI_SCALE } from './uiScale';
+import { isTauriRuntime } from './engine';
+import { usesNativeStartup } from './startup';
 import './index.css';
 
 // E2E/debug handle (harmless in production): lets automation read app state.
@@ -17,10 +19,12 @@ declare global {
 }
 window.__appStore = useAppStore;
 startSessionBridge();
-// Apply the saved zoom before the first render so the shell does not appear at
-// 100% and then jump.
+// A compact native startup window has its own fixed, readable layout. Restore
+// saved CAD zoom during expansion, before the workspace becomes interactive.
+const nativeStartup = usesNativeStartup(isTauriRuntime(), import.meta.env.MODE);
+if (!nativeStartup) delete document.documentElement.dataset.startupWindow;
 const savedUiScale = useAppStore.getState().uiScale;
-if (savedUiScale !== DEFAULT_UI_SCALE) {
+if (!nativeStartup && savedUiScale !== DEFAULT_UI_SCALE) {
   void applyUiScale(savedUiScale).catch((error) => {
     console.warn('Could not apply UI scale', error);
     useAppStore.setState({ uiScale: currentUiScale() });

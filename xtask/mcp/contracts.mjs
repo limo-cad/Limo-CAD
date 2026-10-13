@@ -342,6 +342,14 @@ try {
  });
  console.log('PASS production project-open/export recovery: '+JSON.stringify(recovery));
  await recoveryPage.close();
+ const consentPage=await browser.newPage();
+ await consentPage.goto(server.resolvedUrls.local[0]+'mcp-contract');
+ const consent=await consentPage.evaluate(async()=>{
+  const {checkOpenConsentOwnership}=await import('/src/files/openConsent.browser.test.ts');
+  return checkOpenConsentOwnership();
+ });
+ console.log('PASS production Open consent ownership: '+JSON.stringify(consent));
+ await consentPage.close();
  const namingPage=await browser.newPage();
  await namingPage.goto(server.resolvedUrls.local[0]+'mcp-contract');
  const naming=await namingPage.evaluate(async()=>{

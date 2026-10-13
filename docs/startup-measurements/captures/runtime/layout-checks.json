@@ -1,0 +1,59 @@
+[
+  {
+    "kind": "Real production Open with mocked file IPC",
+    "passed": 2,
+    "nativeReplacements": 0
+  },
+  {
+    "locale": "en",
+    "kind": "Actual ActivityIndicator component; simulated jobs, not native runtime timing",
+    "rect": {
+      "x": 952,
+      "y": 37,
+      "width": 320,
+      "height": 319
+    },
+    "copy": "Activity\nIn progress\n\nOpen drawing · service-bracket-assembly-revision-C.nbcad\n\nPreparing geometry…\n2s elapsed\n\nExport · mounting-plate.step\n\nWaiting for the current operation…\n2s elapsed\n\nFailed · Save drawing · service-bracket.nbcad\n\nError details\nRecent activity\n\nSave drawing · service-bracket.nbcad\n\nFailed\n0s elapsed",
+    "horizontalOverflow": false,
+    "verticalScroll": false
+  },
+  {
+    "locale": "zh-CN",
+    "kind": "Actual ActivityIndicator component; simulated jobs, not native runtime timing",
+    "rect": {
+      "x": 952,
+      "y": 37,
+      "width": 320,
+      "height": 319
+    },
+    "copy": "任务\n正在进行\n\n打开图纸 · service-bracket-assembly-revision-C.nbcad\n\n正在准备几何模型…\n已用 2 秒\n\n导出文件 · mounting-plate.step\n\n正在等待当前操作完成…\n已用 2 秒\n\n未完成 · 保存图纸 · service-bracket.nbcad\n\n错误详情\n最近任务\n\n保存图纸 · service-bracket.nbcad\n\n未完成\n已用 0 秒",
+    "horizontalOverflow": false,
+    "verticalScroll": false
+  },
+  {
+    "locale": "es",
+    "kind": "Actual ActivityIndicator component; simulated jobs, not native runtime timing",
+    "rect": {
+      "x": 952,
+      "y": 37,
+      "width": 320,
+      "height": 335.5
+    },
+    "copy": "Actividad\nEn curso\n\nAbrir dibujo · service-bracket-assembly-revision-C.nbcad\n\nPreparando la geometría…\n2 s transcurridos\n\nExportar · mounting-plate.step\n\nEsperando a que termine la operación actual…\n2 s transcurridos\n\nFalló · Guardar dibujo · service-bracket.nbcad\n\nDetalles del error\nActividad reciente\n\nGuardar dibujo · service-bracket.nbcad\n\nFalló\n0 s transcurridos",
+    "horizontalOverflow": false,
+    "verticalScroll": false
+  },
+  {
+    "locale": "de",
+    "kind": "Actual ActivityIndicator component; simulated jobs, not native runtime timing",
+    "rect": {
+      "x": 952,
+      "y": 37,
+      "width": 320,
+      "height": 347.5
+    },
+    "copy": "Aktivität\nIn Bearbeitung\n\nZeichnung öffnen · service-bracket-assembly-revision-C.nbcad\n\nGeometrie wird vorbereitet…\n2 s vergangen\n\nExportieren · mounting-plate.step\n\nWarten auf den Abschluss des aktuellen Vorgangs…\n2 s vergangen\n\nFehlgeschlagen · Zeichnung speichern · service-bracket.nbcad\n\nFehlerdetails\nLetzte Aktivitäten\n\nZeichnung speichern · service-bracket.nbcad\n\nFehlgeschlagen\n0 s vergangen",
+    "horizontalOverflow": false,
+    "verticalScroll": false
+  }
+]

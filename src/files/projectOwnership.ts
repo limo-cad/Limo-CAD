@@ -21,18 +21,36 @@ export function captureProjectOwner(
 ) {
   const state = useAppStore.getState();
   const revision = projectTransitions.capture();
-  const assertUnchanged = () => {
-    projectTransitions.assertPublished(revision);
+  const assertFrontendUnchanged = (allowNameAdoption = false) => {
     const current = useAppStore.getState();
+    const sameDocument = current.document === state.document || (
+      allowNameAdoption && current.document !== null && state.document !== null
+      && JSON.stringify({ ...current.document, name: state.document.name }) === JSON.stringify(state.document)
+    );
     const assemblyReadModelChanged = !options.ignoreAssemblyReadModel
       && current.assemblyDocument !== state.assemblyDocument;
     if (current.activeProjectTabId !== state.activeProjectTabId
-      || current.document !== state.document || current.solidScene !== state.solidScene
+      || !sameDocument || current.solidScene !== state.solidScene
       || current.finishedSketches !== state.finishedSketches || current.datumPlanes !== state.datumPlanes
       || current.bodyAppearances !== state.bodyAppearances || current.drawingDocument !== state.drawingDocument
       || assemblyReadModelChanged || current.projectVisibility !== state.projectVisibility
       || current.activeSketch !== state.activeSketch || current.historyEdit !== state.historyEdit) {
       throw new Error(translate('file.errorDocumentChangedDuringSave'));
+    }
+  };
+  const assertUnchanged = () => {
+    projectTransitions.assertPublished(revision);
+    assertFrontendUnchanged();
+  };
+  // Open replaces rather than consumes the native model. An uncertain failed
+  // load must remain recoverable without weakening Save/export publication.
+  const assertReplacementSource = (allowNameAdoption = false) => {
+    projectTransitions.assertRevision(revision);
+    assertFrontendUnchanged(allowNameAdoption);
+    const current = useAppStore.getState();
+    if (current.camDocument !== state.camDocument || current.activeNamedView !== state.activeNamedView
+      || current.viewPartOffsets !== state.viewPartOffsets) {
+      throw new Error(translate('file.errorDocumentChangedDuringOpen'));
     }
   };
   const assertSettled = () => {
@@ -42,7 +60,7 @@ export function captureProjectOwner(
       || (!state.projectBusy && current.projectBusy)) throw new Error(translate('file.errorDocumentChangedDuringSave'));
     assertUnchanged();
   };
-  return { state, assertSettled, assertUnchanged, async assertCurrent() {
+  return { state, assertSettled, assertUnchanged, assertReplacementSource, async assertCurrent() {
     await projectTransitions.assertCurrent(revision);
     assertSettled();
   } };

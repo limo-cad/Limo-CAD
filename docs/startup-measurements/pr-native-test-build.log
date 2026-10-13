@@ -1,0 +1,19 @@
+'vswhere.exe' is not recognized as an internal or external command,
+operable program or batch file.
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.0
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+   Compiling nbcad-core v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\core)
+   Compiling nbcad-solid v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\solid)
+   Compiling nbcad-export v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\export)
+   Compiling nbcad-assembly v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\assembly)
+   Compiling nbcad-cam v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\cam)
+   Compiling nbcad-sketch v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\sketch)
+   Compiling nbcad-occt v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\occt)
+   Compiling nbcad-mcp-mutate v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\mcp-mutate)
+   Compiling nbcad-mcp v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\mcp-server)
+   Compiling nbcad v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\src-tauri)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 03s
+  Executable unittests src\lib.rs (D:\limo-startup-target-optimized\debug\deps\nbcad_lib-7315ad7c56aadab5.exe)

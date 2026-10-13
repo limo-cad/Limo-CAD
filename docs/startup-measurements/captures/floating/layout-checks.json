@@ -1,0 +1,522 @@
+[
+  {
+    "name": "en-graphics",
+    "locale": "en",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 126.15625,
+      "width": 298,
+      "height": 147.6875,
+      "bottom": 273.84375,
+      "right": 531
+    },
+    "actions": [],
+    "note": "Workshop noteTolerance is a virtue. Also a number.",
+    "copy": "×\nLimo CAD\n\nDesign with understanding.\n\nCAD startup\n\nPreparing graphics…\n\nWorkshop note\n\nTolerance is a virtue. Also a number.",
+    "closeLabel": "Close application",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "en-file",
+    "locale": "en",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 88.25,
+      "width": 298,
+      "height": 223.484375,
+      "bottom": 311.734375,
+      "right": 531
+    },
+    "actions": [],
+    "note": "Workshop noteThe material has read the drawing and would like to negotiate.",
+    "copy": "×\nLimo CAD\n\nDesign with understanding.\n\nCAD startup\n\nCAD initialized.\n\ndrive-bracket-assembly-revision-B-dimensions-and-service-clearance-reviewed-for-manufacturing.nbcad\n\nPreparing geometry…\n\nWorkshop note\n\nThe material has read the drawing and would like to negotiate.",
+    "closeLabel": "Close application",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "en-recovery",
+    "locale": "en",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 84.515625,
+      "width": 298,
+      "height": 230.96875,
+      "bottom": 315.484375,
+      "right": 531
+    },
+    "actions": [
+      {
+        "x": 233,
+        "y": 225.703125,
+        "width": 145.5,
+        "height": 48.78125,
+        "bottom": 274.484375,
+        "right": 378.5
+      },
+      {
+        "x": 385.5,
+        "y": 225.703125,
+        "width": 145.5,
+        "height": 48.78125,
+        "bottom": 274.484375,
+        "right": 531
+      },
+      {
+        "x": 233,
+        "y": 281.484375,
+        "width": 145.5,
+        "height": 34,
+        "bottom": 315.484375,
+        "right": 378.5
+      },
+      {
+        "x": 385.5,
+        "y": 281.484375,
+        "width": 145.5,
+        "height": 34,
+        "bottom": 315.484375,
+        "right": 531
+      }
+    ],
+    "copy": "×\nLimo CAD\n\nDesign with understanding.\n\nCAD startup\n\nThe workspace could not start.\n\nThis project could not be opened. The document archive contains an incomplete model. You can retry or open an empty workspace. This project could not be opened. The document archive contains an incomplete model. You can retry or open an empty workspace. This project could not be opened. The document archive contains an incomplete model. You can retry or open an empty workspace. This project could not be opened. The document archive contains an incomplete model. You can retry or open an empty workspace. This project could not be opened. The document archive contains an incomplete model. You can retry or open an empty workspace. \n\nTry again\nOpen an empty workspace\nCopy details\nClose application",
+    "closeLabel": "Close application",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "zh-CN-graphics",
+    "locale": "zh-CN",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 126.15625,
+      "width": 298,
+      "height": 147.6875,
+      "bottom": 273.84375,
+      "right": 531
+    },
+    "actions": [],
+    "note": "设计随想公差要讲究，宽容也是。",
+    "copy": "×\n砺模 CAD\n\n砺模，求理解之设计。\n\nCAD 启动\n\n正在准备图形…\n\n设计随想\n\n公差要讲究，宽容也是。",
+    "closeLabel": "关闭应用",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "zh-CN-file",
+    "locale": "zh-CN",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 98.15625,
+      "width": 298,
+      "height": 203.6875,
+      "bottom": 301.84375,
+      "right": 531
+    },
+    "actions": [],
+    "note": "设计随想一丁点毛刺，也能提出很有分量的反对意见。",
+    "copy": "×\n砺模 CAD\n\n砺模，求理解之设计。\n\nCAD 启动\n\nCAD 已初始化。\n\ndrive-bracket-assembly-revision-B-dimensions-and-service-clearance-reviewed-for-manufacturing.nbcad\n\n正在准备几何模型…\n\n设计随想\n\n一丁点毛刺，也能提出很有分量的反对意见。",
+    "closeLabel": "关闭应用",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "zh-CN-recovery",
+    "locale": "zh-CN",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 91.90625,
+      "width": 298,
+      "height": 216.1875,
+      "bottom": 308.09375,
+      "right": 531
+    },
+    "actions": [
+      {
+        "x": 233,
+        "y": 233.09375,
+        "width": 145.5,
+        "height": 34,
+        "bottom": 267.09375,
+        "right": 378.5
+      },
+      {
+        "x": 385.5,
+        "y": 233.09375,
+        "width": 145.5,
+        "height": 34,
+        "bottom": 267.09375,
+        "right": 531
+      },
+      {
+        "x": 233,
+        "y": 274.09375,
+        "width": 145.5,
+        "height": 34,
+        "bottom": 308.09375,
+        "right": 378.5
+      },
+      {
+        "x": 385.5,
+        "y": 274.09375,
+        "width": 145.5,
+        "height": 34,
+        "bottom": 308.09375,
+        "right": 531
+      }
+    ],
+    "copy": "×\n砺模 CAD\n\n砺模，求理解之设计。\n\nCAD 启动\n\n工作区未能启动。\n\n项目文件无法打开。项目数据不完整，请重试或打开空白工作区。项目文件无法打开。项目数据不完整，请重试或打开空白工作区。项目文件无法打开。项目数据不完整，请重试或打开空白工作区。项目文件无法打开。项目数据不完整，请重试或打开空白工作区。项目文件无法打开。项目数据不完整，请重试或打开空白工作区。项目文件无法打开。项目数据不完整，请重试或打开空白工作区。项目文件无法打开。项目数据不完整，请重试或打开空白工作区。项目文件无法打开。项目数据不完整，请重试或打开空白工作区。项目文件无法打开。项目数据不完整，请重试或打开空白工作区。\n\n重试\n打开空白工作区\n复制详细信息\n关闭应用",
+    "closeLabel": "关闭应用",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "es-graphics",
+    "locale": "es",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 126.15625,
+      "width": 298,
+      "height": 147.6875,
+      "bottom": 273.84375,
+      "right": 531
+    },
+    "actions": [],
+    "note": "Nota de tallerLa tolerancia es una virtud. Y también un número.",
+    "copy": "×\nLimo CAD\n\nDiseñar con comprensión.\n\nInicio de CAD\n\nPreparando los gráficos…\n\nNota de taller\n\nLa tolerancia es una virtud. Y también un número.",
+    "closeLabel": "Cerrar aplicación",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "es-file",
+    "locale": "es",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 88.25,
+      "width": 298,
+      "height": 223.484375,
+      "bottom": 311.734375,
+      "right": 531
+    },
+    "actions": [],
+    "note": "Nota de tallerEl refuerzo rara vez es la estrella, pero suele hacer que todo funcione.",
+    "copy": "×\nLimo CAD\n\nDiseñar con comprensión.\n\nInicio de CAD\n\nCAD inicializado.\n\ndrive-bracket-assembly-revision-B-dimensions-and-service-clearance-reviewed-for-manufacturing.nbcad\n\nPreparando la geometría…\n\nNota de taller\n\nEl refuerzo rara vez es la estrella, pero suele hacer que todo funcione.",
+    "closeLabel": "Cerrar aplicación",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "es-recovery",
+    "locale": "es",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 84.515625,
+      "width": 298,
+      "height": 230.96875,
+      "bottom": 315.484375,
+      "right": 531
+    },
+    "actions": [
+      {
+        "x": 233,
+        "y": 225.703125,
+        "width": 145.5,
+        "height": 48.78125,
+        "bottom": 274.484375,
+        "right": 378.5
+      },
+      {
+        "x": 385.5,
+        "y": 225.703125,
+        "width": 145.5,
+        "height": 48.78125,
+        "bottom": 274.484375,
+        "right": 531
+      },
+      {
+        "x": 233,
+        "y": 281.484375,
+        "width": 145.5,
+        "height": 34,
+        "bottom": 315.484375,
+        "right": 378.5
+      },
+      {
+        "x": 385.5,
+        "y": 281.484375,
+        "width": 145.5,
+        "height": 34,
+        "bottom": 315.484375,
+        "right": 531
+      }
+    ],
+    "copy": "×\nLimo CAD\n\nDiseñar con comprensión.\n\nInicio de CAD\n\nNo se pudo iniciar el espacio de trabajo.\n\nNo se pudo abrir el proyecto. Los datos del modelo están incompletos. Reintenta o abre un espacio de trabajo vacío. No se pudo abrir el proyecto. Los datos del modelo están incompletos. Reintenta o abre un espacio de trabajo vacío. No se pudo abrir el proyecto. Los datos del modelo están incompletos. Reintenta o abre un espacio de trabajo vacío. No se pudo abrir el proyecto. Los datos del modelo están incompletos. Reintenta o abre un espacio de trabajo vacío. No se pudo abrir el proyecto. Los datos del modelo están incompletos. Reintenta o abre un espacio de trabajo vacío. No se pudo abrir el proyecto. Los datos del modelo están incompletos. Reintenta o abre un espacio de trabajo vacío. \n\nReintentar\nAbrir un espacio de trabajo vacío\nCopiar detalles\nCerrar aplicación",
+    "closeLabel": "Cerrar aplicación",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "de-graphics",
+    "locale": "de",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 126.15625,
+      "width": 298,
+      "height": 147.6875,
+      "bottom": 273.84375,
+      "right": 531
+    },
+    "actions": [],
+    "note": "WerkstattnotizToleranz ist eine Tugend. Und eine Zahl.",
+    "copy": "×\nLimo CAD\n\nKonstruieren mit Verständnis.\n\nCAD-Start\n\nGrafik wird vorbereitet…\n\nWerkstattnotiz\n\nToleranz ist eine Tugend. Und eine Zahl.",
+    "closeLabel": "Anwendung schließen",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "de-file",
+    "locale": "de",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 88.25,
+      "width": 298,
+      "height": 223.484375,
+      "bottom": 311.734375,
+      "right": 531
+    },
+    "actions": [],
+    "note": "WerkstattnotizDie Versteifung ist selten der Star, aber oft der Grund, warum es funktioniert.",
+    "copy": "×\nLimo CAD\n\nKonstruieren mit Verständnis.\n\nCAD-Start\n\nCAD wurde initialisiert.\n\ndrive-bracket-assembly-revision-B-dimensions-and-service-clearance-reviewed-for-manufacturing.nbcad\n\nGeometrie wird vorbereitet…\n\nWerkstattnotiz\n\nDie Versteifung ist selten der Star, aber oft der Grund, warum es funktioniert.",
+    "closeLabel": "Anwendung schließen",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "de-recovery",
+    "locale": "de",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 72.921875,
+      "width": 298,
+      "height": 254.15625,
+      "bottom": 327.078125,
+      "right": 531
+    },
+    "actions": [
+      {
+        "x": 233,
+        "y": 237.296875,
+        "width": 145.5,
+        "height": 48.78125,
+        "bottom": 286.078125,
+        "right": 378.5
+      },
+      {
+        "x": 385.5,
+        "y": 237.296875,
+        "width": 145.5,
+        "height": 48.78125,
+        "bottom": 286.078125,
+        "right": 531
+      },
+      {
+        "x": 233,
+        "y": 293.078125,
+        "width": 145.5,
+        "height": 34,
+        "bottom": 327.078125,
+        "right": 378.5
+      },
+      {
+        "x": 385.5,
+        "y": 293.078125,
+        "width": 145.5,
+        "height": 34,
+        "bottom": 327.078125,
+        "right": 531
+      }
+    ],
+    "copy": "×\nLimo CAD\n\nKonstruieren mit Verständnis.\n\nCAD-Start\n\nDer Arbeitsbereich konnte nicht gestartet werden.\n\nDas Projekt konnte nicht geöffnet werden. Die Modelldaten sind unvollständig. Erneut versuchen oder einen leeren Arbeitsbereich öffnen. Das Projekt konnte nicht geöffnet werden. Die Modelldaten sind unvollständig. Erneut versuchen oder einen leeren Arbeitsbereich öffnen. Das Projekt konnte nicht geöffnet werden. Die Modelldaten sind unvollständig. Erneut versuchen oder einen leeren Arbeitsbereich öffnen. Das Projekt konnte nicht geöffnet werden. Die Modelldaten sind unvollständig. Erneut versuchen oder einen leeren Arbeitsbereich öffnen. Das Projekt konnte nicht geöffnet werden. Die Modelldaten sind unvollständig. Erneut versuchen oder einen leeren Arbeitsbereich öffnen. Das Projekt konnte nicht geöffnet werden. Die Modelldaten sind unvollständig. Erneut versuchen oder einen leeren Arbeitsbereich öffnen. \n\nErneut versuchen\nLeeren Arbeitsbereich öffnen\nDetails kopieren\nAnwendung schließen",
+    "closeLabel": "Anwendung schließen",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "en-light",
+    "locale": "en",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 0,
+      "y": 0,
+      "width": 560,
+      "height": 380,
+      "bottom": 380,
+      "right": 560
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 233,
+      "y": 126.15625,
+      "width": 298,
+      "height": 147.6875,
+      "bottom": 273.84375,
+      "right": 531
+    },
+    "actions": [],
+    "note": "Workshop noteTolerance is a virtue. Also a number.",
+    "copy": "×\nLimo CAD\n\nDesign with understanding.\n\nCAD startup\n\nLoading CAD resources…\n\nWorkshop note\n\nTolerance is a virtue. Also a number.",
+    "closeLabel": "Close application",
+    "horizontalOverflow": false
+  },
+  {
+    "name": "en-floating-composition",
+    "locale": "en",
+    "kind": "Selected actual StartupScreen component state; simulated native IPC; not a native launch or timing",
+    "card": {
+      "x": 170,
+      "y": 110,
+      "width": 560,
+      "height": 380,
+      "bottom": 490,
+      "right": 730
+    },
+    "cardScrollHeight": 378,
+    "cardClientHeight": 378,
+    "body": {
+      "x": 403,
+      "y": 236.15625,
+      "width": 298,
+      "height": 147.6875,
+      "bottom": 383.84375,
+      "right": 701
+    },
+    "actions": [],
+    "note": "Workshop noteSymmetry enjoys being noticed.",
+    "copy": "×\nLimo CAD\n\nDesign with understanding.\n\nCAD startup\n\nPreparing the first view…\n\nWorkshop note\n\nSymmetry enjoys being noticed.",
+    "closeLabel": "Close application",
+    "horizontalOverflow": false
+  }
+]

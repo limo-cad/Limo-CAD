@@ -1,0 +1,24 @@
+{
+    "artifact":  "runtime-activity-final",
+    "sha256":  "d98babc79d944be47c1982494bdf08644859111a3a22a3adffc79b158876a2dd",
+    "bytes":  122712576,
+    "revision":  "5f9b6d75970b1d7a31137294deb4535dda8465b5",
+    "sourceState": "This base revision plus the owned runtime Activity/window-reuse working-tree changes, preceding the final CAD-keyboard isolation fix.",
+    "binary":  "nbcad.exe",
+    "uiAlias":  "LimoRuntimeActivityFinal.exe",
+    "frontend":  {
+                     "javascript":  "index-CJeKR_a5.js",
+                     "javascriptSha256":  "bccf872df732e08d15d51e7a2177fe3e7ef2bafa505d5eb7c2d852881315c33e",
+                     "css":  "index-DmDvVTwo.css",
+                     "cssSha256":  "89590e6636d69aaf991939b95427d18f1ff255754ff2745b9848aca06c13f5d2"
+                 },
+    "buildSeconds":  63,
+    "nativeTests":  {
+                        "passed":  130,
+                        "failed":  0,
+                        "ignored":  6,
+                        "note":  "Previously verified unchanged native source; this rebuild embeds the final frontend focus and Escape fix."
+                    },
+    "siblingDllCopies":  0,
+    "reuseIsolation":  "Canonical executable and private WebView/report profile. Diagnostics bypass reuse unless --reuse-window; --new-window always independent."
+}
