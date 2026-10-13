@@ -9,7 +9,7 @@ repairs for the previously reported section findings. The project plan now recor
 that work and the hosted/platform and packaged visual qualification then pending
 for #339, rather than treating the old e1b6f4f findings as unchanged current source.
 [Targeted packaged acceptance on 2026-10-11](https://github.com/limo-cad/Limo-CAD/issues/339#issuecomment-6106333435)
-subsequently closed #339; the Bevy integration into main remains in open PR #124.
+subsequently closed #339.
 
 ## New numerical evidence
 

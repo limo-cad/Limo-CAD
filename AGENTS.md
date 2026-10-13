@@ -10,5 +10,5 @@ Do not resume the currently paused GUI/build iteration merely because these
 instructions or the ledger exist. A later user request to resume testing can
 activate the documented sequence.
 
-For the current Bevy transition, keep work in PR124, preserve incoming work
-and saved/recovery data, and do not merge into main without Jack's approval.
+Preserve incoming work and saved/recovery data. Do not merge into main without
+Jack's approval.

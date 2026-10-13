@@ -43,33 +43,6 @@ All four presentations refer to the same application, releases, and community.
 The Latin and Chinese origin story belongs on an optional About/name page.
 Public banners use the name and copy for the selected language.
 
-### Carry the existing localization into the public pages
-
-Preserve the user's saved language preference. The language picker uses each
-language's own name, and missing translations fall back to English. Chinese,
-Spanish, and German are community translations that may be incomplete.
-
-A project site should extend that approach to all four languages:
-
-- Give each language a directly shareable page, for example `/en/`, `/zh-CN/`,
-  `/es/`, and `/de/`. Translate the introduction, navigation, getting-started
-  links, download guidance, page titles, and image descriptions. Ask fluent
-  contributors to review the wording.
-- Offer **English**, **简体中文**, **Español**, and **Deutsch** in a clear language
-  selector. Respect an explicit page link and the user's saved choice; browser
-  language can suggest a starting point for a first visit. Preserve the topic
-  when switching languages.
-- Use the page's localized product name in its heading, banner, search
-  description, and social preview. Keep the visual identity consistent across
-  languages.
-- Start localized learning and help with the introduction, first-part guide,
-  common tasks, and connector setup. Link to the same editable examples and
-  reviewed engineering resources. Clearly identify material still available
-  only in English, and expand coverage as translations are reviewed.
-
-The app's four UI languages provide a starting point. Website and knowledge
-translations are follow-up work.
-
 ## The roots
 
 The Latin verb and Chinese characters connect craftsmanship with learning
@@ -244,41 +217,3 @@ validated part, or a final logo. [Generation prompt and provenance](assets/brand
 Keep the name prominent and the geometry simple. A public banner could use
 an actual editable model or a brief demonstration of a dimension change.
 Review final identity assets in the implementation PR.
-
-## A dedicated home for the project
-
-A dedicated Limo organization and site could bring downloads, mechanical
-design lessons, engineering knowledge, worked examples, help, and AI connector
-setup into one project home. Links shared through classrooms, workshops, and
-community spaces could point people to resources in their chosen language.
-
-The repository home page previews that approach now. [README.md](../README.md)
-opens with a tab-style language row (English, 简体中文, Español, Deutsch) linking
-to [README.zh-CN.md](../README.zh-CN.md), [README.es.md](../README.es.md), and
-[README.de.md](../README.de.md). Each page uses its language's product name,
-and linked documentation that exists only in English is labeled as such. The
-Chinese page has no banner yet because only the English concept image exists.
-
-An English organization profile can link to the four localized site entrances.
-About and contributor pages should identify the project and its maintainers.
-Organization creation, account and site names, ownership, and any repository
-transfer remain separate decisions after name acceptance.
-
-## Review and next steps
-
-1. **Review this proposal.** Agree on Limo, its Chinese name, the localized
-   naming conventions, and the main tagline through the normal PR process.
-   Record the decision in [ADR 0007](adr/0007-limo-name.md).
-   This PR adds proposal documentation, a concept visual, and localized
-   README previews; it does not perform the application rename.
-2. **After acceptance, submit the rename implementation.** Update public
-   copy, localized application display names, and release presentation. Inventory
-   packaging and persistent identifiers; preserve existing projects and agent
-   setups and saved language preferences. Use "Limo CAD (formerly noBS CAD)"
-   in English during the transition, with equivalent guidance on localized
-   pages, so existing users can find the project. Check the chosen repository,
-   site, and account names before the public cutover.
-3. **Review the public site and organization plan.** Prepare the four localized
-   entrances, translation review, and learning/help routes in follow-up work.
-   Review a dedicated organization's ownership, maintenance responsibilities,
-   and any repository transfer separately after the name is accepted.

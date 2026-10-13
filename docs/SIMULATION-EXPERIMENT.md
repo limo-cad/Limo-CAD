@@ -90,10 +90,8 @@ changes are present; their implementation work is not duplicated in this PR.
 reports 14 focused native/desktop/MCP cases and strict Clippy.
 [Packaged acceptance recorded on 2026-10-11](https://github.com/limo-cad/Limo-CAD/issues/339#issuecomment-6106333435)
 completed #339's targeted boundary/source-restoration and idle checks at matched
-`a3145e2c`, with retained native desktop host evidence. #339 is closed. Section
-inspection remains on the Bevy integration branch; PR #124 is still open, so
-this acceptance does not establish delivery to main or complete application
-qualification.
+`a3145e2c`, with retained native desktop host evidence. #339 is closed.
+This targeted acceptance does not establish complete application qualification.
 Cooperative cancellation still does not provide hard process memory/deadline
 containment. This experiment does not claim to have independently rerun that
 entire app suite or performed those packaged visual checks itself.

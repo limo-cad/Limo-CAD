@@ -12,10 +12,6 @@ the pointer applies `assembly_apply_joint_motions` once through the existing
 mutation/history path. Source solids are unchanged; Undo restores the complete
 previous joint state. There is no additional assembly model or solver.
 
-That history behavior is covered by scoped mechanism tests. The known attached
-read/history issue described in [transition status](native-transition-status.md)
-still prevents a claim of global Undo parity.
-
 The grounded component, disconnected components and rigid-only joint paths
 remain selection targets. Sketch support picking, feature/joint editing, motion
 previews and motion studies retain priority. Cancellation restores the original
@@ -38,5 +34,4 @@ That job has not yet been accepted as a live pass. Pixels, drag responsiveness
 on larger mechanisms, platform input behavior and save/reopen behavior still
 need that run. The solver uses its existing
 12-iteration preview budget and may return a valid constrained pose without
-reaching the pointer target. This change does not make the Bevy host the release
-interface; the release build remains React.
+reaching the pointer target.
