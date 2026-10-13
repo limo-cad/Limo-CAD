@@ -733,6 +733,15 @@ fn visible_receipt_waits_for_scene_submission_and_hidden_or_suppressed_rendering
 
 #[test]
 fn inbox_watcher_keeps_admitted_controls_awake_until_durable_completion() {
+    assert_admitted_control_wakes(true);
+}
+
+#[test]
+fn inbox_watcher_services_early_admission_before_session_cache_initialization() {
+    assert_admitted_control_wakes(false);
+}
+
+fn assert_admitted_control_wakes(initialize_cached_session: bool) {
     crate::session_bridge::tests::with_isolated_session_test(|| {
         let fixture = Fixture::new();
         let services = NativeServices {
@@ -767,7 +776,9 @@ fn inbox_watcher_keeps_admitted_controls_awake_until_durable_completion() {
         )
         .unwrap();
         let ticket = native_control::ticket_for(&fixture.bridge, &owner, &session, id).unwrap();
-        native_control::validate_start(&fixture.bridge, &fixture.engine, &ticket).unwrap();
+        if initialize_cached_session {
+            native_control::validate_start(&fixture.bridge, &fixture.engine, &ticket).unwrap();
+        }
         assert!(!request.exists(), "The request-file wake has been retired");
 
         let (send, receive) = std::sync::mpsc::channel();
@@ -792,7 +803,9 @@ fn inbox_watcher_keeps_admitted_controls_awake_until_durable_completion() {
                     "main",
                     handle,
                     stop,
-                    Arc::new(Mutex::new(Some(session.clone()))),
+                    Arc::new(Mutex::new(
+                        initialize_cached_session.then(|| session.clone()),
+                    )),
                     app_settings::Wake::default(),
                     retention::Wake::default(),
                 )
@@ -810,6 +823,10 @@ fn inbox_watcher_keeps_admitted_controls_awake_until_durable_completion() {
             }
         };
         require_wakes();
+        if !initialize_cached_session {
+            native_control::validate_start(&fixture.bridge, &fixture.engine, &ticket).unwrap();
+            require_wakes();
+        }
         let result = controls.join(format!("{id}.result.json"));
         fs::create_dir(&result).unwrap();
         let mut response = json!({"status":"failed","error":"Fixture inspection unavailable","request_id":id,"session_id":session});

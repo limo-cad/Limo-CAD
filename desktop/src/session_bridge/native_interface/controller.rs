@@ -286,6 +286,15 @@ fn start_watcher(
                         }
                     }
                 }
+                // Initialization can admit the first control before synchronize
+                // populates the session cache. Admission also retires its request
+                // file before execution and durable receipt publication finish.
+                // Private owning-window admissions need wakes through both phases,
+                // independently of the optional cache and render callbacks.
+                if native_control::has_pending(&bridge, &window).unwrap_or(false) {
+                    handle.request_redraw();
+                    continue;
+                }
                 let Some(session) = cached_session
                     .lock()
                     .ok()
@@ -312,13 +321,7 @@ fn start_watcher(
                                 && entry.path().extension().is_some_and(|ext| ext == "json")
                         })
                     });
-                // Admission retires the request-file wake before execution and
-                // durable receipt publication finish. Keep the owning window
-                // scheduled through both phases, even without a render wake.
-                if controls
-                    || inbox
-                    || native_control::has_pending(&bridge, &window).unwrap_or(false)
-                {
+                if controls || inbox {
                     handle.request_redraw();
                 }
             }
