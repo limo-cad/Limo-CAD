@@ -91,7 +91,9 @@ bevy = { version = "=0.20.0-rc.2", default-features = false, features = [
   "png",
   "std",
   "tonemapping_luts",
-  "zstd_rust",
+  # Bevy's ruzstd 0.8 decoder is affected by RUSTSEC-2026-0344.
+  # Keep compressed KTX2/tonemapping support using the native zstd backend.
+  "zstd_c",
 ] }
 bevy_ecs = "=0.20.0-rc.2"
 bevy_gizmos = "=0.20.0-rc.2"
