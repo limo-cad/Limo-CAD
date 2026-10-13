@@ -169,7 +169,7 @@ pub(crate) fn install(
     let device_error = six_dof::install(app.world_mut(), &window_id, &handle).err();
     let controller = Controller::new(window_id.clone(), initial_model, stop.clone());
     let preferences_wake = app_settings::install(app.world_mut());
-    start_watcher(
+    let _ = start_watcher(
         &services,
         &window_id,
         handle.clone(),
@@ -235,10 +235,10 @@ fn start_watcher(
     cached_session: Arc<Mutex<Option<String>>>,
     preferences_wake: app_settings::Wake,
     retention_wake: retention::Wake,
-) {
+) -> std::io::Result<std::thread::JoinHandle<()>> {
     let bridge = Arc::downgrade(&services.bridge);
     let window = window_id.to_owned();
-    let _ = std::thread::Builder::new()
+    std::thread::Builder::new()
         .name("cad-native-inbox".into())
         .spawn(move || {
             let mut keepalive = now_ms();
@@ -312,11 +312,17 @@ fn start_watcher(
                                 && entry.path().extension().is_some_and(|ext| ext == "json")
                         })
                     });
-                if controls || inbox {
+                // Admission retires the request-file wake before execution and
+                // durable receipt publication finish. Keep the owning window
+                // scheduled through both phases, even without a render wake.
+                if controls
+                    || inbox
+                    || native_control::has_pending(&bridge, &window).unwrap_or(false)
+                {
                     handle.request_redraw();
                 }
             }
-        });
+        })
 }
 
 fn update(world: &mut World, handle: &NativeInterfaceHandle) {

@@ -732,6 +732,112 @@ fn visible_receipt_waits_for_scene_submission_and_hidden_or_suppressed_rendering
 }
 
 #[test]
+fn inbox_watcher_keeps_admitted_controls_awake_until_durable_completion() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let services = NativeServices {
+            engine: fixture.engine.clone(),
+            bridge: fixture.bridge.clone(),
+        };
+        let owner = fixture.owner();
+        let session = fixture
+            .bridge
+            .session_id_for_window("main")
+            .unwrap()
+            .unwrap();
+        let controls = crate::session_bridge::session_root()
+            .join(&session)
+            .join("controls");
+        fs::create_dir_all(&controls).unwrap();
+        let id = "704-1";
+        let request = controls.join(format!("{id}.request.json"));
+        fs::write(
+            &request,
+            json!({"id":id,"expires_ms":now_ms()+30_000,
+            "ui":{"action":"inspect"}})
+            .to_string(),
+        )
+        .unwrap();
+        crate::session_bridge::control_for_window_owned(
+            &fixture.bridge,
+            "main",
+            &fixture.engine,
+            None,
+            Some((&owner, id)),
+        )
+        .unwrap();
+        let ticket = native_control::ticket_for(&fixture.bridge, &owner, &session, id).unwrap();
+        native_control::validate_start(&fixture.bridge, &fixture.engine, &ticket).unwrap();
+        assert!(!request.exists(), "The request-file wake has been retired");
+
+        let (send, receive) = std::sync::mpsc::channel();
+        let handle = NativeInterfaceHandle::new(move || {
+            let _ = send.send(());
+        });
+        let stop = Arc::new(AtomicBool::new(false));
+        struct Watcher(Arc<AtomicBool>, Option<std::thread::JoinHandle<()>>);
+        impl Drop for Watcher {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Release);
+                if let Some(thread) = self.1.take() {
+                    let _ = thread.join();
+                }
+            }
+        }
+        let _watcher = Watcher(
+            stop.clone(),
+            Some(
+                start_watcher(
+                    &services,
+                    "main",
+                    handle,
+                    stop,
+                    Arc::new(Mutex::new(Some(session.clone()))),
+                    app_settings::Wake::default(),
+                    retention::Wake::default(),
+                )
+                .unwrap(),
+            ),
+        );
+        let require_wakes = || {
+            // Discard queued/one-shot wakes: a still-pending admission must
+            // produce fresh scheduling even without any render callback.
+            while receive.try_recv().is_ok() {}
+            for _ in 0..3 {
+                receive
+                    .recv_timeout(Duration::from_secs(2))
+                    .expect("Admitted control lost its continuing wake source");
+            }
+        };
+        require_wakes();
+        let result = controls.join(format!("{id}.result.json"));
+        fs::create_dir(&result).unwrap();
+        let mut response = json!({"status":"failed","error":"Fixture inspection unavailable","request_id":id,"session_id":session});
+        assert!(matches!(
+            native_control::complete(
+                &fixture.bridge,
+                &fixture.engine,
+                &ticket,
+                None,
+                &mut response,
+            ),
+            Err(native_control::CompletionError::Publication(_))
+        ));
+        require_wakes();
+        fs::remove_dir(&result).unwrap();
+        native_control::retry_pending(&fixture.bridge, &fixture.engine, "main").unwrap();
+        assert!(result.is_file());
+        assert!(!native_control::has_pending(&fixture.bridge, "main").unwrap());
+        // A stale disk marker must not keep the idle host awake without the
+        // owning window's private admission.
+        fs::write(controls.join("foreign.admitted.json"), b"{}").unwrap();
+        std::thread::sleep(Duration::from_millis(60));
+        while receive.try_recv().is_ok() {}
+        assert!(receive.recv_timeout(Duration::from_millis(100)).is_err());
+    });
+}
+
+#[test]
 fn admitted_inspection_wakes_until_its_existing_deadline_without_claiming_gpu_submission() {
     crate::session_bridge::tests::with_isolated_session_test(|| {
         let fixture = Fixture::new();
