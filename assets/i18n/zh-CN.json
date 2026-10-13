@@ -1,4 +1,40 @@
 {
+  "runtimeActivity": {
+    "title": "任务",
+    "current": "正在进行",
+    "recent": "最近任务",
+    "empty": "暂无最近任务。",
+    "starting": "正在开始…",
+    "completed": "已完成",
+    "failed": "未完成",
+    "elapsed": "已用 {seconds} 秒",
+    "close": "关闭任务列表",
+    "dismiss": "关闭通知",
+    "details": "错误详情",
+    "copy": "复制详情",
+    "copied": "已复制详情",
+    "kind": {
+      "open": "打开图纸",
+      "import": "导入几何模型",
+      "save": "保存图纸",
+      "export": "导出文件",
+      "rebuild": "重建几何模型",
+      "drawing": "更新图纸",
+      "cam": "加工计算"
+    },
+    "phase": {
+      "queued": "正在等待当前操作完成…",
+      "reading": "正在读取…",
+      "validating": "正在检查…",
+      "geometry": "正在准备几何模型…",
+      "adopting": "正在更新文档…",
+      "rendering": "正在准备视图…",
+      "writing": "正在写入文件…",
+      "running": "正在计算…",
+      "choosing": "等待你的选择…"
+    },
+    "renderTimeout": "文件已加载，但视图未能在 60 秒内完成渲染。"
+  },
   "meshExport": {
     "title": "导出网格",
     "close": "关闭网格导出",
@@ -9,8 +45,41 @@
     "continue": "继续"
   },
   "app": {
+    "shortName": "砺模",
     "name": "Limo CAD",
     "untitledDocument": "未命名"
+  },
+  "startup": {
+    "scope": "CAD 启动",
+    "initialized": "CAD 已初始化。",
+  "note": "设计随想",
+    "gpu": "正在准备图形…",
+    "frame": "正在绘制工作区…",
+  "empty": "打开空白工作区",
+    "reopen": "请关闭并重新打开砺模 CAD 后重试。如果仍然失败，请将这些详细信息复制到错误报告中。",
+  "tagline": "砺模，求理解之设计。",
+  "document": "正在准备 CAD 工作区…",
+    "renderer": "正在设置图形环境…",
+    "assets": "正在加载建模资源…",
+    "pipelines": "正在准备首个视图…",
+  "ready": "工作区已就绪",
+  "failed": "工作区未能启动。",
+  "slow": "启动时间比平时长。您可以继续等待或重新启动应用。",
+  "timeout": "启动未能在 60 秒内完成。",
+  "retry": "重试",
+  "quit": "关闭应用",
+  "copy": "复制详细信息",
+  "copied": "已复制详细信息",
+  "browser": "交互式 CAD 视口需要桌面应用。",
+  "font": "正在准备文字…"
+},
+  "documentLoad": {
+    "rendering": "正在准备视图…",
+    "reading": "正在读取图纸…",
+    "validating": "正在检查图纸…",
+    "waiting": "正在等待当前操作完成…",
+    "geometry": "正在准备几何模型…",
+    "adopting": "正在更新文档…"
   },
   "topbar": {
     "newDesign": "新建设计",
@@ -24,6 +93,8 @@
     "scripts": "脚本"
   },
   "file": {
+    "errorDocumentChangedDuringOpen": "打开文件期间，当前文档已发生变化。请重新打开文件。",
+    "newWindow": "新建窗口",
     "menu": "文件",
     "new": "新建",
     "panel": "项目",

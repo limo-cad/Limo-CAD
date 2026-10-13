@@ -1,0 +1,62 @@
+[
+  {
+    "batch": "empty-en",
+    "run": "run-01",
+    "bytes": 219,
+    "hazards": []
+  },
+  {
+    "batch": "empty-en",
+    "run": "run-02",
+    "bytes": 219,
+    "hazards": []
+  },
+  {
+    "batch": "empty-en",
+    "run": "run-03",
+    "bytes": 219,
+    "hazards": []
+  },
+  {
+    "batch": "empty-en",
+    "run": "run-04",
+    "bytes": 219,
+    "hazards": []
+  },
+  {
+    "batch": "empty-en",
+    "run": "run-05",
+    "bytes": 219,
+    "hazards": []
+  },
+  {
+    "batch": "document-en",
+    "run": "run-01",
+    "bytes": 219,
+    "hazards": []
+  },
+  {
+    "batch": "document-en",
+    "run": "run-02",
+    "bytes": 219,
+    "hazards": []
+  },
+  {
+    "batch": "document-en",
+    "run": "run-03",
+    "bytes": 219,
+    "hazards": []
+  },
+  {
+    "batch": "document-en",
+    "run": "run-04",
+    "bytes": 219,
+    "hazards": []
+  },
+  {
+    "batch": "document-en",
+    "run": "run-05",
+    "bytes": 219,
+    "hazards": []
+  }
+]

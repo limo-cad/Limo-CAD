@@ -384,6 +384,97 @@ fn release_sbom_gates_reject_omitted_inventories_bypassed_scans_and_unsigned_pub
     assert!(check_release_sbom_gates(&unsigned).is_err());
 }
 
+// Check the real caller bindings before expanding the shared job for the existing
+// geometry/publication contracts. Expansion substitutes only the platform name;
+// the executable steps and their failure conditions remain the actual template.
+fn mcp_acceptance_workflow(source: &Value, acceptance: &Value) -> Result<Value> {
+    let producer = executable_job(source, "prepare-windows-sdk")?;
+    ensure!(
+        producer["outputs"]["sdk-artifact-id"].as_str()
+            == Some("${{ steps.artifact.outputs.artifact-id }}")
+            && producer["outputs"]["sdk-toolset"].as_str()
+                == Some("${{ steps.occt.outputs.toolset }}"),
+        "share this producer's artifact identity and compiler"
+    );
+    let (_, upload) = named_step(producer, "Share SDK with this run's Windows shards")?;
+    ensure!(
+        upload["id"].as_str() == Some("artifact")
+            && upload["if"].is_null()
+            && upload["uses"].as_str() == Some("actions/upload-artifact@v4")
+            && upload["with"]["path"].as_str() == Some("vcpkg_installed/x64-windows/")
+            && upload["with"]["if-no-files-found"].as_str() == Some("error"),
+        "publish the complete SDK only after successful preparation"
+    );
+    let template = executable_job(acceptance, "acceptance")?;
+    let (_, download) = named_step(template, "Download this run's Windows SDK")?;
+    ensure!(
+        download["if"].as_str() == Some("inputs.platform == 'windows'")
+            && download["uses"].as_str() == Some("actions/download-artifact@v4")
+            && download["with"]["artifact-ids"].as_str() == Some("${{ inputs.sdk-artifact-id }}"),
+        "download the exact current-run SDK artifact"
+    );
+    for key in ["run-id", "repository", "github-token", "pattern"] {
+        ensure!(
+            download["with"][key].is_null(),
+            "SDK cannot come from {key}"
+        );
+    }
+    let (compatibility_index, compatibility) =
+        named_step(template, "MSVC environment and SDK compatibility")?;
+    ensure!(
+        compatibility["if"].as_str() == Some("inputs.platform == 'windows'")
+            && compatibility["env"]["SDK_TOOLSET"].as_str() == Some("${{ inputs.sdk-toolset }}")
+            && compatibility["run"]
+                .as_str()
+                .is_some_and(|run| { run.contains("if ($toolset -ne $env:SDK_TOOLSET) { throw") }),
+        "reject an SDK from a different compiler"
+    );
+    let (qualification_index, qualification) =
+        named_step(template, "Qualify downloaded Windows SDK")?;
+    ensure!(
+        qualification["if"].as_str() == Some("inputs.platform == 'windows'"),
+        "every Windows consumer must qualify the downloaded runtime"
+    );
+    requires_command(
+        qualification,
+        "cargo xtask verify-occt-storage --prefix $env:OCCT_ROOT",
+    )?;
+    let (lint_index, _) = named_step(template, "Lint native Rust workspaces")?;
+    ensure!(
+        compatibility_index < qualification_index && qualification_index < lint_index,
+        "qualify the shared SDK before native acceptance"
+    );
+    let mut expanded = source.clone();
+    for (id, platform) in [("mcp-windows", "windows"), ("mcp-linux", "linux")] {
+        let caller = executable_job(source, id)?;
+        ensure!(
+            caller["uses"].as_str() == Some("./.github/workflows/mcp-acceptance.yml")
+                && caller["with"]["platform"].as_str() == Some(platform)
+                && caller["if"].is_null(),
+            "both platforms must invoke the complete shared acceptance"
+        );
+        if platform == "windows" {
+            ensure!(
+                needs(caller)? == ["prepare-windows-sdk"]
+                    && caller["with"]["sdk-artifact-id"].as_str()
+                        == Some("${{ needs.prepare-windows-sdk.outputs.sdk-artifact-id }}")
+                    && caller["with"]["sdk-toolset"].as_str()
+                        == Some("${{ needs.prepare-windows-sdk.outputs.sdk-toolset }}"),
+                "Windows depends on this run's successful SDK producer"
+            );
+        } else {
+            ensure!(
+                caller["needs"].is_null(),
+                "Linux must start independently of Windows"
+            );
+        }
+        let concrete =
+            serde_yaml_ng::to_string(template)?.replace("${{ inputs.platform }}", platform);
+        expanded["jobs"][id] = serde_yaml_ng::from_str(&concrete)?;
+    }
+    Ok(expanded)
+}
+
 fn check_mcp_provenance(source: &Value) -> Result<()> {
     let expected: Value = serde_yaml_ng::from_str(
         "[{shard: core, project: garden-bench}, {shard: turbine, project: vertical-axis-turbine}, {shard: vise, project: d-screw-vise}]",
@@ -721,99 +812,74 @@ fn sdk_cache_keys_keep_all_abi_inputs_and_arm_runner_is_default_branch_only() {
 
 #[test]
 fn native_shards_keep_geometry_workshop_and_exact_same_run_artifact_provenance() {
-    // Alias expansion is significant: validate the actual Linux matrix and
-    // publication steps, rather than merely finding an anchor in the source.
-    check_mcp_provenance(&workflow(".github/workflows/mcp-server.yml")).unwrap();
+    let caller = workflow(".github/workflows/mcp-server.yml");
+    let shared = workflow(".github/workflows/mcp-acceptance.yml");
+    check_mcp_provenance(&mcp_acceptance_workflow(&caller, &shared).unwrap()).unwrap();
     let mcp = read(".github/workflows/mcp-server.yml");
-    assert!(
-        job(&mcp, "mcp-windows").contains("strategy: &acceptance-shards\n      fail-fast: false")
-    );
-    assert!(job(&mcp, "mcp-linux").contains("strategy: *acceptance-shards"));
-    for (shard, project) in [
-        ("core", "garden-bench"),
-        ("turbine", "vertical-axis-turbine"),
-        ("vise", "d-screw-vise"),
-    ] {
-        assert!(mcp.contains(&format!("- shard: {shard}\n            project: {project}")));
-    }
-    for name in ["mcp-windows", "mcp-linux"] {
-        let config = job(&mcp, name);
-        assert!(config.contains("cargo xtask ci mcp-shard ${{ matrix.shard }}"));
-        assert!(config.contains(
-            "name: MCP bench and complete feature workshop\n        if: matrix.shard == 'core'"
-        ));
-        let step = config
-            .split_once("      - name: Native geometry integration regressions\n")
-            .unwrap()
-            .1
-            .split("\n      -")
-            .next()
-            .unwrap();
-        assert!(
-            step.contains("if: ${{ !cancelled() && matrix.shard == 'core' && steps.native-lint.outcome == 'success' }}")
-                && step.contains("CARGO_TARGET_DIR: ${{ github.workspace }}/mcp-server/target")
-        );
-        assert!(step.contains("cargo test --locked -p limo-cad-occt --features native-occt --tests -- --test-threads=1") && !step.contains("continue-on-error:"));
-        ordered(
-            &config,
-            "name: MCP server tests",
-            "Native geometry integration regressions",
-        );
-        ordered(
-            &config,
-            "Native geometry integration regressions",
-            "name: Upload successful demo input",
-        );
-        if name == "mcp-windows" {
-            assert!(
-                step.contains("OCCT_ROOT: ${{ steps.occt.outputs.root }}")
-                    && step.contains("if ($LASTEXITCODE -ne 0)")
-            );
-        } else {
-            assert!(config.contains("uses: ./.github/actions/setup-unix-occt"));
-            assert!(!step.contains("OCCT_ROOT:"));
-        }
-    }
     for input in [
         "crates/**",
         "xtask/**",
         ".github/actions/setup-windows-occt/**",
+        ".github/actions/setup-unix-occt/**",
+        ".github/workflows/mcp-acceptance.yml",
     ] {
         assert_eq!(mcp.matches(&format!("- '{input}'")).count(), 2);
     }
-    let config = job(&mcp, "mcp-tests");
-    assert!(config.contains("key: demo-publication-registry\n          cache-targets: false"));
-    assert!(
-        config.contains("needs: mcp-windows\n    if: ${{ !cancelled() }}")
-            && config.contains("NATIVE_RESULT: ${{ needs.mcp-windows.result }}")
-            && config.contains("MCP_PLATFORM: windows")
-    );
-    let linux = job(&mcp, "mcp-tests-linux");
-    assert!(linux
-        .contains("name: MCP tests (Ubuntu)\n    needs: mcp-linux\n    if: ${{ !cancelled() }}"));
-    assert!(
-        linux.contains("NATIVE_RESULT: ${{ needs.mcp-linux.result }}")
-            && linux.contains("steps: *publish-demo-projects")
-    );
-    ordered(
-        &config,
-        "cargo xtask ci require-platform",
-        "actions/download-artifact",
-    );
-    assert_eq!(config.matches("actions/download-artifact@v4").count(), 3);
-    assert!(
-        config.contains("cargo xtask ci stage-demo-projects")
-            && config
-                .contains("name: Limo-CAD-demo-projects-${{ env.MCP_PLATFORM }}-${{ github.sha }}")
-    );
-    for shard in ["core", "turbine", "vise"] {
-        assert!(config.contains(&format!(
-            "name: mcp-demo-${{{{ env.MCP_PLATFORM }}}}-{shard}"
-        )));
+    assert!(job(&mcp, "mcp-tests")
+        .contains("key: demo-publication-registry\n          cache-targets: false"));
+}
+
+#[test]
+fn shared_native_acceptance_rejects_foreign_sdk_skipped_callers_and_wrong_compilers() {
+    let caller = workflow(".github/workflows/mcp-server.yml");
+    let shared = workflow(".github/workflows/mcp-acceptance.yml");
+    mcp_acceptance_workflow(&caller, &shared).unwrap();
+    for (key, value) in [
+        ("sdk-artifact-id", "an-artifact-from-a-different-run"),
+        ("sdk-toolset", "a-different-compiler"),
+    ] {
+        let mut foreign = caller.clone();
+        foreign["jobs"]["mcp-windows"]["with"][key] = Value::String(value.into());
+        assert!(mcp_acceptance_workflow(&foreign, &shared).is_err(), "{key}");
     }
-    assert!(!Regex::new(r"run-id:|repository:|github-token:|pattern:")
-        .unwrap()
-        .is_match(&config));
+    let mut skipped = caller.clone();
+    skipped["jobs"]["mcp-linux"]["if"] = Value::Bool(false);
+    assert!(mcp_acceptance_workflow(&skipped, &shared).is_err());
+    let mut dependent = caller.clone();
+    dependent["jobs"]["mcp-linux"]["needs"] = Value::String("prepare-windows-sdk".into());
+    assert!(mcp_acceptance_workflow(&dependent, &shared).is_err());
+    let download = named_step(
+        &shared["jobs"]["acceptance"],
+        "Download this run's Windows SDK",
+    )
+    .unwrap()
+    .0;
+    for key in ["run-id", "repository", "github-token", "pattern"] {
+        let mut foreign = shared.clone();
+        foreign["jobs"]["acceptance"]["steps"][download]["with"][key] =
+            Value::String("foreign".into());
+        assert!(mcp_acceptance_workflow(&caller, &foreign).is_err(), "{key}");
+    }
+    let compatibility = named_step(
+        &shared["jobs"]["acceptance"],
+        "MSVC environment and SDK compatibility",
+    )
+    .unwrap()
+    .0;
+    let mut mismatch = shared.clone();
+    mismatch["jobs"]["acceptance"]["steps"][compatibility]["run"] =
+        Value::String("Write-Output 'SDK available'".into());
+    assert!(mcp_acceptance_workflow(&caller, &mismatch).is_err());
+    let qualification = named_step(
+        &shared["jobs"]["acceptance"],
+        "Qualify downloaded Windows SDK",
+    )
+    .unwrap()
+    .0;
+    let mut unqualified = shared;
+    unqualified["jobs"]["acceptance"]["steps"][qualification]["if"] =
+        Value::String("inputs.platform == 'linux'".into());
+    assert!(mcp_acceptance_workflow(&caller, &unqualified).is_err());
 }
 
 #[test]
@@ -1007,7 +1073,11 @@ fn package_gates_reject_dependencies_disabled_commands_and_foreign_artifacts() {
 
 #[test]
 fn mcp_provenance_rejects_missing_shards_bypassed_geometry_and_stale_inputs() {
-    let valid = workflow(".github/workflows/mcp-server.yml");
+    let valid = mcp_acceptance_workflow(
+        &workflow(".github/workflows/mcp-server.yml"),
+        &workflow(".github/workflows/mcp-acceptance.yml"),
+    )
+    .unwrap();
     check_mcp_provenance(&valid).unwrap();
     let mut missing_shard = valid.clone();
     missing_shard["jobs"]["mcp-linux"]["strategy"]["matrix"]["include"]

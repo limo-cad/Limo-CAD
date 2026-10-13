@@ -1,0 +1,11 @@
+{
+    "executable":  "D:\\limo-startup-candidate-separated-runtime\\nbcad.exe",
+    "sha256":  "e77ea3a6a09da71be2862e4c17d517fd2c71a6206254243a230801bb6688d308",
+    "profile":  "dev app opt-level 1, dependencies opt-level 3",
+    "bundle":  "index-3K4FOBp_.js",
+    "bundleSha256":  "4952c99ba7254c0cd3a744351733df048eba6a9cfeb8b15833ff6586c01f3735",
+    "fixtureSha256":  "d7e65fb222a0bb59f0ac82c3f3143a3437a487f3bbacf3a1f314b989b96de609",
+    "createdUtc":  "2026-10-11T21:15:49.6847077Z",
+    "host":  "THUNDER",
+    "note":  "Immutable diagnostic build; no sibling DLLs; OS and driver caches untouched, temperature unverified"
+}

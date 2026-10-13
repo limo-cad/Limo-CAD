@@ -1,4 +1,40 @@
 {
+  "runtimeActivity": {
+    "title": "Aktivität",
+    "current": "In Bearbeitung",
+    "recent": "Letzte Aktivitäten",
+    "empty": "Keine letzten Aktivitäten.",
+    "starting": "Wird gestartet…",
+    "completed": "Abgeschlossen",
+    "failed": "Fehlgeschlagen",
+    "elapsed": "{seconds} s vergangen",
+    "close": "Aktivitäten schließen",
+    "dismiss": "Benachrichtigung schließen",
+    "details": "Fehlerdetails",
+    "copy": "Details kopieren",
+    "copied": "Details kopiert",
+    "kind": {
+      "open": "Zeichnung öffnen",
+      "import": "Geometrie importieren",
+      "save": "Zeichnung speichern",
+      "export": "Exportieren",
+      "rebuild": "Geometrie neu berechnen",
+      "drawing": "Zeichnung aktualisieren",
+      "cam": "CAM-Berechnung"
+    },
+    "phase": {
+      "queued": "Warten auf den Abschluss des aktuellen Vorgangs…",
+      "reading": "Wird gelesen…",
+      "validating": "Wird geprüft…",
+      "geometry": "Geometrie wird vorbereitet…",
+      "adopting": "Dokument wird aktualisiert…",
+      "rendering": "Ansicht wird vorbereitet…",
+      "writing": "Datei wird geschrieben…",
+      "running": "Wird berechnet…",
+      "choosing": "Warten auf deine Auswahl…"
+    },
+    "renderTimeout": "Das Dokument wurde geladen, aber die Ansicht wurde nicht innerhalb von 60 Sekunden fertig dargestellt."
+  },
   "meshExport": {
     "title": "Netzexport",
     "close": "Netzexport schließen",
@@ -9,8 +45,41 @@
     "continue": "Weiter"
   },
   "app": {
+    "shortName": "Limo",
     "name": "Limo CAD",
     "untitledDocument": "Ohne Titel"
+  },
+  "startup": {
+    "scope": "CAD-Start",
+    "initialized": "CAD wurde initialisiert.",
+  "note": "Werkstattnotiz",
+    "gpu": "Grafik wird vorbereitet…",
+    "frame": "Arbeitsbereich wird gezeichnet…",
+  "empty": "Leeren Arbeitsbereich öffnen",
+    "reopen": "Schließen und öffnen Sie Limo CAD erneut. Falls der Start wieder scheitert, kopieren Sie diese Details in einen Fehlerbericht.",
+  "tagline": "Konstruieren mit Verständnis.",
+  "document": "CAD-Arbeitsbereich wird vorbereitet…",
+    "renderer": "Grafik wird eingerichtet…",
+    "assets": "CAD-Ressourcen werden geladen…",
+    "pipelines": "Erste Ansicht wird vorbereitet…",
+  "ready": "Arbeitsbereich bereit",
+  "failed": "Der Arbeitsbereich konnte nicht gestartet werden.",
+  "slow": "Der Start dauert länger als üblich. Sie können weiter warten oder die Anwendung neu starten.",
+  "timeout": "Der Start wurde nicht innerhalb von 60 Sekunden abgeschlossen.",
+  "retry": "Erneut versuchen",
+  "quit": "Anwendung schließen",
+  "copy": "Details kopieren",
+  "copied": "Details kopiert",
+  "browser": "Die interaktive CAD-Ansicht erfordert die Desktop-Anwendung.",
+  "font": "Text wird vorbereitet…"
+},
+  "documentLoad": {
+    "rendering": "Ansicht wird vorbereitet…",
+    "reading": "Zeichnung wird gelesen…",
+    "validating": "Zeichnung wird geprüft…",
+    "waiting": "Warten auf den Abschluss des aktuellen Vorgangs…",
+    "geometry": "Geometrie wird vorbereitet…",
+    "adopting": "Dokument wird aktualisiert…"
   },
   "topbar": {
     "newDesign": "Neue Konstruktion",
@@ -24,6 +93,8 @@
     "scripts": "Skripte"
   },
   "file": {
+    "errorDocumentChangedDuringOpen": "Das aktive Dokument wurde während des Öffnens geändert. Öffne die Datei erneut.",
+    "newWindow": "Neues Fenster",
     "menu": "Datei",
     "new": "Neu",
     "panel": "PROJEKT",

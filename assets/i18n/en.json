@@ -1,4 +1,40 @@
 {
+  "runtimeActivity": {
+    "title": "Activity",
+    "current": "In progress",
+    "recent": "Recent activity",
+    "empty": "No recent activity.",
+    "starting": "Starting…",
+    "completed": "Completed",
+    "failed": "Failed",
+    "elapsed": "{seconds}s elapsed",
+    "close": "Close activity",
+    "dismiss": "Dismiss notification",
+    "details": "Error details",
+    "copy": "Copy details",
+    "copied": "Details copied",
+    "kind": {
+      "open": "Open drawing",
+      "import": "Import geometry",
+      "save": "Save drawing",
+      "export": "Export",
+      "rebuild": "Rebuild geometry",
+      "drawing": "Update drawing",
+      "cam": "CAM work"
+    },
+    "phase": {
+      "queued": "Waiting for the current operation…",
+      "reading": "Reading…",
+      "validating": "Checking…",
+      "geometry": "Preparing geometry…",
+      "adopting": "Updating the document…",
+      "rendering": "Preparing the view…",
+      "writing": "Writing file…",
+      "running": "Computing…",
+      "choosing": "Waiting for your choice…"
+    },
+    "renderTimeout": "The loaded document did not finish rendering within 60 seconds."
+  },
   "meshExport": {
     "title": "Mesh export",
     "close": "Close mesh export",
@@ -9,8 +45,41 @@
     "continue": "Continue"
   },
   "app": {
+    "shortName": "Limo",
     "name": "Limo CAD",
     "untitledDocument": "Untitled"
+  },
+  "startup": {
+    "scope": "CAD startup",
+    "initialized": "CAD initialized.",
+  "note": "Workshop note",
+    "gpu": "Preparing graphics…",
+    "frame": "Drawing your workspace…",
+  "empty": "Open an empty workspace",
+    "reopen": "Close and reopen Limo CAD to try again. If it still fails, copy these details into a bug report.",
+  "tagline": "Design with understanding.",
+    "document": "Preparing the CAD workspace…",
+    "renderer": "Setting up graphics…",
+    "assets": "Loading CAD resources…",
+    "pipelines": "Preparing the first view…",
+  "ready": "Workspace ready",
+  "failed": "The workspace could not start.",
+  "slow": "Startup is taking longer than usual. You can keep waiting or restart the application.",
+  "timeout": "Startup did not finish within 60 seconds.",
+  "retry": "Try again",
+  "quit": "Close application",
+  "copy": "Copy details",
+  "copied": "Details copied",
+  "browser": "The interactive CAD viewport requires the desktop application.",
+  "font": "Preparing text…"
+},
+  "documentLoad": {
+    "rendering": "Preparing the view…",
+    "reading": "Reading drawing…",
+    "validating": "Checking drawing…",
+    "waiting": "Waiting for the current operation…",
+    "geometry": "Preparing geometry…",
+    "adopting": "Updating the document…"
   },
   "topbar": {
     "newDesign": "New design",
@@ -24,6 +93,8 @@
     "scripts": "Scripts"
   },
   "file": {
+    "errorDocumentChangedDuringOpen": "The active document changed while opening the file. Try opening it again.",
+    "newWindow": "New Window",
     "menu": "File",
     "new": "New",
     "panel": "PROJECT",

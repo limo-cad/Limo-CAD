@@ -13,6 +13,9 @@ inputs:
     required: true
 
 outputs:
+  toolset:
+    description: MSVC toolset that identifies this SDK build
+    value: ${{ steps.msvc.outputs.toolset }}
   root:
     description: Installed OCCT SDK root
     value: ${{ steps.msvc.outputs.root }}

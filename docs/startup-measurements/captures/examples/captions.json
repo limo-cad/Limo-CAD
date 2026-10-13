@@ -1,0 +1,83 @@
+{
+  "kind": "Illustrative captures of the actual current UI; phases and existing notes deliberately selected, not timed native startup runs.",
+  "viewport": {
+    "width": 520,
+    "height": 440
+  },
+  "english": [
+    {
+      "file": "en-01.png",
+      "locale": "en",
+      "phase": "renderer",
+      "index": 0,
+      "status": "Setting up graphics…",
+      "note": "Tolerance is a virtue. Also a number."
+    },
+    {
+      "file": "en-02.png",
+      "index": 2,
+      "locale": "en",
+      "note": "The chamfer committee has opinions.",
+      "phase": "assets",
+      "status": "Loading drawing resources…"
+    },
+    {
+      "file": "en-03.png",
+      "index": 45,
+      "locale": "en",
+      "note": "A dimension without units is a mystery with a ruler.",
+      "phase": "font",
+      "status": "Preparing text…"
+    },
+    {
+      "file": "en-04.png",
+      "index": 21,
+      "locale": "en",
+      "note": "A radius is a corner taking a deep breath.",
+      "phase": "pipelines",
+      "status": "Preparing the first view…"
+    },
+    {
+      "file": "en-05.png",
+      "index": 8,
+      "locale": "en",
+      "note": "Gravity remains an enthusiastic design reviewer.",
+      "phase": "frame",
+      "status": "Drawing your workspace…"
+    }
+  ],
+  "companion": [
+    {
+      "file": "companion-en.png",
+      "locale": "en",
+      "phase": "renderer",
+      "index": 0,
+      "status": "Setting up graphics…",
+      "note": "Tolerance is a virtue. Also a number."
+    },
+    {
+      "file": "companion-zh-CN.png",
+      "index": 0,
+      "locale": "zh-CN",
+      "note": "公差要讲究，宽容也是。",
+      "phase": "renderer",
+      "status": "正在设置图形环境…"
+    },
+    {
+      "file": "companion-es.png",
+      "index": 0,
+      "locale": "es",
+      "note": "La tolerancia es una virtud. Y también un número.",
+      "phase": "renderer",
+      "status": "Configurando los gráficos…"
+    },
+    {
+      "file": "companion-de.png",
+      "index": 0,
+      "locale": "de",
+      "note": "Toleranz ist eine Tugend. Und eine Zahl.",
+      "phase": "renderer",
+      "status": "Grafik wird eingerichtet…"
+    }
+  ]
+}

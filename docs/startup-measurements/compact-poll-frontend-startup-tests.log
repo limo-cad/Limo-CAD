@@ -1,0 +1,18 @@
+
+> nbcad@0.2.2 test:startup
+> tsx src/startup.test.ts && node --test scripts/test-startup-bootstrap.mjs
+
+Startup readiness and four-locale recovery copy passed.
+✔ early feedback follows saved language and starts native work only after feedback can paint (5.629ms)
+✔ denied or invalid preferences preserve browser-language and English fallbacks (4.6759ms)
+✔ module failure and a missing module both expose localized early recovery (1.8018ms)
+✔ one local note per launch stays secondary, localized, and independent of readiness (29.6981ms)
+✔ optional note resource failure cannot fail application startup (1.0725ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 318.1288

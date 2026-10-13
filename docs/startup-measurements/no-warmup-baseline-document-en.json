@@ -1,0 +1,408 @@
+{
+  "schema": 1,
+  "label": "baseline",
+  "executable": "D:\\limo-startup-baseline-optimized-runtime\\nbcad.exe",
+  "executableSha256": "472a491839e47b529e9949c04d900ec56b575b06de76846a0b28832ee9f622af",
+  "profile": "dev-app1-debug2-deps3-debug0",
+  "cacheCondition": "warm",
+  "locale": "en",
+  "document": "C:\\Users\\jeffg\\.t3\\worktrees\\noBS-CAD\\t3code-028ff4c7\\examples\\testPiece.nbcad",
+  "documentSha256": "d7e65fb222a0bb59f0ac82c3f3143a3437a487f3bbacf3a1f314b989b96de609",
+  "hardware": {
+    "platform": "win32",
+    "architecture": "x64",
+    "cpu": "AMD Ryzen 7 5800X3D 8-Core Processor           ",
+    "logicalCpus": 16,
+    "memoryBytes": 34266349568
+  },
+  "startedAt": "2026-10-11T19:28:56.056Z",
+  "userDataDirectory": "D:\\limo-startup-results-no-warmup\\baseline-document-en\\webview2-user-data",
+  "warmups": [
+    {
+      "index": 1,
+      "pid": 33404,
+      "launchUnixMs": 1791746936152,
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 33404,
+          "processElapsedMs": 1297.3659,
+          "processStartedUnixMs": 1791746936191,
+          "webElapsedMs": 865.6000000238419
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 33404,
+          "processElapsedMs": 1778.9861999999998,
+          "processStartedUnixMs": 1791746936191,
+          "webElapsedMs": 1357.5
+        },
+        {
+          "detail": null,
+          "durationMs": 5.600000023841858,
+          "phase": "interaction",
+          "pid": 33404,
+          "processElapsedMs": 1787.0928,
+          "processStartedUnixMs": 1791746936191,
+          "webElapsedMs": 1365.6000000238419
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":72,\"sketchFrameMs\":23.69999998807907,\"solidCommandsMs\":75,\"solidFrameMs\":33.09999996423721,\"repeatedCadInteractionMs\":149.5999999642372,\"repeatedTimings\":{\"sketchCommandsMs\":43.39999997615814,\"sketchFrameMs\":16.69999998807907,\"solidCommandsMs\":58.700000047683716,\"solidFrameMs\":30.799999952316284}}",
+          "durationMs": 203.79999995231628,
+          "phase": "cadInteraction",
+          "pid": 33404,
+          "processElapsedMs": 2440.7412000000004,
+          "processStartedUnixMs": 1791746936191,
+          "webElapsedMs": 1576
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 2492.749,
+      "beforeMainMs": 39,
+      "firstFeedbackMs": 1336.3659,
+      "usableWorkspaceMs": 1817.9861999999998,
+      "firstInteractionMs": 5.600000023841858,
+      "firstCadInteractionMs": 203.79999995231628,
+      "cadTimings": {
+        "sketchCommandsMs": 72,
+        "sketchFrameMs": 23.69999998807907,
+        "solidCommandsMs": 75,
+        "solidFrameMs": 33.09999996423721,
+        "repeatedCadInteractionMs": 149.5999999642372,
+        "repeatedTimings": {
+          "sketchCommandsMs": 43.39999997615814,
+          "sketchFrameMs": 16.69999998807907,
+          "solidCommandsMs": 58.700000047683716,
+          "solidFrameMs": 30.799999952316284
+        }
+      },
+      "repeatedCadInteractionMs": 149.5999999642372
+    }
+  ],
+  "runs": [
+    {
+      "index": 1,
+      "pid": 19392,
+      "launchUnixMs": 1791746939129,
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 19392,
+          "processElapsedMs": 1512.9017999999999,
+          "processStartedUnixMs": 1791746939169,
+          "webElapsedMs": 1045.699999988079
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 19392,
+          "processElapsedMs": 1907.0765000000001,
+          "processStartedUnixMs": 1791746939169,
+          "webElapsedMs": 1439.5
+        },
+        {
+          "detail": null,
+          "durationMs": 6.800000011920929,
+          "phase": "interaction",
+          "pid": 19392,
+          "processElapsedMs": 1917.9259,
+          "processStartedUnixMs": 1791746939169,
+          "webElapsedMs": 1451.4000000357628
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":79.09999996423721,\"sketchFrameMs\":24.100000023841858,\"solidCommandsMs\":65.80000001192093,\"solidFrameMs\":75.39999997615814,\"repeatedCadInteractionMs\":286,\"repeatedTimings\":{\"sketchCommandsMs\":53.80000001192093,\"sketchFrameMs\":25.600000023841858,\"solidCommandsMs\":166.69999998807907,\"solidFrameMs\":39.89999997615814}}",
+          "durationMs": 244.39999997615814,
+          "phase": "cadInteraction",
+          "pid": 19392,
+          "processElapsedMs": 2786.0928999999996,
+          "processStartedUnixMs": 1791746939169,
+          "webElapsedMs": 1705
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 2834.8196999999996,
+      "beforeMainMs": 40,
+      "firstFeedbackMs": 1552.9017999999999,
+      "usableWorkspaceMs": 1947.0765000000001,
+      "firstInteractionMs": 6.800000011920929,
+      "firstCadInteractionMs": 244.39999997615814,
+      "cadTimings": {
+        "sketchCommandsMs": 79.09999996423721,
+        "sketchFrameMs": 24.100000023841858,
+        "solidCommandsMs": 65.80000001192093,
+        "solidFrameMs": 75.39999997615814,
+        "repeatedCadInteractionMs": 286,
+        "repeatedTimings": {
+          "sketchCommandsMs": 53.80000001192093,
+          "sketchFrameMs": 25.600000023841858,
+          "solidCommandsMs": 166.69999998807907,
+          "solidFrameMs": 39.89999997615814
+        }
+      },
+      "repeatedCadInteractionMs": 286
+    },
+    {
+      "index": 2,
+      "pid": 42904,
+      "launchUnixMs": 1791746942469,
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 42904,
+          "processElapsedMs": 1614.7318,
+          "processStartedUnixMs": 1791746942516,
+          "webElapsedMs": 1064.0999999642372
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 42904,
+          "processElapsedMs": 2010.8516,
+          "processStartedUnixMs": 1791746942516,
+          "webElapsedMs": 1475.699999988079
+        },
+        {
+          "detail": null,
+          "durationMs": 8.200000047683716,
+          "phase": "interaction",
+          "pid": 42904,
+          "processElapsedMs": 2025.2853000000002,
+          "processStartedUnixMs": 1791746942516,
+          "webElapsedMs": 1489.800000011921
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":89.40000003576279,\"sketchFrameMs\":28,\"solidCommandsMs\":74.19999998807907,\"solidFrameMs\":63.5,\"repeatedCadInteractionMs\":236.29999995231628,\"repeatedTimings\":{\"sketchCommandsMs\":55.59999996423721,\"sketchFrameMs\":34.40000003576279,\"solidCommandsMs\":71.09999996423721,\"solidFrameMs\":75.19999998807907}}",
+          "durationMs": 255.10000002384186,
+          "phase": "cadInteraction",
+          "pid": 42904,
+          "processElapsedMs": 2888.948,
+          "processStartedUnixMs": 1791746942516,
+          "webElapsedMs": 1754.699999988079
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 2961.3199999999997,
+      "beforeMainMs": 47,
+      "firstFeedbackMs": 1661.7318,
+      "usableWorkspaceMs": 2057.8516,
+      "firstInteractionMs": 8.200000047683716,
+      "firstCadInteractionMs": 255.10000002384186,
+      "cadTimings": {
+        "sketchCommandsMs": 89.40000003576279,
+        "sketchFrameMs": 28,
+        "solidCommandsMs": 74.19999998807907,
+        "solidFrameMs": 63.5,
+        "repeatedCadInteractionMs": 236.29999995231628,
+        "repeatedTimings": {
+          "sketchCommandsMs": 55.59999996423721,
+          "sketchFrameMs": 34.40000003576279,
+          "solidCommandsMs": 71.09999996423721,
+          "solidFrameMs": 75.19999998807907
+        }
+      },
+      "repeatedCadInteractionMs": 236.29999995231628
+    },
+    {
+      "index": 3,
+      "pid": 39128,
+      "launchUnixMs": 1791746945925,
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 39128,
+          "processElapsedMs": 1472.7422,
+          "processStartedUnixMs": 1791746945966,
+          "webElapsedMs": 998.5
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 39128,
+          "processElapsedMs": 2022.3396,
+          "processStartedUnixMs": 1791746945966,
+          "webElapsedMs": 1554.800000011921
+        },
+        {
+          "detail": null,
+          "durationMs": 5.5,
+          "phase": "interaction",
+          "pid": 39128,
+          "processElapsedMs": 2030.9453999999998,
+          "processStartedUnixMs": 1791746945966,
+          "webElapsedMs": 1574.699999988079
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":50.69999998807907,\"sketchFrameMs\":17.099999964237213,\"solidCommandsMs\":77.5,\"solidFrameMs\":49.80000001192093,\"repeatedCadInteractionMs\":177.80000001192093,\"repeatedTimings\":{\"sketchCommandsMs\":47.19999998807907,\"sketchFrameMs\":18.30000001192093,\"solidCommandsMs\":69.40000003576279,\"solidFrameMs\":42.89999997615814}}",
+          "durationMs": 195.0999999642372,
+          "phase": "cadInteraction",
+          "pid": 39128,
+          "processElapsedMs": 2720.1078,
+          "processStartedUnixMs": 1791746945966,
+          "webElapsedMs": 1776.5
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 2773.7052999999996,
+      "beforeMainMs": 41,
+      "firstFeedbackMs": 1513.7422,
+      "usableWorkspaceMs": 2063.3396000000002,
+      "firstInteractionMs": 5.5,
+      "firstCadInteractionMs": 195.0999999642372,
+      "cadTimings": {
+        "sketchCommandsMs": 50.69999998807907,
+        "sketchFrameMs": 17.099999964237213,
+        "solidCommandsMs": 77.5,
+        "solidFrameMs": 49.80000001192093,
+        "repeatedCadInteractionMs": 177.80000001192093,
+        "repeatedTimings": {
+          "sketchCommandsMs": 47.19999998807907,
+          "sketchFrameMs": 18.30000001192093,
+          "solidCommandsMs": 69.40000003576279,
+          "solidFrameMs": 42.89999997615814
+        }
+      },
+      "repeatedCadInteractionMs": 177.80000001192093
+    },
+    {
+      "index": 4,
+      "pid": 21360,
+      "launchUnixMs": 1791746949183,
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 21360,
+          "processElapsedMs": 1327.1725999999999,
+          "processStartedUnixMs": 1791746949217,
+          "webElapsedMs": 920.8999999761581
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 21360,
+          "processElapsedMs": 1678.222,
+          "processStartedUnixMs": 1791746949217,
+          "webElapsedMs": 1291.699999988079
+        },
+        {
+          "detail": null,
+          "durationMs": 8.5,
+          "phase": "interaction",
+          "pid": 21360,
+          "processElapsedMs": 1693.3861000000002,
+          "processStartedUnixMs": 1791746949217,
+          "webElapsedMs": 1307.199999988079
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":83.80000001192093,\"sketchFrameMs\":24.69999998807907,\"solidCommandsMs\":90,\"solidFrameMs\":62.19999998807907,\"repeatedCadInteractionMs\":226.60000002384186,\"repeatedTimings\":{\"sketchCommandsMs\":55.30000001192093,\"sketchFrameMs\":21.600000023841858,\"solidCommandsMs\":83.09999996423721,\"solidFrameMs\":66.60000002384186}}",
+          "durationMs": 260.69999998807907,
+          "phase": "cadInteraction",
+          "pid": 21360,
+          "processElapsedMs": 2554.3821,
+          "processStartedUnixMs": 1791746949217,
+          "webElapsedMs": 1579.699999988079
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 2614.409599999999,
+      "beforeMainMs": 34,
+      "firstFeedbackMs": 1361.1725999999999,
+      "usableWorkspaceMs": 1712.222,
+      "firstInteractionMs": 8.5,
+      "firstCadInteractionMs": 260.69999998807907,
+      "cadTimings": {
+        "sketchCommandsMs": 83.80000001192093,
+        "sketchFrameMs": 24.69999998807907,
+        "solidCommandsMs": 90,
+        "solidFrameMs": 62.19999998807907,
+        "repeatedCadInteractionMs": 226.60000002384186,
+        "repeatedTimings": {
+          "sketchCommandsMs": 55.30000001192093,
+          "sketchFrameMs": 21.600000023841858,
+          "solidCommandsMs": 83.09999996423721,
+          "solidFrameMs": 66.60000002384186
+        }
+      },
+      "repeatedCadInteractionMs": 226.60000002384186
+    },
+    {
+      "index": 5,
+      "pid": 10248,
+      "launchUnixMs": 1791746952333,
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 10248,
+          "processElapsedMs": 2071.002,
+          "processStartedUnixMs": 1791746952370,
+          "webElapsedMs": 1379.0999999642372
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 10248,
+          "processElapsedMs": 2552.6727,
+          "processStartedUnixMs": 1791746952370,
+          "webElapsedMs": 1881.8999999761581
+        },
+        {
+          "detail": null,
+          "durationMs": 8.300000011920929,
+          "phase": "interaction",
+          "pid": 10248,
+          "processElapsedMs": 2564.1632,
+          "processStartedUnixMs": 1791746952370,
+          "webElapsedMs": 1893.5
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":64.30000001192093,\"sketchFrameMs\":29.69999998807907,\"solidCommandsMs\":70.20000004768372,\"solidFrameMs\":77.09999996423721,\"repeatedCadInteractionMs\":194.69999998807907,\"repeatedTimings\":{\"sketchCommandsMs\":50.30000001192093,\"sketchFrameMs\":24.399999976158142,\"solidCommandsMs\":73.19999998807907,\"solidFrameMs\":46.80000001192093}}",
+          "durationMs": 241.30000001192093,
+          "phase": "cadInteraction",
+          "pid": 10248,
+          "processElapsedMs": 3348.4636,
+          "processStartedUnixMs": 1791746952370,
+          "webElapsedMs": 2142.899999976158
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 3408.7000000000007,
+      "beforeMainMs": 37,
+      "firstFeedbackMs": 2108.002,
+      "usableWorkspaceMs": 2589.6727,
+      "firstInteractionMs": 8.300000011920929,
+      "firstCadInteractionMs": 241.30000001192093,
+      "cadTimings": {
+        "sketchCommandsMs": 64.30000001192093,
+        "sketchFrameMs": 29.69999998807907,
+        "solidCommandsMs": 70.20000004768372,
+        "solidFrameMs": 77.09999996423721,
+        "repeatedCadInteractionMs": 194.69999998807907,
+        "repeatedTimings": {
+          "sketchCommandsMs": 50.30000001192093,
+          "sketchFrameMs": 24.399999976158142,
+          "solidCommandsMs": 73.19999998807907,
+          "solidFrameMs": 46.80000001192093
+        }
+      },
+      "repeatedCadInteractionMs": 194.69999998807907
+    }
+  ]
+}

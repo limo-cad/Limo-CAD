@@ -1,0 +1,20 @@
+
+> nbcad@0.2.2 test:startup
+> tsx src/startup.test.ts && tsx src/files/documentLoadProgress.test.ts && node --test scripts/test-startup-bootstrap.mjs
+
+Startup readiness and four-locale recovery copy passed.
+File reading progress follows selection and actual native/browser IO; cancellation stays silent.
+✔ early feedback follows saved language and starts native work only after feedback can paint (3.7896ms)
+✔ denied or invalid preferences preserve browser-language and English fallbacks (1.7144ms)
+✔ frameless close is localized and dragging uses the declarative Tauri region (1.6048ms)
+✔ module failure and a missing module both expose localized early recovery (1.0898ms)
+✔ one local note per launch stays secondary, localized, and independent of readiness (2.292ms)
+✔ optional note resource failure cannot fail application startup (1.2057ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 83.4616

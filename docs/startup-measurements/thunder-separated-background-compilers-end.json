@@ -1,0 +1,31 @@
+{
+  "observedAt": "2026-10-11T21:18:09.946Z",
+  "queries": [
+    {
+      "image": "cargo.exe",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"cargo.exe\",\"42172\",\"Console\",\"1\",\"184 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"50520\",\"Console\",\"1\",\"1,224 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"12340\",\"Console\",\"1\",\"4,352 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"10784\",\"Console\",\"1\",\"7,268 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:01\",\"N/A\"\r\n\"cargo.exe\",\"35160\",\"Console\",\"1\",\"10,724 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"22132\",\"Console\",\"1\",\"27,732 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:02\",\"N/A\"\r\n\"cargo.exe\",\"34652\",\"Console\",\"1\",\"11,264 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"28708\",\"Console\",\"1\",\"55,488 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:02\",\"N/A\"\r\n\"cargo.exe\",\"34544\",\"Console\",\"1\",\"11,100 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"13072\",\"Console\",\"1\",\"7,368 K\",\"Unknown\",\"N/A\",\"0:00:00\",\"N/A\"\r\n",
+      "error": null
+    },
+    {
+      "image": "rustc.exe",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"rustc.exe\",\"46776\",\"Console\",\"1\",\"384,196 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:03:47\",\"N/A\"\r\n\"rustc.exe\",\"14948\",\"Console\",\"1\",\"187,632 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:01\",\"N/A\"\r\n\"rustc.exe\",\"25412\",\"Console\",\"1\",\"62,684 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:01\",\"N/A\"\r\n\"rustc.exe\",\"3488\",\"Console\",\"1\",\"55,556 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:01\",\"N/A\"\r\n\"rustc.exe\",\"50560\",\"Console\",\"1\",\"67,924 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:01\",\"N/A\"\r\n\"rustc.exe\",\"27844\",\"Console\",\"1\",\"128,804 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"50828\",\"Console\",\"1\",\"96,844 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"20208\",\"Console\",\"1\",\"70,324 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"41156\",\"Console\",\"1\",\"37,636 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"51032\",\"Console\",\"1\",\"26,384 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"50728\",\"Console\",\"1\",\"38,812 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"51936\",\"Console\",\"1\",\"31,096 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"42600\",\"Console\",\"1\",\"20,292 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n",
+      "error": null
+    },
+    {
+      "image": "cl.exe",
+      "output": "INFO: No tasks are running which match the specified criteria.\r\n",
+      "error": null
+    },
+    {
+      "image": "link.exe",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"link.exe\",\"30452\",\"Console\",\"1\",\"94,224 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"link.exe\",\"50732\",\"Console\",\"1\",\"79,004 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n",
+      "error": null
+    },
+    {
+      "image": "lld-link.exe",
+      "output": "INFO: No tasks are running which match the specified criteria.\r\n",
+      "error": null
+    }
+  ],
+  "ownershipNote": "Root declared all task-owned compiler/UI/server processes retired before timing; listed other compilers are observed only and preserved."
+}

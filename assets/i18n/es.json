@@ -1,4 +1,40 @@
 {
+  "runtimeActivity": {
+    "title": "Actividad",
+    "current": "En curso",
+    "recent": "Actividad reciente",
+    "empty": "No hay actividad reciente.",
+    "starting": "Iniciando…",
+    "completed": "Completado",
+    "failed": "Falló",
+    "elapsed": "{seconds} s transcurridos",
+    "close": "Cerrar actividad",
+    "dismiss": "Descartar notificación",
+    "details": "Detalles del error",
+    "copy": "Copiar detalles",
+    "copied": "Detalles copiados",
+    "kind": {
+      "open": "Abrir dibujo",
+      "import": "Importar geometría",
+      "save": "Guardar dibujo",
+      "export": "Exportar",
+      "rebuild": "Reconstruir geometría",
+      "drawing": "Actualizar dibujo",
+      "cam": "Cálculo CAM"
+    },
+    "phase": {
+      "queued": "Esperando a que termine la operación actual…",
+      "reading": "Leyendo…",
+      "validating": "Comprobando…",
+      "geometry": "Preparando la geometría…",
+      "adopting": "Actualizando el documento…",
+      "rendering": "Preparando la vista…",
+      "writing": "Escribiendo el archivo…",
+      "running": "Calculando…",
+      "choosing": "Esperando tu elección…"
+    },
+    "renderTimeout": "El documento se cargó, pero la vista no terminó de dibujarse en 60 segundos."
+  },
   "meshExport": {
     "title": "Exportar malla",
     "close": "Cerrar exportación de malla",
@@ -9,8 +45,41 @@
     "continue": "Continuar"
   },
   "app": {
+    "shortName": "Limo",
     "name": "Limo CAD",
     "untitledDocument": "Sin título"
+  },
+  "startup": {
+    "scope": "Inicio de CAD",
+    "initialized": "CAD inicializado.",
+  "note": "Nota de taller",
+    "gpu": "Preparando los gráficos…",
+    "frame": "Dibujando el espacio de trabajo…",
+  "empty": "Abrir un espacio de trabajo vacío",
+    "reopen": "Cierre y vuelva a abrir Limo CAD para reintentar. Si vuelve a fallar, copie estos detalles en un informe de error.",
+  "tagline": "Diseñar con comprensión.",
+  "document": "Preparando el espacio de trabajo CAD…",
+    "renderer": "Configurando los gráficos…",
+    "assets": "Cargando recursos de CAD…",
+    "pipelines": "Preparando la primera vista…",
+  "ready": "Espacio de trabajo listo",
+  "failed": "No se pudo iniciar el espacio de trabajo.",
+  "slow": "El inicio está tardando más de lo habitual. Puede esperar o reiniciar la aplicación.",
+  "timeout": "El inicio no se completó en 60 segundos.",
+  "retry": "Reintentar",
+  "quit": "Cerrar aplicación",
+  "copy": "Copiar detalles",
+  "copied": "Detalles copiados",
+  "browser": "La vista CAD interactiva requiere la aplicación de escritorio.",
+  "font": "Preparando el texto…"
+},
+  "documentLoad": {
+    "rendering": "Preparando la vista…",
+    "reading": "Leyendo el dibujo…",
+    "validating": "Comprobando el dibujo…",
+    "waiting": "Esperando a que termine la operación actual…",
+    "geometry": "Preparando la geometría…",
+    "adopting": "Actualizando el documento…"
   },
   "topbar": {
     "newDesign": "Nuevo diseño",
@@ -24,6 +93,8 @@
     "scripts": "Scripts"
   },
   "file": {
+    "errorDocumentChangedDuringOpen": "El documento activo cambió mientras se abría el archivo. Intenta abrirlo de nuevo.",
+    "newWindow": "Nueva ventana",
     "menu": "Archivo",
     "new": "Nuevo",
     "panel": "PROYECTO",

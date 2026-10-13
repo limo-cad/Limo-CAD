@@ -1,0 +1,587 @@
+{
+  "schema": 1,
+  "label": "thunder-fresh-process-profile",
+  "executable": "D:\\limo-startup-candidate-compact-poll-runtime\\nbcad.exe",
+  "executableSha256": "f9d476b25c3d5a37effd2ff3990d0c93bd5d22c3a71fe847102cd6307a220ebb",
+  "profile": "dev-app1-debug2-deps3-debug0",
+  "cacheCondition": "first",
+  "cachePreparation": {
+    "webviewProfilePolicy": "fresh-per-run",
+    "webviewProfileInitiallyEmpty": true,
+    "osAndDriverCaches": "untouched; temperature unverified",
+    "inputFileCache": "No input reads by harness before launches; prior trusted hashes checked after batch; OS/file/driver caches untouched and unverified",
+    "compilationIncluded": false
+  },
+  "locale": "en",
+  "document": null,
+  "documentSha256": null,
+  "inputVerification": {
+    "policy": "after-batch",
+    "status": "verified",
+    "verifiedAt": "2026-10-11T20:50:48.358Z"
+  },
+  "hardware": {
+    "hostname": "Thunder",
+    "platform": "win32",
+    "architecture": "x64",
+    "cpu": "AMD Ryzen 7 5800X3D 8-Core Processor           ",
+    "logicalCpus": 16,
+    "memoryBytes": 34266349568
+  },
+  "hostUptimeSeconds": 326932.75,
+  "startedAt": "2026-10-11T20:50:34.092Z",
+  "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\empty-en\\webview2-user-data",
+  "warmups": [],
+  "runs": [
+    {
+      "index": 1,
+      "pid": 47020,
+      "launchUnixMs": 1791751834094,
+      "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\empty-en\\webview2-user-data\\run-01",
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 47020,
+          "processElapsedMs": 1218.6174999999998,
+          "processStartedUnixMs": 1791751834383,
+          "webElapsedMs": 432.89999997615814
+        },
+        {
+          "detail": null,
+          "durationMs": 130.69999998807907,
+          "phase": "document",
+          "pid": 47020,
+          "processElapsedMs": 1613.7438,
+          "processStartedUnixMs": 1791751834383,
+          "webElapsedMs": 834.3999999761581
+        },
+        {
+          "detail": null,
+          "durationMs": 476.3228,
+          "phase": "gpuDevice",
+          "pid": 47020,
+          "processElapsedMs": 1696.2505999999998,
+          "processStartedUnixMs": 1791751834383,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 6.058400000000001,
+          "phase": "nativeFonts",
+          "pid": 47020,
+          "processElapsedMs": 1703.0144,
+          "processStartedUnixMs": 1791751834383,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 112.4067,
+          "phase": "rendererInstall",
+          "pid": 47020,
+          "processElapsedMs": 1816.6231000000002,
+          "processStartedUnixMs": 1791751834383,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 68.79999995231628,
+          "phase": "windowExpansion",
+          "pid": 47020,
+          "processElapsedMs": 2267.6923,
+          "processStartedUnixMs": 1791751834383,
+          "webElapsedMs": 1488.2999999523163
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 47020,
+          "processElapsedMs": 2268.1543,
+          "processStartedUnixMs": 1791751834383,
+          "webElapsedMs": 1488.2999999523163
+        },
+        {
+          "detail": null,
+          "durationMs": 11.400000035762787,
+          "phase": "interaction",
+          "pid": 47020,
+          "processElapsedMs": 2285.0388000000003,
+          "processStartedUnixMs": 1791751834383,
+          "webElapsedMs": 1504.699999988079
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":53.19999998807907,\"sketchFrameMs\":26.80000001192093,\"solidCommandsMs\":224.9000000357628,\"solidFrameMs\":97.79999995231628,\"repeatedCadInteractionMs\":163.9000000357628,\"repeatedTimings\":{\"sketchCommandsMs\":46.69999998807907,\"sketchFrameMs\":21.200000047683716,\"solidCommandsMs\":67.09999996423721,\"solidFrameMs\":28.900000035762787}}",
+          "durationMs": 402.69999998807907,
+          "phase": "cadInteraction",
+          "pid": 47020,
+          "processElapsedMs": 3067.5666,
+          "processStartedUnixMs": 1791751834383,
+          "webElapsedMs": 1929.7999999523163
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 3363.3687,
+      "beforeMainMs": 289,
+      "firstFeedbackMs": 1507.6174999999998,
+      "usableWorkspaceMs": 2557.1543,
+      "firstInteractionMs": 11.400000035762787,
+      "firstCadInteractionMs": 402.69999998807907,
+      "cadTimings": {
+        "sketchCommandsMs": 53.19999998807907,
+        "sketchFrameMs": 26.80000001192093,
+        "solidCommandsMs": 224.9000000357628,
+        "solidFrameMs": 97.79999995231628,
+        "repeatedCadInteractionMs": 163.9000000357628,
+        "repeatedTimings": {
+          "sketchCommandsMs": 46.69999998807907,
+          "sketchFrameMs": 21.200000047683716,
+          "solidCommandsMs": 67.09999996423721,
+          "solidFrameMs": 28.900000035762787
+        }
+      },
+      "repeatedCadInteractionMs": 163.9000000357628
+    },
+    {
+      "index": 2,
+      "pid": 21768,
+      "launchUnixMs": 1791751837842,
+      "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\empty-en\\webview2-user-data\\run-02",
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 21768,
+          "processElapsedMs": 474.2282,
+          "processStartedUnixMs": 1791751837865,
+          "webElapsedMs": 59
+        },
+        {
+          "detail": null,
+          "durationMs": 253.0494,
+          "phase": "gpuDevice",
+          "pid": 21768,
+          "processElapsedMs": 728.2771,
+          "processStartedUnixMs": 1791751837865,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 6.692799999999999,
+          "phase": "nativeFonts",
+          "pid": 21768,
+          "processElapsedMs": 735.5286,
+          "processStartedUnixMs": 1791751837865,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 94.5731,
+          "phase": "rendererInstall",
+          "pid": 21768,
+          "processElapsedMs": 831.1318,
+          "processStartedUnixMs": 1791751837865,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 415.4000000357628,
+          "phase": "document",
+          "pid": 21768,
+          "processElapsedMs": 1105.2678,
+          "processStartedUnixMs": 1791751837865,
+          "webElapsedMs": 699.8000000119209
+        },
+        {
+          "detail": null,
+          "durationMs": 62.30000001192093,
+          "phase": "windowExpansion",
+          "pid": 21768,
+          "processElapsedMs": 1286.7347,
+          "processStartedUnixMs": 1791751837865,
+          "webElapsedMs": 881.3000000119209
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 21768,
+          "processElapsedMs": 1287.4183,
+          "processStartedUnixMs": 1791751837865,
+          "webElapsedMs": 881.3000000119209
+        },
+        {
+          "detail": null,
+          "durationMs": 5.900000035762787,
+          "phase": "interaction",
+          "pid": 21768,
+          "processElapsedMs": 1296.8396,
+          "processStartedUnixMs": 1791751837865,
+          "webElapsedMs": 891.8000000119209
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":43,\"sketchFrameMs\":27.899999976158142,\"solidCommandsMs\":70.30000001192093,\"solidFrameMs\":90,\"repeatedCadInteractionMs\":167,\"repeatedTimings\":{\"sketchCommandsMs\":47.69999998807907,\"sketchFrameMs\":15.399999976158142,\"solidCommandsMs\":59,\"solidFrameMs\":44.90000003576279}}",
+          "durationMs": 231.19999998807907,
+          "phase": "cadInteraction",
+          "pid": 21768,
+          "processElapsedMs": 1892.6817,
+          "processStartedUnixMs": 1791751837865,
+          "webElapsedMs": 1130.199999988079
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 1927.9261000000001,
+      "beforeMainMs": 23,
+      "firstFeedbackMs": 497.2282,
+      "usableWorkspaceMs": 1310.4183,
+      "firstInteractionMs": 5.900000035762787,
+      "firstCadInteractionMs": 231.19999998807907,
+      "cadTimings": {
+        "sketchCommandsMs": 43,
+        "sketchFrameMs": 27.899999976158142,
+        "solidCommandsMs": 70.30000001192093,
+        "solidFrameMs": 90,
+        "repeatedCadInteractionMs": 167,
+        "repeatedTimings": {
+          "sketchCommandsMs": 47.69999998807907,
+          "sketchFrameMs": 15.399999976158142,
+          "solidCommandsMs": 59,
+          "solidFrameMs": 44.90000003576279
+        }
+      },
+      "repeatedCadInteractionMs": 167
+    },
+    {
+      "index": 3,
+      "pid": 47000,
+      "launchUnixMs": 1791751840160,
+      "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\empty-en\\webview2-user-data\\run-03",
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 47000,
+          "processElapsedMs": 419.1106,
+          "processStartedUnixMs": 1791751840184,
+          "webElapsedMs": 48.59999996423721
+        },
+        {
+          "detail": null,
+          "durationMs": 315.5343,
+          "phase": "gpuDevice",
+          "pid": 47000,
+          "processElapsedMs": 735.5153,
+          "processStartedUnixMs": 1791751840184,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 6.3536,
+          "phase": "nativeFonts",
+          "pid": 47000,
+          "processElapsedMs": 742.4301,
+          "processStartedUnixMs": 1791751840184,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 115.32589999999999,
+          "phase": "rendererInstall",
+          "pid": 47000,
+          "processElapsedMs": 859.5622000000001,
+          "processStartedUnixMs": 1791751840184,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 110.60000002384186,
+          "phase": "document",
+          "pid": 47000,
+          "processElapsedMs": 899.7305,
+          "processStartedUnixMs": 1791751840184,
+          "webElapsedMs": 384
+        },
+        {
+          "detail": null,
+          "durationMs": 58.69999998807907,
+          "phase": "windowExpansion",
+          "pid": 47000,
+          "processElapsedMs": 1370.4638,
+          "processStartedUnixMs": 1791751840184,
+          "webElapsedMs": 1011
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 47000,
+          "processElapsedMs": 1370.8174,
+          "processStartedUnixMs": 1791751840184,
+          "webElapsedMs": 1011
+        },
+        {
+          "detail": null,
+          "durationMs": 9.200000047683716,
+          "phase": "interaction",
+          "pid": 47000,
+          "processElapsedMs": 1391.33,
+          "processStartedUnixMs": 1791751840184,
+          "webElapsedMs": 1031.800000011921
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":57.80000001192093,\"sketchFrameMs\":15.900000035762787,\"solidCommandsMs\":84.59999996423721,\"solidFrameMs\":138,\"repeatedCadInteractionMs\":170.19999998807907,\"repeatedTimings\":{\"sketchCommandsMs\":56.30000001192093,\"sketchFrameMs\":16.599999964237213,\"solidCommandsMs\":59.5,\"solidFrameMs\":37.80000001192093}}",
+          "durationMs": 296.30000001192093,
+          "phase": "cadInteraction",
+          "pid": 47000,
+          "processElapsedMs": 2105.7533,
+          "processStartedUnixMs": 1791751840184,
+          "webElapsedMs": 1335.3999999761581
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 2146.0508999999993,
+      "beforeMainMs": 24,
+      "firstFeedbackMs": 443.1106,
+      "usableWorkspaceMs": 1394.8174,
+      "firstInteractionMs": 9.200000047683716,
+      "firstCadInteractionMs": 296.30000001192093,
+      "cadTimings": {
+        "sketchCommandsMs": 57.80000001192093,
+        "sketchFrameMs": 15.900000035762787,
+        "solidCommandsMs": 84.59999996423721,
+        "solidFrameMs": 138,
+        "repeatedCadInteractionMs": 170.19999998807907,
+        "repeatedTimings": {
+          "sketchCommandsMs": 56.30000001192093,
+          "sketchFrameMs": 16.599999964237213,
+          "solidCommandsMs": 59.5,
+          "solidFrameMs": 37.80000001192093
+        }
+      },
+      "repeatedCadInteractionMs": 170.19999998807907
+    },
+    {
+      "index": 4,
+      "pid": 38100,
+      "launchUnixMs": 1791751842707,
+      "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\empty-en\\webview2-user-data\\run-04",
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 38100,
+          "processElapsedMs": 501.602,
+          "processStartedUnixMs": 1791751842744,
+          "webElapsedMs": 59.19999998807907
+        },
+        {
+          "detail": null,
+          "durationMs": 350.3276,
+          "phase": "gpuDevice",
+          "pid": 38100,
+          "processElapsedMs": 853.2061,
+          "processStartedUnixMs": 1791751842744,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 7.3045,
+          "phase": "nativeFonts",
+          "pid": 38100,
+          "processElapsedMs": 861.3707,
+          "processStartedUnixMs": 1791751842744,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 147.5745,
+          "phase": "rendererInstall",
+          "pid": 38100,
+          "processElapsedMs": 1010.4048999999999,
+          "processStartedUnixMs": 1791751842744,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 508.89999997615814,
+          "phase": "document",
+          "pid": 38100,
+          "processElapsedMs": 1298.6216,
+          "processStartedUnixMs": 1791751842744,
+          "webElapsedMs": 867.8999999761581
+        },
+        {
+          "detail": null,
+          "durationMs": 78.80000001192093,
+          "phase": "windowExpansion",
+          "pid": 38100,
+          "processElapsedMs": 1570.1602,
+          "processStartedUnixMs": 1791751842744,
+          "webElapsedMs": 1139.300000011921
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 38100,
+          "processElapsedMs": 1570.9078000000002,
+          "processStartedUnixMs": 1791751842744,
+          "webElapsedMs": 1139.300000011921
+        },
+        {
+          "detail": null,
+          "durationMs": 41.80000001192093,
+          "phase": "interaction",
+          "pid": 38100,
+          "processElapsedMs": 1633.2317,
+          "processStartedUnixMs": 1791751842744,
+          "webElapsedMs": 1201.1000000238419
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":61.10000002384186,\"sketchFrameMs\":29.399999976158142,\"solidCommandsMs\":81.19999998807907,\"solidFrameMs\":107.60000002384186,\"repeatedCadInteractionMs\":181.70000004768372,\"repeatedTimings\":{\"sketchCommandsMs\":66.10000002384186,\"sketchFrameMs\":17.399999976158142,\"solidCommandsMs\":57.30000001192093,\"solidFrameMs\":40.90000003576279}}",
+          "durationMs": 279.30000001192093,
+          "phase": "cadInteraction",
+          "pid": 38100,
+          "processElapsedMs": 2305.1661,
+          "processStartedUnixMs": 1791751842744,
+          "webElapsedMs": 1490.800000011921
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 2349.3138,
+      "beforeMainMs": 37,
+      "firstFeedbackMs": 538.602,
+      "usableWorkspaceMs": 1607.9078000000002,
+      "firstInteractionMs": 41.80000001192093,
+      "firstCadInteractionMs": 279.30000001192093,
+      "cadTimings": {
+        "sketchCommandsMs": 61.10000002384186,
+        "sketchFrameMs": 29.399999976158142,
+        "solidCommandsMs": 81.19999998807907,
+        "solidFrameMs": 107.60000002384186,
+        "repeatedCadInteractionMs": 181.70000004768372,
+        "repeatedTimings": {
+          "sketchCommandsMs": 66.10000002384186,
+          "sketchFrameMs": 17.399999976158142,
+          "solidCommandsMs": 57.30000001192093,
+          "solidFrameMs": 40.90000003576279
+        }
+      },
+      "repeatedCadInteractionMs": 181.70000004768372
+    },
+    {
+      "index": 5,
+      "pid": 29164,
+      "launchUnixMs": 1791751845445,
+      "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\empty-en\\webview2-user-data\\run-05",
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 29164,
+          "processElapsedMs": 678.8924,
+          "processStartedUnixMs": 1791751845472,
+          "webElapsedMs": 277.5
+        },
+        {
+          "detail": null,
+          "durationMs": 241.1777,
+          "phase": "gpuDevice",
+          "pid": 29164,
+          "processElapsedMs": 920.9999,
+          "processStartedUnixMs": 1791751845472,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 5.0344999999999995,
+          "phase": "nativeFonts",
+          "pid": 29164,
+          "processElapsedMs": 926.534,
+          "processStartedUnixMs": 1791751845472,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 104.5528,
+          "phase": "rendererInstall",
+          "pid": 29164,
+          "processElapsedMs": 1032.1588,
+          "processStartedUnixMs": 1791751845472,
+          "webElapsedMs": null
+        },
+        {
+          "detail": null,
+          "durationMs": 415.39999997615814,
+          "phase": "document",
+          "pid": 29164,
+          "processElapsedMs": 1288.1098,
+          "processStartedUnixMs": 1791751845472,
+          "webElapsedMs": 898
+        },
+        {
+          "detail": null,
+          "durationMs": 70.30000001192093,
+          "phase": "windowExpansion",
+          "pid": 29164,
+          "processElapsedMs": 1489.3879000000002,
+          "processStartedUnixMs": 1791751845472,
+          "webElapsedMs": 1099.9000000357628
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 29164,
+          "processElapsedMs": 1489.8196,
+          "processStartedUnixMs": 1791751845472,
+          "webElapsedMs": 1099.9000000357628
+        },
+        {
+          "detail": null,
+          "durationMs": 7.900000035762787,
+          "phase": "interaction",
+          "pid": 29164,
+          "processElapsedMs": 1508.0871,
+          "processStartedUnixMs": 1791751845472,
+          "webElapsedMs": 1118.7000000476837
+        },
+        {
+          "detail": "{\"sketchCommandsMs\":50,\"sketchFrameMs\":33.09999996423721,\"solidCommandsMs\":88.80000001192093,\"solidFrameMs\":102.39999997615814,\"repeatedCadInteractionMs\":169,\"repeatedTimings\":{\"sketchCommandsMs\":51.5,\"sketchFrameMs\":11.5,\"solidCommandsMs\":51.40000003576279,\"solidFrameMs\":54.59999996423721}}",
+          "durationMs": 274.2999999523163,
+          "phase": "cadInteraction",
+          "pid": 29164,
+          "processElapsedMs": 2163.62,
+          "processStartedUnixMs": 1791751845472,
+          "webElapsedMs": 1403
+        }
+      ],
+      "status": "complete",
+      "observedWallMs": 2205.877200000001,
+      "beforeMainMs": 27,
+      "firstFeedbackMs": 705.8924,
+      "usableWorkspaceMs": 1516.8196,
+      "firstInteractionMs": 7.900000035762787,
+      "firstCadInteractionMs": 274.2999999523163,
+      "cadTimings": {
+        "sketchCommandsMs": 50,
+        "sketchFrameMs": 33.09999996423721,
+        "solidCommandsMs": 88.80000001192093,
+        "solidFrameMs": 102.39999997615814,
+        "repeatedCadInteractionMs": 169,
+        "repeatedTimings": {
+          "sketchCommandsMs": 51.5,
+          "sketchFrameMs": 11.5,
+          "solidCommandsMs": 51.40000003576279,
+          "solidFrameMs": 54.59999996423721
+        }
+      },
+      "repeatedCadInteractionMs": 169
+    }
+  ]
+}

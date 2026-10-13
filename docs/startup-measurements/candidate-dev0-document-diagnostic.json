@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "label": "candidate-document-discovery",
+  "executable": "D:\\limo-startup-candidate-runtime\\nbcad.exe",
+  "executableSha256": "1ec1c10d61040ea46364b343b1ba805abf5f0461ce8bef72a13804855c5fcc50",
+  "profile": "dev",
+  "cacheCondition": "first",
+  "locale": "en",
+  "document": "C:\\Users\\jeffg\\.t3\\worktrees\\noBS-CAD\\t3code-028ff4c7\\examples\\testPiece.nbcad",
+  "documentSha256": "d7e65fb222a0bb59f0ac82c3f3143a3437a487f3bbacf3a1f314b989b96de609",
+  "hardware": {
+    "platform": "win32",
+    "architecture": "x64",
+    "cpu": "AMD Ryzen 7 5800X3D 8-Core Processor           ",
+    "logicalCpus": 16,
+    "memoryBytes": 34266349568
+  },
+  "startedAt": "2026-10-11T16:58:13.784Z",
+  "userDataDirectory": "D:\\limo-startup-runs\\candidate-document-discovery-v1\\webview2-user-data",
+  "warmups": [],
+  "runs": [
+    {
+      "index": 1,
+      "pid": 29752,
+      "launchUnixMs": 1791737893930,
+      "events": [
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "feedback",
+          "pid": 29752,
+          "processElapsedMs": 452.5351,
+          "processStartedUnixMs": 1791737893971,
+          "webElapsedMs": 53.60000002384186
+        },
+        {
+          "detail": null,
+          "durationMs": null,
+          "phase": "workspace",
+          "pid": 29752,
+          "processElapsedMs": 4720.4924,
+          "processStartedUnixMs": 1791737893971,
+          "webElapsedMs": 4309.600000023842
+        },
+        {
+          "detail": null,
+          "durationMs": 23,
+          "phase": "interaction",
+          "pid": 29752,
+          "processElapsedMs": 4747.6364,
+          "processStartedUnixMs": 1791737893971,
+          "webElapsedMs": 4349.300000011921
+        },
+        {
+          "detail": "The diagnostic CAD interaction did not restore its original model.",
+          "durationMs": null,
+          "phase": "error",
+          "pid": 29752,
+          "processElapsedMs": 5684.8979,
+          "processStartedUnixMs": 1791737893971,
+          "webElapsedMs": 5286.300000011921
+        }
+      ],
+      "status": "error",
+      "error": "The diagnostic CAD interaction did not restore its original model.",
+      "observedWallMs": 5729.7352,
+      "beforeMainMs": 41,
+      "firstFeedbackMs": 493.5351,
+      "usableWorkspaceMs": 4761.4924,
+      "firstInteractionMs": 23,
+      "firstCadInteractionMs": null
+    }
+  ]
+}
