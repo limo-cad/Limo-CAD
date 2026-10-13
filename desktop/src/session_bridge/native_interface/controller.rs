@@ -2916,6 +2916,10 @@ fn command_group(command: &NativeCommand) -> &'static str {
 }
 
 fn deliver_control(services: &NativeServices, state: &mut Controller, mut pending: PendingControl) {
+    let saved = pending.response["value"]["saved"] == true;
+    if saved {
+        worker::trace_save("save_project", "receipt_publication_entered");
+    }
     if let Some(ticket) = pending.delivery.as_ref() {
         let presentation = pending
             .presentation_revision
@@ -2934,6 +2938,8 @@ fn deliver_control(services: &NativeServices, state: &mut Controller, mut pendin
                 pending.delivery_only = true;
                 state.pending = Some(pending);
             }
+        } else if saved {
+            worker::trace_save("save_project", "receipt_durable");
         }
     } else if let Err(error) = control_for_window(
         &services.bridge,

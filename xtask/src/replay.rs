@@ -320,6 +320,13 @@ impl Client {
         }
         let before = process_evidence::observe(&mut self.child, Duration::ZERO);
         let kill_attempted = !matches!(before, process_evidence::Observation::Exited(_));
+        let thread_evidence_error = if matches!(before, process_evidence::Observation::Running) {
+            self.process_evidence
+                .as_ref()
+                .and_then(|evidence| evidence.capture_threads(self.process_id()).err())
+        } else {
+            None
+        };
         let kill_error = if kill_attempted {
             self.child.kill().err().map(|error| error.to_string())
         } else {
@@ -328,6 +335,9 @@ impl Client {
         let after = process_evidence::Observation::from_wait(self.child.wait().map(Some));
         self.cleanup_finished = matches!(after, process_evidence::Observation::Exited(_));
         let mut errors = Vec::new();
+        if let Some(error) = thread_evidence_error {
+            errors.push(format!("retain owned thread wait states: {error}"));
+        }
         if let Err(error) = self.record_process(
             "cleanup",
             None,

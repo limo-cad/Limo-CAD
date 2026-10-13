@@ -71,6 +71,8 @@ pub(super) fn observe(child: &mut Child, timeout: Duration) -> Observation {
 pub(super) struct Evidence {
     file: File,
     records: usize,
+    #[cfg(target_os = "linux")]
+    directory: std::path::PathBuf,
 }
 impl Evidence {
     pub(super) fn create(directory: &Path) -> io::Result<Self> {
@@ -80,7 +82,21 @@ impl Evidence {
                 .create_new(true)
                 .open(directory.join("host-process.jsonl"))?,
             records: 0,
+            #[cfg(target_os = "linux")]
+            directory: directory.to_owned(),
         })
+    }
+
+    /// Read only this still-owned child's bounded kernel wait-state fields.
+    pub(super) fn capture_threads(&self, pid: u32) -> io::Result<()> {
+        #[cfg(target_os = "linux")]
+        fs::write(
+            self.directory.join("host-threads-before-cleanup.json"),
+            serde_json::to_vec_pretty(&thread_waits(Path::new("/proc"), pid))?,
+        )?;
+        #[cfg(not(target_os = "linux"))]
+        let _ = pid;
+        Ok(())
     }
     pub(super) fn record(
         &mut self,
@@ -114,10 +130,96 @@ impl Evidence {
             return Err(io::Error::other("Owned process receipt exceeds byte limit"));
         }
         // Count attempted writes as well, so a failed filesystem cannot cause an
-        // unbounded log on repeated cleanup. At most 64 KiB is written per child.
+        // unbounded log on repeated cleanup. Process receipts use at most 64 KiB
+        // per child; the separate thread snapshot has its own field/count bounds.
         self.records += 1;
         self.file.write_all(&bytes)?;
         self.file.write_all(b"\n")?;
         self.file.flush()
+    }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn thread_waits(proc_root: &Path, pid: u32) -> Value {
+    use std::io::Read;
+    let tasks = proc_root.join(pid.to_string()).join("task");
+    let entries = match fs::read_dir(&tasks) {
+        Ok(entries) => entries,
+        Err(error) => return json!({"pid":pid,"error":bounded_text(&error.to_string(),256)}),
+    };
+    let mut tids: Vec<u32> = entries
+        .take(512)
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .filter_map(|entry| entry.file_name().to_str()?.parse().ok())
+        .collect();
+    tids.sort_unstable();
+    let truncated = tids.len() > 128;
+    tids.truncate(128);
+    let threads: Vec<_> = tids
+        .into_iter()
+        .map(|tid| {
+            let mut thread = json!({"tid":tid});
+            for field in ["comm", "wchan", "syscall"] {
+                let path = tasks.join(tid.to_string()).join(field);
+                let read = (|| -> io::Result<String> {
+                    if !fs::symlink_metadata(&path)?.is_file() {
+                        return Err(io::Error::other("Not a regular proc field"));
+                    }
+                    let mut bytes = Vec::new();
+                    File::open(path)?.take(512).read_to_end(&mut bytes)?;
+                    Ok(bounded_text(&String::from_utf8_lossy(&bytes), 512))
+                })();
+                thread[field] = match read {
+                    Ok(value) => json!(value),
+                    Err(error) => json!({"error":bounded_text(&error.to_string(),256)}),
+                };
+            }
+            thread
+        })
+        .collect();
+    json!({"pid":pid,"threads":threads,"truncated":truncated,
+        "limits":{"directory_entries":512,"threads":128,"bytes_per_field":512},
+        "fields":["comm","wchan","syscall"]})
+}
+
+#[cfg(test)]
+mod thread_tests {
+    use super::*;
+
+    #[test]
+    fn wait_state_evidence_is_owned_bounded_and_excludes_environment() {
+        let root = std::env::temp_dir().join(format!(
+            "limo-thread-evidence-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        struct Cleanup(std::path::PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(root.clone());
+        let task = root.join("7/task/7");
+        fs::create_dir_all(&task).unwrap();
+        fs::write(task.join("comm"), "cad-native-kernel").unwrap();
+        fs::write(task.join("wchan"), "futex_wait_queue").unwrap();
+        fs::write(task.join("syscall"), "x".repeat(4096)).unwrap();
+        fs::write(task.join("environ"), "secret environment").unwrap();
+        fs::create_dir_all(root.join("7/task/not-a-tid")).unwrap();
+        fs::create_dir_all(root.join("8/task/8")).unwrap();
+        let evidence = thread_waits(&root, 7);
+        let threads = evidence["threads"].as_array().unwrap();
+        assert_eq!(threads.len(), 1);
+        assert_eq!(threads[0]["tid"], 7);
+        assert_eq!(threads[0]["wchan"], "futex_wait_queue");
+        assert_eq!(threads[0]["syscall"].as_str().unwrap().len(), 512);
+        assert!(!evidence.to_string().contains("secret environment"));
+        assert!(threads[0].get("environ").is_none());
     }
 }

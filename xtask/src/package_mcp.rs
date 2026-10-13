@@ -148,6 +148,7 @@ fn package_command(
         .current_dir(&sessions.0)
         .env("LIMO_CAD_SESSION_DIR", &sessions.0);
     if desktop {
+        command.env("LIMO_CAD_SAVE_DIAGNOSTICS", "1");
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT_PROFILE: AtomicU64 = AtomicU64::new(0);
         let profile = sessions.0.join(format!(

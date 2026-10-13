@@ -1308,11 +1308,14 @@ fn save(
                     },
                     || guard.validate(),
                 )?;
+            worker::trace_save("save_project", "archive_prepared");
             let completed = prepared.write();
+            worker::trace_save("save_project", "archive_write_returned");
             let receipt = workspace
                 .lock()
                 .map_err(|_| "Document workspace lock poisoned")?
                 .complete_save(&services.bridge, completed)?;
+            worker::trace_save("save_project", "workspace_save_completed");
             Ok(NativeMutationResult {
                 context: receipt.owner,
                 engine_revision: receipt.revision,

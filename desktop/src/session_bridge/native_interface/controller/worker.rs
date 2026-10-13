@@ -16,6 +16,16 @@ type Completion = Box<
 type Transaction =
     Box<dyn FnOnce(&NativeServices, &DispatchGuard) -> Result<NativeMutationResult, String> + Send>;
 
+/// Opt-in fixture evidence; never logs paths, model data, or tool arguments.
+pub(super) fn trace_save(operation: &str, stage: &'static str) {
+    if operation == "save_project"
+        && std::env::var("LIMO_CAD_SAVE_DIAGNOSTICS").as_deref() == Ok("1")
+    {
+        use std::io::Write;
+        let _ = writeln!(std::io::stderr().lock(), "Limo CAD save stage: {stage}");
+    }
+}
+
 pub(crate) struct DispatchGuard {
     handle: NativeInterfaceHandle,
     action: Option<NativeInterfaceAction>,
@@ -106,6 +116,7 @@ pub(crate) fn install(
                         PreparedNativePresentation { owner: result.context.clone(), revision: result.engine_revision, scene: Err("Committed model snapshot preparation stopped unexpectedly".into()), publication: Err("Committed model publication preparation stopped unexpectedly".into()) }
                     })
             });
+            trace_save(&job.operation, "worker_result_ready");
             if results.send(Completed { id: job.id, result, presentation }).is_err() { break; }
             handle.request_redraw();
             if panicked { break; }
@@ -705,6 +716,7 @@ pub(crate) fn poll(world: &mut World, services: &NativeServices) -> Option<Outco
         .resource_mut::<NativeMutationWorker>()
         .pending
         .take()?;
+    trace_save(&pending.operation, "ui_received_worker_result");
     if completed.id != pending.id {
         return Some(Outcome {
             id: pending.id,
@@ -727,6 +739,7 @@ pub(crate) fn poll(world: &mut World, services: &NativeServices) -> Option<Outco
         .map_err(|_| "Model completion storage was poisoned".to_owned())
         .and_then(|completion| completion.ok_or("Model completion was already consumed".to_owned()))
         .and_then(|complete| complete(world, services, completed.result));
+    trace_save(&pending.operation, "ui_completion_callback_returned");
     world.remove_resource::<PreparedNativePresentation>();
     Some(Outcome {
         id: pending.id,
