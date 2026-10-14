@@ -93,6 +93,58 @@ fn cdx() -> Value {
         "dependencies":[{"ref":"rust-main","dependsOn":[]}]})
 }
 
+#[test]
+fn spdx_retains_git_provenance_for_colliding_cargo_identities_and_rejects_tampering() {
+    let commit = "7af02be918928cb0b250275a3e09cda1f307f156";
+    let source = format!("git+https://github.com/jeffglousher/fenris?rev={commit}#{commit}");
+    let mut cdx = json!({"components":[
+        {"name":"fenris","version":"0.0.33","purl":"pkg:cargo/fenris@0.0.33","bom-ref":"pkg:cargo/fenris@0.0.33?package-id=git",
+         "externalReferences":[{"type":"distribution","url":source}]},
+        {"name":"fenris","version":"0.0.33","purl":"pkg:cargo/fenris@0.0.33","bom-ref":"pkg:cargo/fenris@0.0.33?package-id=registry"}],"dependencies":[]});
+    let mut spdx = json!({"packages":[
+        {"name":"fenris","versionInfo":"0.0.33","SPDXID":"SPDXRef-pkg-cargo-fenris-0.0.33-package-id-registry","downloadLocation":"NOASSERTION","sourceInfo":"registry lockfile","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:cargo/fenris@0.0.33"}]},
+        {"name":"fenris","versionInfo":"0.0.33","SPDXID":"SPDXRef-pkg-cargo-fenris-0.0.33-package-id-git","downloadLocation":"NOASSERTION","sourceInfo":"simulation lockfile","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:cargo/fenris@0.0.33"}]}],"relationships":[]});
+    let registry = spdx["packages"][0].clone();
+    documents::preserve_rust_git_sources(&cdx, &mut spdx).unwrap();
+    assert_eq!(spdx["packages"][0], registry);
+    assert_eq!(
+        spdx["packages"][1]["downloadLocation"],
+        format!("git+https://github.com/jeffglousher/fenris@{commit}")
+    );
+    assert_eq!(
+        spdx["packages"][1]["sourceInfo"],
+        format!("simulation lockfile\nCargo Git source: {source}")
+    );
+    let preserved = spdx.clone();
+    documents::preserve_rust_git_sources(&cdx, &mut spdx).unwrap();
+    assert_eq!(spdx, preserved);
+    documents::verify_rust_graph(&cdx, &spdx).unwrap();
+    for field in ["downloadLocation", "sourceInfo"] {
+        let mut tampered = preserved.clone();
+        tampered["packages"][1][field] = json!("NOASSERTION");
+        assert!(documents::verify_rust_graph(&cdx, &tampered).is_err());
+    }
+    let git = cdx["components"][0]["externalReferences"][0].clone();
+    cdx["components"][0]["externalReferences"]
+        .as_array_mut()
+        .unwrap()
+        .push(git);
+    assert!(documents::preserve_rust_git_sources(&cdx, &mut spdx).is_err());
+    cdx["components"][0]["externalReferences"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    for invalid in [
+        "git+https://github.com/jeffglousher/fenris?rev=main",
+        "git+https://github.com/jeffglousher/fenris#7af02be",
+        "git+https://github.com/jeffglousher/fenris#not-a-valid-full-commit-hash-xxxxxxxxxxxxx",
+        &format!("git+https://user:password@github.com/jeffglousher/fenris#{commit}"),
+    ] {
+        cdx["components"][0]["externalReferences"][0]["url"] = json!(invalid);
+        assert!(documents::preserve_rust_git_sources(&cdx, &mut spdx).is_err());
+    }
+}
+
 fn library(name: &str, occt: bool) -> native::Library {
     native::Library {
         path: format!("usr/lib/{name}"),
