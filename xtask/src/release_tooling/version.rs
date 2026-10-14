@@ -117,8 +117,10 @@ fn inventory(root: &Path) -> Result<(Vec<Carrier>, BTreeSet<String>)> {
 
 fn document_patterns() -> Vec<Regex> {
     [
-        format!(r"((?:Limo|noBS)-CAD-)({VERSION_PATTERN})(-windows-|-ubuntu-)"),
-        format!(r"((?:Limo|noBS)\.CAD_)({VERSION_PATTERN})(_)"),
+        // Published noBS preview filenames are historical; only current Limo
+        // package names follow VERSION after the product rename.
+        format!(r"(Limo-CAD-)({VERSION_PATTERN})(-windows-|-ubuntu-)"),
+        format!(r"(Limo\.CAD_)({VERSION_PATTERN})(_)"),
         format!(r"(/releases/(?:download|tag)/v)({VERSION_PATTERN})([/)#\s]|$)"),
         format!(r"(\bRelease )({VERSION_PATTERN})([^\w.-]|$)"),
         format!(r"(\[)({VERSION_PATTERN})( release\])"),
@@ -345,6 +347,22 @@ mod tests {
         assert_eq!(documented(&next, "0.4.0-rc.1").unwrap(), next);
         assert!(!documented(&next, "0.4.0").unwrap().contains("rc.1"));
         assert!(documented("Limo-CAD-windows-x64.zip", "0.4.0").is_err());
+    }
+
+    #[test]
+    fn version_bumps_preserve_published_pre_rename_artifacts() {
+        let source = concat!(
+            "/releases/download/bevy-preview-0.2.2-20261004.1/",
+            "noBS-CAD-0.2.2-windows-x64.zip ",
+            "sudo apt install ./noBS.CAD_0.2.2_amd64.deb ",
+            "Limo-CAD-0.3.0-rc.1-windows-x64.zip ",
+            "Limo.CAD_0.3.0-rc.1_amd64.deb"
+        );
+        let next = documented(source, "0.4.0").unwrap();
+        assert!(next.contains("bevy-preview-0.2.2-20261004.1/noBS-CAD-0.2.2-windows-x64.zip"));
+        assert!(next.contains("sudo apt install ./noBS.CAD_0.2.2_amd64.deb"));
+        assert!(next.contains("Limo-CAD-0.4.0-windows-x64.zip"));
+        assert!(next.contains("Limo.CAD_0.4.0_amd64.deb"));
     }
 
     #[test]
