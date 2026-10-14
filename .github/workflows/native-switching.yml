@@ -39,7 +39,7 @@ jobs:
         run: |
           sudo apt-get install --yes --no-install-recommends openbox x11-utils
           command -v xprop
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry

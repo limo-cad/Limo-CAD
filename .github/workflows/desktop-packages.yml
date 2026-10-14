@@ -461,7 +461,7 @@ jobs:
 
       - name: Restore compatible OCCT SDK and build objects
         id: occt
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             /opt/opencascade
@@ -477,7 +477,7 @@ jobs:
 
       - name: Save verified OCCT before application checks
         if: steps.occt.outputs.cache-hit != 'true' && steps.occt_build.outcome == 'success'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             /opt/opencascade
