@@ -26,6 +26,8 @@ fn stop_on_exit(exits: Res<Messages<AppExit>>, stopped: Res<RendererStop>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // AppLabel's derive lookup does not inspect target-specific dependencies.
+    use bevy::app as bevy_app;
     use bevy::{
         app::{AppLabel, PostUpdate, SubApp},
         prelude::*,
