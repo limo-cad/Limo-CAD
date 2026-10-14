@@ -418,6 +418,7 @@ pub(super) fn verify_spdx(
 fn rust_references(cdx: &Value, spdx: &Value) -> Result<BTreeMap<String, String>> {
     let packages = spdx["packages"].as_array().context("SPDX packages")?;
     let mut references = BTreeMap::new();
+    let mut mapped_ids = BTreeSet::new();
     for component in cdx["components"]
         .as_array()
         .context("compiled components")?
@@ -467,13 +468,12 @@ fn rust_references(cdx: &Value, spdx: &Value) -> Result<BTreeMap<String, String>
                 })
                 .context("SPDX lost or ambiguously mapped a compiled Cargo identity")?
         };
-        references.insert(
-            reference.into(),
-            package["SPDXID"]
-                .as_str()
-                .context("SPDX Cargo reference")?
-                .into(),
+        let id = package["SPDXID"].as_str().context("SPDX Cargo reference")?;
+        ensure!(
+            mapped_ids.insert(id),
+            "SPDX collapsed distinct Cargo identities"
         );
+        references.insert(reference.into(), id.into());
     }
     Ok(references)
 }
