@@ -98,7 +98,7 @@ jobs:
           msvc-component: Microsoft.VisualStudio.Component.VC.Tools.x86.x64
       - name: Share SDK with this run's Windows shards
         id: artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mcp-windows-sdk
           path: vcpkg_installed/x64-windows/
@@ -154,7 +154,7 @@ jobs:
       - name: Stage verified editable demo projects
         run: cargo xtask ci stage-demo-projects
       - name: Upload verified editable demo projects
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Limo-CAD-demo-projects-${{ env.MCP_PLATFORM }}-${{ github.sha }}
           path: target/demo-projects/

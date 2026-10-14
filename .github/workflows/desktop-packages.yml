@@ -206,7 +206,7 @@ jobs:
 
       - name: Upload Windows viewport diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Limo-CAD-windows-${{ matrix.architecture }}-viewport-diagnostics
           path: ${{ runner.temp }}\limo-cad-viewport-diagnostics\${{ matrix.architecture }}
@@ -221,7 +221,7 @@ jobs:
           target: ${{ matrix.rust_target }}
 
       - name: Upload portable release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Limo-CAD-${{ steps.app_version.outputs.version }}-windows-${{ matrix.architecture }}
           path: |
@@ -338,7 +338,7 @@ jobs:
 
       - name: Upload Linux viewport diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Limo-CAD-linux-viewport-diagnostics
           path: ${{ runner.temp }}/limo-cad-linux-viewport-diagnostics
@@ -353,7 +353,7 @@ jobs:
           target: x86_64-unknown-linux-gnu
 
       - name: Upload Ubuntu release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Limo-CAD-${{ steps.app_version.outputs.version }}-ubuntu-26.04-x64
           path: |
@@ -542,7 +542,7 @@ jobs:
 
       - name: Upload AppImage diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Limo-CAD-linux-appimage-diagnostics
           path: ${{ runner.temp }}/limo-cad-linux-appimage-diagnostics
@@ -557,7 +557,7 @@ jobs:
           target: x86_64-unknown-linux-gnu
 
       - name: Upload AppImage release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Limo-CAD-${{ steps.app_version.outputs.version }}-linux-x64-appimage
           path: |
@@ -641,7 +641,7 @@ jobs:
 
       - name: Upload AppImage diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Limo-CAD-linux-appimage-26.04-diagnostics
           path: ${{ runner.temp }}/limo-cad-linux-appimage-26.04-diagnostics
@@ -870,7 +870,7 @@ jobs:
 
       - name: Upload macOS MCP verification
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Limo-CAD-macos-mcp-diagnostics
           path: |
@@ -904,7 +904,7 @@ jobs:
           target: aarch64-apple-darwin
 
       - name: Upload Apple silicon release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Limo-CAD-${{ steps.app_version.outputs.version }}-macos-arm64
           path: |
@@ -965,7 +965,7 @@ jobs:
           exit "$failed"
       - name: Retain all release findings and maintenance warnings
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-security-reports-${{ github.sha }}
           path: security-reports

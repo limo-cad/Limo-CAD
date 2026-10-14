@@ -57,7 +57,7 @@ jobs:
         run: cargo xtask switching-comparison
       - name: Retain exact inputs, source/build provenance, and partial or complete samples
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: matched-switching-evidence
           path: |

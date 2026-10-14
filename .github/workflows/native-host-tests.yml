@@ -170,7 +170,7 @@ jobs:
           & .\xtask\platform\windows-ime-probe.ps1 @probeArgs
       - name: Retain inventory, provisioning status, and actual IME messages
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-ime-prerequisite-probe
           path: ${{ runner.temp }}/windows-ime-probe/
@@ -193,7 +193,7 @@ jobs:
         run: bash xtask/platform/run-macos-ime-probe.sh "$RUNNER_TEMP/macos-ime-probe"
       - name: Retain macOS inventory and actual AppKit input callbacks
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-ime-prerequisite-probe
           path: ${{ runner.temp }}/macos-ime-probe/
@@ -251,14 +251,14 @@ jobs:
           bash scripts/verify-linux-native-package.sh "$appimage" "$RUNNER_TEMP/native-package-evidence/appimage"
       - name: Retain packaged native diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-package-linux-diagnostics
           path: ${{ runner.temp }}/native-package-evidence/
           if-no-files-found: warn
           retention-days: 14
       - name: Retain diagnostic packages (never publish a release)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-package-linux
           path: |
@@ -501,7 +501,7 @@ jobs:
 
       - name: Retain Linux input snapshots and native captures
         if: always() && inputs.desktop-input
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-input-linux-${{ matrix.family }}
           path: ${{ runner.temp }}/native-input-linux-*/
@@ -569,7 +569,7 @@ jobs:
             --out "$RUNNER_TEMP/native-input-macos-japanese"
       - name: Retain macOS input snapshots and native captures
         if: always() && (inputs.desktop-input || inputs.ime-native-macos)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-input-macos
           path: ${{ runner.temp }}/native-input-macos*/
@@ -638,7 +638,7 @@ jobs:
             --out "$env:RUNNER_TEMP\native-accessibility-windows"
       - name: Retain Windows input snapshots and native captures
         if: always() && inputs.desktop-input
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-input-windows
           path: |
@@ -657,7 +657,7 @@ jobs:
             --out "$env:RUNNER_TEMP\native-print-windows"
       - name: Retain Windows print dialog cancellation evidence
         if: always() && inputs.desktop-input
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-print-windows
           path: ${{ runner.temp }}/native-print-windows/

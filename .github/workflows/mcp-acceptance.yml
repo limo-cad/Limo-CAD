@@ -155,7 +155,7 @@ jobs:
 
       - name: Upload native recipe failure evidence
         if: failure() && steps.native-tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mcp-recipe-failure-${{ inputs.platform }}-${{ matrix.shard }}
           path: target/mcp-recipe-failure/
@@ -187,7 +187,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'xtask tests failed' }
 
       - name: Upload successful demo input
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mcp-demo-${{ inputs.platform }}-${{ matrix.shard }}
           path: target/mcp-recipe-evidence/${{ matrix.project }}.limo
@@ -197,7 +197,7 @@ jobs:
 
       - name: Upload MCP workshop evidence
         if: always() && matrix.shard == 'core'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mcp-workshop-${{ inputs.platform }}
           path: target/mcp-workshop/

@@ -55,7 +55,7 @@ jobs:
         run: cargo xtask ci native-ignored-test grid-redraw
       - name: Retain native visual evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-sketch-visuals
           path: docs/qa/native-boundary/

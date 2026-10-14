@@ -48,7 +48,7 @@ jobs:
         run: cargo run --locked --manifest-path experiments/rust-simulation/Cargo.toml --bin same_mesh -- "$LIMO_SIM_RESULTS/same-mesh-results.json" "$LIMO_SIM_RESULTS/world-results.json"
       - name: Retain actual runner results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rust-simulation-results
           path: ${{ runner.temp }}/limo-simulation-results/*.json
