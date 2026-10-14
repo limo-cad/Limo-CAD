@@ -27,6 +27,8 @@ mod ime_diagnostics;
 pub(crate) mod ranges;
 pub(crate) mod ribbon;
 mod shortcut_diagnostics;
+#[cfg(feature = "experimental-ui-widgets")]
+pub(crate) mod widgets;
 mod window_focus;
 
 use geometry::HitArea;
@@ -1892,6 +1894,8 @@ pub(crate) fn install(
     handle: NativeInterfaceHandle,
     reducer: impl Fn(&mut World, &NativeInterfaceHandle) + Send + Sync + 'static,
 ) {
+    #[cfg(feature = "experimental-ui-widgets")]
+    widgets::install(app);
     app.insert_resource(handle)
         .insert_resource(InterfaceReducer(Arc::new(reducer)))
         .add_systems(Startup, setup_camera)

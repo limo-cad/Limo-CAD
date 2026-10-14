@@ -224,6 +224,8 @@ impl HostInputState {
 /// Clear a completed/rejected atomic gesture without synthesizing a release
 /// that could activate a control under its last cursor position.
 pub(crate) fn cancel_native_pointer(world: &mut World, handle: &NativeInterfaceHandle) {
+    #[cfg(feature = "experimental-ui-widgets")]
+    super::interface_shell::widgets::cancel(world);
     if let Some(mut state) = world.get_resource_mut::<HostInputState>() {
         state.model_drag.clear();
         state.click_press = None;
@@ -307,7 +309,7 @@ fn key_chord(input: &KeyboardInput, modifiers: Modifiers) -> KeyChord {
     }
 }
 
-fn input_window(event: &WindowEvent) -> Option<Entity> {
+pub(super) fn input_window(event: &WindowEvent) -> Option<Entity> {
     match event {
         WindowEvent::CursorMoved(event) => Some(event.window),
         WindowEvent::CursorEntered(event) => Some(event.window),
@@ -492,6 +494,8 @@ pub(crate) fn prepare_native_input(
             input.modifiers,
         )?;
         input.actions = handle.take_actions()?;
+        #[cfg(feature = "experimental-ui-widgets")]
+        super::interface_shell::widgets::adapt_input(world, handle, input)?;
         Ok(())
     })
 }
