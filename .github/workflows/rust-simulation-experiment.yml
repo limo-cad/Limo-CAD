@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - 'experiments/rust-simulation/**'
-      - 'docs/SIMULATION-EXPERIMENT.md'
       - '.github/workflows/rust-simulation-experiment.yml'
       - '.github/actions/setup-rust/**'
       - 'rust-toolchain.toml'
