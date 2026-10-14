@@ -90,6 +90,8 @@ fn check_3mf(path: &Path, application: &str, metadata: Option<&str>) -> Result<(
         ensure!(
             !archive
                 .file_names()
+                .collect::<zip::result::ZipResult<Vec<_>>>()?
+                .iter()
                 .any(|name| name.starts_with("Metadata/")),
             "Standard 3MF unexpectedly contains slicer-specific metadata"
         );

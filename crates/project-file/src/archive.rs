@@ -2,7 +2,7 @@ use crate::{error, failed, ProjectFileError, MAX_EXPANDED_BYTES, MAX_FILE_BYTES}
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
-use zip::{write::SimpleFileOptions, CompressionMethod, HasZipMetadata, ZipArchive, ZipWriter};
+use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
 pub const PROJECT_EXTENSION: &str = ".limo";
 pub const PROJECT_FORMAT: &str = "limo-cad-project";
@@ -187,33 +187,37 @@ impl ProjectArchive {
             writer
                 .set_raw_comment(source.comment().into())
                 .map_err(|source| failed("could not preserve project ZIP comment", source))?;
-            #[expect(
-                deprecated,
-                reason = "Existing ZIP64 annotations must survive project resaves"
-            )]
-            {
-                writer
-                    .set_raw_zip64_comment(source.zip64_comment().map(Into::into))
-                    .map_err(|source| failed("could not preserve project ZIP64 comment", source))?;
+            if let Some(data) = source.raw_zip64_extensible_data_sector() {
+                writer.set_raw_zip64_extensible_data_sector(data.into());
             }
             for index in 0..source.len() {
                 let entry = source
                     .by_index_raw(index)
                     .map_err(|source| failed("could not read original project entry", source))?;
-                if !entry.comment().is_empty()
-                    || entry.extra_data().is_some_and(|extra| !extra.is_empty())
-                    || entry
-                        .get_metadata()
-                        .central_extra_field
-                        .as_ref()
-                        .is_some_and(|extra| !extra.is_empty())
-                    || entry.get_metadata().encrypted
-                    || entry.is_symlink()
-                    || entry.name_raw() != entry.name().as_bytes()
-                {
-                    return Err(error(format!("cannot preserve opaque ZIP metadata for entry '{}'; keep the original project archive",entry.name())));
+                let name = entry
+                    .name()
+                    .map_err(|source| {
+                        failed(
+                            "cannot preserve project entry name; keep the original project archive",
+                            source,
+                        )
+                    })?
+                    .into_owned();
+                if entry.name_raw() != name.as_bytes() {
+                    return Err(error("cannot preserve project entry name without changing its encoding; keep the original project archive"));
                 }
-                if matches!(entry.name(), "manifest.json" | "model.json") {
+                if !entry.comment().is_empty()
+                    || entry.extra_data_fields().next().is_some()
+                    // ZIP 9 only parses central-directory extra fields. Do not
+                    // discard an opaque extension present only in the local header.
+                    || entry.data_start().and_then(|start| start.checked_sub(entry.header_start()))
+                        != Some(30 + entry.name_raw().len() as u64)
+                    || entry.encrypted()
+                    || entry.is_symlink()
+                {
+                    return Err(error(format!("cannot preserve opaque ZIP metadata for entry '{name}'; keep the original project archive")));
+                }
+                if matches!(name.as_str(), "manifest.json" | "model.json") {
                     continue;
                 }
                 expanded = expanded
@@ -229,7 +233,7 @@ impl ProjectArchive {
                         ));
                     }
                     writer
-                        .add_directory(entry.name(), entry.options())
+                        .add_directory(name, entry.options())
                         .map_err(|source| {
                             failed("could not retain original project directory", source)
                         })?;

@@ -55,8 +55,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Check packaged viewport fixture isolation
@@ -74,7 +75,7 @@ jobs:
         run: python3 scripts/ci/verify-default-windows-package.test.py
 
       - name: Cache Rust workspace
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Install fonts for actual Unicode drawing export
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends fonts-noto-core fonts-noto-cjk

@@ -25,3 +25,7 @@ unicode-segmentation.workspace = true
 
 [build-dependencies]
 cxx-build = { workspace = true, optional = true }
+
+[dev-dependencies]
+resvg = { version = "=0.48.1", default-features = false, features = ["text", "system-fonts"] }
+svg2pdf = { version = "=0.13.0", default-features = false }

@@ -18,7 +18,7 @@ anyhow.workspace = true
 base64.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["float_roundtrip", "raw_value"] }
-serde_yaml_ng = "0.10"
+serde_yaml_ng = "0.10.0"
 limo-cad-core = { path = "../crates/core" }
 limo-cad-recipes = { path = "../crates/recipes" }
 regex.workspace = true

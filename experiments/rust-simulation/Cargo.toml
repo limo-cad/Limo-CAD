@@ -12,9 +12,14 @@ anyhow = "=1.0.104"
 fenris = "=0.0.33"
 fenris-solid = "=0.0.33"
 faer = { version = "=0.24.4", default-features = false, features = ["std", "sparse-linalg"] }
-rapier3d-f64 = { version = "=0.36.0", features = ["fem", "enhanced-determinism"] }
+rapier3d-f64 = { version = "=0.36.1", features = ["fem", "enhanced-determinism"] }
 serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = "=1.0.151"
+serde_json = "=1.0.154"
+
+[patch.crates-io]
+# Published Fenris 0.0.33 numerical code with unused mesh import/export opt-in.
+# Keep its registry subcrates and numerical test coverage unchanged.
+fenris = { git = "https://github.com/jeffglousher/fenris", rev = "7af02be918928cb0b250275a3e09cda1f307f156" }
 
 # Numerical kernels need optimization even for the development experiment.
 [profile.dev]
