@@ -25,7 +25,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2025]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: ./.github/actions/setup-rust
       - run: cargo fmt -p limo-cad-session-storage -- --check
       - run: cargo clippy --locked -p limo-cad-session-storage --all-targets -- -D warnings

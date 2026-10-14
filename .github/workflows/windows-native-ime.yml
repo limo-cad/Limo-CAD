@@ -17,7 +17,7 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 150
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Provision and prove stock IME feasibility on this same runner
         timeout-minutes: 35
         shell: powershell

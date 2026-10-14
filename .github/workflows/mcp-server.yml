@@ -78,7 +78,7 @@ jobs:
       sdk-artifact-id: ${{ steps.artifact.outputs.artifact-id }}
       sdk-toolset: ${{ steps.occt.outputs.toolset }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-rust
         with:
           target: x86_64-pc-windows-msvc
@@ -128,7 +128,7 @@ jobs:
       NATIVE_RESULT: ${{ needs.mcp-windows.result }}
       MCP_PLATFORM: windows
     steps: &publish-demo-projects
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-rust
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:

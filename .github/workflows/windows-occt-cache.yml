@@ -29,7 +29,7 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Warm shared x64 OpenCASCADE SDK
         uses: ./.github/actions/setup-windows-occt
         with:
@@ -42,7 +42,7 @@ jobs:
     runs-on: windows-11-vs2026-arm
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-rust
       - name: Warm shared ARM64 OpenCASCADE SDK
         uses: ./.github/actions/setup-windows-occt

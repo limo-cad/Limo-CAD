@@ -38,7 +38,7 @@ jobs:
       OCCT_ROOT: ${{ inputs.platform == 'windows' && format('{0}/vcpkg_installed/x64-windows', github.workspace) || '/usr' }}
       LIMO_CAD_RECIPE_ARTIFACT_DIR: ${{ github.workspace }}/target/mcp-recipe-evidence
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{ matrix.shard == 'core' && '0' || '1' }}
       - uses: ./.github/actions/setup-rust

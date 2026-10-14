@@ -42,7 +42,7 @@ jobs:
       macos_should_build: ${{ steps.classify.outputs.macos_should_build }}
       linux_should_build: ${{ steps.classify.outputs.linux_should_build }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-rust
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
@@ -88,7 +88,7 @@ jobs:
 
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up repository Rust toolchain
         uses: ./.github/actions/setup-rust
@@ -250,7 +250,7 @@ jobs:
 
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Read the application version
         id: app_version
@@ -429,7 +429,7 @@ jobs:
             zstd
 
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Read the application version
         id: app_version
@@ -578,7 +578,7 @@ jobs:
 
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Read the application version
         id: app_version
@@ -667,7 +667,7 @@ jobs:
 
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Verify Apple silicon runner
         shell: bash
@@ -932,7 +932,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-rust
       - name: Check all locked Rust dependencies
         uses: ./.github/actions/audit-rust
@@ -989,7 +989,7 @@ jobs:
       attestations: read
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Rust
         uses: ./.github/actions/setup-rust

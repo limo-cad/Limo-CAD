@@ -16,10 +16,10 @@ jobs:
       CARGO_TERM_COLOR: never
       LIMO_CAD_SWITCHING_CI: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: candidate
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.BASELINE_SHA }}
           path: baseline

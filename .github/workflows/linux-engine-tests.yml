@@ -55,7 +55,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
