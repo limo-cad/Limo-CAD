@@ -478,6 +478,106 @@ fn rust_references(cdx: &Value, spdx: &Value) -> Result<BTreeMap<String, String>
     Ok(references)
 }
 
+fn rust_git_sources(cdx: &Value, spdx: &Value) -> Result<BTreeMap<String, (String, String)>> {
+    let references = rust_references(cdx, spdx)?;
+    let mut sources = BTreeMap::new();
+    for component in cdx["components"].as_array().context("Cargo components")? {
+        let Some(id) = component["bom-ref"]
+            .as_str()
+            .and_then(|id| references.get(id))
+        else {
+            continue;
+        };
+        for reference in component["externalReferences"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let Some(source) = reference["url"]
+                .as_str()
+                .filter(|url| reference["type"] == "distribution" && url.starts_with("git+"))
+            else {
+                continue;
+            };
+            let (repository, revision) = source
+                .rsplit_once('#')
+                .context("Cargo Git source lacks a resolved commit")?;
+            ensure!(
+                matches!(revision.len(), 40 | 64)
+                    && revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
+                "Cargo Git source requires a full resolved commit"
+            );
+            let repository = repository
+                .split('?')
+                .next()
+                .context("Cargo Git repository")?;
+            let (transport, location) = repository
+                .split_once("://")
+                .context("Cargo Git transport")?;
+            let (host, path) = location
+                .split_once('/')
+                .context("Cargo Git repository path")?;
+            ensure!(
+                matches!(transport, "git+https" | "git+http" | "git+ssh" | "git+git")
+                    && !host.is_empty()
+                    && !host.contains('@')
+                    && !path.is_empty(),
+                "unsupported SPDX Cargo Git download location"
+            );
+            // Cargo uses # for the resolved commit; SPDX reserves # for a subpath.
+            let download = format!("{repository}@{revision}");
+            ensure!(
+                sources
+                    .insert(
+                        id.clone(),
+                        (format!("Cargo Git source: {source}"), download)
+                    )
+                    .is_none(),
+                "ambiguous Cargo Git distribution source"
+            );
+        }
+    }
+    Ok(sources)
+}
+
+pub(super) fn preserve_rust_git_sources(cdx: &Value, spdx: &mut Value) -> Result<()> {
+    let sources = rust_git_sources(cdx, spdx)?;
+    for package in spdx["packages"].as_array_mut().context("SPDX packages")? {
+        let Some((source, download)) = package["SPDXID"].as_str().and_then(|id| sources.get(id))
+        else {
+            continue;
+        };
+        let existing = package["sourceInfo"].as_str().unwrap_or("");
+        if !existing.lines().any(|line| line == source) {
+            package["sourceInfo"] = json!(if existing.is_empty() {
+                source.clone()
+            } else {
+                format!("{existing}\n{source}")
+            });
+        }
+        package["downloadLocation"] = json!(download);
+    }
+    verify_rust_git_sources(cdx, spdx)
+}
+
+fn verify_rust_git_sources(cdx: &Value, spdx: &Value) -> Result<()> {
+    let sources = rust_git_sources(cdx, spdx)?;
+    for package in spdx["packages"].as_array().context("SPDX packages")? {
+        let Some((source, download)) = package["SPDXID"].as_str().and_then(|id| sources.get(id))
+        else {
+            continue;
+        };
+        ensure!(
+            package["downloadLocation"] == *download
+                && package["sourceInfo"]
+                    .as_str()
+                    .is_some_and(|info| info.lines().any(|line| line == source)),
+            "Cargo Git provenance missing or changed in SPDX"
+        );
+    }
+    Ok(())
+}
+
 pub(super) fn preserve_rust_graph(cdx: &Value, spdx: &mut Value) -> Result<()> {
     let references = rust_references(cdx, spdx)?;
     let edges = spdx["relationships"]
@@ -504,6 +604,7 @@ pub(super) fn preserve_rust_graph(cdx: &Value, spdx: &mut Value) -> Result<()> {
 }
 
 pub(super) fn verify_rust_graph(cdx: &Value, spdx: &Value) -> Result<()> {
+    verify_rust_git_sources(cdx, spdx)?;
     let references = rust_references(cdx, spdx)?;
     let edges = spdx["relationships"]
         .as_array()

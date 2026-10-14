@@ -272,7 +272,11 @@ fn convert(cdx: &Path, spdx: &Path) -> Result<()> {
             .arg(cdx)
             .arg("--output")
             .arg(format!("spdx-json@2.3={}", spdx.display())),
-    )
+    )?;
+    let cdx = json_file(cdx)?;
+    let mut document = json_file(spdx)?;
+    documents::preserve_rust_git_sources(&cdx, &mut document)?;
+    write_json(spdx, &document)
 }
 
 fn release(root: &Path, options: Options) -> Result<()> {
