@@ -220,7 +220,7 @@ fn main() -> Result<()> {
     }
     let report = serde_json::json!({
         "schema": 1,
-        "library": "rapier3d-f64 0.36.0, fem + enhanced-determinism",
+        "library": "rapier3d-f64 0.36.1, fem + enhanced-determinism",
         "units": "SI internally; reported displacements mm",
         "material": "synthetic isotropic E=2000 MPa, nu=0.35; density=1270 kg/m^3; not Bambu PETG calibration",
         "beam_load": "40x6x2 mm, root clamped, uniform tip traction integrated on linear boundary triangles; total 0.1 N; no contact; sleeping disabled",

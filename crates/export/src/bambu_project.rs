@@ -752,7 +752,7 @@ fn archive(bytes: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, ExportError> {
     let mut entries = BTreeMap::new();
     for index in 0..zip.len() {
         let entry = zip.by_index(index).map_err(err)?;
-        let name = entry.name().to_string();
+        let name = entry.name().map_err(err)?.into_owned();
         if entry.is_dir() {
             continue;
         }

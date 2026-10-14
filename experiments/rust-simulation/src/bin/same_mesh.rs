@@ -64,7 +64,7 @@ fn comparison_sample(report: &WorldReport) -> Result<&RapierSample> {
         "world report units differ"
     );
     ensure!(
-        report.library == "rapier3d-f64 0.36.0, fem + enhanced-determinism",
+        report.library == "rapier3d-f64 0.36.1, fem + enhanced-determinism",
         "world report library differs"
     );
     ensure!(report.material == "synthetic isotropic E=2000 MPa, nu=0.35; density=1270 kg/m^3; not Bambu PETG calibration", "world report material differs");
@@ -358,7 +358,7 @@ fn main() -> Result<()> {
     let report = serde_json::json!({
         "schema": 1,
         "experiment": "Fenris Tet4 linear static on exact Rapier cuboid rest topology",
-        "versions": {"fenris": "0.0.33", "fenris_solid": "0.0.33", "faer": "0.24.4", "rapier3d_f64": "0.36.0"},
+        "versions": {"fenris": "0.0.33", "fenris_solid": "0.0.33", "faer": "0.24.4", "rapier3d_f64": "0.36.1"},
         "geometry_mm": [40.0, 6.0, 2.0],
         "material": {"young_mpa": 2000.0, "poisson": 0.35, "status": "synthetic isotropic benchmark; not printed PETG calibration"},
         "boundary_conditions": "all X=0 root translations fixed; consistent uniform tip traction in +Z; Rapier comparison has opposite sign, equal magnitude",

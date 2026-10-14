@@ -29,7 +29,7 @@ limo-cad-build-info = { path = "../crates/build-info" }
 limo-cad-interface = { path = "../crates/interface" }
 base64 = "0.23.1"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 limo-cad-script = { path = "../crates/script" }
 limo-cad-recipes = { path = "../crates/recipes" }
 limo-cad-help = { path = "../crates/help" }
@@ -42,7 +42,7 @@ limo-cad-mcp-mutate = { path = "../crates/mcp-mutate" }
 limo-cad-print = { path = "../crates/print" }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.189"
+libc = "0.2.190"
 
 [target.'cfg(windows)'.dependencies]
 enigo = { version = "=0.6.1", default-features = false, optional = true }
@@ -54,5 +54,5 @@ windows-sys = { version = "0.61.2", features = ["Win32_System_Pipes"] }
 
 [dev-dependencies]
 limo-cad-export = { path = "../crates/export", features = ["test-utils"] }
-jsonschema = { version = "0.58.4", default-features = false }
-zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+jsonschema = { version = "0.58.6", default-features = false }
+zip = { version = "9.0.3", default-features = false, features = ["deflate"] }

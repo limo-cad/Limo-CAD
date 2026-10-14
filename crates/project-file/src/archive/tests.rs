@@ -34,7 +34,7 @@ fn opened_project_preserves_recipes_thumbnails_and_future_manifest_data_on_repea
     let initial = ProjectArchive::new(model(7), metadata()).unwrap();
     let mut manifest = initial.manifest().clone();
     manifest["thumbnail"] = json!("preview.png");
-    manifest["recipes"] = json!({"build":"extensions/bench.limo-script.toml","revision":3});
+    manifest["recipes"] = json!({"build":"extensions/Café 零件.limo-script.toml","revision":3});
     manifest["future_vendor"] = json!({"nested":[1,true,"preserve me"]});
     let thumbnail: &[u8] = b"\x89PNG\r\n\x1a\nthumbnail payload";
     let recipe: &[u8] = b"# Editable manufacturing example\nversion = 1\n";
@@ -43,9 +43,16 @@ fn opened_project_preserves_recipes_thumbnails_and_future_manifest_data_on_repea
         initial.model_json().as_bytes(),
         &[
             ("preview.png", thumbnail),
-            ("extensions/bench.limo-script.toml", recipe),
+            ("extensions/Café 零件.limo-script.toml", recipe),
         ],
     );
+    let mut original_raw_recipe = Vec::new();
+    ZipArchive::new(Cursor::new(&initial_bytes))
+        .unwrap()
+        .by_index_raw(4)
+        .unwrap()
+        .read_to_end(&mut original_raw_recipe)
+        .unwrap();
     let mut bytes = initial_bytes;
     let mut saved_size = None;
     for _ in 0..3 {
@@ -69,12 +76,21 @@ fn opened_project_preserves_recipes_thumbnails_and_future_manifest_data_on_repea
         assert!(zip.by_name("extensions/").unwrap().is_dir());
         for (name, expected) in [
             ("preview.png", thumbnail),
-            ("extensions/bench.limo-script.toml", recipe),
+            ("extensions/Café 零件.limo-script.toml", recipe),
         ] {
             let mut actual = Vec::new();
             zip.by_name(name).unwrap().read_to_end(&mut actual).unwrap();
             assert_eq!(actual, expected);
         }
+        let mut raw_recipe = Vec::new();
+        zip.by_index_raw(4)
+            .unwrap()
+            .read_to_end(&mut raw_recipe)
+            .unwrap();
+        assert_eq!(
+            raw_recipe, original_raw_recipe,
+            "Ancillary entries must not be recompressed"
+        );
     }
 }
 
@@ -189,7 +205,12 @@ fn compressed_and_expanded_limits_include_future_entries_without_unbounded_alloc
 #[test]
 fn unsupported_opaque_zip_metadata_is_rejected_instead_of_silently_discarded() {
     let archive = ProjectArchive::new(model(7), metadata()).unwrap();
-    for extra_name in ["model.json", "extensions/future.bin"] {
+    for (extra_name, central_only) in [
+        ("model.json", false),
+        ("model.json", true),
+        ("extensions/future.bin", false),
+        ("extensions/future.bin", true),
+    ] {
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         for (name, contents) in [
             ("manifest.json", archive.manifest().to_string()),
@@ -199,10 +220,10 @@ fn unsupported_opaque_zip_metadata_is_rejected_instead_of_silently_discarded() {
             let mut options = zip::write::FullFileOptions::default();
             if name == extra_name {
                 options
-                    .add_extra_data(
+                    .add_extra_field(
                         0xcafe,
                         b"opaque extension".to_vec().into_boxed_slice(),
-                        false,
+                        central_only,
                     )
                     .unwrap();
             }
@@ -219,4 +240,112 @@ fn unsupported_opaque_zip_metadata_is_rejected_instead_of_silently_discarded() {
             .contains("cannot preserve opaque ZIP metadata"));
         assert_eq!(decoded.original.as_ref().unwrap(), &bytes);
     }
+}
+
+#[test]
+fn zip64_extensible_data_and_raw_archive_comment_survive_repeated_saves() {
+    let current = ProjectArchive::new(model(7), metadata()).unwrap();
+    let data = b"opaque ZIP64 extension\0\xff";
+    let comment = b"original archive annotations\0\xff";
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    writer.set_raw_zip64_extensible_data_sector(data.to_vec().into_boxed_slice());
+    writer
+        .set_raw_comment(comment.to_vec().into_boxed_slice())
+        .unwrap();
+    for (name, payload) in [
+        ("manifest.json", current.manifest().to_string()),
+        ("model.json", current.model_json().to_owned()),
+    ] {
+        writer
+            .start_file(name, SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(payload.as_bytes()).unwrap();
+    }
+    let mut bytes = writer.finish().unwrap().into_inner();
+    for _ in 0..3 {
+        let mut archive = ProjectArchive::decode(bytes).unwrap();
+        archive.update_model(model(7), metadata()).unwrap();
+        bytes = archive.encode().unwrap();
+        let zip = ZipArchive::new(Cursor::new(&bytes)).unwrap();
+        assert_eq!(
+            zip.raw_zip64_extensible_data_sector(),
+            Some(data.as_slice())
+        );
+        assert_eq!(zip.comment(), comment);
+    }
+}
+
+#[test]
+fn local_only_extra_fields_cannot_disappear_during_a_resave() {
+    let current = ProjectArchive::new(model(7), metadata()).unwrap();
+    let name = "extensions/future.bin";
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    for (entry_name, payload) in [
+        ("manifest.json", current.manifest().to_string()),
+        ("model.json", current.model_json().to_owned()),
+        (name, "preserve this payload".to_owned()),
+    ] {
+        let mut options = zip::write::FullFileOptions::default();
+        if entry_name == name {
+            options
+                .add_extra_field(0xcafe, b"local opaque data", false)
+                .unwrap();
+        }
+        writer.start_file(entry_name, options).unwrap();
+        writer.write_all(payload.as_bytes()).unwrap();
+    }
+    let mut bytes = writer.finish().unwrap().into_inner();
+    let mut zip = ZipArchive::new(Cursor::new(&bytes)).unwrap();
+    let central = zip.by_name(name).unwrap().central_header_start() as usize;
+    drop(zip);
+    let extra_size =
+        u16::from_le_bytes(bytes[central + 30..central + 32].try_into().unwrap()) as usize;
+    assert!(extra_size > 0);
+    // Retain the local extension but remove its central-directory copy.
+    bytes[central + 30..central + 32].copy_from_slice(&0_u16.to_le_bytes());
+    let extra = central + 46 + name.len();
+    bytes.drain(extra..extra + extra_size);
+    let end = bytes.len() - 22;
+    assert_eq!(&bytes[end..end + 4], b"PK\x05\x06");
+    let size = u32::from_le_bytes(bytes[end + 12..end + 16].try_into().unwrap());
+    bytes[end + 12..end + 16].copy_from_slice(&(size - extra_size as u32).to_le_bytes());
+    let archive = ProjectArchive::decode(bytes.clone()).unwrap();
+    assert!(archive
+        .encode()
+        .unwrap_err()
+        .to_string()
+        .contains("cannot preserve opaque ZIP metadata"));
+    assert_eq!(archive.original.as_deref(), Some(bytes.as_slice()));
+}
+
+#[test]
+fn non_utf8_entry_names_leave_the_original_archive_intact() {
+    let current = ProjectArchive::new(model(7), metadata()).unwrap();
+    let name = b"extensions/bad.bin";
+    let mut bytes = fixture(
+        current.manifest(),
+        current.model_json().as_bytes(),
+        &[(std::str::from_utf8(name).unwrap(), b"preserved extension")],
+    );
+    let names: Vec<_> = bytes
+        .windows(name.len())
+        .enumerate()
+        .filter_map(|(index, found)| (found == name).then_some(index))
+        .collect();
+    assert_eq!(
+        names.len(),
+        2,
+        "Local and central names must both be altered"
+    );
+    for index in names {
+        bytes[index + name.len() - 1] = 0xff;
+    }
+    let archive = ProjectArchive::decode(bytes.clone()).unwrap();
+    let failure = archive.encode().unwrap_err().to_string();
+    assert!(failure.contains("project entry name"), "{failure}");
+    assert!(
+        failure.contains("keep the original project archive"),
+        "{failure}"
+    );
+    assert_eq!(archive.original.as_deref(), Some(bytes.as_slice()));
 }

@@ -247,12 +247,13 @@ fn shape(
                 glyph.text
             ));
         }
+        let glyph_id = outline_glyph_id(glyph.id.0)?;
         let path = tree
             .fontdb()
             .with_face_data(glyph.font, |bytes, index| {
                 let face = ttf_parser::Face::parse(bytes, index).ok()?;
                 let mut builder = Outline(PathBuilder::new());
-                face.outline_glyph(ttf_parser::GlyphId(glyph.id.0), &mut builder)?;
+                face.outline_glyph(glyph_id, &mut builder)?;
                 builder.0.finish()
             })
             .flatten()
@@ -272,6 +273,12 @@ fn shape(
         return Err("Drawing DXF could not resolve this label to outline glyphs".into());
     }
     Ok(result)
+}
+
+fn outline_glyph_id(id: u32) -> Result<ttf_parser::GlyphId, String> {
+    u16::try_from(id)
+        .map(ttf_parser::GlyphId)
+        .map_err(|_| format!("Drawing DXF glyph index {id} exceeds the supported OpenType range"))
 }
 
 fn find_text(group: &usvg::Group) -> Option<&usvg::Text> {
@@ -471,6 +478,13 @@ fn flatten(path: &Path, vertices: &mut usize) -> Result<Glyph, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn outline_glyph_indices_reject_overflow_instead_of_truncating() {
+        assert_eq!(outline_glyph_id(u16::MAX.into()).unwrap().0, u16::MAX);
+        assert!(outline_glyph_id(u32::from(u16::MAX) + 1).is_err());
+        assert!(outline_glyph_id(u32::MAX).is_err());
+    }
+
     #[test]
     fn unavailable_font_rejects_without_fabricating_a_glyph() {
         assert!(shape(

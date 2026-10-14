@@ -354,6 +354,9 @@ mod tests {
             )
             .unwrap();
         }
+        // Parallel subprocess tests can inherit this descriptor before exec.
+        // Release the fixture lock even if an inherited handle outlives it.
+        lock.unlock().unwrap();
         drop(lock);
         let identity = format!(
             "FREETYPE_LIBRARY_RELEASE={}\ninput={}:{}\n",

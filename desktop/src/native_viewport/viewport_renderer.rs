@@ -33,6 +33,8 @@ use std::{
     thread::JoinHandle,
 };
 
+#[path = "viewport_renderer/shutdown.rs"]
+mod shutdown;
 #[path = "viewport_renderer/surface_submission.rs"]
 mod surface_submission;
 
@@ -318,6 +320,7 @@ impl Plugin for ViewportRendererPlugin {
         let (requests, jobs) = mpsc::sync_channel(1);
         let (replies, frames) = mpsc::sync_channel(1);
         let stopped = Arc::new(AtomicBool::new(false));
+        shutdown::install(app, stopped.clone());
         let worker_stopped = stopped.clone();
         #[cfg(test)]
         let gate = app.world_mut().remove_resource::<tests::CompilationGate>();
