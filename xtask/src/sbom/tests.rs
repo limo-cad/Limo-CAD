@@ -105,6 +105,16 @@ fn spdx_retains_git_provenance_for_colliding_cargo_identities_and_rejects_tamper
         {"name":"fenris","versionInfo":"0.0.33","SPDXID":"SPDXRef-pkg-cargo-fenris-0.0.33-package-id-registry","downloadLocation":"NOASSERTION","sourceInfo":"registry lockfile","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:cargo/fenris@0.0.33"}]},
         {"name":"fenris","versionInfo":"0.0.33","SPDXID":"SPDXRef-pkg-cargo-fenris-0.0.33-package-id-git","downloadLocation":"NOASSERTION","sourceInfo":"simulation lockfile","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:cargo/fenris@0.0.33"}]}],"relationships":[]});
     let registry = spdx["packages"][0].clone();
+    for missing in [0, 1] {
+        let mut collapsed = spdx.clone();
+        collapsed["packages"]
+            .as_array_mut()
+            .unwrap()
+            .remove(missing);
+        let original = collapsed.clone();
+        assert!(documents::preserve_rust_git_sources(&cdx, &mut collapsed).is_err());
+        assert_eq!(collapsed, original, "reject identity loss before mutation");
+    }
     documents::preserve_rust_git_sources(&cdx, &mut spdx).unwrap();
     assert_eq!(spdx["packages"][0], registry);
     assert_eq!(
@@ -116,6 +126,14 @@ fn spdx_retains_git_provenance_for_colliding_cargo_identities_and_rejects_tamper
         format!("simulation lockfile\nCargo Git source: {source}")
     );
     let preserved = spdx.clone();
+    for missing in [0, 1] {
+        let mut collapsed = preserved.clone();
+        collapsed["packages"]
+            .as_array_mut()
+            .unwrap()
+            .remove(missing);
+        assert!(documents::verify_rust_graph(&cdx, &collapsed).is_err());
+    }
     documents::preserve_rust_git_sources(&cdx, &mut spdx).unwrap();
     assert_eq!(spdx, preserved);
     documents::verify_rust_graph(&cdx, &spdx).unwrap();
