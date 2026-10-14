@@ -31,6 +31,7 @@ use crate::solver::{self, Analysis};
 
 mod creation;
 mod dims;
+mod line_snaps;
 mod mods;
 
 /// Snap distance tolerance in sketch mm (screen-relative scaling is a
@@ -517,6 +518,10 @@ impl SketchSession {
         target: SnapTarget,
     ) -> Option<Constraint> {
         match target {
+            SnapTarget::Curve { entity } => Some(Constraint::Coincident {
+                a: point,
+                b: entity,
+            }),
             SnapTarget::ProjectedEdge { edge, .. } => {
                 Some(Constraint::ReferenceOnEdge { point, edge })
             }
@@ -590,12 +595,16 @@ impl SketchSession {
         &self,
         request: crate::dto::CreationPointPreviewRequest,
     ) -> PreviewDto {
-        let (snapped_to, snap) = self.snap_inner(
-            request.raw,
-            !request.ctrl_held,
-            request.allow_midpoint && !request.ctrl_held,
-            request.exclude_position,
-        );
+        let (snapped_to, snap) = if request.allow_curve {
+            self.snap_line_acquisition(request.raw, request.ctrl_held, request.exclude_position)
+        } else {
+            self.snap_inner(
+                request.raw,
+                !request.ctrl_held,
+                request.allow_midpoint && !request.ctrl_held,
+                request.exclude_position,
+            )
+        };
         PreviewDto {
             snapped_to,
             snap,
@@ -854,13 +863,13 @@ impl SketchSession {
     /// constraint on commit (D4.1 parity). Holding Ctrl suppresses the
     /// midpoint inference (Ctrl disables inferences).
     fn snap_line_flow(&self, raw: Vec2, ctrl_held: bool) -> (Vec2, SnapTarget) {
-        self.snap_inner(raw, !ctrl_held, !ctrl_held, None)
+        self.snap_line_acquisition(raw, ctrl_held, None)
     }
 
     /// Endpoint acquisition must not magnetize a short segment back onto its
     /// own start point. Other coincident candidates retain normal priority.
     fn snap_line_endpoint(&self, raw: Vec2, from: Vec2, ctrl_held: bool) -> (Vec2, SnapTarget) {
-        self.snap_inner(raw, !ctrl_held, !ctrl_held, Some(from))
+        self.snap_line_acquisition(raw, ctrl_held, Some(from))
     }
 
     /// Shared pipeline for `preview_segment` and `add_line`: snap, then
@@ -878,8 +887,25 @@ impl SketchSession {
             SnapTarget::Midpoint { .. }
             | SnapTarget::ReferenceMidpoint { .. }
             | SnapTarget::ProjectedEdge { .. }
-            | SnapTarget::Curve { .. }
             | SnapTarget::Intersection { .. } => {}
+            SnapTarget::Curve { .. } => {
+                let d = snapped - from;
+                let raw = to_raw - from;
+                let tol = INFERENCE_ANGLE_TOL_DEG.to_radians().tan();
+                if !ctrl_held
+                    && d.x.abs() >= MIN_LINE_LENGTH_MM
+                    && d.y.abs() <= MERGE_EPS
+                    && raw.y.abs() <= tol * raw.x.abs()
+                {
+                    inferences.push(Inference::Horizontal);
+                } else if !ctrl_held
+                    && d.y.abs() >= MIN_LINE_LENGTH_MM
+                    && d.x.abs() <= MERGE_EPS
+                    && raw.x.abs() <= tol * raw.y.abs()
+                {
+                    inferences.push(Inference::Vertical);
+                }
+            }
             SnapTarget::Grid | SnapTarget::None => {
                 if !ctrl_held {
                     let d = to_raw - from;
@@ -1045,6 +1071,16 @@ impl SketchSession {
                     inferences,
                     tracking: None,
                 };
+            }
+            if !ctrl_held {
+                if let Some((point, target)) = self.snap_line_ray(from, dir, to_hint) {
+                    return PreviewDto {
+                        snapped_to: point,
+                        snap: target,
+                        inferences,
+                        tracking: None,
+                    };
+                }
             }
             if !ctrl_held {
                 if let Some(preview) = self.tracking_preview(from, None, Some(a), to_hint, tracking)
@@ -2266,22 +2302,6 @@ impl SketchSession {
                 self.recompute();
                 return Err(error);
             }
-        }
-
-        if let SnapTarget::Curve { entity: carrier } = preview.snap {
-            let constraint = Constraint::Coincident {
-                a: end_point_id,
-                b: carrier,
-            };
-            let Some(created_constraint) = self.try_add_independent_auto_constraint(constraint)
-            else {
-                self.sketch.restore(before);
-                self.recompute();
-                return Err(SessionError::InvalidConstraint(
-                    "Cannot attach the line endpoint to the acquired curve".to_string(),
-                ));
-            };
-            created.push(created_constraint);
         }
 
         for (point_id, target) in [(start_point_id, from_target), (end_point_id, preview.snap)] {
