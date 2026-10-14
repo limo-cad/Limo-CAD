@@ -5321,6 +5321,24 @@ impl SketchManager {
         self.active_mut()?.add_dimension(request)
     }
 
+    pub fn add_dimension_target(
+        &mut self,
+        request: crate::dto::DimensionTargetRequest,
+    ) -> Result<ToolResult, SessionError> {
+        self.active_mut()?
+            .add_dimension_with_reference(request.dimension, request.reference_edge)
+    }
+
+    pub fn preview_dimension(
+        &self,
+        request: crate::dto::DimensionPreviewRequest,
+    ) -> Result<crate::dto::DimensionDto, SessionError> {
+        self.active
+            .as_ref()
+            .ok_or(SessionError::NoActiveSketch)?
+            .preview_dimension(request)
+    }
+
     pub fn edit_dimension(
         &mut self,
         request: EditDimensionRequest,

@@ -83,6 +83,9 @@ pub(super) struct Interaction {
     pub relation: Option<Relation>,
     pub modify: Option<ModifyTool>,
     pub dimension: Option<String>,
+    pub dimension_tool: bool,
+    pub dimension_edge: Option<limo_cad_core::EdgeId>,
+    pub dimension_preview: Option<limo_cad_sketch::DimensionDto>,
     pub dimension_position: Option<SketchPoint>,
     pub dimension_id: Option<ConstraintId>,
     pub dimension_reference: bool,
@@ -115,10 +118,14 @@ impl Interaction {
             Some(format!("{}: click a curve (Escape cancels)", tool.label()))
         } else if self.dimension.is_some() {
             Some(
-                if self.dimension_id.is_some() {
+                if self.dimension_tool && self.dimension_position.is_some() {
+                    "Type a value and press Enter, or select another edge; Escape cancels"
+                } else if self.dimension_tool {
+                    "Select geometry to dimension; Escape cancels"
+                } else if self.dimension_id.is_some() {
                     "Edit the dimension, or reposition its label"
                 } else {
-                    "Select geometry, then click to place its dimension"
+                    "Type a value and press Enter; Escape cancels"
                 }
                 .into(),
             )
@@ -365,8 +372,10 @@ pub(super) fn execute(
                 .ok_or("Editor generation exhausted")?;
             editor.interaction.retain_selection();
             editor.interaction.dimension = Some(String::new());
+            editor.interaction.dimension_tool = true;
             editor.interaction.dimension_position = None;
             editor.interaction.dimension_id = None;
+            dimension::refresh(engine, editor)?;
         }
         InteractionCommand::EditDimension(id) => {
             editor.form_serial = editor
@@ -487,12 +496,15 @@ pub(super) fn execute(
             editor.interaction.dimension_position = None;
             editor.interaction.dimension_id = None;
             editor.interaction.dimension_actions = false;
+            editor.interaction.dimension_tool = false;
+            editor.interaction.dimension_edge = None;
+            editor.interaction.dimension_preview = None;
         }
         InteractionCommand::DimensionActions => {
             editor.interaction.dimension_actions = !editor.interaction.dimension_actions;
         }
         InteractionCommand::ApplyDimension => {
-            if editor.interaction.dimension_reference {
+            if editor.interaction.dimension_reference && editor.interaction.dimension_id.is_some() {
                 editor.interaction.retain_selection();
                 return Ok(json!({"closed":true}));
             }
@@ -522,10 +534,15 @@ pub(super) fn execute(
                     },
                 );
             }
-            let request = DimensionRequest {
-                entities: editor.interaction.selection.clone(),
-                text_pos: position,
-                value_text: (!text.trim().is_empty()).then(|| text.clone()),
+            let request = limo_cad_sketch::DimensionTargetRequest {
+                reference_edge: editor.interaction.dimension_edge,
+                dimension: DimensionRequest {
+                    entities: editor.interaction.selection.clone(),
+                    text_pos: position,
+                    value_text: (!editor.interaction.dimension_reference
+                        && !text.trim().is_empty())
+                    .then(|| text.clone()),
+                },
             };
             return mutate(
                 world,
@@ -618,6 +635,19 @@ pub(super) fn pointer(
             .flatten()
         },
     );
+    let boundary = if editor.interaction.dimension_tool && hit.is_none() {
+        dimension::boundary_hit(&sketch.projected_edges, at, |p| {
+            native_viewport::interface_world_point(
+                world,
+                &owner.document_id,
+                sketch.basis.to_3d([p.x, p.y]),
+            )
+            .ok()
+            .flatten()
+        })
+    } else {
+        None
+    };
     let mut end_point = native_viewport::interface_sketch_point(
         world,
         &owner.document_id,
@@ -715,7 +745,11 @@ pub(super) fn pointer(
             },
         );
     }
-    if let Some(id) = hit {
+    let old_selection = editor.interaction.selection.clone();
+    let old_edge = editor.interaction.dimension_edge;
+    if let Some(edge) = boundary {
+        editor.interaction.dimension_edge = Some(edge);
+    } else if let Some(id) = hit {
         let previous = editor.interaction.selection.clone();
         let accumulating = shift
             || editor.interaction.relation.is_some()
@@ -753,8 +787,21 @@ pub(super) fn pointer(
         }
     } else if editor.interaction.dimension.is_some() && !editor.interaction.selection.is_empty() {
         editor.interaction.dimension_position = Some(end_point);
+        if let Some(preview) = &mut editor.interaction.dimension_preview {
+            preview.text_pos = end_point;
+        }
     } else if !shift {
         editor.interaction.selection.clear();
+    }
+    if editor.interaction.dimension_tool
+        && (old_selection != editor.interaction.selection
+            || old_edge != editor.interaction.dimension_edge)
+    {
+        if let Err(error) = dimension::refresh(&services.engine, editor) {
+            editor.interaction.selection = old_selection;
+            editor.interaction.dimension_edge = old_edge;
+            return Err(error);
+        }
     }
     present(world, owner, &editor.interaction)?;
     editor.error.clear();

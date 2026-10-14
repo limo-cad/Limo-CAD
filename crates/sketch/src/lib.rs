@@ -83,6 +83,7 @@ pub use dto::{
     TrackingAxis, TrackingGuideDto, TrimPreviewDto, TrimRequest, UndoResult, ViewCameraDto,
     ViewPartOffsetDto, ViewportSnapContext,
 };
+pub use dto::{DimensionPreviewRequest, DimensionTargetRequest};
 pub use edge_selection::{
     candidates as edge_chain_candidates, resolve as resolve_edge_chain, ChainMode, ChainSource,
     EdgeChainRequest,

@@ -389,6 +389,27 @@ pub struct ProjectedEdgeDto {
 }
 
 impl ProjectedEdgeDto {
+    /// Straight finite support only: sampled arcs and curved boundaries must
+    /// not silently become a chord for a driving line dimension.
+    pub fn straight_line(&self) -> Option<(Vec2, Vec2)> {
+        if self.circle.is_some() {
+            return None;
+        }
+        let a = *self.points.first()?;
+        let b = *self.points.last()?;
+        let d = b - a;
+        let length = d.length();
+        if length < 1e-9 {
+            return None;
+        }
+        self.points
+            .iter()
+            .all(|p| {
+                let v = *p - a;
+                (d.x * v.y - d.y * v.x).abs() / length <= 1e-7
+            })
+            .then_some((a, b))
+    }
     /// Include authored contact points in the discovery tessellation. A true
     /// point on a circular carrier generally lies between its sampled chords;
     /// without inserting it, a correctly constrained endpoint can look open.
@@ -533,6 +554,9 @@ pub struct DimensionDto {
     pub kind: String,
     pub entities: Vec<EntityId>,
     pub param_id: Option<ParamId>,
+    /// Stable support geometry is separate from authored entity ids.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference_edge: Option<EdgeId>,
     pub param_name: Option<String>,
     pub param_expression: Option<String>,
     /// Driving parameter value (including its sign), or reference measurement.
@@ -894,6 +918,22 @@ pub struct DimensionRequest {
     /// current geometry (default behavior).
     #[serde(default)]
     pub value_text: Option<String>,
+}
+
+/// Extended host request; existing callers of `DimensionRequest` retain their API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DimensionTargetRequest {
+    #[serde(flatten)]
+    pub dimension: DimensionRequest,
+    #[serde(default)]
+    pub reference_edge: Option<EdgeId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DimensionPreviewRequest {
+    pub entities: Vec<EntityId>,
+    #[serde(default)]
+    pub reference_edge: Option<EdgeId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

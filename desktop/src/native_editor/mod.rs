@@ -20,6 +20,7 @@ pub(crate) mod selection;
 mod sketch;
 mod snapping;
 pub(crate) use forms::FormKind;
+mod dimension;
 mod interaction;
 pub(crate) mod panel;
 pub(crate) use interaction::{AnnotationTarget, InteractionCommand, ModifyTool};
@@ -632,6 +633,9 @@ fn queue_mutation(
                             editor.interaction.dimension_position = None;
                             editor.interaction.dimension_id = None;
                             editor.interaction.dimension_reference = false;
+                            editor.interaction.dimension_tool = false;
+                            editor.interaction.dimension_edge = None;
+                            editor.interaction.dimension_preview = None;
                             editor.interaction.reposition_dimension = None;
                             editor.interaction.constraint = None;
                             editor.interaction.annotation_menu = None;

@@ -268,6 +268,33 @@ fn leaders(dim: &DimensionDto, entities: &[EntityDto], arrow: f64) -> Vec<[Point
     out
 }
 
+fn dimension_leaders(dim: &DimensionDto, sketch: &SketchDto, arrow: f64) -> Vec<[Point; 2]> {
+    let Some(edge) = dim.reference_edge else {
+        return leaders(dim, &sketch.entities, arrow);
+    };
+    let Some(reference) = sketch.projected_edges.iter().find(|e| e.edge_id == edge) else {
+        return vec![];
+    };
+    let Some((start, end)) = reference.straight_line() else {
+        return vec![];
+    };
+    // This presentation operand is never inserted into the editable sketch.
+    let id = limo_cad_sketch::EntityId(reference.id);
+    let mut entities = sketch.entities.clone();
+    entities.push(EntityDto::Line {
+        id,
+        start_id: id,
+        end_id: id,
+        start,
+        end,
+        consumed: false,
+        fully_defined: true,
+    });
+    let mut presentation = dim.clone();
+    presentation.entities.push(id);
+    leaders(&presentation, &entities, arrow)
+}
+
 pub(super) fn synchronize(
     world: &mut World,
     camera: Entity,
@@ -306,6 +333,13 @@ pub(super) fn synchronize(
             .map(|id| id.0)
             .unwrap_or(u64::MAX);
         key.extend([editing as u32, (editing >> 32) as u32]);
+        if let Some(preview) = &editor.interaction.dimension_preview {
+            key.extend([editor.form_serial as u32, (editor.form_serial >> 32) as u32]);
+            for position in [preview.text_pos.x, preview.text_pos.y] {
+                let bits = position.to_bits();
+                key.extend([bits as u32, (bits >> 32) as u32]);
+            }
+        }
         key.extend([
             visibility.hide_dimensions as u32,
             visibility.hide_constraints as u32,
@@ -334,10 +368,14 @@ pub(super) fn synchronize(
             // Dimensions keep their preferred position first. Constraint
             // badges then share the same rotation-aware collision layout.
             let mut layout = layout::Layout::new(size);
-            for dim in sketch
-                .dimensions
-                .iter()
-                .filter(|_| !visibility.hide_dimensions)
+            for dim in
+                sketch
+                    .dimensions
+                    .iter()
+                    .filter(|_| !visibility.hide_dimensions)
+                    .chain(editor.interaction.dimension_preview.iter().filter(|d| {
+                        d.constraint_id.0 == 0 && editor.interaction.dimension.is_some()
+                    }))
             {
                 let world_point = |p: Point| sketch.basis.to_3d([p.x, p.y]);
                 let Some(screen) = native_viewport::interface_world_point(
@@ -361,7 +399,15 @@ pub(super) fn synchronize(
                         unit = unit.max((p[0] - screen[0]).hypot(p[1] - screen[1]));
                     }
                 }
-                let mut lines = leaders(dim, &sketch.entities, 6. / f64::from(unit));
+                let mut lines = dimension_leaders(dim, sketch, 6. / f64::from(unit));
+                if dim.constraint_id.0 == 0 {
+                    for pair in lines {
+                        for point in pair {
+                            segments.extend(world_point(point).map(|v| v as f32));
+                        }
+                    }
+                    continue;
+                }
                 let angle = if sketch.dimension_style == limo_cad_core::DimensionStyle::Aligned
                     && dim.kind != "angle"
                 {

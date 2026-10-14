@@ -158,6 +158,18 @@ pub enum Constraint {
         to: Option<EntityId>,
         value: f64,
     },
+    /// Offset from an authored point/line to an immutable straight support edge.
+    ReferenceDistance {
+        entity: EntityId,
+        edge: EdgeId,
+        value: f64,
+    },
+    /// Angle between an authored line and a stable straight support edge.
+    ReferenceAngle {
+        entity: EntityId,
+        edge: EdgeId,
+        value: f64,
+    },
     Radius {
         entity: EntityId,
         value: f64,
@@ -193,6 +205,22 @@ impl Constraint {
         }
 
         match (*self, *other) {
+            (
+                Constraint::ReferenceDistance { entity, edge, .. },
+                Constraint::ReferenceDistance {
+                    entity: other,
+                    edge: other_edge,
+                    ..
+                },
+            )
+            | (
+                Constraint::ReferenceAngle { entity, edge, .. },
+                Constraint::ReferenceAngle {
+                    entity: other,
+                    edge: other_edge,
+                    ..
+                },
+            ) => entity == other && edge == other_edge,
             (Constraint::Horizontal { entity: a }, Constraint::Horizontal { entity: b })
             | (Constraint::Vertical { entity: a }, Constraint::Vertical { entity: b })
             | (
@@ -329,6 +357,8 @@ impl Constraint {
     pub fn set_dimension_value(&mut self, target: f64) {
         match self {
             Constraint::Distance { value, .. }
+            | Constraint::ReferenceDistance { value, .. }
+            | Constraint::ReferenceAngle { value, .. }
             | Constraint::Radius { value, .. }
             | Constraint::Diameter { value, .. }
             | Constraint::Angle { value, .. }
@@ -364,6 +394,8 @@ impl Constraint {
             Constraint::ArcAngle { .. } => "angle",
             Constraint::EqualDistance { .. } => "equal_distance",
             Constraint::Distance { .. } => "distance",
+            Constraint::ReferenceDistance { .. } => "distance",
+            Constraint::ReferenceAngle { .. } => "angle",
             Constraint::Radius { .. } => "radius",
             Constraint::Diameter { .. } => "diameter",
             Constraint::Angle { .. } => "angle",
@@ -373,6 +405,8 @@ impl Constraint {
     pub fn kind(&self) -> ConstraintKind {
         match self {
             Constraint::Distance { .. }
+            | Constraint::ReferenceDistance { .. }
+            | Constraint::ReferenceAngle { .. }
             | Constraint::Radius { .. }
             | Constraint::Diameter { .. }
             | Constraint::Angle { .. }
@@ -390,6 +424,8 @@ impl Constraint {
             | Constraint::Fix { entity }
             | Constraint::Radius { entity, .. }
             | Constraint::Diameter { entity, .. } => vec![entity],
+            Constraint::ReferenceDistance { entity, .. }
+            | Constraint::ReferenceAngle { entity, .. } => vec![entity],
             Constraint::ReferenceMidpoint { point, .. } => vec![point],
             Constraint::ReferenceOnEdge { point, .. } => vec![point],
             Constraint::CenterCoincident { point, curve } => vec![point, curve],
