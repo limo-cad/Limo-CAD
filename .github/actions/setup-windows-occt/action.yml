@@ -24,8 +24,9 @@ runs:
   using: composite
   steps:
     - name: Check out pinned vcpkg
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
+        persist-credentials: false
         repository: microsoft/vcpkg
         ref: 716b42043743cdceabed9c8e2e6cf80ddae1e0c1
         path: .vcpkg
@@ -49,9 +50,16 @@ runs:
         $root = Join-Path $env:GITHUB_WORKSPACE "vcpkg_installed\$env:VCPKG_TRIPLET"
         "root=$root" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
+    - name: Reuse repository tooling dependencies for SDK qualification
+      uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      with:
+        shared-key: occt-qualification-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}
+        workspaces: . -> target
+        cache-workspace-crates: false
+
     - name: Restore installed OpenCASCADE tree
       id: installed
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ github.workspace }}\vcpkg_installed
         key: vcpkg-installed-v2-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-716b42043743cdceabed9c8e2e6cf80ddae1e0c1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'native/occt-overlay/**') }}
@@ -59,7 +67,7 @@ runs:
     - name: Restore vcpkg binary cache
       if: steps.installed.outputs.cache-hit != 'true'
       id: binary
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ github.workspace }}\.cache\vcpkg\archives
         key: vcpkg-binary-v3-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-716b42043743cdceabed9c8e2e6cf80ddae1e0c1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'native/occt-overlay/**') }}
@@ -95,14 +103,14 @@ runs:
 
     - name: Save vcpkg binary cache
       if: steps.installed.outputs.cache-hit != 'true' && steps.binary.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ github.workspace }}\.cache\vcpkg\archives
         key: vcpkg-binary-v3-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-716b42043743cdceabed9c8e2e6cf80ddae1e0c1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'native/occt-overlay/**') }}
 
     - name: Save installed OpenCASCADE tree
       if: steps.installed.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ github.workspace }}\vcpkg_installed
         key: vcpkg-installed-v2-${{ inputs.runner-cache-key }}-${{ steps.msvc.outputs.toolset }}-716b42043743cdceabed9c8e2e6cf80ddae1e0c1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'native/occt-overlay/**') }}

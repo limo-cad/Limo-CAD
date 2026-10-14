@@ -33,7 +33,7 @@ runs:
       run: cargo xtask build-occt --prefix "$RUNNER_TEMP/limo-cad-occt-sdk" --github-key
     - name: Restore compatible native SDK and build objects
       id: cache
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ${{ runner.temp }}/limo-cad-occt-sdk
@@ -48,7 +48,7 @@ runs:
       run: cargo xtask build-occt --prefix "$RUNNER_TEMP/limo-cad-occt-sdk"
     - name: Retain verified SDK before application checks
       if: steps.cache.outputs.cache-hit != 'true' && steps.build.outcome == 'success'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ${{ runner.temp }}/limo-cad-occt-sdk

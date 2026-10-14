@@ -30,10 +30,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  knowledge_preflight:
+    uses: ./.github/workflows/knowledge-preflight.yml
+
   version_preflight:
     uses: ./.github/workflows/version-guard.yml
 
   classify_changes:
+    needs: knowledge_preflight
     name: Classify desktop build inputs
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -42,9 +46,11 @@ jobs:
       macos_should_build: ${{ steps.classify.outputs.macos_should_build }}
       linux_should_build: ${{ steps.classify.outputs.linux_should_build }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # Reuse repository-tooling's existing key/job prefix and automatic hashes.
           shared-key: repository-tools-repository-tooling
@@ -88,7 +94,9 @@ jobs:
 
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up repository Rust toolchain
         uses: ./.github/actions/setup-rust
@@ -206,7 +214,7 @@ jobs:
 
       - name: Upload Windows viewport diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limo-CAD-windows-${{ matrix.architecture }}-viewport-diagnostics
           path: ${{ runner.temp }}\limo-cad-viewport-diagnostics\${{ matrix.architecture }}
@@ -221,7 +229,7 @@ jobs:
           target: ${{ matrix.rust_target }}
 
       - name: Upload portable release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limo-CAD-${{ steps.app_version.outputs.version }}-windows-${{ matrix.architecture }}
           path: |
@@ -250,7 +258,9 @@ jobs:
 
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Read the application version
         id: app_version
@@ -269,7 +279,7 @@ jobs:
         uses: ./.github/actions/setup-unix-occt
 
       - name: Restore Rust build cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: |
             . -> target
@@ -338,7 +348,7 @@ jobs:
 
       - name: Upload Linux viewport diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limo-CAD-linux-viewport-diagnostics
           path: ${{ runner.temp }}/limo-cad-linux-viewport-diagnostics
@@ -353,7 +363,7 @@ jobs:
           target: x86_64-unknown-linux-gnu
 
       - name: Upload Ubuntu release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limo-CAD-${{ steps.app_version.outputs.version }}-ubuntu-26.04-x64
           path: |
@@ -429,7 +439,9 @@ jobs:
             zstd
 
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Read the application version
         id: app_version
@@ -440,12 +452,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-            | sh -s -- -y --profile minimal --default-toolchain none
+          installer="$RUNNER_TEMP/rustup-init"
+          curl --proto '=https' --tlsv1.2 -fsSL --retry 3 \
+            https://static.rust-lang.org/rustup/archive/1.29.0/x86_64-unknown-linux-gnu/rustup-init \
+            -o "$installer"
+          echo "4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10  $installer" | sha256sum -c -
+          chmod +x "$installer"
+          "$installer" -y --profile minimal --default-toolchain none
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Restore Rust build cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: |
             . -> target
@@ -461,7 +478,7 @@ jobs:
 
       - name: Restore compatible OCCT SDK and build objects
         id: occt
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             /opt/opencascade
@@ -477,7 +494,7 @@ jobs:
 
       - name: Save verified OCCT before application checks
         if: steps.occt.outputs.cache-hit != 'true' && steps.occt_build.outcome == 'success'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             /opt/opencascade
@@ -542,7 +559,7 @@ jobs:
 
       - name: Upload AppImage diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limo-CAD-linux-appimage-diagnostics
           path: ${{ runner.temp }}/limo-cad-linux-appimage-diagnostics
@@ -557,7 +574,7 @@ jobs:
           target: x86_64-unknown-linux-gnu
 
       - name: Upload AppImage release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limo-CAD-${{ steps.app_version.outputs.version }}-linux-x64-appimage
           path: |
@@ -578,7 +595,9 @@ jobs:
 
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Read the application version
         id: app_version
@@ -617,7 +636,7 @@ jobs:
             zenity
 
       - name: Download the AppImage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: Limo-CAD-${{ steps.app_version.outputs.version }}-linux-x64-appimage
           path: ${{ runner.temp }}/appimage
@@ -641,7 +660,7 @@ jobs:
 
       - name: Upload AppImage diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limo-CAD-linux-appimage-26.04-diagnostics
           path: ${{ runner.temp }}/limo-cad-linux-appimage-26.04-diagnostics
@@ -667,7 +686,9 @@ jobs:
 
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Verify Apple silicon runner
         shell: bash
@@ -870,7 +891,7 @@ jobs:
 
       - name: Upload macOS MCP verification
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limo-CAD-macos-mcp-diagnostics
           path: |
@@ -904,7 +925,7 @@ jobs:
           target: aarch64-apple-darwin
 
       - name: Upload Apple silicon release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limo-CAD-${{ steps.app_version.outputs.version }}-macos-arm64
           path: |
@@ -932,13 +953,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
       - name: Check all locked Rust dependencies
         uses: ./.github/actions/audit-rust
       - uses: ./.github/actions/setup-grype
       - name: Download this run's packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: Limo-CAD-*
           path: dist
@@ -965,7 +988,7 @@ jobs:
           exit "$failed"
       - name: Retain all release findings and maintenance warnings
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-security-reports-${{ github.sha }}
           path: security-reports
@@ -989,7 +1012,9 @@ jobs:
       attestations: read
     steps:
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Rust
         uses: ./.github/actions/setup-rust
@@ -998,7 +1023,7 @@ jobs:
         run: cargo xtask check-release-tag "$GITHUB_REF_NAME" "$GITHUB_SHA"
 
       - name: Download this run's packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: Limo-CAD-*
           path: dist

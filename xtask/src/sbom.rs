@@ -19,7 +19,12 @@ use std::{
 pub(crate) const SYFT_VERSION: &str = "1.54.1";
 pub(crate) const AUDITABLE_VERSION: &str = "0.7.7";
 const REPOSITORY: &str = "https://github.com/limo-cad/Limo-CAD";
-const LOCKFILES: &[&str] = &["Cargo.lock", "desktop/Cargo.lock", "mcp-server/Cargo.lock"];
+const LOCKFILES: &[&str] = &[
+    "Cargo.lock",
+    "desktop/Cargo.lock",
+    "mcp-server/Cargo.lock",
+    "experiments/rust-simulation/Cargo.lock",
+];
 
 #[derive(Debug, Default)]
 struct Options {
@@ -165,6 +170,7 @@ fn input_hashes(root: &Path) -> Result<BTreeMap<String, String>> {
         "Cargo.lock",
         "desktop/Cargo.lock",
         "mcp-server/Cargo.lock",
+        "experiments/rust-simulation/Cargo.lock",
         "Cargo.toml",
         "**/Cargo.toml",
         "rust-toolchain.toml",
