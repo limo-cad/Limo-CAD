@@ -16,6 +16,9 @@ use crate::geometry::Vec2;
 use crate::params::{ParamId, ParamKind};
 use crate::session::{SessionError, SketchSession};
 use crate::sketch::DimensionMode;
+use limo_cad_core::EdgeId;
+
+mod preview;
 
 #[cfg(test)]
 #[path = "dimension_edit_tests.rs"]
@@ -188,14 +191,59 @@ impl SketchSession {
         Ok(cid)
     }
 
-    /// Sketch Dimension tool creation and entity-picking rules.
-    pub fn add_dimension(&mut self, request: DimensionRequest) -> Result<ToolResult, SessionError> {
-        let ids = request.entities.clone();
+    fn dimension_spec(
+        &self,
+        ids: &[EntityId],
+        reference_edge: Option<EdgeId>,
+    ) -> Result<(Constraint, f64, ParamKind), SessionError> {
         let kinds: Vec<&str> = ids
             .iter()
             .map(|id| self.kind_of(*id).unwrap_or("missing"))
             .collect();
-        let text_pos = request.text_pos;
+        if let Some(edge) = reference_edge {
+            if ids.len() != 1 || !matches!(kinds[0], "line" | "point") {
+                return Err(SessionError::InvalidConstraint(
+                    "Select one sketch line or point and one support edge".into(),
+                ));
+            }
+            let (a, b) = self
+                .sketch
+                .reference_edge(edge)
+                .and_then(|e| e.straight_line())
+                .ok_or_else(|| {
+                    SessionError::InvalidConstraint("Select a straight support edge".into())
+                })?;
+            let direction = b - a;
+            if let Some(line) = self.line_dir(ids[0]) {
+                let cross = direction.x * line.y - direction.y * line.x;
+                if cross.abs() > 1e-9 * direction.length() * line.length() {
+                    let angle = angle_between(direction, line);
+                    return Ok((
+                        Constraint::ReferenceAngle {
+                            entity: ids[0],
+                            edge,
+                            value: angle,
+                        },
+                        angle,
+                        ParamKind::Angle,
+                    ));
+                }
+            }
+            let point = self
+                .sketch
+                .point_position(ids[0])
+                .unwrap_or_else(|| self.line_mid(ids[0]));
+            let distance = direction.perp().dot(point - a).abs() / direction.length();
+            return Ok((
+                Constraint::ReferenceDistance {
+                    entity: ids[0],
+                    edge,
+                    value: distance,
+                },
+                distance,
+                ParamKind::Length,
+            ));
+        }
 
         let (constraint, measured, kind) = match kinds.as_slice() {
             ["line"] => {
@@ -258,7 +306,8 @@ impl SketchSession {
                     let qb = self.point_of_line_start(ids[1]).unwrap();
                     let d = self
                         .signed_dist_to_line(qb, ids[0])
-                        .ok_or(SessionError::DegenerateSegment)?;
+                        .ok_or(SessionError::DegenerateSegment)?
+                        .abs();
                     (
                         Constraint::Distance {
                             from: ids[0],
@@ -313,6 +362,23 @@ impl SketchSession {
                     .to_string(),
             )),
         };
+        Ok((constraint, measured, kind))
+    }
+
+    /// Sketch Dimension tool creation and entity-picking rules.
+    pub fn add_dimension(&mut self, request: DimensionRequest) -> Result<ToolResult, SessionError> {
+        self.add_dimension_with_reference(request, None)
+    }
+
+    pub fn add_dimension_with_reference(
+        &mut self,
+        request: DimensionRequest,
+        reference_edge: Option<EdgeId>,
+    ) -> Result<ToolResult, SessionError> {
+        let ids = request.entities.clone();
+        let text_pos = request.text_pos;
+        let (constraint, measured, kind) = self.dimension_spec(&ids, reference_edge)?;
+        let side = self.reference_dimension_side(constraint);
 
         if self
             .sketch
@@ -339,6 +405,9 @@ impl SketchSession {
             reference.set_dimension_value(measured);
             let cid = self.sketch.add_constraint(reference);
             self.sketch.bind_reference_dimension(cid, text_pos);
+            if let Some(side) = side {
+                self.sketch.set_offset_side(cid, side);
+            }
             self.sketch.sync_dimension_constraint_values();
             self.push_command(before);
             return Ok(ToolResult {
@@ -349,7 +418,7 @@ impl SketchSession {
 
         let before = self.sketch.snapshot();
         let param = self.param_from_text(kind, request.value_text.as_deref(), measured)?;
-        let cid = match self.add_constraint_bound(constraint, param, text_pos, false) {
+        let cid = match self.add_constraint_bound_offset(constraint, param, text_pos, false, side) {
             Ok(cid) => cid,
             Err(error) => {
                 self.sketch.restore(before);
@@ -885,6 +954,11 @@ impl SketchSession {
                     mode,
                     kind: kind.to_string(),
                     entities: c.referenced_entities(),
+                    reference_edge: match c {
+                        Constraint::ReferenceDistance { edge, .. }
+                        | Constraint::ReferenceAngle { edge, .. } => Some(*edge),
+                        _ => None,
+                    },
                     param_id: pid,
                     param_name,
                     param_expression,

@@ -1027,6 +1027,59 @@ fn build_equations(
                     push_lin(&mut eqs, cid, vec![], 1.0);
                 }
             }
+            Constraint::ReferenceDistance {
+                entity,
+                edge,
+                value,
+            } => {
+                if let Some((a, b)) = sketch.reference_edge(edge).and_then(|e| e.straight_line()) {
+                    let d = b - a;
+                    let normal = d.perp() * (1. / d.length());
+                    let target =
+                        sketch.dim_value(&cid, value) * sketch.offset_side(cid).unwrap_or(1.);
+                    let points = if let Some(d) = map.line_diff(sketch, entity) {
+                        vec![(d.x1, d.y1), (d.x2, d.y2)]
+                    } else {
+                        map.pt(sketch, entity).into_iter().collect()
+                    };
+                    if points.is_empty() {
+                        push_lin(&mut eqs, cid, vec![], 1.);
+                    }
+                    for p in points {
+                        push_lin(
+                            &mut eqs,
+                            cid,
+                            vec![(p.0, normal.x), (p.1, normal.y)],
+                            -a.dot(normal) - target,
+                        );
+                    }
+                } else {
+                    push_lin(&mut eqs, cid, vec![], 1.);
+                }
+            }
+            Constraint::ReferenceAngle {
+                entity,
+                edge,
+                value,
+            } => {
+                if let (Some(d), Some((a, b))) = (
+                    map.line_diff(sketch, entity),
+                    sketch.reference_edge(edge).and_then(|e| e.straight_line()),
+                ) {
+                    let direction = b - a;
+                    eqs.push((
+                        Some(cid),
+                        Eq::AngleAxis {
+                            a: d,
+                            target: direction.y.atan2(direction.x)
+                                + sketch.dim_value(&cid, value).to_radians()
+                                    * sketch.offset_side(cid).unwrap_or(1.),
+                        },
+                    ));
+                } else {
+                    push_lin(&mut eqs, cid, vec![], 1.);
+                }
+            }
             Constraint::SpanMidpoint { point, start, end } => {
                 if let (Some(p), Some(a), Some(b)) = (
                     map.pt(sketch, point),

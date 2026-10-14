@@ -422,7 +422,7 @@ pub(crate) fn guard_document_close(world: &World, owner: &DocumentContext) -> Re
     Ok(())
 }
 
-fn apply_requested_focus(world: &mut World) {
+pub(crate) fn apply_requested_focus(world: &mut World) {
     let Some(request) = world.resource_mut::<RequestedFocus>().0.take() else {
         return;
     };
@@ -1349,7 +1349,7 @@ fn logical_edit_for_platform(
     }
 }
 
-fn synchronize_fields(
+pub(crate) fn synchronize_fields(
     handle: Res<NativeInterfaceHandle>,
     mut focus: ResMut<bevy::input_focus::InputFocus>,
     mut fields: EditableFieldQuery,
