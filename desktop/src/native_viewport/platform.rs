@@ -653,6 +653,11 @@ struct CamCompletedPathGizmos;
 #[derive(Default, Reflect, GizmoConfigGroup)]
 struct CadSketchGizmos;
 
+/// Dimension leaders share the depth-independent pass used by their labels.
+/// Their measured points remain on the sketch plane, including support faces.
+#[derive(Default, Reflect, GizmoConfigGroup)]
+struct CadDimensionGizmos;
+
 #[derive(Default, Reflect, GizmoConfigGroup)]
 struct CadPickFeedbackGizmos;
 
@@ -702,6 +707,7 @@ fn init_cad_state(app: &mut bevy::app::App) {
         .init_gizmo_group::<CadModelEdgeGizmos>()
         .init_gizmo_group::<CamCompletedPathGizmos>()
         .init_gizmo_group::<CadSketchGizmos>()
+        .init_gizmo_group::<CadDimensionGizmos>()
         .init_gizmo_group::<CadPickFeedbackHaloGizmos>()
         .init_gizmo_group::<CadPickFeedbackGizmos>()
         .init_gizmo_group::<CadDirectPickFeedbackGizmos>()
@@ -810,6 +816,10 @@ fn setup_scene(
     let (sketch_config, _) = gizmo_config.config_mut::<CadSketchGizmos>();
 
     sketch_config.depth_bias = SKETCH_DEPTH_BIAS;
+    gizmo_config
+        .config_mut::<CadDimensionGizmos>()
+        .0
+        .render_layers = RenderLayers::layer(1);
     let (pick_feedback_config, _) = gizmo_config.config_mut::<CadPickFeedbackGizmos>();
     pick_feedback_config.depth_bias = PICK_FEEDBACK_DEPTH_BIAS;
     let (direct_pick_feedback_config, _) = gizmo_config.config_mut::<CadDirectPickFeedbackGizmos>();
@@ -1256,6 +1266,7 @@ fn configure_viewport_line_widths(
         .line
         .width = HIGHLIGHT_LINE_WIDTH * scale;
     gizmo_config.config_mut::<CadSketchGizmos>().0.line.width = SKETCH_LINE_WIDTH * scale;
+    gizmo_config.config_mut::<CadDimensionGizmos>().0.line.width = 1.5 * scale;
     gizmo_config
         .config_mut::<CadPickFeedbackGizmos>()
         .0
@@ -2776,6 +2787,7 @@ fn face_mesh(body: &BodyDto, face: &FaceDto) -> Option<Mesh> {
 struct CadGizmos<'w, 's> {
     model_lines: (Gizmos<'w, 's>, Gizmos<'w, 's, CadModelEdgeGizmos>),
     sketch_gizmos: Gizmos<'w, 's, CadSketchGizmos>,
+    dimension_gizmos: Gizmos<'w, 's, CadDimensionGizmos>,
     sketch_point_outlines: Gizmos<'w, 's, CadSketchPointOutlineGizmos>,
     sketch_points: Gizmos<'w, 's, CadSketchPointGizmos>,
     cam_paths: (
@@ -2792,6 +2804,7 @@ fn draw_cad_gizmos(
     CadGizmos {
         model_lines,
         mut sketch_gizmos,
+        mut dimension_gizmos,
         mut sketch_point_outlines,
         mut sketch_points,
         cam_paths,
@@ -2823,6 +2836,7 @@ fn draw_cad_gizmos(
     // Hiding the grid can empty this group. Keep its uploaded asset alive so
     // restoring it does not need another scene update to prepare a new asset.
     keep_gizmo_asset_resident(&mut gizmos);
+    keep_gizmo_asset_resident(&mut dimension_gizmos);
     keep_gizmo_asset_resident(&mut highlights);
     keep_gizmo_asset_resident(&mut model_edges);
     keep_gizmo_asset_resident(&mut cam_completed);
@@ -3538,6 +3552,8 @@ fn draw_cad_gizmos(
                         );
                         if part.completed {
                             cam_completed.line(part.start, part.end, color);
+                        } else if layer.color_role == super::ViewportColorRole::SketchDimension {
+                            dimension_gizmos.line(part.start, part.end, color);
                         } else if layer.width >= 2.0 {
                             highlights.line(part.start, part.end, color);
                         } else {
@@ -6071,6 +6087,103 @@ mod tests {
         }
     }
 
+    #[test]
+    fn sketch_dimension_strokes_use_the_overlay_and_retire_without_hiding_model_lines() {
+        use crate::app_preferences::{palette::viewport_palette, ResolvedTheme};
+        use bevy_gizmos::{config::DefaultGizmoConfigGroup, GizmoAsset, GizmoHandles};
+
+        let mut app = interface_scene_fixture();
+        app.init_asset::<GizmoAsset>()
+            .init_gizmo_group::<DefaultGizmoConfigGroup>();
+        app.world_mut()
+            .resource_mut::<PresentationResource>()
+            .0
+            .hide_ground_grid = true;
+        let points = vec![2.5, 2.5, 10., 2.5, 4., 10., 2.5, 4., 10., 7.5, 4., 10.];
+        let dimension = super::super::ViewportLineLayer {
+            color: [1.; 4],
+            color_role: super::super::ViewportColorRole::SketchDimension,
+            segments: points.into(),
+            width: 1.5,
+            ..default()
+        };
+        apply_preview_state(
+            app.world_mut(),
+            Arc::new(ViewportPreview {
+                lines: vec![super::super::ViewportLineLayer {
+                    color: [1.; 4],
+                    segments: vec![0., 0., 10., 10., 0., 10.].into(),
+                    width: 1.5,
+                    ..default()
+                }],
+                ..default()
+            }),
+        );
+        let buffer = |world: &World, group: std::any::TypeId| {
+            let handle = world.resource::<GizmoHandles>().handles()[&group]
+                .as_ref()
+                .unwrap();
+            let asset = world.resource::<Assets<GizmoAsset>>().get(handle).unwrap();
+            (
+                handle.id(),
+                asset.buffer().list_positions.clone(),
+                asset.buffer().list_colors.clone(),
+            )
+        };
+        let mut retained = None;
+        for (theme, visible) in [
+            (ResolvedTheme::Light, true),
+            (ResolvedTheme::Dark, true),
+            (ResolvedTheme::Dark, false),
+            (ResolvedTheme::Light, true),
+        ] {
+            let palette = *viewport_palette(theme);
+            apply_interface_palette(app.world_mut(), palette);
+            apply_interface_sketch_lines(
+                app.world_mut(),
+                "",
+                if visible {
+                    vec![dimension.clone()]
+                } else {
+                    vec![]
+                },
+            )
+            .unwrap();
+            app.world_mut().run_system_cached(draw_cad_gizmos).unwrap();
+            app.world_mut().run_schedule(bevy::app::Last);
+            let (asset, positions, colors) =
+                buffer(app.world(), std::any::TypeId::of::<CadDimensionGizmos>());
+            assert_eq!(
+                *retained.get_or_insert(asset),
+                asset,
+                "Toggling dimensions retains the uploaded asset"
+            );
+            assert_eq!(positions.len(), if visible { 6 } else { 2 });
+            if visible {
+                assert_eq!(
+                    positions[2..],
+                    [
+                        Vec3::new(2.5, 2.5, 10.),
+                        Vec3::new(2.5, 4., 10.),
+                        Vec3::new(2.5, 4., 10.),
+                        Vec3::new(7.5, 4., 10.)
+                    ]
+                );
+                let expected = rgb(palette.dimension).to_linear();
+                assert!(colors[2..].iter().all(|color| *color == expected));
+            }
+            let (_, positions, _) = buffer(
+                app.world(),
+                std::any::TypeId::of::<DefaultGizmoConfigGroup>(),
+            );
+            assert_eq!(
+                positions.len(),
+                4,
+                "Ordinary preview lines stay in the model pass"
+            );
+        }
+    }
+
     fn native_cache_value(response: String) -> serde_json::Value {
         let response: serde_json::Value = serde_json::from_str(&response).unwrap();
         assert_eq!(response["ok"], true, "{response}");
@@ -6433,6 +6546,7 @@ mod tests {
         gizmo_config.insert(GizmoConfig::default(), CadModelEdgeGizmos);
         gizmo_config.insert(GizmoConfig::default(), CamCompletedPathGizmos);
         gizmo_config.insert(GizmoConfig::default(), CadSketchGizmos);
+        gizmo_config.insert(GizmoConfig::default(), CadDimensionGizmos);
         gizmo_config.insert(GizmoConfig::default(), CadPickFeedbackGizmos);
         gizmo_config.insert(GizmoConfig::default(), CadDirectPickFeedbackGizmos);
         gizmo_config.insert(GizmoConfig::default(), CadProfileBorderGizmos);
@@ -6454,6 +6568,12 @@ mod tests {
             0.0,
             "model edges use only bounded world-space lift, never relative depth bias"
         );
+        let dimensions = &configs.config::<CadDimensionGizmos>().0;
+        assert_eq!(dimensions.render_layers, RenderLayers::layer(1));
+        assert!(!dimensions
+            .render_layers
+            .intersects(&RenderLayers::default()));
+        assert_eq!(dimensions.depth_bias, 0.0);
         let completed = configs.config::<CamCompletedPathGizmos>().0.depth_bias;
         assert!(
             -1.0 < completed && completed < 0.0,
