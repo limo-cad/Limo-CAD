@@ -5,11 +5,21 @@ updates:
       - /
       - /desktop
       - /mcp-server
+      - /experiments/rust-simulation
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      rust-workspaces:
+        patterns: ["*"]
+      rust-security:
+        applies-to: security-updates
+        patterns: ["*"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      workflow-actions:
+        patterns: ["*"]

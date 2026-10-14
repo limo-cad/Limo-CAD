@@ -32,14 +32,14 @@ runs:
     - name: Sign the CycloneDX inventory for the archive
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
       id: sbom_attestation
-      uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
+      uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
       with:
         subject-path: ${{ steps.sbom.outputs.artifact }}
         sbom-path: ${{ steps.sbom.outputs.cdx }}
     - name: Sign the archive and every inventory sidecar
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
       id: provenance
-      uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+      uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
       with:
         subject-path: |
           ${{ steps.sbom.outputs.artifact }}

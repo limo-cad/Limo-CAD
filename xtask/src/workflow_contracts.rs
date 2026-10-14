@@ -37,6 +37,134 @@ fn workflow(file: &str) -> Value {
     serde_yaml_ng::from_str(&read(file)).unwrap_or_else(|error| panic!("invalid {file}: {error}"))
 }
 
+fn uses_action(step: &Value, action: &str) -> bool {
+    step["uses"].as_str().is_some_and(|uses| {
+        uses.split_once('@').is_some_and(|(name, revision)| {
+            name == action
+                && revision.len() == 40
+                && revision.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+    })
+}
+
+#[test]
+fn external_actions_are_immutable_and_checkouts_do_not_retain_credentials() {
+    fn check(value: &Value, path: &std::path::Path) {
+        match value {
+            Value::Mapping(mapping) => {
+                if let Some(uses) = value["uses"].as_str() {
+                    if !uses.starts_with("./") {
+                        let (action, _) = uses.split_once('@').expect("action must have revision");
+                        assert!(
+                            uses_action(value, action),
+                            "mutable action in {}",
+                            path.display()
+                        );
+                        if action == "actions/checkout" {
+                            assert_eq!(
+                                value["with"]["persist-credentials"].as_bool(),
+                                Some(false),
+                                "checkout retains credentials in {}",
+                                path.display()
+                            );
+                        }
+                    }
+                }
+                for child in mapping.values() {
+                    check(child, path);
+                }
+            }
+            Value::Sequence(values) => {
+                for child in values {
+                    check(child, path);
+                }
+            }
+            _ => {}
+        }
+    }
+    fn walk(path: &std::path::Path) {
+        for entry in fs::read_dir(path).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                walk(&path);
+            } else if matches!(
+                path.extension().and_then(|s| s.to_str()),
+                Some("yml" | "yaml")
+            ) {
+                let value: Value =
+                    serde_yaml_ng::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+                check(&value, &path);
+            }
+        }
+    }
+    walk(&crate::release_tooling::root().join(".github"));
+}
+
+#[test]
+fn artifact_identity_rejects_mutable_revisions_and_wrong_actions() {
+    for uses in [
+        "actions/download-artifact@v8",
+        "actions/download-artifact@main",
+        "actions/download-artifact@123",
+        "other/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
+    ] {
+        let step: Value = serde_yaml_ng::from_str(&format!("uses: {uses}")).unwrap();
+        assert!(!uses_action(&step, "actions/download-artifact"));
+    }
+    let step: Value = serde_yaml_ng::from_str(
+        "uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
+    )
+    .unwrap();
+    assert!(uses_action(&step, "actions/download-artifact"));
+}
+
+#[test]
+fn knowledge_failures_stop_native_producers_before_sdk_and_package_work() {
+    let mcp = workflow(".github/workflows/mcp-server.yml");
+    let packages = workflow(".github/workflows/desktop-packages.yml");
+    for source in [&mcp, &packages] {
+        let preflight = executable_job(source, "knowledge_preflight").unwrap();
+        assert_eq!(
+            preflight["uses"].as_str(),
+            Some("./.github/workflows/knowledge-preflight.yml")
+        );
+    }
+    for (source, id) in [
+        (&mcp, "prepare-windows-sdk"),
+        (&mcp, "mcp-linux"),
+        (&packages, "classify_changes"),
+    ] {
+        let producer = executable_job(source, id).unwrap();
+        assert_eq!(producer["needs"].as_str(), Some("knowledge_preflight"));
+        assert!(
+            producer["if"].is_null(),
+            "producer must not bypass failed preflight"
+        );
+    }
+    let source = workflow(".github/workflows/knowledge-preflight.yml");
+    let job = executable_job(&source, "knowledge").unwrap();
+    let steps = executable_steps(job).unwrap();
+    let checkout = steps
+        .iter()
+        .find(|step| uses_action(step, "actions/checkout"))
+        .unwrap();
+    assert_eq!(checkout["with"]["fetch-depth"].as_u64(), Some(0));
+    let validation = steps
+        .iter()
+        .find(|step| {
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("knowledge check"))
+        })
+        .unwrap();
+    requires_command(validation, "cargo run --locked -p xtask -- knowledge check").unwrap();
+    requires_command(
+        validation,
+        "cargo run --locked -p xtask -- knowledge index --check",
+    )
+    .unwrap();
+}
+
 fn executable_job<'a>(source: &'a Value, id: &str) -> Result<&'a Value> {
     let job = &source["jobs"][id];
     ensure!(job.is_mapping(), "missing executable job {id}");
@@ -178,7 +306,7 @@ fn check_package_gates(source: &Value) -> Result<()> {
         "package download cannot be conditional"
     );
     ensure!(
-        download["uses"].as_str() == Some("actions/download-artifact@v4"),
+        uses_action(download, "actions/download-artifact"),
         "missing package artifact download"
     );
     ensure!(
@@ -400,7 +528,7 @@ fn mcp_acceptance_workflow(source: &Value, acceptance: &Value) -> Result<Value> 
     ensure!(
         upload["id"].as_str() == Some("artifact")
             && upload["if"].is_null()
-            && upload["uses"].as_str() == Some("actions/upload-artifact@v4")
+            && uses_action(upload, "actions/upload-artifact")
             && upload["with"]["path"].as_str() == Some("vcpkg_installed/x64-windows/")
             && upload["with"]["if-no-files-found"].as_str() == Some("error"),
         "publish the complete SDK only after successful preparation"
@@ -409,7 +537,7 @@ fn mcp_acceptance_workflow(source: &Value, acceptance: &Value) -> Result<Value> 
     let (_, download) = named_step(template, "Download this run's Windows SDK")?;
     ensure!(
         download["if"].as_str() == Some("inputs.platform == 'windows'")
-            && download["uses"].as_str() == Some("actions/download-artifact@v4")
+            && uses_action(download, "actions/download-artifact")
             && download["with"]["artifact-ids"].as_str() == Some("${{ inputs.sdk-artifact-id }}"),
         "download the exact current-run SDK artifact"
     );
@@ -464,8 +592,8 @@ fn mcp_acceptance_workflow(source: &Value, acceptance: &Value) -> Result<Value> 
             );
         } else {
             ensure!(
-                caller["needs"].is_null(),
-                "Linux must start independently of Windows"
+                needs(caller)? == ["knowledge_preflight"],
+                "Linux must depend only on cheap source validation, independently of Windows"
             );
         }
         let concrete =
@@ -527,7 +655,7 @@ fn check_mcp_provenance(source: &Value) -> Result<()> {
             "only default success flow may upload demo inputs"
         );
         ensure!(
-            upload["uses"].as_str() == Some("actions/upload-artifact@v4"),
+            uses_action(upload, "actions/upload-artifact"),
             "missing shard input upload"
         );
         ensure!(
@@ -575,7 +703,7 @@ fn check_mcp_provenance(source: &Value) -> Result<()> {
         let downloads = executable_steps(job)?
             .iter()
             .enumerate()
-            .filter(|(_, step)| step["uses"].as_str() == Some("actions/download-artifact@v4"))
+            .filter(|(_, step)| uses_action(step, "actions/download-artifact"))
             .collect::<Vec<_>>();
         ensure!(
             downloads.len() == 3,

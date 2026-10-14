@@ -1,6 +1,29 @@
 use super::*;
 
 #[test]
+fn source_inventory_and_release_identity_cover_all_owned_lockfiles() {
+    let root = crate::release_tooling::root();
+    let owned = output(Command::new("git").current_dir(root).args([
+        "ls-files",
+        "Cargo.lock",
+        "desktop/Cargo.lock",
+        "mcp-server/Cargo.lock",
+        "experiments/*/Cargo.lock",
+    ]))
+    .unwrap();
+    let mut tracked: Vec<_> = owned.lines().collect();
+    tracked.sort_unstable();
+    let mut inventoried = LOCKFILES.to_vec();
+    inventoried.sort_unstable();
+    assert_eq!(tracked, inventoried);
+    let identity = input_hashes(root).unwrap();
+    for path in tracked {
+        assert!(root.join(path).is_file());
+        assert!(identity.contains_key(path), "release identity omits {path}");
+    }
+}
+
+#[test]
 fn release_input_hashes_match_windows_and_unix_checkout_settings() {
     let root = crate::release_tooling::root();
     let temporary = tempfile::tempdir().unwrap();

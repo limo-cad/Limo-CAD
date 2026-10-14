@@ -6,6 +6,8 @@ on:
       - 'experiments/rust-simulation/**'
       - 'docs/SIMULATION-EXPERIMENT.md'
       - '.github/workflows/rust-simulation-experiment.yml'
+      - '.github/actions/setup-rust/**'
+      - 'rust-toolchain.toml'
   workflow_dispatch:
 
 permissions:
@@ -23,11 +25,10 @@ jobs:
     env:
       CARGO_BUILD_JOBS: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: '1.99.0'
-          components: rustfmt, clippy
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
       - name: Install mesh I/O prerequisites
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends liblzma-dev pkg-config
       - name: Check formatting
@@ -48,7 +49,7 @@ jobs:
         run: cargo run --locked --manifest-path experiments/rust-simulation/Cargo.toml --bin same_mesh -- "$LIMO_SIM_RESULTS/same-mesh-results.json" "$LIMO_SIM_RESULTS/world-results.json"
       - name: Retain actual runner results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rust-simulation-results
           path: ${{ runner.temp }}/limo-simulation-results/*.json

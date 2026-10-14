@@ -1,0 +1,26 @@
+name: Knowledge source preflight
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  knowledge:
+    name: Knowledge sources and search index
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: repository-tools-repository-tooling
+      - name: Validate source links and committed search index before native work
+        run: |
+          cargo run --locked -p xtask -- knowledge check
+          cargo run --locked -p xtask -- knowledge index --check

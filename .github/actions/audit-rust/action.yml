@@ -2,14 +2,37 @@ name: Audit all locked Rust workspaces
 description: Check fresh RustSec advisories and retain both findings and maintenance warnings.
 inputs:
   reports:
-    description: Output directory for the three JSON reports.
+    description: Output directory for all four workspace JSON reports.
     default: security-reports
 runs:
   using: composite
   steps:
+    - name: Identify the advisory tool compiler and platform
+      id: audit-identity
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "compiler=$(rustc -vV | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+        echo "platform=$(cat /etc/os-release | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+    - name: Restore pinned cargo-audit executable
+      id: audit-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cargo/bin/cargo-audit
+        key: cargo-audit-0.22.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.audit-identity.outputs.platform }}-${{ steps.audit-identity.outputs.compiler }}
     - name: Install pinned cargo-audit
+      if: steps.audit-cache.outputs.cache-hit != 'true'
       shell: bash
       run: cargo install cargo-audit --version 0.22.2 --locked
+    - name: Verify cargo-audit before saving or scanning
+      shell: bash
+      run: cargo-audit --version | grep -Fx 'cargo-audit 0.22.2'
+    - name: Save the verified tool before advisory findings can fail the job
+      if: steps.audit-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cargo/bin/cargo-audit
+        key: cargo-audit-0.22.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.audit-identity.outputs.platform }}-${{ steps.audit-identity.outputs.compiler }}
     - name: Check every committed Rust lockfile
       shell: bash
       env:
@@ -18,11 +41,12 @@ runs:
         set -euo pipefail
         mkdir -p "$LIMO_AUDIT_REPORTS"
         failed=0
-        for workspace in engine desktop mcp-server; do
+        for workspace in engine desktop mcp-server rust-simulation; do
           case "$workspace" in
             engine) lock=Cargo.lock ;;
             desktop) lock=desktop/Cargo.lock ;;
             mcp-server) lock=mcp-server/Cargo.lock ;;
+            rust-simulation) lock=experiments/rust-simulation/Cargo.lock ;;
           esac
           if cargo audit --file "$lock" --json > "$LIMO_AUDIT_REPORTS/rustsec-$workspace.json"; then
             echo "RustSec: $workspace passed"
