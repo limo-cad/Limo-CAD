@@ -1,31 +1,35 @@
-# Checked OCCT 7.9.3 storage
+# Checked OCCT 8.0.1 storage
 
-The replacement `math_DoubleTab.cxx` and `.lxx` preserve the upstream class layout
-and exported signatures. They check dimensions before allocation, retain `size_t`
-byte counts, reject undersized copy destinations, and check rebased index bounds.
-The small-buffer threshold remains 16 elements; empty storage and overlapping
-copies retain their behavior. Valid matrix indexing retains its existing hot path.
+The SDK uses upstream tag `V8_0_1`, commit
+`b8f597c677811d1f9f4d8a97f5ae2825c0353a42`. The upstream matrix implementation
+is now header-only and uses `NCollection_Array2`; the old 7.9 `.cxx`/`.lxx`
+replacements are retired.
 
-The Windows port is derived from microsoft/vcpkg tree
-`9a763d6711b422dea8fd72603ef8f89ff2386983` (OCCT 7.9.3, port revision 1).
-The overlay adds revision 2. Both that port and `cargo xtask build-occt` verify
-the exact upstream input hashes before applying these replacements. Rust build
-cache identities include the replacement content; source and installed SDK
-receipts are checked before reuse.
+The replacement `math_DoubleTab.hxx` preserves the 8.0 class layout and
+64-element small buffer. It checks dimensions and byte counts before selecting
+storage, uses zero-based array constructors to avoid signed offset arithmetic,
+checks rebasing, and computes upper bounds in 64 bits. Copy requires equal
+dimensions, as upstream 8.0 does, and uses `memmove` for overlapping storage.
+Small, external and heap storage retain copy and move behavior.
 
-The changed OCCT files retain their LGPL-2.1 license and OCCT exception notices.
-The vcpkg port and original packaging patches retain Microsoft's MIT license in
-`VCPKG-LICENSE.txt`. Upstream OCCT source is
-https://github.com/Open-Cascade-SAS/OCCT/tree/V7_9_3.
+The Windows port and five packaging patches come from microsoft/vcpkg commit
+`f89a4a1da4e3176a8d1a14c1825b9b2f98e48843`. Overlay port revision 1 adds the
+checked matrix header. Both this port and `cargo xtask build-occt` verify the
+exact upstream archive and header hashes before replacement. Cache identities
+include the replacement content; source and installed SDK receipts are checked
+before reuse. SDK discovery requires the 8.0 ABI and rejects 7.9 headers.
+
+The OCCT header retains its LGPL-2.1 license and OCCT exception notice.
+The vcpkg files retain Microsoft's MIT license in `VCPKG-LICENSE.txt`.
+Upstream source: https://github.com/Open-Cascade-SAS/OCCT/tree/V8_0_1.
 
 ```sh
 cargo xtask build-occt --prefix /absolute/path/to/a/fresh/sdk --jobs 2
 cargo xtask verify-occt-storage --prefix /absolute/path/to/a/fresh/sdk
 ```
 
-Windows manifest installs select the overlay through `vcpkg-configuration.json`.
-Unix builds use the Rust builder and a C++ compiler, CMake/Ninja and FreeType.
-Verification compiles a bounded probe against the installed `TKMath` and
-`TKernel`; it checks allocation, copy, overlap, empty ranges and rebase behavior.
-Replacing only the header is insufficient: the allocator and constructor live
-in the native runtime and must be rebuilt too.
+Build a separate 8.0 SDK; preserve existing SDKs, application sessions and
+recovery data. Verification compiles a bounded probe against the selected
+`TKMath` and `TKernel`, checking overflow, null storage, copy, overlap, empty
+ranges, extreme bounds, rebasing and moves. The entire SDK must use the checked
+header; replacing only an installed header does not rebuild existing libraries.

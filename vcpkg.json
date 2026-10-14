@@ -9,8 +9,8 @@
   "overrides": [
     {
       "name": "opencascade",
-      "version": "7.9.3",
-      "port-version": 2
+      "version": "8.0.1",
+      "port-version": 1
     }
   ]
 }

@@ -73,6 +73,7 @@
 #include <GC_MakeSegment.hxx>
 #include <TColgp_Array2OfPnt.hxx>
 #include <TColStd_Array2OfReal.hxx>
+#include <TColStd_Array1OfReal.hxx>
 #include <TColStd_Array1OfInteger.hxx>
 #include <GCPnts_UniformDeflection.hxx>
 #include <CPnts_UniformDeflection.hxx>
@@ -111,7 +112,6 @@
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS_Iterator.hxx>
 #include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
-#include <TopTools_ListIteratorOfListOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
@@ -1963,7 +1963,7 @@ std::optional<PrismaticCorner> prismatic_corner(
   TopoDS_Face faces[2];
   gp_Dir normals[2];
   int count = 0;
-  for (TopTools_ListIteratorOfListOfShape iterator(adjacent); iterator.More();
+  for (NCollection_List<TopoDS_Shape>::Iterator iterator(adjacent); iterator.More();
        iterator.Next(), ++count) {
     faces[count] = TopoDS::Face(iterator.Value());
     BRepAdaptor_Surface surface(faces[count], true);
@@ -1993,7 +1993,7 @@ std::optional<PrismaticCorner> prismatic_corner(
     if (!vertex_faces.Contains(vertex)) {
       return std::nullopt;
     }
-    for (TopTools_ListIteratorOfListOfShape iterator(vertex_faces.FindFromKey(vertex));
+    for (NCollection_List<TopoDS_Shape>::Iterator iterator(vertex_faces.FindFromKey(vertex));
          iterator.More(); iterator.Next()) {
       const TopoDS_Face face = TopoDS::Face(iterator.Value());
       if (face.IsSame(faces[0]) || face.IsSame(faces[1])) {
@@ -2371,7 +2371,7 @@ void Kernel::apply_job_impl(const FfiJob& job) {
         throw std::runtime_error(job.kind == 5 ? "referenced fillet edge no longer exists"
                                                : "referenced chamfer edge no longer exists");
       }
-      selected.push_back(TopoDS::Edge(edge_map.FindKey(index + 1)));
+      selected.push_back(TopoDS::Edge(edge_map.FindKey(static_cast<std::size_t>(index) + 1)));
     }
 
 
@@ -2776,7 +2776,7 @@ void Kernel::apply_job_impl(const FfiJob& job) {
       if (index >= static_cast<std::uint32_t>(face_map.Extent())) {
         throw std::runtime_error("referenced Shell face no longer exists");
       }
-      closing_faces.Append(face_map.FindKey(index + 1));
+      closing_faces.Append(face_map.FindKey(static_cast<std::size_t>(index) + 1));
     }
     BRepOffsetAPI_MakeThickSolid shell;
     shell.MakeThickSolidByJoin(
@@ -10627,7 +10627,7 @@ static FfiMesh mesh_shape(std::uint64_t body_id,
       const TopTools_ListOfShape& adjacent_faces =
           edge_faces.FindFromKey(edge);
       if (adjacent_faces.Extent() == 2) {
-        TopTools_ListIteratorOfListOfShape iterator(adjacent_faces);
+        NCollection_List<TopoDS_Shape>::Iterator iterator(adjacent_faces);
         const TopoDS_Face first_face = TopoDS::Face(iterator.Value());
         iterator.Next();
         const TopoDS_Face second_face = TopoDS::Face(iterator.Value());

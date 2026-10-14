@@ -91,7 +91,7 @@ jobs:
           cargo xtask verify-occt-storage --prefix $env:OCCT_ROOT
           if ($LASTEXITCODE -ne 0) { throw 'Downloaded SDK runtime qualification failed' }
 
-      - name: Install checked OpenCASCADE 7.9 SDK
+      - name: Install checked OpenCASCADE 8.0 SDK
         if: inputs.platform == 'linux'
         uses: ./.github/actions/setup-unix-occt
 

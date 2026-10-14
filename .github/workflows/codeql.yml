@@ -62,7 +62,7 @@ jobs:
           "CODEQL_EXTRACTOR_RUST_OPTION_SYSROOT_SRC=$sysroot/lib/rustlib/src/rust/library" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "CODEQL_EXTRACTOR_RUST_OPTION_PROC_MACRO_SERVER=$macroServer" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Set up cached OpenCASCADE 7.9 SDK
+      - name: Set up cached OpenCASCADE 8.0 SDK
         id: occt
         timeout-minutes: 150
         uses: ./.github/actions/setup-windows-occt

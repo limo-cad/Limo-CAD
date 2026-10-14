@@ -502,7 +502,7 @@ fn deployment_qualification(
     qualify: impl FnOnce() -> Result<String>,
 ) -> Result<String> {
     qualify().with_context(|| format!(
-        "Could not complete required deployment qualification for OCCT SDK {}. Inspect the underlying error before rebuilding: the native probe requires CMake and Ninja on PATH, MSVC and the Windows SDK. If the error identifies an SDK header/runtime defect, preserve this SDK and build OCCT 7.9.3 with the reviewed overlay in a separate prefix; then use deploy-native --occt-root PATH. Header-only replacement is insufficient", root.display()
+        "Could not complete required deployment qualification for OCCT SDK {}. Inspect the underlying error before rebuilding: the native probe requires CMake and Ninja on PATH, MSVC and the Windows SDK. If the error identifies an SDK header/runtime defect, preserve this SDK and build OCCT 8.0.1 with the reviewed overlay in a separate prefix; then use deploy-native --occt-root PATH. Header-only replacement is insufficient", root.display()
     ))
 }
 
@@ -1092,8 +1092,8 @@ mod tests {
     fn deployment_qualification_preserves_missing_tool_cause_without_diagnosing_sdk_damage() {
         let fixture = tempfile::tempdir().unwrap();
         fs::write(
-            fixture.path().join("math_DoubleTab.lxx"),
-            include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.lxx"),
+            fixture.path().join("math_DoubleTab.hxx"),
+            include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.hxx"),
         )
         .unwrap();
         let calls = Cell::new(0);
@@ -1130,7 +1130,7 @@ mod tests {
     #[test]
     fn sdk_preflight_rejects_legacy_header_before_digest_or_native_qualification() {
         let fixture = tempfile::tempdir().unwrap();
-        fs::write(fixture.path().join("math_DoubleTab.lxx"),
+        fs::write(fixture.path().join("math_DoubleTab.hxx"),
             "memmove(Other.Addr, Addr, (int)((UppR - LowR + 1) * (UppC - LowC + 1) * sizeof(Standard_Real)));"
         ).unwrap();
         let calls = Cell::new(0);
@@ -1160,8 +1160,8 @@ mod tests {
     fn sdk_preflight_requires_native_qualification_and_unchanged_actual_inputs() {
         let fixture = tempfile::tempdir().unwrap();
         fs::write(
-            fixture.path().join("math_DoubleTab.lxx"),
-            include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.lxx"),
+            fixture.path().join("math_DoubleTab.hxx"),
+            include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.hxx"),
         )
         .unwrap();
         let digest_calls = Cell::new(0);

@@ -468,7 +468,7 @@ jobs:
             ${{ runner.temp }}/limo-cad-occt-cache
           key: occt-ubuntu-22.04-v2-${{ runner.arch }}-${{ steps.occt_key.outputs.sdk_key }}
 
-      - name: Build or verify OCCT 7.9 from pinned source
+      - name: Build or verify OCCT 8.0 from pinned source
         id: occt_build
         env:
           LIMO_CAD_BUILD_CACHE: ${{ runner.temp }}/limo-cad-occt-cache
@@ -688,7 +688,7 @@ jobs:
         with:
           target: aarch64-apple-darwin
 
-      - name: Install checked OpenCASCADE 7.9.3
+      - name: Install checked OpenCASCADE 8.0.1
         uses: ./.github/actions/setup-unix-occt
 
       - name: Set up release SBOM tools

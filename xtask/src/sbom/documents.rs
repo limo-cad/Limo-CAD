@@ -115,8 +115,8 @@ pub(super) fn add_release(
         .as_array_mut()
         .context("SBOM components")?;
     components.push(json!({"bom-ref":"limo-occt","type":"framework","name":"Open CASCADE Technology","version":sdk["occt"]["version"],
-        "supplier":{"name":"Open Cascade SAS"},"purl":"pkg:generic/opencascade@7.9.3",
-        "cpe":"cpe:2.3:a:opencascade:open_cascade_technology:7.9.3:*:*:*:*:*:*:*",
+        "supplier":{"name":"Open Cascade SAS"},"purl":"pkg:generic/opencascade@8.0.1",
+        "cpe":"cpe:2.3:a:opencascade:open_cascade_technology:8.0.1:*:*:*:*:*:*:*",
         "licenses":[{"expression":"LGPL-2.1-only WITH OCCT-exception-1.0"}],
         "externalReferences":[{"type":"distribution","url":sdk["occt"]["source"]}],
         "properties":[{"name":"limo:component:variant","value":"Checked-storage source patches recorded in the accompanying build metadata; no CVE remediation claim is made."}]}));
@@ -218,7 +218,7 @@ pub(super) fn validate(cdx: &Value) -> Result<()> {
 
 pub(super) fn verify_native(cdx: &Value, libraries: &[Library]) -> Result<()> {
     let components = cdx["components"].as_array().context("missing components")?;
-    ensure!(components.iter().any(|component| component["bom-ref"] == "limo-occt" && component["version"] == "7.9.3"), "OCCT component missing");
+    ensure!(components.iter().any(|component| component["bom-ref"] == "limo-occt" && component["version"] == "8.0.1"), "OCCT component missing");
     for library in libraries {
         let reference = native_ref(library)?;
         let component = components
@@ -276,7 +276,7 @@ pub(super) fn enrich_spdx(
     let occt = packages
         .iter()
         .find(|package| {
-            package["name"] == "Open CASCADE Technology" && package["versionInfo"] == "7.9.3"
+            package["name"] == "Open CASCADE Technology" && package["versionInfo"] == "8.0.1"
         })
         .and_then(|package| package["SPDXID"].as_str())
         .context("OCCT lost during SPDX conversion")?
@@ -384,7 +384,7 @@ pub(super) fn verify_spdx(
         packages
             .iter()
             .any(|package| package["name"] == "Open CASCADE Technology"
-                && package["versionInfo"] == "7.9.3"),
+                && package["versionInfo"] == "8.0.1"),
         "SPDX omits OCCT"
     );
     let mut ids = BTreeSet::from(["SPDXRef-DOCUMENT"]);

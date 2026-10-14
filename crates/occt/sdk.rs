@@ -119,7 +119,7 @@ fn version_is_compatible(header: &str) -> bool {
                 .flatten()
         })
     };
-    value("OCC_VERSION_MAJOR") == Some(7) && value("OCC_VERSION_MINOR") == Some(9)
+    value("OCC_VERSION_MAJOR") == Some(8) && value("OCC_VERSION_MINOR") == Some(0)
 }
 
 fn missing_libraries(directory: &Path, os: &str) -> Vec<&'static str> {
@@ -154,7 +154,7 @@ pub fn resolve(
             let header = fs::read_to_string(include.join("Standard_Version.hxx"))
                 .map_err(|e| e.to_string())?;
             if !version_is_compatible(&header) {
-                return Err("SDK headers must use the OCCT 7.9 ABI".into());
+                return Err("SDK headers must use the OCCT 8.0 ABI".into());
             }
             let lib = if let Some(path) = override_lib {
                 let missing = missing_libraries(path, os);
@@ -197,7 +197,7 @@ pub fn resolve(
         }
     }
     Err(format!(
-        "Compatible OCCT SDK not found. Set OCCT_ROOT to a complete 7.9.x prefix.\n{}",
+        "Compatible OCCT SDK not found. Set OCCT_ROOT to a complete 8.0.x prefix.\n{}",
         failures.join("\n")
     ))
 }
@@ -224,7 +224,7 @@ mod tests {
             fs::create_dir(root.join("lib")).unwrap();
             fs::write(
                 root.join("include/opencascade/Standard_Version.hxx"),
-                format!("#define OCC_VERSION_MAJOR {version}\n#define OCC_VERSION_MINOR 9\n"),
+                format!("#define OCC_VERSION_MAJOR {version}\n#define OCC_VERSION_MINOR 0\n"),
             )
             .unwrap();
             for lib in LIBRARIES {
@@ -243,7 +243,7 @@ mod tests {
         let fixture = Fixture::new();
         let empty = fixture.0.join("empty");
         fs::create_dir(&empty).unwrap();
-        let good = fixture.sdk("good", 7);
+        let good = fixture.sdk("good", 8);
         assert_eq!(
             resolve(&[empty, good.clone()], "windows", "x86_64", None)
                 .unwrap()
@@ -256,8 +256,8 @@ mod tests {
     #[test]
     fn overrides_fail_closed_and_wrong_abi_is_rejected() {
         let fixture = Fixture::new();
-        let good = fixture.sdk("good", 7);
-        let bad = fixture.sdk("bad", 8);
+        let good = fixture.sdk("good", 8);
+        let bad = fixture.sdk("bad", 7);
         assert!(resolve(&[bad], "windows", "x86_64", None).is_err());
         let override_roots = roots(
             "windows",
@@ -293,7 +293,7 @@ mod tests {
     #[test]
     fn canonical_sdk_paths_are_usable_by_msvc() {
         let fixture = Fixture::new();
-        let root = fixture.sdk("SDK with spaces", 7);
+        let root = fixture.sdk("SDK with spaces", 8);
         let sdk = resolve(
             &[fs::canonicalize(&root).unwrap()],
             "windows",

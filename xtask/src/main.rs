@@ -163,7 +163,7 @@ Commands:
   switching-comparison  Plan (--plan) or orchestrate disposable hosted Bevy comparisons.
   build-wasm    Build the browser's Rust engine with wasm-pack (--dev or --release).
   smoke-wasm    Test the Rust engine facade in headless Chrome using wasm-bindgen-test.
-  build-occt    Build pinned OCCT 7.9.3 with CMake/Ninja on the host:
+  build-occt    Build pinned OCCT 8.0.1 with CMake/Ninja on the host:
                 --prefix PATH [--jobs N] [--cache-dir PATH] [--sccache] [--dry-run]
                 [--repair-runtime] (Windows: explicitly repair owned runtime closure).
                 Requires CMake/Ninja, a C++ compiler and FreeType; preserves compatible build objects.

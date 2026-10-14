@@ -1,4 +1,4 @@
-name: Set up checked OCCT 7.9 SDK
+name: Set up checked OCCT 8.0 SDK
 description: Build or verify the pinned native kernel and checked storage through Rust xtask.
 inputs:
   directory:

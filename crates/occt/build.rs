@@ -49,7 +49,7 @@ fn native() {
             .map(std::path::Path::new),
     )
     .unwrap_or_else(|error| panic!("{error}"));
-    for header in ["Standard_Version.hxx", "math_DoubleTab.lxx"] {
+    for header in ["Standard_Version.hxx", "math_DoubleTab.hxx"] {
         println!(
             "cargo:rerun-if-changed={}",
             sdk.include.join(header).display()

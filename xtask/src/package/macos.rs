@@ -104,7 +104,7 @@ fn stage(package: &Package, options: &Options) -> Result<Vec<String>> {
     let sdk = candidates
         .into_iter()
         .find(|p| p.join("lib/libTKernel.dylib").is_file())
-        .context("OCCT 7.9 SDK missing; set OCCT_ROOT")?;
+        .context("OCCT 8.0 SDK missing; set OCCT_ROOT")?;
     crate::occt_storage::verify(&sdk)?;
     let mut queue: VecDeque<_> = ENTRY_LIBRARIES
         .iter()
@@ -397,8 +397,8 @@ mod tests {
     use super::*;
     #[test]
     fn dependency_parser_retains_spaces_and_system_paths() {
-        let result = parse_dependencies("/some path/libTK.dylib:\n\t@rpath/libTK.7.9.dylib (compatibility version 7.9.0, current version 7.9.0)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 1.0.0)\n");
-        assert_eq!(result[0], "@rpath/libTK.7.9.dylib");
+        let result = parse_dependencies("/some path/libTK.dylib:\n\t@rpath/libTK.8.0.dylib (compatibility version 8.0.0, current version 8.0.0)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 1.0.0)\n");
+        assert_eq!(result[0], "@rpath/libTK.8.0.dylib");
         assert!(system(&result[1]));
     }
 }

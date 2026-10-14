@@ -18,10 +18,10 @@ Disposable CI uses Mesa lavapipe for correctness, not performance acceptance.
 The AppImage is the exception to Ubuntu 26.04 as a build system. An AppImage
 bundles the CAD runtime while using the host graphics/window loaders and C
 library. It runs only where glibc is at least as new as the build system's. It is
-therefore built on Ubuntu 22.04 (glibc 2.35) against OCCT 7.9.3 compiled from pinned source by
-`cargo xtask build-occt --prefix PATH`, because Ubuntu 22.04 does not package OCCT 7.9.
+therefore built on Ubuntu 22.04 (glibc 2.35) against OCCT 8.0.1 compiled from pinned source by
+`cargo xtask build-occt --prefix PATH`, because Ubuntu 22.04 does not package OCCT 8.0.
 Release CI refuses an AppImage that needs a newer glibc, and launches it on both
-Ubuntu 22.04 and 26.04. The Debian package also bundles the checked OCCT 7.9.3
+Ubuntu 22.04 and 26.04. The Debian package also bundles the checked OCCT 8.0.1
 runtime in `/usr/lib/limo-cad`. Its executable and OCCT libraries use relative
 loader paths, so the package works without the build SDK and cannot silently
 load an older system OCCT instead. Graphics/window loaders remain host libraries.
@@ -89,7 +89,7 @@ docker run --rm \
 
 `cargo xtask package --bundle deb` builds only the Debian package.
 
-Both containers build the same checked OCCT 7.9.3 source recipe through Rust xtask.
+Both containers build the same checked OCCT 8.0.1 source recipe through Rust xtask.
 BuildKit caches retain compiler-compatible SDK objects and Rust dependencies.
 The resulting packages carry the repaired native runtime without depending on
 distribution OCCT packages.
@@ -103,7 +103,7 @@ checks. It includes:
 
 - Desktop portals and their GTK backend for native file and print dialogs;
 - Vulkan, Wayland, X11/XKB (including `libxkbcommon-x11-dev`) and udev development files;
-- FreeType development files and the checked OCCT 7.9.3 source build;
+- FreeType development files and the checked OCCT 8.0.1 source build;
 - Rust (the pinned toolchain); and
 - Native packaging utilities including `patchelf`, `file`, FUSE 2 and
   `squashfs-tools` (the AppImage permission audit reads the image with
