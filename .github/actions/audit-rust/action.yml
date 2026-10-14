@@ -7,32 +7,44 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Identify the advisory tool compiler and platform
-      id: audit-identity
+    - name: Check the verified advisory tool platform
       shell: bash
       run: |
         set -euo pipefail
-        echo "compiler=$(rustc -vV | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-        echo "platform=$(cat /etc/os-release | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+        test "$RUNNER_OS" = Linux
+        test "$RUNNER_ARCH" = X64
     - name: Restore pinned cargo-audit executable
       id: audit-cache
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cargo/bin/cargo-audit
-        key: cargo-audit-0.22.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.audit-identity.outputs.platform }}-${{ steps.audit-identity.outputs.compiler }}
+        key: cargo-audit-release-0.22.2-${{ runner.os }}-${{ runner.arch }}-66f9c8f530950d106c1869ce27ef5a4008bcea53c7716c3ed8117586337ee7d8
     - name: Install pinned cargo-audit
       if: steps.audit-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: cargo install cargo-audit --version 0.22.2 --locked
+      run: |
+        set -euo pipefail
+        archive="$RUNNER_TEMP/cargo-audit-0.22.2.tgz"
+        member=cargo-audit-x86_64-unknown-linux-musl-v0.22.2/cargo-audit
+        curl --fail --location --retry 3 --connect-timeout 15 --max-time 120 \
+          --output "$archive" \
+          https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-unknown-linux-musl-v0.22.2.tgz
+        printf '%s  %s\n' 7fb9497f8594b389e5fce5ef9b92db08432996895b2e0c5a0167a69ed445c428 "$archive" | sha256sum --check
+        tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP" "$member"
+        mkdir -p "$HOME/.cargo/bin"
+        install -m 0755 "$RUNNER_TEMP/$member" "$HOME/.cargo/bin/cargo-audit"
     - name: Verify cargo-audit before saving or scanning
       shell: bash
-      run: cargo-audit --version | grep -Fx 'cargo-audit 0.22.2'
+      run: |
+        set -euo pipefail
+        printf '%s  %s\n' 66f9c8f530950d106c1869ce27ef5a4008bcea53c7716c3ed8117586337ee7d8 "$HOME/.cargo/bin/cargo-audit" | sha256sum --check
+        "$HOME/.cargo/bin/cargo-audit" --version | grep -Fx 'cargo-audit 0.22.2'
     - name: Save the verified tool before advisory findings can fail the job
       if: steps.audit-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cargo/bin/cargo-audit
-        key: cargo-audit-0.22.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.audit-identity.outputs.platform }}-${{ steps.audit-identity.outputs.compiler }}
+        key: cargo-audit-release-0.22.2-${{ runner.os }}-${{ runner.arch }}-66f9c8f530950d106c1869ce27ef5a4008bcea53c7716c3ed8117586337ee7d8
     - name: Check every committed Rust lockfile
       shell: bash
       env:
@@ -48,7 +60,7 @@ runs:
             mcp-server) lock=mcp-server/Cargo.lock ;;
             rust-simulation) lock=experiments/rust-simulation/Cargo.lock ;;
           esac
-          if cargo audit --file "$lock" --json > "$LIMO_AUDIT_REPORTS/rustsec-$workspace.json"; then
+          if "$HOME/.cargo/bin/cargo-audit" audit --file "$lock" --json > "$LIMO_AUDIT_REPORTS/rustsec-$workspace.json"; then
             echo "RustSec: $workspace passed"
           else
             echo "::error::RustSec failed for $workspace; inspect the retained JSON report."

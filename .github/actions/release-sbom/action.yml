@@ -14,6 +14,7 @@ runs:
   using: composite
   steps:
     - name: Inventory the finished release archive
+      if: runner.os != 'Windows'
       id: sbom
       shell: bash
       env:
@@ -29,32 +30,59 @@ runs:
         while IFS= read -r archive; do archives+=("$archive"); done < <(compgen -G "$LIMO_SBOM_GLOB" | sort)
         test "${#archives[@]}" -eq 1
         cargo xtask sbom release --artifact "${archives[0]}" --sdk "$LIMO_SBOM_SDK" --target "$LIMO_SBOM_TARGET" --github-output
+    - name: Inventory the finished release archive on Windows
+      if: runner.os == 'Windows'
+      id: sbom-windows
+      shell: pwsh
+      env:
+        LIMO_SBOM_GLOB: ${{ inputs.artifact }}
+        LIMO_SBOM_SDK: ${{ inputs.sdk }}
+        LIMO_SBOM_TARGET: ${{ inputs.target }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        git config --global --add safe.directory $env:GITHUB_WORKSPACE
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot trust checkout for SBOM inventory' }
+        $archives = @(Get-ChildItem -Path $env:LIMO_SBOM_GLOB -File -ErrorAction Stop | Sort-Object FullName)
+        if ($archives.Count -ne 1) { throw 'Expected exactly one finished release archive' }
+        cargo xtask sbom release --artifact $archives[0].FullName --sdk $env:LIMO_SBOM_SDK --target $env:LIMO_SBOM_TARGET --github-output
+        if ($LASTEXITCODE -ne 0) { throw 'Release SBOM inventory failed' }
     - name: Sign the CycloneDX inventory for the archive
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
       id: sbom_attestation
       uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
       with:
-        subject-path: ${{ steps.sbom.outputs.artifact }}
-        sbom-path: ${{ steps.sbom.outputs.cdx }}
+        subject-path: ${{ steps.sbom.outputs.artifact || steps.sbom-windows.outputs.artifact }}
+        sbom-path: ${{ steps.sbom.outputs.cdx || steps.sbom-windows.outputs.cdx }}
     - name: Sign the archive and every inventory sidecar
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
       id: provenance
       uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
       with:
         subject-path: |
-          ${{ steps.sbom.outputs.artifact }}
-          ${{ steps.sbom.outputs.cdx }}
-          ${{ steps.sbom.outputs.spdx }}
-          ${{ steps.sbom.outputs.metadata }}
-          ${{ steps.sbom.outputs.checksums }}
+          ${{ steps.sbom.outputs.artifact || steps.sbom-windows.outputs.artifact }}
+          ${{ steps.sbom.outputs.cdx || steps.sbom-windows.outputs.cdx }}
+          ${{ steps.sbom.outputs.spdx || steps.sbom-windows.outputs.spdx }}
+          ${{ steps.sbom.outputs.metadata || steps.sbom-windows.outputs.metadata }}
+          ${{ steps.sbom.outputs.checksums || steps.sbom-windows.outputs.checksums }}
     - name: Keep portable signed evidence alongside the archive
-      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && runner.os != 'Windows'
       shell: bash
       env:
-        LIMO_SBOM_ARCHIVE: ${{ steps.sbom.outputs.artifact }}
+        LIMO_SBOM_ARCHIVE: ${{ steps.sbom.outputs.artifact || steps.sbom-windows.outputs.artifact }}
         LIMO_SBOM_BUNDLE: ${{ steps.sbom_attestation.outputs.bundle-path }}
         LIMO_PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
       run: |
         set -euo pipefail
         cp "$LIMO_SBOM_BUNDLE" "$LIMO_SBOM_ARCHIVE.sbom.sigstore.json"
         cp "$LIMO_PROVENANCE_BUNDLE" "$LIMO_SBOM_ARCHIVE.provenance.sigstore.json"
+    - name: Keep portable signed evidence alongside the archive on Windows
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
+      shell: pwsh
+      env:
+        LIMO_SBOM_ARCHIVE: ${{ steps.sbom-windows.outputs.artifact }}
+        LIMO_SBOM_BUNDLE: ${{ steps.sbom_attestation.outputs.bundle-path }}
+        LIMO_PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Copy-Item -LiteralPath $env:LIMO_SBOM_BUNDLE -Destination "$($env:LIMO_SBOM_ARCHIVE).sbom.sigstore.json"
+        Copy-Item -LiteralPath $env:LIMO_PROVENANCE_BUNDLE -Destination "$($env:LIMO_SBOM_ARCHIVE).provenance.sigstore.json"
