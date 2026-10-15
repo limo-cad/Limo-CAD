@@ -2,6 +2,114 @@ use super::*;
 use crate::session_bridge::native_interface::tests::Fixture;
 
 #[test]
+fn initial_sketch_picker_frames_panned_origin_and_preserves_existing_views() {
+    use crate::native_editor::{execute, support, EditorCommand};
+    use crate::native_viewport::ViewportCamera;
+
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let owner = fixture.owner();
+        let mut app = native_viewport::interface_scene_fixture();
+        let world = app.world_mut();
+        refresh_native_model(&fixture.engine, world, true).unwrap();
+        native_viewport::apply_interface_viewport(
+            world,
+            InterfaceRect {
+                x: 240.,
+                y: 120.,
+                width: 1000.,
+                height: 700.,
+            },
+            2.,
+        )
+        .unwrap();
+        let command = |world: &mut World, command| {
+            execute(
+                world,
+                &fixture.engine,
+                &fixture.bridge,
+                &owner,
+                command,
+                || Ok(()),
+            )
+            .unwrap()
+        };
+        let original = fixture.engine.engine_call("project_export_model", "");
+        let revision = fixture.engine.geometry_revision();
+        let normal = ViewportCamera::default();
+        for (shift, should_frame) in [
+            ([0.; 3], false),
+            ([10., 10., 0.], false),
+            ([10000., -20000., 0.], true),
+            ([-1000., 1000., -1000.], true),
+        ] {
+            let camera = ViewportCamera {
+                position: std::array::from_fn(|axis| normal.position[axis] + shift[axis]),
+                target: shift,
+                ..normal
+            };
+            native_viewport::apply_interface_view(world, &owner.document_id, Some(camera), None)
+                .unwrap();
+            command(world, EditorCommand::Support(support::Command::Start));
+            let (_, framed, view, _) = native_viewport::interface_view(world);
+            assert_eq!(view.mode, native_viewport::ViewportMode::PickPlane);
+            assert_eq!(
+                framed,
+                if should_frame { normal } else { camera },
+                "First sketch must retain a visible view or recenter without changing angle, zoom and up"
+            );
+            let point = native_viewport::interface_world_point(world, &owner.document_id, [0.; 3])
+                .unwrap()
+                .unwrap();
+            assert!(point[0] > 175. && point[0] < 825. && point[1] > 175. && point[1] < 525.);
+            if should_frame {
+                assert!(
+                    (point[0] - 500.).abs() < 0.001 && (point[1] - 350.).abs() < 0.001,
+                    "Origin must be centered in the actual canvas, independent of UI offsets and DPI"
+                );
+            }
+            command(world, EditorCommand::Cancel);
+            assert!(!support::picking(world));
+            assert_eq!(fixture.engine.geometry_revision(), revision);
+            assert_eq!(
+                fixture.engine.engine_call("project_export_model", ""),
+                original
+            );
+        }
+
+        // Existing geometry is a useful sketch support. Starting another
+        // sketch must preserve the user's framing of that geometry.
+        for (operation, arguments) in [
+            (
+                "sketch_begin",
+                json!({"plane":{"type":"origin_plane","plane":"xy"}}),
+            ),
+            (
+                "sketch_add_line",
+                json!({"from":{"x":0.,"y":0.},"to_raw":{"x":20.,"y":0.},"ctrl_held":true}),
+            ),
+            ("sketch_finish", json!({})),
+        ] {
+            fixture
+                .bridge
+                .apply_native_mutation(&fixture.engine, &owner, operation, &arguments, || Ok(()))
+                .unwrap();
+        }
+        refresh_native_model(&fixture.engine, world, true).unwrap();
+        let camera = ViewportCamera {
+            position: [10170., -170., 130.],
+            target: [10000., 0., 0.],
+            ..normal
+        };
+        native_viewport::apply_interface_view(world, &owner.document_id, Some(camera), None)
+            .unwrap();
+        command(world, EditorCommand::Support(support::Command::Start));
+        assert_eq!(native_viewport::interface_view(world).1, camera);
+        command(world, EditorCommand::Cancel);
+    });
+}
+
+#[test]
 fn browser_projection_excludes_history_and_invalidates_only_consumed_inputs() {
     let mut document = Document::new("Stock");
     let original = BrowserDocument::retain(&document, None);
