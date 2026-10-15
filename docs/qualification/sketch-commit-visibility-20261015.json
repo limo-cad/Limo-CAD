@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-15",
+  "scope": "Committed sketch geometry must appear after the final click without another mouse movement",
+  "base_revision": "736758f291",
+  "branch": "fix/sketch-commit-and-scale",
+  "pull_request": 427,
+  "cause": "Empty sketch curve and point gizmo groups allocated a new asset on the first primitive; its first completed idle frame omitted that asset.",
+  "change": "Retain sketch curve, point outline and point assets with the existing transparent zero-length sentinel.",
+  "shared_tools": [
+    "two-point rectangle",
+    "center rectangle",
+    "line",
+    "midpoint line",
+    "point",
+    "center-diameter circle",
+    "two-point circle",
+    "three-point arc",
+    "center arc",
+    "center-to-center slot",
+    "overall slot",
+    "center-point slot",
+    "spline"
+  ],
+  "validation": {
+    "before_fix": "The original Metal completed-frame regression failed because no rectangle was visible immediately after commit.",
+    "retained_gpu_regression": "For 13 primitive variants, compare the first completed frame with a later forced frame. Undo between primitives; no pointer input supplies a follow-up frame.",
+    "ci_inventory": "The native visual workflow explicitly runs the sketch-commit suite; inventory rejects a missing, renamed or duplicate test.",
+    "user_feedback": "User reports the original visibility issue seems fixed and explicitly requests retaining only this fix.",
+    "narrowed_source_checks": {
+      "metal_gpu_test": "passed; all 13 variants visible in the first completed frame, matching the forced follow-up frame",
+      "renderer_regressions": "45 passed, 0 failed",
+      "ci_inventory_guard": "1 passed, 0 failed",
+      "strict_release_clippy": "desktop lib/tests passed with warnings denied",
+      "formatting_and_whitespace": "passed"
+    },
+    "narrowed_test_application": "Prepared from the PR418/419 combined baseline plus only this retained visibility change; exact source and package checks are recorded beside the delivered app in artifacts/sketch-visibility-only-20261015"
+  },
+  "qualification_limits": [
+    "Windowless Metal checks exercise rendering; they do not qualify physical input or the entire GUI.",
+    "All user documents, recovery data and captures are preserved.",
+    "Broader UI and manual MCP qualification remains paused.",
+    "The test app is supplied before the PR becomes ready for review."
+  ]
+}
