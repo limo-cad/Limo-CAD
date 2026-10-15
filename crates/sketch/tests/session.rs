@@ -1100,7 +1100,9 @@ fn host_roundtrip_begin_add_undo() {
     );
     let v: serde_json::Value = serde_json::from_str(&r).unwrap();
     assert_eq!(v["ok"], true);
-    assert_eq!(v["value"]["created_constraints"][0]["type"], "horizontal");
+    let constraints = v["value"]["created_constraints"].as_array().unwrap();
+    assert!(constraints.iter().any(|c| c["type"] == "horizontal"));
+    assert!(constraints.iter().any(|c| c["type"] == "origin_coincident"));
     assert_eq!(v["value"]["sketch"]["can_undo"], true);
 
     let r = host::handle(&mut m, "undo", "");
