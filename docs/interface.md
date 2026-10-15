@@ -45,6 +45,11 @@ Only currently rendered controls appear; disabled controls remain explicitly
 disabled. Missing labels are reported. This inventory is not a claim that every
 product feature is implemented or behaviorally tested.
 
+Native sketch dimension behavior must follow the
+[sketch dimension interaction requirements](sketch-dimensions.md), including
+leaders that follow the cursor in the measurement's allowed directions as soon
+as the first measurable object is selected.
+
 Inspect immediately before acting. Use the returned opaque control ID with
 `click`, `double_click`, `context_menu`, `set_value`, or `key`. IDs expire on the
 next inspection and reject changed documents, recycled controls, hidden or
