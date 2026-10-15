@@ -3,7 +3,9 @@
   "user_results": {
     "Limo CAD Sketch Fix Test": "Reported problem remains; two screenshots supplied",
     "Limo CAD Sketch Diagnostics, recording on": "Reported good",
-    "Limo CAD Sketch Comparison, recording off": "Reported good"
+    "Limo CAD Sketch Comparison, recording off": "Reported good",
+    "Limo CAD Original State Check": "Reported good with byte-identical original CAD executable",
+    "original_failure_timing": "User confirms it happens on the first rectangle in a brand-new sketch, before finishing or Undo"
   },
   "verified_build_facts": {
     "original_source": "71d789635750ba3d4996d062abe18d1bcc0fa41f",
@@ -39,14 +41,38 @@
     "original_native_libraries_retained": true,
     "original_info_plist_byte_identical": true,
     "recording": "disabled",
-    "only_controlled_change": "Launcher points at the working diagnostic/comparison private config and session directories",
+    "launcher_change": "Launcher points at the working diagnostic/comparison private config and session directories and unsets tracing",
+    "additional_comparison_difference": "The copy has a different app filename and filesystem path; launch context is not identical to the original app",
     "private_state_directory": "~/Library/Application Support/Limo CAD Sketch Diagnostics/",
     "original_saved_data": "Preserved without edits or reset",
     "signature": "Deep strict verification passed",
     "headless_startup": "Passed; original clean source identity verified",
     "zip_integrity": "Passed",
     "manual_instruction": "Quit all CAD test apps before opening the state comparison",
-    "user_result": "pending"
+    "user_result": "Reported good"
+  },
+  "state_inspection_limits": {
+    "preference_files": "Both configuration directories are empty",
+    "saved_project_model": "Identical blank mm project settings; no shapes or saved views",
+    "active_sketch_snapshots": "XY basis and grid snapping match; snapshots differ in manual drawing history",
+    "session_directory_role": "Published MCP model/sketch/focus/heartbeat snapshots and process registry; no automatic restoration of these snapshots was found in native GUI initialization",
+    "conclusion": "Neither corrupt preferences nor saved sketch history is established as the cause. Failure on the first rectangle rules out finishing or Undo as a necessary trigger."
+  },
+  "external_original_app_observer": {
+    "source": "xtask/platform/sketch-observer-macos.m",
+    "instructions": "xtask/platform/sketch-observer-macos.md",
+    "application": "Limo CAD Original Cursor Recorder.app",
+    "artifact_directory": "/Users/jack/Code/noBS-CAD/artifacts/sketch-original-cursor-recorder-20261015-final",
+    "purpose": "Observe the original failing process without replacing its executable, launcher, metadata, configuration or saved data",
+    "target_identity": "Exact original executable path, PID and SHA-256",
+    "cursor": "Unrounded OS Quartz global screen points before and after each independent polling sample",
+    "readouts": "Accessible Drawing field values, screen bounds and individual read intervals from the original app; not pixel OCR or engine-processed cursor coordinates",
+    "viewport": "Optional explicitly derived build-specific coordinates; raw screen coordinates and AX bounds retained independently",
+    "cad_input_or_mcp_requests": false,
+    "storage": "Local private JSONL; target foreground only; 15 minute and 128 MiB bounds",
+    "checks": "Strict Objective-C compile, Clang static analysis, precision/filter/JSON checks, deep strict signature and ZIP integrity passed",
+    "live_capture": "Pending user; the standalone recorder requires its own Accessibility permission",
+    "original_engine_sha256_after_packaging": "71ed50af00ec242578809c4780340ea5fed4beacdaad56d6fa7edb95cc78f4be"
   },
   "evidence": {
     "screenshots": [
@@ -55,7 +81,7 @@
     ],
     "build_and_state_checkpoint": "artifacts/sketch-original-state-check-20261015/investigation-checkpoint.json"
   },
-  "conclusion": "Active recording is not required for the good behavior. The exact cause remains unproven; isolate the original executable from the old app state before attributing a fix to instrumentation or fresh data.",
+  "conclusion": "Active in-process recording and a code rebuild are not required for the good behavior. The exact original executable also behaves correctly in the State Check copy. Saved preferences and project settings do not explain the difference. The original-app discrepancy remains unresolved; capture that exact process externally before attributing a fix to instrumentation, fresh data or source changes.",
   "pr": "https://github.com/limo-cad/Limo-CAD/pull/427",
   "pr_state": "draft",
   "new_source_behavior_changes": 0,
