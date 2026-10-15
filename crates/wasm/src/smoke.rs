@@ -82,14 +82,35 @@ fn browser_facade_sketch_inference_drag_undo_redo_and_finish() {
         .contains(&json!("horizontal")));
     assert_eq!(preview["snapped_to"]["y"].as_f64(), Some(0.));
     let l1 = unwrap(engine.add_line(&payload));
-    assert_eq!(l1["created_constraints"][0]["type"], "horizontal");
+    let constraints = l1["created_constraints"].as_array().unwrap();
+    assert!(
+        constraints.iter().any(|constraint| {
+            constraint["type"] == "horizontal" && constraint["entity"] == l1["entity_id"]
+        }),
+        "{constraints:?}"
+    );
+    assert!(
+        constraints.iter().any(|constraint| {
+            constraint["type"] == "origin_coincident"
+                && constraint["entity"] == l1["start_point_id"]
+        }),
+        "{constraints:?}"
+    );
     let l2 = unwrap(engine.add_line(
         &json!({"from":{"x":50,"y":0},"to_raw":{"x":51,"y":50},"ctrl_held":false}).to_string(),
     ));
     assert_eq!(l2["start_point_id"], l1["end_point_id"]);
-    assert!(["perpendicular", "vertical"]
-        .iter()
-        .any(|kind| l2["created_constraints"][0]["type"] == *kind));
+    let constraints = l2["created_constraints"].as_array().unwrap();
+    assert!(
+        constraints.iter().any(|constraint| {
+            (constraint["type"] == "vertical" && constraint["entity"] == l2["entity_id"])
+                || (constraint["type"] == "perpendicular"
+                    && ((constraint["a"] == l1["entity_id"] && constraint["b"] == l2["entity_id"])
+                        || (constraint["a"] == l2["entity_id"]
+                            && constraint["b"] == l1["entity_id"])))
+        }),
+        "{constraints:?}"
+    );
     let l3 = unwrap(engine.add_line(
         &json!({"from":{"x":50,"y":50},"to_raw":{"x":0.5,"y":0.4},"ctrl_held":false}).to_string(),
     ));
