@@ -7,6 +7,7 @@ mod measurement;
 pub(crate) mod mechanism;
 mod solid;
 use crate::session_bridge::native_interface::controller::assembly::joint;
+pub(crate) mod diagnostics;
 mod dynamic;
 pub(crate) mod support;
 pub(crate) use dynamic::SizeField;
@@ -329,6 +330,7 @@ fn preview(
                 .unwrap_or_else(|| editor.draft.points.first().copied().unwrap_or(cursor)),
             cursor,
         ]);
+        diagnostics::preview(world, editor, acquired.snapped_to, kind);
         if editor.creation_error.as_deref() == Some(editor.error.as_str()) {
             editor.error.clear();
             editor.creation_error = None;

@@ -1156,6 +1156,40 @@ pub(super) fn editor_fixture() -> (App, NativeInterfaceHandle, Entity) {
     editor_fixture_with_submit(false)
 }
 
+#[test]
+fn diagnostic_readout_reports_visible_caption_editor_and_control_independently() {
+    let (mut app, _, entity) = editor_fixture();
+    app.world_mut()
+        .entity_mut(entity)
+        .insert(EditableText::new("4.123456789"));
+    let caption = app
+        .world_mut()
+        .spawn((
+            Text::new("4.1235"),
+            Node {
+                display: Display::Flex,
+                ..default()
+            },
+        ))
+        .id();
+    app.world_mut()
+        .entity_mut(entity)
+        .insert(CompactNumberCaption(caption));
+    let value = diagnostic_value(app.world(), entity);
+    assert_eq!(value["display_text"], "4.1235");
+    assert_eq!(value["editor_text"], "4.123456789");
+    assert_eq!(value["control_text"], "12");
+    assert_eq!(value["pending_user_edit"], true);
+    app.world_mut().get_mut::<Node>(caption).unwrap().display = Display::None;
+    let value = diagnostic_value(app.world(), entity);
+    assert_eq!(value["display_text"], "4.123456789");
+    assert_eq!(value["compact_caption_visible"], false);
+    assert_eq!(
+        app.world().get::<EditableText>(entity).unwrap().value(),
+        "4.123456789"
+    );
+}
+
 fn editor_fixture_with_submit(submit: bool) -> (App, NativeInterfaceHandle, Entity) {
     let (mut app, handle, entity, _) = fixture();
     app.add_plugins((

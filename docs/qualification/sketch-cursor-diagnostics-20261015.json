@@ -1,0 +1,40 @@
+{
+  "purpose": "Diagnostic test app requested after the dimension response issue remained reproducible",
+  "branch": "test/sketch-cursor-diagnostics",
+  "parent_test_app_revision": "71d789635750ba3d4996d062abe18d1bcc0fa41f",
+  "prior_pr418_419_test_baseline": "0221eea75f1c892eb2c712e79263045f8ed83576",
+  "pr": "https://github.com/limo-cad/Limo-CAD/pull/427",
+  "pr_state": "draft pending diagnosis and user acceptance",
+  "user_feedback": {
+    "confirmed_shape_visibility": "User reports the first problem seems fixed",
+    "dimension_response": "User reports the second problem remains; no resolution claimed"
+  },
+  "instrumentation": {
+    "activation": "Only when LIMO_CAD_SKETCH_TRACE_DIR is set by the separate diagnostic launcher",
+    "ordinary_launches": "No recorder resource, disk writes, or recording systems",
+    "raw_input": "Original f64 physical window cursor position before Bevy logical/f32/UI conversion, restricted to the primary application window",
+    "paired_readout": "Post-layout display_sample rows include the last processed raw cursor, actual visible numeric caption or editor text, control value, generation and pending-edit state",
+    "correlation": "Raw/input/preview sequence numbers preserve event order, including multiple raw moves received before one controller update",
+    "mapping": "Window and viewport coordinates, backing/UI scale, camera, sketch raw/acquired/resolved points, anchors, snapping kind and grid acquisition distances",
+    "navigation": "Raw wheel, pinch, resize and backing-scale changes are recorded without logging keyboard events",
+    "storage": "Local per-launch JSONL, create_new, private file permissions, bounded nonblocking queue, dropped-record counts, 256 MiB per file, asynchronous disk writes and exit flush"
+  },
+  "validation": {
+    "new_recorder_regressions_passed": 3,
+    "new_visible_text_adapter_regressions_passed": 1,
+    "sketch_editor_regressions_passed": 64,
+    "native_interface_regressions_passed": 91,
+    "native_host_regressions_passed": 12,
+    "additional_batched_pairing_test_added_after_editor_suite": true,
+    "strict_release_clippy_lib_and_tests": "passed with warnings denied",
+    "touched_file_formatting": "passed",
+    "whitespace": "passed",
+    "artifact_verification": "Separate build-identity.json and startup-verification.json beside the delivered app record exact compiled revision, signatures and package checks"
+  },
+  "local_artifact_directory": "/Users/jack/Code/noBS-CAD/artifacts/sketch-cursor-diagnostics-20261015",
+  "recordings_directory": "~/Desktop/Limo CAD Sketch Diagnostics/",
+  "physical_reproduction_on_diagnostic_build": "pending user",
+  "new_live_ui_passes": 0,
+  "new_manual_mcp_passes": 0,
+  "broader_ui_mcp_qualification": "paused; prior coverage and documents/recovery preserved"
+}

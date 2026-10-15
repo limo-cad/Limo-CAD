@@ -237,7 +237,11 @@ pub(crate) fn build(configure: impl FnOnce(&mut App, NativeInterfaceHandle)) -> 
     let mut app = App::new();
     let plugins = platform::viewport_renderer::interface_plugins().set(WindowPlugin {
         primary_window: Some(Window {
-            title: "Limo CAD".into(),
+            title: if crate::native_editor::diagnostics::requested() {
+                "Limo CAD — Sketch Diagnostics (recording)".into()
+            } else {
+                "Limo CAD".into()
+            },
             name: Some("limo-cad".into()),
             resolution: WindowResolution::new(1360, 860),
             resize_constraints: bevy::window::WindowResizeConstraints {
@@ -285,6 +289,7 @@ pub(crate) fn build(configure: impl FnOnce(&mut App, NativeInterfaceHandle)) -> 
     configure(&mut app, handle);
     super::interface_shell::fields::install(&mut app);
     super::interface_shell::ranges::install(&mut app);
+    crate::native_editor::diagnostics::install(&mut app);
     app
 }
 
@@ -359,6 +364,10 @@ fn route_window_input(world: &mut World) {
                 .map(|event| event.event.clone())
                 .collect::<Vec<_>>();
             handle.record_raw_file_shortcuts(&raw);
+            let backing_scale = world
+                .get::<Window>(window)
+                .map_or(1., |window| f64::from(window.scale_factor()));
+            crate::native_editor::diagnostics::raw_events(world, &raw, backing_scale);
             ordered_modifiers = ordered_modifier_snapshots(&mut state.raw_modifiers, window, raw);
         }
         let events: Vec<_> = state
@@ -488,6 +497,7 @@ pub(crate) fn prepare_native_input(
             input.modifiers,
         )?;
         input.actions = handle.take_actions()?;
+        crate::native_editor::diagnostics::routed(world, input);
         Ok(())
     })
 }

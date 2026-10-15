@@ -516,6 +516,7 @@ fn update_inner(
             .cloned(),
     );
     for mut event in events {
+        crate::native_editor::diagnostics::input(world, handle, &event);
         if event.ui_scale != handle.presented_ui_scale()
             && matches!(
                 event.event,

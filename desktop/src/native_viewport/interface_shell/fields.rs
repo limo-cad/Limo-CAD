@@ -389,6 +389,35 @@ pub(crate) fn has_uncommitted_edit(world: &World, entity: Entity) -> bool {
     })
 }
 
+/// Diagnostic reads are limited to drawing dimensions by the caller. Preserve
+/// the visible caption separately from both the editor buffer and model value.
+pub(crate) fn diagnostic_value(world: &World, entity: Entity) -> serde_json::Value {
+    let editor = world
+        .get::<EditableText>(entity)
+        .map(|editor| editor.value().to_string());
+    let caption = world
+        .get::<CompactNumberCaption>(entity)
+        .and_then(|caption| {
+            (world.get::<Node>(caption.0)?.display != Display::None)
+                .then(|| world.get::<Text>(caption.0).map(|text| text.0.as_str()))
+                .flatten()
+        });
+    let control = world.get::<InterfaceControl>(entity).and_then(|control| {
+        if let Field::Text { value, .. } = &control.field {
+            Some(value.as_str())
+        } else {
+            None
+        }
+    });
+    let bounded =
+        |value: Option<&str>| value.map(|value| value.chars().take(256).collect::<String>());
+    serde_json::json!({
+        "display_text": bounded(caption.or(editor.as_deref())), "editor_text": bounded(editor.as_deref()),
+        "control_text": bounded(control), "compact_caption_visible": caption.is_some(),
+        "pending_user_edit": has_uncommitted_edit(world, entity),
+    })
+}
+
 /// Close or external edits can arrive before a field's blur/Enter commit. Inspect
 /// only the exact captured editor owner and binding; the guard never submits text.
 pub(crate) fn guard_document_close(world: &World, owner: &DocumentContext) -> Result<(), String> {
