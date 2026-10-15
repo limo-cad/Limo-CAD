@@ -657,6 +657,10 @@ impl PreviewRenderer {
 mod boundary_evidence;
 
 #[cfg(test)]
+#[path = "script_preview/dimension_visibility.rs"]
+mod dimension_visibility;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1449,7 +1453,7 @@ mod tests {
         );
     }
 
-    fn decode_rgba(png: &[u8]) -> (u32, u32, Vec<u8>) {
+    pub(super) fn decode_rgba(png: &[u8]) -> (u32, u32, Vec<u8>) {
         use bevy::asset::RenderAssetUsages;
         use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
         let image = Image::from_buffer(
