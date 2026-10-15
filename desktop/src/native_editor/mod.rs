@@ -929,7 +929,7 @@ pub(crate) fn process_one(
                 let Some(basis) = editor.stamp.as_ref().and_then(|stamp| stamp.basis) else { return Ok(result); };
                 let Some(canvas) = viewport_bounds else { return Ok(result); };
                 let cursor = moved.position;
-                if handle.owns_pointer([f64::from(cursor.x),f64::from(cursor.y)]) {return Ok(result);}
+                if handle.blocks_pointer_motion([f64::from(cursor.x),f64::from(cursor.y)]) {return Ok(result);}
                 if f64::from(cursor.x) < canvas.x || f64::from(cursor.x) >= canvas.x+canvas.width
                     || f64::from(cursor.y) < canvas.y || f64::from(cursor.y) >= canvas.y+canvas.height {
                     clear_preview(world, &services.engine, &services.bridge, &presented_owner)?;

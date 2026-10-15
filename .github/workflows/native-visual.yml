@@ -53,6 +53,10 @@ jobs:
         run: cargo xtask ci native-ignored-test sketch-visual
       - name: Verify grid visibility restores without pointer input
         run: cargo xtask ci native-ignored-test grid-redraw
+      - name: Verify committed sketch geometry appears without pointer input
+        env:
+          LIMO_VIEWPORT_RENDER_PROOFS: ${{ github.workspace }}/docs/qa/native-boundary
+        run: cargo xtask ci native-ignored-test sketch-commit
       - name: Retain native visual evidence
         if: always()
         uses: actions/upload-artifact@v4
