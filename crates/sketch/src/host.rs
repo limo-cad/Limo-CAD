@@ -22,12 +22,12 @@ use crate::dto::{
     err_json, ok_json, Arc3PointRequest, ArcCenterRequest, BeginSketchRequest, BreakRequest,
     ChamferRequest, CircleRequest, CircularPatternRequest, ConstraintBatchRequest,
     DeleteConstraintRequest, DeleteDimensionRequest, DeleteEntitiesRequest, DeleteEntityRequest,
-    DimensionRequest, EditDimensionRequest, EvalExpressionRequest, ExtendRequest, FilletRequest,
-    LockedCircleRequest, LockedRectangleRequest, LockedSegmentRequest, MidpointLineRequest,
-    MirrorRequest, MoveCopyRequest, MoveDimensionRequest, MovePointRequest, OffsetRequest,
-    PointRequest, PolygonRequest, RectangleRequest, RectangularPatternRequest, ScaleRequest,
-    SegmentRequest, SetDimensionModeRequest, SetDimensionStyleRequest, SetGridSnapRequest,
-    SetGridStepRequest, SlotRequest, SplineRequest, ToggleFixBatchRequest, TrimRequest,
+    EvalExpressionRequest, ExtendRequest, FilletRequest, LockedCircleRequest,
+    LockedRectangleRequest, LockedSegmentRequest, MidpointLineRequest, MirrorRequest,
+    MoveCopyRequest, MoveDimensionRequest, MovePointRequest, OffsetRequest, PointRequest,
+    PolygonRequest, RectangleRequest, RectangularPatternRequest, ScaleRequest, SegmentRequest,
+    SetDimensionModeRequest, SetDimensionStyleRequest, SetGridSnapRequest, SetGridStepRequest,
+    SlotRequest, SplineRequest, ToggleFixBatchRequest, TrimRequest,
 };
 use crate::manager::SketchManager;
 use crate::plane::PlaneRef;
@@ -260,6 +260,9 @@ pub fn handle_read_only(manager: &SketchManager, method: &str, payload: &str) ->
                 manager.preview_creation_point(r)
             })
         }
+        "preview_dimension" => with_payload(payload, |r: crate::dto::DimensionPreviewRequest| {
+            manager.preview_dimension(r)
+        }),
         "preview_segment" => with_payload(payload, |r: SegmentRequest| manager.preview_segment(r)),
         "preview_creation" => with_payload(payload, |r: crate::dto::CreationPreviewRequest| {
             manager.preview_creation(r)
@@ -685,10 +688,12 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         "add_constraints" => with_payload(payload, |r: ConstraintBatchRequest| {
             manager.add_constraints(r)
         }),
-        "add_dimension" => with_payload(payload, |r: DimensionRequest| manager.add_dimension(r)),
-        "edit_dimension" => {
-            with_payload(payload, |r: EditDimensionRequest| manager.edit_dimension(r))
-        }
+        "add_dimension" => with_payload(payload, |r: crate::dto::DimensionTargetRequest| {
+            manager.add_dimension_target(r)
+        }),
+        "edit_dimension" => with_payload(payload, |r: crate::dto::EditDimensionTargetRequest| {
+            manager.edit_dimension_target(r)
+        }),
         "set_dimension_mode" => with_payload(payload, |r: SetDimensionModeRequest| {
             manager.set_dimension_mode(r)
         }),

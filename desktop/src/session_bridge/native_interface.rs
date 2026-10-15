@@ -675,6 +675,19 @@ pub(crate) fn reduce_action(
                         || handle.validate_action(action),
                     );
                 }
+                ControlInput::Key(key)
+                    if key == &limo_cad_interface::KeyChord::plain("Escape")
+                        && matches!(command, InteractionCommand::DimensionText(_)) =>
+                {
+                    return crate::native_editor::execute(
+                        world,
+                        engine,
+                        bridge,
+                        &action.context,
+                        EditorCommand::Interaction(InteractionCommand::CancelDimension),
+                        || handle.validate_action(action),
+                    );
+                }
                 _ => return Err("Use the expression field to enter a value".into()),
             };
             let command = match command {

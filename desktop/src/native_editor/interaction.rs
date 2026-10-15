@@ -83,6 +83,11 @@ pub(super) struct Interaction {
     pub relation: Option<Relation>,
     pub modify: Option<ModifyTool>,
     pub dimension: Option<String>,
+    pub dimension_initial_value: Option<String>,
+    pub dimension_edited: bool,
+    pub dimension_tool: bool,
+    pub dimension_edge: Option<limo_cad_core::EdgeId>,
+    pub dimension_preview: Option<limo_cad_sketch::DimensionDto>,
     pub dimension_position: Option<SketchPoint>,
     pub dimension_id: Option<ConstraintId>,
     pub dimension_reference: bool,
@@ -115,10 +120,14 @@ impl Interaction {
             Some(format!("{}: click a curve (Escape cancels)", tool.label()))
         } else if self.dimension.is_some() {
             Some(
-                if self.dimension_id.is_some() {
+                if self.dimension_tool && self.dimension_position.is_some() {
+                    "Enter or click to confirm; select another edge to refine; Escape cancels"
+                } else if self.dimension_tool {
+                    "Select geometry to dimension; Escape cancels"
+                } else if self.dimension_id.is_some() {
                     "Edit the dimension, or reposition its label"
                 } else {
-                    "Select geometry, then click to place its dimension"
+                    "Type a value and press Enter; Escape cancels"
                 }
                 .into(),
             )
@@ -186,7 +195,7 @@ pub(super) fn hover(
     world: &mut World,
     services: &NativeServices,
     owner: &DocumentContext,
-    editor: &Editor,
+    editor: &mut Editor,
     cursor: Option<Vec2>,
     canvas: InterfaceRect,
 ) -> Result<(), String> {
@@ -198,6 +207,22 @@ pub(super) fn hover(
         if cache.0.as_ref().is_none_or(|(old, _)| old != stamp) {
             cache.0 = active(&services.engine)?.map(|sketch| (stamp.clone(), sketch));
             cache.1 = None;
+        }
+        if let (Some(cursor), Some((_, sketch))) = (cursor, cache.0.as_ref()) {
+            if editor.interaction.dimension_tool {
+                if let Some(point) = native_viewport::interface_sketch_point(
+                    world,
+                    &owner.document_id,
+                    [cursor.x - canvas.x as f32, cursor.y - canvas.y as f32],
+                    sketch.basis,
+                )? {
+                    if dimension::follow_cursor(&mut editor.interaction, sketch, point) {
+                        if let Some(handle) = world.get_resource::<NativeInterfaceHandle>() {
+                            handle.invalidate_presentation();
+                        }
+                    }
+                }
+            }
         }
         let hit = match (cursor, cache.0.as_ref()) {
             (Some(cursor), Some((_, sketch))) => selection::hit(
@@ -365,8 +390,10 @@ pub(super) fn execute(
                 .ok_or("Editor generation exhausted")?;
             editor.interaction.retain_selection();
             editor.interaction.dimension = Some(String::new());
+            editor.interaction.dimension_tool = true;
             editor.interaction.dimension_position = None;
             editor.interaction.dimension_id = None;
+            dimension::refresh(engine, editor)?;
         }
         InteractionCommand::EditDimension(id) => {
             editor.form_serial = editor
@@ -381,15 +408,11 @@ pub(super) fn execute(
             editor.interaction = Interaction {
                 dimension_id: Some(id),
                 dimension_reference: dim.mode == limo_cad_sketch::DimensionMode::Reference,
-                dimension: Some(
-                    dim.param_expression
-                        .clone()
-                        .unwrap_or_else(|| dim.value.to_string()),
-                ),
                 dimension_position: Some(dim.text_pos),
                 selection: dim.entities.clone(),
                 ..Default::default()
             };
+            dimension::begin_value(&mut editor.interaction, dim);
         }
         InteractionCommand::DeleteDimension => {
             let id = editor
@@ -481,37 +504,64 @@ pub(super) fn execute(
                 .dimension
                 .as_mut()
                 .ok_or("Dimension editor is closed")? = text;
+            editor.interaction.dimension_edited = true;
         }
         InteractionCommand::CancelDimension => {
             editor.interaction.dimension = None;
+            editor.interaction.dimension_initial_value = None;
+            editor.interaction.dimension_edited = false;
             editor.interaction.dimension_position = None;
             editor.interaction.dimension_id = None;
             editor.interaction.dimension_actions = false;
+            editor.interaction.dimension_tool = false;
+            editor.interaction.dimension_edge = None;
+            editor.interaction.dimension_preview = None;
         }
         InteractionCommand::DimensionActions => {
             editor.interaction.dimension_actions = !editor.interaction.dimension_actions;
         }
         InteractionCommand::ApplyDimension => {
-            if editor.interaction.dimension_reference {
+            editor.interaction.dimension_edited |=
+                panel::dimension_value_edited(world, editor.form_serial);
+            if editor.interaction.dimension_reference && editor.interaction.dimension_id.is_some() {
+                if editor.interaction.dimension_tool {
+                    let id = editor.interaction.dimension_id.unwrap();
+                    if let Some(position) = editor.interaction.dimension_position {
+                        if sketch
+                            .dimensions
+                            .iter()
+                            .any(|d| d.constraint_id == id && d.text_pos != position)
+                        {
+                            return mutate(
+                                world,
+                                editor,
+                                Prepared {
+                                    operation: "sketch_move_dimension",
+                                    arguments: json!({"constraint_id": id, "text_pos": position}),
+                                },
+                            );
+                        }
+                    }
+                }
                 editor.interaction.retain_selection();
                 return Ok(json!({"closed":true}));
             }
             if editor.interaction.selection.is_empty() {
                 return Err("Select one or two entities to dimension".into());
             }
-            let text = editor
-                .interaction
-                .dimension
-                .as_ref()
+            let text = dimension::committed_value(&editor.interaction)
                 .ok_or("Dimension editor is closed")?;
             let position = editor
                 .interaction
                 .dimension_position
                 .ok_or("Click in the sketch to place the dimension")?;
             if let Some(id) = editor.interaction.dimension_id {
-                let request = EditDimensionRequest {
-                    constraint_id: id,
-                    text: text.clone(),
+                let request = limo_cad_sketch::EditDimensionTargetRequest {
+                    dimension: EditDimensionRequest {
+                        constraint_id: id,
+                        text: text.to_owned(),
+                    },
+                    text_pos: editor.interaction.dimension_tool.then_some(position),
                 };
                 return mutate(
                     world,
@@ -522,10 +572,15 @@ pub(super) fn execute(
                     },
                 );
             }
-            let request = DimensionRequest {
-                entities: editor.interaction.selection.clone(),
-                text_pos: position,
-                value_text: (!text.trim().is_empty()).then(|| text.clone()),
+            let request = limo_cad_sketch::DimensionTargetRequest {
+                reference_edge: editor.interaction.dimension_edge,
+                dimension: DimensionRequest {
+                    entities: editor.interaction.selection.clone(),
+                    text_pos: position,
+                    value_text: (!editor.interaction.dimension_reference
+                        && !text.trim().is_empty())
+                    .then(|| text.to_owned()),
+                },
             };
             return mutate(
                 world,
@@ -618,6 +673,19 @@ pub(super) fn pointer(
             .flatten()
         },
     );
+    let boundary = if editor.interaction.dimension_tool && hit.is_none() {
+        dimension::boundary_hit(&sketch.projected_edges, at, |p| {
+            native_viewport::interface_world_point(
+                world,
+                &owner.document_id,
+                sketch.basis.to_3d([p.x, p.y]),
+            )
+            .ok()
+            .flatten()
+        })
+    } else {
+        None
+    };
     let mut end_point = native_viewport::interface_sketch_point(
         world,
         &owner.document_id,
@@ -715,7 +783,11 @@ pub(super) fn pointer(
             },
         );
     }
-    if let Some(id) = hit {
+    let old_selection = editor.interaction.selection.clone();
+    let old_edge = editor.interaction.dimension_edge;
+    if let Some(edge) = boundary {
+        editor.interaction.dimension_edge = Some(edge);
+    } else if let Some(id) = hit {
         let previous = editor.interaction.selection.clone();
         let accumulating = shift
             || editor.interaction.relation.is_some()
@@ -752,9 +824,39 @@ pub(super) fn pointer(
             form.values[1] = (end_point.y / scale).to_string();
         }
     } else if editor.interaction.dimension.is_some() && !editor.interaction.selection.is_empty() {
-        editor.interaction.dimension_position = Some(end_point);
+        if editor.interaction.dimension_tool {
+            dimension::follow_cursor(&mut editor.interaction, &sketch, end_point);
+            if editor.interaction.dimension_preview.is_some() {
+                return execute(
+                    world,
+                    &services.engine,
+                    &services.bridge,
+                    owner,
+                    editor,
+                    InteractionCommand::ApplyDimension,
+                    || Ok(()),
+                );
+            }
+        } else {
+            editor.interaction.dimension_position = Some(end_point);
+        }
     } else if !shift {
         editor.interaction.selection.clear();
+    }
+    if editor.interaction.dimension_tool
+        && (old_selection != editor.interaction.selection
+            || old_edge != editor.interaction.dimension_edge)
+    {
+        if let Err(error) = dimension::refresh(&services.engine, editor) {
+            editor.interaction.selection = old_selection;
+            editor.interaction.dimension_edge = old_edge;
+            return Err(error);
+        }
+    }
+    if editor.interaction.dimension_tool && editor.interaction.dimension_preview.is_some() {
+        // Canvas clicks blur native text editing before reaching this handler.
+        // Keep repeat geometry picks ready for typing or unchanged-value Enter.
+        panel::retry_dimension_focus(world);
     }
     present(world, owner, &editor.interaction)?;
     editor.error.clear();
