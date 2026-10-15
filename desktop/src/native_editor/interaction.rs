@@ -83,6 +83,8 @@ pub(super) struct Interaction {
     pub relation: Option<Relation>,
     pub modify: Option<ModifyTool>,
     pub dimension: Option<String>,
+    pub dimension_initial_value: Option<String>,
+    pub dimension_edited: bool,
     pub dimension_tool: bool,
     pub dimension_edge: Option<limo_cad_core::EdgeId>,
     pub dimension_preview: Option<limo_cad_sketch::DimensionDto>,
@@ -406,15 +408,11 @@ pub(super) fn execute(
             editor.interaction = Interaction {
                 dimension_id: Some(id),
                 dimension_reference: dim.mode == limo_cad_sketch::DimensionMode::Reference,
-                dimension: Some(
-                    dim.param_expression
-                        .clone()
-                        .unwrap_or_else(|| dim.value.to_string()),
-                ),
                 dimension_position: Some(dim.text_pos),
                 selection: dim.entities.clone(),
                 ..Default::default()
             };
+            dimension::begin_value(&mut editor.interaction, dim);
         }
         InteractionCommand::DeleteDimension => {
             let id = editor
@@ -506,9 +504,12 @@ pub(super) fn execute(
                 .dimension
                 .as_mut()
                 .ok_or("Dimension editor is closed")? = text;
+            editor.interaction.dimension_edited = true;
         }
         InteractionCommand::CancelDimension => {
             editor.interaction.dimension = None;
+            editor.interaction.dimension_initial_value = None;
+            editor.interaction.dimension_edited = false;
             editor.interaction.dimension_position = None;
             editor.interaction.dimension_id = None;
             editor.interaction.dimension_actions = false;
@@ -546,10 +547,7 @@ pub(super) fn execute(
             if editor.interaction.selection.is_empty() {
                 return Err("Select one or two entities to dimension".into());
             }
-            let text = editor
-                .interaction
-                .dimension
-                .as_ref()
+            let text = dimension::committed_value(&editor.interaction)
                 .ok_or("Dimension editor is closed")?;
             let position = editor
                 .interaction
@@ -559,7 +557,7 @@ pub(super) fn execute(
                 let request = limo_cad_sketch::EditDimensionTargetRequest {
                     dimension: EditDimensionRequest {
                         constraint_id: id,
-                        text: text.clone(),
+                        text: text.to_owned(),
                     },
                     text_pos: editor.interaction.dimension_tool.then_some(position),
                 };
@@ -579,7 +577,7 @@ pub(super) fn execute(
                     text_pos: position,
                     value_text: (!editor.interaction.dimension_reference
                         && !text.trim().is_empty())
-                    .then(|| text.clone()),
+                    .then(|| text.to_owned()),
                 },
             };
             return mutate(

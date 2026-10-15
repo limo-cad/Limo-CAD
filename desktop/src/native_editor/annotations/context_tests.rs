@@ -724,13 +724,16 @@ fn rectangle_dimension_enter_or_placement_click_accepts_unchanged_and_typed_valu
             uuid::Uuid::new_v4()
         )));
         std::env::set_var("LIMO_CAD_SESSION_DIR", &directory.0);
-        for (typed, place) in [
-            (None, false),
-            (Some("20"), false),
-            (Some("21"), false),
-            (None, true),
-            (Some("20"), true),
-            (Some("21"), true),
+        for (height, typed, place) in [
+            (20., None, false),
+            (20., Some("20"), false),
+            (20., Some("21"), false),
+            (20., None, true),
+            (20., Some("20"), true),
+            (20., Some("21"), true),
+            (6.53272650918237, None, false),
+            (6.53272650918237, None, true),
+            (6.53272650918237, Some("6.53272651"), false),
         ] {
             let engine = Arc::new(AppState::new());
             let bridge = Arc::new(SessionBridgeState::default());
@@ -749,7 +752,7 @@ fn rectangle_dimension_enter_or_placement_click_accepts_unchanged_and_typed_valu
                 ("sketch_begin", json!({"type":"origin_plane","plane":"xy"})),
                 (
                     "sketch_add_rectangle",
-                    json!({"mode":"two_point","p1":{"x":0.,"y":0.},"p2":{"x":20.,"y":20.},"ctrl_held":false}),
+                    json!({"mode":"two_point","p1":{"x":0.,"y":0.},"p2":{"x":20.,"y":height},"ctrl_held":false}),
                 ),
             ] {
                 bridge
@@ -813,7 +816,7 @@ fn rectangle_dimension_enter_or_placement_click_accepts_unchanged_and_typed_valu
             let pixel = native_viewport::interface_world_point(
                 world,
                 &owner.document_id,
-                before.basis.to_3d([0., 10.]),
+                before.basis.to_3d([0., height * 0.5]),
             )
             .unwrap()
             .unwrap();
@@ -837,7 +840,7 @@ fn rectangle_dimension_enter_or_placement_click_accepts_unchanged_and_typed_valu
             interface_shell::fields::apply_requested_focus(world);
             assert_eq!(
                 world.resource::<Editor>().interaction.dimension.as_deref(),
-                Some("20")
+                Some(dimension::value_label(height).as_str())
             );
             assert!(!world.resource::<Editor>().interaction.dimension_reference);
             let key = handle.focused_key().unwrap();
@@ -848,7 +851,11 @@ fn rectangle_dimension_enter_or_placement_click_accepts_unchanged_and_typed_valu
                     .editor
                     .raw_selection()
                     .text_range(),
-                0..2
+                0..dimension::value_label(height).len()
+            );
+            assert_eq!(
+                world.get::<Node>(Entity::from_bits(key.0)).unwrap().width,
+                px(160.)
             );
             let keys = typed
                 .into_iter()
@@ -949,13 +956,19 @@ fn rectangle_dimension_enter_or_placement_click_accepts_unchanged_and_typed_valu
                 1,
                 "Dimension confirmation did not create the dimension for {typed:?}, click={place}"
             );
-            assert!(
-                (after.dimensions[0].value - typed.unwrap_or("20").parse::<f64>().unwrap()).abs()
-                    < 1e-8
+            assert_eq!(
+                after.dimensions[0].value,
+                typed.map_or(height, |text| text.parse::<f64>().unwrap()),
+                "untouched suggestions retain exact precision; replacements use typed precision"
             );
             assert_eq!(after.dof.value, 1);
             if place {
-                assert!(after.dimensions[0].text_pos.distance(Point::new(-6., 10.)) < 1e-5);
+                assert!(
+                    after.dimensions[0]
+                        .text_pos
+                        .distance(Point::new(-6., height * 0.5))
+                        < 1e-5
+                );
             }
             assert!(world.resource::<Editor>().interaction.dimension.is_none());
             bridge
