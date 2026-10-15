@@ -2,7 +2,7 @@
 //! engine operations; these fields hold only one unfinished gesture.
 use super::*;
 use crate::native_forms::{DimensionKind, MeasurementInput, ParameterValue};
-use crate::native_viewport::interface_shell::fields;
+use crate::native_viewport::interface_shell::{self, fields};
 use crate::session_bridge::native_interface::controller::chrome::{rect, Widgets};
 use limo_cad_core::UnitSystem;
 use limo_cad_interface::{Field, KeyChord};
@@ -427,6 +427,15 @@ pub(super) fn synchronize(
                     theme.panel,
                     34,
                 );
+                let background = panel.widgets.entity(&format!("size-bg-{index}")).unwrap();
+                if world
+                    .get::<interface_shell::InterfacePointerMotionPassthrough>(background)
+                    .is_none()
+                {
+                    world
+                        .entity_mut(background)
+                        .insert(interface_shell::InterfacePointerMotionPassthrough);
+                }
                 panel.widgets.text(
                     world,
                     camera,
@@ -479,6 +488,9 @@ pub(super) fn synchronize(
                         generation: editor.draft.generation,
                         index,
                     });
+                    world
+                        .entity_mut(entity)
+                        .insert(interface_shell::InterfacePointerMotionPassthrough);
                     if index == 0 {
                         fields::request_focus(world, entity, owner);
                     }

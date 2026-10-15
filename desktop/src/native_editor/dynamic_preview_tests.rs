@@ -284,3 +284,53 @@ fn changing_or_canceling_a_gesture_retires_its_resolved_measurements() {
     expect(&values, SizeField::Width, 30.);
     expect(&values, SizeField::Height, 10.);
 }
+
+#[test]
+fn screen_motion_keeps_one_scale_across_slow_and_large_moves_for_every_sized_tool() {
+    for tool in [
+        CreateTool::Line,
+        CreateTool::MidpointLine,
+        CreateTool::Rectangle(RectangleMode::TwoPoint),
+        CreateTool::Rectangle(RectangleMode::Center),
+        CreateTool::Circle(CircleMode::CenterDiameter),
+        CreateTool::Circle(CircleMode::TwoPoint),
+        CreateTool::Slot(SlotMode::CenterToCenter),
+        CreateTool::Slot(SlotMode::Overall),
+        CreateTool::Slot(SlotMode::CenterPoint),
+    ] {
+        let mut fixture = Fixture::new(tool);
+        let original = native_viewport::interface_camera_snapshot(fixture.app.world()).1;
+        let basis = fixture.editor.stamp.as_ref().unwrap().basis.unwrap();
+        let mut points = Vec::new();
+        for screen in [[1040., 400.], [1080., 400.], [1450., 400.], [1490., 400.]] {
+            let raw = native_viewport::interface_sketch_point(
+                fixture.app.world(),
+                &fixture.owner.document_id,
+                screen,
+                basis,
+            )
+            .unwrap()
+            .unwrap();
+            fixture.move_to(raw, true);
+            points.push(raw);
+            assert_eq!(
+                native_viewport::interface_camera_snapshot(fixture.app.world()).1,
+                original,
+                "{tool:?}: drawing motion must not zoom or refit the view"
+            );
+            let fields = fixture.app.world().resource::<DynamicPanel>();
+            for &entity in fields.fields.values() {
+                assert!(
+                    fixture
+                        .app
+                        .world()
+                        .get::<interface_shell::InterfacePointerMotionPassthrough>(entity)
+                        .is_some(),
+                    "{tool:?}: its live input must not trap drawing motion"
+                );
+            }
+        }
+        assert!(((points[1] - points[0]) - (points[3] - points[2])).length() < 1e-4,
+            "{tool:?}: equal screen displacements must keep the same millimetre scale after a large move");
+    }
+}
