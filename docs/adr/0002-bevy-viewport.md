@@ -4,107 +4,10 @@
 - Date: 2026-07-30
 - Tracking: [#20](https://github.com/limo-cad/Limo-CAD/issues/20)
 
-## Context
+The retired shell/composition contract is retained in the
+[pre-cutover record](https://github.com/limo-cad/Limo-CAD/blob/c537f0232ab86f28b1be3ee46fa6bf5ff46db5b9/docs/adr/0002-bevy-viewport.md).
 
-The desktop viewport needs native GPU rendering, accurate picking, low-latency
-camera input, Retina / HiDPI correctness, and a path toward CAM simulation.
-Putting those responsibilities in the webview couples the most performance-
-sensitive part of the application to browser rendering and native-view
-composition.
-
-Bevy must **not** replace OCCT. Solids remain B-rep; Bevy displays tessellated
-meshes, handles camera/picking/gizmos/3D-mouse, and hosts selection visualization.
-
-React remains valuable for the document shell, accessibility, browser
-automation, and form-heavy workflows. A production boundary therefore needs
-to preserve DOM semantics without drawing the same viewport control twice.
-
-## Decision
-
-The desktop application uses four explicit layers:
-
-1. **OCCT and the Rust document model are authoritative.** OCCT creates and
-   edits B-rep geometry. Tessellation, topology IDs, sketch geometry, and
-   presentation state are passed in-process to the viewport.
-2. **Bevy owns the complete viewport surface.** This includes meshes, edges,
-   sketches, datum/origin geometry, picking, camera navigation, transient
-   previews, selection highlighting, the orientation dial, viewport prompt,
-   status/readout cards, and the bottom navigation bar.
-3. **React owns the application shell and command forms.** Ribbon, browser,
-   project tabs, timeline, menus, and form-heavy feature dialogs remain DOM
-   elements. Transparent DOM proxies retain keyboard, pointer, accessibility,
-   and browser-test semantics for Bevy-owned viewport controls.
-4. **Tauri owns native composition.** The Bevy surface is an opaque native
-   child beneath the webview. The platform host clips the webview around the
-   viewport while preserving real DOM islands such as menus and dialogs above
-   it. CSS transparency is not used as the compositor contract.
-
-## DOM flyout and clipping contract
-
-Any React surface that can cross a shell boundary—menus, combobox lists,
-popovers, tooltips, context menus, and dialogs—must be rendered through a
-React portal under `document.body`. It must not remain a descendant of a
-ribbon, sidebar, tab strip, or other ancestor whose `overflow` can clip it.
-Increasing `z-index` cannot escape an ancestor's clipping boundary.
-
-Portaled surfaces use fixed viewport coordinates derived from the trigger's
-`getBoundingClientRect()`, are clamped to the current window, and are
-repositioned after resize, fullscreen, display-scale, and relevant scroll
-changes. DOM surfaces that cover the native Bevy viewport retain the
-`data-native-viewport-overlay` contract so Tauri preserves them as webview
-islands above the native child. Portaling must not bypass native-composition
-registration.
-
-The File-menu regression that established this rule had an absolutely
-positioned menu beginning exactly at the bottom of an `overflow-hidden`
-ribbon: 92 px in the standard shell and 122 px after the Drawing workspace row
-was added. The menu state changed and the DOM existed, but its entire painted
-and hit-testable area was outside the ancestor's clip. This class of failure
-must be tested by opening the surface and hit-testing/clicking an interior point
-that lies beyond the trigger's shell boundary. DOM presence, state changes,
-overlay-mask rectangles, and screenshots of fullscreen mode alone are not
-sufficient regressions.
-
-Bevy UI is built from the stable core `bevy_ui` flex/grid primitives. The
-experimental, unstyled `bevy_ui_widgets` crate is not a production dependency.
-`ViewportUiTheme` and the component builders in
-`desktop/src/native_viewport/ui.rs` are the canonical style implementation
-for native viewport UI.
-
-The bridge sends explicit palette, HUD, interaction, camera, and presentation
-state. It does not send screenshots or serialized OCCT geometry through
-JavaScript.
-
-When a workspace such as Drawing has no native 3D viewport, the host hides the
-native child and removes the macOS WKWebView cutout mask completely. Retaining
-an empty or stale even-odd mask is forbidden: it clips the webview to the old
-window bounds after live resize or native full-screen transitions. The
-WKWebView and its parent also retain flexible width/height autoresizing so this
-contract holds while the Bevy child is unmounted.
-
-Solid command forms publish a small, debounced semantic preview rather than
-DOM/SVG viewport pixels. For Extrude this contract contains the authoritative
-sketch `PlaneBasis`, selected profile loops, signed extent offsets, Boolean
-role, and direction arrow. The profile is triangulated with its holes and Bevy
-renders the translucent region, tool volume, and 3D manipulator. Both the
-preview and the OCCT request therefore use the same basis; vertical and
-internal datum-plane profiles cannot acquire an independent display rotation.
-React retains only the accessible dimension input and drag hit target. Browser
-regressions inspect this semantic payload without maintaining a second 3D
-renderer.
-
-Transient Bevy geometry is retained. Candidate profiles use inexpensive gizmo
-outlines; only the hovered/selected region receives a translucent x-ray fill.
-Profile and tool meshes are uploaded when their semantic content changes, not
-when the camera, annotations, or screen-size arrow transform changes. Camera
-motion updates retained manipulator transforms in place. This keeps navigation
-allocation-free even while a solid command is open.
-
-The embedded renderer is event-driven. Model, viewport-size, session-binding,
-and transient-mesh changes receive a second Bevy update to settle the extracted
-render world. Camera and presentation-only changes render exactly once on both
-macOS and Windows; duplicating those updates adds pointer latency without
-creating a new GPU pipeline.
+## Shared GPU ownership
 
 The native interface and windowless CAD worker share a GPU device and queue.
 Window configuration and frame acquisition exclude queue operations in the
@@ -116,11 +19,7 @@ pending submission wait so the interface can finish its last frame.
 Teardown also services any pending main-thread surface work.
 
 The Extrude tool volume is a translucent fill without a duplicate edge cage;
-the source sketch remains visible in its normal retained sketch layer. Its DOM
-drag proxy is hit-test-only and never becomes a webview mask island. Projected
-DOM value input is removed from the native cutout while the camera is moving
-and positioned once after navigation settles, so orbit cannot trigger
-per-frame compositor-mask updates or cover the Bevy arrowhead.
+the source sketch remains visible in its normal retained sketch layer.
 
 ## Exact solid-face feature sources
 
@@ -213,9 +112,8 @@ The macOS installed-driver path was calibrated against real cap motions on
 Equivalently, translation maps as `[Tx, -Ty, -Tz]` and rotation as
 `[Rx, -Ry, -Rz]`. In particular, forward/backward tilt keeps the driver's
 `Rx` sign. Preserve this canonical basis across native-driver, raw-HID, and
-browser-driver transports. The executable contracts are
-`scripts/e2e-six-dof-mouse.mjs` and
-`scripts/e2e-bevy-interaction-kernel.mjs`.
+browser-driver transports. The native adapter and its tests are in
+`desktop/src/six_dof_mouse.rs` and `desktop/src/six_dof_mouse/tests.rs`.
 
 Raw/native 6DoF translation and rotation share one persisted speed multiplier.
 The default is `1.5` (150% of the calibrated base rate), adjustable from 25%
@@ -231,40 +129,5 @@ camera. The supported focus-distance range is 2 through 5000 model units.
 Navigation input is transient. Production builds do not expose an input
 recorder, persist raw 6DoF/touchpad packets or camera traces, or periodically
 capture the user's viewport. Regression debugging uses synthetic automated
-inputs. The feature-gated visual lab below captures only its fixed development
-fixture and never attaches to a live user document or input stream.
-
-## Visual regression channel
-
-The `dev-ui-lab` Cargo feature builds a headless, GPU-backed Bevy render target
-using the same production UI builders as the embedded viewport. The capture is
-served by a development-only Vite route beside a React reference surface:
-
-```text
-cargo run --locked --manifest-path desktop/Cargo.toml --features dev-ui-lab --bin bevy-ui-lab -- public/__bevy_ui__/native.png
-npm run dev
-http://127.0.0.1:5173/?bevy-ui-lab=compare
-```
-
-The lab may include a representative feature dialog to validate that the Bevy
-style system can reproduce the shared visual language. It is a visual contract,
-not a second command-form implementation.
-
-## Consequences
-
-- Clear boundary: OCCT = truth, Bevy = presentation/interaction.
-- Viewport-local pixels no longer depend on webview/native-view overlap.
-- React keeps the DOM surfaces that benefit most from accessibility and agent
-  inspection.
-- Native controls and transparent DOM proxies require stable control IDs.
-- The Rust desktop binary is larger; Bevy features remain explicitly selected.
-- The visual lab is feature-gated and excluded from production binaries.
-- License audit into `THIRD_PARTY_NOTICES.md` before merge.
-- 3Dconnexion / 6DoF input can move closer to Rust HID paths already in Tauri.
-
-## Non-goals
-
-- Rewriting the ribbon, browser, timeline, menus, or command forms in Bevy
-- Mesh-only modeling
-- Maintaining a second browser renderer for the desktop viewport
-- Using the visual regression image as the production renderer
+inputs. The feature-gated visual lab captures only its fixed development fixture and
+never attaches to a live user document or input stream.

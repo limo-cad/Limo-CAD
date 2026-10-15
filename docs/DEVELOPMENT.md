@@ -194,7 +194,7 @@ cargo test --locked --manifest-path desktop/Cargo.toml
 The default desktop build compiles the Bevy interface, Winit host, native sketch
 editor, and controller. The temporary `dev-bevy-host` switch and React desktop
 host have been removed. The retired browser frontend was not a desktop
-build dependency. The transition remains under validation on draft PR #124.
+build dependency.
 
 The native host supports middle-button pan, right-button or Shift+middle-button
 orbit, wheel zoom, trackpad pan, Shift+scroll orbit, and pinch zoom. These use the

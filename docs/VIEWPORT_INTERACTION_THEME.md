@@ -42,8 +42,8 @@ Preserve this residency mechanism when adjusting appearance.
 
 ## Desktop visual validation gate
 
-For desktop viewport work, the packaged Tauri application with its embedded
-Bevy surface is the only visual source of truth. Browser rendering, DOM state,
+For desktop viewport work, the packaged native Bevy application is the visual
+source of truth. Browser rendering, DOM state,
 picker state, unit tests, and browser end-to-end tests can prove data flow, but
 they cannot prove that Bevy drew visible or correctly sized pixels. A desktop
 visual fix is not complete until the actual packaged app has reproduced the
@@ -116,10 +116,6 @@ point tokens are synchronized with those states. Related face/body fill colors
 may be toned variants so a selected surface remains readable, but its boundary
 uses the exact hover or selected interaction color.
 
-`src/theme/viewportInteractionTheme.ts` records the typed contract and stroke
-emphasis. Its test verifies CSS synchronization and minimum contrast for both
-appearance modes.
-
 ## Rendering precedence
 
 1. Ordinary non-interactive geometry uses its domain color.
@@ -162,9 +158,7 @@ so the click produces an immediate, visible state change.
 
 The shared theme applies to closed profiles, finished sketch entities, bodies,
 components, faces, model edges, reference planes, surface points, and sketch
-points. New modeling picker geometry must declare a feedback channel in
-`src/modeling/viewportPicker.ts`; the picker contract test rejects silent
-geometry types.
+points.
 
 Modeling inputs that require different geometry types expose both types while
 the command is active. A click is routed to the unambiguous matching input and
