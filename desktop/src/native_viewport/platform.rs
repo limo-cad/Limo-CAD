@@ -2820,9 +2820,13 @@ fn draw_cad_gizmos(
     let fine = rgba(palette.0.grid_fine, 0.28);
     let major = rgba(palette.0.grid_major, 0.48);
 
-    // Hiding the grid can empty this group. Keep its uploaded asset alive so
-    // restoring it does not need another scene update to prepare a new asset.
+    // Idle snapshots must already own their uploaded line assets. The first
+    // primitive (or restoring an empty layer) cannot wait for another mouse
+    // move to prepare a newly allocated asset.
     keep_gizmo_asset_resident(&mut gizmos);
+    keep_gizmo_asset_resident(&mut sketch_gizmos);
+    keep_gizmo_asset_resident(&mut sketch_point_outlines);
+    keep_gizmo_asset_resident(&mut sketch_points);
     keep_gizmo_asset_resident(&mut highlights);
     keep_gizmo_asset_resident(&mut model_edges);
     keep_gizmo_asset_resident(&mut cam_completed);

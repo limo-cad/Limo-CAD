@@ -10,9 +10,9 @@ pub(super) struct CompilationGate {
 }
 
 #[derive(Resource, Default)]
-struct Captured(Option<Image>);
+pub(super) struct Captured(Option<Image>);
 
-fn capture(app: &mut App, target: &Handle<Image>, name: &str) -> Vec<u8> {
+pub(super) fn capture(app: &mut App, target: &Handle<Image>, name: &str) -> Vec<u8> {
     // Capture a prepared UI frame, rather than the first clear-only frame
     // before the interface's own 2D pipelines and image assets are ready.
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -62,7 +62,7 @@ fn capture(app: &mut App, target: &Handle<Image>, name: &str) -> Vec<u8> {
     }
 }
 
-fn ready(app: &mut App) {
+pub(super) fn ready(app: &mut App) {
     let deadline = Instant::now() + Duration::from_secs(20);
     while !app.world().resource::<ViewportReady>().0 {
         app.update();
@@ -72,7 +72,7 @@ fn ready(app: &mut App) {
     }
 }
 
-fn changed(a: &[u8], b: &[u8]) -> usize {
+pub(super) fn changed(a: &[u8], b: &[u8]) -> usize {
     a.as_chunks::<4>()
         .0
         .iter()

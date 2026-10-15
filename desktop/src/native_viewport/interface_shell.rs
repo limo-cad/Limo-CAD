@@ -69,6 +69,7 @@ type RenderedControlQuery<'w, 's> = Query<
         Option<Ref<'static, InterfaceTextRevision>>,
         Option<Ref<'static, InterfacePointerPassthrough>>,
         Option<Ref<'static, InterfaceCanvasAnnotation>>,
+        Option<Ref<'static, InterfacePointerMotionPassthrough>>,
     ),
 >;
 
@@ -82,6 +83,7 @@ type OccluderQuery<'w, 's> = Query<
         Option<Ref<'static, CalculatedClip>>,
         Ref<'static, InheritedVisibility>,
         Option<Ref<'static, InterfaceCanvasOccluder>>,
+        Option<Ref<'static, InterfacePointerMotionPassthrough>>,
     ),
     With<InterfaceOccluder>,
 >;
@@ -201,12 +203,19 @@ pub(crate) struct InterfaceOccluder;
 #[derive(Component, Clone, Copy)]
 pub(crate) struct InterfaceCanvasOccluder(pub &'static str);
 
+/// Floating drawing readouts accept clicks and text edits while the drawing
+/// cursor continues through them. Their previous frame can otherwise trap a
+/// slow-moving cursor and make dimensions jump when it finally leaves.
+#[derive(Component)]
+pub(crate) struct InterfacePointerMotionPassthrough;
+
 #[derive(Clone, Copy)]
 enum HitTarget {
     Control(ControlKey),
     Annotation(ControlKey),
     Canvas(&'static str),
     Occluder,
+    MotionPassthrough(Option<ControlKey>),
 }
 
 impl InterfaceControl {
@@ -745,6 +754,12 @@ impl NativeInterfaceHandle {
         })
     }
 
+    pub(crate) fn blocks_pointer_motion(&self, point: [f64; 2]) -> bool {
+        self.shared
+            .lock()
+            .is_ok_and(|shared| blocks_pointer_motion(&shared, point))
+    }
+
     /// Wheel and pinch may cross annotations, but never other rendered controls
     /// or painted panels. Click hit testing continues to include annotations.
     pub(crate) fn blocks_camera_gesture(&self, point: [f64; 2]) -> bool {
@@ -966,10 +981,11 @@ impl NativeInterfaceHandle {
         let old_hovered = shared.hovered;
         let old_focused = shared.focused;
         let consumed = had_capture
-            || shared
-                .hit_order
-                .iter()
-                .any(|(_, area)| area.contains(position))
+            || shared.hit_order.iter().any(|(target, area)| {
+                area.contains(position)
+                    && !(matches!(phase, PointerPhase::Move)
+                        && matches!(target, HitTarget::MotionPassthrough(_)))
+            })
             || has_modal(&shared);
         match phase {
             PointerPhase::Move => {
@@ -1375,9 +1391,17 @@ fn hit(shared: &Shared, point: [f64; 2]) -> Option<ControlKey> {
         .rev()
         .find(|(_, area)| area.contains(point))
         .and_then(|(target, _)| match target {
-            HitTarget::Control(key) | HitTarget::Annotation(key) => Some(*key),
-            HitTarget::Canvas(_) | HitTarget::Occluder => None,
+            HitTarget::Control(key)
+            | HitTarget::Annotation(key)
+            | HitTarget::MotionPassthrough(Some(key)) => Some(*key),
+            HitTarget::Canvas(_) | HitTarget::Occluder | HitTarget::MotionPassthrough(None) => None,
         })
+}
+
+fn blocks_pointer_motion(shared: &Shared, point: [f64; 2]) -> bool {
+    shared.hit_order.iter().any(|(target, area)| {
+        !matches!(target, HitTarget::MotionPassthrough(_)) && area.contains(point)
+    })
 }
 
 fn valid_rect(rect: InterfaceRect) -> bool {
@@ -2096,6 +2120,7 @@ fn publish_layout(
     mut removed_canvas_owners: RemovedComponents<InterfaceCanvasOccluder>,
     mut removed_passthrough: RemovedComponents<InterfacePointerPassthrough>,
     mut removed_annotations: RemovedComponents<InterfaceCanvasAnnotation>,
+    mut removed_motion_passthrough: RemovedComponents<InterfacePointerMotionPassthrough>,
     mut removed: RemovedComponents<InterfaceControl>,
     mut removed_clips: RemovedComponents<CalculatedClip>,
     mut last_revision: Local<Option<u64>>,
@@ -2108,22 +2133,26 @@ fn publish_layout(
         || removed_occluders.read().count() > 0
         || removed_canvas_owners.read().count() > 0
         || removed_passthrough.read().count() > 0
-        || removed_annotations.read().count() > 0;
+        || removed_annotations.read().count() > 0
+        || removed_motion_passthrough.read().count() > 0;
     if *last_revision == Some(shared.revision)
         && !removed
         && scale
             .as_ref()
             .is_none_or(|scale| scale.0 == shared.presented_ui_scale)
-        && !occluders
-            .iter()
-            .any(|(node, transform, stack, clip, visibility, canvas)| {
+        && !occluders.iter().any(
+            |(node, transform, stack, clip, visibility, canvas, motion_passthrough)| {
                 node.is_changed()
                     || transform.is_changed()
                     || stack.is_changed()
                     || clip.as_ref().is_some_and(|clip| clip.is_changed())
                     || visibility.is_changed()
                     || canvas.as_ref().is_some_and(|canvas| canvas.is_changed())
-            })
+                    || motion_passthrough
+                        .as_ref()
+                        .is_some_and(|marker| marker.is_changed())
+            },
+        )
         && !controls.iter().any(
             |(
                 _,
@@ -2137,6 +2166,7 @@ fn publish_layout(
                 text,
                 passthrough,
                 annotation,
+                motion_passthrough,
             )| {
                 control.is_changed()
                     || node.is_changed()
@@ -2151,6 +2181,9 @@ fn publish_layout(
                         .as_ref()
                         .is_some_and(|marker| marker.is_changed())
                     || annotation
+                        .as_ref()
+                        .is_some_and(|marker| marker.is_changed())
+                    || motion_passthrough
                         .as_ref()
                         .is_some_and(|marker| marker.is_changed())
             },
@@ -2180,6 +2213,7 @@ fn publish_layout(
                 _,
                 passthrough,
                 annotation,
+                motion_passthrough,
             )| {
                 let area = HitArea::new(&computed, &transform, clip.as_deref(), frame.surface);
                 let bounds = area.bounds;
@@ -2230,32 +2264,41 @@ fn publish_layout(
                     area,
                     passthrough.is_some(),
                     annotation.is_some(),
+                    motion_passthrough.is_some(),
                 )
             },
         )
         .collect();
-    stacked.sort_by_key(|(stack, _, _, _, _)| *stack);
+    stacked.sort_by_key(|(stack, _, _, _, _, _)| *stack);
     let mut hits: Vec<_> = stacked
         .iter()
-        .filter(|(_, control, _, passthrough, _)| control.visible && !*passthrough)
-        .map(|(stack, control, area, _, annotation)| {
-            let target = if *annotation {
-                HitTarget::Annotation(control.key)
-            } else {
-                HitTarget::Control(control.key)
-            };
-            (*stack, target, area.clone())
-        })
+        .filter(|(_, control, _, passthrough, _, _)| control.visible && !*passthrough)
+        .map(
+            |(stack, control, area, _, annotation, motion_passthrough)| {
+                let target = if *motion_passthrough {
+                    HitTarget::MotionPassthrough(Some(control.key))
+                } else if *annotation {
+                    HitTarget::Annotation(control.key)
+                } else {
+                    HitTarget::Control(control.key)
+                };
+                (*stack, target, area.clone())
+            },
+        )
         .collect();
-    for (node, transform, stack, clip, visibility, canvas) in &occluders {
+    for (node, transform, stack, clip, visibility, canvas, motion_passthrough) in &occluders {
         if !visibility.get() {
             continue;
         }
         let area = HitArea::new(&node, &transform, clip.as_deref(), frame.surface);
         if area.bounds.width > 0. && area.bounds.height > 0. {
-            let target = canvas
-                .as_ref()
-                .map_or(HitTarget::Occluder, |canvas| HitTarget::Canvas(canvas.0));
+            let target = if motion_passthrough.is_some() {
+                HitTarget::MotionPassthrough(None)
+            } else {
+                canvas
+                    .as_ref()
+                    .map_or(HitTarget::Occluder, |canvas| HitTarget::Canvas(canvas.0))
+            };
             hits.push((stack.0, target, area));
         }
     }
@@ -2266,7 +2309,7 @@ fn publish_layout(
         .collect();
     let mut published: Vec<_> = stacked
         .into_iter()
-        .map(|(_, control, _, _, _)| control)
+        .map(|(_, control, _, _, _, _)| control)
         .collect();
     published.sort_by(|a, b| {
         a.bounds
