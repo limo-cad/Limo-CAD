@@ -546,7 +546,7 @@ fn replacing_a_suggestion_with_identical_text_records_intent_without_changing_th
     assert!(app.world().get::<ValueEdited>(entity).unwrap().0);
     assert_eq!(
         app.world().get::<EditableText>(entity).unwrap().value(),
-        value
+        value.as_str()
     );
     assert!(handle.take_actions().unwrap().is_empty());
 }
