@@ -1,0 +1,45 @@
+{
+  "scope": "Follow-up to the dimension response discrepancy between the original test app and both newer diagnostic copies",
+  "user_results": {
+    "Limo CAD Sketch Fix Test": "Reported problem remains; two screenshots supplied",
+    "Limo CAD Sketch Diagnostics, recording on": "Reported good",
+    "Limo CAD Sketch Comparison, recording off": "Reported good"
+  },
+  "verified_build_facts": {
+    "original_source": "71d789635750ba3d4996d062abe18d1bcc0fa41f",
+    "diagnostic_and_recording_off_source": "cd8b20f7a77cdf3f12f5be0168fb3818894a0458",
+    "original_engine_sha256": "71ed50af00ec242578809c4780340ea5fed4beacdaad56d6fa7edb95cc78f4be",
+    "original_running_process_path_matches_delivered_app": true,
+    "cursor_motion_passthrough_component_present_in_both_binaries": true,
+    "all_28_bundled_native_libraries_identical": true,
+    "both_private_preference_directories_have_no_saved_preferences": true,
+    "saved_sketch_bases": "XY plane, identical basis, grid snapping enabled",
+    "app_metadata_differences": ["name", "display name", "bundle identifier", "launcher executable"]
+  },
+  "controlled_comparison_prepared": {
+    "application": "Limo CAD Original State Check.app",
+    "artifact_directory": "/Users/jack/Code/noBS-CAD/artifacts/sketch-original-state-check-20261015",
+    "original_cad_executable_byte_identical": true,
+    "original_native_libraries_retained": true,
+    "original_info_plist_byte_identical": true,
+    "recording": "disabled",
+    "only_controlled_change": "Launcher points at the working diagnostic/comparison private config and session directories",
+    "private_state_directory": "~/Library/Application Support/Limo CAD Sketch Diagnostics/",
+    "original_saved_data": "Preserved without edits or reset",
+    "signature": "Deep strict verification passed",
+    "headless_startup": "Passed; original clean source identity verified",
+    "zip_integrity": "Passed",
+    "manual_instruction": "Quit all CAD test apps before opening the state comparison",
+    "user_result": "pending"
+  },
+  "evidence": {
+    "screenshots": ["artifacts/sketch-original-state-check-20261015/evidence/original-7.227x20.045.png", "artifacts/sketch-original-state-check-20261015/evidence/original-20x20.png"],
+    "build_and_state_checkpoint": "artifacts/sketch-original-state-check-20261015/investigation-checkpoint.json"
+  },
+  "conclusion": "Active recording is not required for the good behavior. The exact cause remains unproven; isolate the original executable from the old app state before attributing a fix to instrumentation or fresh data.",
+  "pr": "https://github.com/limo-cad/Limo-CAD/pull/427",
+  "pr_state": "draft",
+  "new_source_behavior_changes": 0,
+  "new_automated_ui_acceptance_claims": 0,
+  "broader_ui_mcp_qualification": "paused; previous coverage remains unchanged"
+}
