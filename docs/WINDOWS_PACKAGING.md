@@ -39,7 +39,7 @@ child viewport composition, DOM input relay, or React desktop shell.
 ## Reproducible dependency set
 
 The root `vcpkg.json` pins the vcpkg registry and overrides Open CASCADE
-Technology to 7.9.3, the same OCCT line used by the macOS build. The manifest
+Technology to 8.0.1, the same OCCT line used by the macOS build. The manifest
 selects the reviewed storage fix from `native/occt-overlay` at port revision 2.
 Native SDK qualification compiles a bounded allocation/copy probe against the
 actual `TKMath` runtime; an unchanged header or runtime fails before packaging.
@@ -126,7 +126,7 @@ requests to `main`, version tags, and manual dispatches. Both jobs:
 
 1. checks out the pinned vcpkg registry;
 2. restores an ABI-keyed vcpkg binary cache when one is available;
-3. installs OCCT 7.9.3 for the matching `x64-windows` or `arm64-windows`
+3. installs OCCT 8.0.1 for the matching `x64-windows` or `arm64-windows`
    vcpkg triplet, compiling only on a cache miss;
 4. creates the portable ZIP;
 5. launches the packaged executable long enough to catch missing DLL or

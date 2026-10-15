@@ -7,7 +7,7 @@ The generator extracts or mounts the final archive and inventories:
 - Rust components and dependency relationships embedded in the executable by
   cargo-auditable. Lockfiles are used for advisory/source checks; their optional
   or build-only packages are not substituted for the compiled release graph.
-- OCCT 7.9.3, its source archive digest, license/exception and the exact local
+- OCCT 8.0.1, its source archive digest, license/exception and the exact local
   storage patch digests. Unix builds use the checked SDK's completed-file receipt;
   Windows uses the vcpkg port's cached DLL/source/patch receipt, including its
   additional packaging patches and package metadata digests.

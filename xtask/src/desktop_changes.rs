@@ -409,7 +409,7 @@ mod tests {
             ".cargo/tools.toml",
             ".gitattributes",
             "crates/occt/sdk.rs",
-            "native/occt-overlay/opencascade/math_DoubleTab.lxx",
+            "native/occt-overlay/opencascade/math_DoubleTab.hxx",
             "vcpkg-configuration.json",
             "VERSION",
             "REPOSITORY",

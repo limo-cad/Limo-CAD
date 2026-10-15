@@ -154,7 +154,9 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Probe Windows IME prerequisites
         timeout-minutes: 35
         shell: powershell
@@ -170,7 +172,7 @@ jobs:
           & .\xtask\platform\windows-ime-probe.ps1 @probeArgs
       - name: Retain inventory, provisioning status, and actual IME messages
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-ime-prerequisite-probe
           path: ${{ runner.temp }}/windows-ime-probe/
@@ -183,7 +185,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Compile and probe the stock macOS text control
         timeout-minutes: 5
         shell: bash
@@ -193,7 +197,7 @@ jobs:
         run: bash xtask/platform/run-macos-ime-probe.sh "$RUNNER_TEMP/macos-ime-probe"
       - name: Retain macOS inventory and actual AppKit input callbacks
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos-ime-prerequisite-probe
           path: ${{ runner.temp }}/macos-ime-probe/
@@ -208,7 +212,9 @@ jobs:
     env:
       CARGO_INCREMENTAL: 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Isolate diagnostic package outputs
         id: package-target
         shell: bash
@@ -225,7 +231,7 @@ jobs:
         uses: ./.github/actions/setup-unix-occt
       # Keep dependency artifacts, not diagnostic executables/package bundles.
       # Whole target archives compete with the much costlier checked OCCT SDK.
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: desktop -> ${{ steps.package-target.outputs.cache-target }}
           key: native-package-linux
@@ -251,14 +257,14 @@ jobs:
           bash scripts/verify-linux-native-package.sh "$appimage" "$RUNNER_TEMP/native-package-evidence/appimage"
       - name: Retain packaged native diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-package-linux-diagnostics
           path: ${{ runner.temp }}/native-package-evidence/
           if-no-files-found: warn
           retention-days: 14
       - name: Retain diagnostic packages (never publish a release)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-package-linux
           path: |
@@ -288,7 +294,9 @@ jobs:
             *) echo 'Unknown input family'; exit 1 ;;
           esac
       - name: Check out Limo CAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Rust
         uses: ./.github/actions/setup-rust
@@ -303,7 +311,7 @@ jobs:
 
       - name: Cache Rust build
         id: rust-cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: |
             . -> target
@@ -501,7 +509,7 @@ jobs:
 
       - name: Retain Linux input snapshots and native captures
         if: always() && inputs.desktop-input
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-input-linux-${{ matrix.family }}
           path: ${{ runner.temp }}/native-input-linux-*/
@@ -514,9 +522,11 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: desktop -> target
           key: native-host-macos
@@ -569,7 +579,7 @@ jobs:
             --out "$RUNNER_TEMP/native-input-macos-japanese"
       - name: Retain macOS input snapshots and native captures
         if: always() && (inputs.desktop-input || inputs.ime-native-macos)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-input-macos
           path: ${{ runner.temp }}/native-input-macos*/
@@ -582,9 +592,11 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 150
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: desktop -> target
           key: native-host-windows
@@ -638,7 +650,7 @@ jobs:
             --out "$env:RUNNER_TEMP\native-accessibility-windows"
       - name: Retain Windows input snapshots and native captures
         if: always() && inputs.desktop-input
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-input-windows
           path: |
@@ -657,7 +669,7 @@ jobs:
             --out "$env:RUNNER_TEMP\native-print-windows"
       - name: Retain Windows print dialog cancellation evidence
         if: always() && inputs.desktop-input
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-print-windows
           path: ${{ runner.temp }}/native-print-windows/

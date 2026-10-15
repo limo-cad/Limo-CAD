@@ -291,7 +291,7 @@ pub fn doctor(mut args: impl Iterator<Item = String>) -> Result<()> {
                     .map(Path::new),
             )
             .map_err(anyhow::Error::msg)?;
-            println!("OCCT 7.9 headers: {}\nOCCT link libraries: {}\nNative compilation also requires the target's C++ compiler/platform SDK.", sdk.include.display(), sdk.lib.display());
+            println!("OCCT 8.0 headers: {}\nOCCT link libraries: {}\nNative compilation also requires the target's C++ compiler/platform SDK.", sdk.include.display(), sdk.lib.display());
         }
         Scope::Wasm => {
             require_tool("wasm-pack")?;

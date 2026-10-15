@@ -6,8 +6,7 @@ updated: 2026-09-20
 
 # How humans find help today
 
-Short operating note for Design Ops and contributors. **No full Tauri Help
-panel yet** — humans and agents share one Markdown corpus; doors differ.
+Humans and agents share one Markdown corpus.
 
 ## Doors (same corpus)
 
@@ -19,10 +18,6 @@ panel yet** — humans and agents share one Markdown corpus; doors differ.
 | **MCP resources** | `resources/list` / `resources/read` on `limo-cad://knowledge/...` (start at `limo-cad://knowledge/index.md`) | Embedded at MCP build |
 | **GitHub Pages** | Browse hosted knowledge HTML (when published) | Same markdown; prefer `cad_help` / resources for automation |
 | **Checkout** | Read files under `knowledge/**` in a clone | Same files |
-
-Future **desktop Help** should call the **same** `limo-cad-help` crate (search /
-get / topics) and render the same pages — not a second corpus. Until that UI
-lands, the index + taxonomy + MCP/Pages are the human browse path.
 
 ## Scripts / demos (unchanged)
 
@@ -83,4 +78,3 @@ Goal: find a **fit coupon** demo after reading enclosure join guidance.
 Automation uses the identical `search` → `get` → recipe path; browse may
 instead click links from [knowledge/index.md](../../knowledge/index.md) or
 [taxonomy](../../knowledge/machine-design/taxonomy.md).
-

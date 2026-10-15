@@ -115,8 +115,8 @@ pub(super) fn add_release(
         .as_array_mut()
         .context("SBOM components")?;
     components.push(json!({"bom-ref":"limo-occt","type":"framework","name":"Open CASCADE Technology","version":sdk["occt"]["version"],
-        "supplier":{"name":"Open Cascade SAS"},"purl":"pkg:generic/opencascade@7.9.3",
-        "cpe":"cpe:2.3:a:opencascade:open_cascade_technology:7.9.3:*:*:*:*:*:*:*",
+        "supplier":{"name":"Open Cascade SAS"},"purl":"pkg:generic/opencascade@8.0.1",
+        "cpe":"cpe:2.3:a:opencascade:open_cascade_technology:8.0.1:*:*:*:*:*:*:*",
         "licenses":[{"expression":"LGPL-2.1-only WITH OCCT-exception-1.0"}],
         "externalReferences":[{"type":"distribution","url":sdk["occt"]["source"]}],
         "properties":[{"name":"limo:component:variant","value":"Checked-storage source patches recorded in the accompanying build metadata; no CVE remediation claim is made."}]}));
@@ -218,7 +218,7 @@ pub(super) fn validate(cdx: &Value) -> Result<()> {
 
 pub(super) fn verify_native(cdx: &Value, libraries: &[Library]) -> Result<()> {
     let components = cdx["components"].as_array().context("missing components")?;
-    ensure!(components.iter().any(|component| component["bom-ref"] == "limo-occt" && component["version"] == "7.9.3"), "OCCT component missing");
+    ensure!(components.iter().any(|component| component["bom-ref"] == "limo-occt" && component["version"] == "8.0.1"), "OCCT component missing");
     for library in libraries {
         let reference = native_ref(library)?;
         let component = components
@@ -276,7 +276,7 @@ pub(super) fn enrich_spdx(
     let occt = packages
         .iter()
         .find(|package| {
-            package["name"] == "Open CASCADE Technology" && package["versionInfo"] == "7.9.3"
+            package["name"] == "Open CASCADE Technology" && package["versionInfo"] == "8.0.1"
         })
         .and_then(|package| package["SPDXID"].as_str())
         .context("OCCT lost during SPDX conversion")?
@@ -384,7 +384,7 @@ pub(super) fn verify_spdx(
         packages
             .iter()
             .any(|package| package["name"] == "Open CASCADE Technology"
-                && package["versionInfo"] == "7.9.3"),
+                && package["versionInfo"] == "8.0.1"),
         "SPDX omits OCCT"
     );
     let mut ids = BTreeSet::from(["SPDXRef-DOCUMENT"]);
@@ -418,6 +418,7 @@ pub(super) fn verify_spdx(
 fn rust_references(cdx: &Value, spdx: &Value) -> Result<BTreeMap<String, String>> {
     let packages = spdx["packages"].as_array().context("SPDX packages")?;
     let mut references = BTreeMap::new();
+    let mut mapped_ids = BTreeSet::new();
     for component in cdx["components"]
         .as_array()
         .context("compiled components")?
@@ -467,15 +468,114 @@ fn rust_references(cdx: &Value, spdx: &Value) -> Result<BTreeMap<String, String>
                 })
                 .context("SPDX lost or ambiguously mapped a compiled Cargo identity")?
         };
-        references.insert(
-            reference.into(),
-            package["SPDXID"]
-                .as_str()
-                .context("SPDX Cargo reference")?
-                .into(),
+        let id = package["SPDXID"].as_str().context("SPDX Cargo reference")?;
+        ensure!(
+            mapped_ids.insert(id),
+            "SPDX collapsed distinct Cargo identities"
         );
+        references.insert(reference.into(), id.into());
     }
     Ok(references)
+}
+
+fn rust_git_sources(cdx: &Value, spdx: &Value) -> Result<BTreeMap<String, (String, String)>> {
+    let references = rust_references(cdx, spdx)?;
+    let mut sources = BTreeMap::new();
+    for component in cdx["components"].as_array().context("Cargo components")? {
+        let Some(id) = component["bom-ref"]
+            .as_str()
+            .and_then(|id| references.get(id))
+        else {
+            continue;
+        };
+        for reference in component["externalReferences"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let Some(source) = reference["url"]
+                .as_str()
+                .filter(|url| reference["type"] == "distribution" && url.starts_with("git+"))
+            else {
+                continue;
+            };
+            let (repository, revision) = source
+                .rsplit_once('#')
+                .context("Cargo Git source lacks a resolved commit")?;
+            ensure!(
+                matches!(revision.len(), 40 | 64)
+                    && revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
+                "Cargo Git source requires a full resolved commit"
+            );
+            let repository = repository
+                .split('?')
+                .next()
+                .context("Cargo Git repository")?;
+            let (transport, location) = repository
+                .split_once("://")
+                .context("Cargo Git transport")?;
+            let (host, path) = location
+                .split_once('/')
+                .context("Cargo Git repository path")?;
+            ensure!(
+                matches!(transport, "git+https" | "git+http" | "git+ssh" | "git+git")
+                    && !host.is_empty()
+                    && !host.contains('@')
+                    && !path.is_empty(),
+                "unsupported SPDX Cargo Git download location"
+            );
+            // Cargo uses # for the resolved commit; SPDX reserves # for a subpath.
+            let download = format!("{repository}@{revision}");
+            ensure!(
+                sources
+                    .insert(
+                        id.clone(),
+                        (format!("Cargo Git source: {source}"), download)
+                    )
+                    .is_none(),
+                "ambiguous Cargo Git distribution source"
+            );
+        }
+    }
+    Ok(sources)
+}
+
+pub(super) fn preserve_rust_git_sources(cdx: &Value, spdx: &mut Value) -> Result<()> {
+    let sources = rust_git_sources(cdx, spdx)?;
+    for package in spdx["packages"].as_array_mut().context("SPDX packages")? {
+        let Some((source, download)) = package["SPDXID"].as_str().and_then(|id| sources.get(id))
+        else {
+            continue;
+        };
+        let existing = package["sourceInfo"].as_str().unwrap_or("");
+        if !existing.lines().any(|line| line == source) {
+            package["sourceInfo"] = json!(if existing.is_empty() {
+                source.clone()
+            } else {
+                format!("{existing}\n{source}")
+            });
+        }
+        package["downloadLocation"] = json!(download);
+    }
+    verify_rust_git_sources(cdx, spdx)
+}
+
+fn verify_rust_git_sources(cdx: &Value, spdx: &Value) -> Result<()> {
+    let sources = rust_git_sources(cdx, spdx)?;
+    for package in spdx["packages"].as_array().context("SPDX packages")? {
+        let Some((source, download)) = package["SPDXID"].as_str().and_then(|id| sources.get(id))
+        else {
+            continue;
+        };
+        ensure!(
+            package["downloadLocation"] == *download
+                && package["sourceInfo"]
+                    .as_str()
+                    .is_some_and(|info| info.lines().any(|line| line == source)),
+            "Cargo Git provenance missing or changed in SPDX"
+        );
+    }
+    Ok(())
 }
 
 pub(super) fn preserve_rust_graph(cdx: &Value, spdx: &mut Value) -> Result<()> {
@@ -504,6 +604,7 @@ pub(super) fn preserve_rust_graph(cdx: &Value, spdx: &mut Value) -> Result<()> {
 }
 
 pub(super) fn verify_rust_graph(cdx: &Value, spdx: &Value) -> Result<()> {
+    verify_rust_git_sources(cdx, spdx)?;
     let references = rust_references(cdx, spdx)?;
     let edges = spdx["relationships"]
         .as_array()

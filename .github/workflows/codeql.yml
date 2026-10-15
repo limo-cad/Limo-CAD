@@ -33,7 +33,9 @@ jobs:
           - language: c-cpp
             build-mode: manual
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
         env:
           GIT_CONFIG_COUNT: '1'
           GIT_CONFIG_KEY_0: core.autocrlf
@@ -62,7 +64,7 @@ jobs:
           "CODEQL_EXTRACTOR_RUST_OPTION_SYSROOT_SRC=$sysroot/lib/rustlib/src/rust/library" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "CODEQL_EXTRACTOR_RUST_OPTION_PROC_MACRO_SERVER=$macroServer" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Set up cached OpenCASCADE 7.9 SDK
+      - name: Set up cached OpenCASCADE 8.0 SDK
         id: occt
         timeout-minutes: 150
         uses: ./.github/actions/setup-windows-occt
@@ -72,14 +74,14 @@ jobs:
           msvc-component: Microsoft.VisualStudio.Component.VC.Tools.x86.x64
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         env:
           OCCT_ROOT: ${{ steps.occt.outputs.root }}
           CODEQL_EXTRACTOR_RUST_OPTION_CARGO_TARGET_DIR: ${{ runner.temp }}/codeql-cargo-rust
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-          tools: https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-win64.tar.zst
+          tools: https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.2/codeql-bundle-win64.tar.zst
           queries: security-extended
 
       - name: Compile the C++ bridge for extraction
@@ -91,7 +93,7 @@ jobs:
 
       - name: Analyze
         timeout-minutes: 60
-        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         env:
           OCCT_ROOT: ${{ steps.occt.outputs.root }}
           CODEQL_EXTRACTOR_RUST_OPTION_CARGO_TARGET_DIR: ${{ runner.temp }}/codeql-cargo-rust
@@ -119,15 +121,17 @@ jobs:
           - language: javascript-typescript
             bundle: javascript
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           languages: ${{ matrix.language }}
           build-mode: none
-          tools: https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-${{ matrix.bundle }}-linux64.tar.zst
+          tools: https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.2/codeql-bundle-${{ matrix.bundle }}-linux64.tar.zst
           queries: security-extended
       - name: Analyze
-        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           category: /language:${{ matrix.language }}

@@ -5,14 +5,13 @@
 //! Acquisition can also reconfigure an outdated surface. Keep both surface paths
 //! protected, while main-world modeling and pipeline compilation stay independent.
 use super::{NativeViewportCamera, CAD_TARGET_FORMAT};
-#[cfg(any(target_os = "macos", target_os = "ios"))]
 use bevy::ecs::system::NonSendMarker;
 use bevy::{
     app::{AppExit, SubApp},
     camera::{CameraOutputMode, CompositingSpace, RenderTarget},
     core_pipeline::blit::{BlitPipeline, BlitPipelineKey},
     ecs::{
-        schedule::{ScheduleCleanupPolicy, ScheduleLabel},
+        schedule::{ScheduleCleanupPolicy, ScheduleLabel, Schedules, SingleThreadedExecutor},
         system::{CombinatorSystem, Combine, RunSystemError, System, SystemAccess, SystemIn},
     },
     prelude::*,
@@ -150,7 +149,7 @@ pub(super) fn install_interface(render: &mut SubApp) -> SharedSubmission {
 // Mirrors Bevy's surface-system inputs, with the shared submission guard.
 fn configure_surfaces(
     commands: Commands,
-    #[cfg(any(target_os = "macos", target_os = "ios"))] marker: NonSendMarker,
+    _marker: NonSendMarker,
     windows: Query<(
         Entity,
         &mut ExtractedWindow,
@@ -162,13 +161,15 @@ fn configure_surfaces(
     render_device: Res<RenderDevice>,
     (submission, _queue_exclusion): (Res<SharedSubmission>, ResMut<RenderQueue>),
 ) {
-    // A normal system keeps macOS's NonSendMarker/main-thread routing. Mutable
-    // queue access also excludes same-world GPU-copy submission systems.
+    // A CAD buffer scope can tick unrelated global tasks while holding this
+    // gate. Keep surface work on the interface's existing main-thread executor
+    // on every platform so the worker cannot steal it and reacquire its own
+    // gate. Mutable queue access also excludes same-world GPU-copy systems.
     submission.run(|| {
         create_surfaces(
             commands,
             #[cfg(any(target_os = "macos", target_os = "ios"))]
-            marker,
+            _marker,
             windows,
             render_instance,
             render_adapter,
@@ -178,7 +179,7 @@ fn configure_surfaces(
 }
 
 fn acquire_surfaces(
-    #[cfg(any(target_os = "macos", target_os = "ios"))] _marker: NonSendMarker,
+    _marker: NonSendMarker,
     windows: Query<(MainEntity, &mut ExtractedWindow, Option<&SurfaceData>)>,
     render_device: Res<RenderDevice>,
     sorted_cameras: Res<SortedCameras>,
@@ -378,6 +379,16 @@ fn install_worker_schedule(
     prewarm: fn(&mut World, &mut World),
     compile: fn(&mut World) -> bool,
 ) {
+    // Guarded render systems must execute on their owning worker. A Send ECS
+    // system otherwise enters the global compute pool and can be stolen by the
+    // interface's main thread while it services window tasks. A nested scoped
+    // job can then run surface acquisition on that same thread, waiting for the
+    // GPU gate held by this worker while the worker awaits the stolen system.
+    // Keep internal scoped buffer work parallel, but never dispatch an entire
+    // guarded system to that shared executor. Include startup/device recovery.
+    for (_, schedule) in render.world_mut().resource_mut::<Schedules>().iter_mut() {
+        schedule.set_executor(SingleThreadedExecutor::new());
+    }
     // Extraction runs Bevy's RenderStartup and recovery callbacks too. Protect
     // those GPU initialization paths without gating the CAD main-world update.
     render.init_resource::<CompiledAfterDraw>();
@@ -477,6 +488,53 @@ mod tests {
 
     #[derive(Resource)]
     struct RequestExit;
+
+    #[derive(Resource)]
+    struct RenderThread(std::thread::ThreadId);
+
+    fn guarded_scoped_buffers(owner: Res<RenderThread>, submission: Res<SharedSubmission>) {
+        assert_eq!(
+            std::thread::current().id(),
+            owner.0,
+            "a guarded render system must not be stolen by another executor"
+        );
+        assert!(submission.0.try_lock().is_err());
+        bevy::tasks::ComputeTaskPool::get().scope(|scope| {
+            scope.spawn(async {});
+        });
+    }
+
+    #[test]
+    fn guarded_worker_schedules_keep_scoped_systems_on_the_render_thread() {
+        bevy::tasks::ComputeTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+        let submission = SharedSubmission::default();
+        let worker = thread::spawn(move || {
+            let mut worker = SubApp::new();
+            worker.update_schedule = Some(OriginalWorkerUpdate.intern());
+            worker.insert_resource(RenderThread(thread::current().id()));
+            worker.insert_resource(submission.clone());
+            worker.add_systems(RenderStartup, guarded_scoped_buffers);
+            worker.add_systems(bevy::render::ExtractSchedule, guarded_scoped_buffers);
+            worker.add_systems(Render, guarded_scoped_buffers);
+            worker.add_systems(OriginalWorkerUpdate, |world: &mut World| {
+                world.run_schedule(Render)
+            });
+            worker.set_extract(|_, world| {
+                world.run_schedule(RenderStartup);
+                world.run_schedule(bevy::render::ExtractSchedule);
+            });
+            install_worker_schedule(
+                &mut worker,
+                submission,
+                Arc::new(AtomicBool::new(false)),
+                |_, _| {},
+                |_| false,
+            );
+            worker.extract(&mut World::new());
+            worker.update();
+        });
+        worker.join().unwrap();
+    }
 
     fn original_queue_processor(mut pipelines: ResMut<CpuPipelines>) {
         pipelines.processed_in_render += 1;
@@ -662,10 +720,9 @@ mod tests {
                         .find(|(key, _)| ids.contains(key))
                         .unwrap();
                     assert!(matches!(system.access(), SystemAccess::Shared(_)));
-                    assert_eq!(
-                        system.system().is_send(),
-                        !cfg!(any(target_os = "macos", target_os = "ios")),
-                        "Apple surface wrappers must retain main-thread routing"
+                    assert!(
+                        !system.system().is_send(),
+                        "guarded surface work must not enter the global pool while a CAD buffer scope holds the GPU gate"
                     );
                 }
             });

@@ -31,31 +31,31 @@ edition = "2021"
 [workspace.dependencies]
 anyhow = "1.0.104"
 base64 = "0.23.1"
-cxx = "1.0.202"
-cxx-build = "1.0.202"
+cxx = "1.0.205"
+cxx-build = "1.0.205"
 earcutr = "0.5.0"
 flate2 = { version = "1.1.10", default-features = false }
 js-sys = "0.3.106"
 png = "0.18.1"
 regex = "1.13.1"
-roxmltree = "0.20.0"
+roxmltree = "0.21.1"
 semver = "1.0.28"
 serde = "1.0.229"
-serde_json = "1.0.151"
-sha2 = "0.11.0"
+serde_json = "1.0.154"
+sha2 = "0.11.1"
 sysinfo = { version = "0.39.6", default-features = false }
 tar = "0.4.46"
 tempfile = "3.27.0"
 time = "0.3.55"
-toml_edit = "0.25.15"
+toml_edit = "0.25.17"
 ttf-parser = "=0.25.1"
 unicode-segmentation = "=1.13.3"
 ureq = "3.4.2"
-usvg = { version = "=0.45.1", default-features = false }
+usvg = { version = "=0.48.1", default-features = false }
 wasm-bindgen = "0.2.129"
 wasm-bindgen-test = "0.3.79"
 windows = { version = "=0.62.2", default-features = false }
-zip = { version = "8.6.0", default-features = false }
+zip = { version = "9.0.3", default-features = false }
 
 # Bevy's development starting point: retain development checks while avoiding
 # unoptimized solver and dependency work. Workspace members use level 1.

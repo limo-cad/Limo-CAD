@@ -3,15 +3,14 @@ use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, fs, path::Path};
 
-const SOURCE_SHA512: &str = "65935a2f46021e2b9a7dd2a218515c06925454855a8cc952fcbd1cccbfd5c8d605ed8f1d930d2aec87ef172ded551d0a237fad128319fb9cbcabdc755aa0aa67";
+const SOURCE_SHA512: &str = "bbe7099071cbf5397940ebc6e66ec05f8023d5e5aae6142870e14b93aa6f8f94c30980ef421e717f0fbfbc23b3520c3ccfe8a939c4caba3ccbf325060e26eb52";
 const PATCHES: &[&str] = &[
-    "fix-install-prefix-path.patch",
-    "drop-bin-letter-d.patch",
-    "dependencies.patch",
-    "install-include-dir.patch",
-    "remove-vcpkg-enabling.patch",
-    "math_DoubleTab.cxx",
-    "math_DoubleTab.lxx",
+    "0001-cmake-keep-build-use-vcpkg-explicit.patch",
+    "0002-cmake-load-exported-package-dependencies.patch",
+    "0003-image-remove-freeimage-msvc-autolink.patch",
+    "0004-cmake-add-additional-path-extraction-for-OpenCASCADE.patch",
+    "0005-drop-bin-letter.patch",
+    "math_DoubleTab.hxx",
 ];
 
 pub(super) fn evidence(sdk: &Path, mut evidence: Value) -> Result<Value> {
@@ -20,7 +19,7 @@ pub(super) fn evidence(sdk: &Path, mut evidence: Value) -> Result<Value> {
         .context("rebuild the pinned vcpkg overlay to capture OCCT build evidence")?;
     ensure!(
         manifest["schemaVersion"] == 1
-            && manifest["version"] == "7.9.3"
+            && manifest["version"] == "8.0.1"
             && manifest["sourceSha512"] == SOURCE_SHA512,
         "unexpected vcpkg OCCT source identity"
     );
@@ -108,7 +107,7 @@ mod tests {
             })
             .collect::<BTreeMap<_, _>>();
         let path = sdk.join("share/opencascade/limo-occt-build.json");
-        let mut manifest = json!({"schemaVersion":1,"version":"7.9.3","triplet":"x64-windows","sourceSha512":SOURCE_SHA512,"patches":patches,"files":files});
+        let mut manifest = json!({"schemaVersion":1,"version":"8.0.1","triplet":"x64-windows","sourceSha512":SOURCE_SHA512,"patches":patches,"files":files});
         super::super::write_json(&path, &manifest).unwrap();
         let base = crate::occt_sdk::sbom_evidence("").unwrap();
         evidence(sdk, base.clone()).unwrap();
@@ -118,7 +117,7 @@ mod tests {
             .to_string()
             .contains("port receipt"));
         fs::write(sdk.join("bin/TKernel.dll"), "TKernel.dll").unwrap();
-        manifest["patches"]["dependencies.patch"] = json!("unexpected patch");
+        manifest["patches"]["math_DoubleTab.hxx"] = json!("unexpected patch");
         super::super::write_json(&path, &manifest).unwrap();
         assert!(evidence(sdk, base)
             .unwrap_err()

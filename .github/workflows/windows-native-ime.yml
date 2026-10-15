@@ -17,7 +17,9 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 150
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Provision and prove stock IME feasibility on this same runner
         timeout-minutes: 35
         shell: powershell
@@ -26,7 +28,7 @@ jobs:
             -Out (Join-Path $env:RUNNER_TEMP 'windows-ime-stock') `
             -ProvisionJapanese -ExerciseIme
       - uses: ./.github/actions/setup-rust
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: desktop -> target
           key: native-host-windows
@@ -57,7 +59,7 @@ jobs:
             --out "$env:RUNNER_TEMP\native-ime-windows"
       - name: Retain stock prerequisites, actual Bevy events, and window captures
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-ime-windows
           path: |

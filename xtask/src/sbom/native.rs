@@ -174,8 +174,8 @@ fn sdk_evidence(sdk: &Path) -> Result<Value> {
     crate::occt_storage::verify_header(&include)?;
     let version = fs::read_to_string(include.join("Standard_Version.hxx"))?;
     ensure!(
-        regex::Regex::new(r#"OCC_VERSION_COMPLETE\s+"7\.9\.3""#)?.is_match(&version),
-        "SDK is not the expected OCCT 7.9.3"
+        regex::Regex::new(r#"OCC_VERSION_COMPLETE\s+"8\.0\.1""#)?.is_match(&version),
+        "SDK is not the expected OCCT 8.0.1"
     );
     let receipt_path = sdk.join(".limo-sdk-complete.json");
     if !receipt_path.is_file() {
@@ -543,7 +543,7 @@ mod tests {
     fn inventory_includes_versioned_sos_and_aliases_and_refuses_external_native_links() {
         for name in [
             "TKernel.dll",
-            "libTKernel.7.9.3.dylib",
+            "libTKernel.8.0.1.dylib",
             "libfreetype.so.6.20.1",
             "libxcb.so",
         ] {

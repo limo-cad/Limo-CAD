@@ -26,6 +26,7 @@ on:
       - '.github/actions/setup-unix-occt/**'
       - '.github/workflows/mcp-server.yml'
       - '.github/workflows/mcp-acceptance.yml'
+      - '.github/workflows/knowledge-preflight.yml'
       - '.gitattributes'
       - '.github/actions/setup-windows-occt/**'
       - '.github/actions/setup-linux-desktop/**'
@@ -52,6 +53,7 @@ on:
       - '.github/actions/setup-unix-occt/**'
       - '.github/workflows/mcp-server.yml'
       - '.github/workflows/mcp-acceptance.yml'
+      - '.github/workflows/knowledge-preflight.yml'
       - '.gitattributes'
       - '.github/actions/setup-windows-occt/**'
       - '.github/actions/setup-linux-desktop/**'
@@ -70,7 +72,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  knowledge_preflight:
+    uses: ./.github/workflows/knowledge-preflight.yml
+
   prepare-windows-sdk:
+    needs: knowledge_preflight
     name: Prepare shared Windows SDK
     runs-on: windows-2025
     timeout-minutes: 180
@@ -78,7 +84,9 @@ jobs:
       sdk-artifact-id: ${{ steps.artifact.outputs.artifact-id }}
       sdk-toolset: ${{ steps.occt.outputs.toolset }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
         with:
           target: x86_64-pc-windows-msvc
@@ -98,7 +106,7 @@ jobs:
           msvc-component: Microsoft.VisualStudio.Component.VC.Tools.x86.x64
       - name: Share SDK with this run's Windows shards
         id: artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcp-windows-sdk
           path: vcpkg_installed/x64-windows/
@@ -115,6 +123,7 @@ jobs:
       sdk-toolset: ${{ needs.prepare-windows-sdk.outputs.sdk-toolset }}
 
   mcp-linux:
+    needs: knowledge_preflight
     uses: ./.github/workflows/mcp-acceptance.yml
     with:
       platform: linux
@@ -128,33 +137,35 @@ jobs:
       NATIVE_RESULT: ${{ needs.mcp-windows.result }}
       MCP_PLATFORM: windows
     steps: &publish-demo-projects
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: demo-publication-registry
           cache-targets: false
       - name: Require every platform acceptance shard
         run: cargo xtask ci require-platform
       - name: Download verified bench
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: mcp-demo-${{ env.MCP_PLATFORM }}-core
           path: target/mcp-recipe-evidence
       - name: Download verified turbine
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: mcp-demo-${{ env.MCP_PLATFORM }}-turbine
           path: target/mcp-recipe-evidence
       - name: Download verified vise
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: mcp-demo-${{ env.MCP_PLATFORM }}-vise
           path: target/mcp-recipe-evidence
       - name: Stage verified editable demo projects
         run: cargo xtask ci stage-demo-projects
       - name: Upload verified editable demo projects
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limo-CAD-demo-projects-${{ env.MCP_PLATFORM }}-${{ github.sha }}
           path: target/demo-projects/

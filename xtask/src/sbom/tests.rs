@@ -1,6 +1,29 @@
 use super::*;
 
 #[test]
+fn source_inventory_and_release_identity_cover_all_owned_lockfiles() {
+    let root = crate::release_tooling::root();
+    let owned = output(Command::new("git").current_dir(root).args([
+        "ls-files",
+        "Cargo.lock",
+        "desktop/Cargo.lock",
+        "mcp-server/Cargo.lock",
+        "experiments/*/Cargo.lock",
+    ]))
+    .unwrap();
+    let mut tracked: Vec<_> = owned.lines().collect();
+    tracked.sort_unstable();
+    let mut inventoried = LOCKFILES.to_vec();
+    inventoried.sort_unstable();
+    assert_eq!(tracked, inventoried);
+    let identity = input_hashes(root).unwrap();
+    for path in tracked {
+        assert!(root.join(path).is_file());
+        assert!(identity.contains_key(path), "release identity omits {path}");
+    }
+}
+
+#[test]
 fn release_input_hashes_match_windows_and_unix_checkout_settings() {
     let root = crate::release_tooling::root();
     let temporary = tempfile::tempdir().unwrap();
@@ -70,6 +93,76 @@ fn cdx() -> Value {
         "dependencies":[{"ref":"rust-main","dependsOn":[]}]})
 }
 
+#[test]
+fn spdx_retains_git_provenance_for_colliding_cargo_identities_and_rejects_tampering() {
+    let commit = "7af02be918928cb0b250275a3e09cda1f307f156";
+    let source = format!("git+https://github.com/jeffglousher/fenris?rev={commit}#{commit}");
+    let mut cdx = json!({"components":[
+        {"name":"fenris","version":"0.0.33","purl":"pkg:cargo/fenris@0.0.33","bom-ref":"pkg:cargo/fenris@0.0.33?package-id=git",
+         "externalReferences":[{"type":"distribution","url":source}]},
+        {"name":"fenris","version":"0.0.33","purl":"pkg:cargo/fenris@0.0.33","bom-ref":"pkg:cargo/fenris@0.0.33?package-id=registry"}],"dependencies":[]});
+    let mut spdx = json!({"packages":[
+        {"name":"fenris","versionInfo":"0.0.33","SPDXID":"SPDXRef-pkg-cargo-fenris-0.0.33-package-id-registry","downloadLocation":"NOASSERTION","sourceInfo":"registry lockfile","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:cargo/fenris@0.0.33"}]},
+        {"name":"fenris","versionInfo":"0.0.33","SPDXID":"SPDXRef-pkg-cargo-fenris-0.0.33-package-id-git","downloadLocation":"NOASSERTION","sourceInfo":"simulation lockfile","externalRefs":[{"referenceType":"purl","referenceLocator":"pkg:cargo/fenris@0.0.33"}]}],"relationships":[]});
+    let registry = spdx["packages"][0].clone();
+    for missing in [0, 1] {
+        let mut collapsed = spdx.clone();
+        collapsed["packages"]
+            .as_array_mut()
+            .unwrap()
+            .remove(missing);
+        let original = collapsed.clone();
+        assert!(documents::preserve_rust_git_sources(&cdx, &mut collapsed).is_err());
+        assert_eq!(collapsed, original, "reject identity loss before mutation");
+    }
+    documents::preserve_rust_git_sources(&cdx, &mut spdx).unwrap();
+    assert_eq!(spdx["packages"][0], registry);
+    assert_eq!(
+        spdx["packages"][1]["downloadLocation"],
+        format!("git+https://github.com/jeffglousher/fenris@{commit}")
+    );
+    assert_eq!(
+        spdx["packages"][1]["sourceInfo"],
+        format!("simulation lockfile\nCargo Git source: {source}")
+    );
+    let preserved = spdx.clone();
+    for missing in [0, 1] {
+        let mut collapsed = preserved.clone();
+        collapsed["packages"]
+            .as_array_mut()
+            .unwrap()
+            .remove(missing);
+        assert!(documents::verify_rust_graph(&cdx, &collapsed).is_err());
+    }
+    documents::preserve_rust_git_sources(&cdx, &mut spdx).unwrap();
+    assert_eq!(spdx, preserved);
+    documents::verify_rust_graph(&cdx, &spdx).unwrap();
+    for field in ["downloadLocation", "sourceInfo"] {
+        let mut tampered = preserved.clone();
+        tampered["packages"][1][field] = json!("NOASSERTION");
+        assert!(documents::verify_rust_graph(&cdx, &tampered).is_err());
+    }
+    let git = cdx["components"][0]["externalReferences"][0].clone();
+    cdx["components"][0]["externalReferences"]
+        .as_array_mut()
+        .unwrap()
+        .push(git);
+    assert!(documents::preserve_rust_git_sources(&cdx, &mut spdx).is_err());
+    cdx["components"][0]["externalReferences"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    for invalid in [
+        "git+https://github.com/jeffglousher/fenris?rev=main",
+        "git+https://github.com/jeffglousher/fenris#7af02be",
+        "git+https://github.com/jeffglousher/fenris#not-a-valid-full-commit-hash-xxxxxxxxxxxxx",
+        &format!("git+https://user:password@github.com/jeffglousher/fenris#{commit}"),
+    ] {
+        cdx["components"][0]["externalReferences"][0]["url"] = json!(invalid);
+        assert!(documents::preserve_rust_git_sources(&cdx, &mut spdx).is_err());
+    }
+}
+
 fn library(name: &str, occt: bool) -> native::Library {
     native::Library {
         path: format!("usr/lib/{name}"),
@@ -78,7 +171,7 @@ fn library(name: &str, occt: bool) -> native::Library {
         purl: None,
         kind: "library".into(),
         sha256: "a".repeat(64),
-        version: if occt { "7.9.3" } else { "unknown" }.into(),
+        version: if occt { "8.0.1" } else { "unknown" }.into(),
         producer: if occt { "Open Cascade SAS" } else { "unknown" }.into(),
         license: if occt {
             "LGPL-2.1-only WITH OCCT-exception-1.0"
@@ -107,7 +200,7 @@ fn release_inventory_requires_an_embedded_compiled_graph_not_a_lockfile_list() {
 #[test]
 fn native_inventory_keeps_unknowns_file_hashes_and_real_loader_relationships() {
     let mut report = cdx();
-    let mut kernel = library("libTKernel.so.7.9.3", true);
+    let mut kernel = library("libTKernel.so.8.0.1", true);
     kernel.imports = vec!["libfreetype.so.6".into(), "libc.so.6".into()];
     let libraries = vec![kernel, library("libfreetype.so.6", false)];
     let evidence = crate::occt_sdk::sbom_evidence("FREETYPE_VERSION_STRING=2.14.0\n").unwrap();
@@ -163,8 +256,12 @@ fn broken_and_duplicate_references_are_rejected() {
 #[test]
 fn sdk_evidence_identifies_patches_separately_from_the_upstream_release() {
     let report = crate::occt_sdk::sbom_evidence("FREETYPE_VERSION_STRING=2.14.0\nCMAKE_CXX_COMPILER_ID=Clang\nCMAKE_CXX_COMPILER_VERSION=19.1\n").unwrap();
-    assert_eq!(report["occt"]["version"], "7.9.3");
-    assert_eq!(report["occt"]["patches"].as_array().unwrap().len(), 2);
+    assert_eq!(report["occt"]["version"], "8.0.1");
+    assert_eq!(report["occt"]["patches"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        report["occt"]["patches"][0]["path"],
+        "src/FoundationClasses/TKMath/math/math_DoubleTab.hxx"
+    );
     assert_eq!(report["dependencies"][0]["version"], "2.14.0");
     assert_ne!(
         report["occt"]["patches"][0]["sha256"],
@@ -200,7 +297,7 @@ fn unsupported_or_duplicate_options_are_rejected() {
 
 #[test]
 fn spdx_conversion_retains_native_identities_hashes_and_loader_edges() {
-    let mut kernel = library("libTKernel.so.7.9", true);
+    let mut kernel = library("libTKernel.so.8.0", true);
     kernel.imports = vec!["libfreetype.so.6".into()];
     let mut freetype = library("libfreetype.so.6", false);
     freetype.package_name = "freetype".into();
@@ -208,7 +305,7 @@ fn spdx_conversion_retains_native_identities_hashes_and_loader_edges() {
     freetype.purl = Some("pkg:generic/freetype@2.14.0".into());
     let libraries = vec![kernel, freetype];
     let mut report = json!({"spdxVersion":"SPDX-2.3","creationInfo":{"creators":["Tool: syft-1.54.1"]},
-        "packages":[{"SPDXID":"SPDXRef-OCCT","name":"Open CASCADE Technology","versionInfo":"7.9.3"},
+        "packages":[{"SPDXID":"SPDXRef-OCCT","name":"Open CASCADE Technology","versionInfo":"8.0.1"},
             {"SPDXID":"SPDXRef-converted-limo-native-placeholder","name":"converter native file without hash"}],
         "relationships":[{"spdxElementId":"SPDXRef-OCCT","relatedSpdxElement":"SPDXRef-converted-limo-native-placeholder","relationshipType":"DEPENDS_ON"}]});
     documents::enrich_spdx(
@@ -255,8 +352,8 @@ fn sealed_fixture(directory: &Path) -> Evidence {
     fs::write(directory.join(artifact), b"finished archive").unwrap();
     let artifact_sha256 = crate::hash::file(&directory.join(artifact)).unwrap();
     let libraries = vec![
-        library("libTKernel.so.7.9", true),
-        library("libTKDESTEP.so.7.9", true),
+        library("libTKernel.so.8.0", true),
+        library("libTKDESTEP.so.8.0", true),
     ];
     let native_sdk = crate::occt_sdk::sbom_evidence("").unwrap();
     let version = crate::release_tooling::version::read(root).unwrap();
@@ -275,7 +372,7 @@ fn sealed_fixture(directory: &Path) -> Evidence {
         "rust-main",
     )
     .unwrap();
-    let mut spdx = json!({"spdxVersion":"SPDX-2.3","creationInfo":{"creators":[]},"packages":[{"SPDXID":"SPDXRef-OCCT","name":"Open CASCADE Technology","versionInfo":"7.9.3"}],"relationships":[]});
+    let mut spdx = json!({"spdxVersion":"SPDX-2.3","creationInfo":{"creators":[]},"packages":[{"SPDXID":"SPDXRef-OCCT","name":"Open CASCADE Technology","versionInfo":"8.0.1"}],"relationships":[]});
     spdx["packages"].as_array_mut().unwrap().push(json!({"SPDXID":"SPDXRef-RustMain","name":"limo-cad","versionInfo":version,"externalRefs":[{"referenceType":"purl","referenceLocator":format!("pkg:cargo/limo-cad@{version}")}]}));
     documents::enrich_spdx(
         &mut spdx,
@@ -433,22 +530,22 @@ fn final_archive_fixture_preserves_compiled_graph_native_files_and_both_formats(
     fs::create_dir(sdk.join("lib")).unwrap();
     fs::write(
         sdk.join("include/Standard_Version.hxx"),
-        "#define OCC_VERSION_COMPLETE \"7.9.3\"\n",
+        "#define OCC_VERSION_COMPLETE \"8.0.1\"\n",
     )
     .unwrap();
     fs::write(
-        sdk.join("include/math_DoubleTab.lxx"),
-        include_bytes!("../../../native/occt-overlay/opencascade/math_DoubleTab.lxx"),
+        sdk.join("include/math_DoubleTab.hxx"),
+        include_bytes!("../../../native/occt-overlay/opencascade/math_DoubleTab.hxx"),
     )
     .unwrap();
     let source = temporary.path().join("native.c");
     for (name, body) in [
         (
-            "libTKernel.7.9.dylib",
+            "libTKernel.8.0.dylib",
             "int kernel_fixture(void) { return 1; }",
         ),
         (
-            "libTKDESTEP.7.9.dylib",
+            "libTKDESTEP.8.0.dylib",
             "int step_fixture(void) { return 2; }",
         ),
         (

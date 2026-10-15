@@ -4,6 +4,10 @@ Reviewed against the PR124 base on 2026-10-11. Revisit these entries before the
 next release and when an advisory or upstream version changes. A reviewed entry
 does not approve a release or establish that a vulnerability is unreachable.
 
+The OCCT entries below retain the 7.9.3 assessment. They have not been
+reassessed for the separately upgraded 8.0.1 SDK; the version change does not
+establish parser remediation.
+
 | Dependency | Evidence and status | Follow-up / owner |
 | --- | --- | --- |
 | OCCT 7.9.3: high parser findings | Grype 0.120.1 matches [CVE-2026-42476](https://nvd.nist.gov/vuln/detail/CVE-2026-42476) (STL), [CVE-2026-42477](https://nvd.nist.gov/vuln/detail/CVE-2026-42477) (OBJ), and [CVE-2026-42478](https://nvd.nist.gov/vuln/detail/CVE-2026-42478) (VRML) at **High**. NVD's affected ranges include 7.9.3; its primary scores are 7.1, 7.1 and 7.5, with lower secondary scores also recorded. **Under investigation; release-blocking matches**, not confirmed exploitability in every platform package. | Maintainers: inspect which affected modules are shipped/reachable on each target, reproduce against the exact SDK, verify an upstream fix or evidence-based VEX status and add regressions before releasing. The checked matrix patches do not establish parser remediation. |

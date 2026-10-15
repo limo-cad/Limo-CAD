@@ -1263,6 +1263,10 @@ mod tests {
                 "replay::tests::transport_child_waits_for_eof",
                 "--ignored",
                 "--nocapture",
+                // Pretty output prefixes the test name without a newline on
+                // single-threaded runners, hiding the fixture's readiness line.
+                "--quiet",
+                "--test-threads=1",
             ])
             .env("LIMO_CAD_TRANSPORT_TEST_CHILD", "1")
             .env_remove("LIMO_CAD_TRANSPORT_TEST_EXIT_CODE")

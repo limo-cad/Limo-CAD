@@ -18,11 +18,10 @@ pub(super) fn prepare(
         let Some(digest) = fingerprint.strip_prefix("file:") else {
             continue;
         };
-        let mut parts = relative.split('/');
-        let (Some("src"), Some(package), Some(header), None) =
-            (parts.next(), parts.next(), parts.next(), parts.next())
-        else {
-            continue;
+        let parts = relative.split('/').collect::<Vec<_>>();
+        let (package, header) = match parts.as_slice() {
+            ["src", package, header] | ["src", _, _, package, header] => (*package, *header),
+            _ => continue,
         };
         if !super::forwarding_header(Path::new(header)) {
             continue;
@@ -106,10 +105,11 @@ fn present(path: &Path) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const HEADER: &str = "src/RWStepGeom/PrivateContext.pxx";
+    const HEADER: &str = "src/DataExchange/TKDESTEP/RWStepGeom/PrivateContext.pxx";
     fn fixture() -> (tempfile::TempDir, BTreeMap<String, String>) {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("source");
+        fs::create_dir_all(source.join(HEADER).parent().unwrap()).unwrap();
         fs::create_dir_all(source.join("src/RWStepGeom")).unwrap();
         fs::write(source.join(HEADER), b"verified private context").unwrap();
         fs::create_dir_all(temp.path().join("build/include/opencascade")).unwrap();

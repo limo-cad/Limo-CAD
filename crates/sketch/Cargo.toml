@@ -9,7 +9,7 @@ repository.workspace = true
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-uuid = { version = "1.26.1", features = ["v4", "js"] }
+uuid = { version = "1.28.0", features = ["v4", "js"] }
 limo-cad-cam = { path = "../cam" }
 limo-cad-core = { path = "../core" }
 limo-cad-assembly = { path = "../assembly" }

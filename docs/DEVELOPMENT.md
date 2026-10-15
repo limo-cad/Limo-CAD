@@ -18,7 +18,7 @@ cd Limo-CAD
 `rust-toolchain.toml` pins the compiler and formatting/lint components.
 `cargo xtask doctor --scope desktop` checks the compiler and OCCT headers/link
 libraries without building or opening a CAD window. An explicit SDK override
-must be complete and use the OCCT 7.9 ABI; it never silently falls back.
+must be complete and use the OCCT 8.0 ABI; it never silently falls back.
 
 Set up the native SDK for your machine below, then use the same build command
 on Windows, macOS and Linux:
@@ -74,8 +74,8 @@ Install Xcode Command Line Tools and Homebrew, then:
 
 ```sh
 brew install cmake ninja freetype
-cargo xtask build-occt --prefix "$HOME/Library/Caches/limo-cad/occt-7.9.3"
-export OCCT_ROOT="$HOME/Library/Caches/limo-cad/occt-7.9.3"
+cargo xtask build-occt --prefix "$HOME/Library/Caches/limo-cad/occt-8.0.1"
+export OCCT_ROOT="$HOME/Library/Caches/limo-cad/occt-8.0.1"
 ```
 
 The builder checks the source and qualifies the repaired native storage runtime.
@@ -194,7 +194,7 @@ cargo test --locked --manifest-path desktop/Cargo.toml
 The default desktop build compiles the Bevy interface, Winit host, native sketch
 editor, and controller. The temporary `dev-bevy-host` switch and React desktop
 host have been removed. The retired browser frontend was not a desktop
-build dependency. The transition remains under validation on draft PR #124.
+build dependency.
 
 The native host supports middle-button pan, right-button or Shift+middle-button
 orbit, wheel zoom, trackpad pan, Shift+scroll orbit, and pinch zoom. These use the

@@ -1,4 +1,4 @@
-//! Reproducible OCCT 7.9 SDK build through a portable Rust entry point.
+//! Reproducible OCCT 8.0 SDK build through a portable Rust entry point.
 use crate::build_tools::run as run_command;
 use anyhow::{bail, ensure, Context, Result};
 use std::{
@@ -16,22 +16,15 @@ mod includes;
 #[path = "occt_runtime.rs"]
 mod runtime;
 
-const VERSION: &str = "7_9_3";
-const SHA256: &str = "5ecf094ec6b12d5413dfb851d8c3590c354058aee556e32e408bdfbf8c357d57";
+const VERSION: &str = "8_0_1";
+const SHA256: &str = "0d6913eae4bcc09a3653ceced6dda1aec11c35a1513d4c06762c9b002092c68a";
 const MAX_SOURCE_BYTES: u64 = 256 * 1024 * 1024;
 type SourceOverride<'a> = (&'a str, &'a str, &'a [u8]);
-const SOURCE_OVERRIDES: &[SourceOverride<'_>] = &[
-    (
-        "src/math/math_DoubleTab.cxx",
-        "bc046ea106812a0f2c37d47a5f54cd58099837dcb6a68c1c86749db4077d5b43",
-        include_bytes!("../../native/occt-overlay/opencascade/math_DoubleTab.cxx"),
-    ),
-    (
-        "src/math/math_DoubleTab.lxx",
-        "2cf1b4d1c9f855e04b00edaae56d5fb700769db50a3d7000341fd3c269116b54",
-        include_bytes!("../../native/occt-overlay/opencascade/math_DoubleTab.lxx"),
-    ),
-];
+const SOURCE_OVERRIDES: &[SourceOverride<'_>] = &[(
+    "src/FoundationClasses/TKMath/math/math_DoubleTab.hxx",
+    "99a468c807bb46d75da900ce4955779f873c7cfd06396f6449ca6ceefa7bd301",
+    include_bytes!("../../native/occt-overlay/opencascade/math_DoubleTab.hxx"),
+)];
 
 /// Evidence for the actual checked SDK, covered by its completed-file receipt.
 pub(crate) fn sbom_evidence(compiler: &str) -> Result<serde_json::Value> {
@@ -84,6 +77,9 @@ fn override_digest() -> Result<String> {
 }
 const SETTINGS: &[&str] = &[
     "CMAKE_BUILD_TYPE=Release",
+    "BUILD_USE_VCPKG=OFF",
+    "BUILD_GTEST=OFF",
+    "CMAKE_OBJECT_PATH_MAX=240",
     "BUILD_LIBRARY_TYPE=Shared",
     "BUILD_MODULE_FoundationClasses=ON",
     "BUILD_MODULE_ModelingData=ON",
@@ -263,7 +259,11 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
         crate::hash::file(&archive)? == SHA256,
         "cached OCCT archive checksum differs; refusing reuse"
     );
-    let source_variant = source_cache.join(&overrides);
+    // OCCT 8 nests modules/toolkits/packages. Keep full content identities while
+    // avoiding two consecutive 64-character hashes in MSVC's source paths.
+    let source_variant = options.cache.join("variants").join(crate::hash::reader(
+        format!("{SHA256}:{overrides}").as_bytes(),
+    )?);
     fs::create_dir_all(&source_variant)?;
     let source = source_variant.join(format!("OCCT-{VERSION}"));
     if !source.exists() {

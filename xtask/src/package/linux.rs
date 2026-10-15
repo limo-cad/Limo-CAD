@@ -40,8 +40,8 @@ pub(super) fn build(package: &Package, options: &Options) -> Result<()> {
     }
     copyrights.push(sdk.join("share/doc/opencascade/copyright"));
     copyrights.extend([
-        PathBuf::from("/usr/share/doc/libocct-foundation-7.9/copyright"),
-        PathBuf::from("/usr/share/doc/libocct-data-exchange-7.9/copyright"),
+        PathBuf::from("/usr/share/doc/libocct-foundation-8.0/copyright"),
+        PathBuf::from("/usr/share/doc/libocct-data-exchange-8.0/copyright"),
     ]);
     let copyright = first(copyrights, "OCCT copyright notice")?;
     let license = first(
@@ -231,7 +231,7 @@ fn stage_deb_occt(package: &Package, sdk: &Path, root: &Path) -> Result<()> {
     ensure!(
         names
             .iter()
-            .any(|name| name.starts_with("libTKMath.so.7.9")),
+            .any(|name| name.starts_with("libTKMath.so.8.0")),
         "missing checked TKMath runtime"
     );
     common::run(
@@ -401,7 +401,7 @@ mod tests {
         let runtime = root.path().join("usr/lib/limo-cad");
         fs::create_dir_all(&bin).unwrap();
         fs::create_dir_all(&runtime).unwrap();
-        let name = "libTKBO.so.7.9";
+        let name = "libTKBO.so.8.0";
         fs::write(runtime.join(name), []).unwrap();
         let owned = runtime.canonicalize().unwrap();
         let origin = bin.join("../lib/limo-cad").join(name);

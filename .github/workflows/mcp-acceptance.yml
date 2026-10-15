@@ -38,8 +38,9 @@ jobs:
       OCCT_ROOT: ${{ inputs.platform == 'windows' && format('{0}/vcpkg_installed/x64-windows', github.workspace) || '/usr' }}
       LIMO_CAD_RECIPE_ARTIFACT_DIR: ${{ github.workspace }}/target/mcp-recipe-evidence
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: ${{ matrix.shard == 'core' && '0' || '1' }}
       - uses: ./.github/actions/setup-rust
         with:
@@ -60,7 +61,7 @@ jobs:
 
       - name: Download this run's Windows SDK
         if: inputs.platform == 'windows'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ inputs.sdk-artifact-id }}
           path: vcpkg_installed/x64-windows
@@ -91,7 +92,7 @@ jobs:
           cargo xtask verify-occt-storage --prefix $env:OCCT_ROOT
           if ($LASTEXITCODE -ne 0) { throw 'Downloaded SDK runtime qualification failed' }
 
-      - name: Install checked OpenCASCADE 7.9 SDK
+      - name: Install checked OpenCASCADE 8.0 SDK
         if: inputs.platform == 'linux'
         uses: ./.github/actions/setup-unix-occt
 
@@ -155,7 +156,7 @@ jobs:
 
       - name: Upload native recipe failure evidence
         if: failure() && steps.native-tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcp-recipe-failure-${{ inputs.platform }}-${{ matrix.shard }}
           path: target/mcp-recipe-failure/
@@ -187,7 +188,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'xtask tests failed' }
 
       - name: Upload successful demo input
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcp-demo-${{ inputs.platform }}-${{ matrix.shard }}
           path: target/mcp-recipe-evidence/${{ matrix.project }}.limo
@@ -197,7 +198,7 @@ jobs:
 
       - name: Upload MCP workshop evidence
         if: always() && matrix.shard == 'core'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcp-workshop-${{ inputs.platform }}
           path: target/mcp-workshop/

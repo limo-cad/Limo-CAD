@@ -15,7 +15,7 @@ Limo CAD does not keep separate native and browser CAD models.
 ```text
 Rust document/history and solid planner (crates/core, sketch, solid)
                          |
-Native OCCT 7.9.x adapter (crates/occt)
+Native OCCT 8.0.x adapter (crates/occt)
                          |
 Rust validation + commit + document DTO
 ```
@@ -44,15 +44,15 @@ default AP214 model.
 
 ## 2. Native development
 
-The bridge is implemented with `cxx` in `crates/occt`. It is tested with
-OCCT 7.9.3 and accepts any compatible 7.9.x SDK during local development.
+The bridge is implemented with `cxx` in `crates/occt`. It targets
+OCCT 8.0.1 and accepts any compatible 8.0.x SDK during local development.
 
 macOS SDK setup:
 
 ```sh
 brew install cmake ninja freetype
-cargo xtask build-occt --prefix "$HOME/Library/Caches/limo-cad/occt-7.9.3"
-export OCCT_ROOT="$HOME/Library/Caches/limo-cad/occt-7.9.3"
+cargo xtask build-occt --prefix "$HOME/Library/Caches/limo-cad/occt-8.0.1"
+export OCCT_ROOT="$HOME/Library/Caches/limo-cad/occt-8.0.1"
 cargo test -p limo-cad-occt --features native-occt
 cargo check --manifest-path desktop/Cargo.toml
 ```
@@ -65,7 +65,7 @@ Fontconfig development packages. Ubuntu uses `libfreetype6-dev` and
 and includes their libraries and headers in its cache identity.
 
 ```sh
-export OCCT_ROOT=/absolute/path/to/opencascade-7.9.3
+export OCCT_ROOT=/absolute/path/to/opencascade-8.0.1
 cargo test -p limo-cad-occt --features native-occt
 ```
 
@@ -161,7 +161,7 @@ Windows targets are x64 and ARM64 on Windows 10 version 1803 or newer and
 Windows 11. They require Microsoft's
 centrally installed matching Visual C++ v14 Redistributable.
 
-The root `vcpkg.json` pins both the vcpkg registry and OCCT 7.9.3. The Windows
+The root `vcpkg.json` pins both the vcpkg registry and OCCT 8.0.1. The Windows
 packager compiles the native Cargo executable, copies the complete
 DLL set from the isolated vcpkg prefix beside the executable, adds licenses,
 and creates a ZIP plus SHA-256 file:
@@ -187,7 +187,7 @@ and runtime requirements.
 ## 5. Reproducible Ubuntu 26.04 packages
 
 Ubuntu 26.04 LTS is the official Linux baseline. The package bundles the checked
-OCCT 7.9.3 runtime and a full native Bevy/Winit window with Vulkan rendering.
+OCCT 8.0.1 runtime and a full native Bevy/Winit window with Vulkan rendering.
 GTK supplies file dialogs and the desktop portal supplies printing. Package
 verification exercises private X11 and Wayland displays; it no longer checks
 an embedded browser's child surface.
@@ -225,20 +225,20 @@ optional Chrome engine smoke test.
 
 ## 7. Version and CI policy
 
-- Local development: a compatible OCCT 7.9.x SDK is accepted for engine checks;
-  distributed packages require the checked 7.9.3 SDK.
-- macOS and Linux CI build verified OCCT 7.9.3 sources through Rust xtask.
+- Local development: a compatible OCCT 8.0.x SDK is accepted for engine checks;
+  distributed packages require the checked 8.0.1 SDK.
+- macOS and Linux CI build verified OCCT 8.0.1 sources through Rust xtask.
   The compiler, FreeType, source and checked storage replacements determine
   the cache identity. A bounded probe qualifies the actual `TKMath` runtime
   before the SDK receipt is published or reused.
-- Windows CI: use the committed vcpkg baseline and OCCT 7.9.3 override,
+- Windows CI: use the committed vcpkg baseline and OCCT 8.0.1 override,
   installed as the dynamic `x64-windows` or `arm64-windows` triplet. Preserve
   vcpkg binary packages in an ABI-keyed CI cache; a cache miss must rebuild
   from the pinned sources.
-- Linux CI: build the DEB on `ubuntu-26.04` with its private checked OCCT 7.9.3
+- Linux CI: build the DEB on `ubuntu-26.04` with its private checked OCCT 8.0.1
   runtime, and verify Vulkan viewport startup under headless X11 and
   Weston/XWayland sessions. Build the AppImage in an Ubuntu 22.04 container
-  against OCCT 7.9.3 compiled from pinned, checksummed source
+  against OCCT 8.0.1 compiled from pinned, checksummed source
   (`cargo xtask build-occt --prefix PATH`, cached by verified compiler/SDK/recipe fingerprints), refuse it if
   it needs glibc newer than 2.35, and verify it under X11 on Ubuntu 22.04 and
   26.04.

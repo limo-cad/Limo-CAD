@@ -166,14 +166,11 @@ fn select_msvc(configure: &mut Command, compile: &mut Command) -> Result<()> {
 }
 
 pub fn verify_header(include: &Path) -> Result<()> {
-    let expected = include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.lxx")
+    let expected = include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.hxx")
         .replace("\r\n", "\n");
-    let installed = fs::read_to_string(include.join("math_DoubleTab.lxx"))?
-        .replace("\r\n", "\n")
-        .replace(
-            "#include \"Standard_OutOfRange.hxx\"",
-            "#include <Standard_OutOfRange.hxx>",
-        );
+    let installed = fs::read_to_string(include.join("math_DoubleTab.hxx"))?.replace("\r\n", "\n");
+    let quoted_includes = regex::Regex::new(r#"(?m)^(#\s*include)\s+"([A-Za-z0-9_.-]+)"$"#)?;
+    let installed = quoted_includes.replace_all(&installed, "$1 <$2>");
     ensure!(installed == expected, "OCCT SDK lacks the reviewed checked matrix header; rebuild with cargo xtask build-occt or the pinned vcpkg overlay");
     Ok(())
 }
@@ -250,8 +247,8 @@ mod tests {
     #[test]
     fn checked_header_accepts_vcpkg_formatting_and_rejects_changed_storage() {
         let staging = tempfile::tempdir().unwrap();
-        let header = staging.path().join("math_DoubleTab.lxx");
-        let reviewed = include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.lxx")
+        let header = staging.path().join("math_DoubleTab.hxx");
+        let reviewed = include_str!("../../native/occt-overlay/opencascade/math_DoubleTab.hxx")
             .replace("\r\n", "\n");
         fs::write(&header, &reviewed).unwrap();
         verify_header(staging.path()).unwrap();

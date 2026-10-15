@@ -65,7 +65,6 @@
 - [CAM foundation](CAM.md) and [High Speed Roughing](CAM_ADAPTIVE.md).
 - [OCCT packaging](OCCT_PACKAGING.md), [Windows packaging](WINDOWS_PACKAGING.md) and
   [Ubuntu packaging](LINUX_PACKAGING.md).
-- [Windows native viewport debugging](WINDOWS_NATIVE_VIEWPORT_DEBUGGING.md).
 - [Sketch constraint matrix](SKETCH_CONSTRAINT_PAIRWISE_MATRIX.md),
   [modeling selection](MODELING_VIEWPORT_SELECTION.md) and
   [viewport interaction](VIEWPORT_INTERACTION_THEME.md).

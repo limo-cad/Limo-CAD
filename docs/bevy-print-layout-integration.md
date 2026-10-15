@@ -2,11 +2,7 @@
 
 The Bevy desktop now uses one named-view editor for presentation and printing.
 Assembly 3MF exports retain the CAD component/occurrence hierarchy, alignment,
-and every intentional repeated instance. This integrates the shared work from
-[main PR #257](https://github.com/limo-cad/Limo-CAD/pull/257) into the native
-host and Bevy controls. The feature targets `feat/bevy-interface` because that
-interface replaces the legacy desktop.
-
+and every intentional repeated instance.
 ## Use a layout
 
 1. Open **Named Views** in the CAD browser and choose **Create named view**.
