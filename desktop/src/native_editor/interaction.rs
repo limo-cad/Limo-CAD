@@ -842,6 +842,11 @@ pub(super) fn pointer(
             return Err(error);
         }
     }
+    if editor.interaction.dimension_tool && editor.interaction.dimension_preview.is_some() {
+        // Canvas clicks blur native text editing before reaching this handler.
+        // Keep placement and repeat picks ready for typing or unchanged-value Enter.
+        panel::retry_dimension_focus(world);
+    }
     present(world, owner, &editor.interaction)?;
     editor.error.clear();
     modify_preview::refresh_form(world, &services.engine, owner, editor, &sketch)?;

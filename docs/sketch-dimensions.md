@@ -35,7 +35,10 @@ preview and select the new value for replacement.
 
 Enter must commit the displayed value and leader position in one undoable
 operation, including when reusing an existing driving dimension. Escape must
-cancel the preview. Existing read-only reference dimensions may be
+cancel the preview. Enter must also accept the displayed current value without
+requiring it to be retyped or changed. An optional canvas placement click must
+return focus to the value field, preserving its value, so Enter still commits.
+Existing read-only reference dimensions may be
 repositioned without changing their measured value.
 
 Manual acceptance must cover horizontal, vertical and diagonal line lengths,

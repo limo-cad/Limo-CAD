@@ -711,3 +711,274 @@ fn inline_dimension_pick_refines_measurement_and_enter_applies_one_undoable_chan
         assert_eq!(undone.dimensions, after.dimensions);
     });
 }
+
+#[test]
+fn rectangle_dimension_enter_accepts_unchanged_retyped_and_changed_values() {
+    use crate::native_viewport::winit_host::{
+        prepare_native_input, HostInputState, NativeHostInput,
+    };
+    use bevy::input::keyboard::{Key, KeyCode, KeyboardInput, NativeKeyCode};
+    crate::session_bridge::with_isolated_session_test(|| {
+        let directory = SessionDirectory(std::env::temp_dir().join(format!(
+            "rectangle-dimension-enter-{}",
+            uuid::Uuid::new_v4()
+        )));
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &directory.0);
+        for (typed, place) in [
+            (None, false),
+            (Some("20"), false),
+            (Some("21"), false),
+            (None, true),
+            (Some("20"), true),
+            (Some("21"), true),
+        ] {
+            let engine = Arc::new(AppState::new());
+            let bridge = Arc::new(SessionBridgeState::default());
+            crate::session_bridge::parse_engine_envelope(bridge.with_project_session_transition(
+                "main",
+                &engine,
+                || engine.bind_project_session("rectangle-dimension-test"),
+            ))
+            .unwrap();
+            let owner = bridge.native_document_context("main", &engine).unwrap();
+            let services = NativeServices {
+                engine: engine.clone(),
+                bridge: bridge.clone(),
+            };
+            for (operation, arguments) in [
+                ("sketch_begin", json!({"type":"origin_plane","plane":"xy"})),
+                (
+                    "sketch_add_rectangle",
+                    json!({"mode":"two_point","p1":{"x":0.,"y":0.},"p2":{"x":20.,"y":20.},"ctrl_held":false}),
+                ),
+            ] {
+                bridge
+                    .apply_native_mutation(&engine, &owner, operation, &arguments, || Ok(()))
+                    .unwrap();
+            }
+            let before = active(&engine).unwrap().unwrap();
+            assert!(before.dimensions.is_empty());
+            assert_eq!(before.dof.value, 2);
+            let mut app = native_viewport::interface_scene_fixture();
+            app.add_plugins(bevy::text::TextPlugin);
+            interface_shell::fields::install(&mut app);
+            let world = app.world_mut();
+            world.init_resource::<Assets<Image>>();
+            world.init_resource::<bevy::input_focus::InputFocus>();
+            world.init_resource::<HostInputState>();
+            world.spawn(InterfaceCamera);
+            let handle = NativeInterfaceHandle::new(|| {});
+            worker::install(world, services.clone(), handle.clone()).unwrap();
+            world.insert_resource(handle.clone());
+            native_viewport::apply_interface_edit_model(
+                world,
+                crate::session_bridge::native_interface::model_snapshot(&engine),
+            )
+            .unwrap();
+            let canvas = InterfaceRect {
+                x: 0.,
+                y: 90.,
+                width: 1000.,
+                height: 650.,
+            };
+            let ribbon = InterfaceRect {
+                x: 0.,
+                y: 0.,
+                width: 1000.,
+                height: 80.,
+            };
+            native_viewport::apply_interface_viewport(world, canvas, 1.).unwrap();
+            native_viewport::apply_interface_view(
+                world,
+                &owner.document_id,
+                Some(ViewportCamera {
+                    position: [10., 10., 100.],
+                    target: [10., 10., 0.],
+                    up: [0., 1., 0.],
+                    vertical_fov_degrees: 45.,
+                }),
+                None,
+            )
+            .unwrap();
+            synchronize_controls(world, &handle, &services, &owner, ribbon, canvas).unwrap();
+            crate::native_editor::execute(
+                world,
+                &engine,
+                &bridge,
+                &owner,
+                EditorCommand::Interaction(InteractionCommand::Dimension),
+                || Ok(()),
+            )
+            .unwrap();
+            let pixel = native_viewport::interface_world_point(
+                world,
+                &owner.document_id,
+                before.basis.to_3d([0., 10.]),
+            )
+            .unwrap()
+            .unwrap();
+            let pixel = Vec2::new(pixel[0] + canvas.x as f32, pixel[1] + canvas.y as f32);
+            world.resource_scope(|world, mut editor: Mut<Editor>| {
+                interaction::pointer(
+                    world,
+                    (&services, &owner),
+                    &mut editor,
+                    (pixel, pixel, canvas),
+                    false,
+                    false,
+                )
+                .unwrap();
+            });
+            synchronize_controls(world, &handle, &services, &owner, ribbon, canvas).unwrap();
+            layout(world, &handle, &owner, canvas);
+            world
+                .run_system_cached(interface_shell::fields::synchronize_fields)
+                .unwrap();
+            interface_shell::fields::apply_requested_focus(world);
+            assert_eq!(
+                world.resource::<Editor>().interaction.dimension.as_deref(),
+                Some("20")
+            );
+            assert!(!world.resource::<Editor>().interaction.dimension_reference);
+            let key = handle.focused_key().unwrap();
+            assert_eq!(
+                world
+                    .get::<bevy::text::EditableText>(Entity::from_bits(key.0))
+                    .unwrap()
+                    .editor
+                    .raw_selection()
+                    .text_range(),
+                0..2
+            );
+            let keys = typed
+                .into_iter()
+                .flat_map(str::chars)
+                .map(|c| (Key::Character(c.to_string().into()), Some(c.to_string())))
+                .chain(std::iter::once((Key::Enter, None)));
+            for (logical_key, text) in keys {
+                if logical_key == Key::Enter && place {
+                    let at = native_viewport::interface_world_point(
+                        world,
+                        &owner.document_id,
+                        before.basis.to_3d([-6., 15.]),
+                    )
+                    .unwrap()
+                    .unwrap();
+                    let at = Vec2::new(at[0] + canvas.x as f32, at[1] + canvas.y as f32);
+                    let mut click = NativeHostInput {
+                        ui_scale: 1.,
+                        context: handle.presented_context(),
+                        cursor: Some(at),
+                        modifiers: Default::default(),
+                        event: WindowEvent::MouseButtonInput(
+                            bevy::input::mouse::MouseButtonInput {
+                                button: bevy::input::mouse::MouseButton::Left,
+                                state: ButtonState::Pressed,
+                                window: Entity::PLACEHOLDER,
+                            },
+                        ),
+                        consumed: false,
+                        actions: Vec::new(),
+                    };
+                    prepare_native_input(world, &handle, &mut click).unwrap();
+                    for action in click.actions {
+                        crate::session_bridge::native_interface::controller::reduce_control_input(
+                            &engine, &bridge, world, &handle, &action,
+                        )
+                        .unwrap();
+                    }
+                    assert_eq!(
+                        handle.focused_key(),
+                        None,
+                        "native canvas input blurs the value field"
+                    );
+                    world.resource_scope(|world, mut editor: Mut<Editor>| {
+                        interaction::pointer(
+                            world,
+                            (&services, &owner),
+                            &mut editor,
+                            (at, at, canvas),
+                            false,
+                            false,
+                        )
+                        .unwrap();
+                    });
+                    synchronize_controls(world, &handle, &services, &owner, ribbon, canvas)
+                        .unwrap();
+                    layout(world, &handle, &owner, canvas);
+                    world
+                        .run_system_cached(interface_shell::fields::synchronize_fields)
+                        .unwrap();
+                    interface_shell::fields::apply_requested_focus(world);
+                    assert_eq!(
+                        handle.focused_key(),
+                        Some(key),
+                        "placement must restore the same value field"
+                    );
+                    assert_eq!(
+                        world
+                            .get::<bevy::text::EditableText>(Entity::from_bits(key.0))
+                            .unwrap()
+                            .value()
+                            .to_string(),
+                        typed.unwrap_or("20")
+                    );
+                }
+                let mut input = NativeHostInput {
+                    ui_scale: 1.,
+                    context: handle.presented_context(),
+                    cursor: Some(pixel),
+                    modifiers: Default::default(),
+                    event: WindowEvent::KeyboardInput(KeyboardInput {
+                        key_code: KeyCode::Unidentified(NativeKeyCode::Unidentified),
+                        logical_key,
+                        state: ButtonState::Pressed,
+                        text: text.map(Into::into),
+                        repeat: false,
+                        window: Entity::PLACEHOLDER,
+                    }),
+                    consumed: false,
+                    actions: Vec::new(),
+                };
+                prepare_native_input(world, &handle, &mut input).unwrap();
+                assert!(input.consumed, "keyboard input was lost for {typed:?}");
+                for action in input.actions {
+                    crate::session_bridge::native_interface::controller::reduce_control_input(
+                        &engine, &bridge, world, &handle, &action,
+                    )
+                    .unwrap();
+                }
+            }
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                if let Some(outcome) = worker::poll(world, &services) {
+                    outcome.value.unwrap();
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "Enter did not finish for {typed:?}"
+                );
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            let after = active(&engine).unwrap().unwrap();
+            assert_eq!(
+                after.dimensions.len(),
+                1,
+                "Enter did not create the dimension for {typed:?}"
+            );
+            assert!(
+                (after.dimensions[0].value - typed.unwrap_or("20").parse::<f64>().unwrap()).abs()
+                    < 1e-8
+            );
+            assert_eq!(after.dof.value, 1);
+            assert!(world.resource::<Editor>().interaction.dimension.is_none());
+            bridge
+                .apply_native_history(&engine, &owner, false, || Ok(()))
+                .unwrap();
+            let undone = active(&engine).unwrap().unwrap();
+            assert_eq!(undone.entities, before.entities);
+            assert!(undone.dimensions.is_empty());
+        }
+    });
+}
