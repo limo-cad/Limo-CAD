@@ -781,3 +781,7 @@ fn render_worker(
 #[cfg(test)]
 #[path = "viewport_renderer/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "viewport_renderer/sketch_commit_tests.rs"]
+mod sketch_commit_tests;

@@ -26,9 +26,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     match task.as_str() {
         "desktop-changes" => return crate::desktop_changes::run(args),
         "native-ignored-test" => {
-            let suite = args
-                .next()
-                .context("missing native ignored suite (fonts, sketch-visual or grid-redraw)")?;
+            let suite = args.next().context(
+                "missing native ignored suite (fonts, sketch-visual, grid-redraw or sketch-commit)",
+            )?;
             ensure!(
                 args.next().is_none(),
                 "unexpected native ignored suite argument"
@@ -137,7 +137,13 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             "native_viewport_grid_restores_without_pointer_motion_or_another_scene_request",
             &["native_viewport_grid_restores_without_pointer_motion_or_another_scene_request"],
         )),
-        _ => bail!("unknown native ignored suite; use fonts, sketch-visual or grid-redraw"),
+        "sketch-commit" => Ok((
+            "committed_sketch_primitives_render_without_a_followup_pointer_frame",
+            &["committed_sketch_primitives_render_without_a_followup_pointer_frame"],
+        )),
+        _ => bail!(
+            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw or sketch-commit"
+        ),
     }
 }
 
@@ -329,7 +335,7 @@ mod tests {
     use super::*;
     #[test]
     fn native_diagnostic_filters_reject_empty_renamed_and_duplicate_tests() {
-        for suite in ["fonts", "sketch-visual", "grid-redraw"] {
+        for suite in ["fonts", "sketch-visual", "grid-redraw", "sketch-commit"] {
             let (filter, expected) = native_ignored_suite(suite).unwrap();
             let inventory = expected
                 .iter()
