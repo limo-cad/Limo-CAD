@@ -1,3 +1,0 @@
-native Bevy viewport installed (Bevy 0.19 / wgpu DX12-Vulkan / embedded HWND, 1.00x scale)
-React native-viewport bridge connected (ready=false)
-native Bevy viewport ready: 520x440 logical, 520x440 physical, 1.00x scale

@@ -1,0 +1,27 @@
+diff --git a/src-tauri/Cargo.lock b/src-tauri/Cargo.lock
+index 2821bcb1..3d5ecced 100644
+--- a/src-tauri/Cargo.lock
++++ b/src-tauri/Cargo.lock
+@@ -4022,6 +4022,7 @@ dependencies = [
+  "nbcad-help",
+  "nbcad-mcp-mutate",
+  "nbcad-occt",
++ "nbcad-print",
+  "nbcad-recipes",
+  "nbcad-script",
+  "nbcad-sketch",
+@@ -4054,6 +4055,14 @@ dependencies = [
+  "serde_json",
+ ]
+ 
++[[package]]
++name = "nbcad-print"
++version = "0.2.1"
++dependencies = [
++ "png 0.17.16",
++ "serde_json",
++]
++
+ [[package]]
+ name = "nbcad-recipes"
+ version = "0.2.1"

@@ -1,0 +1,49 @@
+'vswhere.exe' is not recognized as an internal or external command,
+operable program or batch file.
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.0
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+   Compiling nbcad-core v0.2.2 (D:\limo-startup-baseline-e4015de\crates\core)
+   Compiling nbcad-solid v0.2.2 (D:\limo-startup-baseline-e4015de\crates\solid)
+   Compiling nbcad-export v0.2.2 (D:\limo-startup-baseline-e4015de\crates\export)
+   Compiling nbcad-occt v0.2.2 (D:\limo-startup-baseline-e4015de\crates\occt)
+   Compiling nbcad-assembly v0.2.2 (D:\limo-startup-baseline-e4015de\crates\assembly)
+   Compiling nbcad-cam v0.2.2 (D:\limo-startup-baseline-e4015de\crates\cam)
+   Compiling nbcad-help v0.2.2 (D:\limo-startup-baseline-e4015de\crates\help)
+   Compiling nbcad-sketch v0.2.2 (D:\limo-startup-baseline-e4015de\crates\sketch)
+   Compiling nbcad-script v0.2.2 (D:\limo-startup-baseline-e4015de\crates\script)
+   Compiling nbcad-recipes v0.2.2 (D:\limo-startup-baseline-e4015de\crates\recipes)
+   Compiling nbcad-mcp-mutate v0.2.2 (D:\limo-startup-baseline-e4015de\crates\mcp-mutate)
+   Compiling nbcad-print v0.2.2 (D:\limo-startup-baseline-e4015de\crates\print)
+   Compiling nbcad v0.2.2 (D:\limo-startup-baseline-e4015de\src-tauri)
+   Compiling nbcad-mcp v0.2.2 (D:\limo-startup-baseline-e4015de\mcp-server)
+warning: constant `GRID_TARGET_PX` is never used
+    --> src\native_viewport\platform.rs:5280:7
+     |
+5280 | const GRID_TARGET_PX: f32 = 24.0;
+     |       ^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `one_two_five_mantissa` is never used
+    --> src\native_viewport\platform.rs:5300:4
+     |
+5300 | fn one_two_five_mantissa(normalized: f64) -> f64 {
+     |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `adaptive_grid_step` is never used
+    --> src\native_viewport\platform.rs:5316:4
+     |
+5316 | fn adaptive_grid_step(world_per_pixel: f32) -> f32 {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `initial_loading` is never used
+   --> src\native_viewport\loading.rs:115:15
+    |
+115 | pub(super) fn initial_loading(app: &App) -> bool {
+    |               ^^^^^^^^^^^^^^^
+
+warning: `nbcad` (lib) generated 4 warnings
+    Finished `dev` profile [optimized + debuginfo] target(s) in 14m 11s

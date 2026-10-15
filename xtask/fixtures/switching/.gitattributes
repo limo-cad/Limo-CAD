@@ -1,3 +1,0 @@
-*.jsonc text eol=lf
-*.nbcad -text
-*.patch text eol=lf

@@ -1,0 +1,352 @@
+diff --git a/crates/assembly/src/lib.rs b/crates/assembly/src/lib.rs
+index 3daf09a2..d951cab2 100644
+--- a/crates/assembly/src/lib.rs
++++ b/crates/assembly/src/lib.rs
+@@ -2368,6 +2368,49 @@ impl AssemblyDocumentDto {
+     ) -> Result<MechanismPreviewDto, String> {
+         solve_mechanism_drag(self, request, scene)
+     }
++
++    /// Availability uses the same active scene and grounded joint graph as the
++    /// solver. A rigid-only or disconnected component stays a selection target.
++    pub fn can_drag_occurrence(
++        &self,
++        body: BodyId,
++        occurrence: OccurrenceId,
++        scene: &SolidSceneDto,
++    ) -> bool {
++        let mut active = self.clone();
++        if active.project_active_scene(scene).is_err()
++            || !active
++                .component_structure
++                .occurrence_contains_body(occurrence, body)
++        {
++            return false;
++        }
++        let Some(target) = active.component_structure.occurrence(occurrence) else {
++            return false;
++        };
++        let mut siblings = active
++            .component_structure
++            .occurrences
++            .iter()
++            .filter(|o| o.parent_occurrence_id == target.parent_occurrence_id)
++            .collect::<Vec<_>>();
++        siblings.sort_by_key(|o| o.id.0);
++        let Some(ground) = siblings
++            .iter()
++            .find(|o| o.grounded)
++            .or_else(|| siblings.first())
++            .map(|o| o.id)
++        else {
++            return false;
++        };
++        occurrence != ground
++            && joint_path(&active, ground, occurrence).is_some_and(|path| {
++                active
++                    .joints
++                    .iter()
++                    .any(|j| path.contains(&j.id) && !active_coordinates(j.kind).is_empty())
++            })
++    }
+ }
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+diff --git a/crates/mcp-mutate/src/lib.rs b/crates/mcp-mutate/src/lib.rs
+index d818acc5..ca736407 100644
+--- a/crates/mcp-mutate/src/lib.rs
++++ b/crates/mcp-mutate/src/lib.rs
+@@ -19,6 +19,7 @@ pub fn is_live_engine_query(method: &str) -> bool {
+             | "assembly_document"
+             | "assembly_swept_collision_check"
+             | "assembly_preview_joint_coordinates"
++            | "assembly_preview_mechanism_drag"
+             | "assembly_evaluate_motion_study"
+             | "assembly_sample_motion_study"
+             | "assembly_export_motion_path_csv"
+@@ -785,6 +786,12 @@ pub static MUTATES: &[MutateSpec] = &[
+         payload: PayloadKind::Object,
+         execution: ExecutionKind::Direct,
+     },
++    MutateSpec {
++        name: "assembly_apply_joint_motions",
++        engine_method: "assembly_apply_joint_motions",
++        payload: PayloadKind::Object,
++        execution: ExecutionKind::Direct,
++    },
+     MutateSpec {
+         name: "assembly_create_contact_set",
+         engine_method: "assembly_create_contact_set",
+diff --git a/interface/catalog.json b/interface/catalog.json
+index be76947c..b7bebd93 100644
+--- a/interface/catalog.json
++++ b/interface/catalog.json
+@@ -1989,6 +1989,8 @@
+             "assembly_set_joint_motion",
+             "assembly_set_joint_coordinates",
+             "assembly_preview_joint_coordinates",
++            "assembly_preview_mechanism_drag",
++            "assembly_apply_joint_motions",
+             "assembly_create_gear_relation",
+             "assembly_update_gear_relation",
+             "assembly_delete_gear_relation"
+diff --git a/mcp-server/src/assembly_tools.rs b/mcp-server/src/assembly_tools.rs
+index 532df70f..9255b6b3 100644
+--- a/mcp-server/src/assembly_tools.rs
++++ b/mcp-server/src/assembly_tools.rs
+@@ -20,6 +20,14 @@ pub fn specs() -> Vec<ToolSpec> {
+     contact["id"] = id.clone();
+     contact["enabled"] = json!({"type":"boolean"});
+     let mut tools = vec![
++        ToolSpec::direct("assembly_preview_mechanism_drag","Preview component drag",
++            "Solve a grabbed component through its joint mechanism without changing saved intent. Supply the picked point in body-local coordinates and its target in document coordinates. Returns solved poses, coordinates and convergence diagnostics; it never moves source geometry.",
++            "assembly_preview_mechanism_drag",Payload::Object,object_schema(json!({"body_id":id,"occurrence_id":id,
++            "target_pose":object_schema(json!({"body_id":id,"translation":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"rotation":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4}}),&["body_id","translation","rotation"]),
++            "grab_point_local":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"target_point_world":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"initial_joint_motions":{"type":"array","items":motion},"solve_orientation":{"type":"boolean"},"maximum_iterations":{"type":"integer","minimum":1,"maximum":96}}),&["body_id","target_pose"])),
++        ToolSpec::direct("assembly_apply_joint_motions","Save mechanism position",
++            "Apply joint coordinates atomically through the assembly solver. This is the commit used when releasing a component drag.",
++            "assembly_apply_joint_motions",Payload::Object,object_schema(json!({"motions":{"type":"array","items":motion}}),&["motions"])),
+         ToolSpec::direct("assembly_preview_joint_coordinates","Preview joint motion",
+             "Solve all five supported joint coordinates without changing saved joint intent or source geometry. Returns the solved component poses and diagnostics.",
+             "assembly_preview_joint_coordinates",Payload::Object,object_schema(json!({"motion":motion}), &["motion"])),
+diff --git a/mcp-server/src/lib.rs b/mcp-server/src/lib.rs
+index 75d04945..c2557345 100644
+--- a/mcp-server/src/lib.rs
++++ b/mcp-server/src/lib.rs
+@@ -1458,6 +1458,7 @@ fn is_read_safe_while_attached(name: &str) -> bool {
+             | "assembly_interference_check"
+             | "assembly_swept_collision_check"
+             | "assembly_preview_joint_coordinates"
++            | "assembly_preview_mechanism_drag"
+             | "assembly_evaluate_motion_study"
+             | "assembly_sample_motion_study"
+             | "assembly_export_motion_path_csv"
+@@ -10514,6 +10515,23 @@ mod tests {
+         for op in ["assembly_evaluate_motion_study","assembly_sample_motion_study","assembly_export_motion_path_csv"]{assert!(is_read_safe_while_attached(op));assert!(nbcad_mcp_mutate::is_live_engine_query(op));}
+     }
+ 
++    #[test]
++    fn mechanism_tools_share_read_only_preview_and_atomic_coordinate_commit() {
++        let mut s=CadServer::new().unwrap();extrude_offset_box(&mut s,"Sketch1",-12.,-2.);
++        let scene=extrude_offset_box(&mut s,"Sketch2",2.,12.);let bodies=scene["scene"]["bodies"].as_array().unwrap();
++        s.call_tool("assembly_create_joint",json!({"name":"Slide","kind":"slider","grounded_body_id":bodies[0]["id"],"connector_a":planar_connector_from_body(&bodies[0]),"connector_b":planar_connector_from_body(&bodies[1])})).unwrap();
++        let solution=s.call_tool("assembly_solution",json!({})).unwrap();
++        let mut pose=solution["body_poses"][1].clone();pose["translation"][2]=json!(pose["translation"][2].as_f64().unwrap()+8.);
++        let before=s.call_tool("cad_project_model",json!({})).unwrap();
++        let result=s.call_tool("cad_interface",json!({"action":"execute","group":"assembly/joints","operation":"assembly_preview_mechanism_drag","arguments":{"body_id":bodies[1]["id"],"target_pose":pose,"maximum_iterations":12}})).unwrap();
++        assert_eq!(result["solution"]["solved"],true);assert_eq!(result["converged"],true);
++        assert_eq!(s.call_tool("cad_project_model",json!({})).unwrap(),before);
++        s.call_tool("cad_interface",json!({"action":"execute","group":"assembly/joints","operation":"assembly_apply_joint_motions","arguments":{"motions":result["joint_motions"]}})).unwrap();
++        assert_ne!(s.call_tool("cad_project_model",json!({})).unwrap(),before);
++        assert!(!nbcad_mcp_mutate::is_inbox_mutate("assembly_preview_mechanism_drag"));
++        assert!(nbcad_mcp_mutate::is_inbox_mutate("assembly_apply_joint_motions"));
++    }
++
+     #[test]
+     fn swept_inspection_is_exact_read_only_bounded_and_deterministic() {
+         let mut server=CadServer::new().unwrap();
+diff --git a/src-tauri/src/native_editor/mcp.rs b/src-tauri/src/native_editor/mcp.rs
+index 5a24d3de..5beea50e 100644
+--- a/src-tauri/src/native_editor/mcp.rs
++++ b/src-tauri/src/native_editor/mcp.rs
+@@ -194,6 +194,7 @@ pub(crate) fn drive(
+     // Each MCP call is an atomic gesture. Errors, focus changes and worker
+     // enqueue must never leave a synthetic primary button held across calls.
+     world.resource_mut::<Editor>().press = None;
++    if result.is_err() { mechanism::cancel(world); }
+     cancel_native_pointer(world, handle);
+-    result
++    result.and_then(|value| Ok(mechanism::tick(world,handle,services,owner)?.unwrap_or(value)))
+ }
+diff --git a/src-tauri/src/native_editor/mod.rs b/src-tauri/src/native_editor/mod.rs
+index 2e01e0dc..a363814e 100644
+--- a/src-tauri/src/native_editor/mod.rs
++++ b/src-tauri/src/native_editor/mod.rs
+@@ -3,6 +3,7 @@
+ 
+ mod annotations;
+ mod solid;
++pub(crate) mod mechanism;
+ use crate::session_bridge::native_interface::controller::assembly::joint;
+ mod dynamic;
+ pub(crate) mod support;
+@@ -524,6 +525,10 @@ pub(crate) fn process_one(
+     let Some(frame) = handle.frame() else {
+         return Ok(json!({"handled":false}));
+     };
++    if mechanism::pointer(world,handle,services,event)? {
++        world.resource_mut::<Editor>().press=None;
++        return Ok(json!({"handled":true,"mechanism_drag":true}));
++    }
+     if frame.modal_stack.is_empty() && event.context.as_ref() == Some(&frame.context) {
+         use crate::session_bridge::native_interface::feature::manipulator::{self,Pointer};
+         let phase=match &event.event {
+diff --git a/src-tauri/src/native_editor/solid.rs b/src-tauri/src/native_editor/solid.rs
+index 2b3ef434..2a6490bb 100644
+--- a/src-tauri/src/native_editor/solid.rs
++++ b/src-tauri/src/native_editor/solid.rs
+@@ -21,7 +21,7 @@ fn pick(
+         NativePickPurpose::Geometry,
+     )
+ }
+-fn allowed(world: &World) -> bool {
++pub(super) fn allowed(world: &World) -> bool {
+     feature::panel(world).is_none() && !crate::session_bridge::native_interface::controller::assembly::joint::active(world)
+         && native_viewport::interface_geometry(world)
+             .active_sketch
+diff --git a/src-tauri/src/session_bridge/native_interface.rs b/src-tauri/src/session_bridge/native_interface.rs
+index 58becd2f..a8af6f8e 100644
+--- a/src-tauri/src/session_bridge/native_interface.rs
++++ b/src-tauri/src/session_bridge/native_interface.rs
+@@ -251,7 +251,7 @@ impl SessionBridgeState {
+             let edit_history = if operation == "solid_delete_feature"
+                 || operation == "solid_reorder_feature"
+                 || operation.starts_with("solid_edit_")
+-                || matches!(operation, "assembly_set_occurrence_pose" | "assembly_duplicate_occurrence" | "assembly_create_component" | "assembly_create_occurrence" | "assembly_update_component" | "assembly_update_occurrence" | "assembly_set_occurrence_grounded" | "assembly_create_joint" | "assembly_update_joint" | "assembly_delete_joint" | "assembly_set_joint_enabled" | "assembly_set_joint_coordinates" | "assembly_create_position" | "assembly_update_position" | "assembly_delete_position" | "assembly_apply_position" | "assembly_create_motion_study" | "assembly_update_motion_study" | "assembly_delete_motion_study" | "assembly_create_contact_set" | "assembly_update_contact_set" | "assembly_delete_contact_set")
++                || matches!(operation, "assembly_set_occurrence_pose" | "assembly_duplicate_occurrence" | "assembly_create_component" | "assembly_create_occurrence" | "assembly_update_component" | "assembly_update_occurrence" | "assembly_set_occurrence_grounded" | "assembly_create_joint" | "assembly_update_joint" | "assembly_delete_joint" | "assembly_set_joint_enabled" | "assembly_set_joint_coordinates" | "assembly_apply_joint_motions" | "assembly_create_position" | "assembly_update_position" | "assembly_delete_position" | "assembly_apply_position" | "assembly_create_motion_study" | "assembly_update_motion_study" | "assembly_delete_motion_study" | "assembly_create_contact_set" | "assembly_update_contact_set" | "assembly_delete_contact_set")
+             {
+                 let model =
+                     super::parse_engine_envelope(engine.engine_call("project_export_model", ""))?;
+diff --git a/src-tauri/src/session_bridge/native_interface/controller.rs b/src-tauri/src/session_bridge/native_interface/controller.rs
+index b3817dd2..2ff3a3c0 100644
+--- a/src-tauri/src/session_bridge/native_interface/controller.rs
++++ b/src-tauri/src/session_bridge/native_interface/controller.rs
+@@ -377,6 +377,7 @@ fn update_inner(
+         }
+         if worker::busy(world) {
+             retain_busy_intent(state, &event);
++            crate::native_editor::mechanism::observe_busy(world,&event);
+             continue;
+         }
+         // Lifecycle input can arrive before the first semantic frame. Handle
+@@ -589,6 +590,12 @@ fn update_inner(
+         })?;
+         if view::pending(world) { handle.request_redraw(); }
+     }
++    if crate::native_editor::mechanism::active(world) {
++        let owner=bridge.native_document_context(&state.window_id,engine)?;
++        if state.close_pending || files::awaiting(world) {crate::native_editor::mechanism::cancel(world);}
++        crate::native_editor::mechanism::tick(world,handle,services,&owner)?;
++        if worker::busy(world) {return maintain_busy_window(world,handle,state);}
++    }
+     if (assembly::motion::active(world) || assembly::studies::active(world)) && state.pending.is_none() && !state.close_pending && !state.exit_after_receipt && !files::awaiting(world) {
+         let owner=bridge.native_document_context(&state.window_id,engine)?;
+         assembly::studies::tick(world,handle,services,&owner)?;
+@@ -682,6 +689,7 @@ fn maintain_busy_window(
+         .collect::<Vec<_>>();
+     for event in events {
+         retain_busy_intent(state, &event);
++            crate::native_editor::mechanism::observe_busy(world,&event);
+     }
+     let _ = handle.take_actions()?;
+     let _ = handle.take_modal_keys()?;
+diff --git a/src-tauri/src/session_bridge/native_interface/controller/assembly/joint/tests.rs b/src-tauri/src/session_bridge/native_interface/controller/assembly/joint/tests.rs
+index 205a01f6..058a2765 100644
+--- a/src-tauri/src/session_bridge/native_interface/controller/assembly/joint/tests.rs
++++ b/src-tauri/src/session_bridge/native_interface/controller/assembly/joint/tests.rs
+@@ -1,6 +1,79 @@
+ use super::*;
+ use crate::session_bridge::native_interface::tests::Fixture;
+ 
++#[test]
++fn mechanism_drag_keeps_source_geometry_and_applies_one_reversible_joint_position() {
++    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
++    let f = Fixture::new();
++    stock(&f);
++    let a = document(&f.engine).unwrap();
++    let mut form = Form::new(&a, None, UnitSystem::Mm);
++    form.kind = nbcad_sketch::JointKindDto::Slider;
++    form.connectors = picked(&f, &a);
++    form.coordinates[1].limited = true;
++    form.coordinates[1].values[1].set_text("-20".into());
++    form.coordinates[1].values[2].set_text("20".into());
++    let (op, args) = form.request(&a).unwrap();
++    f.bridge
++        .apply_native_mutation(&f.engine, &f.owner(), op, &args, || Ok(()))
++        .unwrap();
++    let a = document(&f.engine).unwrap();
++    let scene = f.engine.viewport_snapshot().2;
++    let solution = a.solve(&scene);
++    let base = &solution.instance_body_poses[0];
++    let moving = &solution.instance_body_poses[1];
++    assert!(!a.can_drag_occurrence(base.body_id, base.occurrence_id, &scene));
++    assert!(a.can_drag_occurrence(moving.body_id, moving.occurrence_id, &scene));
++    let mut disabled = a.clone();
++    disabled.joints[0].enabled = false;
++    assert!(!disabled.can_drag_occurrence(moving.body_id, moving.occurrence_id, &scene));
++    let mut rigid = a.clone();
++    rigid.joints[0].kind = nbcad_sketch::JointKindDto::Rigid;
++    assert!(!rigid.can_drag_occurrence(moving.body_id, moving.occurrence_id, &scene));
++    let before = parse_engine_envelope(f.engine.engine_call("project_export_model", "")).unwrap();
++    let target = nbcad_sketch::BodyPoseDto {
++        body_id: moving.body_id,
++        translation: [
++            moving.translation[0],
++            moving.translation[1],
++            moving.translation[2] + 10.,
++        ],
++        rotation: moving.rotation,
++    };
++    let preview:nbcad_sketch::MechanismPreviewDto=serde_json::from_value(parse_engine_envelope(f.engine.engine_call("assembly_preview_mechanism_drag",&json!({"body_id":moving.body_id,"occurrence_id":moving.occurrence_id,"target_pose":target,"maximum_iterations":12}).to_string())).unwrap()).unwrap();
++    assert!(preview.solution.solved && preview.converged, "{preview:?}");
++    assert_eq!(
++        parse_engine_envelope(f.engine.engine_call("project_export_model", "")).unwrap(),
++        before
++    );
++    f.bridge
++        .apply_native_mutation(
++            &f.engine,
++            &f.owner(),
++            "assembly_apply_joint_motions",
++            &json!({"motions":preview.joint_motions}),
++            || Ok(()),
++        )
++        .unwrap();
++    let after = parse_engine_envelope(f.engine.engine_call("project_export_model", "")).unwrap();
++    assert_ne!(before, after);
++    assert_eq!(f.engine.viewport_snapshot().2, scene);
++    f.bridge
++        .apply_native_history(&f.engine, &f.owner(), false, || Ok(()))
++        .unwrap();
++    assert_eq!(
++        parse_engine_envelope(f.engine.engine_call("project_export_model", "")).unwrap(),
++        before
++    );
++    f.bridge
++        .apply_native_history(&f.engine, &f.owner(), true, || Ok(()))
++        .unwrap();
++    assert_eq!(
++        parse_engine_envelope(f.engine.engine_call("project_export_model", "")).unwrap(),
++        after
++    );
++}
++
+ pub(in super::super) fn stock(f: &Fixture) {
+     for i in 0..2 {
+         for (op, args) in [
+diff --git a/xtask/src/main.rs b/xtask/src/main.rs
+index b95a8a5d..7790fc23 100644
+--- a/xtask/src/main.rs
++++ b/xtask/src/main.rs
+@@ -13,6 +13,7 @@ mod native_fixture;
+ mod native_hole_test;
+ mod native_inspect_test;
+ mod native_joint_test;
++mod native_mechanism_test;
+ mod native_move_test;
+ mod native_planes_test;
+ mod native_refine_test;
+diff --git a/xtask/src/test_mcp.rs b/xtask/src/test_mcp.rs
+index 9458206e..83fa57e5 100644
+--- a/xtask/src/test_mcp.rs
++++ b/xtask/src/test_mcp.rs
+@@ -35,6 +35,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
+     if suite == "native-studies" {
+         return crate::native_studies_test::run(args);
+     }
++    if suite == "native-mechanism" {
++        return crate::native_mechanism_test::run(args);
++    }
+     if suite == "native-move" {
+         return crate::native_move_test::run(args);
+     }

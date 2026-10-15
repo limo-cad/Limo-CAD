@@ -1,0 +1,111 @@
+diff --git a/crates/occt/src/drawing_export/cloud.rs b/crates/occt/src/drawing_export/cloud.rs
+index d8aef136..6809db44 100644
+--- a/crates/occt/src/drawing_export/cloud.rs
++++ b/crates/occt/src/drawing_export/cloud.rs
+@@ -68,12 +68,13 @@ pub(super) fn draw(
+             .ok_or("Revision cloud scratch overflow")?,
+     )?;
+     let label = format!("REV {revision}");
++    let first_baseline = plan.caption_baseline(&label);
+     // Same native baseline, font height and 1.25 multiline spacing. DXF cannot
+     // partially clip glyphs like the paper viewport: fail before publication.
+     for (row, line) in label.lines().enumerate() {
+         let baseline = [
+-            plan.label[0],
+-            plan.label[1] + row as f64 * cloud::TEXT_HEIGHT_MM * 1.25,
++            first_baseline[0],
++            first_baseline[1] + row as f64 * cloud::TEXT_HEIGHT_MM * 1.25,
+         ];
+         let bounds = text::label_bounds(baseline, line, cloud::TEXT_HEIGHT_MM, 1.);
+         if bounds[0] < 0. || bounds[1] < 0. || bounds[2] > size[0] || bounds[3] > size[1] {
+@@ -95,8 +96,8 @@ pub(super) fn draw(
+     }
+     for (row, line) in label.lines().enumerate() {
+         let baseline = [
+-            plan.label[0],
+-            plan.label[1] + row as f64 * cloud::TEXT_HEIGHT_MM * 1.25,
++            first_baseline[0],
++            first_baseline[1] + row as f64 * cloud::TEXT_HEIGHT_MM * 1.25,
+         ];
+         out.label(baseline, line, cloud::TEXT_HEIGHT_MM, false)?;
+     }
+diff --git a/crates/occt/src/drawing_presentation/cloud.rs b/crates/occt/src/drawing_presentation/cloud.rs
+index 673c07a8..1e726338 100644
+--- a/crates/occt/src/drawing_presentation/cloud.rs
++++ b/crates/occt/src/drawing_presentation/cloud.rs
+@@ -62,6 +62,16 @@ impl<'a> Cloud<'a> {
+     pub fn work(&self) -> u64 {
+         self.count * MAX_ARC_POINTS
+     }
++    /// First baseline of the complete formatted caption. The final row keeps
++    /// the existing single-row position above the cloud; preceding rows grow
++    /// upward instead of entering its scallops. Saved vertices never move.
++    pub fn caption_baseline(&self, text: &str) -> P {
++        let preceding_rows = text.lines().count().saturating_sub(1);
++        [
++            self.label[0],
++            self.label[1] - preceding_rows as f64 * TEXT_HEIGHT_MM * 1.25,
++        ]
++    }
+     pub fn arcs(&self) -> impl Iterator<Item = Scallop> + '_ {
+         self.points.iter().enumerate().flat_map(|(index, &start)| {
+             let end = self.points[(index + 1) % self.points.len()];
+@@ -157,4 +167,26 @@ mod tests {
+         assert!(Cloud::new(&[[f64::MAX, 0.], [-f64::MAX, 1.], [0., 2.]]).is_err());
+         assert!(Cloud::new(&vec![[0., 0.]; 4097]).is_err());
+     }
++
++    #[test]
++    fn multiline_caption_grows_upward_and_retains_single_row_clearance() {
++        let points = [[40., 55.], [135., 55.], [135., 115.], [40., 115.]];
++        let cloud = Cloud::new(&points).unwrap();
++        let top_ink = cloud
++            .arcs()
++            .flat_map(Scallop::points)
++            .map(|p| p[1] - STROKE_MM * 0.5)
++            .fold(f64::INFINITY, f64::min);
++        for text in ["REV B", "REV B\nCafé 零件", "REV B\r\nCafé\r\nC\r\n"] {
++            let first = cloud.caption_baseline(text);
++            let last = first[1] + (text.lines().count() - 1) as f64 * 4.;
++            assert_eq!(last, 53.);
++            assert!(last < top_ink, "caption baseline must stay above scallop ink");
++            assert_eq!(first[0], 40.);
++        }
++        assert_eq!(cloud.caption_baseline("REV B"), cloud.label);
++        assert_eq!(cloud.caption_baseline("REV B\nCafé 零件"), [40., 49.]);
++        assert_eq!(cloud.caption_baseline("REV B\nC\nD"), [40., 45.]);
++        assert_eq!(points, [[40., 55.], [135., 55.], [135., 115.], [40., 115.]]);
++    }
+ }
+diff --git a/src-tauri/src/session_bridge/native_interface/controller/workbench/drawing_annotations.rs b/src-tauri/src/session_bridge/native_interface/controller/workbench/drawing_annotations.rs
+index 9436375a..4558ea8e 100644
+--- a/src-tauri/src/session_bridge/native_interface/controller/workbench/drawing_annotations.rs
++++ b/src-tauri/src/session_bridge/native_interface/controller/workbench/drawing_annotations.rs
+@@ -554,9 +554,10 @@ fn render_checked(
+                 }
+                 art.polyline(&scallop.points(), &style, Ink::Revision);
+             }
++            let caption = format!("REV {revision}");
+             art.label(
+-                cloud.label,
+-                format!("REV {revision}"),
++                cloud.caption_baseline(&caption),
++                caption,
+                 nbcad_occt::drawing_presentation::cloud::TEXT_HEIGHT_MM,
+                 1., false, Ink::Revision,
+             );
+diff --git a/src-tauri/src/session_bridge/native_interface/controller/workbench/drawing_annotations/cloud_tests.rs b/src-tauri/src/session_bridge/native_interface/controller/workbench/drawing_annotations/cloud_tests.rs
+index 51bba2a8..76a6bf2b 100644
+--- a/src-tauri/src/session_bridge/native_interface/controller/workbench/drawing_annotations/cloud_tests.rs
++++ b/src-tauri/src/session_bridge/native_interface/controller/workbench/drawing_annotations/cloud_tests.rs
+@@ -52,6 +52,10 @@ fn shared_cloud_geometry_keeps_native_strokes_labels_selection_and_saved_vertice
+         assert_eq!(art.labels[0].text, "REV cω");
+         assert_eq!(art.labels[1].text, "B");
+         assert!((art.labels[1].y - art.labels[0].y - 4.).abs() < 1e-5);
++        // The last row stays at the former one-row baseline. In particular a
++        // rectangle's second row must no longer enter its top scallops.
++        assert!((f64::from(art.labels[1].y) - cloud.label[1]).abs() < 1e-5);
++        assert!((f64::from(art.labels[0].y) - (cloud.label[1] - 4.)).abs() < 1e-5);
+         assert!(art
+             .labels
+             .iter()

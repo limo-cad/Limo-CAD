@@ -1,0 +1,1204 @@
+{
+  "purpose": "Recovery custody for local work removed during checkout consolidation; this branch does not integrate the experimental histories into main.",
+  "canonical_checkout": "C:\\Users\\jeffg\\dev\\noBS-CAD",
+  "main_head": "736758f291289ff2bb1942a0405027b44e919997",
+  "summary": {
+    "candidate_labels": 422,
+    "distinct_original_tips": 130,
+    "local_only_tips": 91,
+    "local_only_commits": 232,
+    "verified_archived_files": 92,
+    "recovery_files": 146,
+    "recovery_file_bytes": 3977857,
+    "history_blobs": 699,
+    "history_blob_bytes": 54527216
+  },
+  "original_tip_map": {
+    "original/refs/heads/audit/bevy-bambu-acceptance": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+    "original/refs/heads/audit/bevy-design-sheet-ownership": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+    "original/refs/heads/audit/bevy-idle-drag-history": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+    "original/refs/heads/build/occt-8.0.1": "af14d27a6fb418a9f53a060296a6ee41c8e7b2ac",
+    "original/refs/heads/chore/bevy-coordination-metadata-20261004": "43d7dd6a5f0f3fef1a5d4180f3ff7efc9fcf88ef",
+    "original/refs/heads/chore/dependency-cargo-pages-20261013": "a3f6bd7e51e9b945c01888ad41ac69e9fca29f51",
+    "original/refs/heads/chore/dependency-refresh-20261013": "00fb34a7be0d1213228a772763dcd51a15b7ca67",
+    "original/refs/heads/chore/remove-superseded-transition-docs": "e91c5d7bdf11222a1845e81116ae6a6a438556f8",
+    "original/refs/heads/ci/dependency-security-efficiency-20261014": "2e8bddb91597edbad588897b8c290d000be3d122",
+    "original/refs/heads/codex/mcp-session-status": "20811371eb3aba3316110208ff7d3f31127cd129",
+    "original/refs/heads/docs/bevy-form-tab-acceptance": "302bf6b5694ae92b681a0da6403a344635dc758d",
+    "original/refs/heads/docs/bevy-live-pair-checkpoint": "ec088802fbe7e3b2d9476e71d8d55afb09142c38",
+    "original/refs/heads/docs/bevy-namedview-acceptance": "98303c2d928a0137fdb28c5336fafa7d99f28b17",
+    "original/refs/heads/docs/bevy-ownership-census-refresh": "ae9e5904ef4099517c6bc6373383e2fc1228dd0a",
+    "original/refs/heads/docs/bevy-read-ownership-receipts": "948af2ee771eee5b27f72ec40a06eab392028088",
+    "original/refs/heads/docs/bevy-section-boundary-acceptance": "b322f0c012de317d325c4645bdbebce385ac5819",
+    "original/refs/heads/docs/bevy-source-115-checkpoint": "28633dd776c2d9027ef16cd7b762e4ad1164bb5e",
+    "original/refs/heads/docs/bevy-split-redo-acceptance": "c052f09cb731740cea617c343f2023dcbc1f45e4",
+    "original/refs/heads/docs/bevy-turbine-visible-checkpoint": "60ea50b74319cc4f6b7ce1f83cc260bd2d426270",
+    "original/refs/heads/docs/section-review-delivery-bevy-20261011": "357e569f8ffc0237c61fa231542cdfeeb5b78cc7",
+    "original/refs/heads/docs/simulation-review-delivery-main-20261011": "ef5deb3e1a0c28ca9c50042ec9b8829df145f7e7",
+    "original/refs/heads/feat/bevy-interface": "2604117bbe0d08fd91637fa4b3edb0bdafd0f8fd",
+    "original/refs/heads/fix/3mf-turbine-reader-feature-20261004": "f2a9f3967139967ca48a56e7a6abca78b01c44ed",
+    "original/refs/heads/fix/bevy-316-gcode-evidence-20261011": "36610b4dc8436936f48494bfcc947fae0bfae93e",
+    "original/refs/heads/fix/bevy-333-geometry-invalidation": "479665c712625b6a95529275b20d88894e6629df",
+    "original/refs/heads/fix/bevy-333-ownership": "a4451117d03f76b11afa1319271045b08482e8ca",
+    "original/refs/heads/fix/bevy-333-read-boundaries": "386fa844c555d412051c67ab9d6cb82355653723",
+    "original/refs/heads/fix/bevy-348-recognition": "6c633203aaed89a729d3570f59af913e4d29698c",
+    "original/refs/heads/fix/bevy-active-sketch-scalars": "900c325ded0296287907f7c26219c8ae271d7369",
+    "original/refs/heads/fix/bevy-appimage-ubuntu2204": "59195010e317251a28d43d83656c9b6b3e82e22d",
+    "original/refs/heads/fix/bevy-arm64-surface-config-20261011": "58dd168a8f118d480837aca57b5126ed20497331",
+    "original/refs/heads/fix/bevy-arm64-viewport-focus-20261004": "9550e539b9c8f1eb2670de00659fa01941882762",
+    "original/refs/heads/fix/bevy-bambu-inspect-lock": "9eff7e0065bb3ce1a946b492696501bc36717930",
+    "original/refs/heads/fix/bevy-bambu-layout-detached": "8eeee2969d827a04b96cd59fbb2da83bace734fd",
+    "original/refs/heads/fix/bevy-bambu-lifecycle": "a4fa8e78ee0c5847d9fcca4135f53c3aa8e489d5",
+    "original/refs/heads/fix/bevy-bambu-nine-failures": "c922ff1230ab4cf0bf0783c55ca29ea14727a6f3",
+    "original/refs/heads/fix/bevy-bambu-prepared-export": "435efbe81965922c1cdbf313c3d5ac67d71ced8a",
+    "original/refs/heads/fix/bevy-bambu-preview-snapshot": "9369ef54f626289c5f07f5dea23b7ec37b75e387",
+    "original/refs/heads/fix/bevy-bambu-write-lease": "ef3d1fe8d5ef38ab89026847e8bcb47e19e9ded5",
+    "original/refs/heads/fix/bevy-bench-countersink-notes": "47867403ed5dce30d546cb7f2238398a22c50687",
+    "original/refs/heads/fix/bevy-body-generations": "f6064edced7aad42de24f0041f40d8b5e1c93d1a",
+    "original/refs/heads/fix/bevy-body-render-reuse": "12ee94242f9a1be66cb7115f3f195ff0c58273d8",
+    "original/refs/heads/fix/bevy-caption-exposure": "bebd9a4dc4cd301f3e4b62222df4de0c6058e27f",
+    "original/refs/heads/fix/bevy-ci-cache": "20dffa4ba5c8ea16077442491e9226278b224dba",
+    "original/refs/heads/fix/bevy-codeql-budget-20261004": "b84a760ffa1c421d58740146ed738b27117cd1ba",
+    "original/refs/heads/fix/bevy-cold-paper-projection": "851abe77cc2a492b0732db2fe50a139bbb960646",
+    "original/refs/heads/fix/bevy-counterbore-joint-ownership": "9fbf2e076e906b9732f8a4485c35e49f25ffbebf",
+    "original/refs/heads/fix/bevy-deploy-qualification-diagnostic": "e23e43b0b6b0bb9d5bbce3257d0051257414dbb1",
+    "original/refs/heads/fix/bevy-desktop-ci-labels-20261011": "74cd035a5133f9da4c2f3c44d968854b3ea28791",
+    "original/refs/heads/fix/bevy-desktop-classifier-immutable": "99f289ca95a9981d06b0505e45e7a21b29f40ea4",
+    "original/refs/heads/fix/bevy-detached-contact": "ecd00537f0e24fabf19d61b3ae44723a631f23fa",
+    "original/refs/heads/fix/bevy-detached-contact-desktop": "ab6caebb685d79111136740078e313c6010983b5",
+    "original/refs/heads/fix/bevy-detached-interference": "a3b46561657b44ac65ca2043b128838b0e927903",
+    "original/refs/heads/fix/bevy-detached-interference-desktop": "2ca6c359ce8db7d4017882baff7ce8110af8f55a",
+    "original/refs/heads/fix/bevy-detached-motion-csv": "b5289411bc0a0be502c40cbd5abac533eefee275",
+    "original/refs/heads/fix/bevy-detached-motion-csv-desktop": "132620c84280f36e63d89ad1e29f71109ba4c212",
+    "original/refs/heads/fix/bevy-detached-section": "1cb6e30dd1fd40d6081582983ca7adbd0deed006",
+    "original/refs/heads/fix/bevy-detached-section-desktop": "7f713512d4e44853483b81464653b57f714a3130",
+    "original/refs/heads/fix/bevy-detached-swept": "7f5f8f9c2acfb43052e9861d3b04910048a0df35",
+    "original/refs/heads/fix/bevy-detached-swept-desktop": "0f22b20e664bd6cb6aa195ff23603d89c552d7ba",
+    "original/refs/heads/fix/bevy-lessons-20261011": "4cffad578c223d26898619b72fb9e5c5211456f0",
+    "original/refs/heads/fix/bevy-macos-lifecycle-upload": "f156a4290c7118cde1d972ed771fe99a1e8ec687",
+    "original/refs/heads/fix/bevy-material-catalog-privacy-sync-20261004": "2ea324635fa7aee37147f31c59d4caa85a5efe9d",
+    "original/refs/heads/fix/bevy-mcp-export-lifetime": "3ac28fb04e9122bd4e66df77b0ea1aae6fe4a2d3",
+    "original/refs/heads/fix/bevy-mcp-read-ownership": "0b759b000aef0fa28dde2b598378928ac3c41af9",
+    "original/refs/heads/fix/bevy-mechanism-pointer-projection": "bacb12b9a9c24150adfb05f40e23a3e07a7f3b20",
+    "original/refs/heads/fix/bevy-menu-window-ownership": "da554e3230179f8864145ec3b67fb3511dfd8b6d",
+    "original/refs/heads/fix/bevy-named-view-labels": "4047cdc6b6d2dc1a0e803ff5596668096ecc4838",
+    "original/refs/heads/fix/bevy-narrow-frame-routing": "c67d9291215dbf74067ac205d8ed702c127f23bb",
+    "original/refs/heads/fix/bevy-native-drawing-export-detached": "27ec6551430fc61907e3cf26cd1fabb6ae076060",
+    "original/refs/heads/fix/bevy-native-key-witness": "51616b4ed4e6f0ba35948bfe402162f0fb2ea538",
+    "original/refs/heads/fix/bevy-native-query-liveness": "feeb84d29236180ed3203d22ea171223a6cfdcc6",
+    "original/refs/heads/fix/bevy-number-negative-zero": "3b21cbe0be95ab7a70e917e05c146e2141343d93",
+    "original/refs/heads/fix/bevy-numeric-caption-width": "29fa6fa445e4272da8a2629411a0a036e5b3dd21",
+    "original/refs/heads/fix/bevy-occt-overflow-147": "4699059f368ea7be4c06043f07b00cb7a6b796d3",
+    "original/refs/heads/fix/bevy-occt-runtime-assembly": "bdd119d4ea82630992b741d3aa9b8c1f1b4d5302",
+    "original/refs/heads/fix/bevy-occt-windows-path-guard": "ee6bc566f4063b47d5120961f1ba62c3e601ba52",
+    "original/refs/heads/fix/bevy-overlapping-recess-contract": "8caba80d7b9df63acd32f3c34a5b594f430ca3e0",
+    "original/refs/heads/fix/bevy-packaged-mcp-unc-20261004": "17eb0a3f684552e5dd36eeb3f74207310d1c6830",
+    "original/refs/heads/fix/bevy-packaged-shutdown": "fccb5e3190e3d9a8485dc151b337c71a1ab77143",
+    "original/refs/heads/fix/bevy-pdf-page-dpi": "eecd92cac203b5ed38a5aead2b44168c09cc88b1",
+    "original/refs/heads/fix/bevy-pending-paper-identity": "b6bdd2d6dc8edb7b6e9974ef179fc99196fc0944",
+    "original/refs/heads/fix/bevy-portable-mesh-export": "ecfe0aeff1a782ccac8c5dae45b981546e108a76",
+    "original/refs/heads/fix/bevy-print-modal-ownership": "2718bbf2d65ec965aa8aa37d16e6d1339a7dc58f",
+    "original/refs/heads/fix/bevy-print-to-file": "3cf4430b02e9a12fd18d8c291cc407504f0dfa93",
+    "original/refs/heads/fix/bevy-protect-headless-runtime": "7d90c2034421c94756b545219673e8ec53623d04",
+    "original/refs/heads/fix/bevy-query-liveness-fixture": "167a5aadd68ea4845b3851cfcaa9f40f31174c9c",
+    "original/refs/heads/fix/bevy-read-owner-tail": "5957937cf4046b5db9ca7bdbb92ea8d28067c824",
+    "original/refs/heads/fix/bevy-render-retention": "be6ed70840027cb6450a747f38fee503fe03c9a4",
+    "original/refs/heads/fix/bevy-requested-focus-owner": "1b37472e1bf1d0566672cd1f49213cce3c937741",
+    "original/refs/heads/fix/bevy-retained-reader-audit": "d0267058b8889d415aa79cf9ce6f49c9b9ffa860",
+    "original/refs/heads/fix/bevy-sdk-concurrency-contract": "28080f8e7d0f42d1090f9f55ac05b574bc65c667",
+    "original/refs/heads/fix/bevy-selected-coplanar": "e1a9169aace1e11955308c588af210bdeb9631ba",
+    "original/refs/heads/fix/bevy-small-issues-20261011": "3f19d7e02ef6dbc5bc9c66cc6141b93c3e21a2f6",
+    "original/refs/heads/fix/bevy-step-export-snapshot": "d493f04ee6c7344998b36939bc1ea2646afcf0d2",
+    "original/refs/heads/fix/bevy-unchanged-sketch-cleanliness": "061b583817278b89790307f5f6dbddefddf4b970",
+    "original/refs/heads/fix/bevy-verifier-diagnostics-20261011": "e59552a649b96bdeafe7d8070e269991686dbba0",
+    "original/refs/heads/fix/bevy-window-metrics": "8240b11428bd6265051dfe41b22fe2ac16788267",
+    "original/refs/heads/fix/bevy-window-reads": "1b04cd8ac112f58983255e86d4a101c3b06db7ff",
+    "original/refs/heads/fix/bevy-windows-runtime-closure": "8b0d4b99620ae8ad73b0fb28c7f465b5aab99747",
+    "original/refs/heads/fix/bevy-xtask-cleanup-20261004": "9721273e13085634f717ce4b172026ec69dae79d",
+    "original/refs/heads/fix/codeql-main-budget-20261004": "e2ee2abb8d3406785b4355c2a44458f9cb5e775f",
+    "original/refs/heads/fix/core-default-derives-main-20261004": "60713ba21e8c4e34420d2507f8fba1ff35f22f7d",
+    "original/refs/heads/fix/detached-print-output-20261011": "7f7f88419bb68eea6b242157b8f8dd45973fc67f",
+    "original/refs/heads/fix/gpu-stock-finite-flute": "09898b904f1024d2ff307b4cb99c9cf62884aede",
+    "original/refs/heads/fix/machine-design-help-integration": "fff14c201132b499f50c56eadac48446f3be7dc6",
+    "original/refs/heads/fix/mcp-aggregate-cancellation-main-20261004": "e43486cdf35c44bc563512c658ab8a08b72a5f58",
+    "original/refs/heads/fix/mcp-demo-staging-20261004": "8b855cb49b742247064a0e0795fec2f97bfb49eb",
+    "original/refs/heads/fix/native-script-preview": "3cb29989a80d24609cc79f90ea51a6747af53615",
+    "original/refs/heads/fix/occt-runtime-fixture-lock-20261013": "240880a389cb4ab19fd2d7b3e1443fd88cd4232d",
+    "original/refs/heads/fix/presentation-layer99": "5e80b139501e1bfbc75a43abc94f7ea7c11f9675",
+    "original/refs/heads/fix/private-unix-sessions-main-20261004": "03a15973912faae8ffccf3a06ffba1ebfa2414cd",
+    "original/refs/heads/fix/stop-native-renderer-before-exit-20261014": "96cb765301bc682df3be363b1f31806e1848e287",
+    "original/refs/heads/fix/usvg-svg-print-compatibility-20261013": "0e26ab4edfe974a48fef2b10ef1485b68fb24cfa",
+    "original/refs/heads/fix/vita-inbox-named-view-camera": "8962265d9be7b18eef825df5e61686f6b9fd30f4",
+    "original/refs/heads/integration/approved-main-bevy-20261013": "c2097d5b192db767aa3a6a636a43b47e65159f66",
+    "original/refs/heads/main": "3c30b1b1cef3aaef59ce4ad74483f7919205aa4e",
+    "original/refs/heads/perf/borrow-drawing-scene": "a2df1dc1b2a64445d9e284d80508a1dc03ae8c0a",
+    "original/refs/heads/perf/ci-cache-efficiency": "e99ca3c9ff387fdc78eab02e4242719a9985f6ba",
+    "original/refs/heads/review/bevy-incoming-startup": "5507584755a332e340252b5afdc29e5e47b1b6f0",
+    "original/refs/heads/t3code/bevy-continue": "a8559e65e1d0315346a9b98b54b06da8eb4eb820",
+    "original/refs/heads/t3code/finish-bevy-transition": "c537f0232ab86f28b1be3ee46fa6bf5ff46db5b9",
+    "worktree/000/C:/Users/jeffg/dev/noBS-CAD": "a8559e65e1d0315346a9b98b54b06da8eb4eb820",
+    "worktree/001/C:/Users/jeffg/.t3/worktrees/noBS-CAD/t3code-ec3f03c5": "e91c5d7bdf11222a1845e81116ae6a6a438556f8",
+    "worktree/002/C:/Users/jeffg/dev/limo-cad-ci-security-20261014": "2e8bddb91597edbad588897b8c290d000be3d122",
+    "worktree/003/C:/Users/jeffg/dev/limo-cad-dependency-parent-20261013": "a3f6bd7e51e9b945c01888ad41ac69e9fca29f51",
+    "worktree/004/C:/Users/jeffg/dev/limo-cad-dependency-refresh-20261013": "96cb765301bc682df3be363b1f31806e1848e287",
+    "worktree/005/C:/Users/jeffg/dev/limo-cad-occt-8.0.1": "af14d27a6fb418a9f53a060296a6ee41c8e7b2ac",
+    "worktree/006/C:/Users/jeffg/dev/limo-cad-occt-lock-fix-20261013": "240880a389cb4ab19fd2d7b3e1443fd88cd4232d",
+    "worktree/007/C:/Users/jeffg/dev/noBS-CAD-machine-design-help": "fff14c201132b499f50c56eadac48446f3be7dc6",
+    "worktree/008/C:/Users/jeffg/dev/noBS-CAD-native-script-preview": "3cb29989a80d24609cc79f90ea51a6747af53615",
+    "worktree/009/C:/Users/jeffg/dev/noBS-CAD-presentation-layer99": "5e80b139501e1bfbc75a43abc94f7ea7c11f9675",
+    "worktree/010/C:/Users/jeffg/dev/noBS-CAD-session": "20811371eb3aba3316110208ff7d3f31127cd129",
+    "worktree/011/D:/limo-approved-integration": "c2097d5b192db767aa3a6a636a43b47e65159f66",
+    "worktree/012/D:/limo-cad-maintenance/backlog-parallel-source/active-sketch-scalars": "900c325ded0296287907f7c26219c8ae271d7369",
+    "worktree/013/D:/limo-cad-maintenance/backlog-parallel-source/arm64-surface-config-20261011": "58dd168a8f118d480837aca57b5126ed20497331",
+    "worktree/014/D:/limo-cad-maintenance/backlog-parallel-source/bambu-acceptance": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+    "worktree/015/D:/limo-cad-maintenance/backlog-parallel-source/bambu-inspect-lock": "9eff7e0065bb3ce1a946b492696501bc36717930",
+    "worktree/016/D:/limo-cad-maintenance/backlog-parallel-source/bambu-layout-detached": "8eeee2969d827a04b96cd59fbb2da83bace734fd",
+    "worktree/017/D:/limo-cad-maintenance/backlog-parallel-source/bambu-lifecycle": "a4fa8e78ee0c5847d9fcca4135f53c3aa8e489d5",
+    "worktree/018/D:/limo-cad-maintenance/backlog-parallel-source/bambu-nine-failures": "c922ff1230ab4cf0bf0783c55ca29ea14727a6f3",
+    "worktree/019/D:/limo-cad-maintenance/backlog-parallel-source/bambu-prepared-export": "435efbe81965922c1cdbf313c3d5ac67d71ced8a",
+    "worktree/020/D:/limo-cad-maintenance/backlog-parallel-source/bambu-preview-snapshot": "9369ef54f626289c5f07f5dea23b7ec37b75e387",
+    "worktree/021/D:/limo-cad-maintenance/backlog-parallel-source/bambu-toolpath-evidence-20261011": "36610b4dc8436936f48494bfcc947fae0bfae93e",
+    "worktree/022/D:/limo-cad-maintenance/backlog-parallel-source/bambu-write-lease": "ef3d1fe8d5ef38ab89026847e8bcb47e19e9ded5",
+    "worktree/023/D:/limo-cad-maintenance/backlog-parallel-source/bench-countersink-notes": "47867403ed5dce30d546cb7f2238398a22c50687",
+    "worktree/024/D:/limo-cad-maintenance/backlog-parallel-source/body-generations": "f6064edced7aad42de24f0041f40d8b5e1c93d1a",
+    "worktree/025/D:/limo-cad-maintenance/backlog-parallel-source/body-render-reuse": "12ee94242f9a1be66cb7115f3f195ff0c58273d8",
+    "worktree/026/D:/limo-cad-maintenance/backlog-parallel-source/caption-exposure": "bebd9a4dc4cd301f3e4b62222df4de0c6058e27f",
+    "worktree/027/D:/limo-cad-maintenance/backlog-parallel-source/ci-cache": "20dffa4ba5c8ea16077442491e9226278b224dba",
+    "worktree/028/D:/limo-cad-maintenance/backlog-parallel-source/codeql-borrowed-review-9cdf": "f7d51c1c17192f63c0f63483e7b769fa24ca61c8",
+    "worktree/029/D:/limo-cad-maintenance/backlog-parallel-source/cold-paper-projection": "851abe77cc2a492b0732db2fe50a139bbb960646",
+    "worktree/030/D:/limo-cad-maintenance/backlog-parallel-source/counterbore-joint-ownership": "9fbf2e076e906b9732f8a4485c35e49f25ffbebf",
+    "worktree/031/D:/limo-cad-maintenance/backlog-parallel-source/deploy-qualification-diagnostic": "e23e43b0b6b0bb9d5bbce3257d0051257414dbb1",
+    "worktree/032/D:/limo-cad-maintenance/backlog-parallel-source/design-sheet-ownership": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+    "worktree/033/D:/limo-cad-maintenance/backlog-parallel-source/desktop-ci-labels-20261011": "74cd035a5133f9da4c2f3c44d968854b3ea28791",
+    "worktree/034/D:/limo-cad-maintenance/backlog-parallel-source/desktop-classifier-immutable": "99f289ca95a9981d06b0505e45e7a21b29f40ea4",
+    "worktree/035/D:/limo-cad-maintenance/backlog-parallel-source/detached-contact-desktop": "ab6caebb685d79111136740078e313c6010983b5",
+    "worktree/036/D:/limo-cad-maintenance/backlog-parallel-source/detached-contact-native": "ecd00537f0e24fabf19d61b3ae44723a631f23fa",
+    "worktree/037/D:/limo-cad-maintenance/backlog-parallel-source/detached-interference-desktop": "2ca6c359ce8db7d4017882baff7ce8110af8f55a",
+    "worktree/038/D:/limo-cad-maintenance/backlog-parallel-source/detached-interference-native": "a3b46561657b44ac65ca2043b128838b0e927903",
+    "worktree/039/D:/limo-cad-maintenance/backlog-parallel-source/detached-motion-csv-desktop": "132620c84280f36e63d89ad1e29f71109ba4c212",
+    "worktree/040/D:/limo-cad-maintenance/backlog-parallel-source/detached-motion-csv-native": "b5289411bc0a0be502c40cbd5abac533eefee275",
+    "worktree/041/D:/limo-cad-maintenance/backlog-parallel-source/detached-print-output": "7f7f88419bb68eea6b242157b8f8dd45973fc67f",
+    "worktree/042/D:/limo-cad-maintenance/backlog-parallel-source/detached-section": "1cb6e30dd1fd40d6081582983ca7adbd0deed006",
+    "worktree/043/D:/limo-cad-maintenance/backlog-parallel-source/detached-section-desktop": "7f713512d4e44853483b81464653b57f714a3130",
+    "worktree/044/D:/limo-cad-maintenance/backlog-parallel-source/detached-swept-desktop": "0f22b20e664bd6cb6aa195ff23603d89c552d7ba",
+    "worktree/045/D:/limo-cad-maintenance/backlog-parallel-source/detached-swept-native": "7f5f8f9c2acfb43052e9861d3b04910048a0df35",
+    "worktree/046/D:/limo-cad-maintenance/backlog-parallel-source/form-tab-acceptance": "302bf6b5694ae92b681a0da6403a344635dc758d",
+    "worktree/047/D:/limo-cad-maintenance/backlog-parallel-source/geometry-invalidation": "479665c712625b6a95529275b20d88894e6629df",
+    "worktree/048/D:/limo-cad-maintenance/backlog-parallel-source/idle-drag-history": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
+    "worktree/049/D:/limo-cad-maintenance/backlog-parallel-source/incoming-startup-review": "5507584755a332e340252b5afdc29e5e47b1b6f0",
+    "worktree/050/D:/limo-cad-maintenance/backlog-parallel-source/issue333": "a4451117d03f76b11afa1319271045b08482e8ca",
+    "worktree/051/D:/limo-cad-maintenance/backlog-parallel-source/issue333-read-boundaries": "386fa844c555d412051c67ab9d6cb82355653723",
+    "worktree/052/D:/limo-cad-maintenance/backlog-parallel-source/issue348": "6c633203aaed89a729d3570f59af913e4d29698c",
+    "worktree/053/D:/limo-cad-maintenance/backlog-parallel-source/issue381-nav-153a-20261012": "56dc455ae465f7f5c9e92b6ea87bcc80cbc17008",
+    "worktree/054/D:/limo-cad-maintenance/backlog-parallel-source/lessons-20261011": "4cffad578c223d26898619b72fb9e5c5211456f0",
+    "worktree/055/D:/limo-cad-maintenance/backlog-parallel-source/live-pair-checkpoint": "ec088802fbe7e3b2d9476e71d8d55afb09142c38",
+    "worktree/056/D:/limo-cad-maintenance/backlog-parallel-source/macos-lifecycle-upload": "f156a4290c7118cde1d972ed771fe99a1e8ec687",
+    "worktree/057/D:/limo-cad-maintenance/backlog-parallel-source/mcp-export-lifetime": "3ac28fb04e9122bd4e66df77b0ea1aae6fe4a2d3",
+    "worktree/058/D:/limo-cad-maintenance/backlog-parallel-source/mcp-read-ownership": "0b759b000aef0fa28dde2b598378928ac3c41af9",
+    "worktree/059/D:/limo-cad-maintenance/backlog-parallel-source/mechanism-pointer-projection": "bacb12b9a9c24150adfb05f40e23a3e07a7f3b20",
+    "worktree/060/D:/limo-cad-maintenance/backlog-parallel-source/menu-window-ownership": "da554e3230179f8864145ec3b67fb3511dfd8b6d",
+    "worktree/061/D:/limo-cad-maintenance/backlog-parallel-source/named-view-labels": "4047cdc6b6d2dc1a0e803ff5596668096ecc4838",
+    "worktree/062/D:/limo-cad-maintenance/backlog-parallel-source/namedview-acceptance": "98303c2d928a0137fdb28c5336fafa7d99f28b17",
+    "worktree/063/D:/limo-cad-maintenance/backlog-parallel-source/narrow-frame-routing": "c67d9291215dbf74067ac205d8ed702c127f23bb",
+    "worktree/064/D:/limo-cad-maintenance/backlog-parallel-source/native-drawing-export-detached": "27ec6551430fc61907e3cf26cd1fabb6ae076060",
+    "worktree/065/D:/limo-cad-maintenance/backlog-parallel-source/native-key-witness": "51616b4ed4e6f0ba35948bfe402162f0fb2ea538",
+    "worktree/066/D:/limo-cad-maintenance/backlog-parallel-source/native-query-drawing-guards-9e": "4382a5a8dd2ff3a353c6654a67c8f5e0c3f968fb",
+    "worktree/067/D:/limo-cad-maintenance/backlog-parallel-source/native-query-liveness": "feeb84d29236180ed3203d22ea171223a6cfdcc6",
+    "worktree/068/D:/limo-cad-maintenance/backlog-parallel-source/numeric-caption-width": "29fa6fa445e4272da8a2629411a0a036e5b3dd21",
+    "worktree/069/D:/limo-cad-maintenance/backlog-parallel-source/numeric-negative-zero": "3b21cbe0be95ab7a70e917e05c146e2141343d93",
+    "worktree/070/D:/limo-cad-maintenance/backlog-parallel-source/occt-overflow-147": "4699059f368ea7be4c06043f07b00cb7a6b796d3",
+    "worktree/071/D:/limo-cad-maintenance/backlog-parallel-source/occt-path-guard": "ee6bc566f4063b47d5120961f1ba62c3e601ba52",
+    "worktree/072/D:/limo-cad-maintenance/backlog-parallel-source/occt-runtime-assembly": "bdd119d4ea82630992b741d3aa9b8c1f1b4d5302",
+    "worktree/073/D:/limo-cad-maintenance/backlog-parallel-source/overlapping-recess-contract": "8caba80d7b9df63acd32f3c34a5b594f430ca3e0",
+    "worktree/074/D:/limo-cad-maintenance/backlog-parallel-source/ownership-census-refresh": "ae9e5904ef4099517c6bc6373383e2fc1228dd0a",
+    "worktree/075/D:/limo-cad-maintenance/backlog-parallel-source/packaged-shutdown": "fccb5e3190e3d9a8485dc151b337c71a1ab77143",
+    "worktree/076/D:/limo-cad-maintenance/backlog-parallel-source/pdf-page-dpi": "eecd92cac203b5ed38a5aead2b44168c09cc88b1",
+    "worktree/077/D:/limo-cad-maintenance/backlog-parallel-source/pending-paper-identity": "b6bdd2d6dc8edb7b6e9974ef179fc99196fc0944",
+    "worktree/078/D:/limo-cad-maintenance/backlog-parallel-source/portable-mesh-export": "ecfe0aeff1a782ccac8c5dae45b981546e108a76",
+    "worktree/079/D:/limo-cad-maintenance/backlog-parallel-source/pr367-correctness-9823": "9823b9954367713403b1a594f624fdd5c97c1674",
+    "worktree/080/D:/limo-cad-maintenance/backlog-parallel-source/pr368-root-review-8886": "88863584a50dd43b61e08a97d803f5f4ca7958a1",
+    "worktree/081/D:/limo-cad-maintenance/backlog-parallel-source/print-modal-ownership": "2718bbf2d65ec965aa8aa37d16e6d1339a7dc58f",
+    "worktree/082/D:/limo-cad-maintenance/backlog-parallel-source/print-to-file": "3cf4430b02e9a12fd18d8c291cc407504f0dfa93",
+    "worktree/083/D:/limo-cad-maintenance/backlog-parallel-source/query-liveness-fixture": "167a5aadd68ea4845b3851cfcaa9f40f31174c9c",
+    "worktree/084/D:/limo-cad-maintenance/backlog-parallel-source/read-owner-tail": "5957937cf4046b5db9ca7bdbb92ea8d28067c824",
+    "worktree/085/D:/limo-cad-maintenance/backlog-parallel-source/read-ownership-docs": "948af2ee771eee5b27f72ec40a06eab392028088",
+    "worktree/086/D:/limo-cad-maintenance/backlog-parallel-source/render-retention": "be6ed70840027cb6450a747f38fee503fe03c9a4",
+    "worktree/087/D:/limo-cad-maintenance/backlog-parallel-source/requested-focus-owner": "1b37472e1bf1d0566672cd1f49213cce3c937741",
+    "worktree/088/D:/limo-cad-maintenance/backlog-parallel-source/retained-reader-audit": "d0267058b8889d415aa79cf9ce6f49c9b9ffa860",
+    "worktree/089/D:/limo-cad-maintenance/backlog-parallel-source/runtime-headless-protection": "7d90c2034421c94756b545219673e8ec53623d04",
+    "worktree/090/D:/limo-cad-maintenance/backlog-parallel-source/sdk-concurrency-contract": "28080f8e7d0f42d1090f9f55ac05b574bc65c667",
+    "worktree/091/D:/limo-cad-maintenance/backlog-parallel-source/section-boundary-acceptance": "b322f0c012de317d325c4645bdbebce385ac5819",
+    "worktree/092/D:/limo-cad-maintenance/backlog-parallel-source/selected-coplanar": "e1a9169aace1e11955308c588af210bdeb9631ba",
+    "worktree/093/D:/limo-cad-maintenance/backlog-parallel-source/small-open-issues-20261011": "3f19d7e02ef6dbc5bc9c66cc6141b93c3e21a2f6",
+    "worktree/094/D:/limo-cad-maintenance/backlog-parallel-source/source-115-acceptance-checkpoint": "28633dd776c2d9027ef16cd7b762e4ad1164bb5e",
+    "worktree/095/D:/limo-cad-maintenance/backlog-parallel-source/split-redo-acceptance": "c052f09cb731740cea617c343f2023dcbc1f45e4",
+    "worktree/096/D:/limo-cad-maintenance/backlog-parallel-source/step-export-snapshot": "d493f04ee6c7344998b36939bc1ea2646afcf0d2",
+    "worktree/097/D:/limo-cad-maintenance/backlog-parallel-source/turbine-visible-checkpoint": "60ea50b74319cc4f6b7ce1f83cc260bd2d426270",
+    "worktree/098/D:/limo-cad-maintenance/backlog-parallel-source/unchanged-sketch-cleanliness": "061b583817278b89790307f5f6dbddefddf4b970",
+    "worktree/099/D:/limo-cad-maintenance/backlog-parallel-source/verifier-diagnostics-20261011": "e59552a649b96bdeafe7d8070e269991686dbba0",
+    "worktree/100/D:/limo-cad-maintenance/backlog-parallel-source/window-metrics": "8240b11428bd6265051dfe41b22fe2ac16788267",
+    "worktree/101/D:/limo-cad-maintenance/backlog-parallel-source/window-reads": "1b04cd8ac112f58983255e86d4a101c3b06db7ff",
+    "worktree/102/D:/limo-cad-maintenance/backlog-parallel-source/windows-runtime-closure": "8b0d4b99620ae8ad73b0fb28c7f465b5aab99747",
+    "worktree/103/D:/limo-cad-worktrees/final-section-review-bevy-20261011": "357e569f8ffc0237c61fa231542cdfeeb5b78cc7",
+    "worktree/104/D:/limo-cad-worktrees/vita-inbox-named-view-camera-20261010": "8962265d9be7b18eef825df5e61686f6b9fd30f4",
+    "worktree/105/D:/limo-ci-baseline": "7e5b91320c066ebe1cfcf39c48506e5051bd2dbd",
+    "worktree/106/D:/limo-ci-efficiency": "e99ca3c9ff387fdc78eab02e4242719a9985f6ba",
+    "worktree/107/D:/limo-startup-baseline-e4015de": "e4015de638b55823299d4a195e20a10ecbe9fae7",
+    "worktree/108/D:/noBS-CAD-builds/codeql-audit-20261004/3mf-turbine-feature": "f2a9f3967139967ca48a56e7a6abca78b01c44ed",
+    "worktree/109/D:/noBS-CAD-builds/codeql-audit-20261004/material-private-session-sync": "2ea324635fa7aee37147f31c59d4caa85a5efe9d",
+    "worktree/110/D:/noBS-CAD-builds/codeql-audit-20261004/mcp-aggregate-main": "e43486cdf35c44bc563512c658ab8a08b72a5f58",
+    "worktree/111/D:/noBS-CAD-builds/codeql-audit-20261004/private-sessions-main": "03a15973912faae8ffccf3a06ffba1ebfa2414cd",
+    "worktree/112/D:/noBS-CAD-builds/mcp-cache-review-20261004": "8b855cb49b742247064a0e0795fec2f97bfb49eb",
+    "worktree/113/D:/noBS-CAD-builds/performance-prs/drawing-scene": "a2df1dc1b2a64445d9e284d80508a1dc03ae8c0a",
+    "worktree/114/D:/noBS-CAD-builds/velocity-babysit-20261004/arm64-viewport-focus": "9550e539b9c8f1eb2670de00659fa01941882762",
+    "worktree/115/D:/noBS-CAD-builds/velocity-babysit-20261004/bevy-appimage-ubuntu2204": "59195010e317251a28d43d83656c9b6b3e82e22d",
+    "worktree/116/D:/noBS-CAD-builds/velocity-babysit-20261004/bevy-coordination-metadata": "43d7dd6a5f0f3fef1a5d4180f3ff7efc9fcf88ef",
+    "worktree/117/D:/noBS-CAD-builds/velocity-babysit-20261004/bevy-xtask-cleanup": "9721273e13085634f717ce4b172026ec69dae79d",
+    "worktree/118/D:/noBS-CAD-builds/velocity-babysit-20261004/codeql-budget-bevy": "b84a760ffa1c421d58740146ed738b27117cd1ba",
+    "worktree/119/D:/noBS-CAD-builds/velocity-babysit-20261004/codeql-budget-main": "e2ee2abb8d3406785b4355c2a44458f9cb5e775f",
+    "worktree/120/D:/noBS-CAD-builds/velocity-babysit-20261004/core-default-main": "60713ba21e8c4e34420d2507f8fba1ff35f22f7d",
+    "worktree/121/D:/noBS-CAD-builds/velocity-babysit-20261004/gpu-stock-finite-flute": "09898b904f1024d2ff307b4cb99c9cf62884aede",
+    "worktree/122/D:/noBS-CAD-builds/velocity-babysit-20261004/mcp-demo-staging": "8b855cb49b742247064a0e0795fec2f97bfb49eb",
+    "worktree/123/D:/noBS-CAD-builds/velocity-babysit-20261004/packaged-mcp-unc": "17eb0a3f684552e5dd36eeb3f74207310d1c6830",
+    "unpublished-and-detached.bundle/refs/heads/docs/bevy-form-tab-acceptance": "302bf6b5694ae92b681a0da6403a344635dc758d",
+    "unpublished-and-detached.bundle/refs/heads/docs/bevy-live-pair-checkpoint": "ec088802fbe7e3b2d9476e71d8d55afb09142c38",
+    "unpublished-and-detached.bundle/refs/heads/docs/bevy-namedview-acceptance": "98303c2d928a0137fdb28c5336fafa7d99f28b17",
+    "unpublished-and-detached.bundle/refs/heads/docs/bevy-ownership-census-refresh": "ae9e5904ef4099517c6bc6373383e2fc1228dd0a",
+    "unpublished-and-detached.bundle/refs/heads/docs/bevy-read-ownership-receipts": "948af2ee771eee5b27f72ec40a06eab392028088",
+    "unpublished-and-detached.bundle/refs/heads/docs/bevy-section-boundary-acceptance": "b322f0c012de317d325c4645bdbebce385ac5819",
+    "unpublished-and-detached.bundle/refs/heads/docs/bevy-source-115-checkpoint": "28633dd776c2d9027ef16cd7b762e4ad1164bb5e",
+    "unpublished-and-detached.bundle/refs/heads/docs/bevy-split-redo-acceptance": "c052f09cb731740cea617c343f2023dcbc1f45e4",
+    "unpublished-and-detached.bundle/refs/heads/docs/bevy-turbine-visible-checkpoint": "60ea50b74319cc4f6b7ce1f83cc260bd2d426270",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-316-gcode-evidence-20261011": "36610b4dc8436936f48494bfcc947fae0bfae93e",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-333-ownership": "a4451117d03f76b11afa1319271045b08482e8ca",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-333-read-boundaries": "386fa844c555d412051c67ab9d6cb82355653723",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-348-recognition": "6c633203aaed89a729d3570f59af913e4d29698c",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-active-sketch-scalars": "900c325ded0296287907f7c26219c8ae271d7369",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-arm64-surface-config-20261011": "58dd168a8f118d480837aca57b5126ed20497331",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-bambu-inspect-lock": "9eff7e0065bb3ce1a946b492696501bc36717930",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-bambu-layout-detached": "8eeee2969d827a04b96cd59fbb2da83bace734fd",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-bambu-lifecycle": "a4fa8e78ee0c5847d9fcca4135f53c3aa8e489d5",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-bambu-nine-failures": "c922ff1230ab4cf0bf0783c55ca29ea14727a6f3",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-bambu-prepared-export": "435efbe81965922c1cdbf313c3d5ac67d71ced8a",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-bambu-preview-snapshot": "9369ef54f626289c5f07f5dea23b7ec37b75e387",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-bambu-write-lease": "ef3d1fe8d5ef38ab89026847e8bcb47e19e9ded5",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-bench-countersink-notes": "47867403ed5dce30d546cb7f2238398a22c50687",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-body-generations": "f6064edced7aad42de24f0041f40d8b5e1c93d1a",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-body-render-reuse": "12ee94242f9a1be66cb7115f3f195ff0c58273d8",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-caption-exposure": "bebd9a4dc4cd301f3e4b62222df4de0c6058e27f",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-ci-cache": "20dffa4ba5c8ea16077442491e9226278b224dba",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-cold-paper-projection": "851abe77cc2a492b0732db2fe50a139bbb960646",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-counterbore-joint-ownership": "9fbf2e076e906b9732f8a4485c35e49f25ffbebf",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-deploy-qualification-diagnostic": "e23e43b0b6b0bb9d5bbce3257d0051257414dbb1",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-desktop-ci-labels-20261011": "74cd035a5133f9da4c2f3c44d968854b3ea28791",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-desktop-classifier-immutable": "99f289ca95a9981d06b0505e45e7a21b29f40ea4",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-detached-contact": "ecd00537f0e24fabf19d61b3ae44723a631f23fa",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-detached-contact-desktop": "ab6caebb685d79111136740078e313c6010983b5",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-detached-interference": "a3b46561657b44ac65ca2043b128838b0e927903",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-detached-interference-desktop": "2ca6c359ce8db7d4017882baff7ce8110af8f55a",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-detached-motion-csv": "b5289411bc0a0be502c40cbd5abac533eefee275",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-detached-motion-csv-desktop": "132620c84280f36e63d89ad1e29f71109ba4c212",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-detached-section": "1cb6e30dd1fd40d6081582983ca7adbd0deed006",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-detached-section-desktop": "7f713512d4e44853483b81464653b57f714a3130",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-detached-swept": "7f5f8f9c2acfb43052e9861d3b04910048a0df35",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-detached-swept-desktop": "0f22b20e664bd6cb6aa195ff23603d89c552d7ba",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-lessons-20261011": "4cffad578c223d26898619b72fb9e5c5211456f0",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-macos-lifecycle-upload": "f156a4290c7118cde1d972ed771fe99a1e8ec687",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-mcp-export-lifetime": "3ac28fb04e9122bd4e66df77b0ea1aae6fe4a2d3",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-mcp-read-ownership": "0b759b000aef0fa28dde2b598378928ac3c41af9",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-mechanism-pointer-projection": "bacb12b9a9c24150adfb05f40e23a3e07a7f3b20",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-menu-window-ownership": "da554e3230179f8864145ec3b67fb3511dfd8b6d",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-named-view-labels": "4047cdc6b6d2dc1a0e803ff5596668096ecc4838",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-narrow-frame-routing": "c67d9291215dbf74067ac205d8ed702c127f23bb",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-native-drawing-export-detached": "27ec6551430fc61907e3cf26cd1fabb6ae076060",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-native-key-witness": "51616b4ed4e6f0ba35948bfe402162f0fb2ea538",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-native-query-liveness": "feeb84d29236180ed3203d22ea171223a6cfdcc6",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-number-negative-zero": "3b21cbe0be95ab7a70e917e05c146e2141343d93",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-numeric-caption-width": "29fa6fa445e4272da8a2629411a0a036e5b3dd21",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-occt-overflow-147": "4699059f368ea7be4c06043f07b00cb7a6b796d3",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-occt-runtime-assembly": "bdd119d4ea82630992b741d3aa9b8c1f1b4d5302",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-occt-windows-path-guard": "ee6bc566f4063b47d5120961f1ba62c3e601ba52",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-overlapping-recess-contract": "8caba80d7b9df63acd32f3c34a5b594f430ca3e0",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-packaged-mcp-unc-20261004": "17eb0a3f684552e5dd36eeb3f74207310d1c6830",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-packaged-shutdown": "fccb5e3190e3d9a8485dc151b337c71a1ab77143",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-pdf-page-dpi": "eecd92cac203b5ed38a5aead2b44168c09cc88b1",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-pending-paper-identity": "b6bdd2d6dc8edb7b6e9974ef179fc99196fc0944",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-portable-mesh-export": "ecfe0aeff1a782ccac8c5dae45b981546e108a76",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-print-modal-ownership": "2718bbf2d65ec965aa8aa37d16e6d1339a7dc58f",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-print-to-file": "3cf4430b02e9a12fd18d8c291cc407504f0dfa93",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-protect-headless-runtime": "7d90c2034421c94756b545219673e8ec53623d04",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-query-liveness-fixture": "167a5aadd68ea4845b3851cfcaa9f40f31174c9c",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-read-owner-tail": "5957937cf4046b5db9ca7bdbb92ea8d28067c824",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-render-retention": "be6ed70840027cb6450a747f38fee503fe03c9a4",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-requested-focus-owner": "1b37472e1bf1d0566672cd1f49213cce3c937741",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-sdk-concurrency-contract": "28080f8e7d0f42d1090f9f55ac05b574bc65c667",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-selected-coplanar": "e1a9169aace1e11955308c588af210bdeb9631ba",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-small-issues-20261011": "3f19d7e02ef6dbc5bc9c66cc6141b93c3e21a2f6",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-step-export-snapshot": "d493f04ee6c7344998b36939bc1ea2646afcf0d2",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-unchanged-sketch-cleanliness": "061b583817278b89790307f5f6dbddefddf4b970",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-verifier-diagnostics-20261011": "e59552a649b96bdeafe7d8070e269991686dbba0",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-window-metrics": "8240b11428bd6265051dfe41b22fe2ac16788267",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-window-reads": "1b04cd8ac112f58983255e86d4a101c3b06db7ff",
+    "unpublished-and-detached.bundle/refs/heads/fix/bevy-windows-runtime-closure": "8b0d4b99620ae8ad73b0fb28c7f465b5aab99747",
+    "unpublished-and-detached.bundle/refs/heads/fix/detached-print-output-20261011": "7f7f88419bb68eea6b242157b8f8dd45973fc67f",
+    "unpublished-and-detached.bundle/refs/heads/fix/native-script-preview": "3cb29989a80d24609cc79f90ea51a6747af53615",
+    "unpublished-and-detached.bundle/refs/heads/fix/presentation-layer99": "5e80b139501e1bfbc75a43abc94f7ea7c11f9675",
+    "unpublished-and-detached.bundle/refs/heads/fix/vita-inbox-named-view-camera": "8962265d9be7b18eef825df5e61686f6b9fd30f4",
+    "unpublished-and-detached.bundle/refs/heads/review/bevy-incoming-startup": "5507584755a332e340252b5afdc29e5e47b1b6f0",
+    "unpublished-and-detached.bundle/refs/consolidation-snapshot/detached-28": "f7d51c1c17192f63c0f63483e7b769fa24ca61c8",
+    "unpublished-and-detached.bundle/refs/consolidation-snapshot/detached-53": "56dc455ae465f7f5c9e92b6ea87bcc80cbc17008",
+    "unpublished-and-detached.bundle/refs/consolidation-snapshot/detached-66": "4382a5a8dd2ff3a353c6654a67c8f5e0c3f968fb",
+    "unpublished-branches.bundle/refs/heads/docs/bevy-form-tab-acceptance": "302bf6b5694ae92b681a0da6403a344635dc758d",
+    "unpublished-branches.bundle/refs/heads/docs/bevy-live-pair-checkpoint": "ec088802fbe7e3b2d9476e71d8d55afb09142c38",
+    "unpublished-branches.bundle/refs/heads/docs/bevy-namedview-acceptance": "98303c2d928a0137fdb28c5336fafa7d99f28b17",
+    "unpublished-branches.bundle/refs/heads/docs/bevy-ownership-census-refresh": "ae9e5904ef4099517c6bc6373383e2fc1228dd0a",
+    "unpublished-branches.bundle/refs/heads/docs/bevy-read-ownership-receipts": "948af2ee771eee5b27f72ec40a06eab392028088",
+    "unpublished-branches.bundle/refs/heads/docs/bevy-section-boundary-acceptance": "b322f0c012de317d325c4645bdbebce385ac5819",
+    "unpublished-branches.bundle/refs/heads/docs/bevy-source-115-checkpoint": "28633dd776c2d9027ef16cd7b762e4ad1164bb5e",
+    "unpublished-branches.bundle/refs/heads/docs/bevy-split-redo-acceptance": "c052f09cb731740cea617c343f2023dcbc1f45e4",
+    "unpublished-branches.bundle/refs/heads/docs/bevy-turbine-visible-checkpoint": "60ea50b74319cc4f6b7ce1f83cc260bd2d426270",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-316-gcode-evidence-20261011": "36610b4dc8436936f48494bfcc947fae0bfae93e",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-333-ownership": "a4451117d03f76b11afa1319271045b08482e8ca",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-333-read-boundaries": "386fa844c555d412051c67ab9d6cb82355653723",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-348-recognition": "6c633203aaed89a729d3570f59af913e4d29698c",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-active-sketch-scalars": "900c325ded0296287907f7c26219c8ae271d7369",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-arm64-surface-config-20261011": "58dd168a8f118d480837aca57b5126ed20497331",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-bambu-inspect-lock": "9eff7e0065bb3ce1a946b492696501bc36717930",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-bambu-layout-detached": "8eeee2969d827a04b96cd59fbb2da83bace734fd",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-bambu-lifecycle": "a4fa8e78ee0c5847d9fcca4135f53c3aa8e489d5",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-bambu-nine-failures": "c922ff1230ab4cf0bf0783c55ca29ea14727a6f3",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-bambu-prepared-export": "435efbe81965922c1cdbf313c3d5ac67d71ced8a",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-bambu-preview-snapshot": "9369ef54f626289c5f07f5dea23b7ec37b75e387",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-bambu-write-lease": "ef3d1fe8d5ef38ab89026847e8bcb47e19e9ded5",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-bench-countersink-notes": "47867403ed5dce30d546cb7f2238398a22c50687",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-body-generations": "f6064edced7aad42de24f0041f40d8b5e1c93d1a",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-body-render-reuse": "12ee94242f9a1be66cb7115f3f195ff0c58273d8",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-caption-exposure": "bebd9a4dc4cd301f3e4b62222df4de0c6058e27f",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-ci-cache": "20dffa4ba5c8ea16077442491e9226278b224dba",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-cold-paper-projection": "851abe77cc2a492b0732db2fe50a139bbb960646",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-counterbore-joint-ownership": "9fbf2e076e906b9732f8a4485c35e49f25ffbebf",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-deploy-qualification-diagnostic": "e23e43b0b6b0bb9d5bbce3257d0051257414dbb1",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-desktop-ci-labels-20261011": "74cd035a5133f9da4c2f3c44d968854b3ea28791",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-desktop-classifier-immutable": "99f289ca95a9981d06b0505e45e7a21b29f40ea4",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-detached-contact": "ecd00537f0e24fabf19d61b3ae44723a631f23fa",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-detached-contact-desktop": "ab6caebb685d79111136740078e313c6010983b5",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-detached-interference": "a3b46561657b44ac65ca2043b128838b0e927903",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-detached-interference-desktop": "2ca6c359ce8db7d4017882baff7ce8110af8f55a",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-detached-motion-csv": "b5289411bc0a0be502c40cbd5abac533eefee275",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-detached-motion-csv-desktop": "132620c84280f36e63d89ad1e29f71109ba4c212",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-detached-section": "1cb6e30dd1fd40d6081582983ca7adbd0deed006",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-detached-section-desktop": "7f713512d4e44853483b81464653b57f714a3130",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-detached-swept": "7f5f8f9c2acfb43052e9861d3b04910048a0df35",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-detached-swept-desktop": "0f22b20e664bd6cb6aa195ff23603d89c552d7ba",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-lessons-20261011": "4cffad578c223d26898619b72fb9e5c5211456f0",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-macos-lifecycle-upload": "f156a4290c7118cde1d972ed771fe99a1e8ec687",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-mcp-export-lifetime": "3ac28fb04e9122bd4e66df77b0ea1aae6fe4a2d3",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-mcp-read-ownership": "0b759b000aef0fa28dde2b598378928ac3c41af9",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-mechanism-pointer-projection": "bacb12b9a9c24150adfb05f40e23a3e07a7f3b20",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-menu-window-ownership": "da554e3230179f8864145ec3b67fb3511dfd8b6d",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-named-view-labels": "4047cdc6b6d2dc1a0e803ff5596668096ecc4838",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-narrow-frame-routing": "c67d9291215dbf74067ac205d8ed702c127f23bb",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-native-drawing-export-detached": "27ec6551430fc61907e3cf26cd1fabb6ae076060",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-native-key-witness": "51616b4ed4e6f0ba35948bfe402162f0fb2ea538",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-native-query-liveness": "feeb84d29236180ed3203d22ea171223a6cfdcc6",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-number-negative-zero": "3b21cbe0be95ab7a70e917e05c146e2141343d93",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-numeric-caption-width": "29fa6fa445e4272da8a2629411a0a036e5b3dd21",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-occt-overflow-147": "4699059f368ea7be4c06043f07b00cb7a6b796d3",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-occt-runtime-assembly": "bdd119d4ea82630992b741d3aa9b8c1f1b4d5302",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-occt-windows-path-guard": "ee6bc566f4063b47d5120961f1ba62c3e601ba52",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-overlapping-recess-contract": "8caba80d7b9df63acd32f3c34a5b594f430ca3e0",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-packaged-mcp-unc-20261004": "17eb0a3f684552e5dd36eeb3f74207310d1c6830",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-packaged-shutdown": "fccb5e3190e3d9a8485dc151b337c71a1ab77143",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-pdf-page-dpi": "eecd92cac203b5ed38a5aead2b44168c09cc88b1",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-pending-paper-identity": "b6bdd2d6dc8edb7b6e9974ef179fc99196fc0944",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-portable-mesh-export": "ecfe0aeff1a782ccac8c5dae45b981546e108a76",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-print-modal-ownership": "2718bbf2d65ec965aa8aa37d16e6d1339a7dc58f",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-print-to-file": "3cf4430b02e9a12fd18d8c291cc407504f0dfa93",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-protect-headless-runtime": "7d90c2034421c94756b545219673e8ec53623d04",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-query-liveness-fixture": "167a5aadd68ea4845b3851cfcaa9f40f31174c9c",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-read-owner-tail": "5957937cf4046b5db9ca7bdbb92ea8d28067c824",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-render-retention": "be6ed70840027cb6450a747f38fee503fe03c9a4",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-requested-focus-owner": "1b37472e1bf1d0566672cd1f49213cce3c937741",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-sdk-concurrency-contract": "28080f8e7d0f42d1090f9f55ac05b574bc65c667",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-selected-coplanar": "e1a9169aace1e11955308c588af210bdeb9631ba",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-small-issues-20261011": "3f19d7e02ef6dbc5bc9c66cc6141b93c3e21a2f6",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-step-export-snapshot": "d493f04ee6c7344998b36939bc1ea2646afcf0d2",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-unchanged-sketch-cleanliness": "061b583817278b89790307f5f6dbddefddf4b970",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-verifier-diagnostics-20261011": "e59552a649b96bdeafe7d8070e269991686dbba0",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-window-metrics": "8240b11428bd6265051dfe41b22fe2ac16788267",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-window-reads": "1b04cd8ac112f58983255e86d4a101c3b06db7ff",
+    "unpublished-branches.bundle/refs/heads/fix/bevy-windows-runtime-closure": "8b0d4b99620ae8ad73b0fb28c7f465b5aab99747",
+    "unpublished-branches.bundle/refs/heads/fix/detached-print-output-20261011": "7f7f88419bb68eea6b242157b8f8dd45973fc67f",
+    "unpublished-branches.bundle/refs/heads/fix/native-script-preview": "3cb29989a80d24609cc79f90ea51a6747af53615",
+    "unpublished-branches.bundle/refs/heads/fix/presentation-layer99": "5e80b139501e1bfbc75a43abc94f7ea7c11f9675",
+    "unpublished-branches.bundle/refs/heads/fix/vita-inbox-named-view-camera": "8962265d9be7b18eef825df5e61686f6b9fd30f4",
+    "unpublished-branches.bundle/refs/heads/review/bevy-incoming-startup": "5507584755a332e340252b5afdc29e5e47b1b6f0",
+    "stash@{0}": "85eb1c2b91570ea26f222c523dda5c55c3971c68",
+    "stash@{1}": "b67df2364977d50c9c2ba44892aa19cf9406332c",
+    "stash@{2}": "bbad76b7381065bd721f325e4d7c64471972df75"
+  },
+  "files": [
+    {
+      "path": "archives/uncommitted-and-evidence/tree-008/src-tauri/gen/schemas/acl-manifests.json",
+      "bytes": 68210,
+      "sha256": "d3eace193b1e453756736eaf27bb156df62c7a41b2fe101403ee92ef93e69699"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-008/src-tauri/gen/schemas/capabilities.json",
+      "bytes": 203,
+      "sha256": "6091e42268cff682fb2c0f099e0429a0448c2085e28e889d24ad3b66927283bc"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-008/src-tauri/gen/schemas/desktop-schema.json",
+      "bytes": 120083,
+      "sha256": "2a16f62c90a059a1b67e4501216bb3476f402087e99ba659dd38c9d0521f3b07"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-008/src-tauri/gen/schemas/windows-schema.json",
+      "bytes": 120083,
+      "sha256": "2a16f62c90a059a1b67e4501216bb3476f402087e99ba659dd38c9d0521f3b07"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-043/docs/qualification/bevy-ownership-audit.md",
+      "bytes": 20687,
+      "sha256": "49bee940a6477855b9ee5ad09e82f844341b3f9199c45dbaa2291de0b17bab74"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-043/docs/qualification/snapshot-ownership-audit.md",
+      "bytes": 31170,
+      "sha256": "2cfdf00499947848d9f0abaea936ca07626b903af11b886543c87c8c2b69c00a"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/backport-frontend-observer.cjs",
+      "bytes": 3025,
+      "sha256": "635e65bcdf73da7a0ccb3f51940a72bceb8049d462cbf487e1511fa9ec893c30"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/backport-observers.cjs",
+      "bytes": 4116,
+      "sha256": "a0c19ac837ab0a8b55dcfabf0059b778817a9aba2dda1af534eb2d4d0389bb99"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/baseline-optimized-build.log",
+      "bytes": 2485,
+      "sha256": "5ce8f026098dae2e49fb68ba633233f1912e78c18ad199124432d0e230d54098"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/baseline-warmup-released",
+      "bytes": 89,
+      "sha256": "75d034701c912694d09ea9291f1f606c2f8efab1b602830094908cf81bdde424"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/build-baseline-optimized.cmd",
+      "bytes": 608,
+      "sha256": "2c523743c69fb3afa6233a46e0c9a2b1b4c84e0b082e88a692d6254e4cd9870d"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/build-baseline.cmd",
+      "bytes": 594,
+      "sha256": "208654b26fffc2c212bcc19517c805a6b4663852f41bfc14758fa9a118f095f1"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/build-candidate-optimized.cmd",
+      "bytes": 504,
+      "sha256": "4fb9ee552c53ee27c9a1ae2f1cc1c3fd33f2499ae48ef56e9637678d1c47f37d"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/build-candidate.cmd",
+      "bytes": 627,
+      "sha256": "657120eee9d72d285f0b99f6877f34d24218949a440a2a25b711a3f0f5675efa"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/build-runtime-activity.cmd",
+      "bytes": 504,
+      "sha256": "b9fe76672d29f1a62f77070c612ecd63797282b0386d01b5d2daafaa6f99e27d"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/candidate-final-build.log",
+      "bytes": 2175,
+      "sha256": "316754eb806ad2fbc84a85fe3015c9a4b2de2c33faeb98192301516751dfb0fd"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/candidate-no-warmup-build.log",
+      "bytes": 5138,
+      "sha256": "eda3813365403d0b16a8c6fd97d3a9609ac5fbed808edaf47fd02380e41c2267"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/candidate-no-warmup-test-build.log",
+      "bytes": 2086,
+      "sha256": "da4582c5fade66991040baf403bab086cb70e2516760913f07bdfb4485d89b36"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/candidate-optimized-build.log",
+      "bytes": 17336,
+      "sha256": "10b3f8b362d1ffc91ba27c973d452c5ac334a6ede51fab26d1386f4964c52798"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/candidate-optimized-tests.log",
+      "bytes": 1914,
+      "sha256": "d91c17342525bdcf19a66779475903e28fcf87be3211a6854289ac6e02e5cdf7"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/check-harness-failure.cmd",
+      "bytes": 353,
+      "sha256": "41f5a9d76bf92c91072b8197ae14d51b2bd0c5147ffaa828b25541b761ff770b"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/check-harness-final-error.cmd",
+      "bytes": 451,
+      "sha256": "0d4c275297820a75ce6caf4e8a81ae3acbdcbdf6fd5ef9aa865670adff5ee52c"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/check-harness-final.cmd",
+      "bytes": 421,
+      "sha256": "c48710a87e29e40da0963f1c2d8d17685d7a79f69bbec212b03abf4605710947"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/check-harness.cmd",
+      "bytes": 321,
+      "sha256": "21092e31d73b92412ec40148df2a9dc1785c9a6ca5a4601855878e893015d0ae"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/check-observers.cmd",
+      "bytes": 678,
+      "sha256": "b330304d777612ed29396ba8bf45cd2f195735ccdc3681562e9c6d7ffe31aad8"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/discover-baseline.cmd",
+      "bytes": 376,
+      "sha256": "72e3c913bff4378b730ea6b8b2f6aad6574e3e76be962933fa00fcf5264a4740"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/mailbox-check.json",
+      "bytes": 120,
+      "sha256": "3bcb542091d9445dc937c192187287cd1765dc32f454b2dd1da9ad839c309ac6"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/measure-baseline.cmd",
+      "bytes": 738,
+      "sha256": "01a7a52db4e507e934595f7fa58c5f16aee45dddc5ab0ea5c03ff3a01dd00dd8"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/measure-paired-compact-poll.cmd",
+      "bytes": 1702,
+      "sha256": "6c2e61c32718a68f8ba2c3aeca5a4a430e8bc790c7a5018ea8c1b428f947a1a1"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/measure-paired-compact.cmd",
+      "bytes": 1652,
+      "sha256": "bdaa6524782cc9a200eb6491c5f2e328ea53e48719eb4c2f727fb3634528ebad"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/measure-paired-no-warmup.cmd",
+      "bytes": 1642,
+      "sha256": "d81ee7fd3d8bf3d5cb01f61ebb427fc64f06140b3df00c66b73c2d5b94efa876"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/measure-paired-optimized-checkpoint.cmd",
+      "bytes": 1732,
+      "sha256": "e14cb77ba03e99b13538247e54e5f293b7f42e2150da2185dc6c6a1ea5610583"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/measure-paired-optimized.cmd",
+      "bytes": 1618,
+      "sha256": "311de1048c7b4ef63df60bdd6d92989e9973f2608f1e25da0c3197e9958e5f68"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/measure-startup-checkpoint.mjs",
+      "bytes": 9379,
+      "sha256": "4fb039f9f8fe9f044bc2d4e53701f7c20164d18a13fccb25a7a512423f51504e"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/measure-thunder-boot-once.cmd",
+      "bytes": 818,
+      "sha256": "c1b7ff150c59f7a981fb1f00c62343dc843987a98c28a6c000976d1609ef31fa"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/measure-thunder-fresh.cmd",
+      "bytes": 1318,
+      "sha256": "388fe49311f29913bf684022a5d95d533f2734f44860d3cc4aa226bf6f9ed021"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/measure-thunder-separated.cmd",
+      "bytes": 1206,
+      "sha256": "b894264bfd30a460eb07b450ae6f2f61d660633f67304f431bb0deb31b503965"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/mock-startup.cjs",
+      "bytes": 965,
+      "sha256": "5aaf60cba74a110e6409c8c27433ef58e4f916e53f81cab9d0f336c248b1cdbe"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/observer-check.index",
+      "bytes": 97262,
+      "sha256": "4a85d2fdb82b17d0ce2c833eaf5f81b30ca25ecbeb7867bc0886d26ee42ae00c"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/paired-compact-measurement.log",
+      "bytes": 5512,
+      "sha256": "5d5e98a4886d629f32bad24b7ce096f1bec5deb1b217e8a62b1af05f233df752"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/paired-compact-poll-measurement.log",
+      "bytes": 5412,
+      "sha256": "7e4bc54537fc58285b5c26977a9aa1d755d5e427410d50b21774980e1afb0d64"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/paired-compact-poll-summary.log",
+      "bytes": 32215,
+      "sha256": "443c8a2b5697ff717ed8f13cda12957f90306075bad0896cb28842aad25d6d1e"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/paired-final-measurement.log",
+      "bytes": 5503,
+      "sha256": "f9d1add0c04e836add2884eecfac1b35c50703bf3a37618f41410983965dc223"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/paired-final-summary.log",
+      "bytes": 18085,
+      "sha256": "2dfca3c36bc8675d6f68881b00286451d653cd2d83f200aadf0b860a68e24953"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/paired-no-warmup-measurement.log",
+      "bytes": 5534,
+      "sha256": "5807f4f911876c04877e018f39f3b89b61a73b9b6debab483eca9b54490b5503"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/paired-no-warmup-summary.log",
+      "bytes": 18069,
+      "sha256": "42c8a2f0a535aebf305a2aad5140e40abea28f70146d5f4662afb0e8d3c00281"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/retry-baseline.cmd",
+      "bytes": 481,
+      "sha256": "09d5399efa94e8b7c390353e7b309a3b9a1f3513d890231183cc26d3d12e019d"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/run-all-runtime-native-tests.ps1",
+      "bytes": 2084,
+      "sha256": "03d3baec752fd13ba38f2f543642fe01170f0d9be30c6f444482a65976d3f86e"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/runtime-activity-app-build.log",
+      "bytes": 2568,
+      "sha256": "6d59b9f144d26e232a17ba9b21a378637bd2b89f2f3c1170253e2c4ee6b4b012"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/runtime-activity-final-app-build.log",
+      "bytes": 2568,
+      "sha256": "6b1f22b604878568562d0ccb3c316798256fbefd0b420377817bd90e559c5f0e"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/runtime-activity-keyboard-final-app-build.log",
+      "bytes": 2568,
+      "sha256": "f0ad63f8621d87cead8f798bd559c63497ec155a8b308040421e82d596b809ce"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/runtime-native-test-build-current-head.log",
+      "bytes": 1589,
+      "sha256": "c8f150f665dc85b714ac34b78962c5edd1183c45d95b9684aaf5f48cc7ea29e9"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/runtime-native-test-build.log",
+      "bytes": 1190,
+      "sha256": "b6f73ae15b3bde3736d092412269ef887be9557694589fae17e247450dcfcd8d"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src-tauri/gen/schemas/acl-manifests.json",
+      "bytes": 69894,
+      "sha256": "a7be3087844dcbda3369c9364330ffb5194717de7bafa4989bd7f1de873ff273"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src-tauri/gen/schemas/capabilities.json",
+      "bytes": 241,
+      "sha256": "945e1601deda3c25d622e02c78053e522eee05ba3a867a52809072feaf320287"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src-tauri/gen/schemas/desktop-schema.json",
+      "bytes": 122829,
+      "sha256": "690a5b12f0f900e6b49ef2ecbb1d50b820b2d2d3c20167169f2f5fbc484d64b2"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src-tauri/gen/schemas/windows-schema.json",
+      "bytes": 122829,
+      "sha256": "690a5b12f0f900e6b49ef2ecbb1d50b820b2d2d3c20167169f2f5fbc484d64b2"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src-tauri/src/lib.rs",
+      "bytes": 54478,
+      "sha256": "214b735ce8762f15b269c451c4a88f44d2b2910699c9bd594bdd3808adf41ca7"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src-tauri/src/main.rs",
+      "bytes": 3105,
+      "sha256": "78057de4068a446d182fe3d02b4220e5a7ab2576110177f7c64dcb5289081870"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src-tauri/src/native_viewport/loading.rs",
+      "bytes": 17556,
+      "sha256": "cc7bf08a43982e05d4c7d7239b7edf5d5adea0216ed522cbdb9b99b9a4d8e4d2"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src-tauri/src/native_viewport/mod.rs",
+      "bytes": 30098,
+      "sha256": "b4326995675ba5ad1f87d82625fd68fd7970272955449e2a03bc74d359120f58"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src-tauri/src/native_viewport/platform.rs",
+      "bytes": 341201,
+      "sha256": "91a9a084cda8a012af91136e6bd097bd6a5feb052d52ec091d1f3b72d10748f1"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src-tauri/src/startup_metrics.rs",
+      "bytes": 2905,
+      "sha256": "a02e30da7ddeedc940651548998bfebbf6a5eee3fc2519af52dbd52a653e5a0c"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src/App.tsx",
+      "bytes": 21293,
+      "sha256": "07ec7a4c4b5a2c15f97c9ecef0ad2c96a5aaf3b75c648239594c98dd940d3906"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src/components/viewport/nativeViewportBridge.ts",
+      "bytes": 67561,
+      "sha256": "4f3bbbb60486a6cabddae92a1181c01a6c1f1466f47f42f280646b4e44ae94f7"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src/engine/projectModelComparison.ts",
+      "bytes": 1912,
+      "sha256": "5d7cc5a8f0ec61b52342e28097c9672ad24eb760e5e9813e8c1a65dfa3e67d60"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src/startupBaselineObserver.ts",
+      "bytes": 1646,
+      "sha256": "ec661a3e9e5116a241317d899e71fb349cdfcb958a7f2efed5bda70b5557a078"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/src/startupMeasurement.ts",
+      "bytes": 9243,
+      "sha256": "5856321973e9f1c55157a97584789912696f909764a5ef5cb9f6a9975ca45803"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/stage-baseline-optimized.cmd",
+      "bytes": 286,
+      "sha256": "9ec62c36e8a10007c507989226f11076f143f5600365628f858711f121468cb1"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/summarize-paired-compact-poll.mjs",
+      "bytes": 2224,
+      "sha256": "a4778a1cfc90b48078c75eafed5cb6d28629561515a1f758a5a375cd72d66ba6"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/summarize-paired-compact.mjs",
+      "bytes": 2214,
+      "sha256": "8e708f9c253bcfcf77e3f76cf3c1dbd5188de1b5082a78f9ac5275196eba72d6"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/summarize-paired-no-warmup.mjs",
+      "bytes": 1815,
+      "sha256": "45d234f120566af0949083b4693b1f9b607db21e1159dc4b1d64b6fcfab01d0d"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/summarize-paired-optimized.mjs",
+      "bytes": 1811,
+      "sha256": "9198a71408acb409c0fc97e11c261751110f240b1e9b6352c6f1ae90e1474f65"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/summarize-thunder-separated.mjs",
+      "bytes": 3597,
+      "sha256": "00003859e698da626a1c6a3271874505752b38f13792bff220fd37179a0bbe3d"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/test-candidate-no-warmup-no-run.cmd",
+      "bytes": 588,
+      "sha256": "df16d495a81e2432a99f9f7c005c68e3c07485718e07aff117919b294eb42d3b"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/test-candidate-optimized.cmd",
+      "bytes": 579,
+      "sha256": "ad396b67854cdb08e7e3c7e307652a7613888ea6c3a5130890df55d3f2549149"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/test-runtime-native-no-run.cmd",
+      "bytes": 588,
+      "sha256": "713c66ee5320b132507d0a4744b05dbc3f17304ee39fff77fd2fb4d2c2184896"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/thunder-fresh-measurement.log",
+      "bytes": 2291,
+      "sha256": "6d84ddc8aa904e31bfd7635b877659d682aa13cf05b75c7be932fc2fad6213f7"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/thunder-separated-measurement.log",
+      "bytes": 2733,
+      "sha256": "c3935c78dd1e3dcebe195a44efb6a4a4424c7badcb898529e78d53c3350fbbe9"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-107/thunder-separated-summary.log",
+      "bytes": 10418,
+      "sha256": "b2f0568f9ee3e34f6d3ec478f1e76c27b497041af527d994b9b4f925d4b0abf0"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-113/src-tauri/gen/schemas/acl-manifests.json",
+      "bytes": 69894,
+      "sha256": "a7be3087844dcbda3369c9364330ffb5194717de7bafa4989bd7f1de873ff273"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-113/src-tauri/gen/schemas/capabilities.json",
+      "bytes": 241,
+      "sha256": "945e1601deda3c25d622e02c78053e522eee05ba3a867a52809072feaf320287"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-113/src-tauri/gen/schemas/desktop-schema.json",
+      "bytes": 122829,
+      "sha256": "690a5b12f0f900e6b49ef2ecbb1d50b820b2d2d3c20167169f2f5fbc484d64b2"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-113/src-tauri/gen/schemas/windows-schema.json",
+      "bytes": 122829,
+      "sha256": "690a5b12f0f900e6b49ef2ecbb1d50b820b2d2d3c20167169f2f5fbc484d64b2"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-121/src-tauri/gen/schemas/acl-manifests.json",
+      "bytes": 69894,
+      "sha256": "a7be3087844dcbda3369c9364330ffb5194717de7bafa4989bd7f1de873ff273"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-121/src-tauri/gen/schemas/capabilities.json",
+      "bytes": 241,
+      "sha256": "945e1601deda3c25d622e02c78053e522eee05ba3a867a52809072feaf320287"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-121/src-tauri/gen/schemas/desktop-schema.json",
+      "bytes": 122829,
+      "sha256": "690a5b12f0f900e6b49ef2ecbb1d50b820b2d2d3c20167169f2f5fbc484d64b2"
+    },
+    {
+      "path": "archives/uncommitted-and-evidence/tree-121/src-tauri/gen/schemas/windows-schema.json",
+      "bytes": 122829,
+      "sha256": "690a5b12f0f900e6b49ef2ecbb1d50b820b2d2d3c20167169f2f5fbc484d64b2"
+    },
+    {
+      "path": "archives/retired-primary-schemas/gen/schemas/acl-manifests.json",
+      "bytes": 69894,
+      "sha256": "a7be3087844dcbda3369c9364330ffb5194717de7bafa4989bd7f1de873ff273"
+    },
+    {
+      "path": "archives/retired-primary-schemas/gen/schemas/capabilities.json",
+      "bytes": 203,
+      "sha256": "6091e42268cff682fb2c0f099e0429a0448c2085e28e889d24ad3b66927283bc"
+    },
+    {
+      "path": "archives/retired-primary-schemas/gen/schemas/desktop-schema.json",
+      "bytes": 122829,
+      "sha256": "690a5b12f0f900e6b49ef2ecbb1d50b820b2d2d3c20167169f2f5fbc484d64b2"
+    },
+    {
+      "path": "archives/retired-primary-schemas/gen/schemas/windows-schema.json",
+      "bytes": 122829,
+      "sha256": "690a5b12f0f900e6b49ef2ecbb1d50b820b2d2d3c20167169f2f5fbc484d64b2"
+    },
+    {
+      "path": "local-experiments/.codex/attached-read-history-fixed-session-bridge.rs",
+      "bytes": 188809,
+      "sha256": "4575e98e52711ab8346bdf431dc14ff7add72ef7eae772d675ebe01627a7a131"
+    },
+    {
+      "path": "local-experiments/.codex/check_technical_fonts.py",
+      "bytes": 297,
+      "sha256": "fb1c70c2810a2c68c5ff4fdee31c2d2c7e639f785a0bbeb7bde3460f9427d670"
+    },
+    {
+      "path": "local-experiments/.codex/cloud-caption-in-progress.patch",
+      "bytes": 5864,
+      "sha256": "fdf3cc3a408a6cbe2dc2f3a05a1b3c4f3b75ea7ab9cf4d672461085c75590d2f"
+    },
+    {
+      "path": "local-experiments/.codex/local_mcp.py",
+      "bytes": 2976,
+      "sha256": "06ff135eec40c531e5ceb5aed09dc39fa295610da3fc8f58e1ddc60ebcec2f05"
+    },
+    {
+      "path": "local-experiments/.codex/record-ci-annotation-ime-review.py",
+      "bytes": 3145,
+      "sha256": "99c75973cb53354f09783a66670abb820067917c668043e4764863ab1d00b7b7"
+    },
+    {
+      "path": "local-experiments/.codex/record_cloud_caption_review.py",
+      "bytes": 3011,
+      "sha256": "b2c6b77bbdb77ff1efbaca083b396adcc65745a5d0fd946ff529c28fcdd98949"
+    },
+    {
+      "path": "local-experiments/.codex/render_exports.py",
+      "bytes": 3371,
+      "sha256": "f71ad7ad2e0f174a13fe49e3ab552c9d452ec35ae5109d7ab5ffe24c09e8da7e"
+    },
+    {
+      "path": "local-experiments/.codex/render_svg.rs",
+      "bytes": 879,
+      "sha256": "05b278971e5f7bf2d071d17304cbe9190d1919c00836dd193f7e7cf193b31c99"
+    },
+    {
+      "path": "local-experiments/.codex/retire-frontend-host-2.cjs",
+      "bytes": 5795,
+      "sha256": "8bcf98de75a1192c3fd8eab801a6dfedde7272b9087ededbb3dc2c7b1f0c553b"
+    },
+    {
+      "path": "local-experiments/.codex/retire-frontend-host-3.cjs",
+      "bytes": 3509,
+      "sha256": "73f14cf3cfbc6f4ec84bf5797183a39814d5dcb5b279f71b53d86726c93513a9"
+    },
+    {
+      "path": "local-experiments/.codex/retire-frontend-host-4.cjs",
+      "bytes": 4394,
+      "sha256": "668fae4a084c30ed3a1eed47d70c424ec302eeae32dc44aae5e88e4bba4d2686"
+    },
+    {
+      "path": "local-experiments/.codex/retire-frontend-host-5.cjs",
+      "bytes": 817,
+      "sha256": "7c19d0936d7dafc21e0bb571987f13258da9c742bd8889b8aa67f9e58286f200"
+    },
+    {
+      "path": "local-experiments/.codex/retire-frontend-host-final.cjs",
+      "bytes": 4816,
+      "sha256": "1cba04d98c137ce2fb4775f8bfbaf66de9e38f9ba41d7ea757fd3cf1d732b5b8"
+    },
+    {
+      "path": "local-experiments/.codex/retire-frontend-host.cjs",
+      "bytes": 5932,
+      "sha256": "5ad6f95da3e48a28a8c30908b85c4c1640b67785fe3efcc0f7f5ccd77a50a244"
+    },
+    {
+      "path": "local-experiments/.codex/review-center-export-artifacts.cjs",
+      "bytes": 9753,
+      "sha256": "00681ee19ad20a75047ef8d212e086fb9c12bfe9caba8ccf6c3d7e441375a243"
+    },
+    {
+      "path": "local-experiments/.codex/review-center-export-final.cjs",
+      "bytes": 7994,
+      "sha256": "80471ac593bd4a8c760600fca0c4fc98540713ec5da786775f3503fd5b9d22d8"
+    },
+    {
+      "path": "local-experiments/.codex/review-cloud-exports.cjs",
+      "bytes": 8092,
+      "sha256": "b9c2c6710ba1a309667be481356c931469639e41c269ff74e5c0b8c0ba6c405c"
+    },
+    {
+      "path": "local-experiments/.codex/run_live_fixture.py",
+      "bytes": 2514,
+      "sha256": "85bb5c2795b1274ca860ee13b976066af89eeb5360f18b59e0f20a428daff303"
+    },
+    {
+      "path": "local-experiments/.codex/ci-483d7e25-windows/pinned-native-input-windows.ps1",
+      "bytes": 12289,
+      "sha256": "fe641ac380eee760d7a8070d7c23089a1d86a2446643b015be64b503d50d421b"
+    },
+    {
+      "path": "local-experiments/.codex/ci-483d7e25-windows/pinned-native-platform-test.rs",
+      "bytes": 19768,
+      "sha256": "8644d56ffcc4b9a0cc21cb2064b56851f9a4bf28f4ad915deb53545c3fa47a53"
+    },
+    {
+      "path": "local-experiments/.codex/drawing-navigation-test/harness.rs",
+      "bytes": 130,
+      "sha256": "4d37ef98fa4455852cc1037f0415238f7d44158cd72df60a4599da1013956cef"
+    },
+    {
+      "path": "local-experiments/.codex/drawing-navigation-test/run.ps1",
+      "bytes": 948,
+      "sha256": "e95b8e3ae96ef337447273f31afb5a03a7b11a881094f477fd8a3402a7fca305"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/cloud-final-retired.patch",
+      "bytes": 5864,
+      "sha256": "fdf3cc3a408a6cbe2dc2f3a05a1b3c4f3b75ea7ab9cf4d672461085c75590d2f"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/cloud-original-partial.patch",
+      "bytes": 5864,
+      "sha256": "fdf3cc3a408a6cbe2dc2f3a05a1b3c4f3b75ea7ab9cf4d672461085c75590d2f"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/inspect_cam.py",
+      "bytes": 1596,
+      "sha256": "7a0c13962e8d6c17124110ec752990833ae7b8de470bac9ff86c8facc2ef9a0d"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-tracked.patch",
+      "bytes": 19152,
+      "sha256": "1e1f128991481c244ce5833250985293bcd160219349f6e27f3c5146056a47c1"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/drawing-font-diagnosis.py",
+      "bytes": 1961,
+      "sha256": "534fe1d7b1ecdcbb84367e8c9c2da285caa39d67ee7fe762f83324c4a27b3570"
+    },
+    {
+      "path": "local-experiments/.codex/svg-renderer/src/main.rs",
+      "bytes": 879,
+      "sha256": "05b278971e5f7bf2d071d17304cbe9190d1919c00836dd193f7e7cf193b31c99"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/switching-36382024049/builds/baseline-cargo-lock.patch",
+      "bytes": 535,
+      "sha256": "4513b24a36b4278fe47ff826884c7716c01077af7885c99b221bbb5e538d3ef9"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/switching-36382024049/builds/baseline-source.patch",
+      "bytes": 533,
+      "sha256": "8dd02c7f12293ed9da54050226b29e6d1d2888b9e0b51556602b77672c8171b0"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/switching-36378351803/builds/baseline-cargo-lock.patch",
+      "bytes": 535,
+      "sha256": "4513b24a36b4278fe47ff826884c7716c01077af7885c99b221bbb5e538d3ef9"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/switching-36378351803/builds/baseline-source.patch",
+      "bytes": 533,
+      "sha256": "8dd02c7f12293ed9da54050226b29e6d1d2888b9e0b51556602b77672c8171b0"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/switching-36374321979/builds/baseline-cargo-lock.patch",
+      "bytes": 535,
+      "sha256": "4513b24a36b4278fe47ff826884c7716c01077af7885c99b221bbb5e538d3ef9"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/switching-36374321979/builds/baseline-source.patch",
+      "bytes": 533,
+      "sha256": "8dd02c7f12293ed9da54050226b29e6d1d2888b9e0b51556602b77672c8171b0"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/switching-36368236968/builds/baseline-cargo-lock.patch",
+      "bytes": 535,
+      "sha256": "4513b24a36b4278fe47ff826884c7716c01077af7885c99b221bbb5e538d3ef9"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/switching-36368236968/builds/baseline-source.patch",
+      "bytes": 533,
+      "sha256": "8dd02c7f12293ed9da54050226b29e6d1d2888b9e0b51556602b77672c8171b0"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/ime-trace-harness/src/ime_trace.rs",
+      "bytes": 7056,
+      "sha256": "89fbf393ef9850dd49a45ed831d927a3c000a22499b4a32dd2310021ecab0f34"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/ime-trace-harness/src/lib.rs",
+      "bytes": 67,
+      "sha256": "ab1b47a9ac290c30482b4827f3207ed2ee07838ccc663ed01b1345c4715c549f"
+    },
+    {
+      "path": "local-experiments/.codex/parity-resume/ime-trace-harness/src/ime_trace/budget.rs",
+      "bytes": 3108,
+      "sha256": "05929144cdfcd9c59d3a0bdafdd6e56f8354804dc643e09ef36eafc2f645dfe9"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/retained-evidence/bevy-annotation-continue/.codex/revision-cloud-geometry-check.rs",
+      "bytes": 2744,
+      "sha256": "5d5d1fb1be812d06bcc8cfdcf13d6d4139b06f153c31408e5185a8e4c775ea13"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/xtask/src/main.rs",
+      "bytes": 4596,
+      "sha256": "df54e152f86d973f58c6459c0414cfcd480f1f3e98db56a3fb17edf6f18226da"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/xtask/src/native_mechanism_test.rs",
+      "bytes": 4373,
+      "sha256": "82c1829cb585052fc849cdd52f528e8c49e166f71a78c113124b69dbd3b93e09"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/xtask/src/test_mcp.rs",
+      "bytes": 3155,
+      "sha256": "1fa9a1ddb5c21dd2722a506db8d9dba807b0c36caeda694f26b803243077f4a2"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/src-tauri/src/native_editor/mcp.rs",
+      "bytes": 7060,
+      "sha256": "7a1ccdfc76408c8b3e5506900459b5107b853d627dddcc2cb66291d623a025f3"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/src-tauri/src/native_editor/mechanism.rs",
+      "bytes": 20311,
+      "sha256": "4c2589c44cef3e80a060a245ddcebd9ae5d3b4182d0d7244a2afd9576d8b5eb7"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/src-tauri/src/native_editor/mod.rs",
+      "bytes": 47310,
+      "sha256": "690643781b7689d71aa3bde54032890836b2900476633ed0afbc9370d3e71850"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/src-tauri/src/native_editor/solid.rs",
+      "bytes": 6924,
+      "sha256": "2aaf8f723564b96ac837a2962b15068b9d55439d2621842a07bbdcd1c34d5258"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/src-tauri/src/session_bridge/native_interface.rs",
+      "bytes": 28562,
+      "sha256": "ee68386aeca6a3114d3e0c78f0f7955406ffd45216d98fb67079d5cea8e74b12"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/src-tauri/src/session_bridge/native_interface/controller.rs",
+      "bytes": 68122,
+      "sha256": "24a9ad81c57dd1e7fc14a02817ea2833b74fa0cb14d216b72902731484215d66"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/src-tauri/src/session_bridge/native_interface/controller/assembly/joint/tests.rs",
+      "bytes": 9214,
+      "sha256": "fb382e32888b6b143ce280ee8f98151ce24676c69194a377e8e4a3940b5b36d3"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/mcp-server/src/assembly_tools.rs",
+      "bytes": 9546,
+      "sha256": "93c15beaae92b718c1637ec0f474025ac30f240caf53562133cd9aae2a6bf5bf"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/mcp-server/src/lib.rs",
+      "bytes": 614153,
+      "sha256": "4793d5a46f600d274031b7890e3df5db74a7de699a125e3354e918708ffd01a1"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/crates/mcp-mutate/src/lib.rs",
+      "bytes": 38682,
+      "sha256": "a48f304d4cc4f4a2def7b41c5661840c2969da9800b860fa539ecbb4559b13c0"
+    },
+    {
+      "path": "local-experiments/.codex/handoff-audit/mechanism-original/crates/assembly/src/lib.rs",
+      "bytes": 297140,
+      "sha256": "4a59cd151e609cf1975d6220afad3eebab7474c8fe5eca040c434f5842204000"
+    }
+  ],
+  "archives": {
+    "uncommitted-and-evidence.zip": {
+      "bytes": 351694,
+      "sha256": "cd61743242c6ff837d99aea715d1e05f4cb4046ce5060b728509a3b4aab00149"
+    },
+    "retired-primary-schemas.zip": {
+      "bytes": 24545,
+      "sha256": "c65b30eded8f4acec32c893daefe3beabcb1c4e760a431083ee0276c3e5b567f"
+    },
+    "unpublished-and-detached.bundle": {
+      "bytes": 1349733,
+      "sha256": "098cbba4e9bd70c022159888eb5a8c1ed45a3ab3029b660c6bf5cbaa8e6f3d99"
+    },
+    "unpublished-branches.bundle": {
+      "bytes": 1351222,
+      "sha256": "c6f72f8da646d891d7386eb0dc1cbe0681bb4f0070e2bdb26e1d896142091158"
+    }
+  },
+  "restoration": [
+    "git fetch origin recovery/local-work-20261015",
+    "git show origin/recovery/local-work-20261015:RECOVERY.json",
+    "Choose the original commit from original_tip_map; git switch -c restored-work COMMIT; copy the desired archived files from this recovery branch."
+  ],
+  "secret_scan": {
+    "tool": "gitleaks 8.30.1",
+    "reviewed_findings": [
+      "Four ordinal-face-2 unit-test face identifiers across source copies",
+      "One OCCT SDK replacement_key content/cache digest"
+    ],
+    "credentials_detected": false
+  },
+  "retention": "Keep the remote recovery branch and original local recovery archives until the operator confirms recovery is unnecessary."
+}

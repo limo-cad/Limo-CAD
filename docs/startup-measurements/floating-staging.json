@@ -1,9 +1,0 @@
-{
-    "executable":  "D:\\limo-startup-candidate-floating-runtime\\nbcad.exe",
-    "sha256":  "f48b231c425644dfa901fc9f832aeaea40be3c7a93c48b4a3feca7fc7c11f0a7",
-    "bundle":  "index-CoxyHmt5.js",
-    "bundleSha256":  "7e04de23b805938d45d7e205f993c47d5213d3ce97009e239e4252efc5142293",
-    "size":  "560x380 frameless, opaque, native shadow",
-    "createdUtc":  "2026-10-12T00:06:02.7238499Z",
-    "note":  "Visual revision; historical timings retain earlier executable hashes"
-}

@@ -1,0 +1,558 @@
+{
+  "schema": 1,
+  "comparisonProfile": "dev-app1-debug2-deps3-debug0",
+  "workloads": {
+    "empty": {
+      "documentSha256": null,
+      "baselineSha256": "472a491839e47b529e9949c04d900ec56b575b06de76846a0b28832ee9f622af",
+      "candidateSha256": "6d6fc31655cb1e5bc1dc78fb6eccc0ffa74aaea9b3465d560291e15aabf8a67c",
+      "measurements": {
+        "firstFeedbackMs": {
+          "baseline": {
+            "median": 1443.9372,
+            "min": 1298.4661,
+            "max": 1736.438,
+            "values": [
+              1443.9372,
+              1298.4661,
+              1379.951,
+              1736.438,
+              1508.0329
+            ]
+          },
+          "candidate": {
+            "median": 582.7044,
+            "min": 515.9665,
+            "max": 643.2144000000001,
+            "values": [
+              582.7044,
+              547.5959,
+              643.2144000000001,
+              622.5336,
+              515.9665
+            ]
+          },
+          "medianChangePercent": -59.64475463337327
+        },
+        "usableWorkspaceMs": {
+          "baseline": {
+            "median": 1678.2970999999998,
+            "min": 1497.8001,
+            "max": 1987.7232,
+            "values": [
+              1678.2970999999998,
+              1497.8001,
+              1638.4093,
+              1987.7232,
+              1711.9768000000001
+            ]
+          },
+          "candidate": {
+            "median": 1429.0491,
+            "min": 1310.2354,
+            "max": 1535.8245,
+            "values": [
+              1448.1143,
+              1363.1367,
+              1535.8245,
+              1429.0491,
+              1310.2354
+            ]
+          },
+          "medianChangePercent": -14.851244156949317
+        },
+        "firstInteractionMs": {
+          "baseline": {
+            "median": 5.700000047683716,
+            "min": 5.200000047683716,
+            "max": 9.899999976158142,
+            "values": [
+              9.899999976158142,
+              5.200000047683716,
+              6.399999976158142,
+              5.700000047683716,
+              5.600000023841858
+            ]
+          },
+          "candidate": {
+            "median": 7.400000035762787,
+            "min": 4.5,
+            "max": 10.100000023841858,
+            "values": [
+              8.199999988079071,
+              10.100000023841858,
+              7.400000035762787,
+              4.5,
+              5.800000011920929
+            ]
+          },
+          "medianChangePercent": 29.82456094487038
+        },
+        "firstCadInteractionMs": {
+          "baseline": {
+            "median": 268.69999998807907,
+            "min": 252.39999997615814,
+            "max": 279.2000000476837,
+            "values": [
+              268.69999998807907,
+              252.39999997615814,
+              277.30000001192093,
+              279.2000000476837,
+              264.9000000357628
+            ]
+          },
+          "candidate": {
+            "median": 263.7999999523163,
+            "min": 213.69999998807907,
+            "max": 322.60000002384186,
+            "values": [
+              243.89999997615814,
+              322.60000002384186,
+              285.4000000357628,
+              213.69999998807907,
+              263.7999999523163
+            ]
+          },
+          "medianChangePercent": -1.8235951008485962
+        },
+        "repeatedCadInteractionMs": {
+          "baseline": {
+            "median": 181.80000001192093,
+            "min": 167.19999998807907,
+            "max": 184.80000001192093,
+            "values": [
+              167.19999998807907,
+              181.80000001192093,
+              184.80000001192093,
+              168.30000001192093,
+              182.19999998807907
+            ]
+          },
+          "candidate": {
+            "median": 169.19999998807907,
+            "min": 132,
+            "max": 223.5,
+            "values": [
+              158.5,
+              201.39999997615814,
+              223.5,
+              132,
+              169.19999998807907
+            ]
+          },
+          "medianChangePercent": -6.93069308196681
+        }
+      },
+      "candidateCadTimings": [
+        {
+          "sketchCommandsMs": 49.30000001192093,
+          "sketchFrameMs": 27.099999964237213,
+          "solidCommandsMs": 47.200000047683716,
+          "solidFrameMs": 120.29999995231628,
+          "repeatedCadInteractionMs": 158.5,
+          "repeatedTimings": {
+            "sketchCommandsMs": 48.10000002384186,
+            "sketchFrameMs": 11.699999988079071,
+            "solidCommandsMs": 54.80000001192093,
+            "solidFrameMs": 43.89999997615814
+          }
+        },
+        {
+          "sketchCommandsMs": 69.30000001192093,
+          "sketchFrameMs": 22,
+          "solidCommandsMs": 79.10000002384186,
+          "solidFrameMs": 152.19999998807907,
+          "repeatedCadInteractionMs": 201.39999997615814,
+          "repeatedTimings": {
+            "sketchCommandsMs": 61.39999997615814,
+            "sketchFrameMs": 33.69999998807907,
+            "solidCommandsMs": 60.60000002384186,
+            "solidFrameMs": 45.69999998807907
+          }
+        },
+        {
+          "sketchCommandsMs": 57.60000002384186,
+          "sketchFrameMs": 29.899999976158142,
+          "solidCommandsMs": 69,
+          "solidFrameMs": 128.9000000357628,
+          "repeatedCadInteractionMs": 223.5,
+          "repeatedTimings": {
+            "sketchCommandsMs": 65.5,
+            "sketchFrameMs": 20,
+            "solidCommandsMs": 70.19999998807907,
+            "solidFrameMs": 67.80000001192093
+          }
+        },
+        {
+          "sketchCommandsMs": 49.10000002384186,
+          "sketchFrameMs": 13.899999976158142,
+          "solidCommandsMs": 54.5,
+          "solidFrameMs": 96.19999998807907,
+          "repeatedCadInteractionMs": 132,
+          "repeatedTimings": {
+            "sketchCommandsMs": 45,
+            "sketchFrameMs": 14.600000023841858,
+            "solidCommandsMs": 45,
+            "solidFrameMs": 27.399999976158142
+          }
+        },
+        {
+          "sketchCommandsMs": 62.299999952316284,
+          "sketchFrameMs": 16.200000047683716,
+          "solidCommandsMs": 69.39999997615814,
+          "solidFrameMs": 115.89999997615814,
+          "repeatedCadInteractionMs": 169.19999998807907,
+          "repeatedTimings": {
+            "sketchCommandsMs": 50.30000001192093,
+            "sketchFrameMs": 23.69999998807907,
+            "solidCommandsMs": 57.30000001192093,
+            "solidFrameMs": 37.89999997615814
+          }
+        }
+      ],
+      "baselineCadTimings": [
+        {
+          "sketchCommandsMs": 56.80000001192093,
+          "sketchFrameMs": 25.69999998807907,
+          "solidCommandsMs": 71.30000001192093,
+          "solidFrameMs": 114.89999997615814,
+          "repeatedCadInteractionMs": 167.19999998807907,
+          "repeatedTimings": {
+            "sketchCommandsMs": 50.5,
+            "sketchFrameMs": 18.100000023841858,
+            "solidCommandsMs": 64.89999997615814,
+            "solidFrameMs": 33.69999998807907
+          }
+        },
+        {
+          "sketchCommandsMs": 51,
+          "sketchFrameMs": 24.099999964237213,
+          "solidCommandsMs": 58.30000001192093,
+          "solidFrameMs": 119,
+          "repeatedCadInteractionMs": 181.80000001192093,
+          "repeatedTimings": {
+            "sketchCommandsMs": 61.80000001192093,
+            "sketchFrameMs": 21.80000001192093,
+            "solidCommandsMs": 51.59999996423721,
+            "solidFrameMs": 46.60000002384186
+          }
+        },
+        {
+          "sketchCommandsMs": 53.5,
+          "sketchFrameMs": 27.69999998807907,
+          "solidCommandsMs": 76.39999997615814,
+          "solidFrameMs": 119.70000004768372,
+          "repeatedCadInteractionMs": 184.80000001192093,
+          "repeatedTimings": {
+            "sketchCommandsMs": 44.5,
+            "sketchFrameMs": 18.30000001192093,
+            "solidCommandsMs": 65.59999996423721,
+            "solidFrameMs": 56.40000003576279
+          }
+        },
+        {
+          "sketchCommandsMs": 59.10000002384186,
+          "sketchFrameMs": 31.399999976158142,
+          "solidCommandsMs": 69.5,
+          "solidFrameMs": 119.20000004768372,
+          "repeatedCadInteractionMs": 168.30000001192093,
+          "repeatedTimings": {
+            "sketchCommandsMs": 51.90000003576279,
+            "sketchFrameMs": 27,
+            "solidCommandsMs": 53.5,
+            "solidFrameMs": 35.89999997615814
+          }
+        },
+        {
+          "sketchCommandsMs": 72,
+          "sketchFrameMs": 19.80000001192093,
+          "solidCommandsMs": 59.30000001192093,
+          "solidFrameMs": 113.80000001192093,
+          "repeatedCadInteractionMs": 182.19999998807907,
+          "repeatedTimings": {
+            "sketchCommandsMs": 45.10000002384186,
+            "sketchFrameMs": 25.5,
+            "solidCommandsMs": 59,
+            "solidFrameMs": 52.59999996423721
+          }
+        }
+      ]
+    },
+    "document": {
+      "documentSha256": "d7e65fb222a0bb59f0ac82c3f3143a3437a487f3bbacf3a1f314b989b96de609",
+      "baselineSha256": "472a491839e47b529e9949c04d900ec56b575b06de76846a0b28832ee9f622af",
+      "candidateSha256": "6d6fc31655cb1e5bc1dc78fb6eccc0ffa74aaea9b3465d560291e15aabf8a67c",
+      "measurements": {
+        "firstFeedbackMs": {
+          "baseline": {
+            "median": 1552.9017999999999,
+            "min": 1361.1725999999999,
+            "max": 2108.002,
+            "values": [
+              1552.9017999999999,
+              1661.7318,
+              1513.7422,
+              1361.1725999999999,
+              2108.002
+            ]
+          },
+          "candidate": {
+            "median": 530.5488,
+            "min": 483.61269999999996,
+            "max": 814.3991,
+            "values": [
+              814.3991,
+              530.5488,
+              483.61269999999996,
+              509.4083,
+              746.5926000000001
+            ]
+          },
+          "medianChangePercent": -65.83500643762534
+        },
+        "usableWorkspaceMs": {
+          "baseline": {
+            "median": 2057.8516,
+            "min": 1712.222,
+            "max": 2589.6727,
+            "values": [
+              1947.0765000000001,
+              2057.8516,
+              2063.3396000000002,
+              1712.222,
+              2589.6727
+            ]
+          },
+          "candidate": {
+            "median": 1390.7575000000002,
+            "min": 1356.6003,
+            "max": 1854.4883000000002,
+            "values": [
+              1854.4883000000002,
+              1367.9131,
+              1356.6003,
+              1390.7575000000002,
+              1655.1551000000002
+            ]
+          },
+          "medianChangePercent": -32.4170168538878
+        },
+        "firstInteractionMs": {
+          "baseline": {
+            "median": 8.200000047683716,
+            "min": 5.5,
+            "max": 8.5,
+            "values": [
+              6.800000011920929,
+              8.200000047683716,
+              5.5,
+              8.5,
+              8.300000011920929
+            ]
+          },
+          "candidate": {
+            "median": 7.100000023841858,
+            "min": 4.899999976158142,
+            "max": 11.5,
+            "values": [
+              7.899999976158142,
+              11.5,
+              4.899999976158142,
+              7.100000023841858,
+              5.300000011920929
+            ]
+          },
+          "medianChangePercent": -13.414634359088563
+        },
+        "firstCadInteractionMs": {
+          "baseline": {
+            "median": 244.39999997615814,
+            "min": 195.0999999642372,
+            "max": 260.69999998807907,
+            "values": [
+              244.39999997615814,
+              255.10000002384186,
+              195.0999999642372,
+              260.69999998807907,
+              241.30000001192093
+            ]
+          },
+          "candidate": {
+            "median": 234.4000000357628,
+            "min": 164.10000002384186,
+            "max": 246.9000000357628,
+            "values": [
+              234.4000000357628,
+              243,
+              164.10000002384186,
+              246.9000000357628,
+              178.19999998807907
+            ]
+          },
+          "medianChangePercent": -4.091653003834239
+        },
+        "repeatedCadInteractionMs": {
+          "baseline": {
+            "median": 226.60000002384186,
+            "min": 177.80000001192093,
+            "max": 286,
+            "values": [
+              286,
+              236.29999995231628,
+              177.80000001192093,
+              226.60000002384186,
+              194.69999998807907
+            ]
+          },
+          "candidate": {
+            "median": 171.19999998807907,
+            "min": 162.79999995231628,
+            "max": 424.4000000357628,
+            "values": [
+              236.10000002384186,
+              165.5,
+              171.19999998807907,
+              424.4000000357628,
+              162.79999995231628
+            ]
+          },
+          "medianChangePercent": -24.448367180023755
+        }
+      },
+      "candidateCadTimings": [
+        {
+          "sketchCommandsMs": 67.80000001192093,
+          "sketchFrameMs": 20.30000001192093,
+          "solidCommandsMs": 103.09999996423721,
+          "solidFrameMs": 43.200000047683716,
+          "repeatedCadInteractionMs": 236.10000002384186,
+          "repeatedTimings": {
+            "sketchCommandsMs": 56.40000003576279,
+            "sketchFrameMs": 60.89999997615814,
+            "solidCommandsMs": 77.80000001192093,
+            "solidFrameMs": 41
+          }
+        },
+        {
+          "sketchCommandsMs": 50.09999996423721,
+          "sketchFrameMs": 26.19999998807907,
+          "solidCommandsMs": 128.60000002384186,
+          "solidFrameMs": 38.10000002384186,
+          "repeatedCadInteractionMs": 165.5,
+          "repeatedTimings": {
+            "sketchCommandsMs": 46.80000001192093,
+            "sketchFrameMs": 25.099999964237213,
+            "solidCommandsMs": 63.19999998807907,
+            "solidFrameMs": 30.400000035762787
+          }
+        },
+        {
+          "sketchCommandsMs": 55.80000001192093,
+          "sketchFrameMs": 11.600000023841858,
+          "solidCommandsMs": 60.39999997615814,
+          "solidFrameMs": 36.30000001192093,
+          "repeatedCadInteractionMs": 171.19999998807907,
+          "repeatedTimings": {
+            "sketchCommandsMs": 51,
+            "sketchFrameMs": 15.300000011920929,
+            "solidCommandsMs": 57.39999997615814,
+            "solidFrameMs": 47.5
+          }
+        },
+        {
+          "sketchCommandsMs": 86.5,
+          "sketchFrameMs": 25.100000023841858,
+          "solidCommandsMs": 76.10000002384186,
+          "solidFrameMs": 59.19999998807907,
+          "repeatedCadInteractionMs": 424.4000000357628,
+          "repeatedTimings": {
+            "sketchCommandsMs": 56.30000001192093,
+            "sketchFrameMs": 13.199999988079071,
+            "solidCommandsMs": 303.5,
+            "solidFrameMs": 51.40000003576279
+          }
+        },
+        {
+          "sketchCommandsMs": 47.60000002384186,
+          "sketchFrameMs": 19.399999976158142,
+          "solidCommandsMs": 61.40000003576279,
+          "solidFrameMs": 49.799999952316284,
+          "repeatedCadInteractionMs": 162.79999995231628,
+          "repeatedTimings": {
+            "sketchCommandsMs": 49.69999998807907,
+            "sketchFrameMs": 16.19999998807907,
+            "solidCommandsMs": 51.5,
+            "solidFrameMs": 45.39999997615814
+          }
+        }
+      ],
+      "baselineCadTimings": [
+        {
+          "sketchCommandsMs": 79.09999996423721,
+          "sketchFrameMs": 24.100000023841858,
+          "solidCommandsMs": 65.80000001192093,
+          "solidFrameMs": 75.39999997615814,
+          "repeatedCadInteractionMs": 286,
+          "repeatedTimings": {
+            "sketchCommandsMs": 53.80000001192093,
+            "sketchFrameMs": 25.600000023841858,
+            "solidCommandsMs": 166.69999998807907,
+            "solidFrameMs": 39.89999997615814
+          }
+        },
+        {
+          "sketchCommandsMs": 89.40000003576279,
+          "sketchFrameMs": 28,
+          "solidCommandsMs": 74.19999998807907,
+          "solidFrameMs": 63.5,
+          "repeatedCadInteractionMs": 236.29999995231628,
+          "repeatedTimings": {
+            "sketchCommandsMs": 55.59999996423721,
+            "sketchFrameMs": 34.40000003576279,
+            "solidCommandsMs": 71.09999996423721,
+            "solidFrameMs": 75.19999998807907
+          }
+        },
+        {
+          "sketchCommandsMs": 50.69999998807907,
+          "sketchFrameMs": 17.099999964237213,
+          "solidCommandsMs": 77.5,
+          "solidFrameMs": 49.80000001192093,
+          "repeatedCadInteractionMs": 177.80000001192093,
+          "repeatedTimings": {
+            "sketchCommandsMs": 47.19999998807907,
+            "sketchFrameMs": 18.30000001192093,
+            "solidCommandsMs": 69.40000003576279,
+            "solidFrameMs": 42.89999997615814
+          }
+        },
+        {
+          "sketchCommandsMs": 83.80000001192093,
+          "sketchFrameMs": 24.69999998807907,
+          "solidCommandsMs": 90,
+          "solidFrameMs": 62.19999998807907,
+          "repeatedCadInteractionMs": 226.60000002384186,
+          "repeatedTimings": {
+            "sketchCommandsMs": 55.30000001192093,
+            "sketchFrameMs": 21.600000023841858,
+            "solidCommandsMs": 83.09999996423721,
+            "solidFrameMs": 66.60000002384186
+          }
+        },
+        {
+          "sketchCommandsMs": 64.30000001192093,
+          "sketchFrameMs": 29.69999998807907,
+          "solidCommandsMs": 70.20000004768372,
+          "solidFrameMs": 77.09999996423721,
+          "repeatedCadInteractionMs": 194.69999998807907,
+          "repeatedTimings": {
+            "sketchCommandsMs": 50.30000001192093,
+            "sketchFrameMs": 24.399999976158142,
+            "solidCommandsMs": 73.19999998807907,
+            "solidFrameMs": 46.80000001192093
+          }
+        }
+      ]
+    }
+  }
+}

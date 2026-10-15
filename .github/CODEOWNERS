@@ -1,6 +1,0 @@
-# Soft ownership until the maintainer set grows.
-# Either listed owner may review; PR authors should not approve their own PRs.
-
-*       @jackControls @jeffglousher
-/mcp-server/ @jackControls @jeffglousher
-/crates/ @jackControls @jeffglousher

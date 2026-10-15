@@ -1,6 +1,0 @@
-# Historical evidence hashes refer to original bytes, including line endings.
-* -text -whitespace
-*.inp linguist-generated=true
-*.dat linguist-generated=true
-*.step linguist-generated=true
-*.log linguist-generated=true

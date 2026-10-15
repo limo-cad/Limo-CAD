@@ -1,9 +1,0 @@
-{"detail":null,"durationMs":null,"phase":"feedback","pid":41416,"processElapsedMs":1531.4470999999999,"processStartedUnixMs":1791750125556,"webElapsedMs":137.5999999642372}
-{"detail":null,"durationMs":1443.1559,"phase":"gpuDevice","pid":41416,"processElapsedMs":2978.4894,"processStartedUnixMs":1791750125556,"webElapsedMs":null}
-{"detail":null,"durationMs":39.36,"phase":"nativeFonts","pid":41416,"processElapsedMs":3018.3522,"processStartedUnixMs":1791750125556,"webElapsedMs":null}
-{"detail":null,"durationMs":368.7274,"phase":"rendererInstall","pid":41416,"processElapsedMs":3388.1494000000002,"processStartedUnixMs":1791750125556,"webElapsedMs":null}
-{"detail":null,"durationMs":328.80000001192093,"phase":"document","pid":41416,"processElapsedMs":34370.327099999995,"processStartedUnixMs":1791750125556,"webElapsedMs":32977.09999996424}
-{"detail":null,"durationMs":114.0,"phase":"windowExpansion","pid":41416,"processElapsedMs":34955.68,"processStartedUnixMs":1791750125556,"webElapsedMs":33565.39999997616}
-{"detail":null,"durationMs":null,"phase":"workspace","pid":41416,"processElapsedMs":34956.1314,"processStartedUnixMs":1791750125556,"webElapsedMs":33565.39999997616}
-{"detail":null,"durationMs":12.0,"phase":"interaction","pid":41416,"processElapsedMs":34985.1267,"processStartedUnixMs":1791750125556,"webElapsedMs":33597.80000001192}
-{"detail":"{\"sketchCommandsMs\":76.5,\"sketchFrameMs\":35.90000003576279,\"solidCommandsMs\":141.0999999642372,\"solidFrameMs\":83,\"repeatedCadInteractionMs\":637.4000000357628,\"repeatedTimings\":{\"sketchCommandsMs\":93.40000003576279,\"sketchFrameMs\":35.799999952316284,\"solidCommandsMs\":411.9000000357628,\"solidFrameMs\":96.30000001192093}}","durationMs":336.5,"phase":"cadInteraction","pid":41416,"processElapsedMs":36745.7061,"processStartedUnixMs":1791750125556,"webElapsedMs":33947.89999997616}

@@ -1,0 +1,21 @@
+'vswhere.exe' is not recognized as an internal or external command,
+operable program or batch file.
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.0
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+   Compiling nbcad-core v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\core)
+error: failed to run custom build command for `nbcad-core v0.2.2 (C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\core)`
+
+Caused by:
+  process didn't exit successfully: `D:\limo-startup-target-optimized\debug\build\nbcad-core-7db78f13f8d72967\build-script-build` (exit code: 101)
+  --- stdout
+  cargo:rerun-if-env-changed=NBCAD_BUILD_REVISION
+  cargo:rerun-if-env-changed=NBCAD_BUILD_CHANNEL
+
+  --- stderr
+
+  thread 'main' (51604) panicked at C:\Users\jeffg\.t3\worktrees\noBS-CAD\t3code-028ff4c7\crates\core\build.rs:153:33:
+  Build identity: NBCAD_BUILD_REVISION does not match the checked-out HEAD
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
