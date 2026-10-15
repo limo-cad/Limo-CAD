@@ -21,11 +21,17 @@ also reuse the dependencies of the Rust SDK builder. The existing pinned Rust
 cache action keys by compiler, Cargo manifests/lockfiles and build environment;
 the additional key separates the runner and target architecture.
 
-These caches exclude workspace crates and installed Cargo tools. Application
-code is rebuilt and packages are staged, signed and verified by the existing
-steps. Dependency caches can be saved when a later package check fails; the
-check still fails normally. SDK verification, package tests, release gates,
-triggers and the policy that lets SDK owners finish are unchanged.
+The [pinned cache action](https://github.com/Swatinem/rust-cache/blob/6323deb102c322ba6fcbdcafc7e3dddab59af2b6/src/save.ts)
+excludes packages located inside each cached workspace root and installed Cargo
+tools. Desktop path dependencies outside `desktop/`, including `../crates` and
+`../mcp-server`, can remain cached; Cargo still checks their freshness when
+building. Packages are staged, signed and verified by the existing steps.
+
+New caches are saved only after the whole packaging job succeeds. This avoids
+publishing an incomplete archive under the final immutable key when SDK setup
+or compilation fails; an exact cache hit cannot be enriched by a later run.
+SDK verification, package tests, release gates, triggers and the policy that
+lets SDK owners finish are unchanged.
 
 The first compatible build populates the cache. Later updates to the same PR can
 reuse it; sibling PRs cannot read each other's merge-ref caches. After merge,

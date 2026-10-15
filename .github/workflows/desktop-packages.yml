@@ -112,7 +112,6 @@ jobs:
           key: desktop-packages-${{ matrix.runner_cache_key }}-${{ matrix.rust_target }}
           cache-workspace-crates: false
           cache-bin: false
-          cache-on-failure: true
 
       - name: Set up cached OpenCASCADE SDK
         id: occt
@@ -729,7 +728,6 @@ jobs:
           key: desktop-packages-macos-15-aarch64-apple-darwin
           cache-workspace-crates: false
           cache-bin: false
-          cache-on-failure: true
 
       - name: Install checked OpenCASCADE 8.0.1
         uses: ./.github/actions/setup-unix-occt
