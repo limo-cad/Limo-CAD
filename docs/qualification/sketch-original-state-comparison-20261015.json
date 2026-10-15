@@ -5,7 +5,8 @@
     "Limo CAD Sketch Diagnostics, recording on": "Reported good",
     "Limo CAD Sketch Comparison, recording off": "Reported good",
     "Limo CAD Original State Check": "Reported good with byte-identical original CAD executable",
-    "original_failure_timing": "User confirms it happens on the first rectangle in a brand-new sketch, before finishing or Undo"
+    "original_failure_timing": "User confirms it happens on the first rectangle in a brand-new sketch, before finishing or Undo",
+    "latest_capture": "User reports capture completed but the problem did not recur during capture; recording contents and target identity not yet inspected"
   },
   "verified_build_facts": {
     "original_source": "71d789635750ba3d4996d062abe18d1bcc0fa41f",
@@ -71,7 +72,18 @@
     "cad_input_or_mcp_requests": false,
     "storage": "Local private JSONL; target foreground only; 15 minute and 128 MiB bounds",
     "checks": "Strict Objective-C compile, Clang static analysis, precision/filter/JSON checks, deep strict signature and ZIP integrity passed",
-    "live_capture": "Pending user; the standalone recorder requires its own Accessibility permission",
+    "live_capture": "User reports capture without reproduction; file inspection pending because macOS denies access to the new Desktop recording folder, including outside the tool sandbox",
+    "observer_effect": {
+      "verified_source_behavior": "The first AccessKit macOS tree read can activate the adapter. The pinned Bevy Winit activation handler sets AccessibilityRequested=true, enabling its conditional PostUpdate accessibility-node updates.",
+      "source_evidence": [
+        "desktop/vendor/bevy_winit/src/accessibility.rs:81-102",
+        "desktop/vendor/bevy_winit/src/accessibility.rs:188-192",
+        "desktop/vendor/bevy_winit/src/accessibility.rs:319-322",
+        "accesskit_macos 0.26.3 src/adapter.rs:get_or_init_context and view_children"
+      ],
+      "interpretation": "The external observer does not alter CAD files, but it is not guaranteed to preserve runtime scheduling/workload. A timing effect is a hypothesis, not a diagnosed cause.",
+      "limits": "No before/after AccessibilityRequested state, failing trace or frame timing comparison has been captured. This path does not establish why the earlier recording-off copies behaved correctly."
+    },
     "original_engine_sha256_after_packaging": "71ed50af00ec242578809c4780340ea5fed4beacdaad56d6fa7edb95cc78f4be"
   },
   "evidence": {
@@ -81,7 +93,7 @@
     ],
     "build_and_state_checkpoint": "artifacts/sketch-original-state-check-20261015/investigation-checkpoint.json"
   },
-  "conclusion": "Active in-process recording and a code rebuild are not required for the good behavior. The exact original executable also behaves correctly in the State Check copy. Saved preferences and project settings do not explain the difference. The original-app discrepancy remains unresolved; capture that exact process externally before attributing a fix to instrumentation, fresh data or source changes.",
+  "conclusion": "The latest capture did not reproduce the problem. Active in-process recording and a code rebuild are not required for the good behavior, and the exact original executable also works in the State Check copy. Saved preferences and project settings do not explain the difference. External accessibility observation can alter runtime workload, but no causal timing evidence is established. The issue remains unresolved; inspect the captured JSONL after user transfer before claiming cursor/readout consistency or a fix.",
   "pr": "https://github.com/limo-cad/Limo-CAD/pull/427",
   "pr_state": "draft",
   "new_source_behavior_changes": 0,

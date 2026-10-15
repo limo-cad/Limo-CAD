@@ -38,6 +38,12 @@ capture stops after 15 minutes or 128 MiB. Nothing is uploaded.
   and cursor samples on both sides bound the polling interval; they do not claim
   one atomic CAD frame or one-to-one OS-event correlation. A slow accessibility
   query can lengthen the interval.
+- Reading the accessibility tree can activate AccessKit and enable Bevy's
+  conditional accessibility-node updates. The companion leaves CAD files and
+  data unchanged, but it cannot guarantee unchanged runtime scheduling or
+  workload. Jack's first capture did not reproduce the problem. A timing effect
+  is a hypothesis; the recording has not yet been inspected, and this does not
+  explain the earlier successful recording-off copies.
 - An optional `viewport_derived_build_71d78963` uses an unambiguous AX content
   group and the known sketch chrome dimensions for this specific build. It is
   explicitly derived, not the engine's viewport measurement. Raw coordinates
