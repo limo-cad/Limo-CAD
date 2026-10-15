@@ -32,6 +32,8 @@ use super::{
 mod accessibility;
 #[cfg(feature = "dev-native-ime-trace")]
 mod ime_trace;
+#[cfg(target_os = "macos")]
+mod macos_quit;
 mod submission;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod window_icon;
@@ -281,6 +283,8 @@ pub(crate) fn build(configure: impl FnOnce(&mut App, NativeInterfaceHandle)) -> 
         .add_message::<NativeHostInput>()
         .add_systems(PreUpdate, route_window_input);
     accessibility::install(&mut app);
+    #[cfg(target_os = "macos")]
+    macos_quit::install(&mut app, handle.clone());
     submission::install(&mut app);
     configure(&mut app, handle);
     super::interface_shell::fields::install(&mut app);
