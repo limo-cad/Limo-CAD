@@ -521,6 +521,8 @@ pub(super) fn execute(
             editor.interaction.dimension_actions = !editor.interaction.dimension_actions;
         }
         InteractionCommand::ApplyDimension => {
+            editor.interaction.dimension_edited |=
+                panel::dimension_value_edited(world, editor.form_serial);
             if editor.interaction.dimension_reference && editor.interaction.dimension_id.is_some() {
                 if editor.interaction.dimension_tool {
                     let id = editor.interaction.dimension_id.unwrap();
