@@ -524,6 +524,34 @@ fn external_field_updates_reveal_leading_digits_without_changing_precision() {
 }
 
 #[test]
+fn replacing_a_suggestion_with_identical_text_records_intent_without_changing_the_buffer() {
+    let (mut app, handle, entity) = editor_fixture();
+    let value = app
+        .world()
+        .get::<EditableText>(entity)
+        .unwrap()
+        .value()
+        .to_string();
+    app.world_mut()
+        .entity_mut(entity)
+        .insert(ValueEdited::default());
+    apply_edit(app.world_mut(), entity, TextEdit::SelectAll).unwrap();
+    assert!(!app.world().get::<ValueEdited>(entity).unwrap().0);
+    apply_edit(
+        app.world_mut(),
+        entity,
+        TextEdit::Insert(value.clone().into()),
+    )
+    .unwrap();
+    assert!(app.world().get::<ValueEdited>(entity).unwrap().0);
+    assert_eq!(
+        app.world().get::<EditableText>(entity).unwrap().value(),
+        value
+    );
+    assert!(handle.take_actions().unwrap().is_empty());
+}
+
+#[test]
 fn requested_measurement_focus_selects_the_value_once_without_replacing_typed_edits() {
     let (mut app, handle, entity) = editor_fixture();
     handle.blur();

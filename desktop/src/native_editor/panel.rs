@@ -26,6 +26,15 @@ pub(super) fn retry_dimension_focus(world: &mut World) {
     }
 }
 
+pub(super) fn dimension_value_edited(world: &World, generation: u64) -> bool {
+    world
+        .get_resource::<Panel>()
+        .filter(|panel| panel.dimension_generation == Some(generation))
+        .and_then(|panel| panel.field)
+        .and_then(|field| world.get::<fields::ValueEdited>(field))
+        .is_some_and(|edited| edited.0)
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct RibbonGroup {
     pub key: &'static str,
@@ -632,6 +641,9 @@ pub(super) fn synchronize(
                     &assets,
                 )?;
                 world.flush();
+                world
+                    .entity_mut(field)
+                    .insert(fields::ValueEdited::default());
                 bind_command(
                     world,
                     field,
