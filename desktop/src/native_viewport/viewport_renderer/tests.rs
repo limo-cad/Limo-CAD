@@ -2,6 +2,9 @@ use super::*;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured};
 use std::time::{Duration, Instant};
 
+#[path = "origin_plane_tests.rs"]
+mod origin_plane_tests;
+
 #[derive(Resource)]
 pub(super) struct CompilationGate {
     pub(super) receiver: Mutex<mpsc::Receiver<()>>,
