@@ -3372,11 +3372,11 @@ fn build_tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "sketch_edit_dimension",
             "Edit driving dimension",
-            "Change a dimension value or formula.",
+            "Change a dimension value or formula, optionally committing its annotation position in the same undo step.",
             "edit_dimension",
             Payload::Object,
             object_schema(
-                json!({"constraint_id": {"type": "integer", "minimum": 1}, "text": {"type": "string"}}),
+                json!({"constraint_id": {"type": "integer", "minimum": 1}, "text": {"type": "string"}, "text_pos": point.clone()}),
                 &["constraint_id", "text"],
             ),
         ),

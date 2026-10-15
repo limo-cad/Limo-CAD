@@ -472,6 +472,45 @@ fn inline_dimension_pick_refines_measurement_and_enter_applies_one_undoable_chan
                 0..value.value().to_string().len()
             );
         };
+        let hover = |world: &mut World, point: Point, expected: Point| {
+            let pixel = native_viewport::interface_world_point(
+                world,
+                &owner.document_id,
+                before.basis.to_3d([point.x, point.y]),
+            )
+            .unwrap()
+            .unwrap();
+            let pixel = Vec2::new(pixel[0] + canvas.x as f32, pixel[1] + canvas.y as f32);
+            world.resource_scope(|world, mut editor: Mut<Editor>| {
+                interaction::hover(world, &services, &owner, &mut editor, Some(pixel), canvas)
+                    .unwrap();
+            });
+            synchronize_controls(world, &handle, &services, &owner, ribbon, canvas).unwrap();
+            layout(world, &handle, &owner, canvas);
+            world
+                .run_system_cached(interface_shell::fields::synchronize_fields)
+                .unwrap();
+            interface_shell::fields::apply_requested_focus(world);
+            let position = world
+                .resource::<Editor>()
+                .interaction
+                .dimension_position
+                .unwrap();
+            assert!(
+                position.distance(expected) < 1e-5,
+                "{position:?} != {expected:?}"
+            );
+            assert_eq!(
+                world
+                    .resource::<Editor>()
+                    .interaction
+                    .dimension_preview
+                    .as_ref()
+                    .unwrap()
+                    .text_pos,
+                position
+            );
+        };
         pick(world, Point::new(10., 0.));
         assert_eq!(
             world.resource::<Editor>().interaction.dimension.as_deref(),
@@ -483,6 +522,40 @@ fn inline_dimension_pick_refines_measurement_and_enter_applies_one_undoable_chan
             .dimension_position
             .is_some());
         let first_generation = world.resource::<Editor>().form_serial;
+        let first_field = handle.focused_key().unwrap();
+        let first_node = world
+            .get::<Node>(Entity::from_bits(first_field.0))
+            .unwrap()
+            .clone();
+        reduce(
+            world,
+            &services,
+            &handle,
+            first_field,
+            ControlInput::SetValue("23".into()),
+            &owner,
+        )
+        .unwrap();
+        hover(world, Point::new(15., 4.), Point::new(10., 4.));
+        hover(world, Point::new(-30., 4.), Point::new(10., 4.));
+        assert_eq!(world.resource::<Editor>().form_serial, first_generation);
+        assert_eq!(handle.focused_key(), Some(first_field));
+        assert_ne!(
+            world.get::<Node>(Entity::from_bits(first_field.0)).unwrap(),
+            &first_node
+        );
+        assert_eq!(
+            world.resource::<Editor>().interaction.dimension.as_deref(),
+            Some("23")
+        );
+        assert_eq!(
+            world
+                .get::<bevy::text::EditableText>(Entity::from_bits(first_field.0))
+                .unwrap()
+                .value()
+                .to_string(),
+            "23"
+        );
         pick(world, Point::new(10., 10.));
         assert_eq!(
             world.resource::<Editor>().interaction.dimension.as_deref(),
@@ -526,6 +599,17 @@ fn inline_dimension_pick_refines_measurement_and_enter_applies_one_undoable_chan
             &owner,
         )
         .unwrap();
+        let second_generation = world.resource::<Editor>().form_serial;
+        hover(world, Point::new(14., 4.), Point::new(14., 5.));
+        hover(world, Point::new(14., 40.), Point::new(14., 5.));
+        assert_eq!(world.resource::<Editor>().form_serial, second_generation);
+        assert_eq!(handle.focused_key(), Some(key));
+        assert_eq!(
+            world.resource::<Editor>().interaction.dimension.as_deref(),
+            Some("6")
+        );
+        assert_eq!(engine.geometry_revision(), revision);
+        assert_eq!(engine.engine_call("project_export_model", ""), model);
         reduce(
             world,
             &services,
@@ -547,11 +631,83 @@ fn inline_dimension_pick_refines_measurement_and_enter_applies_one_undoable_chan
         let after = active(&engine).unwrap().unwrap();
         assert_eq!(after.dimensions.len(), 1);
         assert!((after.dimensions[0].value - 6.).abs() < 1e-8);
+        assert!(after.dimensions[0].text_pos.distance(Point::new(14., 5.)) < 1e-5);
         assert!(world.resource::<Editor>().interaction.dimension.is_none());
         bridge
             .apply_native_history(&engine, &owner, false, || Ok(()))
             .unwrap();
         assert_eq!(active(&engine).unwrap().unwrap().entities, before.entities);
         assert!(active(&engine).unwrap().unwrap().dimensions.is_empty());
+
+        bridge
+            .apply_native_history(&engine, &owner, true, || Ok(()))
+            .unwrap();
+        crate::native_editor::execute(
+            world,
+            &engine,
+            &bridge,
+            &owner,
+            EditorCommand::Interaction(InteractionCommand::Dimension),
+            || Ok(()),
+        )
+        .unwrap();
+        let midpoints: Vec<_> = after
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                EntityDto::Line { start, end, .. } => Some((*start + *end) * 0.5),
+                _ => None,
+            })
+            .collect();
+        pick(world, midpoints[0]);
+        pick(world, midpoints[1]);
+        assert_eq!(
+            world.resource::<Editor>().interaction.dimension_id,
+            Some(after.dimensions[0].constraint_id)
+        );
+        let moved = Point::new(18., (midpoints[0].y + midpoints[1].y) * 0.5);
+        hover(world, Point::new(18., 40.), moved);
+        assert_eq!(
+            active(&engine).unwrap().unwrap().dimensions,
+            after.dimensions
+        );
+        let key = handle.focused_key().unwrap();
+        reduce(
+            world,
+            &services,
+            &handle,
+            key,
+            ControlInput::SetValue("8".into()),
+            &owner,
+        )
+        .unwrap();
+        reduce(
+            world,
+            &services,
+            &handle,
+            key,
+            ControlInput::Key(KeyChord::plain("Enter")),
+            &owner,
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(outcome) = worker::poll(world, &services) {
+                outcome.value.unwrap();
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let edited = active(&engine).unwrap().unwrap();
+        assert_eq!(edited.dimensions.len(), 1);
+        assert!((edited.dimensions[0].value - 8.).abs() < 1e-8);
+        assert!(edited.dimensions[0].text_pos.distance(moved) < 1e-5);
+        bridge
+            .apply_native_history(&engine, &owner, false, || Ok(()))
+            .unwrap();
+        let undone = active(&engine).unwrap().unwrap();
+        assert_eq!(undone.entities, after.entities);
+        assert_eq!(undone.dimensions, after.dimensions);
     });
 }

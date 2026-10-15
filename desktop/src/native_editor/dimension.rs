@@ -45,6 +45,31 @@ pub(super) fn refresh(engine: &AppState, editor: &mut Editor) -> Result<(), Stri
     Ok(())
 }
 
+pub(super) fn follow_cursor(
+    state: &mut interaction::Interaction,
+    sketch: &SketchDto,
+    cursor: SketchPoint,
+) -> bool {
+    if !state.dimension_tool || state.dimension.is_none() {
+        return false;
+    }
+    let Some(preview) = &mut state.dimension_preview else {
+        return false;
+    };
+    let Some(position) = annotations::preview_position(preview, sketch, cursor) else {
+        return false;
+    };
+    if state
+        .dimension_position
+        .is_some_and(|old| old.distance(position) < 1e-9)
+    {
+        return false;
+    }
+    state.dimension_position = Some(position);
+    preview.text_pos = position;
+    true
+}
+
 pub(super) fn boundary_hit(
     edges: &[ProjectedEdgeDto],
     cursor: [f32; 2],

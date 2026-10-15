@@ -947,7 +947,7 @@ pub(crate) fn process_one(
                     let a = canvas;
                     let inside = f64::from(p.x) >= a.x && f64::from(p.x) < a.x+a.width &&
                         f64::from(p.y) >= a.y && f64::from(p.y) < a.y+a.height && !handle.owns_pointer([f64::from(p.x),f64::from(p.y)]);
-                    interaction::hover(world, services, &presented_owner, &editor, inside.then_some(p), a)?;
+                    interaction::hover(world, services, &presented_owner, &mut editor, inside.then_some(p), a)?;
                     result = json!({"handled":true,"hover":inside});
                 }
             }

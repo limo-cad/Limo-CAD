@@ -22,7 +22,7 @@ use crate::dto::{
     err_json, ok_json, Arc3PointRequest, ArcCenterRequest, BeginSketchRequest, BreakRequest,
     ChamferRequest, CircleRequest, CircularPatternRequest, ConstraintBatchRequest,
     DeleteConstraintRequest, DeleteDimensionRequest, DeleteEntitiesRequest, DeleteEntityRequest,
-    EditDimensionRequest, EvalExpressionRequest, ExtendRequest, FilletRequest, LockedCircleRequest,
+    EvalExpressionRequest, ExtendRequest, FilletRequest, LockedCircleRequest,
     LockedRectangleRequest, LockedSegmentRequest, MidpointLineRequest, MirrorRequest,
     MoveCopyRequest, MoveDimensionRequest, MovePointRequest, OffsetRequest, PointRequest,
     PolygonRequest, RectangleRequest, RectangularPatternRequest, ScaleRequest, SegmentRequest,
@@ -691,9 +691,9 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         "add_dimension" => with_payload(payload, |r: crate::dto::DimensionTargetRequest| {
             manager.add_dimension_target(r)
         }),
-        "edit_dimension" => {
-            with_payload(payload, |r: EditDimensionRequest| manager.edit_dimension(r))
-        }
+        "edit_dimension" => with_payload(payload, |r: crate::dto::EditDimensionTargetRequest| {
+            manager.edit_dimension_target(r)
+        }),
         "set_dimension_mode" => with_payload(payload, |r: SetDimensionModeRequest| {
             manager.set_dimension_mode(r)
         }),
