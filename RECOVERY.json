@@ -8,10 +8,11 @@
     "local_only_tips": 91,
     "local_only_commits": 232,
     "verified_archived_files": 92,
-    "recovery_files": 146,
-    "recovery_file_bytes": 3977857,
+    "recovery_files": 147,
+    "recovery_file_bytes": 3979095,
     "history_blobs": 699,
-    "history_blob_bytes": 54527216
+    "history_blob_bytes": 54527216,
+    "stashes_preserved": 3
   },
   "original_tip_map": {
     "original/refs/heads/audit/bevy-bambu-acceptance": "a3145e2c04902c47fc4ce269dc71dc69567f5110",
@@ -1167,6 +1168,11 @@
       "path": "local-experiments/.codex/handoff-audit/mechanism-original/crates/assembly/src/lib.rs",
       "bytes": 297140,
       "sha256": "4a59cd151e609cf1975d6220afad3eebab7474c8fe5eca040c434f5842204000"
+    },
+    {
+      "path": "local-experiments/.codex/linux-sdk-check.sh",
+      "bytes": 1238,
+      "sha256": "e6efb9ddc50e71ca251e01f5bd44db7e67929c3e178dfa24dec6cba052026ea0"
     }
   ],
   "archives": {

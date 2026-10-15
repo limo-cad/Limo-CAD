@@ -1,0 +1,116 @@
+{
+  "source_preservation_complete": true,
+  "full_artifact_cleanup_complete": false,
+  "main_head": "736758f291289ff2bb1942a0405027b44e919997",
+  "main_clean": true,
+  "local_branches": [
+    "main"
+  ],
+  "remaining_stashes": [],
+  "removed": [
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\mcp-server\\target",
+      "logical_bytes": 236816609,
+      "method": "agent-resources reviewed fingerprint-bound cleanup",
+      "retained": "Empty resource root with ownership/lock markers"
+    }
+  ],
+  "policy_blocked_paths": [
+    {
+      "path": "C:\\Users\\jeffg\\dev\\limo-cad-dependency-refresh-20261013",
+      "details": "Cache-only detached worktree; target and Git-pointer deletion rejected in preceding cleanup; no retry."
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\limo-cad-occt-lock-fix-20261013",
+      "details": "Cache-only detached worktree; target and Git-pointer deletion rejected in preceding cleanup; no retry."
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\dist",
+      "details": "Native PowerShell deletion batch rejected by automatic approval review: blocked by policy; no deletion, no retry."
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\src\\engine-wasm\\pkg",
+      "details": "Native PowerShell deletion batch rejected by automatic approval review: blocked by policy; no deletion, no retry."
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\xtask\\platform\\__pycache__",
+      "details": "Native PowerShell deletion batch rejected by automatic approval review: blocked by policy; no deletion, no retry."
+    }
+  ],
+  "retained_resources": [
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\target",
+      "files": 5,
+      "logical_bytes": 98210,
+      "links": [
+        {
+          "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\target\\debug",
+          "target": "\\\\?\\D:\\limo-cad-maintenance\\cache-preservation-20261010-C-debug\\debug"
+        }
+      ]
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\mcp-server\\target",
+      "files": 13,
+      "logical_bytes": 236816786,
+      "links": []
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\dist",
+      "files": 5,
+      "logical_bytes": 2389046,
+      "links": []
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\src\\engine-wasm\\pkg",
+      "files": 5,
+      "logical_bytes": 4120054,
+      "links": []
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\xtask\\platform\\__pycache__",
+      "files": 2,
+      "logical_bytes": 22372,
+      "links": []
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\.codex",
+      "files": 26113,
+      "logical_bytes": 2745148097,
+      "links": []
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\docs\\qa",
+      "files": 414,
+      "logical_bytes": 20457589,
+      "links": []
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\.vcpkg",
+      "files": 72245,
+      "logical_bytes": 3241900214,
+      "links": []
+    },
+    {
+      "path": "C:\\Users\\jeffg\\dev\\noBS-CAD\\vcpkg_installed",
+      "files": 8012,
+      "logical_bytes": 1837122611,
+      "links": []
+    }
+  ],
+  "preservation_notes": [
+    "target/debug is a junction into D:/limo-cad-maintenance/cache-preservation-20261010-C-debug/debug; preserve its shared target.",
+    "SDKs, active GUI/headless runtimes, saved CAD documents, app/session recovery, credentials and qualification evidence retained.",
+    "Prior recovery bundles/archives remain at D:/codex-audits/main-only-consolidation-20261015; new audit evidence at D:/codex-audits/local-work-finalization-20261015.",
+    "No feature merge, GUI/MCP qualification, new compiler build or global configuration change performed.",
+    "Fresh-session source work should use the canonical main checkout. Complete cleanup remains blocked until the denied removals can be resolved by the operator or approval policy."
+  ],
+  "git_integrity": {
+    "full_fsck_passed": true,
+    "repair": "Recreated the canonical empty-tree object 4b825dc642cb6eb9a060e54bf8d69288fbee4904 from its exact empty contents."
+  },
+  "command_environment": {
+    "git": "Command-scoped reduced PATH with Git/system directories and LANG/LC_ALL=C avoided hanging probes.",
+    "python": "Use Python/system directories in PATH for audit Python; Git subprocesses have their own explicit environment. No permanent configuration was changed."
+  }
+}
