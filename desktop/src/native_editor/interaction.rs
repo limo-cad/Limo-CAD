@@ -119,7 +119,7 @@ impl Interaction {
         } else if self.dimension.is_some() {
             Some(
                 if self.dimension_tool && self.dimension_position.is_some() {
-                    "Type a value and press Enter, or select another edge; Escape cancels"
+                    "Enter or click to confirm; select another edge to refine; Escape cancels"
                 } else if self.dimension_tool {
                     "Select geometry to dimension; Escape cancels"
                 } else if self.dimension_id.is_some() {
@@ -826,6 +826,17 @@ pub(super) fn pointer(
     } else if editor.interaction.dimension.is_some() && !editor.interaction.selection.is_empty() {
         if editor.interaction.dimension_tool {
             dimension::follow_cursor(&mut editor.interaction, &sketch, end_point);
+            if editor.interaction.dimension_preview.is_some() {
+                return execute(
+                    world,
+                    &services.engine,
+                    &services.bridge,
+                    owner,
+                    editor,
+                    InteractionCommand::ApplyDimension,
+                    || Ok(()),
+                );
+            }
         } else {
             editor.interaction.dimension_position = Some(end_point);
         }
@@ -844,7 +855,7 @@ pub(super) fn pointer(
     }
     if editor.interaction.dimension_tool && editor.interaction.dimension_preview.is_some() {
         // Canvas clicks blur native text editing before reaching this handler.
-        // Keep placement and repeat picks ready for typing or unchanged-value Enter.
+        // Keep repeat geometry picks ready for typing or unchanged-value Enter.
         panel::retry_dimension_focus(world);
     }
     present(world, owner, &editor.interaction)?;

@@ -713,7 +713,7 @@ fn inline_dimension_pick_refines_measurement_and_enter_applies_one_undoable_chan
 }
 
 #[test]
-fn rectangle_dimension_enter_accepts_unchanged_retyped_and_changed_values() {
+fn rectangle_dimension_enter_or_placement_click_accepts_unchanged_and_typed_values() {
     use crate::native_viewport::winit_host::{
         prepare_native_input, HostInputState, NativeHostInput,
     };
@@ -903,26 +903,8 @@ fn rectangle_dimension_enter_accepts_unchanged_retyped_and_changed_values() {
                         )
                         .unwrap();
                     });
-                    synchronize_controls(world, &handle, &services, &owner, ribbon, canvas)
-                        .unwrap();
-                    layout(world, &handle, &owner, canvas);
-                    world
-                        .run_system_cached(interface_shell::fields::synchronize_fields)
-                        .unwrap();
-                    interface_shell::fields::apply_requested_focus(world);
-                    assert_eq!(
-                        handle.focused_key(),
-                        Some(key),
-                        "placement must restore the same value field"
-                    );
-                    assert_eq!(
-                        world
-                            .get::<bevy::text::EditableText>(Entity::from_bits(key.0))
-                            .unwrap()
-                            .value()
-                            .to_string(),
-                        typed.unwrap_or("20")
-                    );
+                    assert!(worker::busy(world), "placement must commit without Enter");
+                    break;
                 }
                 let mut input = NativeHostInput {
                     ui_scale: 1.,
@@ -957,7 +939,7 @@ fn rectangle_dimension_enter_accepts_unchanged_retyped_and_changed_values() {
                 }
                 assert!(
                     Instant::now() < deadline,
-                    "Enter did not finish for {typed:?}"
+                    "Dimension confirmation did not finish for {typed:?}, click={place}"
                 );
                 std::thread::sleep(Duration::from_millis(2));
             }
@@ -965,13 +947,16 @@ fn rectangle_dimension_enter_accepts_unchanged_retyped_and_changed_values() {
             assert_eq!(
                 after.dimensions.len(),
                 1,
-                "Enter did not create the dimension for {typed:?}"
+                "Dimension confirmation did not create the dimension for {typed:?}, click={place}"
             );
             assert!(
                 (after.dimensions[0].value - typed.unwrap_or("20").parse::<f64>().unwrap()).abs()
                     < 1e-8
             );
             assert_eq!(after.dof.value, 1);
+            if place {
+                assert!(after.dimensions[0].text_pos.distance(Point::new(-6., 10.)) < 1e-5);
+            }
             assert!(world.resource::<Editor>().interaction.dimension.is_none());
             bridge
                 .apply_native_history(&engine, &owner, false, || Ok(()))
@@ -979,6 +964,12 @@ fn rectangle_dimension_enter_accepts_unchanged_retyped_and_changed_values() {
             let undone = active(&engine).unwrap().unwrap();
             assert_eq!(undone.entities, before.entities);
             assert!(undone.dimensions.is_empty());
+            bridge
+                .apply_native_history(&engine, &owner, true, || Ok(()))
+                .unwrap();
+            let redone = active(&engine).unwrap().unwrap();
+            assert_eq!(redone.entities, after.entities);
+            assert_eq!(redone.dimensions, after.dimensions);
         }
     });
 }
