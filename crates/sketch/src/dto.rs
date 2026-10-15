@@ -942,6 +942,16 @@ pub struct EditDimensionRequest {
     pub text: String,
 }
 
+/// Optional annotation placement committed with the value in the same undo step.
+/// Existing Rust and JSON callers retain the value-only request.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EditDimensionTargetRequest {
+    #[serde(flatten)]
+    pub dimension: EditDimensionRequest,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_pos: Option<Vec2>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetDimensionModeRequest {
     pub constraint_id: ConstraintId,

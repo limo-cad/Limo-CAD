@@ -193,7 +193,7 @@ pub(super) fn hover(
     world: &mut World,
     services: &NativeServices,
     owner: &DocumentContext,
-    editor: &Editor,
+    editor: &mut Editor,
     cursor: Option<Vec2>,
     canvas: InterfaceRect,
 ) -> Result<(), String> {
@@ -205,6 +205,22 @@ pub(super) fn hover(
         if cache.0.as_ref().is_none_or(|(old, _)| old != stamp) {
             cache.0 = active(&services.engine)?.map(|sketch| (stamp.clone(), sketch));
             cache.1 = None;
+        }
+        if let (Some(cursor), Some((_, sketch))) = (cursor, cache.0.as_ref()) {
+            if editor.interaction.dimension_tool {
+                if let Some(point) = native_viewport::interface_sketch_point(
+                    world,
+                    &owner.document_id,
+                    [cursor.x - canvas.x as f32, cursor.y - canvas.y as f32],
+                    sketch.basis,
+                )? {
+                    if dimension::follow_cursor(&mut editor.interaction, sketch, point) {
+                        if let Some(handle) = world.get_resource::<NativeInterfaceHandle>() {
+                            handle.invalidate_presentation();
+                        }
+                    }
+                }
+            }
         }
         let hit = match (cursor, cache.0.as_ref()) {
             (Some(cursor), Some((_, sketch))) => selection::hit(
@@ -505,6 +521,25 @@ pub(super) fn execute(
         }
         InteractionCommand::ApplyDimension => {
             if editor.interaction.dimension_reference && editor.interaction.dimension_id.is_some() {
+                if editor.interaction.dimension_tool {
+                    let id = editor.interaction.dimension_id.unwrap();
+                    if let Some(position) = editor.interaction.dimension_position {
+                        if sketch
+                            .dimensions
+                            .iter()
+                            .any(|d| d.constraint_id == id && d.text_pos != position)
+                        {
+                            return mutate(
+                                world,
+                                editor,
+                                Prepared {
+                                    operation: "sketch_move_dimension",
+                                    arguments: json!({"constraint_id": id, "text_pos": position}),
+                                },
+                            );
+                        }
+                    }
+                }
                 editor.interaction.retain_selection();
                 return Ok(json!({"closed":true}));
             }
@@ -521,9 +556,12 @@ pub(super) fn execute(
                 .dimension_position
                 .ok_or("Click in the sketch to place the dimension")?;
             if let Some(id) = editor.interaction.dimension_id {
-                let request = EditDimensionRequest {
-                    constraint_id: id,
-                    text: text.clone(),
+                let request = limo_cad_sketch::EditDimensionTargetRequest {
+                    dimension: EditDimensionRequest {
+                        constraint_id: id,
+                        text: text.clone(),
+                    },
+                    text_pos: editor.interaction.dimension_tool.then_some(position),
                 };
                 return mutate(
                     world,
@@ -786,9 +824,10 @@ pub(super) fn pointer(
             form.values[1] = (end_point.y / scale).to_string();
         }
     } else if editor.interaction.dimension.is_some() && !editor.interaction.selection.is_empty() {
-        editor.interaction.dimension_position = Some(end_point);
-        if let Some(preview) = &mut editor.interaction.dimension_preview {
-            preview.text_pos = end_point;
+        if editor.interaction.dimension_tool {
+            dimension::follow_cursor(&mut editor.interaction, &sketch, end_point);
+        } else {
+            editor.interaction.dimension_position = Some(end_point);
         }
     } else if !shift {
         editor.interaction.selection.clear();

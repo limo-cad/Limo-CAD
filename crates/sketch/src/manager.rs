@@ -5346,6 +5346,13 @@ impl SketchManager {
         self.active_mut()?.edit_dimension(request)
     }
 
+    pub fn edit_dimension_target(
+        &mut self,
+        request: crate::dto::EditDimensionTargetRequest,
+    ) -> Result<AddConstraintResult, SessionError> {
+        self.active_mut()?.edit_dimension_target(request)
+    }
+
     pub fn set_dimension_mode(
         &mut self,
         request: SetDimensionModeRequest,

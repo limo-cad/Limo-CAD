@@ -455,6 +455,23 @@ impl SketchSession {
         &mut self,
         request: EditDimensionRequest,
     ) -> Result<AddConstraintResult, SessionError> {
+        self.edit_dimension_target(crate::dto::EditDimensionTargetRequest {
+            dimension: request,
+            text_pos: None,
+        })
+    }
+
+    pub fn edit_dimension_target(
+        &mut self,
+        request: crate::dto::EditDimensionTargetRequest,
+    ) -> Result<AddConstraintResult, SessionError> {
+        let position = request.text_pos;
+        if position.is_some_and(|p| !p.x.is_finite() || !p.y.is_finite()) {
+            return Err(SessionError::InvalidConstraint(
+                "Dimension placement must be finite".into(),
+            ));
+        }
+        let request = request.dimension;
         if self.sketch.is_reference_dimension(&request.constraint_id) {
             return Err(SessionError::InvalidConstraint(
                 "Reference dimensions report solved geometry and cannot be edited; make the dimension driving first"
@@ -521,6 +538,10 @@ impl SketchSession {
         }
 
         self.analysis = Some(analysis);
+        if let Some(position) = position {
+            self.sketch
+                .set_dim_placement(request.constraint_id, position);
+        }
         self.push_command(before);
         Ok(AddConstraintResult {
             constraint_id: request.constraint_id,
