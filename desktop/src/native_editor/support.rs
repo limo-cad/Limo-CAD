@@ -80,6 +80,9 @@ pub(super) fn execute(
                 origin: FaceSketchOrigin::FaceCenter,
                 ..default()
             };
+            if face.is_none() && engine.document_snapshot().features.is_empty() {
+                frame_initial_origin(world, owner)?;
+            }
             editor.error.clear();
             present(world, owner, &editor.support)?;
             Ok(json!({"picking_support":true}))
@@ -109,6 +112,34 @@ pub(super) fn execute(
             )
         }
     }
+}
+
+/// A new design can inherit a panned view. Keep the first sketch's only
+/// supports inside the canvas while preserving the chosen view angle and zoom.
+fn frame_initial_origin(world: &mut World, owner: &DocumentContext) -> Result<(), String> {
+    let (_, camera, _, size) = native_viewport::interface_view(world);
+    let padding = size[0].min(size[1]) * 0.25;
+    let visible = native_viewport::interface_world_point(world, &owner.document_id, [0.; 3])?
+        .is_some_and(|point| {
+            point[0] >= padding
+                && point[0] <= size[0] - padding
+                && point[1] >= padding
+                && point[1] <= size[1] - padding
+        });
+    if !visible {
+        let position = std::array::from_fn(|axis| camera.position[axis] - camera.target[axis]);
+        native_viewport::apply_interface_view(
+            world,
+            &owner.document_id,
+            Some(native_viewport::ViewportCamera {
+                position,
+                target: [0.; 3],
+                ..camera
+            }),
+            None,
+        )?;
+    }
+    Ok(())
 }
 
 pub(super) fn pick(
