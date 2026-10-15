@@ -571,11 +571,12 @@ pub(super) fn synchronize(
                 interface_shell::ribbon::menu_ink(world, entity);
             }
         }
-        let dimension = active && editor.interaction.dimension.is_some();
+        let dimension = active
+            && editor.interaction.dimension.is_some()
+            && editor.interaction.dimension_position.is_some();
         if dimension {
             let theme = crate::native_viewport::ui::theme(world);
-            let inline = editor.interaction.dimension_id.is_some();
-            let (left, top) = if inline {
+            let (left, top) = {
                 let stamp = editor.stamp.as_ref().ok_or("Dimension has no owner")?;
                 let position = editor
                     .interaction
@@ -600,44 +601,7 @@ pub(super) fn synchronize(
                         (canvas.y + canvas.height) as f32 - 32.,
                     ),
                 )
-            } else {
-                (
-                    ((area.x + area.width) as f32 - 280.).max(240.),
-                    area.y as f32 + 94.,
-                )
             };
-            if !inline {
-                panel.widgets.panel(
-                    world,
-                    camera,
-                    "dimension",
-                    rect(left, top, 272., 160.),
-                    theme.panel.with_alpha(1.),
-                    30,
-                );
-                panel.widgets.text(
-                    world,
-                    camera,
-                    "dim-title",
-                    rect(left + 12., top + 8., 248., 24.),
-                    "Sketch Dimension",
-                    13.,
-                    31,
-                );
-                panel.widgets.text(
-                    world,
-                    camera,
-                    "dim-help",
-                    rect(left + 12., top + 38., 248., 24.),
-                    if editor.interaction.dimension_position.is_some() {
-                        "Value / expression (blank measures)"
-                    } else {
-                        "Select geometry, then click to place"
-                    },
-                    11.,
-                    31,
-                );
-            }
             let mut control = InterfaceControl::button("sketch/dimension", "Dimension value");
             control.owned_keys = vec![KeyChord::plain("Enter"), KeyChord::plain("Escape")];
             control.field = Field::Text {
@@ -645,11 +609,7 @@ pub(super) fn synchronize(
                 read_only: editor.interaction.dimension_reference,
                 selection: None,
             };
-            let mut bounds = if inline {
-                rect(left, top, 128., 28.)
-            } else {
-                rect(left + 12., top + 68., 248., 30.)
-            };
+            let mut bounds = rect(left, top, 128., 28.);
             bounds.border = UiRect::all(px(1.));
             bounds.padding = UiRect::horizontal(px(6.));
             if panel.dimension_generation != Some(editor.form_serial) {
@@ -695,7 +655,7 @@ pub(super) fn synchronize(
                 fields::request_focus(world, field, &editor.stamp.as_ref().unwrap().owner);
                 panel.dimension_focused = true;
             }
-            if inline {
+            if editor.interaction.dimension_id.is_some() {
                 panel.widgets.button(
                     world,
                     camera,
@@ -743,45 +703,6 @@ pub(super) fn synchronize(
                             None,
                             43,
                         )?;
-                    }
-                }
-            } else {
-                for (key, label, command, offset) in [
-                    (
-                        "dim-cancel",
-                        "Cancel Dimension",
-                        InteractionCommand::CancelDimension,
-                        0.,
-                    ),
-                    (
-                        "dim-apply",
-                        "Apply Dimension",
-                        InteractionCommand::ApplyDimension,
-                        128.,
-                    ),
-                ] {
-                    let mut control = InterfaceControl::button("sketch/dimension", label);
-                    control.disabled = matches!(command, InteractionCommand::ApplyDimension)
-                        && (editor.interaction.dimension_reference
-                            || editor.interaction.dimension_position.is_none()
-                            || editor.interaction.selection.is_empty());
-                    control.selected = Some(offset != 0.);
-                    let mut bounds = rect(left + 12. + offset, top + 116., 120., 30.);
-                    bounds.border = UiRect::all(px(1.));
-                    bounds.justify_content = JustifyContent::Center;
-                    panel.widgets.button(
-                        world,
-                        camera,
-                        key,
-                        control,
-                        Some(if offset == 0. { "Cancel" } else { "Apply" }),
-                        NativeCommand::Sketch(EditorCommand::Interaction(command)),
-                        bounds,
-                        None,
-                        31,
-                    )?;
-                    if offset != 0. {
-                        interface_shell::primary_button(world, panel.widgets.entity(key).unwrap());
                     }
                 }
             }

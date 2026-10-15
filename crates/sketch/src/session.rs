@@ -3489,6 +3489,8 @@ impl SketchSession {
             | Constraint::EqualDistance { .. }
             | Constraint::ReferenceMidpoint { .. }
             | Constraint::ReferenceOnEdge { .. }
+            | Constraint::ReferenceDistance { .. }
+            | Constraint::ReferenceAngle { .. }
             | Constraint::SpanMidpoint { .. } => {
                 return Err(invalid(
                     "This relation is internal and is created by its sketch tool",
@@ -4834,6 +4836,7 @@ impl SketchSession {
                 Constraint::Parallel { .. }
                 | Constraint::Perpendicular { .. }
                 | Constraint::Angle { .. } => {}
+                Constraint::ReferenceDistance { .. } | Constraint::ReferenceAngle { .. } => {}
             }
         }
 
@@ -5212,6 +5215,13 @@ impl SketchSession {
 
                 Constraint::Radius { entity, .. } | Constraint::Diameter { entity, .. } => {
                     curve_centers.insert(entity);
+                }
+                Constraint::ReferenceDistance { entity, .. } => {
+                    add_line_shape(&mut line_lengths, &mut line_angles, entity);
+                }
+                Constraint::ReferenceAngle { entity, .. } => {
+                    line_lengths.insert(entity);
+                    line_midpoints.insert(entity);
                 }
                 Constraint::Fix { .. }
                 | Constraint::ReferenceMidpoint { .. }

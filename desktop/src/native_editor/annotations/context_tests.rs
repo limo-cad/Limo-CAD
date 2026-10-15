@@ -342,3 +342,216 @@ fn annotation_context_menu_deletes_only_its_target_and_supports_undo_redo() {
         }
     });
 }
+
+#[test]
+fn inline_dimension_pick_refines_measurement_and_enter_applies_one_undoable_change() {
+    crate::session_bridge::with_isolated_session_test(|| {
+        let directory = SessionDirectory(
+            std::env::temp_dir().join(format!("sketch-inline-dimension-{}", uuid::Uuid::new_v4())),
+        );
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &directory.0);
+        let engine = Arc::new(AppState::new());
+        let bridge = Arc::new(SessionBridgeState::default());
+        crate::session_bridge::parse_engine_envelope(bridge.with_project_session_transition(
+            "main",
+            &engine,
+            || engine.bind_project_session("inline-dimension-test"),
+        ))
+        .unwrap();
+        let owner = bridge.native_document_context("main", &engine).unwrap();
+        let services = NativeServices {
+            engine: engine.clone(),
+            bridge: bridge.clone(),
+        };
+        let mutate = |op, args: Value| {
+            bridge
+                .apply_native_mutation(&engine, &owner, op, &args, || Ok(()))
+                .unwrap()
+        };
+        mutate("sketch_begin", json!({"type":"origin_plane","plane":"xy"}));
+        for (a, b) in [
+            ([0., 0.], [20., 0.]),
+            ([0., 10.], [20., 10.]),
+            ([30., 0.], [30., 20.]),
+        ] {
+            mutate(
+                "sketch_add_line",
+                json!({"from":{"x":a[0],"y":a[1]},"to_raw":{"x":b[0],"y":b[1]},"ctrl_held":true}),
+            );
+        }
+        let before = active(&engine).unwrap().unwrap();
+        let revision = engine.geometry_revision();
+        let model = engine.engine_call("project_export_model", "");
+        let mut app = native_viewport::interface_scene_fixture();
+        app.add_plugins(bevy::text::TextPlugin);
+        let world = app.world_mut();
+        world.init_resource::<Assets<Image>>();
+        world.spawn(InterfaceCamera);
+        let handle = NativeInterfaceHandle::new(|| {});
+        worker::install(world, services.clone(), handle.clone()).unwrap();
+        world.insert_resource(handle.clone());
+        world.init_resource::<bevy::input_focus::InputFocus>();
+        native_viewport::apply_interface_edit_model(
+            world,
+            crate::session_bridge::native_interface::model_snapshot(&engine),
+        )
+        .unwrap();
+        let canvas = InterfaceRect {
+            x: 0.,
+            y: 90.,
+            width: 1000.,
+            height: 650.,
+        };
+        let ribbon = InterfaceRect {
+            x: 0.,
+            y: 0.,
+            width: 1000.,
+            height: 80.,
+        };
+        native_viewport::apply_interface_viewport(world, canvas, 1.).unwrap();
+        native_viewport::apply_interface_view(
+            world,
+            &owner.document_id,
+            Some(ViewportCamera {
+                position: [10., 10., 100.],
+                target: [10., 10., 0.],
+                up: [0., 1., 0.],
+                vertical_fov_degrees: 45.,
+            }),
+            None,
+        )
+        .unwrap();
+        synchronize_controls(world, &handle, &services, &owner, ribbon, canvas).unwrap();
+        crate::native_editor::execute(
+            world,
+            &engine,
+            &bridge,
+            &owner,
+            EditorCommand::Interaction(InteractionCommand::Dimension),
+            || Ok(()),
+        )
+        .unwrap();
+        let pick = |world: &mut World, point: Point| {
+            handle.blur();
+            interface_shell::fields::after_window_input(world, &handle).unwrap();
+            let pixel = native_viewport::interface_world_point(
+                world,
+                &owner.document_id,
+                before.basis.to_3d([point.x, point.y]),
+            )
+            .unwrap()
+            .unwrap();
+            let pixel = Vec2::new(pixel[0] + canvas.x as f32, pixel[1] + canvas.y as f32);
+            world.resource_scope(|world, mut editor: Mut<Editor>| {
+                interaction::pointer(
+                    world,
+                    (&services, &owner),
+                    &mut editor,
+                    (pixel, pixel, canvas),
+                    false,
+                    false,
+                )
+                .unwrap();
+            });
+            synchronize_controls(world, &handle, &services, &owner, ribbon, canvas).unwrap();
+            layout(world, &handle, &owner, canvas);
+            world
+                .run_system_cached(interface_shell::fields::synchronize_fields)
+                .unwrap();
+            interface_shell::fields::apply_requested_focus(world);
+            let field = world
+                .query::<(Entity, &InterfaceControl)>()
+                .iter(world)
+                .find(|(_, c)| c.label == "Dimension value")
+                .map(|(e, _)| e)
+                .unwrap();
+            assert_eq!(handle.focused_key(), Some(ControlKey(field.to_bits())));
+            let value = world.get::<bevy::text::EditableText>(field).unwrap();
+            assert_eq!(
+                value.editor.raw_selection().text_range(),
+                0..value.value().to_string().len()
+            );
+        };
+        pick(world, Point::new(10., 0.));
+        assert_eq!(
+            world.resource::<Editor>().interaction.dimension.as_deref(),
+            Some("20")
+        );
+        assert!(world
+            .resource::<Editor>()
+            .interaction
+            .dimension_position
+            .is_some());
+        let first_generation = world.resource::<Editor>().form_serial;
+        pick(world, Point::new(10., 10.));
+        assert_eq!(
+            world.resource::<Editor>().interaction.dimension.as_deref(),
+            Some("10")
+        );
+        assert!(world.resource::<Editor>().form_serial > first_generation);
+        assert_eq!(
+            world
+                .resource::<Editor>()
+                .interaction
+                .dimension_preview
+                .as_ref()
+                .unwrap()
+                .kind,
+            "distance"
+        );
+        assert_eq!(engine.geometry_revision(), revision);
+        assert_eq!(engine.engine_call("project_export_model", ""), model);
+        let field = world
+            .query::<(Entity, &InterfaceControl)>()
+            .iter(world)
+            .find(|(_, control)| control.label == "Dimension value")
+            .map(|(entity, _)| entity)
+            .unwrap();
+        let control = world.get::<InterfaceControl>(field).unwrap();
+        assert!(
+            matches!(&control.field, limo_cad_interface::Field::Text { value, read_only: false, .. } if value == "10")
+        );
+        assert!(control.owned_keys.contains(&KeyChord::plain("Enter")));
+        assert!(!world
+            .query::<&InterfaceControl>()
+            .iter(world)
+            .any(|c| c.label == "Apply Dimension"));
+        let key = ControlKey(field.to_bits());
+        reduce(
+            world,
+            &services,
+            &handle,
+            key,
+            ControlInput::SetValue("6".into()),
+            &owner,
+        )
+        .unwrap();
+        reduce(
+            world,
+            &services,
+            &handle,
+            key,
+            ControlInput::Key(KeyChord::plain("Enter")),
+            &owner,
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(outcome) = worker::poll(world, &services) {
+                outcome.value.unwrap();
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let after = active(&engine).unwrap().unwrap();
+        assert_eq!(after.dimensions.len(), 1);
+        assert!((after.dimensions[0].value - 6.).abs() < 1e-8);
+        assert!(world.resource::<Editor>().interaction.dimension.is_none());
+        bridge
+            .apply_native_history(&engine, &owner, false, || Ok(()))
+            .unwrap();
+        assert_eq!(active(&engine).unwrap().unwrap().entities, before.entities);
+        assert!(active(&engine).unwrap().unwrap().dimensions.is_empty());
+    });
+}

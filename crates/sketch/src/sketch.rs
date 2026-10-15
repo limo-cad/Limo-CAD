@@ -773,6 +773,25 @@ impl Sketch {
         }
 
         match constraint {
+            Constraint::ReferenceDistance { entity, edge, .. } => {
+                let (a, b) = self.reference_edge(edge)?.straight_line()?;
+                let point = self
+                    .point_position(entity)
+                    .or_else(|| self.resolved_line(entity).map(|(a, b)| (a + b) * 0.5))?;
+                signed_distance(point, a, b).map(f64::abs)
+            }
+            Constraint::ReferenceAngle { entity, edge, .. } => {
+                let (a, b) = self.reference_edge(edge)?.straight_line()?;
+                let (c, d) = self.resolved_line(entity)?;
+                let u = b - a;
+                let v = d - c;
+                Some(
+                    (u.dot(v) / (u.length() * v.length()))
+                        .clamp(-1., 1.)
+                        .acos()
+                        .to_degrees(),
+                )
+            }
             Constraint::Distance { from, to: None, .. } => {
                 let (start, end) = self.resolved_line(from)?;
                 Some(start.distance(end))
