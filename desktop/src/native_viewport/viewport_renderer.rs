@@ -196,6 +196,24 @@ struct Target {
     lease: std::sync::Weak<()>,
 }
 
+fn wait_for_target<'a>(targets: &'a mut [Target], stopped: &AtomicBool) -> Option<&'a mut Target> {
+    loop {
+        if stopped.load(Ordering::Acquire) {
+            return None;
+        }
+        if let Some(index) = targets
+            .iter()
+            .position(|target| target.lease.strong_count() == 0)
+        {
+            return Some(&mut targets[index]);
+        }
+        // Deferred extraction can retain a third frame alongside the main and
+        // render worlds. Wait outside the GPU submission gate so the interface
+        // can finish that handoff. Keep the pending snapshot and honor shutdown.
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
 /// A full rendering receipt requires the matching viewport texture as well as
 /// the UI. Menus can already be displayed and receive input while this is false.
 #[derive(Resource, Default)]
@@ -579,9 +597,9 @@ fn render_worker(
     if let Some(gate) = gate {
         app.sub_app_mut(RenderApp).world_mut().insert_resource(gate);
     }
-    // The main world and its pipelined render world may each retain a distinct
-    // completed frame. A third texture lets CAD render without overwriting
-    // either. Only an unleased texture can be reused; there is no readback.
+    // Keep a bounded pool. The main world, render world and deferred extraction
+    // can briefly retain all three textures; wait for a lease to end in that
+    // case. Never overwrite a leased texture; there is no readback.
     let mut targets: [Target; 3] = std::array::from_fn(|_| Target {
         image: app
             .world_mut()
@@ -598,10 +616,9 @@ fn render_worker(
         }
         let owner = snapshot.owner;
         let stamp = snapshot.stamp.clone();
-        let target = targets
-            .iter_mut()
-            .find(|target| target.lease.strong_count() == 0)
-            .ok_or("CAD viewport has no free texture")?;
+        let Some(target) = wait_for_target(&mut targets, stopped) else {
+            return Ok(());
+        };
         let lease = Arc::new(());
         target.lease = Arc::downgrade(&lease);
         let target = &target.image;

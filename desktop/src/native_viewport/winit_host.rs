@@ -30,10 +30,10 @@ use super::{
 };
 
 mod accessibility;
-#[cfg(target_os = "macos")]
-mod macos_quit;
 #[cfg(feature = "dev-native-ime-trace")]
 mod ime_trace;
+#[cfg(target_os = "macos")]
+mod macos_quit;
 mod submission;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod window_icon;
