@@ -85,6 +85,10 @@ fn sketch_origin_planes_render_on_first_open_and_after_cancel() {
         app.update();
         ready(&mut app);
         let cancelled = capture(&mut app, &target, "origin-planes-cancelled");
-        assert_eq!(changed(&solid, &cancelled), 0, "Cancel must hide the planes");
+        assert_eq!(
+            changed(&solid, &cancelled),
+            0,
+            "Cancel must hide the planes"
+        );
     }
 }
