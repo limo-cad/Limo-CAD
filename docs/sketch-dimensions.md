@@ -33,16 +33,20 @@ preview and select the new value for replacement.
 
 ## Commit, cancellation and acceptance
 
-Enter must commit the displayed value and leader position in one undoable
-operation, including when reusing an existing driving dimension. Escape must
-cancel the preview. Enter must also accept the displayed current value without
-requiring it to be retyped or changed. An optional canvas placement click must
-return focus to the value field, preserving its value, so Enter still commits.
-Existing read-only reference dimensions may be
-repositioned without changing their measured value.
+Enter or a placement click on empty sketch canvas must commit the displayed
+value and leader position in one undoable operation, including when reusing an
+existing driving dimension. Both actions must accept the displayed current
+value without requiring it to be retyped or changed. A placement click must
+commit any typed value or expression before applying the dimension, without
+requiring a subsequent Enter. Clicking another sketch object or support edge
+must refine the measurement instead of committing the current preview.
+Clicking the inline value field must allow editing. Escape must cancel the
+preview. Existing read-only reference dimensions may be repositioned without
+changing their measured value.
 
 Manual acceptance must cover horizontal, vertical and diagonal line lengths,
 parallel sketch/support edges, angles, radial dimensions, typing while moving
-the cursor, existing dimensions, Enter, Escape, Undo/Redo and save/reopen.
+the cursor, existing dimensions, Enter, placement-click confirmation, continued
+edge selection, Escape, Undo/Redo and save/reopen.
 Automated checks support this requirement; a maintainer must manually confirm
 the experience and manually promote the draft PR. No agent approval.
