@@ -14,7 +14,23 @@
     "all_28_bundled_native_libraries_identical": true,
     "both_private_preference_directories_have_no_saved_preferences": true,
     "saved_sketch_bases": "XY plane, identical basis, grid snapping enabled",
-    "app_metadata_differences": ["name", "display name", "bundle identifier", "launcher executable"]
+    "app_metadata_differences": [
+      "name",
+      "display name",
+      "bundle identifier",
+      "launcher executable"
+    ],
+    "original_source_forced_desktop_rebuild": {
+      "all_16_code_and_data_sections_identical_to_original": true,
+      "machine_code_bytes": 78970684,
+      "machine_code_sha256": "afcfe8c489d7fee184c9afd93011b49a376f32b8538113b8f120ccd713904b8d",
+      "original_file_sha256": "71ed50af00ec242578809c4780340ea5fed4beacdaad56d6fa7edb95cc78f4be",
+      "rebuild_file_sha256": "541189833f2b366227a497da195188b5f46a3d602b21cf5fc0415759815de5c6",
+      "source": "71d789635750ba3d4996d062abe18d1bcc0fa41f",
+      "scope": "Removed and rebuilt the desktop package in this task's isolated cache. The signed whole-file hashes differ; every executable code/data section matches.",
+      "result": "No stale original desktop code found",
+      "evidence": "artifacts/sketch-original-state-check-20261015/clean-rebuild-comparison.json"
+    }
   },
   "controlled_comparison_prepared": {
     "application": "Limo CAD Original State Check.app",
@@ -33,7 +49,10 @@
     "user_result": "pending"
   },
   "evidence": {
-    "screenshots": ["artifacts/sketch-original-state-check-20261015/evidence/original-7.227x20.045.png", "artifacts/sketch-original-state-check-20261015/evidence/original-20x20.png"],
+    "screenshots": [
+      "artifacts/sketch-original-state-check-20261015/evidence/original-7.227x20.045.png",
+      "artifacts/sketch-original-state-check-20261015/evidence/original-20x20.png"
+    ],
     "build_and_state_checkpoint": "artifacts/sketch-original-state-check-20261015/investigation-checkpoint.json"
   },
   "conclusion": "Active recording is not required for the good behavior. The exact cause remains unproven; isolate the original executable from the old app state before attributing a fix to instrumentation or fresh data.",
