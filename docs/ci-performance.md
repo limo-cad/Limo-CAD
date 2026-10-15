@@ -12,6 +12,28 @@ standalone required PR check and Desktop packages' preflight cannot cancel each
 other. The required check names in [branch protection](branch-protection.md) stay
 unchanged. The independent Rust interface workflow runs CI helper/contract tests.
 
+## Compiled dependencies for Windows and macOS packages
+
+Windows x64, Windows ARM64 and macOS Apple silicon packaging restore Rust
+dependencies for both the root tooling workspace and the desktop workspace.
+Restoration follows toolchain setup and precedes SDK preparation, so macOS can
+also reuse the dependencies of the Rust SDK builder. The existing pinned Rust
+cache action keys by compiler, Cargo manifests/lockfiles and build environment;
+the additional key separates the runner and target architecture.
+
+These caches exclude workspace crates and installed Cargo tools. Application
+code is rebuilt and packages are staged, signed and verified by the existing
+steps. Dependency caches can be saved when a later package check fails; the
+check still fails normally. SDK verification, package tests, release gates,
+triggers and the policy that lets SDK owners finish are unchanged.
+
+The first compatible build populates the cache. Later updates to the same PR can
+reuse it; sibling PRs cannot read each other's merge-ref caches. After merge,
+an existing manual **Desktop packages** run on `main` can seed caches visible to
+new PRs. No extra scheduled or push-triggered builds are added. Compare cache
+restore/save time, compilation time and cache storage after rollout before
+claiming a measured saving; repository cache limits and eviction still apply.
+
 ## Shared Windows OpenCASCADE caches
 
 `.github/actions/setup-windows-occt` is used by Windows packaging, Windows MCP
