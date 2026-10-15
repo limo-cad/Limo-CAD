@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-15",
+  "scope": "Reported sketch commit visibility delay and jumpy live drawing dimensions",
+  "base_revision": "736758f291",
+  "fix_revision": "60353dfd",
+  "branch": "fix/sketch-commit-and-scale",
+  "pull_request": 427,
+  "causes": [
+    "An empty sketch curve/point gizmo group allocated a new asset on the first primitive; its first completed idle frame omitted that asset.",
+    "Floating drawing readout controls and their painted backgrounds consumed CursorMoved, pausing the preview while the pointer crossed the previous readout position."
+  ],
+  "changes": [
+    "Retain sketch curve, point outline and point assets with the existing invisible zero-length sentinel.",
+    "Mark drawing readouts as motion passthrough in the shared hit registry and sketch preview handler, retaining click capture, keyboard editing, wheel ownership, clipping, panel and document guards."
+  ],
+  "validation": {
+    "before_fix": "Metal completed frame contained no rectangle after commit; the new regression failed its immediate-visibility assertion.",
+    "after_fix": "Metal pixel regression passes 13 primitive variants, including both rectangle modes, line, midpoint line, point, both circle modes, both arcs, all three slots and spline. First completed pixels equal a later forced frame, with Undo between primitives and no pointer events.",
+    "native_editor": {
+      "passed": 60,
+      "failed": 0
+    },
+    "native_interface": {
+      "passed": 90,
+      "failed": 0
+    },
+    "native_renderer": {
+      "passed": 45,
+      "failed": 0
+    },
+    "ci_inventory": {
+      "passed": 1,
+      "failed": 0
+    },
+    "scale": "Equal screen displacements keep the same model displacement before and after a large move for every dimensioned tool. Drawing does not change the camera.",
+    "formatting": "Touched Rust files and git diff whitespace check passed."
+  },
+  "ci": "Native sketch visual workflow explicitly runs the sketch-commit GPU suite; inventory rejects a missing, renamed or duplicate test.",
+  "source_sha256": {
+    "desktop/src/native_editor/dynamic.rs": "6cb76658fbe82587a9e345a9820a657833c55ec37a89d5929ad6fcabb6c6c7c8",
+    "desktop/src/native_editor/mod.rs": "e62bd33c696f3ca5f0727ad59caea3827c2bba002511180dee58e3e36e7f9018",
+    "desktop/src/native_viewport/platform.rs": "686d8525fe0823bd2abb19cbd6a4e2466e27afdbc9e093c2d3918fbc0bb1452c",
+    "desktop/src/native_viewport/interface_shell.rs": "db3ba2eb14e846bbde6b1cd14d2ec7b30281b7c23f2ceba6b95b58f401f2226e",
+    "desktop/src/native_viewport/viewport_renderer/sketch_commit_tests.rs": "2aa8d95f99989ccfbd2ae116e1b96bb230d0c183000ef3de736a0496e2623187"
+  },
+  "qualification_limits": [
+    "Native GPU checks are windowless and use real Metal rendering; they do not qualify physical input or the complete GUI.",
+    "No live user document or recovery data was changed.",
+    "Broader UI and manual MCP qualification stays paused; existing coverage statuses and receipts are retained.",
+    "User acceptance of the separate test application is required before marking the PR ready."
+  ]
+}
