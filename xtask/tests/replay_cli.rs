@@ -56,8 +56,16 @@ fn command(executable: impl AsRef<std::ffi::OsStr>) -> Command {
     command
 }
 
+fn xtask(profile: &Path) -> Command {
+    let mut command = command(env!("CARGO_BIN_EXE_xtask"));
+    // A developer's managed installation must not replace the owned fake server
+    // or trigger a runtime rebuild while these protocol fixtures are running.
+    command.env("LOCALAPPDATA", profile).env("APPDATA", profile);
+    command
+}
+
 fn replay(server: &Path, mode: &str, args: &[&str], heartbeat: &Path) -> Output {
-    command(env!("CARGO_BIN_EXE_xtask"))
+    xtask(server.parent().unwrap())
         .args(["run-script", "--recipe", "fixture", "--server"])
         .arg(server)
         .args(args)
@@ -107,7 +115,7 @@ fn headless_save_reopens_the_archive_and_preserves_existing_files_on_failure() {
     let requests = temp.0.join("requests.jsonl");
     let out = temp.0.join("reports");
     let run = |mode: &str, extra: &[&str]| {
-        command(env!("CARGO_BIN_EXE_xtask"))
+        xtask(&temp.0)
             .args(["run-script", "--recipe", "fixture", "--server"])
             .arg(&fixture)
             .arg("--save")
@@ -200,7 +208,7 @@ fn packaged_replay_arguments_initialization_deadline_and_owned_cleanup() {
     let captured = temp.0.join("arguments.txt");
     let literal = "a path with spaces / \"quotes\" ; $literal Ω";
     let forwarded = ["--appimage-extract-and-run", "--headless", literal, ""];
-    let mut run = command(env!("CARGO_BIN_EXE_xtask"));
+    let mut run = xtask(&temp.0);
     run.args([
         "run-script",
         "--recipe",
@@ -226,7 +234,7 @@ fn packaged_replay_arguments_initialization_deadline_and_owned_cleanup() {
     );
 
     let standalone = temp.0.join("standalone.txt");
-    let output = command(env!("CARGO_BIN_EXE_xtask"))
+    let output = xtask(&temp.0)
         .args(["cad-call", "--server"])
         .arg(&fixture)
         .args(["--args", "{\"action\":\"catalog\"}"])
@@ -236,7 +244,7 @@ fn packaged_replay_arguments_initialization_deadline_and_owned_cleanup() {
     succeeded(&output);
     assert_eq!(fs::read_to_string(&standalone).unwrap(), "\n");
     let cad_call = temp.0.join("cad-call.txt");
-    let output = command(env!("CARGO_BIN_EXE_xtask"))
+    let output = xtask(&temp.0)
         .args(["cad-call", "--server"])
         .arg(&fixture)
         .args([
