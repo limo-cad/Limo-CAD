@@ -284,7 +284,7 @@ pub(crate) fn build(configure: impl FnOnce(&mut App, NativeInterfaceHandle)) -> 
         .add_systems(PreUpdate, route_window_input);
     accessibility::install(&mut app);
     #[cfg(target_os = "macos")]
-    macos_quit::install(&mut app);
+    macos_quit::install(&mut app, handle.clone());
     submission::install(&mut app);
     configure(&mut app, handle);
     super::interface_shell::fields::install(&mut app);
