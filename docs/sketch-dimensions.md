@@ -12,6 +12,14 @@ in full so typing replaces it. A line initially previews its length. Selecting
 a second parallel line or straight support-face edge must refine the preview
 to spacing; selecting a nonparallel edge must refine it to an angle.
 
+Generated numeric suggestions must show readable leading digits and the
+decimal point, with at most nine significant digits and scientific notation
+for very small or large values. The focused field must fit those suggestions
+without scrolling to the fractional tail. Accepting an untouched suggestion
+must retain the exact measured or stored value, without rounding the model.
+Typing a replacement must commit exactly the entered value or expression;
+existing expressions must remain literal when opened for editing.
+
 ## Required cursor-following leaders
 
 **After the first measurable object is selected, moving the cursor within the

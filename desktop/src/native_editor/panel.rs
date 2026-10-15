@@ -594,7 +594,7 @@ pub(super) fn synchronize(
                 (
                     (canvas.x as f32 + pixel[0] + 10.).clamp(
                         canvas.x as f32 + 4.,
-                        (canvas.x + canvas.width) as f32 - 172.,
+                        ((canvas.x + canvas.width) as f32 - 204.).max(canvas.x as f32 + 4.),
                     ),
                     (canvas.y as f32 + pixel[1] - 14.).clamp(
                         canvas.y as f32 + 4.,
@@ -609,7 +609,7 @@ pub(super) fn synchronize(
                 read_only: editor.interaction.dimension_reference,
                 selection: None,
             };
-            let mut bounds = rect(left, top, 128., 28.);
+            let mut bounds = rect(left, top, 160., 28.);
             bounds.border = UiRect::all(px(1.));
             bounds.padding = UiRect::horizontal(px(6.));
             if panel.dimension_generation != Some(editor.form_serial) {
@@ -665,7 +665,7 @@ pub(super) fn synchronize(
                     NativeCommand::Sketch(EditorCommand::Interaction(
                         InteractionCommand::DimensionActions,
                     )),
-                    rect(left + 132., top, 28., 28.),
+                    rect(left + 164., top, 28., 28.),
                     None,
                     41,
                 )?;
