@@ -5,7 +5,6 @@
 //! Acquisition can also reconfigure an outdated surface. Keep both surface paths
 //! protected, while main-world modeling and pipeline compilation stay independent.
 use super::{NativeViewportCamera, CAD_TARGET_FORMAT};
-#[cfg(any(target_os = "macos", target_os = "ios"))]
 use bevy::ecs::system::NonSendMarker;
 use bevy::{
     app::{AppExit, SubApp},
@@ -150,7 +149,7 @@ pub(super) fn install_interface(render: &mut SubApp) -> SharedSubmission {
 // Mirrors Bevy's surface-system inputs, with the shared submission guard.
 fn configure_surfaces(
     commands: Commands,
-    #[cfg(any(target_os = "macos", target_os = "ios"))] marker: NonSendMarker,
+    _marker: NonSendMarker,
     windows: Query<(
         Entity,
         &mut ExtractedWindow,
@@ -162,13 +161,15 @@ fn configure_surfaces(
     render_device: Res<RenderDevice>,
     (submission, _queue_exclusion): (Res<SharedSubmission>, ResMut<RenderQueue>),
 ) {
-    // A normal system keeps macOS's NonSendMarker/main-thread routing. Mutable
-    // queue access also excludes same-world GPU-copy submission systems.
+    // A CAD buffer scope can tick unrelated global tasks while holding this
+    // gate. Keep surface work on the interface's existing main-thread executor
+    // on every platform so the worker cannot steal it and reacquire its own
+    // gate. Mutable queue access also excludes same-world GPU-copy systems.
     submission.run(|| {
         create_surfaces(
             commands,
             #[cfg(any(target_os = "macos", target_os = "ios"))]
-            marker,
+            _marker,
             windows,
             render_instance,
             render_adapter,
@@ -178,7 +179,7 @@ fn configure_surfaces(
 }
 
 fn acquire_surfaces(
-    #[cfg(any(target_os = "macos", target_os = "ios"))] _marker: NonSendMarker,
+    _marker: NonSendMarker,
     windows: Query<(MainEntity, &mut ExtractedWindow, Option<&SurfaceData>)>,
     render_device: Res<RenderDevice>,
     sorted_cameras: Res<SortedCameras>,
@@ -719,10 +720,9 @@ mod tests {
                         .find(|(key, _)| ids.contains(key))
                         .unwrap();
                     assert!(matches!(system.access(), SystemAccess::Shared(_)));
-                    assert_eq!(
-                        system.system().is_send(),
-                        !cfg!(any(target_os = "macos", target_os = "ios")),
-                        "Apple surface wrappers must retain main-thread routing"
+                    assert!(
+                        !system.system().is_send(),
+                        "guarded surface work must not enter the global pool while a CAD buffer scope holds the GPU gate"
                     );
                 }
             });
