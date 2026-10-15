@@ -80,12 +80,11 @@ fn guard_delegate(delegate: &AnyObject) {
     assert_eq!(previous, original);
 }
 
-pub(super) fn install(app: &mut App) {
+pub(super) fn install(app: &mut App, wake: NativeInterfaceHandle) {
     let main = MainThreadMarker::new().expect("native Quit installs on the AppKit thread");
     let application = NSApplication::sharedApplication(main);
     let delegate = application.delegate().expect("Winit application delegate");
     let requested = QuitRequested::default();
-    let wake = app.world().resource::<NativeInterfaceHandle>().clone();
     DELIVERY.with_borrow_mut(|delivery| {
         *delivery = Some(Delivery {
             requested: requested.clone(),
