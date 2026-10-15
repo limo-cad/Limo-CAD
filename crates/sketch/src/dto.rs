@@ -823,6 +823,9 @@ pub struct CreationPointPreviewRequest {
     pub ctrl_held: bool,
     #[serde(default)]
     pub allow_midpoint: bool,
+    /// Line tools acquire finite sketch-edge interiors as sliding coincidences.
+    #[serde(default)]
+    pub allow_curve: bool,
     #[serde(default)]
     pub exclude_position: Option<Vec2>,
 }
