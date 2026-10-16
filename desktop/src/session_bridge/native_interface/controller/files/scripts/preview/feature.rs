@@ -85,7 +85,7 @@ pub(crate) fn paint_hint(
                     .is_some_and(|button| key.0 == button.to_bits())
         });
     let open = focused
-        || point.is_some_and(|p| keep_hint(p, anchor, [x, y, w, 112.], world.resource::<Hint>().0));
+        || point.is_some_and(|p| keep_hint(p, anchor, [x, y, w, 136.], world.resource::<Hint>().0));
     world.resource_mut::<Hint>().0 = open;
     if !open {
         return Ok(());
@@ -95,7 +95,11 @@ pub(crate) fn paint_hint(
         world,
         camera,
         "extrude-help-card",
-        rect(x, y, w, 112.),
+        Node {
+            border: UiRect::all(px(1.)),
+            border_radius: BorderRadius::all(px(8.)),
+            ..rect(x, y, w, 136.)
+        },
         theme.panel.with_alpha(1.),
         65,
     );
@@ -103,33 +107,34 @@ pub(crate) fn paint_hint(
         world,
         camera,
         "extrude-help-title",
-        rect(x + 12., y + 8., w - 24., 20.),
+        rect(x + 16., y + 12., w - 32., 24.),
         "Extrude",
-        14.,
+        16.,
         66,
     );
     widgets.text(
         world,
         camera,
         "extrude-help-description",
-        rect(x + 12., y + 32., w - 24., 35.),
+        rect(x + 16., y + 40., w - 32., 36.),
         "Give a closed sketch profile depth to make a solid.",
-        11.,
+        12.,
         66,
     );
     let mut control = InterfaceControl::button("solid/build", "Show me how to Extrude");
     control.disabled = available(world).is_err();
-    widgets.button(
+    let entry = widgets.button(
         world,
         camera,
         "extrude-show-me",
         control,
         Some("Show me"),
         NativeCommand::File(FileCommand::ScriptPreview(Action::Extrude)),
-        rect(x + 12., y + 74., w - 24., 26.),
+        rect(x + 16., y + 88., w - 32., 32.),
         None,
         66,
     )?;
+    interface_shell::primary_button(world, entry);
     Ok(())
 }
 
@@ -138,49 +143,38 @@ pub(super) fn guide(
     camera: Entity,
     widgets: &mut chrome::Widgets,
     (x, y, w): (f32, f32, f32),
+    demo: &lesson::Demo,
     cue: Option<PreviewCue>,
     theme: ViewportUiTheme,
 ) {
-    for (index, (step, label)) in [
-        (PreviewCue::Profile, "1  Select profile"),
-        (PreviewCue::Extrude, "2  Extrude"),
-        (PreviewCue::Depth, "3  Distance: 12 mm"),
-        (PreviewCue::Apply, "4  Apply · New body"),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let left = x + (index % 2) as f32 * (w + 6.) / 2.;
-        let top = y + (index / 2) as f32 * 28.;
-        let selected = cue == Some(step);
+    let width = (w - 18.) / 4.;
+    for (index, (step, label)) in demo.steps.iter().enumerate() {
+        let left = x + index as f32 * (width + 6.);
+        let selected = cue == Some(*step);
+        widgets.colored_text(
+            world,
+            camera,
+            &format!("extrude-cue-label-{index}"),
+            rect(left, y, width, 20.),
+            &format!("{}  {label}", index + 1),
+            11.,
+            63,
+            if selected { theme.ink } else { theme.mute },
+        );
         widgets.panel(
             world,
             camera,
             &format!("extrude-cue-{index}"),
-            rect(left, top, (w - 6.) / 2., 24.),
-            if selected {
-                theme.accent_soft
-            } else {
-                theme.panel
-            },
+            rect(left, y + 24., width, 3.),
+            if selected { theme.accent } else { theme.edge },
             62,
-        );
-        widgets.text(
-            world,
-            camera,
-            &format!("extrude-cue-label-{index}"),
-            rect(left + 6., top + 2., (w - 18.) / 2., 20.),
-            label,
-            11.,
-            63,
         );
     }
 }
-
 pub(super) fn help() -> &'static Result<Vec<String>, String> {
     static PAGE: OnceLock<Result<Vec<String>, String>> = OnceLock::new();
     PAGE.get_or_init(|| {
-        let page = limo_cad_mcp::help_page("concepts.extrude-basics")?;
+        let page = limo_cad_mcp::help_page(lesson::EXTRUDE.help)?;
         let body = page["body"].as_str().ok_or("Extrude help has no content")?;
         Ok(body
             .split("\n\n")
@@ -220,87 +214,55 @@ pub(super) fn paint_help(
     height: f32,
     theme: ViewportUiTheme,
 ) -> Result<(), String> {
-    let w = (width - 40.).clamp(280., 420.);
-    let x = (width - w - 20.).max(4.);
-    let h = (height - 64.).clamp(280., 370.);
-    let index = world.resource::<Files>().script.preview.help_page;
-    let (text, count) = match help() {
-        Ok(pages) => (
-            pages.get(index).map(String::as_str).unwrap_or(""),
-            pages.len(),
-        ),
-        Err(error) => (error.as_str(), 0),
-    };
-    widgets.panel(
+    let card = card::Card::new(width);
+    let (x, y, w) = (card.x, card.y, card.width);
+    let h = ((w - 32.) * 176. / 300.).min((height - y - 326.).max(24.)) + 310.;
+    card.paint(
         world,
         camera,
-        "scripts-card",
-        rect(x, 32., w, h),
-        theme.panel.with_alpha(1.),
-        60,
-    );
-    widgets.text(
-        world,
-        camera,
-        "scripts-preview-heading",
-        rect(x + 12., 44., w - 24., 24.),
-        "Extrude help",
-        15.,
-        61,
-    );
+        widgets,
+        "help",
+        h,
+        lesson::EXTRUDE.title,
+        theme,
+    )?;
     widgets.text(
         world,
         camera,
         "extrude-help-page",
-        rect(x + 12., 76., w - 24., 20.),
-        &format!("{}/{}", index + 1, count),
-        11.,
+        rect(x + 16., y + 76., w - 32., 24.),
+        "A closed profile becomes a solid",
+        14.,
         61,
     );
+    let body = match help() {
+        Ok(paragraphs) => paragraphs.join("\n\n"),
+        Err(error) => error.clone(),
+    };
     widgets.text(
         world,
         camera,
         "extrude-help-body",
-        rect(x + 12., 108., w - 24., h - 156.),
-        text,
-        12.,
+        rect(x + 16., y + 116., w - 32., h - 184.),
+        &body,
+        13.,
         61,
     );
-    for (i, (label, action, disabled)) in [
-        ("Previous", Action::Previous, index == 0),
-        ("Next", Action::Next, index + 1 >= count),
-        ("Back to demo", Action::Demo, false),
-        ("Close", Action::Close, false),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let bw = (w - 30.) / 2.;
-        let mut control = InterfaceControl::button("document/scripts", label);
-        control.disabled = disabled;
-        let entity = widgets.button(
-            world,
-            camera,
-            &format!("extrude-help-action-{i}"),
-            control,
-            Some(label),
-            NativeCommand::File(FileCommand::ScriptPreview(action)),
-            rect(
-                x + 12. + (i % 2) as f32 * (bw + 6.),
-                32. + h - 70. + (i / 2) as f32 * 32.,
-                bw,
-                26.,
-            ),
-            None,
-            61,
-        )?;
-        if i == 2 {
-            focus_control(world, entity);
-        }
-    }
+    let entity = widgets.button(
+        world,
+        camera,
+        "extrude-help-back",
+        InterfaceControl::button("document/scripts", "Back to demonstration"),
+        Some("Back to demonstration"),
+        NativeCommand::File(FileCommand::ScriptPreview(Action::Demo)),
+        rect(x + 16., y + h - 48., w - 32., 32.),
+        None,
+        61,
+    )?;
+    interface_shell::primary_button(world, entity);
+    focus_control(world, entity);
     Ok(())
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -13,174 +13,160 @@ pub(crate) fn paint(
         return feature::paint_help(world, camera, widgets, width, height, theme);
     }
     let script = &world.resource::<Files>().script;
-    let extrude = script.preview.return_to.is_some()
-        || script.example.is_some_and(|e| e.id == "extrude-basics");
-    let w = (width - 40.).clamp(280., 420.);
-    let x = (width - w - 20.).max(4.);
-    let y = 32.;
-    let image_width = (w - 24.).min(300.);
-    let image_height = if extrude {
-        (image_width * 176. / 300.).min((height - 310.).max(80.))
-    } else {
-        image_width * 176. / 300.
-    };
-    let image_x = x + (w - image_width) / 2.;
+    let demo = (script.preview.return_to.is_some()
+        || script
+            .example
+            .is_some_and(|e| e.id == lesson::EXTRUDE.recipe))
+    .then_some(&lesson::EXTRUDE);
+    let card = card::Card::new(width);
+    let (x, y, w) = (card.x, card.y, card.width);
+    let image_width = w - 32.;
+    let image_height = (image_width * 176. / 300.).min((height - y - 326.).max(24.));
     let scale = world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .iter(world)
         .next()
-        .map_or(1., |window| window.scale_factor());
-    let scale = (scale
+        .map_or(1., Window::scale_factor)
         * world
             .get_resource::<bevy::ui::UiScale>()
-            .map_or(1., |s| s.0))
-    .clamp(1., 3.5);
+            .map_or(1., |s| s.0);
+    let scale = scale
+        .clamp(1., 2.)
+        .min(MAX_RENDER_SIZE[0] as f32 / image_width)
+        .min(MAX_RENDER_SIZE[1] as f32 / image_height);
     let size = [
-        (image_width * scale).round() as u32,
-        (image_height * scale).round() as u32,
+        ((image_width * scale).round() as u32).max(64),
+        ((image_height * scale).round() as u32).max(64),
     ];
+    let palette = crate::native_viewport::ui::palette(world);
     let preview = &mut world.resource_mut::<Files>().script.preview;
+    if preview.palette != palette {
+        preview.palette = palette;
+        preview.changed()?;
+    }
     if preview.size != size {
         preview.size = size;
         preview.changed()?;
     }
-    let count = preview.count();
-    let index = preview.index;
-    let playing = preview.playing;
+    let (index, count, playing) = (preview.index, preview.count(), preview.playing);
     let image = (preview.image_index == Some(index))
         .then(|| preview.image.clone())
         .flatten();
-    let current_image = image.is_some() && preview.rendered == preview.revision;
+    let current = image.is_some() && preview.rendered == preview.revision;
+    let ready = preview.retained.is_some();
     let caption = preview.error.clone().unwrap_or_else(|| {
         preview
             .retained
             .as_ref()
-            .map(|retained| {
-                format!(
-                    "{}/{} — {}",
-                    index + 1,
-                    count,
-                    retained.descriptor.captions[index]
-                )
-            })
-            .unwrap_or_else(|| "Preparing the isolated lesson preview...".into())
+            .map(|r| r.descriptor.captions[index].clone())
+            .unwrap_or_else(|| "Preparing your example…".into())
     });
-    let ready = preview.retained.is_some();
     let cue = preview
         .retained
         .as_ref()
         .and_then(|r| r.descriptor.cues.get(index))
         .copied()
         .flatten();
-    widgets.panel(
+    card.paint(
         world,
         camera,
-        "scripts-card",
-        rect(x, y, w, image_height + if extrude { 264. } else { 200. }),
-        theme.panel.with_alpha(1.),
-        60,
-    );
-    widgets.text(
-        world,
-        camera,
-        "scripts-preview-heading",
-        rect(x + 12., y + 8., w - 24., 22.),
-        if extrude {
-            "Extrude · Show me"
-        } else {
-            "Lesson preview"
-        },
-        15.,
-        61,
-    );
-    widgets.text(
-        world,
-        camera,
-        "scripts-preview-purpose",
-        rect(x + 12., y + 34., w - 24., 24.),
-        "Drag or use arrow keys to turn. Home fits the model.",
-        11.,
-        61,
-    );
-    let mut control = InterfaceControl::button(
+        widgets,
+        "demo",
+        image_height + if demo.is_some() { 310. } else { 268. },
+        demo.map_or("Lesson preview", |d| d.title),
+        theme,
+    )?;
+    let mut model = InterfaceControl::button(
         "document/scripts",
         format!(
             "Lesson preview model: {}{caption}",
-            if current_image {
-                ""
-            } else {
-                "Preparing image — "
-            }
+            if current { "" } else { "Preparing image — " }
         ),
     );
-    control.owned_keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home"]
+    model.owned_keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home"]
         .map(limo_cad_interface::KeyChord::plain)
         .into();
-    let mut bounds = rect(image_x, y + 64., image_width, image_height);
-    bounds.border = UiRect::all(px(1.));
     let entity = widgets.button(
         world,
         camera,
         "scripts-preview-model",
-        control,
+        model,
         Some(if image.is_some() {
             ""
         } else {
-            "Rendering preview..."
+            "Loading example…"
         }),
         NativeCommand::File(FileCommand::ScriptPreview(Action::Model)),
-        bounds,
+        Node {
+            border: UiRect::all(px(1.)),
+            border_radius: BorderRadius::all(px(6.)),
+            ..rect(x + 16., y + 72., image_width, image_height)
+        },
         None,
         61,
     )?;
     feature::focus_control(world, entity);
     if let Some(image) = image {
-        world.entity_mut(entity).insert(ImageNode::new(image));
-    } else {
+        if world
+            .get::<ImageNode>(entity)
+            .is_none_or(|node| node.image != image)
+        {
+            world.entity_mut(entity).insert(ImageNode::new(image));
+        }
+    } else if world.get::<ImageNode>(entity).is_some() {
         world.entity_mut(entity).remove::<ImageNode>();
     }
-    let extra = if extrude { 64. } else { 0. };
-    if extrude {
+    let top = y + 80. + image_height;
+    widgets.colored_text(
+        world,
+        camera,
+        "scripts-preview-purpose",
+        rect(x + 16., top, w - 72., 18.),
+        "Drag to turn · Arrow keys · Home to fit",
+        10.,
+        61,
+        theme.mute,
+    );
+    widgets.button(
+        world,
+        camera,
+        "scripts-preview-fit",
+        InterfaceControl::button("document/scripts", "Fit preview"),
+        Some(""),
+        NativeCommand::File(FileCommand::ScriptPreview(Action::Fit)),
+        rect(x + w - 40., top - 3., 24., 24.),
+        Some(interface_shell::ribbon::Icon::Fit),
+        61,
+    )?;
+    let extra = if let Some(demo) = demo {
         feature::guide(
             world,
             camera,
             widgets,
-            (x + 12., y + image_height + 72., w - 24.),
+            (x + 16., top + 30., w - 32.),
+            demo,
             cue,
             theme,
         );
-    }
+        42.
+    } else {
+        0.
+    };
     widgets.text(
         world,
         camera,
         "scripts-preview-caption",
-        Node {
-            overflow: Overflow::clip(),
-            ..rect(x + 12., y + 72. + image_height + extra, w - 24., 46.)
-        },
+        rect(x + 16., top + 30. + extra, w - 32., 44.),
         &caption,
-        11.,
+        13.,
         61,
     );
-    let top = y + image_height + 124. + extra;
-    let fourth = (w - 42.) / 4.;
+    let buttons = top + 84. + extra;
+    let bw = (w - 48.) / 3.;
     for (i, (label, action, disabled)) in [
+        ("Previous", Action::Previous, !ready || index == 0),
         (
-            "Previous preview frame",
-            Action::Previous,
-            !ready || index == 0,
-        ),
-        (
-            "Next preview frame",
-            Action::Next,
-            !ready || index + 1 >= count,
-        ),
-        (
-            if playing {
-                "Stop preview replay"
-            } else {
-                "Replay preview"
-            },
+            if playing { "Pause" } else { "Replay" },
             if playing {
                 Action::Stop
             } else {
@@ -188,32 +174,40 @@ pub(crate) fn paint(
             },
             count < 2,
         ),
-        ("Fit preview", Action::Fit, !ready),
+        ("Next", Action::Next, !ready || index + 1 >= count),
     ]
     .into_iter()
     .enumerate()
     {
         let mut control = InterfaceControl::button("document/scripts", label);
         control.disabled = disabled;
-        let caption = [
-            "Previous",
-            "Next",
-            if playing { "Stop" } else { "Replay" },
-            "Fit",
-        ][i];
-        widgets.button(
+        let entity = widgets.button(
             world,
             camera,
             &format!("scripts-preview-button-{i}"),
             control,
-            Some(caption),
+            Some(label),
             NativeCommand::File(FileCommand::ScriptPreview(action)),
-            rect(x + 12. + i as f32 * (fourth + 6.), top, fourth, 26.),
+            rect(x + 16. + i as f32 * (bw + 8.), buttons, bw, 32.),
             None,
             61,
         )?;
+        if i == 1 {
+            interface_shell::primary_button(world, entity);
+        }
     }
-    if extrude {
+    let footer = buttons + 44.;
+    widgets.colored_text(
+        world,
+        camera,
+        "scripts-preview-safety",
+        rect(x + 16., footer, w - 144., 24.),
+        "Your design stays unchanged",
+        10.,
+        61,
+        theme.mute,
+    );
+    if demo.is_some() {
         widgets.button(
             world,
             camera,
@@ -221,31 +215,10 @@ pub(crate) fn paint(
             InterfaceControl::button("document/scripts", "Open Extrude help"),
             Some("Open help"),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Help)),
-            rect(x + 12., top + 36., (w - 30.) / 2., 28.),
-            None,
+            rect(x + w - 120., footer - 2., 104., 28.),
+            Some(interface_shell::ribbon::Icon::Book),
             61,
         )?;
     }
-    let close_label = if extrude {
-        "Close"
-    } else {
-        "Back to script source"
-    };
-    widgets.button(
-        world,
-        camera,
-        "scripts-preview-close",
-        InterfaceControl::button("document/scripts", close_label),
-        Some(close_label),
-        NativeCommand::File(FileCommand::ScriptPreview(Action::Close)),
-        rect(
-            x + 12. + if extrude { (w - 18.) / 2. } else { 0. },
-            top + 36.,
-            if extrude { (w - 30.) / 2. } else { w - 24. },
-            28.,
-        ),
-        None,
-        61,
-    )?;
     Ok(())
 }

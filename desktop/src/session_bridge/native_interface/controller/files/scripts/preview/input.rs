@@ -14,10 +14,9 @@ pub(crate) fn input(
     handle: &NativeInterfaceHandle,
     event: &NativeHostInput,
 ) -> Result<bool, String> {
-    if !world
-        .get_resource::<Files>()
-        .is_some_and(|files| files.scripts && files.script.preview.open)
-    {
+    if !world.get_resource::<Files>().is_some_and(|files| {
+        (files.scripts || files.script.preview.contextual()) && files.script.preview.open
+    }) {
         return Ok(false);
     }
     if let WindowEvent::KeyboardInput(key) = &event.event {

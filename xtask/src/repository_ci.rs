@@ -27,7 +27,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "desktop-changes" => return crate::desktop_changes::run(args),
         "native-ignored-test" => {
             let suite = args.next().context(
-                "missing native ignored suite (fonts, sketch-visual, grid-redraw, sketch-commit or extrude-preview)",
+                "missing native ignored suite (fonts, sketch-visual, grid-redraw, sketch-commit, extrude-preview or show-me-ui)",
             )?;
             ensure!(
                 args.next().is_none(),
@@ -145,8 +145,12 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             "extrude_preview_renders_selected_profile_and_real_solid",
             &["extrude_preview_renders_selected_profile_and_real_solid"],
         )),
+        "show-me-ui" => Ok((
+            "native_show_me_ui_evidence_and_performance",
+            &["native_show_me_ui_evidence_and_performance"],
+        )),
         _ => bail!(
-            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit or extrude-preview"
+            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit, extrude-preview or show-me-ui"
         ),
     }
 }
@@ -345,6 +349,7 @@ mod tests {
             "grid-redraw",
             "sketch-commit",
             "extrude-preview",
+            "show-me-ui",
         ] {
             let (filter, expected) = native_ignored_suite(suite).unwrap();
             let inventory = expected

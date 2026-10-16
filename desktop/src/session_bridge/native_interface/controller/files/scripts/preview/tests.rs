@@ -64,6 +64,136 @@ fn png() -> Vec<u8> {
 }
 
 #[test]
+fn native_script_preview_cached_frames_skip_gpu_work_and_fence_late_errors() {
+    let mut world = world();
+    let (view, _, _) = retained(&mut world);
+    let handle = NativeInterfaceHandle::new(|| {});
+    let revision = world.resource::<Files>().script.preview.revision;
+    publish(
+        &mut world,
+        Rendered {
+            view,
+            revision,
+            png: png(),
+        },
+    )
+    .unwrap();
+    let original = world.resource::<Files>().script.preview.image.clone();
+    let (send, receive) = mpsc::channel();
+    {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.render = Some(Mutex::new(receive));
+        preview.render_revision = revision;
+        preview.changed().unwrap();
+    }
+    render(&mut world, &handle).unwrap();
+    assert_eq!(world.resource::<Files>().script.preview.image, original);
+    assert_eq!(world.resource::<Files>().script.preview.render_jobs, 0);
+    send.send(Err("retired render failure".into())).unwrap();
+    poll(&mut world);
+    let preview = &mut world.resource_mut::<Files>().script.preview;
+    assert!(preview.error.is_none());
+    assert_eq!(preview.rendered, preview.revision);
+    preview.turn(HOME.0 + 0.1, HOME.1).unwrap();
+    assert!(preview.images.get(images::Key::current(preview)).is_none());
+    preview.turn(HOME.0, HOME.1).unwrap();
+    preview.size[0] += 1;
+    assert!(preview.images.get(images::Key::current(preview)).is_none());
+    preview.size[0] -= 1;
+    preview.palette.body[0] += 0.05;
+    assert!(preview.images.get(images::Key::current(preview)).is_none());
+    close(&mut world);
+    assert!(world.resource::<Assets<Image>>().is_empty());
+    assert_eq!(
+        world.resource::<Files>().script.preview.images.footprint(),
+        (0, 0)
+    );
+}
+
+#[test]
+fn native_script_preview_closed_and_paused_poll_do_not_mutate_or_wake() {
+    use std::sync::atomic::AtomicUsize;
+    let mut world = world();
+    let wakes = Arc::new(AtomicUsize::new(0));
+    let counted = wakes.clone();
+    world.insert_resource(NativeInterfaceHandle::new(move || {
+        counted.fetch_add(1, Ordering::Relaxed);
+    }));
+    for open in [false, true] {
+        {
+            let preview = &mut world.resource_mut::<Files>().script.preview;
+            preview.open = open;
+            preview.rendered = preview.revision;
+        }
+        world.clear_trackers();
+        for _ in 0..10_000 {
+            poll(&mut world);
+        }
+        assert!(!world.get_resource_ref::<Files>().unwrap().is_changed());
+        assert_eq!(wakes.load(Ordering::Relaxed), 0);
+        assert_eq!(world.resource::<Files>().script.preview.render_jobs, 0);
+    }
+}
+
+#[test]
+fn native_script_preview_high_dpi_layout_respects_the_bounded_renderer() {
+    let mut world = world();
+    world.init_resource::<ViewportUiAssets>();
+    let camera = world.spawn_empty().id();
+    let mut widgets = super::super::super::super::chrome::Widgets::default();
+    let theme = crate::native_viewport::ui::theme(&world);
+    for scale in [1., 2., 3.5] {
+        world.insert_resource(bevy::ui::UiScale(scale));
+        widgets.begin();
+        panel::paint(&mut world, camera, &mut widgets, 432., 600., theme).unwrap();
+        widgets.finish(&mut world);
+        let size = world.resource::<Files>().script.preview.size;
+        assert!((64..=MAX_RENDER_SIZE[0]).contains(&size[0]));
+        assert!((64..=MAX_RENDER_SIZE[1]).contains(&size[1]));
+    }
+}
+
+#[test]
+fn native_script_preview_cached_replay_arms_every_frame_without_gpu_completion_wakes() {
+    let mut world = world();
+    let (view, _, _) = retained(&mut world);
+    let handle = NativeInterfaceHandle::new(|| {});
+    world.insert_resource(handle.clone());
+    for index in 0..3 {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.index = index;
+        preview.changed().unwrap();
+        let revision = preview.revision;
+        publish(
+            &mut world,
+            Rendered {
+                view: view.clone(),
+                revision,
+                png: png(),
+            },
+        )
+        .unwrap();
+    }
+    command(&mut world, &handle, Action::Replay, &ControlInput::Click).unwrap();
+    poll(&mut world);
+    for index in 0..2 {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        assert_eq!(preview.index, index);
+        preview
+            .wake
+            .as_mut()
+            .expect("Cached frame needs its own next wake")
+            .due = Instant::now();
+        poll(&mut world);
+    }
+    let preview = &world.resource::<Files>().script.preview;
+    assert_eq!(preview.index, 2);
+    assert_eq!(preview.render_jobs, 0);
+    assert!(!preview.playing);
+    assert!(preview.wake.is_none());
+}
+
+#[test]
 fn native_script_preview_uses_catalog_policy_and_never_substitutes_edited_source() {
     let mut world = world();
     let handle = NativeInterfaceHandle::new(|| {});
@@ -107,8 +237,13 @@ fn native_script_preview_extrude_preserves_dirty_source_and_help_does_not_advanc
     )
     .unwrap();
     world.resource_mut::<Files>().script.editor_open = true;
+    world.resource_mut::<Files>().scripts = false;
     let handle = NativeInterfaceHandle::new(|| {});
     command(&mut world, &handle, Action::Extrude, &ControlInput::Click).unwrap();
+    assert!(
+        !world.resource::<Files>().scripts,
+        "A contextual demo must not select the Scripts workspace"
+    );
     let channel = world
         .resource_mut::<Files>()
         .script
@@ -127,15 +262,14 @@ fn native_script_preview_extrude_preserves_dirty_source_and_help_does_not_advanc
     preview.retained = Some(Retained::new(preview.service.clone(), frames).unwrap());
     assert!(preview.playing);
     command(&mut world, &handle, Action::Help, &ControlInput::Click).unwrap();
-    command(&mut world, &handle, Action::Next, &ControlInput::Click).unwrap();
+    assert!(command(&mut world, &handle, Action::Next, &ControlInput::Click).is_err());
     let preview = &world.resource::<Files>().script.preview;
-    assert_eq!(preview.help_page, 1);
     assert_eq!(preview.index, 0);
     assert!(!preview.playing);
     command(&mut world, &handle, Action::Demo, &ControlInput::Click).unwrap();
     command(&mut world, &handle, Action::Close, &ControlInput::Click).unwrap();
     let files = world.resource::<Files>();
-    assert!(files.scripts && files.script.editor_open && files.script.dirty());
+    assert!(!files.scripts && files.script.editor_open && files.script.dirty());
     assert_eq!(files.script.source, "unfinished { draft");
     assert_eq!(files.script.example.unwrap().id, "fillet-basics");
     assert!(files.script.preview.retained.is_none());
@@ -253,6 +387,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
     )
     .unwrap();
     let request = RenderRequest {
+        palette: None,
         preview_id: document,
         view_id: view.clone(),
         revision: revision + 1,
@@ -265,6 +400,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
     assert!(service.render(request).unwrap_err().contains("expired"));
     let reopened = Retained::new(service.clone(), frames()).unwrap();
     let request = RenderRequest {
+        palette: None,
         preview_id: reopened.descriptor.preview_id.clone(),
         view_id: view,
         revision: revision + 1,

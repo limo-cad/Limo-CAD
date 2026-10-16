@@ -1,0 +1,33 @@
+{
+  "cached_frames": 7,
+  "cached_rgba_bytes": 6720000,
+  "closed_cached_bytes": 0,
+  "closed_poll_ns": 941.634,
+  "cold_frame_ms": [
+    1418.3346000000001,
+    247.5935,
+    763.0649000000001,
+    253.07489999999999,
+    249.9444,
+    260.6635,
+    261.7445
+  ],
+  "cold_gpu_jobs": 7,
+  "durations_ms": [
+    1400,
+    1400,
+    350,
+    350,
+    350,
+    1400,
+    1400
+  ],
+  "idle_poll_samples": 100000,
+  "idle_preview_wakes": 0,
+  "paused_poll_ns": 826.143,
+  "prepare_ms": 496.8451,
+  "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+  "texture_budget_bytes": 16777216,
+  "warm_gpu_jobs": 0,
+  "warm_replay_ms": 0.02318
+}

@@ -30,6 +30,7 @@ const MAX_CACHE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_DOCUMENTS: usize = 8;
 const MAX_VIEWS: usize = 8;
+pub(crate) const MAX_RENDER_SIZE: [u32; 2] = [640, 400];
 const REQUEST_LIFETIME: Duration = Duration::from_secs(20);
 
 fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
@@ -277,6 +278,8 @@ pub(crate) struct PreviewDescriptor {
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RenderRequest {
+    #[serde(default)]
+    pub palette: Option<ViewportPalette>,
     pub preview_id: String,
     pub view_id: String,
     pub revision: u64,
@@ -290,8 +293,8 @@ impl RenderRequest {
     fn validate(&self) -> Result<(), String> {
         if uuid::Uuid::parse_str(&self.view_id).is_err()
             || self.revision == 0
-            || !(64..=640).contains(&self.width)
-            || !(64..=400).contains(&self.height)
+            || !(64..=MAX_RENDER_SIZE[0]).contains(&self.width)
+            || !(64..=MAX_RENDER_SIZE[1]).contains(&self.height)
             || !self.yaw.is_finite()
             || self.yaw.abs() > 100_000.0
             || !self.pitch.is_finite()
@@ -313,7 +316,7 @@ struct ServiceState {
 #[derive(Default)]
 pub(crate) struct PreviewService(Mutex<ServiceState>, Arc<AtomicUsize>);
 enum WorkerCommand {
-    Render(RenderJob),
+    Render(Box<RenderJob>),
     Release,
 }
 struct RenderJob {
@@ -458,13 +461,13 @@ impl PreviewService {
             .worker
             .as_ref()
             .unwrap()
-            .try_send(WorkerCommand::Render(RenderJob {
+            .try_send(WorkerCommand::Render(Box::new(RenderJob {
                 document,
                 request,
                 cancelled: cancelled.clone(),
                 reply,
                 deadline,
-            }))
+            })))
             .map_err(|_| "Feature preview renderer is busy; try again")?;
         if let Some((_, previous)) = state.views.insert(view_id, (revision, cancelled.clone())) {
             previous.store(true, Ordering::Release);
@@ -667,6 +670,9 @@ impl PreviewRenderer {
             self.model_key = Some(model_key);
         }
         let world = self.app.world_mut();
+        if let Some(palette) = request.palette {
+            apply_interface_palette(world, palette);
+        }
         *world.resource_mut::<CapturedImage>() = CapturedImage {
             revision,
             result: None,
@@ -768,6 +774,7 @@ mod tests {
 
     fn request(preview_id: String, view_id: String, revision: u64) -> RenderRequest {
         RenderRequest {
+            palette: None,
             preview_id,
             view_id,
             revision,

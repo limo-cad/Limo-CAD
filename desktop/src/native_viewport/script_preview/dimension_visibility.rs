@@ -55,6 +55,7 @@ fn native_sketch_dimension_leaders_remain_visible_over_solid_faces() {
         std::fs::create_dir_all(path).unwrap();
     }
     let mut request = RenderRequest {
+        palette: None,
         preview_id: "dimension-visibility".into(),
         view_id: String::new(),
         revision: 1,

@@ -1474,7 +1474,10 @@ pub(crate) fn synchronize(
             Some(interface_shell::ribbon::Icon::Book),
             42,
         )?;
-        if world.resource::<Files>().scripts {
+        let preview = &world.resource::<Files>().script.preview;
+        if preview.open && preview.contextual() {
+            scripts::paint_preview(world, camera, &mut state.chrome, width, height, theme)?;
+        } else if world.resource::<Files>().scripts {
             paint_scripts((world, camera), &mut state, width, height, theme)?;
         }
         state.chrome.finish(world);

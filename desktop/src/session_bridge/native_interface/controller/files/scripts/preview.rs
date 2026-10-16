@@ -2,7 +2,7 @@
 //! Neither preparing nor rendering a preview receives the live CAD document.
 use super::*;
 use crate::native_viewport::script_preview::{
-    Frame, PreviewDescriptor, PreviewService, RenderRequest,
+    Frame, PreviewDescriptor, PreviewService, RenderRequest, MAX_RENDER_SIZE,
 };
 use bevy::{
     asset::RenderAssetUsages,
@@ -10,8 +10,11 @@ use bevy::{
 };
 use std::time::{Duration, Instant};
 
+mod card;
 mod feature;
+mod images;
 mod input;
+mod lesson;
 mod panel;
 pub(crate) use feature::paint_hint;
 pub(crate) use input::input;
@@ -87,6 +90,9 @@ pub(crate) struct State {
     generation: u64,
     build: Option<ResultChannel<Vec<Frame>>>,
     render: Option<ResultChannel<Rendered>>,
+    render_revision: u64,
+    #[cfg(test)]
+    render_jobs: usize,
     service: Arc<PreviewService>,
     retained: Option<Retained>,
     index: usize,
@@ -97,6 +103,8 @@ pub(crate) struct State {
     attempted: u64,
     size: [u32; 2],
     image: Option<Handle<Image>>,
+    images: images::Cache,
+    palette: crate::native_viewport::ViewportPalette,
     image_index: Option<usize>,
     error: Option<String>,
     playing: bool,
@@ -104,7 +112,6 @@ pub(crate) struct State {
     drag: Option<input::Drag>,
     return_to: Option<(bool, bool, bool, bool)>,
     help: bool,
-    help_page: usize,
     focus_owner: Option<DocumentContext>,
 }
 pub(in super::super) fn cancel_pointer(world: &mut World) {
@@ -120,6 +127,9 @@ impl Default for State {
             generation: 0,
             build: None,
             render: None,
+            render_revision: 0,
+            #[cfg(test)]
+            render_jobs: 0,
             service: Arc::new(PreviewService::default()),
             retained: None,
             index: 0,
@@ -130,6 +140,8 @@ impl Default for State {
             attempted: 0,
             size: [300, 176],
             image: None,
+            images: images::Cache::default(),
+            palette: crate::native_viewport::ViewportPalette::default(),
             image_index: None,
             error: None,
             playing: false,
@@ -137,12 +149,14 @@ impl Default for State {
             drag: None,
             return_to: None,
             help: false,
-            help_page: 0,
             focus_owner: None,
         }
     }
 }
 impl State {
+    pub fn contextual(&self) -> bool {
+        self.return_to.is_some()
+    }
     pub fn building(&self) -> bool {
         self.build.is_some()
     }
@@ -213,7 +227,7 @@ fn open_extrude(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(),
     }
     let example = catalog::examples()
         .iter()
-        .find(|example| example.id == "extrude-basics")
+        .find(|example| example.id == lesson::EXTRUDE.recipe)
         .ok_or("The Extrude example is unavailable")?;
     let files = world.resource::<Files>();
     let previous = (
@@ -225,7 +239,6 @@ fn open_extrude(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(),
     let generation = files.script.generation;
     start(world, handle, example.source.clone(), generation)?;
     let files = &mut world.resource_mut::<Files>();
-    files.scripts = true;
     files.script.chapters.open = false;
     files.script.preview.return_to = Some(previous);
     files.script.preview.playing = true;
@@ -278,7 +291,7 @@ fn start(
 
 fn close(world: &mut World) {
     world.resource_mut::<Files>().script.preview.return_to = None;
-    let image = {
+    let images = {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.open = false;
         preview.help = false;
@@ -288,11 +301,12 @@ fn close(world: &mut World) {
         preview.wake = None;
         preview.drag = None;
         preview.image_index = None;
-        preview.image.take()
+        preview.image = None;
+        preview.images.drain()
     };
-    if let Some(image) = image {
-        if let Some(mut images) = world.get_resource_mut::<Assets<Image>>() {
-            images.remove(image.id());
+    if let Some(mut assets) = world.get_resource_mut::<Assets<Image>>() {
+        for image in images {
+            assets.remove(image.id());
         }
     }
 }
@@ -346,7 +360,6 @@ pub(crate) fn command(
         match action {
             Action::Help | Action::Demo => {
                 preview.help = action == Action::Help;
-                preview.help_page = 0;
                 preview.focus_owner = handle.presented_context();
                 preview.playing = false;
                 preview.wake = None;
@@ -355,14 +368,7 @@ pub(crate) fn command(
             Action::Previous | Action::Next => {
                 preview.playing = false;
                 if preview.help {
-                    let count = feature::help().as_ref().map_or(0, Vec::len);
-                    preview.help_page = if action == Action::Previous {
-                        preview.help_page.saturating_sub(1)
-                    } else {
-                        (preview.help_page + 1).min(count.saturating_sub(1))
-                    };
-                    handle.request_redraw();
-                    return Ok(json!({"help_page":preview.help_page}));
+                    return Err("Return to the demonstration before stepping frames".into());
                 }
                 preview.index = if action == Action::Previous {
                     preview.index.saturating_sub(1)
@@ -417,29 +423,34 @@ fn publish(world: &mut World, rendered: Rendered) -> Result<(), String> {
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     )
     .map_err(|error| format!("Cannot display lesson preview: {error}"))?;
-    let old = world.resource_mut::<Files>().script.preview.image.take();
-    let handle = {
-        let mut images = world.resource_mut::<Assets<Image>>();
-        if let Some(old) = old {
-            images.remove(old.id());
-        }
-        images.add(image)
-    };
-    let preview = &mut world.resource_mut::<Files>().script.preview;
-    preview.image = Some(handle);
-    preview.image_index = Some(preview.index);
-    preview.rendered = rendered.revision;
-    preview.error = None;
-    Ok(())
+    world.resource_scope(|world, mut files: Mut<Files>| {
+        let preview = &mut files.script.preview;
+        let key = images::Key::current(preview);
+        let handle =
+            preview
+                .images
+                .store(&mut world.resource_mut::<Assets<Image>>(), key, image)?;
+        preview.image = Some(handle);
+        preview.image_index = Some(preview.index);
+        preview.rendered = rendered.revision;
+        preview.error = None;
+        Ok(())
+    })
 }
 
 fn render(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String> {
     let preview = &mut world.resource_mut::<Files>().script.preview;
-    if !preview.open
-        || preview.help
-        || preview.render.is_some()
-        || preview.attempted == preview.revision
-    {
+    if !preview.open || preview.help || preview.attempted == preview.revision {
+        return Ok(());
+    }
+    if let Some(image) = preview.images.get(images::Key::current(preview)) {
+        preview.image = Some(image);
+        preview.image_index = Some(preview.index);
+        preview.rendered = preview.revision;
+        preview.attempted = preview.revision;
+        return Ok(());
+    }
+    if preview.render.is_some() {
         return Ok(());
     }
     let Some(retained) = &preview.retained else {
@@ -449,6 +460,7 @@ fn render(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), Strin
     preview.attempted = revision;
     let view = retained.view.clone();
     let request = RenderRequest {
+        palette: Some(preview.palette),
         preview_id: retained.descriptor.preview_id.clone(),
         view_id: view.clone(),
         revision,
@@ -459,6 +471,10 @@ fn render(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), Strin
         pitch: preview.pitch,
     };
     let pending = retained.service.render(request)?;
+    #[cfg(test)]
+    {
+        preview.render_jobs += 1;
+    }
     let (send, receive) = mpsc::channel();
     let wake = handle.clone();
     std::thread::Builder::new()
@@ -474,6 +490,7 @@ fn render(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), Strin
         })
         .map_err(|error| format!("Cannot wait for preview pixels: {error}"))?;
     preview.render = Some(Mutex::new(receive));
+    preview.render_revision = revision;
     Ok(())
 }
 
@@ -517,12 +534,21 @@ pub(super) fn poll(world: &mut World) {
     let files = world.resource::<Files>();
     let preview = &files.script.preview;
     if preview.open
-        && (!files.scripts
+        && ((!files.scripts && !preview.contextual())
             || files.script.library.open
             || files.script.editor_open
             || files.script.generation != preview.generation)
     {
         close(world);
+    }
+    let preview = &world.resource::<Files>().script.preview;
+    if preview.build.is_none()
+        && preview.render.is_none()
+        && (!preview.open
+            || preview.help
+            || (!preview.playing && preview.rendered == preview.revision))
+    {
+        return;
     }
     if let Some(result) = receive(&world.resource::<Files>().script.preview.build) {
         let preview = &mut world.resource_mut::<Files>().script.preview;
@@ -538,7 +564,7 @@ pub(super) fn poll(world: &mut World) {
         world.resource_mut::<Files>().script.preview.render = None;
         if let Err(error) = result.and_then(|result| publish(world, result)) {
             let preview = &mut world.resource_mut::<Files>().script.preview;
-            if preview.open && preview.attempted == preview.revision {
+            if preview.open && preview.render_revision == preview.revision {
                 preview.error = Some(error);
             }
         }
@@ -551,7 +577,15 @@ pub(super) fn poll(world: &mut World) {
         &handle,
         Instant::now(),
     )
-    .and_then(|_| render(world, &handle));
+    .and_then(|_| render(world, &handle))
+    // Cached pixels arrive synchronously: arm their dwell timer in this update.
+    .and_then(|_| {
+        replay(
+            &mut world.resource_mut::<Files>().script.preview,
+            &handle,
+            Instant::now(),
+        )
+    });
     if let Err(error) = outcome {
         world.resource_mut::<Files>().script.preview.error = Some(error);
     }
@@ -559,3 +593,6 @@ pub(super) fn poll(world: &mut World) {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod evidence;

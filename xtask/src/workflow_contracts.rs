@@ -1643,6 +1643,7 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
         "Verify the Extrude lesson profile and solid on the GPU",
     )?;
     requires_command(lesson, "cargo xtask ci native-ignored-test extrude-preview")?;
+    requires_command(lesson, "cargo xtask ci native-ignored-test show-me-ui")?;
     ensure!(
         lesson["if"].is_null() && lesson["continue-on-error"].is_null(),
         "Extrude GPU acceptance must execute and propagate failures"
@@ -1651,6 +1652,11 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
         lesson["env"]["LIMO_CAD_PREVIEW_PROOF_DIR"].as_str()
             == Some("${{ github.workspace }}/docs/qa/native-boundary"),
         "Extrude GPU captures must be included in the retained visual evidence"
+    );
+    ensure!(
+        lesson["env"]["LIMO_CAD_SHOW_ME_PROOF_DIR"].as_str()
+            == Some("${{ github.workspace }}/docs/qa/native-boundary/show-me"),
+        "Show me UI captures must be included in the retained visual evidence"
     );
     let (_, evidence) = named_step(job, "Retain native visual evidence")?;
     ensure!(
@@ -1671,6 +1677,11 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
         .context("renderer PR paths")?;
     for path in [
         "desktop/src/native_viewport/**",
+        "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/**",
+        "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs",
+        "desktop/src/session_bridge/native_interface/controller/chrome.rs",
+        "desktop/src/session_bridge/native_interface/controller/files.rs",
+        "desktop/src/session_bridge/native_interface/controller/files/panel.rs",
         "crates/occt/**",
         "crates/sketch/**",
         "crates/recipes/**",

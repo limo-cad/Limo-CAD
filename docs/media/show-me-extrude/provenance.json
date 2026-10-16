@@ -1,0 +1,21 @@
+{
+  "capture": "Windowless production Bevy widgets and real isolated CAD preview renderer; not an OS screen recording.",
+  "animation": "Seven captured lesson frames at descriptor timings; cropped and downsampled, with a shared GIF palette.",
+  "native_capture_size": [
+    864,
+    1200
+  ],
+  "ui_scale": 2,
+  "source_sha256_lf": {
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/card.rs": "a52e0501adc1b1e4c6ff5a618fe7bdc025716e99f178ce54a15557582471ff3a",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/evidence.rs": "8792a7e0c4a03412417339c5855ddd8eecb0d317d9524b2bd09e72239a255b6b",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/feature.rs": "48fde082de2114f4641c66cf7a742d347cdee09c320b5ef7761537517cab332d",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/images.rs": "58fe7942c67f90e226c0e45932d691ca8fa258b1f4337c4efd2e160be40d8955",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/input.rs": "1a9a50b4fe0db183a6915fef9939b1311b9d57d489a32c51f66496731a2d9db6",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/lesson.rs": "f9cf1b8c25defe2f145ea9a8d10ed49362dd5a0b94de3567716bdf99a4f02349",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/panel.rs": "98313dcd11a410cc7ce055c74a13edf0b4244787dc68053a538445b6db002349",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/tests.rs": "8740c26afb127915304d3dcb746a9402e70c2c9d4163bcec80a81255718be3a1",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs": "71a93d4203d8b43fd7383afa1d9fa4095d5d8b421967f11e0ebb80b8aaedd7e9",
+    "desktop/src/native_viewport/script_preview.rs": "3cd69201e8e509d8624ad2e82e030a30cc81c9377b8367b3707b1cfbc9ae215d"
+  }
+}
