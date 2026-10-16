@@ -103,6 +103,16 @@ jobs:
         with:
           target: ${{ matrix.rust_target }}
 
+      - name: Restore Rust build dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: |
+            . -> target
+            desktop -> target
+          key: desktop-packages-${{ matrix.runner_cache_key }}-${{ matrix.rust_target }}
+          cache-workspace-crates: false
+          cache-bin: false
+
       - name: Set up cached OpenCASCADE SDK
         id: occt
         uses: ./.github/actions/setup-windows-occt
@@ -708,6 +718,16 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           target: aarch64-apple-darwin
+
+      - name: Restore Rust build dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: |
+            . -> target
+            desktop -> target
+          key: desktop-packages-macos-15-aarch64-apple-darwin
+          cache-workspace-crates: false
+          cache-bin: false
 
       - name: Install checked OpenCASCADE 8.0.1
         uses: ./.github/actions/setup-unix-occt
