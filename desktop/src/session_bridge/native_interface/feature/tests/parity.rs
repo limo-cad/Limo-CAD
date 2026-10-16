@@ -55,6 +55,7 @@ fn shaded_extrusion_preserves_concavity_holes_and_each_signed_extent() {
         ),
     ] {
         let request = ExtrudeRequest {
+            merge_profiles: false,
             sketch_name: "Sketch1".into(),
             profile_indices: vec![0],
             source_face: None,

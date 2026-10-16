@@ -360,10 +360,13 @@ impl SolidDocument {
             ExtrudeOperation::Join | ExtrudeOperation::Cut | ExtrudeOperation::Intersect => {}
         };
         for definition in &self.extrudes {
-            let count = definition
-                .source_face
-                .map(|_| 1)
-                .unwrap_or(definition.profile_indices.len());
+            let count = profile_output_count(
+                definition
+                    .source_face
+                    .map(|_| 1)
+                    .unwrap_or(definition.profile_indices.len()),
+                definition.merge_profiles,
+            );
             add_outputs(
                 definition.operation,
                 &definition.new_body_ids[..count.min(definition.new_body_ids.len())],
@@ -373,10 +376,11 @@ impl SolidDocument {
         for definition in &self.revolves {
             add_outputs(
                 definition.operation,
-                &definition.new_body_ids[..definition
-                    .profile_indices
-                    .len()
-                    .min(definition.new_body_ids.len())],
+                &definition.new_body_ids[..profile_output_count(
+                    definition.profile_indices.len(),
+                    definition.merge_profiles,
+                )
+                .min(definition.new_body_ids.len())],
                 &definition.target_body_ids,
             );
         }
@@ -812,6 +816,7 @@ impl SolidDocument {
             } else {
                 request.profile_indices
             },
+            merge_profiles: request.merge_profiles,
             operation: request.operation,
             extent: request.extent,
             taper_angle_deg: request.taper_angle_deg,
@@ -911,6 +916,7 @@ impl SolidDocument {
             request.profile_indices
         };
         definition.operation = request.operation;
+        definition.merge_profiles = request.merge_profiles;
         definition.extent = request.extent;
         definition.taper_angle_deg = request.taper_angle_deg;
         definition.flip = request.flip;
@@ -955,6 +961,7 @@ impl SolidDocument {
             name: name.into(),
             sketch_name: request.sketch_name,
             profile_indices: request.profile_indices,
+            merge_profiles: request.merge_profiles,
             axis_origin: request.axis_origin,
             axis_direction: request.axis_direction,
             axis_line_sketch_name: request.axis_line_sketch_name,
@@ -1000,6 +1007,7 @@ impl SolidDocument {
         }
         definition.sketch_name = request.sketch_name;
         definition.profile_indices = request.profile_indices;
+        definition.merge_profiles = request.merge_profiles;
         definition.axis_origin = request.axis_origin;
         definition.axis_direction = request.axis_direction;
         definition.axis_line_sketch_name = request.axis_line_sketch_name;
@@ -2331,21 +2339,25 @@ fn body_owners(
                 &mut owners,
                 definition.feature_id,
                 definition.operation,
-                &definition.new_body_ids[..definition
-                    .source_face
-                    .map(|_| 1)
-                    .unwrap_or(definition.profile_indices.len())
-                    .min(definition.new_body_ids.len())],
+                &definition.new_body_ids[..profile_output_count(
+                    definition
+                        .source_face
+                        .map(|_| 1)
+                        .unwrap_or(definition.profile_indices.len()),
+                    definition.merge_profiles,
+                )
+                .min(definition.new_body_ids.len())],
                 &definition.target_body_ids,
             ),
             FeatureDefinitionRef::Revolve(definition) => assign_owners(
                 &mut owners,
                 definition.feature_id,
                 definition.operation,
-                &definition.new_body_ids[..definition
-                    .profile_indices
-                    .len()
-                    .min(definition.new_body_ids.len())],
+                &definition.new_body_ids[..profile_output_count(
+                    definition.profile_indices.len(),
+                    definition.merge_profiles,
+                )
+                .min(definition.new_body_ids.len())],
                 &definition.target_body_ids,
             ),
             FeatureDefinitionRef::Sweep(definition) => assign_owners(
@@ -2636,6 +2648,16 @@ fn make_jobs(
                 } else {
                     profiles.len()
                 };
+                let operation = profile_operation(
+                    definition.operation,
+                    definition.merge_profiles,
+                    source_count,
+                );
+                let target_body_ids = if definition.operation == ExtrudeOperation::NewBody {
+                    Vec::new()
+                } else {
+                    definition.target_body_ids.clone()
+                };
                 let (mut start_offset, mut end_offset) = offsets(
                     definition.extent,
                     source_basis,
@@ -2653,14 +2675,14 @@ fn make_jobs(
                     ));
                 }
 
-                let result_body_ids = match definition.operation {
+                let result_body_ids = match operation {
                     ExtrudeOperation::NewBody => definition
                         .new_body_ids
                         .iter()
                         .copied()
                         .take(source_count)
                         .collect::<Vec<_>>(),
-                    ExtrudeOperation::Join if definition.target_body_ids.is_empty() => {
+                    ExtrudeOperation::Join if target_body_ids.is_empty() => {
                         if source_count < 2 {
                             return Err(SolidError::InvalidExtent(
                                 "Join without a target needs at least two profiles".to_string(),
@@ -2676,28 +2698,26 @@ fn make_jobs(
                     ExtrudeOperation::Join
                     | ExtrudeOperation::Cut
                     | ExtrudeOperation::Intersect => {
-                        if definition.target_body_ids.is_empty() {
+                        if target_body_ids.is_empty() {
                             return Err(SolidError::InvalidExtent(
                                 "a boolean extrude needs at least one target body".to_string(),
                             ));
                         }
-                        for target in &definition.target_body_ids {
+                        for target in &target_body_ids {
                             if !available_bodies.contains(target) {
                                 return Err(SolidError::MissingTarget(*target));
                             }
                         }
-                        definition.target_body_ids.clone()
+                        target_body_ids.clone()
                     }
                 };
-                if result_body_ids.len() != source_count
-                    && definition.operation == ExtrudeOperation::NewBody
-                {
+                if result_body_ids.len() != source_count && operation == ExtrudeOperation::NewBody {
                     return Err(SolidError::InvalidHistory(format!(
                         "{} has too few reserved body ids",
                         definition.name
                     )));
                 }
-                match definition.operation {
+                match operation {
                     ExtrudeOperation::NewBody | ExtrudeOperation::Join => {
                         available_bodies.extend(result_body_ids.iter().copied())
                     }
@@ -2705,14 +2725,14 @@ fn make_jobs(
                 }
                 jobs.push(KernelJobDto::Extrude(KernelExtrudeJobDto {
                     feature_id: definition.feature_id,
-                    operation: definition.operation,
+                    operation,
                     source_face,
                     profiles,
                     normal: source_basis.normal.into(),
                     start_offset,
                     end_offset,
                     taper_angle_deg: definition.taper_angle_deg,
-                    target_body_ids: definition.target_body_ids.clone(),
+                    target_body_ids,
                     result_body_ids,
                 }));
             }
@@ -2799,19 +2819,25 @@ fn make_jobs(
                     }
                     Ok(())
                 })?;
-                let result_body_ids = resolve_outputs(
+                let operation = profile_operation(
                     definition.operation,
+                    definition.merge_profiles,
+                    profiles.len(),
+                );
+                let target_body_ids = if definition.operation == ExtrudeOperation::NewBody {
+                    Vec::new()
+                } else {
+                    definition.target_body_ids.clone()
+                };
+                let result_body_ids = resolve_outputs(
+                    operation,
                     &definition.new_body_ids,
                     profiles.len(),
-                    &definition.target_body_ids,
+                    &target_body_ids,
                     &available_bodies,
                     &definition.name,
                 )?;
-                record_new_bodies(
-                    definition.operation,
-                    &result_body_ids,
-                    &mut available_bodies,
-                );
+                record_new_bodies(operation, &result_body_ids, &mut available_bodies);
                 let axis_origin = sketch.basis.to_3d([axis_origin_2d.x, axis_origin_2d.y]);
                 let axis_direction = [
                     sketch.basis.u[0] * dx + sketch.basis.v[0] * dy,
@@ -2822,12 +2848,12 @@ fn make_jobs(
                     definition.angle_deg.to_radians() * if definition.flip { -1.0 } else { 1.0 };
                 jobs.push(KernelJobDto::Revolve(KernelRevolveJobDto {
                     feature_id: definition.feature_id,
-                    operation: definition.operation,
+                    operation,
                     profiles,
                     axis_origin: axis_origin.into(),
                     axis_direction: axis_direction.into(),
                     angle_rad,
-                    target_body_ids: definition.target_body_ids.clone(),
+                    target_body_ids,
                     result_body_ids,
                 }));
             }
@@ -3393,6 +3419,28 @@ fn make_jobs(
     Ok(jobs)
 }
 
+fn profile_output_count(count: usize, merge_profiles: bool) -> usize {
+    if merge_profiles {
+        count.min(1)
+    } else {
+        count
+    }
+}
+
+/// Keep Create Body in persisted history while using the kernel's existing
+/// targetless Join to fuse the tools and validate one connected solid.
+fn profile_operation(
+    operation: ExtrudeOperation,
+    merge_profiles: bool,
+    count: usize,
+) -> ExtrudeOperation {
+    if operation == ExtrudeOperation::NewBody && merge_profiles && count > 1 {
+        ExtrudeOperation::Join
+    } else {
+        operation
+    }
+}
+
 fn resolve_outputs(
     operation: ExtrudeOperation,
     reserved_body_ids: &[BodyId],
@@ -3413,6 +3461,15 @@ fn resolve_outputs(
                 .copied()
                 .take(new_body_count)
                 .collect())
+        }
+        ExtrudeOperation::Join if target_body_ids.is_empty() && new_body_count > 1 => {
+            reserved_body_ids
+                .first()
+                .copied()
+                .map(|id| vec![id])
+                .ok_or_else(|| {
+                    SolidError::InvalidHistory(format!("{feature_name} has no reserved body id"))
+                })
         }
         ExtrudeOperation::Join | ExtrudeOperation::Cut | ExtrudeOperation::Intersect => {
             if target_body_ids.is_empty() {
@@ -3435,7 +3492,7 @@ fn record_new_bodies(
     result_body_ids: &[BodyId],
     available_bodies: &mut BTreeSet<BodyId>,
 ) {
-    if operation == ExtrudeOperation::NewBody {
+    if operation == ExtrudeOperation::NewBody || operation == ExtrudeOperation::Join {
         available_bodies.extend(result_body_ids.iter().copied());
     }
 }
@@ -3945,7 +4002,7 @@ fn kernel_profiles(
     let mut selected = BTreeSet::new();
     let mut roots = Vec::new();
     for requested_index in indices {
-        let mut profile = sketch
+        let profile = sketch
             .profiles
             .iter()
             .find(|profile| profile.index == *requested_index)
@@ -3953,22 +4010,6 @@ fn kernel_profiles(
                 sketch: sketch.sketch_name.clone(),
                 index: *requested_index,
             })?;
-        while profile.nesting_depth % 2 == 1 {
-            let parent_index = profile.parent_index.ok_or_else(|| {
-                SolidError::InvalidHistory(format!(
-                    "profile {} in '{}' has an invalid nesting parent",
-                    profile.index, sketch.sketch_name
-                ))
-            })?;
-            profile = sketch
-                .profiles
-                .iter()
-                .find(|candidate| candidate.index == parent_index)
-                .ok_or_else(|| SolidError::ProfileNotFound {
-                    sketch: sketch.sketch_name.clone(),
-                    index: parent_index,
-                })?;
-        }
         if selected.insert(profile.index) {
             roots.push(profile);
         }
@@ -5610,6 +5651,7 @@ mod tests {
 
     fn request(indices: Vec<u32>) -> ExtrudeRequest {
         ExtrudeRequest {
+            merge_profiles: false,
             source_face: None,
             sketch_name: "Sketch1".to_string(),
             profile_indices: indices,
@@ -5777,6 +5819,7 @@ mod tests {
         let source_face_id = doc.scene().bodies[0].faces[0].id;
         let source_signature = doc.scene().bodies[0].faces[0].signature.unwrap();
         let face_request = ExtrudeRequest {
+            merge_profiles: false,
             source_face: Some(PlanarFaceSourceDto {
                 body_id: source_body_id,
                 face_id: source_face_id,
@@ -5966,6 +6009,7 @@ mod tests {
     fn revolve_plan_maps_the_sketch_axis_and_rejects_crossing_profiles() {
         let mut doc = SolidDocument::new();
         let request = RevolveRequest {
+            merge_profiles: false,
             sketch_name: "Sketch1".to_string(),
             profile_indices: vec![0],
             axis_origin: Point2Dto::new(0.0, 0.0),
@@ -5996,6 +6040,7 @@ mod tests {
 
         doc.cancel_pending(plan.transaction_id);
         let crossing = RevolveRequest {
+            merge_profiles: false,
             sketch_name: "Sketch1".to_string(),
             profile_indices: vec![0],
             axis_origin: Point2Dto::new(10.0, 0.0),
@@ -6027,6 +6072,7 @@ mod tests {
                 FeatureId(3),
                 "Revolve1",
                 RevolveRequest {
+                    merge_profiles: false,
                     sketch_name: "Sketch1".to_string(),
                     profile_indices: vec![0],
                     axis_origin: Point2Dto::new(123.0, 456.0),
@@ -6057,6 +6103,7 @@ mod tests {
                 FeatureId(3),
                 "Revolve1",
                 RevolveRequest {
+                    merge_profiles: false,
                     sketch_name: "Sketch1".to_string(),
                     profile_indices: vec![0],
                     axis_origin: Point2Dto::new(0.0, 0.0),
@@ -6170,6 +6217,7 @@ mod tests {
     fn missing_stable_line_references_fail_recompute() {
         let mut revolve_doc = SolidDocument::new();
         let missing_axis = RevolveRequest {
+            merge_profiles: false,
             sketch_name: "Sketch1".to_string(),
             profile_indices: vec![0],
             axis_origin: Point2Dto::new(0.0, 0.0),

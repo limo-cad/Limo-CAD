@@ -3159,14 +3159,10 @@ fn draw_cad_gizmos(
             .filter(|catalog| state.profile_picker_active && catalog.sketch_name == sketch.name)
             .flat_map(|catalog| {
                 catalog.profiles.iter().filter(|profile| {
-                    let outer_index = if profile.nesting_depth % 2 == 0 {
-                        Some(profile.index)
-                    } else {
-                        profile.parent_index
-                    };
                     state.candidate_profiles.iter().any(|reference| {
                         reference.sketch_name == catalog.sketch_name
-                            && Some(reference.profile_index) == outer_index
+                            && (reference.profile_index == profile.index
+                                || Some(reference.profile_index) == profile.parent_index)
                     })
                 })
             })
@@ -3248,11 +3244,21 @@ fn draw_cad_gizmos(
                     ])
                 })
                 .collect::<Vec<_>>();
-            for profile in catalog
-                .profiles
-                .iter()
-                .filter(|candidate| candidate.nesting_depth % 2 == 0)
-            {
+            let mut profiles = catalog.profiles.iter().collect::<Vec<_>>();
+            profiles.sort_by_key(|profile| {
+                if state.selected_profiles.iter().any(|p| {
+                    p.sketch_name == catalog.sketch_name && p.profile_index == profile.index
+                }) {
+                    2
+                } else if state.hovered_profile.as_ref().is_some_and(|p| {
+                    p.sketch_name == catalog.sketch_name && p.profile_index == profile.index
+                }) {
+                    1
+                } else {
+                    0
+                }
+            });
+            for profile in profiles {
                 if !state.candidate_profiles.iter().any(|candidate| {
                     candidate.sketch_name == catalog.sketch_name
                         && candidate.profile_index == profile.index
@@ -3275,10 +3281,11 @@ fn draw_cad_gizmos(
                     rgba(palette.0.finished_sketch, 0.94)
                 };
                 let mut outline = profile_outline_segments(&profile.points, &replacement_lines);
-                for hole in catalog.profiles.iter().filter(|candidate| {
-                    candidate.nesting_depth % 2 == 1
-                        && candidate.parent_index == Some(profile.index)
-                }) {
+                for hole in catalog
+                    .profiles
+                    .iter()
+                    .filter(|candidate| candidate.parent_index == Some(profile.index))
+                {
                     outline.extend(profile_outline_segments(&hole.points, &replacement_lines));
                 }
                 draw_profile_segments(&mut profile_borders, &catalog.basis, &outline, color);

@@ -128,7 +128,14 @@ impl SolidForm {
             sketch_name: definition.sketch_name.clone(),
             indices: definition.profile_indices.clone(),
         };
-        form.operation = definition.operation;
+        let legacy_merge =
+            definition.operation == ExtrudeOperation::Join && definition.target_body_ids.is_empty();
+        form.operation = if legacy_merge {
+            ExtrudeOperation::NewBody
+        } else {
+            definition.operation
+        };
+        form.merge_profiles = definition.merge_profiles || legacy_merge;
         form.operation_manual = true;
         form.targets = definition.target_body_ids.clone();
         form.flip = definition.flip;
@@ -318,6 +325,7 @@ impl SolidForm {
             axis_line_entity_id: line.map(|l| l.1),
             angle_deg: angle,
             flip: self.flip,
+            merge_profiles: self.operation == ExtrudeOperation::NewBody && self.merge_profiles,
             operation: self.operation,
             target_body_ids: if self.operation == ExtrudeOperation::NewBody {
                 vec![]
@@ -439,6 +447,12 @@ impl SolidForm {
                     ],
                 ),
                 true,
+            ),
+            (
+                F::MergeProfiles,
+                "Merge profiles".into(),
+                Field::Toggle(self.merge_profiles),
+                self.operation == ExtrudeOperation::NewBody,
             ),
             (
                 F::Targets,

@@ -35,8 +35,8 @@ pub struct ProfileLoopDto {
     pub index: u32,
     pub points: Vec<Point2Dto>,
     pub area: f64,
-    /// Smallest enclosing loop, when this loop is nested. Even nesting depths
-    /// are material regions; odd depths are holes in their parent region.
+    /// Smallest enclosing loop, when this loop is nested. Every loop bounds a
+    /// selectable region; its immediate children are holes in that region.
     #[serde(default)]
     pub parent_index: Option<u32>,
     #[serde(default)]
@@ -234,6 +234,9 @@ pub struct ExtrudeRequest {
     pub source_face: Option<PlanarFaceSourceDto>,
     pub sketch_name: String,
     pub profile_indices: Vec<u32>,
+    /// Fuse the selected regions into one connected New Body result.
+    #[serde(default)]
+    pub merge_profiles: bool,
     #[serde(default)]
     pub operation: ExtrudeOperation,
     #[serde(default)]
@@ -258,6 +261,8 @@ pub struct EditExtrudeRequest {
 pub struct RevolveRequest {
     pub sketch_name: String,
     pub profile_indices: Vec<u32>,
+    #[serde(default)]
+    pub merge_profiles: bool,
     pub axis_origin: Point2Dto,
     pub axis_direction: Point2Dto,
     /// Sketch that owns `axis_line_entity_id`. Legacy definitions omit this
@@ -730,6 +735,8 @@ pub struct ExtrudeDefinitionDto {
     pub source_face_basis: Option<PlaneBasis>,
     pub sketch_name: String,
     pub profile_indices: Vec<u32>,
+    #[serde(default)]
+    pub merge_profiles: bool,
     pub operation: ExtrudeOperation,
     pub extent: ExtrudeExtent,
     pub taper_angle_deg: f64,
@@ -751,6 +758,8 @@ pub struct RevolveDefinitionDto {
     pub name: String,
     pub sketch_name: String,
     pub profile_indices: Vec<u32>,
+    #[serde(default)]
+    pub merge_profiles: bool,
     pub axis_origin: Point2Dto,
     pub axis_direction: Point2Dto,
     #[serde(default)]

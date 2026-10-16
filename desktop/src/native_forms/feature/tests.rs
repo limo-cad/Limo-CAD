@@ -721,3 +721,69 @@ fn editing_preserves_the_existing_feature_id_and_explicit_operation() {
         ExtrudeExtent::Distance { distance: 12. }
     );
 }
+
+#[test]
+fn extrude_and_revolve_offer_a_persisted_merge_option_for_inner_regions() {
+    for kind in [SolidFormKind::Extrude, SolidFormKind::Revolve] {
+        let mut fixture = Fixture::new();
+        fixture.profiles[0].profiles[1].points = vec![
+            limo_cad_solid::Point2Dto::new(2., 2.),
+            limo_cad_solid::Point2Dto::new(4., 2.),
+            limo_cad_solid::Point2Dto::new(4., 4.),
+            limo_cad_solid::Point2Dto::new(2., 4.),
+        ];
+        fixture.profiles[0].profiles[1].area = 4.;
+        let model = fixture.model();
+        let mut form = SolidForm::new_kind(kind, &model);
+        form.set_source(
+            ProfileSource::Profiles {
+                sketch_name: "Sketch1".into(),
+                indices: vec![1],
+            },
+            &model,
+        )
+        .unwrap();
+        if kind == SolidFormKind::Revolve {
+            form.set_value(SolidField::Axis, "y", &model).unwrap();
+        }
+        assert!(
+            form.can_apply(&model),
+            "the inner region is a valid source for {kind:?}"
+        );
+        form.set_source(
+            ProfileSource::Profiles {
+                sketch_name: "Sketch1".into(),
+                indices: vec![0, 1],
+            },
+            &model,
+        )
+        .unwrap();
+        form.set_value(SolidField::MergeProfiles, "true", &model)
+            .unwrap();
+        let row = form
+            .fields(&model)
+            .into_iter()
+            .find(|r| r.field == SolidField::MergeProfiles)
+            .unwrap();
+        assert!(row.visible && row.enabled);
+        assert!(matches!(row.value, Field::Toggle(true)));
+        form.set_value(SolidField::Operation, "cut", &model)
+            .unwrap();
+        form.set_targets(vec![BodyId(1)], &model).unwrap();
+        assert!(
+            !form
+                .fields(&model)
+                .iter()
+                .find(|r| r.field == SolidField::MergeProfiles)
+                .unwrap()
+                .visible
+        );
+        assert_eq!(form.payload(&model).unwrap().1["merge_profiles"], false);
+        form.set_value(SolidField::Operation, "new_body", &model)
+            .unwrap();
+        let ticket = form.prepare_apply(&model).unwrap();
+        assert_eq!(ticket.arguments()["merge_profiles"], true);
+        assert_eq!(ticket.arguments()["profile_indices"], json!([0, 1]));
+        assert_eq!(ticket.arguments()["operation"], "new_body");
+    }
+}

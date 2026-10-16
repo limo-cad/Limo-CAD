@@ -22,6 +22,7 @@ fn extrusion(
     targets: Vec<limo_cad_core::BodyId>,
 ) -> ExtrudeRequest {
     ExtrudeRequest {
+        merge_profiles: false,
         source_face: None,
         sketch_name: sketch.to_string(),
         profile_indices: profiles,

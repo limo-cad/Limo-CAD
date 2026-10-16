@@ -3194,7 +3194,15 @@ void Kernel::apply_job_impl(const FfiJob& job) {
       throw std::runtime_error(
           "Join Profiles needs multiple profiles and one output body");
     }
-    impl_->bodies[job.result_body_ids[0]] = fuse_shapes(tools);
+    const TopoDS_Shape merged = fuse_shapes(tools);
+    TopTools_IndexedMapOfShape solids;
+    TopExp::MapShapes(merged, TopAbs_SOLID, solids);
+    if (solids.Extent() != 1 || !BRepCheck_Analyzer(merged).IsValid()) {
+      throw std::runtime_error(
+          "Merge profiles requires contacting regions that form one solid; "
+          "separate regions and point-only contact cannot be merged");
+    }
+    impl_->bodies[job.result_body_ids[0]] = merged;
     return;
   }
   if (job.target_body_ids.empty()) {

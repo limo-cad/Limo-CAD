@@ -117,6 +117,7 @@ fn manager_with_face_sketch() -> (SketchManager, limo_cad_core::FaceId) {
     manager.end_sketch().unwrap();
     let plan = manager
         .prepare_extrude(ExtrudeRequest {
+            merge_profiles: false,
             source_face: None,
             sketch_name: "Sketch1".to_string(),
             profile_indices: vec![0],

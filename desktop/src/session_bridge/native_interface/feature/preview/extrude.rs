@@ -100,7 +100,7 @@ pub(super) fn source_triangles(
     for outer in catalog
         .profiles
         .iter()
-        .filter(|p| p.nesting_depth % 2 == 0 && request.profile_indices.contains(&p.index))
+        .filter(|p| request.profile_indices.contains(&p.index))
     {
         let mut flat = Vec::new();
         let mut holes = Vec::new();
@@ -109,7 +109,7 @@ pub(super) fn source_triangles(
                 catalog
                     .profiles
                     .iter()
-                    .filter(|p| p.nesting_depth % 2 == 1 && p.parent_index == Some(outer.index)),
+                    .filter(|p| p.parent_index == Some(outer.index)),
             )
             .enumerate()
         {
@@ -179,9 +179,26 @@ pub(crate) fn build(
         fill.extend(triangle.iter().rev().map(|p| offset(*p, end)));
     }
     let mut outline = Vec::new();
+    let mut shared_edges = std::collections::BTreeMap::new();
+    for boundary in &boundaries {
+        for pair in boundary.windows(2) {
+            let key = |p: [f64; 3]| p.map(|v| (v * 1e7).round() as i64);
+            let (a, b) = (key(pair[0]), key(pair[1]));
+            let key = if a < b { (a, b) } else { (b, a) };
+            *shared_edges.entry(key).or_insert(0usize) += 1;
+        }
+    }
     for boundary in boundaries {
         for pair in boundary.windows(2) {
             let [a, b] = [pair[0], pair[1]];
+            if request.merge_profiles || request.operation != ExtrudeOperation::NewBody {
+                let key = |p: [f64; 3]| p.map(|v| (v * 1e7).round() as i64);
+                let (ka, kb) = (key(a), key(b));
+                let key = if ka < kb { (ka, kb) } else { (kb, ka) };
+                if shared_edges[&key] > 1 {
+                    continue;
+                }
+            }
             let [a0, b0, a1, b1] = [
                 offset(a, start),
                 offset(b, start),

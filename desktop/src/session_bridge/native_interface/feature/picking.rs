@@ -842,7 +842,7 @@ fn source_profile(
             continue;
         }
         for region in &sketch.profiles {
-            if region.nesting_depth % 2 != 0 || !inside(local, &region.points) {
+            if !inside(local, &region.points) {
                 continue;
             }
             if sketch
