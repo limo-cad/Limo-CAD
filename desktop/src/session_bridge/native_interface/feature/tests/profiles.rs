@@ -442,3 +442,84 @@ fn nested_regions_can_be_picked_toggled_and_merged_in_both_native_forms() {
         assert!(fixture.engine.viewport_snapshot().2.errors.is_empty());
     }
 }
+
+#[test]
+fn a_later_larger_coplanar_sketch_does_not_swallow_an_inner_profile() {
+    let _lock = super::super::super::super::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let owner = fixture.owner();
+    for (p1, p2) in [([20., -10.], [40., 10.]), ([10., -20.], [50., 20.])] {
+        for (op, args) in [
+            ("sketch_begin", json!({"type":"origin_plane","plane":"xy"})),
+            (
+                "sketch_add_rectangle",
+                json!({"mode":"two_point","p1":{"x":p1[0],"y":p1[1]},"p2":{"x":p2[0],"y":p2[1]},"ctrl_held":true}),
+            ),
+            ("sketch_finish", json!({})),
+        ] {
+            fixture
+                .bridge
+                .apply_native_mutation(&fixture.engine, &owner, op, &args, || Ok(()))
+                .unwrap();
+        }
+    }
+    let mut app = scene(&fixture, &owner);
+    native_viewport::apply_interface_viewport(
+        app.world_mut(),
+        limo_cad_interface::Rect {
+            x: 0.,
+            y: 0.,
+            width: 1080.,
+            height: 600.,
+        },
+        1.,
+    )
+    .unwrap();
+    native_viewport::apply_interface_view(
+        app.world_mut(),
+        &owner.document_id,
+        Some(ViewportCamera {
+            position: [30., 0., 120.],
+            target: [30., 0., 0.],
+            up: [0., 1., 0.],
+            ..Default::default()
+        }),
+        Some(ViewportPresentation::default()),
+    )
+    .unwrap();
+    let services = NativeServices {
+        engine: fixture.engine.clone(),
+        bridge: fixture.bridge.clone(),
+    };
+    let id = open(&fixture, app.world_mut(), &owner, None);
+    for (point, sketch) in [([30., 0., 0.], "Sketch1"), ([15., 0., 0.], "Sketch2")] {
+        action(
+            &fixture,
+            app.world_mut(),
+            &owner,
+            id,
+            FeatureControl::Pick(SolidField::Source),
+            ControlInput::Click,
+        )
+        .unwrap();
+        let point = native_viewport::interface_world_point(app.world(), &owner.document_id, point)
+            .unwrap()
+            .unwrap();
+        picking::handle_canvas_pick(app.world_mut(), &services, &owner, point)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            app.world()
+                .resource::<NativeFeature>()
+                .editor
+                .as_ref()
+                .unwrap()
+                .form
+                .selected_profiles(),
+            vec![ProfileRefDto {
+                sketch_name: sketch.into(),
+                profile_index: 0
+            }]
+        );
+    }
+}
