@@ -101,34 +101,76 @@ custom-shader coverage.
 
 ## Focused integration check, 2026-10-16
 
-The local comparison includes main `49dec66d`, PR433 `467fe8b9`, and PR434
-`fcbde1b7`. The dependent PRs were still open when tested; their commits were
-merged only into the local validation branch. PR420's follow-up merges current
-main without bundling those unmerged PRs into its published diff.
+The resumed comparison uses clean integration revision `da44953a`, combining
+main `49dec66d`, the updated PR433 head `5cde5c0d`, PR434 `fcbde1b7`, and PR420
+code checkpoint `21e0ef5d`. The dependencies remain locally merged only; they
+are not included in PR420's published diff. The earlier initial-window run at
+`1e393585` used PR433 `467fe8b9` and is preserved as historical evidence.
 
-Two signed, self-contained macOS Apple silicon apps were built from clean
-integration revision `1e393585`, with the experiment disabled and enabled.
-Both started using bundled OCCT 8.0.1 libraries. At the matched 1360 × 860
-logical client size (2720 × 1720 render target), light theme, English, 100%
-interface scale and 200% display scale, the initial native windows had matching
-ribbon labels/icons, disabled controls, browser, navigation and history layout.
-The saved captures differ only in an eight-pixel-high segment of the empty
-history track. No clipping or workflow obstruction is visible in that state.
+Jack authorized native macOS app automation for this focused comparison.
+Two separately signed, self-contained Apple silicon apps were built from the
+same clean integration revision, with the widget feature disabled and enabled.
+Both load bundled OCCT 8.0.1. Native pointer and keyboard input exercised isolated
+scratch documents; MCP only inspected and captured their state. The matched
+client size was 1360 × 860 logical pixels, at 200% display scale.
 
-All 97 native interface tests, including the seven widget behavior tests,
-passed with the experiment enabled. The native GPU compositing regression also
-passed and retained its frames. These source tests verify admitted activation,
-cancellation, checkbox proposals, keyboard routing and stale-target rejection;
-they are not live mouse/keyboard workflow acceptance.
+The scoped run records **11 passed behavior cases, one shared baseline issue,
+and 13 paired visual states**. No new widget regression was observed in these
+cases. This is not full UI qualification or human adoption acceptance.
 
-Live menus, feature dialogs, profile merging, history editing, alternate
-appearances, keyboard/IME and accessibility remain unverified in this check.
-The repository's guarded computer-input implementation supports Windows only;
-a scoped macOS app-automation exception was requested and remains pending.
-Read-only app inspection/capture did not change that input restriction.
-The [focused evidence record](qualification/bevy-widgets-20261016.json)
-separates the observed initial window from those pending cases. The broad
-qualification ledger remains paused and unchanged.
+| Exercised behavior | Observed result |
+| --- | --- |
+| File menu and Settings | Matching labels, icons, disabled entries and single activation |
+| Light/English/100%; dark/Chinese/125% | Comparable sizing, selection, focus and translated labels; lower settings remain reachable by scrolling |
+| Settings boolean toggle | Pointer switches it off; Space switches it on, verified in the accepted control state |
+| Two sketch regions and Merge profiles | Center and ring select independently; merging previews one combined volume |
+| Distance edit and Apply | 12 mm is committed before one extrusion is added; one body and two total history features |
+| Earlier sketch edit | Later extrusion disappears from the canvas while Sketch1 is edited, then returns on Finish |
+| Release outside Finish Sketch | Widget build stays in sketch mode; the canceled gesture does not finish it |
+| Undo/Redo and save/reopen | Body and history restore; both saved schema-15 model payloads are exactly equal |
+| Feature edit and Cancel | Two profiles, Merge and 12 mm persist; canceling a flipped preview restores the original body |
+| Snap palette row/square | Shared issue described below; not counted as a functional pass |
+
+The primary modeling captures match after accounting for different fixture
+names and a two-pixel-high history-track line. Settings and File menu captures have
+different empty-grid positions; their controls have matching bounds and state.
+The reopened feature dialogs are pixel-identical. Additional differences are
+confined to the header, browser expansion and history track after the differing
+inspection sequences.
+Raw pixel differences and capture hashes are retained, rather than described
+as a universal pixel-identity pass.
+
+![Default and widget extrusion comparison](qualification/bevy-widgets-20261016/extrude-applied.png)
+
+![Default and widget dark Chinese settings comparison](qualification/bevy-widgets-20261016/settings-dark-zh-125.png)
+
+![Default and widget earlier sketch editing comparison](qualification/bevy-widgets-20261016/history-sketch-edit.png)
+
+**Shared baseline observation:** in both apps, clicking the displayed Snap
+square did nothing, while clicking its row toggled it. After the row toggled,
+inspection reported no focused control and Space did not toggle it. Snap was
+restored in both fixtures. This remains unresolved and needs human reproduction
+and inspection of native hit targets/focus retirement; no widget-specific cause
+was established. It is recorded as an issue, not a pass or an accepted cosmetic
+difference.
+
+The updated PR433 integration passed two profile-selection migration tests and
+five native OCCT region tests. The earlier integration passed all 97 native
+interface tests, including seven widget cases, and the native GPU compositing
+regression. Their revisions are recorded separately. Those source checks are
+not substitutes for the native interaction evidence.
+
+Live Revolve, the complete control catalog, held-key/re-entry/deactivation edge
+cases, full focus traversal, IME, screen readers, other display densities and
+Windows/Linux visual checks remain untested in this scope. Native file-chooser
+automation needed deliberate key presses on one retry; the verified path opened
+successfully afterward. Neither that automation behavior nor earlier window
+enumeration failures are attributed to a locked Mac or a product defect.
+
+The [focused evidence record](qualification/bevy-widgets-20261016.json) includes
+expected/actual results, build hashes, fixture paths, captures, unresolved
+observations and explicit exclusions. The broad UI/MCP ledger remains paused
+and unchanged. The feature stays opt-in and this PR stays draft.
 
 ## Required human manual verification
 
