@@ -1,0 +1,107 @@
+{
+  "scope": "PR420 widget visual parity with PR433 and PR434 assumed merged",
+  "tested_revision": "1e3935854e38a726bd2badf046aa0287fd149a5e",
+  "baseline_revision": "3a96e1f96c58add71dd3404aeebf34d789babefd",
+  "main_revision": "49dec66db7a0707c9fcd715a003a7abaa61b8801",
+  "dependency_heads": {
+    "433": "467fe8b9eb245b40c76632067ad9f35162ec51f5",
+    "434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "dependencies_locally_merged_only": true,
+  "platform": "macOS Apple silicon",
+  "builds": {
+    "default": {
+      "experimental_ui_widgets": false,
+      "engine_sha256": "6eeb8e27aafc2b660947a1399ae8bafebbafdab44b2f003844ca5b2a89f2a0a1"
+    },
+    "widgets": {
+      "experimental_ui_widgets": true,
+      "engine_sha256": "bdd2759ea655b09d91feec94b067229755f06a5fda75f5d2ce61ea411f7404ba"
+    }
+  },
+  "package_checks": {
+    "clean_build_identity": true,
+    "deep_strict_ad_hoc_signature": true,
+    "bundled_occt_8_0_1_loaded": true
+  },
+  "appearance": {
+    "theme": "light",
+    "locale": "en",
+    "interface_scale": 1,
+    "display_scale": 2,
+    "logical_client": [
+      1360,
+      860
+    ],
+    "capture_pixels": [
+      2720,
+      1720
+    ]
+  },
+  "acceptance": "Comparable appearance; minor differences acceptable when existing workflow remains intact.",
+  "initial_window": {
+    "status": "passed_read_only_visual_comparison",
+    "expected": "Comparable ribbon, labels, glyphs, disabled controls, browser tree, navigation bar and history layout.",
+    "actual": "Matching initial layout with no visible clipping. Pixel differences are confined to the empty history track.",
+    "functional_interaction_verified": false,
+    "pixel_comparison": {
+      "size_default": [
+        2720,
+        1720
+      ],
+      "size_widgets": [
+        2720,
+        1720
+      ],
+      "changed_pixels": 16028,
+      "difference_bbox": [
+        676,
+        1670,
+        2680,
+        1678
+      ],
+      "max_channel_difference": 41,
+      "mean_channel_difference": [
+        0.14038389192886458,
+        0.12326436388508892,
+        0.10614483584131328
+      ]
+    }
+  },
+  "source_tests": {
+    "native_interface_passed": 97,
+    "included_widget_tests": 7,
+    "native_gpu_compositing_passed": 1
+  },
+  "captures": [
+    {
+      "variant": "default",
+      "path": "artifacts/pr420-visual-parity-20261016/default/initial-light.png",
+      "sha256": "9171ca8f88c72784201ca722206a35bd2a87f3245ab2da9e74309c8f4f0b407a"
+    },
+    {
+      "variant": "widgets",
+      "path": "artifacts/pr420-visual-parity-20261016/widgets/initial-light.png",
+      "sha256": "6e2b44d77949c2b6aeaa47fd136721c395f1543aa233e9b48320029512ff0a76"
+    }
+  ],
+  "evidence_root": "artifacts/pr420-visual-parity-20261016",
+  "not_run": [
+    "Live button/menu/checkbox interaction",
+    "Extrude/Revolve profile selection and Merge profiles",
+    "Creation-time sketch and feature history editing",
+    "Dark theme, additional locales and interface scales",
+    "Live keyboard repeat/focus, IME and screen reader",
+    "Windows/Linux visual comparison"
+  ],
+  "input_gate": {
+    "status": "pending_user_scope_exception",
+    "rule": ".cursor/rules/surface-qualification.mdc",
+    "requirement": "All CAD input uses guarded Rust computer control with observation before every input.",
+    "implementation_platform": "Windows only",
+    "requested_exception": "macOS app automation for the scoped visual check; isolated documents and fresh observations"
+  },
+  "human_manual_acceptance": false,
+  "broad_qualification_ledger_changed": false,
+  "broad_run_state": "paused"
+}

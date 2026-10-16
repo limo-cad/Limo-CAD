@@ -1,11 +1,16 @@
 # WIP: Bevy 0.20.0 stable and headless widgets
 
 **Draft only. Human manual verification is required before adoption or merge.**
-This exploration starts from remote `main` at
-`736758f291289ff2bb1942a0405027b44e919997`. The default desktop moves from
-`=0.20.0-rc.2` to `=0.20.0` stable. The widget prototype is opt-in and is not
-qualified for release. No human UI passes or broad qualification-ledger changes
-are claimed by this PR.
+This exploration originally started from remote `main` at
+`736758f291289ff2bb1942a0405027b44e919997`. Current main already includes Bevy
+`=0.20.0` stable, so the remaining PR change is the opt-in headless widget
+prototype. It is not qualified for release. No human UI passes or broad
+qualification-ledger changes are claimed by this PR.
+
+The visual acceptance criterion is a comparable appearance and an intact
+workflow. Minor differences are acceptable when they do not obscure state,
+change command meaning, clip required content, or prevent an existing action.
+Pixel identity is useful evidence, but is not an adoption requirement.
 
 ## Why headless widgets
 
@@ -94,16 +99,48 @@ UI/compositing regression also passed. These results leave the human checklist
 below outstanding; they do not qualify supported platform packages or full
 custom-shader coverage.
 
+## Focused integration check, 2026-10-16
+
+The local comparison includes main `49dec66d`, PR433 `467fe8b9`, and PR434
+`fcbde1b7`. The dependent PRs were still open when tested; their commits were
+merged only into the local validation branch. PR420's follow-up merges current
+main without bundling those unmerged PRs into its published diff.
+
+Two signed, self-contained macOS Apple silicon apps were built from clean
+integration revision `1e393585`, with the experiment disabled and enabled.
+Both started using bundled OCCT 8.0.1 libraries. At the matched 1360 × 860
+logical client size (2720 × 1720 render target), light theme, English, 100%
+interface scale and 200% display scale, the initial native windows had matching
+ribbon labels/icons, disabled controls, browser, navigation and history layout.
+The saved captures differ only in an eight-pixel-high segment of the empty
+history track. No clipping or workflow obstruction is visible in that state.
+
+All 97 native interface tests, including the seven widget behavior tests,
+passed with the experiment enabled. The native GPU compositing regression also
+passed and retained its frames. These source tests verify admitted activation,
+cancellation, checkbox proposals, keyboard routing and stale-target rejection;
+they are not live mouse/keyboard workflow acceptance.
+
+Live menus, feature dialogs, profile merging, history editing, alternate
+appearances, keyboard/IME and accessibility remain unverified in this check.
+The repository's guarded computer-input implementation supports Windows only;
+a scoped macOS app-automation exception was requested and remains pending.
+Read-only app inspection/capture did not change that input restriction.
+The [focused evidence record](qualification/bevy-widgets-20261016.json)
+separates the observed initial window from those pending cases. The broad
+qualification ledger remains paused and unchanged.
+
 ## Required human manual verification
 
-Compare the same scratch fixture on remote main/rc2, stable/default, and
-stable/experiment at matched window size and display/interface scale. Record
+Compare the same scratch fixture on stable/default and stable/experiment at
+matched window size and display/interface scale. Record
 build identity, expected versus actual behavior and screenshots where useful.
 Do not reuse previous qualification passes as evidence for changed controls.
 
 - [ ] Light/dark themes, localization, 100%/200% display and interface scaling:
       labels, glyphs, dimensions, spacing, hover, selected/pressed/disabled
-      colors, focus rings, clipping and tooltip placement match.
+      colors, focus rings, clipping and tooltip placement remain comparable. Minor
+      differences are acceptable if the workflow remains intact.
 - [ ] Toolbar, ribbon, dialog and menu buttons activate exactly once on release;
       dragging outside, releasing outside, window deactivation and cancellation
       do not activate. Re-entry while captured matches the baseline.
