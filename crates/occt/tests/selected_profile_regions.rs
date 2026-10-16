@@ -7,9 +7,11 @@ use limo_cad_sketch::{
     RectangleMode, RectangleRequest, SegmentRequest, SetGridSnapRequest, SketchManager, Vec2,
 };
 use limo_cad_solid::{
-    CommitKernelRequest, EditExtrudeRequest, EditRevolveRequest, ExtrudeExtent, ExtrudeOperation,
-    ExtrudeRequest, KernelJobDto, Point2Dto, RecomputePlanDto, RevolveRequest,
+    CommitKernelRequest, DatumPlaneRequest, DatumPlaneSourceDto, EditExtrudeRequest,
+    EditRevolveRequest, ExtrudeExtent, ExtrudeOperation, ExtrudeRequest, KernelJobDto, Point2Dto,
+    RecomputePlanDto, RevolveRequest,
 };
+use serde_json::{json, Value};
 use std::f64::consts::TAU;
 
 fn fixture(kind: &str) -> SketchManager {
@@ -155,6 +157,149 @@ fn inner_square_and_surrounding_ring_create_the_selected_material_in_both_tools(
                 (volume(&kernel, body.id) - expected).abs() < expected * 1e-8,
                 "{tool}, depth {depth}"
             );
+            let saved = manager.export_project_model().unwrap();
+            let mut reopened = SketchManager::new();
+            let plan = reopened.prepare_load_project(saved).unwrap();
+            let mut reopened_kernel = OcctKernel::new().unwrap();
+            apply(&mut reopened, &mut reopened_kernel, plan);
+            assert!((volume(&reopened_kernel, body.id) - expected).abs() < expected * 1e-8);
+        }
+    }
+}
+
+#[test]
+fn pre_region_selection_fixture_reopens_as_the_original_ring() {
+    let mut saved =
+        include_str!("../../sketch/tests/fixtures/legacy_nested_profile_v14.json").to_string();
+    for _ in 0..2 {
+        let mut manager = SketchManager::new();
+        let mut kernel = OcctKernel::new().unwrap();
+        let plan = manager.prepare_load_project(saved).unwrap();
+        apply(&mut manager, &mut kernel, plan);
+        assert_eq!(manager.solid_scene().bodies.len(), 1);
+        assert_eq!(manager.solid_scene().bodies[0].id, BodyId(1));
+        assert!((volume(&kernel, BodyId(1)) - 12_000.).abs() < 1e-6);
+        assert_eq!(manager.extrude_definitions()[0].profile_indices, vec![0]);
+        saved = manager.export_project_model().unwrap();
+        let model: Value = serde_json::from_str(&saved).unwrap();
+        assert_eq!(
+            model["schema_version"],
+            limo_cad_sketch::PROJECT_SCHEMA_VERSION
+        );
+    }
+}
+
+fn other_consumer(manager: &mut SketchManager, tool: &str, profile: u32) -> RecomputePlanDto {
+    let xy = PlaneRef::OriginPlane {
+        plane: OriginPlane::Xy,
+    };
+    if tool == "sweep" {
+        manager
+            .begin_sketch(PlaneRef::OriginPlane {
+                plane: OriginPlane::Xz,
+            })
+            .unwrap();
+        let line = manager
+            .add_line(SegmentRequest {
+                from: Vec2::new(0., 0.),
+                to_raw: Vec2::new(0., 10.),
+                ctrl_held: true,
+            })
+            .unwrap();
+        manager.end_sketch().unwrap();
+        manager
+            .prepare_sweep(
+                serde_json::from_value(json!({
+                    "profile":{"sketch_name":"Sketch1","profile_index":profile},
+                    "path_sketch_name":"Sketch2","path_entity_ids":[line.entity_id]
+                }))
+                .unwrap(),
+            )
+            .unwrap()
+    } else {
+        let plane = manager
+            .create_datum_plane(DatumPlaneRequest {
+                name: Some("Loft section".into()),
+                source: DatumPlaneSourceDto::Offset {
+                    reference: xy,
+                    distance: 10.,
+                },
+            })
+            .unwrap();
+        manager
+            .begin_sketch(PlaneRef::DatumPlane {
+                datum_id: plane.planes.last().unwrap().datum_id,
+            })
+            .unwrap();
+        for (x1, y1, x2, y2) in [(10., 0., 50., 40.), (20., 10., 40., 30.)] {
+            manager
+                .add_rectangle(RectangleRequest {
+                    mode: RectangleMode::TwoPoint,
+                    p1: Vec2::new(x1, y1),
+                    p2: Vec2::new(x2, y2),
+                    ctrl_held: true,
+                })
+                .unwrap();
+        }
+        manager.end_sketch().unwrap();
+        manager
+            .prepare_loft(
+                serde_json::from_value(json!({
+                    "sections":[
+                        {"sketch_name":"Sketch1","profile_index":profile},
+                        {"sketch_name":"Sketch2","profile_index":profile}
+                    ], "ruled":true
+                }))
+                .unwrap(),
+            )
+            .unwrap()
+    }
+}
+
+#[test]
+fn every_legacy_profile_consumer_keeps_geometry_and_body_ids_after_migration() {
+    for tool in ["extrude", "revolve", "sweep", "loft"] {
+        let mut manager = fixture("nested");
+        let regions = &manager.profile_catalog()[0].profiles;
+        let outer = regions.iter().find(|p| p.nesting_depth == 0).unwrap().index;
+        let inner = regions.iter().find(|p| p.nesting_depth == 1).unwrap().index;
+        let plan = if matches!(tool, "extrude" | "revolve") {
+            prepare(&mut manager, tool, &[outer], false)
+        } else {
+            other_consumer(&mut manager, tool, outer)
+        };
+        let mut kernel = OcctKernel::new().unwrap();
+        apply(&mut manager, &mut kernel, plan);
+        let body = manager.solid_scene().bodies[0].id;
+        let expected = volume(&kernel, body);
+        let mut model: Value =
+            serde_json::from_str(&manager.export_project_model().unwrap()).unwrap();
+        model["schema_version"] = json!(14);
+        let key = format!("{tool}s");
+        let definition = &mut model[&key][0];
+        if matches!(tool, "extrude" | "revolve") {
+            definition["profile_indices"] = json!([inner]);
+            definition.as_object_mut().unwrap().remove("merge_profiles");
+        } else if tool == "sweep" {
+            definition["profile"]["profile_index"] = json!(inner);
+        } else {
+            for section in definition["sections"].as_array_mut().unwrap() {
+                section["profile_index"] = json!(inner);
+            }
+        }
+        let mut saved = model.to_string();
+        for _ in 0..2 {
+            let mut reopened = SketchManager::new();
+            let mut reopened_kernel = OcctKernel::new().unwrap();
+            let plan = reopened.prepare_load_project(saved).unwrap();
+            apply(&mut reopened, &mut reopened_kernel, plan);
+            assert_eq!(reopened.solid_scene().bodies.len(), 1, "{tool}");
+            assert_eq!(reopened.solid_scene().bodies[0].id, body, "{tool}");
+            assert!(
+                (volume(&reopened_kernel, body) - expected).abs() < expected * 1e-8,
+                "{tool}"
+            );
+            saved = reopened.export_project_model().unwrap();
         }
     }
 }

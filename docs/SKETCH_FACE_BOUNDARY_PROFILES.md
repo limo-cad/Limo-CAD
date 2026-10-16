@@ -40,9 +40,8 @@ selectable in new sketches:
    catalog drops faces with zero.
 2. **Nesting only sees emitted profiles.** Because the bare face outline is
    never emitted, a rectangle drawn on a face stays at nesting depth 0. Adding
-   the outline as ordinary sketch geometry would have made it the depth-zero
-   outer loop and turned every drawn shape inside it into a hole — a shape that
-   can no longer be extruded.
+   the outline as ordinary sketch geometry would make it the depth-zero
+   outer loop and introduce an extra surrounding region.
 
 Provenance survives noding through the reserved id range: a piece shared by
 authored geometry and a projected edge keeps the smaller authored id
@@ -68,6 +67,18 @@ Projected sources use stable body-edge IDs in a separate namespace from authored
 entities, so renumbered discovery slots neither break nor steal saved selections.
 Schema 1–8 projects bootstrap their current catalog without changing old indices;
 legacy face sketches lacking boundary intent remain authored-only.
+
+### Saved nested selections
+
+Schema 15 records each selected loop as its own bounded region, with its
+immediate children as holes. Earlier replay treated an odd-depth loop as an
+alias for its enclosing even-depth region. On load, those legacy Extrude,
+Revolve, Sweep and Loft references are mapped to the regions they originally
+produced. Duplicate aliases collapse in selection order, while reserved body
+IDs remain unchanged. This includes suppressed and rolled-back history.
+Initial schema-14 Extrude/Revolve definitions containing `merge_profiles`
+already use direct region selections and retain that meaning. Resaving writes
+schema 15 so older readers reject the file instead of changing its geometry.
 
 ## Snapping
 

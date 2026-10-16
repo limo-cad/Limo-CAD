@@ -1,0 +1,578 @@
+{
+  "format": "limo-cad-project",
+  "schema_version": 14,
+  "document": {
+    "name": "Untitled",
+    "settings": {
+      "units": "mm",
+      "dimension_style": "aligned"
+    },
+    "history": {
+      "features": [
+        {
+          "id": 1,
+          "name": "Sketch1",
+          "kind": "sketch",
+          "suppressed": false,
+          "status": {
+            "state": "ok"
+          }
+        },
+        {
+          "id": 2,
+          "name": "Extrude1",
+          "kind": "extrude",
+          "suppressed": false,
+          "status": {
+            "state": "ok"
+          }
+        }
+      ],
+      "rollback_index": 2
+    }
+  },
+  "sketches": [
+    {
+      "feature_id": 1,
+      "name": "Sketch1",
+      "plane": {
+        "type": "origin_plane",
+        "plane": "xy"
+      },
+      "basis": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "v": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "dimension_style": "aligned",
+      "grid_snap": true,
+      "snapshot": {
+        "offset_sides": {},
+        "reference_edges": [],
+        "entities": [
+          [
+            1,
+            {
+              "type": "point",
+              "position": {
+                "x": 10.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            2,
+            {
+              "type": "point",
+              "position": {
+                "x": 50.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            3,
+            {
+              "type": "point",
+              "position": {
+                "x": 50.0,
+                "y": 40.0
+              }
+            }
+          ],
+          [
+            4,
+            {
+              "type": "point",
+              "position": {
+                "x": 10.0,
+                "y": 40.0
+              }
+            }
+          ],
+          [
+            5,
+            {
+              "type": "line",
+              "start": 1,
+              "end": 2
+            }
+          ],
+          [
+            6,
+            {
+              "type": "line",
+              "start": 2,
+              "end": 3
+            }
+          ],
+          [
+            7,
+            {
+              "type": "line",
+              "start": 3,
+              "end": 4
+            }
+          ],
+          [
+            8,
+            {
+              "type": "line",
+              "start": 4,
+              "end": 1
+            }
+          ],
+          [
+            9,
+            {
+              "type": "point",
+              "position": {
+                "x": 20.0,
+                "y": 10.0
+              }
+            }
+          ],
+          [
+            10,
+            {
+              "type": "point",
+              "position": {
+                "x": 40.0,
+                "y": 10.0
+              }
+            }
+          ],
+          [
+            11,
+            {
+              "type": "point",
+              "position": {
+                "x": 40.0,
+                "y": 30.0
+              }
+            }
+          ],
+          [
+            12,
+            {
+              "type": "point",
+              "position": {
+                "x": 20.0,
+                "y": 30.0
+              }
+            }
+          ],
+          [
+            13,
+            {
+              "type": "line",
+              "start": 9,
+              "end": 10
+            }
+          ],
+          [
+            14,
+            {
+              "type": "line",
+              "start": 10,
+              "end": 11
+            }
+          ],
+          [
+            15,
+            {
+              "type": "line",
+              "start": 11,
+              "end": 12
+            }
+          ],
+          [
+            16,
+            {
+              "type": "line",
+              "start": 12,
+              "end": 9
+            }
+          ]
+        ],
+        "generated_points": [
+          1,
+          2,
+          3,
+          4,
+          9,
+          10,
+          11,
+          12
+        ],
+        "constraints": [
+          [
+            1,
+            {
+              "type": "horizontal",
+              "entity": 5
+            }
+          ],
+          [
+            2,
+            {
+              "type": "horizontal",
+              "entity": 7
+            }
+          ],
+          [
+            3,
+            {
+              "type": "vertical",
+              "entity": 6
+            }
+          ],
+          [
+            4,
+            {
+              "type": "vertical",
+              "entity": 8
+            }
+          ],
+          [
+            5,
+            {
+              "type": "horizontal",
+              "entity": 13
+            }
+          ],
+          [
+            6,
+            {
+              "type": "horizontal",
+              "entity": 15
+            }
+          ],
+          [
+            7,
+            {
+              "type": "vertical",
+              "entity": 14
+            }
+          ],
+          [
+            8,
+            {
+              "type": "vertical",
+              "entity": 16
+            }
+          ]
+        ],
+        "fix_targets": {},
+        "params": {
+          "params": [],
+          "next_id": 0,
+          "next_name": 0
+        },
+        "dim_params": {},
+        "dim_placements": {},
+        "dim_modes": {},
+        "next_entity": 16,
+        "next_constraint": 8
+      },
+      "profile_identities": {
+        "next": 2,
+        "records": [
+          {
+            "id": 0,
+            "key": [
+              [
+                [
+                  {
+                    "entity": 5
+                  }
+                ],
+                1
+              ],
+              [
+                [
+                  {
+                    "entity": 6
+                  }
+                ],
+                1
+              ],
+              [
+                [
+                  {
+                    "entity": 7
+                  }
+                ],
+                1
+              ],
+              [
+                [
+                  {
+                    "entity": 8
+                  }
+                ],
+                1
+              ]
+            ],
+            "shape": [
+              [
+                10000000,
+                0
+              ],
+              [
+                50000000,
+                0
+              ],
+              [
+                50000000,
+                40000000
+              ],
+              [
+                10000000,
+                40000000
+              ]
+            ]
+          },
+          {
+            "id": 1,
+            "key": [
+              [
+                [
+                  {
+                    "entity": 13
+                  }
+                ],
+                1
+              ],
+              [
+                [
+                  {
+                    "entity": 14
+                  }
+                ],
+                1
+              ],
+              [
+                [
+                  {
+                    "entity": 15
+                  }
+                ],
+                1
+              ],
+              [
+                [
+                  {
+                    "entity": 16
+                  }
+                ],
+                1
+              ]
+            ],
+            "shape": [
+              [
+                20000000,
+                10000000
+              ],
+              [
+                40000000,
+                10000000
+              ],
+              [
+                40000000,
+                30000000
+              ],
+              [
+                20000000,
+                30000000
+              ]
+            ]
+          }
+        ]
+      },
+      "entity_id_high_water": 16
+    }
+  ],
+  "extrudes": [
+    {
+      "feature_id": 2,
+      "name": "Extrude1",
+      "source_face": null,
+      "source_face_key": null,
+      "source_face_signature": null,
+      "source_face_basis": null,
+      "sketch_name": "Sketch1",
+      "profile_indices": [
+        1
+      ],
+      "operation": "new_body",
+      "extent": {
+        "type": "distance",
+        "distance": 10.0
+      },
+      "taper_angle_deg": 0.0,
+      "flip": false,
+      "target_body_ids": [],
+      "to_face_basis": null,
+      "new_body_ids": [
+        1
+      ]
+    }
+  ],
+  "revolves": [],
+  "sweeps": [],
+  "lofts": [],
+  "ribs": [],
+  "fillets": [],
+  "chamfers": [],
+  "holes": [],
+  "datum_planes": [],
+  "body_features": [],
+  "body_appearances": [],
+  "drawings": {
+    "sheets": [],
+    "active_sheet_id": null,
+    "next_sheet_id": 1,
+    "next_view_id": 1,
+    "next_annotation_id": 1,
+    "next_revision_id": 1,
+    "next_bom_item_id": 1,
+    "templates": [],
+    "next_template_id": 1
+  },
+  "assembly": {
+    "gear_relations": [],
+    "next_gear_relation_id": 1,
+    "joints": [],
+    "next_joint_id": 1,
+    "grounded_body_id": null,
+    "component_structure": {
+      "definitions": [
+        {
+          "id": 1,
+          "name": "Body1 Part",
+          "body_ids": [
+            1
+          ],
+          "local_coordinate_system": {
+            "translation": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "rotation": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          "promoted": true
+        }
+      ],
+      "occurrences": [
+        {
+          "id": 1,
+          "name": "Body1",
+          "component_id": 1,
+          "parent_occurrence_id": null,
+          "local_pose": {
+            "translation": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "rotation": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          "visible": true,
+          "grounded": false
+        }
+      ],
+      "next_component_id": 2,
+      "next_occurrence_id": 2
+    },
+    "positions": [],
+    "next_position_id": 1,
+    "motion_studies": [],
+    "next_motion_study_id": 1,
+    "contact_sets": [],
+    "next_contact_set_id": 1
+  },
+  "visibility": {
+    "hidden_body_ids": [],
+    "hidden_datum_plane_ids": [],
+    "hidden_sketch_names": []
+  },
+  "views": [],
+  "print_intent": {
+    "version": 4,
+    "source_document_id": null,
+    "selected_process": null,
+    "defaults": {
+      "wall_count": null,
+      "infill_density_percent": null,
+      "infill_pattern": null,
+      "top_shell_layers": null,
+      "bottom_shell_layers": null
+    },
+    "parts": [],
+    "presets": [],
+    "target_handoffs": [],
+    "modifiers": [],
+    "height_ranges": [],
+    "layer_height_profiles": []
+  },
+  "cam": {
+    "setups": [],
+    "active_setup_id": null,
+    "tools": [],
+    "units": "millimeters",
+    "post_defaults": {
+      "dialect": "grbl",
+      "program_number": 1001,
+      "sequence_numbers": false,
+      "siemens_828d": null,
+      "tool_call_mode": "automatic",
+      "machine_retract_z": null
+    },
+    "next_setup_id": 1,
+    "next_operation_id": 1,
+    "next_tool_id": 1
+  },
+  "counters": {
+    "sketch": 1,
+    "extrude": 1,
+    "revolve": 0,
+    "sweep": 0,
+    "loft": 0,
+    "rib": 0,
+    "fillet": 0,
+    "chamfer": 0,
+    "hole": 0
+  },
+  "preferences": {
+    "grid_snap": true
+  }
+}
