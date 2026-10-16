@@ -21,6 +21,32 @@ pub(crate) fn input(
         return Ok(false);
     }
     if let WindowEvent::KeyboardInput(key) = &event.event {
+        if key.state == ButtonState::Pressed
+            && key.logical_key == Key::Escape
+            && !event.modifiers.ctrl
+            && !event.modifiers.meta
+            && !event.modifiers.alt
+            && !event.modifiers.shift
+            && handle.focused_key().is_some_and(|key| {
+                world
+                    .get::<NativeCommandBinding>(Entity::from_bits(key.0))
+                    .is_some_and(|binding| {
+                        matches!(
+                            binding.command,
+                            NativeCommand::File(FileCommand::ScriptPreview(_))
+                        )
+                    })
+            })
+            && handle
+                .presented_pointer_context()
+                .is_some_and(|(owner, modal_empty, _)| {
+                    modal_empty && event.context.as_ref() == Some(&owner)
+                })
+        {
+            crate::native_viewport::winit_host::cancel_native_pointer(world, handle);
+            command(world, handle, Action::Close, &ControlInput::Click)?;
+            return Ok(true);
+        }
         let preview_focused = handle.focused_key().is_some_and(|key| {
             world
                 .get::<NativeCommandBinding>(Entity::from_bits(key.0))

@@ -15,6 +15,14 @@ pub struct Recipe {
 
 pub const RECIPES: &[Recipe] = &[
     Recipe {
+        id: "extrude-basics",
+        source: include_str!("../../../examples/scripts/extrude-basics.limo.jsonc"),
+        summary: "Select a closed rectangle, set a 12 mm distance and apply an editable extrusion.",
+        kind: "lesson",
+        focus_operations: &["solid_extrude"],
+        preview: true,
+    },
+    Recipe {
         id: "d-screw-vise",
         source: include_str!("../../../examples/scripts/d-screw-vise.limo.jsonc"),
         summary: "Build a captured-slide vise with 100 mm jaws, 90 mm travel and a custom rounded 24 x 4 screw with a shallow print flat. Six printed parts and M5/M6 hardware envelopes make 30 bodies including optional mounts, with seven drawing sheets and per-part print layouts. Physical qualification remains required.",

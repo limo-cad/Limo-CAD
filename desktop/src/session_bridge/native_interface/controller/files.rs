@@ -19,6 +19,7 @@ mod profile_output;
 mod scripts;
 pub(super) use panel::synchronize;
 pub(super) use printing::message as print_message;
+pub(super) use scripts::paint_feature_hint;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum FileCommand {

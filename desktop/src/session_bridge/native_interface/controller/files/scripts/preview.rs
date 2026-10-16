@@ -10,8 +10,10 @@ use bevy::{
 };
 use std::time::{Duration, Instant};
 
+mod feature;
 mod input;
 mod panel;
+pub(crate) use feature::paint_hint;
 pub(crate) use input::input;
 pub(crate) use panel::paint;
 
@@ -21,6 +23,9 @@ const FRAME_DELAY: Duration = Duration::from_millis(1800);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     Open,
+    Extrude,
+    Help,
+    Demo,
     Close,
     Model,
     Previous,
@@ -97,6 +102,10 @@ pub(crate) struct State {
     playing: bool,
     wake: Option<Wake>,
     drag: Option<input::Drag>,
+    return_to: Option<(bool, bool, bool, bool)>,
+    help: bool,
+    help_page: usize,
+    focus_owner: Option<DocumentContext>,
 }
 pub(in super::super) fn cancel_pointer(world: &mut World) {
     if let Some(mut files) = world.get_resource_mut::<Files>() {
@@ -126,6 +135,10 @@ impl Default for State {
             playing: false,
             wake: None,
             drag: None,
+            return_to: None,
+            help: false,
+            help_page: 0,
+            focus_owner: None,
         }
     }
 }
@@ -189,6 +202,44 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
     let state = &world.resource::<Files>().script;
     let example = eligible(state)?;
     let generation = state.generation;
+    start(world, handle, example.source.clone(), generation)
+}
+
+fn open_extrude(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String> {
+    available(world)?;
+    editor::retain_source_error(world);
+    if world.resource::<Files>().script.preview.open {
+        return Err("Close the current lesson preview first".into());
+    }
+    let example = catalog::examples()
+        .iter()
+        .find(|example| example.id == "extrude-basics")
+        .ok_or("The Extrude example is unavailable")?;
+    let files = world.resource::<Files>();
+    let previous = (
+        files.scripts,
+        files.script.editor_open,
+        files.script.library.open,
+        files.script.chapters.open,
+    );
+    let generation = files.script.generation;
+    start(world, handle, example.source.clone(), generation)?;
+    let files = &mut world.resource_mut::<Files>();
+    files.scripts = true;
+    files.script.chapters.open = false;
+    files.script.preview.return_to = Some(previous);
+    files.script.preview.playing = true;
+    files.script.preview.focus_owner = handle.presented_context();
+    Ok(())
+}
+
+fn start(
+    world: &mut World,
+    handle: &NativeInterfaceHandle,
+    source: String,
+    generation: u64,
+) -> Result<(), String> {
+    let state = &world.resource::<Files>().script;
     let revision = state
         .preview
         .revision
@@ -201,7 +252,7 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
         .name("cad-preview-prepare".into())
         .spawn(move || {
             let result =
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| prepare(&example.source)))
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| prepare(&source)))
                     .unwrap_or_else(|_| {
                         Err("Lesson preview preparation stopped unexpectedly".into())
                     });
@@ -220,14 +271,18 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
     preview.pitch = HOME.1;
     preview.revision = revision;
     preview.error = None;
+    preview.help = false;
     preview.build = Some(Mutex::new(receive));
     Ok(())
 }
 
 fn close(world: &mut World) {
+    world.resource_mut::<Files>().script.preview.return_to = None;
     let image = {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.open = false;
+        preview.help = false;
+        preview.focus_owner = None;
         preview.retained = None;
         preview.playing = false;
         preview.wake = None;
@@ -265,18 +320,46 @@ pub(crate) fn command(
     }
     if action == Action::Open {
         open(world, handle)?;
+    } else if action == Action::Extrude {
+        open_extrude(world, handle)?;
     } else if action == Action::Close {
+        let previous = world.resource::<Files>().script.preview.return_to;
         close(world);
-        world.resource_mut::<Files>().script.editor_open = true;
+        if let Some((scripts, editor, library, chapters)) = previous {
+            let files = &mut world.resource_mut::<Files>();
+            files.scripts = scripts;
+            files.script.editor_open = editor;
+            files.script.library.open = library;
+            files.script.chapters.open = chapters;
+        } else {
+            world.resource_mut::<Files>().script.editor_open = true;
+        }
     } else {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         if !preview.open {
             return Err("Open the lesson preview first".into());
         }
         match action {
+            Action::Help | Action::Demo => {
+                preview.help = action == Action::Help;
+                preview.help_page = 0;
+                preview.focus_owner = handle.presented_context();
+                preview.playing = false;
+                preview.wake = None;
+            }
             Action::Model => {}
             Action::Previous | Action::Next => {
                 preview.playing = false;
+                if preview.help {
+                    let count = feature::help().as_ref().map_or(0, Vec::len);
+                    preview.help_page = if action == Action::Previous {
+                        preview.help_page.saturating_sub(1)
+                    } else {
+                        (preview.help_page + 1).min(count.saturating_sub(1))
+                    };
+                    handle.request_redraw();
+                    return Ok(json!({"help_page":preview.help_page}));
+                }
                 preview.index = if action == Action::Previous {
                     preview.index.saturating_sub(1)
                 } else {
@@ -348,7 +431,11 @@ fn publish(world: &mut World, rendered: Rendered) -> Result<(), String> {
 
 fn render(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String> {
     let preview = &mut world.resource_mut::<Files>().script.preview;
-    if !preview.open || preview.render.is_some() || preview.attempted == preview.revision {
+    if !preview.open
+        || preview.help
+        || preview.render.is_some()
+        || preview.attempted == preview.revision
+    {
         return Ok(());
     }
     let Some(retained) = &preview.retained else {
@@ -395,20 +482,27 @@ fn replay(preview: &mut State, handle: &NativeInterfaceHandle, now: Instant) -> 
         preview.playing = preview.index + 1 < preview.count();
         preview.changed()?;
     } else if preview.wake.is_none() {
+        let delay = preview
+            .retained
+            .as_ref()
+            .and_then(|r| r.descriptor.durations_ms.get(preview.index))
+            .copied()
+            .map(Duration::from_millis)
+            .unwrap_or(FRAME_DELAY);
         let cancelled = Arc::new(AtomicBool::new(false));
         let token = cancelled.clone();
         let handle = handle.clone();
         std::thread::Builder::new()
             .name("cad-preview-replay".into())
             .spawn(move || {
-                std::thread::sleep(FRAME_DELAY);
+                std::thread::sleep(delay);
                 if !token.load(Ordering::Acquire) {
                     handle.request_redraw();
                 }
             })
             .map_err(|error| format!("Cannot schedule preview replay: {error}"))?;
         preview.wake = Some(Wake {
-            due: now + FRAME_DELAY,
+            due: now + delay,
             cancelled,
         });
     }

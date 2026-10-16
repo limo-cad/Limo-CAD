@@ -5505,6 +5505,11 @@ fn help_store() -> &'static limo_cad_help::HelpStore {
     STORE.get_or_init(limo_cad_help::HelpStore::bundled)
 }
 
+/// Read the same bundled page used by MCP without attaching to a CAD session.
+pub fn help_page(id: &str) -> Result<Value, String> {
+    cad_help_call(&json!({"action":"get", "id":id}))
+}
+
 fn cad_help_call(arguments: &Value) -> Result<Value, String> {
     let action = arguments
         .get("action")

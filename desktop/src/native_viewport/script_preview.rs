@@ -3,6 +3,7 @@
 //! AppState, publisher, native child view, or access to the live camera/picker.
 use super::super::DEFAULT_VERTICAL_FOV_DEGREES;
 use super::*;
+use crate::native_viewport::FinishedSketchEntityPickRef;
 use bevy::render::{
     pipelined_rendering::PipelinedRenderingPlugin,
     render_resource::{
@@ -41,10 +42,25 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub(crate) struct Frame {
     pub caption: String,
     pub scene: SolidSceneDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<limo_cad_sketch::SketchDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cue: Option<PreviewCue>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PreviewCue {
+    Profile,
+    Extrude,
+    Depth,
+    Apply,
 }
 
 #[derive(Serialize)]
@@ -52,6 +68,12 @@ struct RetainedFrame {
     caption: String,
     #[serde(serialize_with = "serialize_scene")]
     scene: Arc<SolidSceneDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    profile: Option<limo_cad_sketch::SketchDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cue: Option<PreviewCue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duration_ms: Option<u64>,
 }
 
 fn serialize_scene<S: serde::Serializer>(
@@ -81,6 +103,45 @@ impl PreviewDocument {
         let mut faces = 0;
         let mut edges = 0;
         for frame in &frames {
+            if frame
+                .duration_ms
+                .is_some_and(|delay| !(100..=5000).contains(&delay))
+            {
+                return Err("Preview frame timing must be between 100 and 5000 ms".into());
+            }
+            if let Some(profile) = &frame.profile {
+                if profile.entities.len() > 128
+                    || profile.dimensions.len() > 32
+                    || !profile.projected_edges.is_empty()
+                    || !profile.reference_midpoints.is_empty()
+                {
+                    return Err("Preview profiles must be small, independent line sketches".into());
+                }
+                let mut point = |p: limo_cad_sketch::Vec2| -> Result<(), String> {
+                    let p = profile.basis.to_3d([p.x, p.y]);
+                    if p.iter().any(|v| !v.is_finite() || v.abs() > 10_000.) {
+                        return Err("Invalid preview profile point".into());
+                    }
+                    let p = Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
+                    low = low.min(p);
+                    high = high.max(p);
+                    Ok(())
+                };
+                for entity in &profile.entities {
+                    match entity {
+                        limo_cad_sketch::EntityDto::Point { position, .. } => point(*position)?,
+                        limo_cad_sketch::EntityDto::Line { start, end, .. } => {
+                            point(*start)?;
+                            point(*end)?;
+                        }
+                        _ => {
+                            return Err(
+                                "Preview profiles currently support straight segments".into()
+                            )
+                        }
+                    }
+                }
+            }
             if frame.caption.len() > 4000 || !frame.scene.errors.is_empty() {
                 return Err("A preview frame has an invalid caption or failed geometry".into());
             }
@@ -175,6 +236,9 @@ impl PreviewDocument {
                 .map(|frame| RetainedFrame {
                     caption: frame.caption,
                     scene: Arc::new(frame.scene),
+                    profile: frame.profile,
+                    cue: frame.cue,
+                    duration_ms: frame.duration_ms,
                 })
                 .collect(),
             center,
@@ -206,6 +270,8 @@ impl PreviewDocument {
 pub(crate) struct PreviewDescriptor {
     pub preview_id: String,
     pub captions: Vec<String>,
+    pub cues: Vec<Option<PreviewCue>>,
+    pub durations_ms: Vec<u64>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -310,6 +376,12 @@ impl PreviewService {
                 .frames
                 .iter()
                 .map(|frame| frame.caption.clone())
+                .collect(),
+            cues: document.frames.iter().map(|frame| frame.cue).collect(),
+            durations_ms: document
+                .frames
+                .iter()
+                .map(|frame| frame.duration_ms.unwrap_or(1800))
                 .collect(),
         };
         let mut state = self.0.lock().map_err(|_| "Preview cache lock poisoned")?;
@@ -606,11 +678,34 @@ impl PreviewRenderer {
                 revision: self.geometry_revision,
                 document: std::sync::Arc::new(limo_cad_native_engine::NativeViewportDocument {
                     scene: Arc::clone(&document.frames[request.frame_index].scene),
+                    finished_sketches: document.frames[request.frame_index]
+                        .profile
+                        .clone()
+                        .into_iter()
+                        .collect(),
                     ..Default::default()
                 }),
                 ..default()
             };
             bind_document_geometry(world);
+            world
+                .resource_mut::<PresentationResource>()
+                .0
+                .selected_finished_sketch_entities = document.frames[request.frame_index]
+                .profile
+                .as_ref()
+                .into_iter()
+                .flat_map(|profile| {
+                    profile
+                        .entities
+                        .iter()
+                        .filter(|entity| matches!(entity, limo_cad_sketch::EntityDto::Line { .. }))
+                        .map(|entity| FinishedSketchEntityPickRef {
+                            sketch_name: profile.name.clone(),
+                            entity_id: entity.id().0,
+                        })
+                })
+                .collect();
         }
         *world.resource_mut::<CameraResource>() = CameraResource {
             camera: document.camera(request),
@@ -726,6 +821,69 @@ mod tests {
         oversized.scene.bodies[0].mesh.indices = vec![0; 300_003];
         assert!(PreviewDocument::new(vec![oversized]).is_err());
         assert!(PreviewDocument::new(vec![frame(0.0); 17]).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires a native graphics adapter"]
+    fn extrude_preview_renders_selected_profile_and_real_solid() {
+        let mut report = limo_cad_mcp::preview_script(include_str!(
+            "../../../examples/scripts/extrude-basics.limo.jsonc"
+        ))
+        .unwrap();
+        let frames = serde_json::from_value(report["exports"]["preview_frames"].take()).unwrap();
+        let mut document = PreviewDocument::new(frames).unwrap();
+        let mut renderer = PreviewRenderer::new().unwrap();
+        let cancelled = AtomicBool::new(false);
+        let mut request = request("extrude-profile".into(), "proof".into(), 1);
+        request.width = 600;
+        request.height = 400;
+        let mut render = |document: &PreviewDocument, request: &RenderRequest| {
+            renderer
+                .render(
+                    document,
+                    request,
+                    &cancelled,
+                    Instant::now() + Duration::from_secs(60),
+                )
+                .unwrap()
+        };
+        let profile = render(&document, &request);
+        request.frame_index = 6;
+        request.revision += 1;
+        let solid = render(&document, &request);
+        document.frames[0].profile = None;
+        request.frame_index = 0;
+        request.preview_id = "extrude-negative-control".into();
+        request.revision += 1;
+        let blank = render(&document, &request);
+        let (_, _, profile_pixels) = decode_rgba(&profile);
+        let (_, _, solid_pixels) = decode_rgba(&solid);
+        let (_, _, blank_pixels) = decode_rgba(&blank);
+        let changed = |left: &[u8], right: &[u8]| {
+            left.as_chunks::<4>()
+                .0
+                .iter()
+                .zip(right.as_chunks::<4>().0.iter())
+                .filter(|(a, b)| a[..3] != b[..3])
+                .count()
+        };
+        assert!(
+            changed(&profile_pixels, &blank_pixels) > 30,
+            "The first selected profile must be visible"
+        );
+        assert!(
+            changed(&profile_pixels, &solid_pixels) > 1000,
+            "Extrusion must visibly change real geometry"
+        );
+        if let Ok(path) = std::env::var("LIMO_CAD_PREVIEW_PROOF_DIR") {
+            for (name, bytes) in [
+                ("extrude-profile.png", profile),
+                ("extrude-solid.png", solid),
+                ("extrude-blank-control.png", blank),
+            ] {
+                std::fs::write(std::path::Path::new(&path).join(name), bytes).unwrap();
+            }
+        }
     }
 
     #[test]
@@ -1142,10 +1300,12 @@ mod tests {
                 Frame {
                     caption: format!("{label} with edges"),
                     scene,
+                    ..default()
                 },
                 Frame {
                     caption: format!("{label} without edges"),
                     scene: without_edges,
+                    ..default()
                 },
             ])
             .unwrap();
@@ -1864,6 +2024,7 @@ mod tests {
             let mut document = PreviewDocument::new(vec![Frame {
                 caption: "Thin partial circular plate".into(),
                 scene: scene.clone(),
+                ..default()
             }])
             .unwrap();
             let base_radius = document.radius;
@@ -1975,14 +2136,17 @@ mod tests {
             Frame {
                 caption: "Hidden edges present".into(),
                 scene,
+                ..default()
             },
             Frame {
                 caption: "Hidden edges removed".into(),
                 scene: without_hidden_edges,
+                ..default()
             },
             Frame {
                 caption: "All edges removed (negative control)".into(),
                 scene: without_any_edges,
+                ..default()
             },
         ])
         .unwrap();

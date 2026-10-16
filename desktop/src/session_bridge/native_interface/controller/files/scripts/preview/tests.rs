@@ -29,6 +29,7 @@ fn frames() -> Vec<Frame> {
         .map(|index| Frame {
             caption: format!("Frame {index}"),
             scene: serde_json::from_value(json!({"bodies":[],"errors":[]})).unwrap(),
+            ..default()
         })
         .collect()
 }
@@ -91,6 +92,57 @@ fn native_script_preview_uses_catalog_policy_and_never_substitutes_edited_source
     assert!(world.resource::<Files>().script.dirty());
     assert!(!world.resource::<Files>().script.preview.building());
     assert!(world.resource::<Files>().lesson.is_none());
+}
+
+#[test]
+fn native_script_preview_extrude_preserves_dirty_source_and_help_does_not_advance_geometry() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let before = fixture.engine.engine_call("project_export_model", "");
+    let mut world = world();
+    select(&mut world, "fillet-basics");
+    editor::edit_source(
+        &mut world,
+        &ControlInput::SetValue("unfinished { draft".into()),
+    )
+    .unwrap();
+    world.resource_mut::<Files>().script.editor_open = true;
+    let handle = NativeInterfaceHandle::new(|| {});
+    command(&mut world, &handle, Action::Extrude, &ControlInput::Click).unwrap();
+    let channel = world
+        .resource_mut::<Files>()
+        .script
+        .preview
+        .build
+        .take()
+        .unwrap();
+    let frames = channel
+        .lock()
+        .unwrap()
+        .recv_timeout(Duration::from_secs(10))
+        .unwrap()
+        .unwrap();
+    assert_eq!(frames.len(), 7);
+    let preview = &mut world.resource_mut::<Files>().script.preview;
+    preview.retained = Some(Retained::new(preview.service.clone(), frames).unwrap());
+    assert!(preview.playing);
+    command(&mut world, &handle, Action::Help, &ControlInput::Click).unwrap();
+    command(&mut world, &handle, Action::Next, &ControlInput::Click).unwrap();
+    let preview = &world.resource::<Files>().script.preview;
+    assert_eq!(preview.help_page, 1);
+    assert_eq!(preview.index, 0);
+    assert!(!preview.playing);
+    command(&mut world, &handle, Action::Demo, &ControlInput::Click).unwrap();
+    command(&mut world, &handle, Action::Close, &ControlInput::Click).unwrap();
+    let files = world.resource::<Files>();
+    assert!(files.scripts && files.script.editor_open && files.script.dirty());
+    assert_eq!(files.script.source, "unfinished { draft");
+    assert_eq!(files.script.example.unwrap().id, "fillet-basics");
+    assert!(files.script.preview.retained.is_none());
+    assert_eq!(
+        fixture.engine.engine_call("project_export_model", ""),
+        before
+    );
 }
 
 #[test]

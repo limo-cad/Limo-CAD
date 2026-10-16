@@ -494,6 +494,13 @@ pub(super) fn synchronize(
             (width, height, side),
             cam_visible,
         )?;
+        files::paint_feature_hint(
+            world,
+            camera,
+            controls.get("extrude").copied(),
+            &mut state.widgets,
+            width,
+        )?;
         state.widgets.finish(world);
         Ok(())
     })();

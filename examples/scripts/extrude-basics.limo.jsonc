@@ -1,0 +1,40 @@
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Extrude a closed profile",
+  "starting_state": "empty",
+  "steps": [
+    {"chapter":"A closed profile", "note":"Draw a 40 by 24 mm rectangle on XY, then finish the sketch.", "duration_ms":1200},
+    {"call":{"group":"sketch/draw","operation":"sketch_begin","arguments":{"name":"Extrude footprint","plane":{"type":"origin_plane","plane":"xy"}}}},
+    {"id":"profile","call":{"group":"sketch/draw","operation":"sketch_add_rectangle_locked","arguments":{"mode":"two_point","anchor":{"x":0,"y":0},"corner_hint":{"x":40,"y":24},"width_mm":40,"height_mm":24,"ctrl_held":true}}},
+    {"call":{"group":"sketch/draw","operation":"sketch_finish","arguments":{}}},
+    {"id":"empty","call":{"group":"solid/check","operation":"solid_scene","arguments":{}}},
+    {"chapter":"Extrude", "note":"Choose Extrude and the closed rectangle. Set Distance to 12 mm and Operation to New body, then Apply.", "duration_ms":1600},
+    {"id":"depth3","call":{"group":"solid/build","operation":"solid_extrude","arguments":{"sketch_name":"Extrude footprint","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":3},"taper_angle_deg":0,"flip":false,"target_body_ids":[]}}},
+    {"let":{"feature":{"$select":{"from":{"$ref":"depth3"},"path":"/document/features","take":"last","pointer":"/id"}}}},
+    {"id":"depth6","call":{"group":"solid/build","operation":"solid_edit_extrude","arguments":{"feature_id":{"$ref":"feature"},"extrude":{"sketch_name":"Extrude footprint","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":6},"taper_angle_deg":0,"flip":false,"target_body_ids":[]}}}},
+    {"id":"depth9","call":{"group":"solid/build","operation":"solid_edit_extrude","arguments":{"feature_id":{"$ref":"feature"},"extrude":{"sketch_name":"Extrude footprint","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":9},"taper_angle_deg":0,"flip":false,"target_body_ids":[]}}}},
+    {"id":"depth12","call":{"group":"solid/build","operation":"solid_edit_extrude","arguments":{"feature_id":{"$ref":"feature"},"extrude":{"sketch_name":"Extrude footprint","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":12},"taper_angle_deg":0,"flip":false,"target_body_ids":[]}}}},
+    {"view":"isometric","fit":true,"duration_ms":300}
+  ],
+  "checks": [
+    {"id":"final_scene","call":{"group":"solid/check","operation":"solid_scene","arguments":{}},"expect":{"/errors":[]}},
+    {"assert":{"$count":{"$ref":"final_scene","pointer":"/bodies"}},"equals":1},
+    {"id":"model","call":{"group":"document/files","operation":"cad_project_model","arguments":{}}},
+    {"assert":{"$ref":"model","pointer":"/extrudes/0/extent/distance"},"equals":12},
+    {"assert":{"$count":{"$ref":"model","pointer":"/document/history/features"}},"equals":2}
+  ],
+  "exports": {
+    "final_scene":{"$ref":"final_scene"},
+    "final_model":{"$ref":"model"},
+    "preview_frames":[
+      {"caption":"Finish the sketch. Select its closed rectangle.","scene":{"$ref":"empty"},"profile":{"$ref":"profile","pointer":"/sketch"},"cue":"profile","duration_ms":1400},
+      {"caption":"Choose Extrude in the Model ribbon.","scene":{"$ref":"empty"},"profile":{"$ref":"profile","pointer":"/sketch"},"cue":"extrude","duration_ms":1400},
+      {"caption":"Set the extrusion distance. The preview grows along the sketch normal.","scene":{"$ref":"depth3","pointer":"/scene"},"cue":"depth","duration_ms":350},
+      {"caption":"Adjust the distance toward 12 mm.","scene":{"$ref":"depth6","pointer":"/scene"},"cue":"depth","duration_ms":350},
+      {"caption":"The same extrusion updates; no extra body is created.","scene":{"$ref":"depth9","pointer":"/scene"},"cue":"depth","duration_ms":350},
+      {"caption":"Distance: 12 mm. Operation: New body.","scene":{"$ref":"depth12","pointer":"/scene"},"cue":"depth","duration_ms":1400},
+      {"caption":"Apply to keep the solid. The sketch and extrusion remain editable in History.","scene":{"$ref":"depth12","pointer":"/scene"},"cue":"apply","duration_ms":1400}
+    ]
+  }
+}
