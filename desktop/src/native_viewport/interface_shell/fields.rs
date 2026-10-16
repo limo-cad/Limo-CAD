@@ -106,6 +106,11 @@ pub(crate) struct DrawingDimension {
 #[derive(Component)]
 pub(crate) struct LiveValue;
 
+/// Optional edit intent for rounded suggestions. Replacing the selected text
+/// with the same visible literal must still count as an explicit value.
+#[derive(Component, Default)]
+pub(crate) struct ValueEdited(pub bool);
+
 /// Presentation only: the real editor, owned value and selection stay exact.
 #[derive(Component)]
 struct CompactNumberCaption(Entity);
@@ -422,7 +427,7 @@ pub(crate) fn guard_document_close(world: &World, owner: &DocumentContext) -> Re
     Ok(())
 }
 
-fn apply_requested_focus(world: &mut World) {
+pub(crate) fn apply_requested_focus(world: &mut World) {
     let Some(request) = world.resource_mut::<RequestedFocus>().0.take() else {
         return;
     };
@@ -864,6 +869,11 @@ fn apply_edit(world: &mut World, entity: Entity, edit: TextEdit) -> Result<(), S
         .queue_edit(edit);
     flush_edits(world)?;
     invalidate_text(world, entity);
+    if records_history {
+        if let Some(mut edited) = world.get_mut::<ValueEdited>(entity) {
+            edited.0 = true;
+        }
+    }
     if let Some(before) = before {
         if world
             .get::<EditableText>(entity)
@@ -1349,7 +1359,7 @@ fn logical_edit_for_platform(
     }
 }
 
-fn synchronize_fields(
+pub(crate) fn synchronize_fields(
     handle: Res<NativeInterfaceHandle>,
     mut focus: ResMut<bevy::input_focus::InputFocus>,
     mut fields: EditableFieldQuery,

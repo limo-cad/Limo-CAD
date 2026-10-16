@@ -4,9 +4,9 @@
 
 use limo_cad_core::EdgeId;
 use limo_cad_sketch::{
-    Constraint, DimensionMode, DimensionRequest, EditDimensionRequest, LockedRectangleRequest,
-    LockedSegmentRequest, MoveDimensionRequest, OriginPlane, PlaneRef, RectangleMode,
-    SetDimensionModeRequest, SketchSession, Vec2,
+    Constraint, DimensionMode, DimensionRequest, EditDimensionRequest, EditDimensionTargetRequest,
+    LockedRectangleRequest, LockedSegmentRequest, MoveDimensionRequest, OriginPlane, PlaneRef,
+    RectangleMode, SetDimensionModeRequest, SketchSession, Vec2,
 };
 
 fn v(x: f64, y: f64) -> Vec2 {
@@ -155,6 +155,58 @@ fn distance_dim_drives_line_length_and_counts_dof() {
         stored.constraint,
         Constraint::Distance { value, .. } if (value - 65.0).abs() < 1e-9
     ));
+}
+
+#[test]
+fn editing_dimension_value_and_cursor_placement_is_atomic_and_undoable() {
+    let mut s = session();
+    let l = s.add_line(v(0., 0.), v(20., 0.), true).unwrap();
+    s.add_dimension(DimensionRequest {
+        entities: vec![l.entity_id],
+        text_pos: v(10., 5.),
+        value_text: None,
+    })
+    .unwrap();
+    let before = s.dto();
+    let id = before.dimensions[0].constraint_id;
+    let request = |text: &str, text_pos| EditDimensionTargetRequest {
+        dimension: EditDimensionRequest {
+            constraint_id: id,
+            text: text.into(),
+        },
+        text_pos,
+    };
+    let after = s
+        .edit_dimension_target(request("12", Some(v(10., -8.))))
+        .unwrap()
+        .sketch;
+    assert!((after.dimensions[0].value - 12.).abs() < 1e-8);
+    assert_eq!(after.dimensions[0].text_pos, v(10., -8.));
+    let undone = s.undo().unwrap().sketch;
+    assert_eq!(undone.entities, before.entities);
+    assert_eq!(undone.dimensions, before.dimensions);
+    let redone = s.redo().unwrap().sketch;
+    assert_eq!(redone.entities, after.entities);
+    assert_eq!(redone.dimensions, after.dimensions);
+
+    for invalid in [
+        request("unknown_parameter", Some(v(4., 9.))),
+        request("15", Some(v(f64::NAN, 9.))),
+    ] {
+        assert!(s.edit_dimension_target(invalid).is_err());
+        assert_eq!(s.dto().entities, after.entities);
+        assert_eq!(s.dto().dimensions, after.dimensions);
+    }
+    let old_json = serde_json::to_string(&EditDimensionRequest {
+        constraint_id: id,
+        text: "14".into(),
+    })
+    .unwrap();
+    let value_only: EditDimensionTargetRequest = serde_json::from_str(&old_json).unwrap();
+    assert_eq!(value_only.text_pos, None);
+    let edited = s.edit_dimension_target(value_only).unwrap().sketch;
+    assert_eq!(edited.dimensions[0].text_pos, after.dimensions[0].text_pos);
+    assert!((edited.dimensions[0].value - 14.).abs() < 1e-8);
 }
 
 #[test]

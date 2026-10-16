@@ -55,6 +55,10 @@ pub(super) fn acquire(
         raw,
         ctrl_held: ctrl,
         allow_midpoint: draft.tool != Some(CreateTool::Point),
+        allow_curve: matches!(
+            draft.tool,
+            Some(CreateTool::Line | CreateTool::MidpointLine)
+        ),
         exclude_position: (draft.tool == Some(CreateTool::Line))
             .then(|| draft.points.last().copied())
             .flatten(),

@@ -233,6 +233,67 @@ fn line_readouts_follow_existing_points_inference_and_snap_suppression() {
 }
 
 #[test]
+fn near_axis_native_preview_and_click_agree_with_and_without_a_length_lock() {
+    for length_lock in [false, true] {
+        for direction in [
+            SketchPoint::new(1., 0.),
+            SketchPoint::new(-1., 0.),
+            SketchPoint::new(0., 1.),
+            SketchPoint::new(0., -1.),
+        ] {
+            let mut fixture = Fixture::new(CreateTool::Line);
+            call(&fixture.engine, "set_grid_snap", json!({"enabled":false}));
+            if length_lock {
+                fixture.lock(SizeField::Length, "25");
+            }
+            let raw = direction * 30.4 + direction.perp() * 0.3;
+            let values = fixture.move_to(raw, false);
+            let expected = direction * if length_lock { 25. } else { 30.4 };
+            assert!(fixture.editor.draft.resolved_preview.unwrap()[1].distance(expected) < 1e-9);
+            expect(&values, SizeField::Length, expected.length());
+            expect(
+                &values,
+                SizeField::Angle,
+                direction.y.atan2(direction.x).to_degrees(),
+            );
+            let context = fixture.editor.draft.snap_context.unwrap();
+            let acquired =
+                snapping::acquire(&fixture.engine, &fixture.editor.draft, raw, false, context)
+                    .unwrap();
+            let picked = snapping::pick(&fixture.editor.draft, raw, &acquired);
+            let mut command = fixture
+                .editor
+                .draft
+                .prepare(picked, false)
+                .unwrap()
+                .unwrap();
+            snapping::attach(&mut command.arguments, Some(context));
+            let spec = limo_cad_mcp_mutate::lookup_mutate(command.operation).unwrap();
+            call(&fixture.engine, spec.engine_method, command.arguments);
+            let sketch = active(&fixture.engine).unwrap().unwrap();
+            let (start, end) = sketch
+                .entities
+                .iter()
+                .find_map(|entity| {
+                    if let limo_cad_sketch::EntityDto::Line { start, end, .. } = entity {
+                        Some((*start, *end))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap();
+            assert!((end - start).distance(expected) < 1e-9);
+        }
+    }
+    let mut fixture = Fixture::new(CreateTool::Line);
+    call(&fixture.engine, "set_grid_snap", json!({"enabled":false}));
+    // Within the angular cone, but more than seven pixels off the axis.
+    let raw = SketchPoint::new(500., 6.);
+    fixture.move_to(raw, false);
+    assert_eq!(fixture.editor.draft.resolved_preview.unwrap()[1], raw);
+}
+
+#[test]
 fn partial_locks_measure_the_resolved_preview_and_preserve_typed_expressions() {
     let mut line = Fixture::new(CreateTool::Line);
     line.move_to(SketchPoint::new(30.4, 10.3), false);

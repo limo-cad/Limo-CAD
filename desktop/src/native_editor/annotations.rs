@@ -25,6 +25,9 @@ mod context_tests;
 #[path = "annotations/layout_tests.rs"]
 mod layout_tests;
 #[cfg(test)]
+#[path = "annotations/leader_motion_tests.rs"]
+mod leader_motion_tests;
+#[cfg(test)]
 #[path = "annotations/theme_tests.rs"]
 mod theme_tests;
 
@@ -136,6 +139,7 @@ fn relation_icon(kind: &str) -> &'static str {
 
 /// Pure annotation geometry. Extension endpoints come from authoritative
 /// entities, not the formatted value (which may be rounded or a reference).
+#[cfg(test)]
 fn leaders(dim: &DimensionDto, entities: &[EntityDto], arrow: f64) -> Vec<[Point; 2]> {
     let refs: Vec<_> = dim
         .entities
@@ -145,6 +149,52 @@ fn leaders(dim: &DimensionDto, entities: &[EntityDto], arrow: f64) -> Vec<[Point
     if refs.len() != dim.entities.len() {
         return vec![];
     }
+    leaders_for(dim, &refs, arrow)
+}
+
+fn angle_geometry(refs: &[&EntityDto]) -> Option<(Point, f64, f64)> {
+    let [first, second] = refs else { return None };
+    let ((a, b), (c, d)) = (line(first)?, line(second)?);
+    let u = b - a;
+    let v = d - c;
+    let cross = u.x * v.y - u.y * v.x;
+    if cross.abs() < 1e-12 {
+        return None;
+    }
+    let t = ((c.x - a.x) * v.y - (c.y - a.y) * v.x) / cross;
+    let start = u.y.atan2(u.x);
+    let mut sweep = (v.y.atan2(v.x) - start).rem_euclid(std::f64::consts::TAU);
+    if sweep > std::f64::consts::PI {
+        sweep -= std::f64::consts::TAU;
+    }
+    Some((a + u * t, start, sweep))
+}
+
+fn distance_endpoints(refs: &[&EntityDto], position: Point) -> Option<(Point, Point)> {
+    match refs {
+        [EntityDto::Line { start, end, .. }] => Some((*start, *end)),
+        [EntityDto::Point { position: a, .. }, EntityDto::Point { position: b, .. }] => {
+            Some((*a, *b))
+        }
+        [EntityDto::Point { position, .. }, other] | [other, EntityDto::Point { position, .. }] => {
+            line(other).map(|(a, b)| (*position, projected(*position, a, b)))
+        }
+        [a, b] => {
+            if let (Some((a, _)), Some((c, d))) = (line(a), line(b)) {
+                Some((a, projected(a, c, d)))
+            } else if let (Some((a, r)), Some((b, s))) = (radial(a), radial(b)) {
+                let delta = position - a;
+                let u = delta * (1. / delta.length().max(1e-12));
+                Some((a + u * r, b + u * s))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn leaders_for(dim: &DimensionDto, refs: &[&EntityDto], arrow: f64) -> Vec<[Point; 2]> {
     let mut out = vec![];
     let mut arrow_at = |tip: Point, toward: Point| {
         let delta = toward - tip;
@@ -192,28 +242,12 @@ fn leaders(dim: &DimensionDto, entities: &[EntityDto], arrow: f64) -> Vec<[Point
         return out;
     }
     if dim.kind == "angle" {
-        if refs.len() != 2 {
-            return out;
-        }
-        let (Some((a, b)), Some((c, d))) = (line(refs[0]), line(refs[1])) else {
+        let Some((center, start, sweep)) = angle_geometry(refs) else {
             return out;
         };
-        let u = b - a;
-        let v = d - c;
-        let cross = u.x * v.y - u.y * v.x;
-        if cross.abs() < 1e-12 {
-            return out;
-        }
-        let t = ((c.x - a.x) * v.y - (c.y - a.y) * v.x) / cross;
-        let center = a + u * t;
         let radius = dim.text_pos.distance(center);
         if radius < 1e-8 {
             return out;
-        }
-        let start = u.y.atan2(u.x);
-        let mut sweep = (v.y.atan2(v.x) - start).rem_euclid(std::f64::consts::TAU);
-        if sweep > std::f64::consts::PI {
-            sweep -= std::f64::consts::TAU;
         }
         let at = |t: f64| {
             center + Point::new((start + sweep * t).cos(), (start + sweep * t).sin()) * radius
@@ -228,29 +262,7 @@ fn leaders(dim: &DimensionDto, entities: &[EntityDto], arrow: f64) -> Vec<[Point
     if dim.kind != "distance" {
         return out;
     }
-    let endpoints = match refs.as_slice() {
-        [EntityDto::Line { start, end, .. }] => Some((*start, *end)),
-        [EntityDto::Point { position: a, .. }, EntityDto::Point { position: b, .. }] => {
-            Some((*a, *b))
-        }
-        [EntityDto::Point { position, .. }, other] | [other, EntityDto::Point { position, .. }] => {
-            line(other).map(|(a, b)| (*position, projected(*position, a, b)))
-        }
-        [a, b] => {
-            if let (Some((a, _)), Some((c, d))) = (line(a), line(b)) {
-                Some((a, projected(a, c, d)))
-            } else if let (Some((a, r)), Some((b, s))) = (radial(a), radial(b)) {
-                let delta = dim.text_pos - a;
-                let len = delta.length().max(1e-12);
-                let u = delta * (1. / len);
-                Some((a + u * r, b + u * s))
-            } else {
-                None
-            }
-        }
-        _ => None,
-    };
-    if let Some((a, b)) = endpoints {
+    if let Some((a, b)) = distance_endpoints(refs, dim.text_pos) {
         let d = b - a;
         let len = d.length();
         if len < 1e-12 {
@@ -266,6 +278,76 @@ fn leaders(dim: &DimensionDto, entities: &[EntityDto], arrow: f64) -> Vec<[Point
         out.extend([[a, p], [b, q], [p, q]]);
     }
     out
+}
+
+fn with_operands<T>(
+    dim: &DimensionDto,
+    sketch: &SketchDto,
+    use_operands: impl FnOnce(&[&EntityDto]) -> T,
+) -> Option<T> {
+    let mut refs = dim
+        .entities
+        .iter()
+        .map(|id| sketch.entities.iter().find(|entity| entity.id() == *id))
+        .collect::<Option<Vec<_>>>()?;
+    let reference = if let Some(edge) = dim.reference_edge {
+        let reference = sketch.projected_edges.iter().find(|e| e.edge_id == edge)?;
+        let (start, end) = reference.straight_line()?;
+        // Borrow a presentation operand without copying the sketch or adding geometry.
+        let id = limo_cad_sketch::EntityId(reference.id);
+        Some(EntityDto::Line {
+            id,
+            start_id: id,
+            end_id: id,
+            start,
+            end,
+            consumed: false,
+            fully_defined: true,
+        })
+    } else {
+        None
+    };
+    if let Some(reference) = &reference {
+        refs.push(reference);
+    }
+    Some(use_operands(&refs))
+}
+
+fn dimension_leaders(dim: &DimensionDto, sketch: &SketchDto, arrow: f64) -> Vec<[Point; 2]> {
+    with_operands(dim, sketch, |refs| leaders_for(dim, refs, arrow)).unwrap_or_default()
+}
+
+/// Share the leader's actual operands so placement cannot change its measurement.
+pub(super) fn preview_position(
+    dim: &DimensionDto,
+    sketch: &SketchDto,
+    cursor: Point,
+) -> Option<Point> {
+    if !cursor.x.is_finite() || !cursor.y.is_finite() {
+        return None;
+    }
+    let position = with_operands(dim, sketch, |refs| match dim.kind.as_str() {
+        "distance" => {
+            let (a, b) = distance_endpoints(refs, dim.text_pos)?;
+            let span = b - a;
+            let length = span.length();
+            if length < 1e-12 {
+                return None;
+            }
+            let normal = span.perp() * (1. / length);
+            let middle = (a + b) * 0.5;
+            Some(middle + normal * (cursor - middle).dot(normal))
+        }
+        "angle" => {
+            let (center, start, sweep) = angle_geometry(refs)?;
+            let angle = start + sweep * 0.5;
+            let radius = cursor.distance(center);
+            (radius > 1e-8).then_some(center + Point::new(angle.cos(), angle.sin()) * radius)
+        }
+        "radius" | "diameter" => Some(cursor),
+        _ => None,
+    })??;
+    (position.x.is_finite() && position.y.is_finite()).then_some(position)
 }
 
 pub(super) fn synchronize(
@@ -306,6 +388,13 @@ pub(super) fn synchronize(
             .map(|id| id.0)
             .unwrap_or(u64::MAX);
         key.extend([editing as u32, (editing >> 32) as u32]);
+        if let Some(preview) = &editor.interaction.dimension_preview {
+            key.extend([editor.form_serial as u32, (editor.form_serial >> 32) as u32]);
+            for position in [preview.text_pos.x, preview.text_pos.y] {
+                let bits = position.to_bits();
+                key.extend([bits as u32, (bits >> 32) as u32]);
+            }
+        }
         key.extend([
             visibility.hide_dimensions as u32,
             visibility.hide_constraints as u32,
@@ -334,10 +423,25 @@ pub(super) fn synchronize(
             // Dimensions keep their preferred position first. Constraint
             // badges then share the same rotation-aware collision layout.
             let mut layout = layout::Layout::new(size);
-            for dim in sketch
-                .dimensions
-                .iter()
-                .filter(|_| !visibility.hide_dimensions)
+            for dim in
+                sketch
+                    .dimensions
+                    .iter()
+                    .filter(|_| !visibility.hide_dimensions)
+                    .map(|stored| {
+                        editor
+                            .interaction
+                            .dimension_preview
+                            .as_ref()
+                            .filter(|preview| {
+                                editor.interaction.dimension_tool
+                                    && preview.constraint_id == stored.constraint_id
+                            })
+                            .unwrap_or(stored)
+                    })
+                    .chain(editor.interaction.dimension_preview.iter().filter(|d| {
+                        d.constraint_id.0 == 0 && editor.interaction.dimension.is_some()
+                    }))
             {
                 let world_point = |p: Point| sketch.basis.to_3d([p.x, p.y]);
                 let Some(screen) = native_viewport::interface_world_point(
@@ -361,7 +465,15 @@ pub(super) fn synchronize(
                         unit = unit.max((p[0] - screen[0]).hypot(p[1] - screen[1]));
                     }
                 }
-                let mut lines = leaders(dim, &sketch.entities, 6. / f64::from(unit));
+                let mut lines = dimension_leaders(dim, sketch, 6. / f64::from(unit));
+                if dim.constraint_id.0 == 0 {
+                    for pair in lines {
+                        for point in pair {
+                            segments.extend(world_point(point).map(|v| v as f32));
+                        }
+                    }
+                    continue;
+                }
                 let angle = if sketch.dimension_style == limo_cad_core::DimensionStyle::Aligned
                     && dim.kind != "angle"
                 {

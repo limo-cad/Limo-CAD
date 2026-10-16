@@ -3,6 +3,9 @@ use limo_cad_sketch::{
     Constraint, DragPhase, MovePointRequest, ProjectedCircleDto, ProjectedEdgeDto, SketchSession,
     Vec2,
 };
+use limo_cad_sketch::{
+    DimensionRequest, EntityDto, LockedSegmentRequest, RectangleMode, SnapTarget,
+};
 fn v(x: f64, y: f64) -> Vec2 {
     Vec2::new(x, y)
 }
@@ -149,4 +152,167 @@ fn point_tool_boundary_attachment_is_authored_and_ctrl_suppresses_it() {
                 < 1e-8
         );
     }
+}
+
+fn locked_line(from: Vec2, to_hint: Vec2, ctrl: bool) -> LockedSegmentRequest {
+    LockedSegmentRequest {
+        from,
+        to_hint,
+        angle_deg: Some(90.),
+        length_mm: None,
+        angle_text: None,
+        length_text: None,
+        ctrl_held: ctrl,
+        tracking: None,
+        intersection: None,
+        from_crossing: None,
+        to_crossing: None,
+    }
+}
+
+#[test]
+fn typed_angle_boundary_snap_survives_length_edits_undo_and_support_refresh() {
+    let mut s = session();
+    s.set_projected_edges(vec![edge(20.)]);
+    let rectangle = s
+        .add_rectangle(RectangleMode::TwoPoint, v(3., 5.), v(13., 15.))
+        .unwrap();
+    for line in [rectangle.entities[4], rectangle.entities[5]] {
+        s.add_dimension(DimensionRequest {
+            entities: vec![line],
+            text_pos: v(25., 10.),
+            value_text: Some("10".into()),
+        })
+        .unwrap();
+    }
+    let from = v(8., 15.);
+    let cursor = v(8.3, 19.7);
+    let preview = s.preview_segment_locked(
+        from,
+        (None, Some(90.)),
+        cursor,
+        false,
+        (None, None, None, None),
+    );
+    assert_eq!(
+        preview.snap,
+        SnapTarget::ProjectedEdge {
+            edge: EdgeId(1),
+            position: v(8., 20.)
+        }
+    );
+    assert!(preview.snapped_to.distance(v(8., 20.)) < 1e-8);
+    let result = s
+        .add_line_locked(&locked_line(from, cursor, false))
+        .unwrap();
+    assert!(result
+        .sketch
+        .constraints
+        .iter()
+        .any(|c| matches!(c.constraint,
+        Constraint::ReferenceOnEdge { point, edge: EdgeId(1) } if point == result.end_point_id)));
+    s.add_dimension(DimensionRequest {
+        entities: vec![result.entity_id],
+        text_pos: v(6., 17.),
+        value_text: Some("8".into()),
+    })
+    .unwrap();
+    let check = |s: &SketchSession, length: f64, boundary: f64| {
+        let a = s.sketch().point_position(result.start_point_id).unwrap();
+        let b = s.sketch().point_position(result.end_point_id).unwrap();
+        assert!(
+            (b.y - boundary).abs() < 1e-6,
+            "endpoint left boundary: {b:?}"
+        );
+        assert!((a.distance(b) - length).abs() < 1e-6);
+        assert!((a.x - b.x).abs() < 1e-6);
+    };
+    check(&s, 8., 20.);
+    s.undo().unwrap();
+    check(&s, 5., 20.);
+    s.redo().unwrap();
+    check(&s, 8., 20.);
+    s.set_projected_edges(vec![edge(22.)]);
+    check(&s, 8., 22.);
+    let saved = serde_json::to_string(&s.sketch().snapshot()).unwrap();
+    let mut reopened = limo_cad_sketch::Sketch::new();
+    reopened.restore(serde_json::from_str(&saved).unwrap());
+    reopened.solve().unwrap();
+    assert!((reopened.point_position(result.end_point_id).unwrap().y - 22.).abs() < 1e-6);
+}
+
+#[test]
+fn line_start_acquires_rectangle_edge_interior_and_keeps_sliding_coincidence() {
+    let mut s = session();
+    s.set_projected_edges(vec![edge(25.)]);
+    let rectangle = s
+        .add_rectangle(RectangleMode::TwoPoint, v(3., 5.), v(33., 15.))
+        .unwrap();
+    let carrier = rectangle.entities[6];
+    let raw = v(10.2, 15.3);
+    let preview = s.preview_creation_point(limo_cad_sketch::CreationPointPreviewRequest {
+        raw,
+        ctrl_held: false,
+        allow_midpoint: true,
+        allow_curve: true,
+        exclude_position: None,
+    });
+    assert_eq!(preview.snap, SnapTarget::Curve { entity: carrier });
+    let result = s
+        .add_line_locked(&locked_line(raw, v(10.2, 25.), false))
+        .unwrap();
+    assert!(s.dto().constraints.iter().any(|c| matches!(c.constraint,
+        Constraint::Coincident { a, b } if a == result.start_point_id && b == carrier)));
+    s.add_dimension(DimensionRequest {
+        entities: vec![result.entity_id],
+        text_pos: v(8., 20.),
+        value_text: Some("7".into()),
+    })
+    .unwrap();
+    let EntityDto::Line { start, end, .. } = s
+        .dto()
+        .entities
+        .into_iter()
+        .find(|e| e.id() == carrier)
+        .unwrap()
+    else {
+        panic!("rectangle edge missing");
+    };
+    let point = s.sketch().point_position(result.start_point_id).unwrap();
+    assert!((point.y - start.y).abs() < 1e-6 && (start.y - end.y).abs() < 1e-6);
+    assert!((s.sketch().point_position(result.end_point_id).unwrap().y - 25.).abs() < 1e-6);
+}
+
+#[test]
+fn angle_lock_obeys_finite_boundary_and_inference_override() {
+    let mut s = session();
+    s.set_projected_edges(vec![edge(20.)]);
+    for (from, cursor, ctrl) in [
+        (v(8., 10.), v(8., 20.), true),
+        (v(8., 10.), v(8., 0.), false),
+        (v(22.1, 10.), v(22.1, 20.), false),
+    ] {
+        let preview = s.preview_segment_locked(
+            from,
+            (None, Some(90.)),
+            cursor,
+            ctrl,
+            (None, None, None, None),
+        );
+        assert!(!matches!(
+            preview.snap,
+            SnapTarget::ProjectedEdge { .. } | SnapTarget::ReferenceMidpoint { .. }
+        ));
+    }
+    let preview = s.preview_segment_locked(
+        v(10., 10.),
+        (None, Some(90.)),
+        v(10.2, 20.),
+        false,
+        (None, None, None, None),
+    );
+    assert_eq!(
+        preview.snap,
+        SnapTarget::ReferenceMidpoint { edge: EdgeId(1) }
+    );
 }

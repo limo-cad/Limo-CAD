@@ -20,6 +20,7 @@ pub(crate) mod selection;
 mod sketch;
 mod snapping;
 pub(crate) use forms::FormKind;
+mod dimension;
 mod interaction;
 pub(crate) mod panel;
 pub(crate) use interaction::{AnnotationTarget, InteractionCommand, ModifyTool};
@@ -632,6 +633,9 @@ fn queue_mutation(
                             editor.interaction.dimension_position = None;
                             editor.interaction.dimension_id = None;
                             editor.interaction.dimension_reference = false;
+                            editor.interaction.dimension_tool = false;
+                            editor.interaction.dimension_edge = None;
+                            editor.interaction.dimension_preview = None;
                             editor.interaction.reposition_dimension = None;
                             editor.interaction.constraint = None;
                             editor.interaction.annotation_menu = None;
@@ -943,7 +947,7 @@ pub(crate) fn process_one(
                     let a = canvas;
                     let inside = f64::from(p.x) >= a.x && f64::from(p.x) < a.x+a.width &&
                         f64::from(p.y) >= a.y && f64::from(p.y) < a.y+a.height && !handle.owns_pointer([f64::from(p.x),f64::from(p.y)]);
-                    interaction::hover(world, services, &presented_owner, &editor, inside.then_some(p), a)?;
+                    interaction::hover(world, services, &presented_owner, &mut editor, inside.then_some(p), a)?;
                     result = json!({"handled":true,"hover":inside});
                 }
             }

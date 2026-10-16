@@ -10,9 +10,9 @@ pub(super) struct CompilationGate {
 }
 
 #[derive(Resource, Default)]
-struct Captured(Option<Image>);
+pub(super) struct Captured(Option<Image>);
 
-fn capture(app: &mut App, target: &Handle<Image>, name: &str) -> Vec<u8> {
+pub(super) fn capture(app: &mut App, target: &Handle<Image>, name: &str) -> Vec<u8> {
     // Capture a prepared UI frame, rather than the first clear-only frame
     // before the interface's own 2D pipelines and image assets are ready.
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -62,7 +62,7 @@ fn capture(app: &mut App, target: &Handle<Image>, name: &str) -> Vec<u8> {
     }
 }
 
-fn ready(app: &mut App) {
+pub(super) fn ready(app: &mut App) {
     let deadline = Instant::now() + Duration::from_secs(20);
     while !app.world().resource::<ViewportReady>().0 {
         app.update();
@@ -72,7 +72,7 @@ fn ready(app: &mut App) {
     }
 }
 
-fn changed(a: &[u8], b: &[u8]) -> usize {
+pub(super) fn changed(a: &[u8], b: &[u8]) -> usize {
     a.as_chunks::<4>()
         .0
         .iter()
@@ -635,4 +635,107 @@ fn worker_shutdown_services_pending_main_thread_surface_work() {
         .recv_timeout(Duration::from_secs(5))
         .expect("CAD shutdown did not service the pending surface work");
     main.join().unwrap();
+}
+
+#[test]
+fn texture_pool_waits_for_deferred_extraction() {
+    use bevy::ecs::schedule::{ScheduleLabel, SystemSet};
+    use bevy::render::extract_plugin::ExtractPlugin;
+
+    // Exercise Bevy's actual deferred extraction schedule without a GPU. These
+    // resources retain the same leases as HostSurface and ExtractedTexture.
+    #[derive(Resource)]
+    struct Displayed(Arc<()>);
+    #[derive(Resource)]
+    struct Extracted(Arc<()>);
+    fn extract_lease(mut commands: Commands, frame: Extract<Res<Displayed>>) {
+        commands.insert_resource(Extracted(frame.0.clone()));
+    }
+    let mut app = App::new();
+    app.add_plugins(ExtractPlugin::<RenderApp>::new(
+        |_, _| {},
+        Render::base_schedule,
+        Render.intern(),
+        RenderSystems::ExtractCommands.intern(),
+        RenderSystems::PostCleanup.intern(),
+    ));
+    let mut render = app.remove_sub_app(RenderApp).unwrap();
+    render.update_schedule = Some(Render.intern());
+    render.add_systems(ExtractSchedule, extract_lease);
+    let mut targets: [Target; 3] = std::array::from_fn(|_| Target {
+        image: default(),
+        lease: default(),
+    });
+    for (index, target) in targets.iter_mut().enumerate() {
+        let lease = Arc::new(());
+        target.lease = Arc::downgrade(&lease);
+        app.world_mut().insert_resource(Displayed(lease));
+        if index < 2 {
+            render.extract(app.world_mut());
+        }
+        if index == 0 {
+            render.update();
+        }
+    }
+    // A is in the render world, B in queued extraction commands, C in the main
+    // world. The next CAD job must wait, rather than return a fatal error.
+    assert_eq!(
+        targets.each_ref().map(|target| target.lease.strong_count()),
+        [1, 1, 1]
+    );
+    assert!(std::sync::Weak::ptr_eq(
+        &targets[0].lease,
+        &Arc::downgrade(&render.world().resource::<Extracted>().0),
+    ));
+    let released = targets[0].lease.clone();
+    let (done, completed) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let stopped = AtomicBool::new(false);
+        let acquired = wait_for_target(&mut targets, &stopped)
+            .map(|target| std::sync::Weak::ptr_eq(&target.lease, &released));
+        done.send(acquired).unwrap();
+    });
+    assert_eq!(
+        completed.recv_timeout(Duration::from_millis(50)),
+        Err(mpsc::RecvTimeoutError::Timeout),
+        "a fully leased pool must wait without failing or reusing a live texture",
+    );
+    // Applying B frees exactly A, while B and C stay leased.
+    render.update();
+    assert_eq!(
+        completed.recv_timeout(Duration::from_secs(5)).unwrap(),
+        Some(true),
+        "the pending job must acquire only the released texture",
+    );
+    worker.join().unwrap();
+}
+
+#[test]
+fn texture_pool_wait_is_cancelled_on_shutdown() {
+    let leases: [Arc<()>; 3] = std::array::from_fn(|_| Arc::new(()));
+    let mut targets = leases.each_ref().map(|lease| Target {
+        image: default(),
+        lease: Arc::downgrade(lease),
+    });
+    let stopped = Arc::new(AtomicBool::new(false));
+    let worker_stopped = stopped.clone();
+    let (done, completed) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let cancelled = wait_for_target(&mut targets, &worker_stopped).is_none();
+        done.send(cancelled).unwrap();
+    });
+    assert_eq!(
+        completed.recv_timeout(Duration::from_millis(50)),
+        Err(mpsc::RecvTimeoutError::Timeout),
+    );
+    stopped.store(true, Ordering::Release);
+    assert!(completed.recv_timeout(Duration::from_secs(5)).unwrap());
+    worker.join().unwrap();
+    assert!(leases.iter().all(|lease| Arc::strong_count(lease) == 1));
+    // Shutdown also wins when an unused target is available.
+    let mut available = [Target {
+        image: default(),
+        lease: default(),
+    }];
+    assert!(wait_for_target(&mut available, &stopped).is_none());
 }

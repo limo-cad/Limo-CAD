@@ -31,6 +31,7 @@ use crate::solver::{self, Analysis};
 
 mod creation;
 mod dims;
+mod line_snaps;
 mod mods;
 
 /// Snap distance tolerance in sketch mm (screen-relative scaling is a
@@ -517,6 +518,10 @@ impl SketchSession {
         target: SnapTarget,
     ) -> Option<Constraint> {
         match target {
+            SnapTarget::Curve { entity } => Some(Constraint::Coincident {
+                a: point,
+                b: entity,
+            }),
             SnapTarget::ProjectedEdge { edge, .. } => {
                 Some(Constraint::ReferenceOnEdge { point, edge })
             }
@@ -590,12 +595,16 @@ impl SketchSession {
         &self,
         request: crate::dto::CreationPointPreviewRequest,
     ) -> PreviewDto {
-        let (snapped_to, snap) = self.snap_inner(
-            request.raw,
-            !request.ctrl_held,
-            request.allow_midpoint && !request.ctrl_held,
-            request.exclude_position,
-        );
+        let (snapped_to, snap) = if request.allow_curve {
+            self.snap_line_acquisition(request.raw, request.ctrl_held, request.exclude_position)
+        } else {
+            self.snap_inner(
+                request.raw,
+                !request.ctrl_held,
+                request.allow_midpoint && !request.ctrl_held,
+                request.exclude_position,
+            )
+        };
         PreviewDto {
             snapped_to,
             snap,
@@ -854,56 +863,57 @@ impl SketchSession {
     /// constraint on commit (D4.1 parity). Holding Ctrl suppresses the
     /// midpoint inference (Ctrl disables inferences).
     fn snap_line_flow(&self, raw: Vec2, ctrl_held: bool) -> (Vec2, SnapTarget) {
-        self.snap_inner(raw, !ctrl_held, !ctrl_held, None)
+        self.snap_line_acquisition(raw, ctrl_held, None)
     }
 
     /// Endpoint acquisition must not magnetize a short segment back onto its
     /// own start point. Other coincident candidates retain normal priority.
     fn snap_line_endpoint(&self, raw: Vec2, from: Vec2, ctrl_held: bool) -> (Vec2, SnapTarget) {
-        self.snap_inner(raw, !ctrl_held, !ctrl_held, Some(from))
+        self.snap_line_acquisition(raw, ctrl_held, Some(from))
     }
 
     /// Shared pipeline for `preview_segment` and `add_line`: snap, then
-    /// (unless Ctrl is held or the snap is coincident) apply H/V inference
-    /// within `INFERENCE_ANGLE_TOL_DEG` of the u/v axes and project the
-    /// endpoint onto the inferred direction.
+    /// apply near-axis inference within the angular and viewport capture
+    /// limits. Finite edge attachment and H/V inference must agree; exact
+    /// point/origin acquisitions and explicit inference overrides win.
     fn snap_and_infer(&self, from: Vec2, to_raw: Vec2, ctrl_held: bool) -> PreviewDto {
         let (mut snapped, mut target) = self.snap_line_endpoint(to_raw, from, ctrl_held);
         let mut inferences = Vec::new();
 
-        match target {
-            SnapTarget::Point { .. } | SnapTarget::Origin => {
-                inferences.push(Inference::Coincident);
-            }
-            SnapTarget::Midpoint { .. }
-            | SnapTarget::ReferenceMidpoint { .. }
-            | SnapTarget::ProjectedEdge { .. }
-            | SnapTarget::Curve { .. }
-            | SnapTarget::Intersection { .. } => {}
-            SnapTarget::Grid | SnapTarget::None => {
-                if !ctrl_held {
-                    let d = to_raw - from;
-                    let tol = INFERENCE_ANGLE_TOL_DEG.to_radians().tan();
-                    if d.x.abs() >= d.y.abs() && d.y.abs() <= tol * d.x.abs() {
-                        snapped.y = from.y;
-
-                        if snapped.distance(from) < MIN_LINE_LENGTH_MM
-                            && d.length() >= MIN_LINE_LENGTH_MM
-                        {
-                            snapped.x = to_raw.x;
-                            target = SnapTarget::None;
-                        }
-                        inferences.push(Inference::Horizontal);
-                    } else if d.y.abs() > d.x.abs() && d.x.abs() <= tol * d.y.abs() {
-                        snapped.x = from.x;
-                        if snapped.distance(from) < MIN_LINE_LENGTH_MM
-                            && d.length() >= MIN_LINE_LENGTH_MM
-                        {
-                            snapped.y = to_raw.y;
-                            target = SnapTarget::None;
-                        }
-                        inferences.push(Inference::Vertical);
-                    }
+        if matches!(target, SnapTarget::Point { .. } | SnapTarget::Origin) {
+            inferences.push(Inference::Coincident);
+        } else if let Some(axis) = self.line_axis(from, to_raw, ctrl_held) {
+            let delta = to_raw - from;
+            let (direction, inference) = match axis {
+                TrackingAxis::Horizontal => {
+                    (Vec2::new(delta.x.signum(), 0.), Inference::Horizontal)
+                }
+                TrackingAxis::Vertical => (Vec2::new(0., delta.y.signum()), Inference::Vertical),
+            };
+            if let Some((point, carrier)) = self.snap_line_ray(from, direction, to_raw) {
+                // Acquire the exact axis/carrier intersection rather than an
+                // off-axis midpoint or the cursor's nearest edge projection.
+                snapped = point;
+                target = carrier;
+                inferences.push(inference);
+            } else if matches!(target, SnapTarget::Grid | SnapTarget::None) {
+                match axis {
+                    TrackingAxis::Horizontal => snapped.y = from.y,
+                    TrackingAxis::Vertical => snapped.x = from.x,
+                }
+                if snapped.distance(from) < MIN_LINE_LENGTH_MM {
+                    snapped = from + direction * delta.dot(direction);
+                    target = SnapTarget::None;
+                }
+                inferences.push(inference);
+            } else {
+                let d = snapped - from;
+                let across = match axis {
+                    TrackingAxis::Horizontal => d.y,
+                    TrackingAxis::Vertical => d.x,
+                };
+                if d.length() >= MIN_LINE_LENGTH_MM && across.abs() <= MERGE_EPS {
+                    inferences.push(inference);
                 }
             }
         }
@@ -1007,11 +1017,11 @@ impl SketchSession {
             }
 
             let d = to_hint - from;
-            let tol = INFERENCE_ANGLE_TOL_DEG.to_radians().tan();
-            if !ctrl_held && d.x.abs() >= d.y.abs() && d.y.abs() <= tol * d.x.abs() {
+            let axis = self.line_axis(from, to_hint, ctrl_held);
+            if axis == Some(TrackingAxis::Horizontal) {
                 inferences.push(Inference::Horizontal);
                 Vec2::new(from.x + l * d.x.signum(), from.y)
-            } else if !ctrl_held && d.y.abs() > d.x.abs() && d.x.abs() <= tol * d.y.abs() {
+            } else if axis == Some(TrackingAxis::Vertical) {
                 inferences.push(Inference::Vertical);
                 Vec2::new(from.x, from.y + l * d.y.signum())
             } else {
@@ -1045,6 +1055,16 @@ impl SketchSession {
                     inferences,
                     tracking: None,
                 };
+            }
+            if !ctrl_held {
+                if let Some((point, target)) = self.snap_line_ray(from, dir, to_hint) {
+                    return PreviewDto {
+                        snapped_to: point,
+                        snap: target,
+                        inferences,
+                        tracking: None,
+                    };
+                }
             }
             if !ctrl_held {
                 if let Some(preview) = self.tracking_preview(from, None, Some(a), to_hint, tracking)
@@ -1988,8 +2008,11 @@ impl SketchSession {
                         return None;
                     }
                     let absolute_cosine = direction.dot(other).abs() / (length * other_length);
-                    (absolute_cosine <= perpendicular_cos_limit)
-                        .then_some((candidate, absolute_cosine))
+                    (absolute_cosine <= perpendicular_cos_limit
+                        && self.grid_capture_mm.is_none_or(|radius| {
+                            direction.dot(other).abs() / other_length <= radius
+                        }))
+                    .then_some((candidate, absolute_cosine))
                 })
                 .min_by(|a, b| a.1.total_cmp(&b.1));
 
@@ -2042,6 +2065,9 @@ impl SketchSession {
                     let other_length = other.length();
                     other_length >= MIN_LINE_LENGTH_MM
                         && direction.dot(other).abs() / (length * other_length) <= cosine_limit
+                        && self.grid_capture_mm.is_none_or(|radius| {
+                            direction.dot(other).abs() / other_length <= radius
+                        })
                 })
         })
     }
@@ -2214,7 +2240,11 @@ impl SketchSession {
             .add_entity(Entity::line(start_point_id, end_point_id));
 
         let mut created = Vec::new();
-        let perpendicular_created = if ctrl_held {
+        let perpendicular_created = if ctrl_held
+            || locks
+                .as_ref()
+                .is_some_and(|locks| locks.angle_deg.is_some())
+        {
             false
         } else {
             let candidates = self.perpendicular_candidates(line_id, [start_point_id, end_point_id]);
@@ -2229,24 +2259,6 @@ impl SketchSession {
             }
             accepted
         };
-        for inference in &preview.inferences {
-            let constraint = match inference {
-                Inference::Horizontal if !perpendicular_created => {
-                    Some(Constraint::Horizontal { entity: line_id })
-                }
-                Inference::Vertical if !perpendicular_created => {
-                    Some(Constraint::Vertical { entity: line_id })
-                }
-                Inference::Horizontal | Inference::Vertical => None,
-                Inference::Perpendicular => None,
-
-                Inference::Coincident => None,
-            };
-            if let Some(c) = constraint {
-                let id = self.sketch.add_constraint(c);
-                created.push(ConstraintDto { id, constraint: c });
-            }
-        }
         for (point_id, target) in [(start_point_id, from_target), (end_point_id, preview.snap)] {
             if let Some(constraint) = self.attach_origin_if_acquired(point_id, target) {
                 created.push(constraint);
@@ -2268,26 +2280,27 @@ impl SketchSession {
             }
         }
 
-        if let SnapTarget::Curve { entity: carrier } = preview.snap {
-            let constraint = Constraint::Coincident {
-                a: end_point_id,
-                b: carrier,
-            };
-            let Some(created_constraint) = self.try_add_independent_auto_constraint(constraint)
-            else {
-                self.sketch.restore(before);
-                self.recompute();
-                return Err(SessionError::InvalidConstraint(
-                    "Cannot attach the line endpoint to the acquired curve".to_string(),
-                ));
-            };
-            created.push(created_constraint);
-        }
-
         for (point_id, target) in [(start_point_id, from_target), (end_point_id, preview.snap)] {
             if let Some(c) = self.midpoint_constraint_for_target(point_id, target) {
                 let id = self.sketch.add_constraint(c);
                 created.push(ConstraintDto { id, constraint: c });
+            }
+        }
+
+        // Attach acquired endpoints first. Two anchored midpoints can already
+        // determine the axis; never add a redundant H/V constraint on top.
+        for inference in &preview.inferences {
+            let constraint = match inference {
+                Inference::Horizontal if !perpendicular_created => {
+                    Some(Constraint::Horizontal { entity: line_id })
+                }
+                Inference::Vertical if !perpendicular_created => {
+                    Some(Constraint::Vertical { entity: line_id })
+                }
+                _ => None,
+            };
+            if let Some(c) = constraint.and_then(|c| self.try_add_independent_auto_constraint(c)) {
+                created.push(c);
             }
         }
 
@@ -3469,6 +3482,8 @@ impl SketchSession {
             | Constraint::EqualDistance { .. }
             | Constraint::ReferenceMidpoint { .. }
             | Constraint::ReferenceOnEdge { .. }
+            | Constraint::ReferenceDistance { .. }
+            | Constraint::ReferenceAngle { .. }
             | Constraint::SpanMidpoint { .. } => {
                 return Err(invalid(
                     "This relation is internal and is created by its sketch tool",
@@ -4814,6 +4829,7 @@ impl SketchSession {
                 Constraint::Parallel { .. }
                 | Constraint::Perpendicular { .. }
                 | Constraint::Angle { .. } => {}
+                Constraint::ReferenceDistance { .. } | Constraint::ReferenceAngle { .. } => {}
             }
         }
 
@@ -5192,6 +5208,13 @@ impl SketchSession {
 
                 Constraint::Radius { entity, .. } | Constraint::Diameter { entity, .. } => {
                     curve_centers.insert(entity);
+                }
+                Constraint::ReferenceDistance { entity, .. } => {
+                    add_line_shape(&mut line_lengths, &mut line_angles, entity);
+                }
+                Constraint::ReferenceAngle { entity, .. } => {
+                    line_lengths.insert(entity);
+                    line_midpoints.insert(entity);
                 }
                 Constraint::Fix { .. }
                 | Constraint::ReferenceMidpoint { .. }

@@ -3356,7 +3356,7 @@ fn build_tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "sketch_add_dimension",
             "Add driving dimension",
-            "Add a driving dimension to selected entities, optionally using a formula.",
+            "Add a driving dimension to selected entities, optionally using a formula. A reference_edge selects a stable straight support-face edge for an offset or angle.",
             "add_dimension",
             Payload::Object,
             object_schema(
@@ -3364,6 +3364,7 @@ fn build_tool_specs() -> Vec<ToolSpec> {
                     "entities": entity_ids.clone(),
                     "text_pos": point.clone(),
                     "value_text": {"type": ["string", "null"]}
+                    ,"reference_edge": {"type": ["integer", "null"], "minimum": 1}
                 }),
                 &["entities", "text_pos"],
             ),
@@ -3371,11 +3372,11 @@ fn build_tool_specs() -> Vec<ToolSpec> {
         ToolSpec::direct(
             "sketch_edit_dimension",
             "Edit driving dimension",
-            "Change a dimension value or formula.",
+            "Change a dimension value or formula, optionally committing its annotation position in the same undo step.",
             "edit_dimension",
             Payload::Object,
             object_schema(
-                json!({"constraint_id": {"type": "integer", "minimum": 1}, "text": {"type": "string"}}),
+                json!({"constraint_id": {"type": "integer", "minimum": 1}, "text": {"type": "string"}, "text_pos": point.clone()}),
                 &["constraint_id", "text"],
             ),
         ),
