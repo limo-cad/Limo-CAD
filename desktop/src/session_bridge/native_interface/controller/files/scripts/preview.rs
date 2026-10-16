@@ -318,6 +318,10 @@ pub(crate) fn command(
     } else if !super::super::super::super::is_activation(input) {
         return Err("Preview command requires activation".into());
     }
+    if action != Action::Model && world.resource::<Files>().script.preview.drag.is_some() {
+        crate::native_viewport::winit_host::cancel_native_pointer(world, handle);
+        cancel_pointer(world);
+    }
     if action == Action::Open {
         open(world, handle)?;
     } else if action == Action::Extrude {

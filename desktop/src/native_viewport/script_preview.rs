@@ -876,6 +876,7 @@ mod tests {
             "Extrusion must visibly change real geometry"
         );
         if let Ok(path) = std::env::var("LIMO_CAD_PREVIEW_PROOF_DIR") {
+            std::fs::create_dir_all(&path).unwrap();
             for (name, bytes) in [
                 ("extrude-profile.png", profile),
                 ("extrude-solid.png", solid),

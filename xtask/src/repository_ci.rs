@@ -27,7 +27,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "desktop-changes" => return crate::desktop_changes::run(args),
         "native-ignored-test" => {
             let suite = args.next().context(
-                "missing native ignored suite (fonts, sketch-visual, grid-redraw or sketch-commit)",
+                "missing native ignored suite (fonts, sketch-visual, grid-redraw, sketch-commit or extrude-preview)",
             )?;
             ensure!(
                 args.next().is_none(),
@@ -141,8 +141,12 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             "committed_sketch_primitives_render_without_a_followup_pointer_frame",
             &["committed_sketch_primitives_render_without_a_followup_pointer_frame"],
         )),
+        "extrude-preview" => Ok((
+            "extrude_preview_renders_selected_profile_and_real_solid",
+            &["extrude_preview_renders_selected_profile_and_real_solid"],
+        )),
         _ => bail!(
-            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw or sketch-commit"
+            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit or extrude-preview"
         ),
     }
 }
@@ -335,7 +339,13 @@ mod tests {
     use super::*;
     #[test]
     fn native_diagnostic_filters_reject_empty_renamed_and_duplicate_tests() {
-        for suite in ["fonts", "sketch-visual", "grid-redraw", "sketch-commit"] {
+        for suite in [
+            "fonts",
+            "sketch-visual",
+            "grid-redraw",
+            "sketch-commit",
+            "extrude-preview",
+        ] {
             let (filter, expected) = native_ignored_suite(suite).unwrap();
             let inventory = expected
                 .iter()
