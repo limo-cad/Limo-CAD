@@ -193,6 +193,10 @@ impl SessionBridgeState {
             matches!(
                 operation,
                 "solid_edit_extrude"
+                    | "solid_edit_revolve"
+                    | "solid_edit_sweep"
+                    | "solid_edit_loft"
+                    | "solid_edit_rib"
                     | "solid_edit_fillet"
                     | "solid_edit_chamfer"
                     | "solid_edit_shell"
@@ -284,6 +288,10 @@ fn prepare(
     let definitions = parse_engine_envelope(stage.engine.engine_call(
         match kind {
             SolidFormKind::Extrude => "extrude_definitions",
+            SolidFormKind::Revolve => "revolve_definitions",
+            SolidFormKind::Sweep => "sweep_definitions",
+            SolidFormKind::Loft => "loft_definitions",
+            SolidFormKind::Rib => "rib_definitions",
             SolidFormKind::Hole => "hole_definitions",
             SolidFormKind::Fillet => "fillet_definitions",
             SolidFormKind::Chamfer => "chamfer_definitions",
@@ -298,7 +306,6 @@ fn prepare(
             SolidFormKind::OffsetPlane | SolidFormKind::Midplane | SolidFormKind::AnglePlane => {
                 "datum_plane_definitions"
             }
-            _ => return Err("This feature has no topology editor".into()),
         },
         "",
     ))?;
@@ -311,6 +318,22 @@ fn prepare(
         let definition: ExtrudeDefinitionDto =
             serde_json::from_value(definition.clone()).map_err(|error| error.to_string())?;
         SolidForm::edit(&definition, &snapshot.model(None))?
+    } else if kind == SolidFormKind::Revolve {
+        let definition: RevolveDefinitionDto =
+            serde_json::from_value(definition.clone()).map_err(|error| error.to_string())?;
+        SolidForm::edit_revolve(&definition, &snapshot.model(None))?
+    } else if kind == SolidFormKind::Sweep {
+        let definition: SweepDefinitionDto =
+            serde_json::from_value(definition.clone()).map_err(|error| error.to_string())?;
+        SolidForm::edit_sweep(&definition, &snapshot.model(None))?
+    } else if kind == SolidFormKind::Loft {
+        let definition: LoftDefinitionDto =
+            serde_json::from_value(definition.clone()).map_err(|error| error.to_string())?;
+        SolidForm::edit_loft(&definition, &snapshot.model(None))?
+    } else if kind == SolidFormKind::Rib {
+        let definition: limo_cad_solid::RibDefinitionDto =
+            serde_json::from_value(definition.clone()).map_err(|error| error.to_string())?;
+        SolidForm::edit_rib(&definition, &snapshot.model(None))?
     } else if kind == SolidFormKind::MoveCopy {
         SolidForm::edit_move(definition, &snapshot.model(None))?
     } else if kind == SolidFormKind::Hole {
@@ -349,23 +372,33 @@ fn install(
         .last_id
         .checked_add(1)
         .ok_or("Feature identities exhausted")?;
-    let pick_target = Some(if prepared.form.kind() == SolidFormKind::Extrude {
-        SolidField::Source
-    } else if prepared.form.kind().selects_bodies() {
-        SolidField::Bodies
-    } else if prepared.form.kind().is_plane() {
-        SolidField::FirstPlane
-    } else if prepared.form.kind() == SolidFormKind::Combine {
-        SolidField::TargetBody
-    } else if prepared.form.kind() == SolidFormKind::Hole {
-        SolidField::HolePositions
-    } else if prepared.form.kind() == SolidFormKind::ExternalThread {
-        SolidField::Cylinder
-    } else if prepared.form.kind() == SolidFormKind::Shell {
-        SolidField::Faces
-    } else {
-        SolidField::Edges
-    });
+    let pick_target = Some(
+        if matches!(
+            prepared.form.kind(),
+            SolidFormKind::Extrude
+                | SolidFormKind::Revolve
+                | SolidFormKind::Sweep
+                | SolidFormKind::Loft
+        ) {
+            SolidField::Source
+        } else if prepared.form.kind() == SolidFormKind::Rib {
+            SolidField::Path
+        } else if prepared.form.kind().selects_bodies() {
+            SolidField::Bodies
+        } else if prepared.form.kind().is_plane() {
+            SolidField::FirstPlane
+        } else if prepared.form.kind() == SolidFormKind::Combine {
+            SolidField::TargetBody
+        } else if prepared.form.kind() == SolidFormKind::Hole {
+            SolidField::HolePositions
+        } else if prepared.form.kind() == SolidFormKind::ExternalThread {
+            SolidField::Cylinder
+        } else if prepared.form.kind() == SolidFormKind::Shell {
+            SolidField::Faces
+        } else {
+            SolidField::Edges
+        },
+    );
     let mut editor = Editor {
         id,
         form: prepared.form,

@@ -713,6 +713,14 @@ fn finishing_an_existing_sketch_rebuilds_its_solid_without_duplicating_history()
     )
     .unwrap();
     drain(app.world_mut());
+    assert!(
+        native_viewport::interface_geometry(app.world())
+            .scene
+            .bodies
+            .is_empty(),
+        "Editing Sketch1 must remove its later extrusion from the renderer and picker"
+    );
+    assert_eq!(fixture.engine.document_snapshot().features, original);
     let active = crate::session_bridge::parse_engine_envelope(
         fixture.engine.engine_call("active_sketch", ""),
     )

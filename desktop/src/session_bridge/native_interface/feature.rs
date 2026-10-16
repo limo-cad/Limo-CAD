@@ -1006,6 +1006,10 @@ fn reduce_owned(
             matches!(
                 kind,
                 SolidFormKind::Extrude
+                    | SolidFormKind::Revolve
+                    | SolidFormKind::Sweep
+                    | SolidFormKind::Loft
+                    | SolidFormKind::Rib
                     | SolidFormKind::Fillet
                     | SolidFormKind::Chamfer
                     | SolidFormKind::MoveCopy
