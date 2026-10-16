@@ -19,6 +19,9 @@ pub(crate) fn input(
     }) {
         return Ok(false);
     }
+    if feature::help_input(world, handle, event)? {
+        return Ok(true);
+    }
     if let WindowEvent::KeyboardInput(key) = &event.event {
         if key.state == ButtonState::Pressed
             && key.logical_key == Key::Escape

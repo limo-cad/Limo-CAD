@@ -9,9 +9,9 @@ pub(super) struct Card {
 }
 impl Card {
     pub fn new(width: f32) -> Self {
-        let w = (width - 40.).clamp(280., 392.);
+        let w = (width - 32.).clamp(280., 320.);
         Self {
-            x: (width - w - 20.).max(4.),
+            x: (width - w - 16.).max(4.),
             y: 44.,
             width: w,
         }
@@ -35,34 +35,27 @@ impl Card {
             &key("card"),
             Node {
                 border: UiRect::all(px(1.)),
-                border_radius: BorderRadius::all(px(8.)),
+                border_radius: BorderRadius::all(px(6.)),
                 ..rect(x, y, w, height)
             },
             theme.panel.with_alpha(1.),
             60,
         );
         let entity = widgets.entity(&key("card")).unwrap();
-        let shadow = BoxShadow::new(theme.shadow, px(0.), px(6.), px(0.), px(16.));
+        let shadow = BoxShadow::new(theme.shadow, px(0.), px(4.), px(0.), px(10.));
         if world.get::<BoxShadow>(entity) != Some(&shadow) {
             world.entity_mut(entity).insert(shadow);
         }
-        widgets.colored_text(
-            world,
-            camera,
-            &key("kind"),
-            rect(x + 16., y + 12., w - 68., 16.),
-            "Show me",
-            11.,
-            61,
-            theme.mute,
-        );
         widgets.text(
             world,
             camera,
             &key("heading"),
-            rect(x + 16., y + 30., w - 68., 28.),
-            title,
-            20.,
+            rect(x + 12., y + 10., w - 52., 24.),
+            &format!(
+                "{title} · {}",
+                if view == "help" { "Help" } else { "Show me" }
+            ),
+            14.,
             61,
         );
         widgets.button(
@@ -72,7 +65,7 @@ impl Card {
             InterfaceControl::button("document/scripts", "Close demonstration"),
             Some(""),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Close)),
-            rect(x + w - 44., y + 16., 28., 28.),
+            rect(x + w - 36., y + 10., 24., 24.),
             Some(interface_shell::ribbon::Icon::Cancel),
             61,
         )?;

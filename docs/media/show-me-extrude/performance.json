@@ -1,16 +1,16 @@
 {
   "cached_frames": 7,
-  "cached_rgba_bytes": 6720000,
+  "cached_rgba_bytes": 5751872,
   "closed_cached_bytes": 0,
-  "closed_poll_ns": 941.634,
+  "closed_poll_ns": 956.038,
   "cold_frame_ms": [
-    1418.3346000000001,
-    247.5935,
-    763.0649000000001,
-    253.07489999999999,
-    249.9444,
-    260.6635,
-    261.7445
+    1487.7565,
+    227.4276,
+    747.3978999999999,
+    225.1381,
+    243.5878,
+    228.1231,
+    229.6116
   ],
   "cold_gpu_jobs": 7,
   "durations_ms": [
@@ -24,10 +24,10 @@
   ],
   "idle_poll_samples": 100000,
   "idle_preview_wakes": 0,
-  "paused_poll_ns": 826.143,
-  "prepare_ms": 496.8451,
+  "paused_poll_ns": 848.951,
+  "prepare_ms": 506.3786,
   "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
   "texture_budget_bytes": 16777216,
   "warm_gpu_jobs": 0,
-  "warm_replay_ms": 0.02318
+  "warm_replay_ms": 0.022546
 }

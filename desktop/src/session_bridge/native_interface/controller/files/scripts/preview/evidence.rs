@@ -63,8 +63,24 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
                     .to_srgba();
                 let expected = [ink.red, ink.green, ink.blue].map(|v| (v * 255.).round() as i16);
                 let pixels = decoded.data.as_ref().unwrap();
-                let visible = (148..204)
-                    .flat_map(|y| (72..480).map(move |x| (y * 864 + x) * 4))
+                let (node, transform) = app
+                    .world_mut()
+                    .query::<(&Text, &ComputedNode, &bevy::ui::UiGlobalTransform)>()
+                    .iter(app.world())
+                    .find_map(|(text, node, transform)| {
+                        text.0
+                            .starts_with("Extrude ·")
+                            .then_some((*node, *transform))
+                    })
+                    .expect("Native title is laid out");
+                let start = transform.translation - node.size / 2.;
+                let size = decoded.texture_descriptor.size;
+                let left = start.x.max(0.) as usize;
+                let top = start.y.max(0.) as usize;
+                let right = (start.x + node.size.x).min(size.width as f32) as usize;
+                let bottom = (start.y + node.size.y).min(size.height as f32) as usize;
+                let visible = (top..bottom)
+                    .flat_map(|y| (left..right).map(move |x| (y * size.width as usize + x) * 4))
                     .filter(|offset| {
                         (0..3).all(|i| (pixels[*offset + i] as i16 - expected[i]).abs() < 45)
                     })
@@ -333,6 +349,77 @@ fn native_show_me_ui_evidence_and_performance() {
     panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., light).unwrap();
     widgets.finish(app.world_mut());
     capture(&mut app, &target, &out.join("light.png"));
+    // Jack's reproduction: the supported 1200×760 window at 175% UI scale.
+    command(app.world_mut(), &handle, Action::Help, &ControlInput::Click).unwrap();
+    app.insert_resource(bevy::ui::UiScale(1.75));
+    let mut texture = Image::new_fill(
+        Extent3d {
+            width: 1200,
+            height: 760,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        &[0, 0, 0, 255],
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    texture.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC;
+    app.world_mut()
+        .resource_mut::<Assets<Image>>()
+        .insert(target.id(), texture)
+        .unwrap();
+    for _ in 0..3 {
+        widgets.begin();
+        panel::paint(
+            app.world_mut(),
+            camera,
+            &mut widgets,
+            1200. / 1.75,
+            760. / 1.75,
+            light,
+        )
+        .unwrap();
+        widgets.finish(app.world_mut());
+        update(&mut app);
+    }
+    capture(&mut app, &target, &out.join("help-175-top.png"));
+    let clip = widgets.entity("extrude-help-body").unwrap();
+    let back = widgets.entity("extrude-help-back").unwrap();
+    let clip_node = app.world().get::<ComputedNode>(clip).unwrap();
+    let clip_center = app
+        .world()
+        .get::<bevy::ui::UiGlobalTransform>(clip)
+        .unwrap()
+        .translation;
+    let back_node = app.world().get::<ComputedNode>(back).unwrap();
+    let back_center = app
+        .world()
+        .get::<bevy::ui::UiGlobalTransform>(back)
+        .unwrap()
+        .translation;
+    assert!(
+        clip_center.y + clip_node.size.y / 2. + 8. <= back_center.y - back_node.size.y / 2.,
+        "Help has a real clipped reading region above its fixed return action"
+    );
+    command(
+        app.world_mut(),
+        &handle,
+        Action::HelpBody,
+        &ControlInput::Key(limo_cad_interface::KeyChord::plain("End")),
+    )
+    .unwrap();
+    widgets.begin();
+    panel::paint(
+        app.world_mut(),
+        camera,
+        &mut widgets,
+        1200. / 1.75,
+        760. / 1.75,
+        light,
+    )
+    .unwrap();
+    widgets.finish(app.world_mut());
+    capture(&mut app, &target, &out.join("help-175-bottom.png"));
     let mut idle_ns = vec![];
     for open in [true, false] {
         if !open {

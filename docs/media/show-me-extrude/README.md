@@ -1,6 +1,6 @@
 # Extrude Show me evidence
 
-The PNGs capture production native Bevy widgets and the isolated CAD renderer at 2× UI scale. `demo.gif` sequences the seven real lesson frames at their descriptor timings; it is a component capture, not an OS screen recording. Cropping and GIF downsampling do not change the UI.
+The PNGs capture production native Bevy widgets and the isolated CAD renderer at 2× UI scale. `help-175.png` uses the supported 1200×760 minimum window at 175% scale. The help reading region clips overflow above a fixed return action and supports wheel, arrow, Page Up/Down and Home/End navigation. `demo.gif` sequences the seven real lesson frames at their descriptor timings; it is a component capture, not an OS screen recording. Cropping and GIF downsampling do not change the UI.
 
 Reproduce with a graphics adapter and the configured OCCT SDK:
 

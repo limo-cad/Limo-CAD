@@ -28,6 +28,7 @@ pub(crate) enum Action {
     Open,
     Extrude,
     Help,
+    HelpBody,
     Demo,
     Close,
     Model,
@@ -112,6 +113,7 @@ pub(crate) struct State {
     drag: Option<input::Drag>,
     return_to: Option<(bool, bool, bool, bool)>,
     help: bool,
+    help_view: feature::HelpView,
     focus_owner: Option<DocumentContext>,
 }
 pub(in super::super) fn cancel_pointer(world: &mut World) {
@@ -149,6 +151,7 @@ impl Default for State {
             drag: None,
             return_to: None,
             help: false,
+            help_view: feature::HelpView::default(),
             focus_owner: None,
         }
     }
@@ -317,6 +320,13 @@ pub(crate) fn command(
     mut action: Action,
     input: &ControlInput,
 ) -> Result<Value, String> {
+    if let (Action::HelpBody, ControlInput::Key(key)) = (action, input) {
+        feature::scroll_help_key(world, key)?;
+        handle.request_redraw();
+        return Ok(
+            json!({"help_scroll":world.resource::<Files>().script.preview.help_view.offset}),
+        );
+    }
     if let (Action::Model, ControlInput::Key(key)) = (action, input) {
         if key.alt || key.ctrl || key.meta || key.shift {
             return Err("Use unmodified arrow keys or Home to turn the preview".into());
@@ -363,7 +373,9 @@ pub(crate) fn command(
                 preview.focus_owner = handle.presented_context();
                 preview.playing = false;
                 preview.wake = None;
+                preview.help_view = feature::HelpView::default();
             }
+            Action::HelpBody => {}
             Action::Model => {}
             Action::Previous | Action::Next => {
                 preview.playing = false;

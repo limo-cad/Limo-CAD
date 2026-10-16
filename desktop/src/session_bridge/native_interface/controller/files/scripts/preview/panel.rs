@@ -20,8 +20,8 @@ pub(crate) fn paint(
     .then_some(&lesson::EXTRUDE);
     let card = card::Card::new(width);
     let (x, y, w) = (card.x, card.y, card.width);
-    let image_width = w - 32.;
-    let image_height = (image_width * 176. / 300.).min((height - y - 326.).max(24.));
+    let image_width = w - 24.;
+    let image_height = (image_width * 176. / 300.).min((height - y - 204.).max(64.));
     let scale = world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .iter(world)
@@ -72,7 +72,7 @@ pub(crate) fn paint(
         camera,
         widgets,
         "demo",
-        image_height + if demo.is_some() { 310. } else { 268. },
+        image_height + if demo.is_some() { 188. } else { 162. },
         demo.map_or("Lesson preview", |d| d.title),
         theme,
     )?;
@@ -99,8 +99,8 @@ pub(crate) fn paint(
         NativeCommand::File(FileCommand::ScriptPreview(Action::Model)),
         Node {
             border: UiRect::all(px(1.)),
-            border_radius: BorderRadius::all(px(6.)),
-            ..rect(x + 16., y + 72., image_width, image_height)
+            border_radius: BorderRadius::all(px(4.)),
+            ..rect(x + 12., y + 44., image_width, image_height)
         },
         None,
         61,
@@ -116,39 +116,18 @@ pub(crate) fn paint(
     } else if world.get::<ImageNode>(entity).is_some() {
         world.entity_mut(entity).remove::<ImageNode>();
     }
-    let top = y + 80. + image_height;
-    widgets.colored_text(
-        world,
-        camera,
-        "scripts-preview-purpose",
-        rect(x + 16., top, w - 72., 18.),
-        "Drag to turn · Arrow keys · Home to fit",
-        10.,
-        61,
-        theme.mute,
-    );
-    widgets.button(
-        world,
-        camera,
-        "scripts-preview-fit",
-        InterfaceControl::button("document/scripts", "Fit preview"),
-        Some(""),
-        NativeCommand::File(FileCommand::ScriptPreview(Action::Fit)),
-        rect(x + w - 40., top - 3., 24., 24.),
-        Some(interface_shell::ribbon::Icon::Fit),
-        61,
-    )?;
+    let top = y + 54. + image_height;
     let extra = if let Some(demo) = demo {
         feature::guide(
             world,
             camera,
             widgets,
-            (x + 16., top + 30., w - 32.),
+            (x + 12., top, w - 24.),
             demo,
             cue,
             theme,
         );
-        42.
+        26.
     } else {
         0.
     };
@@ -156,16 +135,23 @@ pub(crate) fn paint(
         world,
         camera,
         "scripts-preview-caption",
-        rect(x + 16., top + 30. + extra, w - 32., 44.),
+        rect(x + 12., top + extra, w - 24., 38.),
         &caption,
-        13.,
+        12.,
         61,
     );
-    let buttons = top + 84. + extra;
-    let bw = (w - 48.) / 3.;
-    for (i, (label, action, disabled)) in [
-        ("Previous", Action::Previous, !ready || index == 0),
+    let buttons = top + extra + 44.;
+    for (i, (label, caption, action, disabled, left, width)) in [
         (
+            "Previous",
+            "‹",
+            Action::Previous,
+            !ready || index == 0,
+            x + 8.,
+            28.,
+        ),
+        (
+            if playing { "Pause" } else { "Replay" },
             if playing { "Pause" } else { "Replay" },
             if playing {
                 Action::Stop
@@ -173,52 +159,71 @@ pub(crate) fn paint(
                 Action::Replay
             },
             count < 2,
+            x + 36.,
+            64.,
         ),
-        ("Next", Action::Next, !ready || index + 1 >= count),
+        (
+            "Next",
+            "›",
+            Action::Next,
+            !ready || index + 1 >= count,
+            x + 100.,
+            28.,
+        ),
     ]
     .into_iter()
     .enumerate()
     {
         let mut control = InterfaceControl::button("document/scripts", label);
         control.disabled = disabled;
-        let entity = widgets.button(
+        widgets.button(
             world,
             camera,
             &format!("scripts-preview-button-{i}"),
             control,
-            Some(label),
+            Some(caption),
             NativeCommand::File(FileCommand::ScriptPreview(action)),
-            rect(x + 16. + i as f32 * (bw + 8.), buttons, bw, 32.),
+            Node {
+                justify_content: JustifyContent::Center,
+                ..rect(left, buttons, width, 28.)
+            },
             None,
             61,
         )?;
-        if i == 1 {
-            interface_shell::primary_button(world, entity);
-        }
     }
-    let footer = buttons + 44.;
-    widgets.colored_text(
+    widgets.button(
         world,
         camera,
-        "scripts-preview-safety",
-        rect(x + 16., footer, w - 144., 24.),
-        "Your design stays unchanged",
-        10.,
+        "scripts-preview-fit",
+        InterfaceControl::button("document/scripts", "Fit preview (Home)"),
+        Some(""),
+        NativeCommand::File(FileCommand::ScriptPreview(Action::Fit)),
+        rect(x + w - 100., buttons, 28., 28.),
+        Some(interface_shell::ribbon::Icon::Fit),
         61,
-        theme.mute,
-    );
+    )?;
     if demo.is_some() {
         widgets.button(
             world,
             camera,
             "extrude-open-help",
             InterfaceControl::button("document/scripts", "Open Extrude help"),
-            Some("Open help"),
+            Some("Help"),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Help)),
-            rect(x + w - 120., footer - 2., 104., 28.),
+            rect(x + w - 68., buttons, 56., 28.),
             Some(interface_shell::ribbon::Icon::Book),
             61,
         )?;
     }
+    widgets.colored_text(
+        world,
+        camera,
+        "scripts-preview-safety",
+        rect(x + 12., buttons + 36., w - 24., 16.),
+        "Drag to turn · Your design stays unchanged",
+        10.,
+        61,
+        theme.mute,
+    );
     Ok(())
 }

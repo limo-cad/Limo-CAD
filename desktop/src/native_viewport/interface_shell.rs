@@ -291,6 +291,7 @@ struct Shared {
     focused: Option<ControlKey>,
     window_focus_return: Option<window_focus::ReturnTarget>,
     tab_excluded: std::collections::HashSet<ControlKey>,
+    tab_after: Vec<(ControlKey, ControlKey)>,
     capture: Option<Capture>,
     actions: VecDeque<NativeInterfaceAction>,
     modal_keys: VecDeque<NativeModalKey>,
@@ -316,6 +317,7 @@ impl Default for Shared {
             focused: None,
             window_focus_return: None,
             tab_excluded: Default::default(),
+            tab_after: Vec::new(),
             capture: None,
             actions: VecDeque::new(),
             modal_keys: VecDeque::new(),
@@ -1123,6 +1125,24 @@ impl NativeInterfaceHandle {
         Ok(())
     }
 
+    /// Keep a contextual action beside its anchor in both tab directions.
+    /// Eligibility and document/modal ownership still come from the registry.
+    pub(crate) fn place_in_tab_order_after(
+        &self,
+        key: ControlKey,
+        anchor: ControlKey,
+    ) -> Result<(), String> {
+        let mut shared = self
+            .shared
+            .lock()
+            .map_err(|_| "Native interface lock poisoned")?;
+        shared.tab_after.retain(|(existing, _)| *existing != key);
+        if key != anchor {
+            shared.tab_after.push((key, anchor));
+        }
+        Ok(())
+    }
+
     pub fn focus_next(&self, backwards: bool) -> Result<bool, String> {
         let mut shared = self
             .shared
@@ -1132,7 +1152,7 @@ impl NativeInterfaceHandle {
             Ok(context) => context,
             Err(_) => return Ok(has_modal(&shared)),
         };
-        let keys: Vec<_> = shared
+        let mut keys: Vec<_> = shared
             .registry
             .frame()
             .controls
@@ -1146,6 +1166,18 @@ impl NativeInterfaceHandle {
             })
             .map(|control| control.key)
             .collect();
+        for (key, anchor) in &shared.tab_after {
+            if keys.contains(anchor) {
+                if let Some(index) = keys.iter().position(|candidate| candidate == key) {
+                    let key = keys.remove(index);
+                    let index = keys
+                        .iter()
+                        .position(|candidate| candidate == anchor)
+                        .unwrap();
+                    keys.insert(index + 1, key);
+                }
+            }
+        }
         if keys.is_empty() {
             return Ok(has_modal(&shared));
         }
@@ -2289,6 +2321,10 @@ fn publish_layout(
     shared
         .tab_excluded
         .retain(|key| published.iter().any(|control| control.key == *key));
+    shared.tab_after.retain(|(key, anchor)| {
+        published.iter().any(|control| control.key == *key)
+            && published.iter().any(|control| control.key == *anchor)
+    });
     shared.focused = shared.focused.filter(|key| eligible(*key));
     shared.hovered = shared.hovered.filter(|key| eligible(*key));
     if shared
