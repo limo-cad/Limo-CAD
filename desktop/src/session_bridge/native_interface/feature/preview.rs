@@ -620,6 +620,16 @@ fn source(request: &ExtrudeRequest, model: &ViewportModel) -> ProfileSource {
             if !selected {
                 continue;
             }
+            // A selected child fills this boundary's other side. Its edge
+            // becomes internal to a fused selection, including at odd depths.
+            if (request.merge_profiles || request.operation != ExtrudeOperation::NewBody)
+                && request.profile_indices.contains(&profile.index)
+                && profile
+                    .parent_index
+                    .is_some_and(|parent| request.profile_indices.contains(&parent))
+            {
+                continue;
+            }
             let mut points: Vec<_> = profile
                 .points
                 .iter()
