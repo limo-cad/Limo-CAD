@@ -147,3 +147,22 @@ against rebuilt WASM. Pure editing tests cover immutable copies, rest-source
 references and frozen insertion anchors; the pure reorder test confirms
 order-sensitive stock cache identity. TypeScript, icon provenance, desktop assets and the arm64 app
 bundle pass; the bundle's signature, 30 libraries and five notices verify.
+
+## Transitive rest-stock height intent
+
+Rest-stock freshness includes height-expression records for every operation in
+every upstream source setup, as well as setup, operation, tool and linking
+intent. These side records matter before regeneration updates cached numerical
+heights. Changing or removing source clearance, retract, feed, top or bottom
+intent immediately marks all dependent rest results stale. Records are ordered
+by operation ID, so moving records in storage does not invalidate evidence.
+
+The upstream fingerprint uses a new version for rest setups. Older rest stamps
+lack height-intent evidence and require explicit regeneration; no migration
+blesses them as current. Independent setup fingerprints remain unchanged.
+Existing source-first regeneration and NC posting gates remain in force.
+
+Host regressions cover a three-setup rest chain plus an independent setup, each
+height role and removal, failed-regeneration atomicity, save/reopen, source-first
+regeneration, unchanged-intent restoration, legacy evidence and unrelated edits.
+These are engine checks, not a new native UI qualification result.
