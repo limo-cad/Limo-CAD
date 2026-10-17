@@ -3,6 +3,19 @@ use super::*;
 use limo_cad_project_file::ProjectSnapshot;
 
 impl NativeEngineHost {
+    /// JSON-command adapter for the shared bounded CBOR snapshot codec.
+    /// Decode failures retain the same unchanged marker as preparation errors.
+    pub fn project_load_snapshot_encoded(&self, payload: &str) -> String {
+        let snapshot = serde_json::from_str::<String>(payload)
+            .map_err(|error| error.to_string())
+            .and_then(|encoded| {
+                ProjectSnapshot::decode_base64(&encoded).map_err(|error| error.to_string())
+            });
+        match snapshot {
+            Ok(snapshot) => self.project_load_snapshot(&snapshot),
+            Err(error) => unchanged_project_load_error(error),
+        }
+    }
     /// Capture model and domain intent under one engine lock. Callers retain
     /// their document-owner/revision fence through capture and save preparation.
     /// This does not capture active sketch editing state or derived results.
@@ -95,5 +108,31 @@ mod tests {
         // Valid retry replaces the entire paired state, including intent removal.
         assert_eq!(result(host.project_load_snapshot(&initial))["ok"], true);
         assert_eq!(host.project_snapshot().unwrap(), initial);
+    }
+    #[test]
+    fn encoded_load_retains_domains_and_marks_decode_errors_unchanged() {
+        let host = NativeEngineHost::new();
+        let original = host.project_snapshot().unwrap();
+        let snapshot = ProjectSnapshot::new(
+            original.model_json().to_owned(),
+            vec![SnapshotIntent {
+                name: "intent/encoded.cbor".into(),
+                payload: vec![0, 255, 7],
+            }],
+        )
+        .unwrap();
+        let payload = serde_json::to_string(&snapshot.encode_base64().unwrap()).unwrap();
+        assert_eq!(
+            result(host.project_load_snapshot_encoded(&payload))["ok"],
+            true
+        );
+        assert_eq!(host.project_snapshot().unwrap(), snapshot);
+        let revision = host.geometry_revision();
+        for invalid in ["{}", "\"***\"", "\"gA==\""] {
+            let rejected = result(host.project_load_snapshot_encoded(invalid));
+            assert_eq!(rejected["data"]["project_load_state"], "unchanged");
+            assert_eq!(host.project_snapshot().unwrap(), snapshot);
+            assert_eq!(host.geometry_revision(), revision);
+        }
     }
 }

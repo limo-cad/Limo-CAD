@@ -3110,6 +3110,14 @@ fn build_tool_specs() -> Vec<ToolSpec> {
             empty_schema(),
         ),
         ToolSpec::solid(
+            "cad_load_project_snapshot",
+            "Load complete project snapshot",
+            "Transactionally load a CBOR v1 model/domain snapshot encoded as standard padded base64. Known domain intent is validated before replacement; unknown intent is retained. Existing script and inbox size limits still apply.",
+            "project_prepare_load_snapshot",
+            Payload::Field("snapshot_cbor_base64"),
+            object_schema(json!({"snapshot_cbor_base64":{"type":"string","minLength":4,"maxLength":357913944}}), &["snapshot_cbor_base64"]),
+        ),
+        ToolSpec::solid(
             "cad_load_project_model",
             "Load project model",
             "Transactionally load and recompute a Limo CAD model.json payload.",

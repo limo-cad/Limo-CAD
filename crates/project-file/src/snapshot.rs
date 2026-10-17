@@ -78,6 +78,22 @@ impl ProjectSnapshot {
     pub fn intents(&self) -> &[SnapshotIntent] {
         &self.intents
     }
+    /// JSON command transports carry the canonical CBOR snapshot as standard
+    /// padded base64. This does not enlarge script/inbox admission limits.
+    pub fn encode_base64(&self) -> Result<String, ProjectFileError> {
+        use base64::Engine as _;
+        Ok(base64::engine::general_purpose::STANDARD.encode(self.encode_cbor()?))
+    }
+    pub fn decode_base64(encoded: &str) -> Result<Self, ProjectFileError> {
+        use base64::Engine as _;
+        if encoded.len() > MAX_SNAPSHOT_BYTES.div_ceil(3) * 4 {
+            return Err(error("encoded project snapshot exceeds size limit"));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|e| error(format!("invalid project snapshot base64: {e}")))?;
+        Self::decode_cbor(&bytes)
+    }
     pub fn encode_cbor(&self) -> Result<Vec<u8>, ProjectFileError> {
         let mut output = LimitedOutput(Vec::new());
         ciborium::into_writer(
@@ -257,5 +273,24 @@ mod tests {
         let mut trailing = valid;
         trailing.push(0);
         assert!(ProjectSnapshot::decode_cbor(&trailing).is_err());
+    }
+    #[test]
+    fn command_transport_preserves_pair_and_rejects_invalid_encoding() {
+        let snapshot = ProjectSnapshot::new(
+            model("Command"),
+            vec![SnapshotIntent {
+                name: "intent/future.cbor".into(),
+                payload: vec![0, 255, 128, 7],
+            }],
+        )
+        .unwrap();
+        let encoded = snapshot.encode_base64().unwrap();
+        assert_eq!(ProjectSnapshot::decode_base64(&encoded).unwrap(), snapshot);
+        for invalid in ["", "***", "gA==", "e30=", "AA==extra"] {
+            assert!(
+                ProjectSnapshot::decode_base64(invalid).is_err(),
+                "{invalid}"
+            );
+        }
     }
 }
