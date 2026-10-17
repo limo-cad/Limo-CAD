@@ -1,6 +1,6 @@
 use crate::{
     element::{dot, geometry},
-    SolveOptions, ThermalMesh, ThermalResult,
+    SolveOptions, ThermalMesh, ThermalResult, ThermalSurface,
 };
 use limo_cad_core::IsotropicConduction;
 use std::collections::{BTreeMap, BTreeSet};
@@ -34,6 +34,28 @@ pub fn solve_steady(
     prescribed_k: &[(usize, f64)],
     nodal_load_w: &[f64],
     options: SolveOptions,
+    cancelled: impl FnMut() -> bool,
+) -> Result<ThermalResult, String> {
+    solve_steady_with_surfaces(
+        mesh,
+        materials,
+        prescribed_k,
+        nodal_load_w,
+        &[],
+        options,
+        cancelled,
+    )
+}
+
+/// Include exterior surface flux and constant convection. Each component must
+/// have a prescribed temperature or a positive convection coefficient.
+pub fn solve_steady_with_surfaces(
+    mesh: &ThermalMesh,
+    materials: &[IsotropicConduction<'_>],
+    prescribed_k: &[(usize, f64)],
+    nodal_load_w: &[f64],
+    surfaces: &[ThermalSurface],
+    options: SolveOptions,
     mut cancelled: impl FnMut() -> bool,
 ) -> Result<ThermalResult, String> {
     check_cancel(&mut cancelled)?;
@@ -42,6 +64,7 @@ pub fn solve_steady(
         || mesh.elements.is_empty()
         || n > options.max_nodes
         || mesh.elements.len() > options.max_elements
+        || surfaces.len() > mesh.elements.len().saturating_mul(4)
         || options.max_iterations == 0
         || !options.relative_tolerance.is_finite()
         || !(0. < options.relative_tolerance && options.relative_tolerance < 1.)
@@ -98,6 +121,8 @@ pub fn solve_steady(
         }
         geometries.push(g);
     }
+    let applied_power_w = load.iter().sum::<f64>();
+    let surface = crate::surface::assemble(mesh, surfaces, &mut rows, &mut load, &mut cancelled)?;
     if !load.iter().all(|x| x.is_finite())
         || !rows.iter().flat_map(|r| r.values()).all(|x| x.is_finite())
     {
@@ -112,7 +137,7 @@ pub fn solve_steady(
         let mut anchored = false;
         visited[start] = true;
         while let Some(i) = pending.pop() {
-            anchored |= fixed[i].is_some();
+            anchored |= fixed[i].is_some() || surface.anchored[i];
             for &j in &adjacency[i] {
                 if !visited[j] {
                     visited[j] = true;
@@ -121,7 +146,10 @@ pub fn solve_steady(
             }
         }
         if !anchored {
-            return Err("Every thermal component requires a prescribed temperature".into());
+            return Err(
+                "Every thermal component requires a prescribed temperature or positive convection"
+                    .into(),
+            );
         }
     }
     let diagonal: Vec<_> = rows
@@ -207,7 +235,9 @@ pub fn solve_steady(
     if !free_residual_l2_w.is_finite() || free_residual_l2_w > tolerance {
         return Err("Thermal result failed the recomputed residual check".into());
     }
-    let balance_error_w = reaction_w.iter().sum::<f64>() + load.iter().sum::<f64>();
+    let surface_heat_w = crate::surface::heat(surfaces, &surface.areas, &temperature_k)?;
+    let balance_error_w =
+        reaction_w.iter().sum::<f64>() + applied_power_w + surface_heat_w.iter().sum::<f64>();
     let balance_scale = load.iter().chain(&reaction_w).map(|v| v.abs()).sum::<f64>();
     let balance_limit = tolerance * (n as f64).sqrt() + 1e-12 * balance_scale;
     if !balance_error_w.is_finite()
@@ -231,6 +261,7 @@ pub fn solve_steady(
         temperature_k,
         reaction_w,
         element_flux_w_m2,
+        surface_heat_w,
         iterations,
         free_residual_l2_w,
         balance_error_w,

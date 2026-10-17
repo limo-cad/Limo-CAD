@@ -2,7 +2,8 @@
 //! No mesher, persisted study, native UI or automatic material suitability claim.
 mod element;
 mod steady;
-pub use steady::solve_steady;
+mod surface;
+pub use steady::{solve_steady, solve_steady_with_surfaces};
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThermalTet {
     pub nodes: [usize; 4],
@@ -42,7 +43,26 @@ pub struct ThermalResult {
     pub reaction_w: Vec<f64>,
     /// Constant element flux in input element order, W/m^2.
     pub element_flux_w_m2: Vec<[f64; 3]>,
+    /// Net heat entering through each supplied surface, W, in input order.
+    pub surface_heat_w: Vec<f64>,
     pub iterations: usize,
     pub free_residual_l2_w: f64,
     pub balance_error_w: f64,
+}
+
+/// Constant convection against an ambient temperature.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThermalConvection {
+    pub coefficient_w_m2_k: f64,
+    pub ambient_k: f64,
+}
+
+/// One exterior mesh triangle. Order does not define flux direction: positive
+/// heat_flux_in_w_m2 always enters the domain. Flux and convection may coexist.
+/// Use at most one record per face; prescribed nodal temperatures may overlap.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThermalSurface {
+    pub nodes: [usize; 3],
+    pub heat_flux_in_w_m2: f64,
+    pub convection: Option<ThermalConvection>,
 }

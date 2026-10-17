@@ -420,3 +420,296 @@ fn rigid_rotation_rotates_flux_without_changing_temperature() {
         }
     }
 }
+
+fn exterior_faces(mesh: &ThermalMesh, axis: usize, value: f64) -> Vec<[usize; 3]> {
+    let mut counts = std::collections::BTreeMap::new();
+    for e in &mesh.elements {
+        for local in [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]] {
+            let mut face = local.map(|i| e.nodes[i]);
+            face.sort_unstable();
+            *counts.entry(face).or_insert(0) += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .filter(|(f, n)| *n == 1 && f.iter().all(|i| mesh.points_m[*i][axis] == value))
+        .map(|(f, _)| f)
+        .collect()
+}
+fn surface_solve(
+    mesh: &ThermalMesh,
+    bc: &[(usize, f64)],
+    surfaces: &[ThermalSurface],
+) -> ThermalResult {
+    let m = material(2.);
+    solve_steady_with_surfaces(
+        mesh,
+        &[m.isotropic_conduction(MaterialPropertyFilter::default())
+            .unwrap()],
+        bc,
+        &vec![0.; mesh.points_m.len()],
+        surfaces,
+        SolveOptions::default(),
+        || false,
+    )
+    .unwrap()
+}
+
+#[test]
+fn prescribed_surface_flux_has_explicit_inward_sign_and_correct_power() {
+    let mesh = cube(3);
+    let bc: Vec<_> = mesh
+        .points_m
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p[0] == 0.)
+        .map(|(i, _)| (i, 300.))
+        .collect();
+    let surfaces: Vec<_> = exterior_faces(&mesh, 0, 1.)
+        .into_iter()
+        .map(|nodes| ThermalSurface {
+            nodes,
+            heat_flux_in_w_m2: 200.,
+            convection: None,
+        })
+        .collect();
+    assert_eq!(surfaces.len(), 18);
+    let r = surface_solve(&mesh, &bc, &surfaces);
+    for (p, t) in mesh.points_m.iter().zip(&r.temperature_k) {
+        close(*t, 300. + 100. * p[0], 1e-6);
+    }
+    close(r.surface_heat_w.iter().sum(), 200., 1e-7);
+    close(r.reaction_w.iter().sum(), -200., 1e-6);
+    close(r.balance_error_w, 0., 1e-6);
+    for q in r.element_flux_w_m2 {
+        close(q[0], -200., 1e-5);
+    }
+}
+
+#[test]
+fn convection_and_fixed_temperature_match_series_thermal_resistance() {
+    let mesh = cube(3);
+    let bc: Vec<_> = mesh
+        .points_m
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p[0] == 0.)
+        .map(|(i, _)| (i, 400.))
+        .collect();
+    let surfaces: Vec<_> = exterior_faces(&mesh, 0, 1.)
+        .into_iter()
+        .map(|nodes| ThermalSurface {
+            nodes,
+            heat_flux_in_w_m2: 0.,
+            convection: Some(ThermalConvection {
+                coefficient_w_m2_k: 4.,
+                ambient_k: 300.,
+            }),
+        })
+        .collect();
+    let r = surface_solve(&mesh, &bc, &surfaces);
+    let q = 100. / (1. / 2. + 1. / 4.);
+    for (p, t) in mesh.points_m.iter().zip(&r.temperature_k) {
+        close(*t, 400. - q / 2. * p[0], 1e-6);
+    }
+    close(r.surface_heat_w.iter().sum(), -q, 1e-6);
+    close(r.reaction_w.iter().sum(), q, 1e-6);
+    close(r.balance_error_w, 0., 1e-6);
+}
+
+#[test]
+fn convection_anchors_a_component_without_an_artificial_temperature_constraint() {
+    let mesh = cube(3);
+    let mut surfaces = Vec::new();
+    for (side, ambient) in [(0., 400.), (1., 300.)] {
+        surfaces.extend(
+            exterior_faces(&mesh, 0, side)
+                .into_iter()
+                .map(|nodes| ThermalSurface {
+                    nodes,
+                    heat_flux_in_w_m2: 0.,
+                    convection: Some(ThermalConvection {
+                        coefficient_w_m2_k: 4.,
+                        ambient_k: ambient,
+                    }),
+                }),
+        );
+    }
+    let r = surface_solve(&mesh, &[], &surfaces);
+    for (p, t) in mesh.points_m.iter().zip(&r.temperature_k) {
+        close(*t, 375. - 50. * p[0], 1e-6);
+    }
+    assert!(r.reaction_w.iter().all(|q| *q == 0.));
+    close(r.surface_heat_w[..18].iter().sum(), 100., 1e-6);
+    close(r.surface_heat_w[18..].iter().sum(), -100., 1e-6);
+    close(r.balance_error_w, 0., 1e-6);
+}
+
+#[test]
+fn surface_flux_and_convection_combine_without_double_counting() {
+    let mesh = cube(3);
+    let bc: Vec<_> = mesh
+        .points_m
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p[0] == 0.)
+        .map(|(i, _)| (i, 300.))
+        .collect();
+    let surfaces: Vec<_> = exterior_faces(&mesh, 0, 1.)
+        .into_iter()
+        .map(|nodes| ThermalSurface {
+            nodes,
+            heat_flux_in_w_m2: 200.,
+            convection: Some(ThermalConvection {
+                coefficient_w_m2_k: 4.,
+                ambient_k: 300.,
+            }),
+        })
+        .collect();
+    let before = surfaces.clone();
+    let r = surface_solve(&mesh, &bc, &surfaces);
+    for (p, t) in mesh.points_m.iter().zip(&r.temperature_k) {
+        close(*t, 300. + (200. / 6.) * p[0], 1e-6);
+    }
+    close(r.surface_heat_w.iter().sum(), 200. / 3., 1e-6);
+    close(r.reaction_w.iter().sum(), -200. / 3., 1e-6);
+    assert_eq!(surfaces, before);
+    let mut reversed = surfaces.clone();
+    for s in &mut reversed {
+        s.nodes.reverse();
+    }
+    let other = surface_solve(&mesh, &bc, &reversed);
+    for (a, b) in r.temperature_k.iter().zip(other.temperature_k) {
+        close(*a, b, 1e-7);
+    }
+}
+
+#[test]
+fn robin_triangle_uses_consistent_mass_matrix_for_nonuniform_temperature() {
+    let mesh = ThermalMesh {
+        points_m: vec![[0., 0., 0.], [1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
+        elements: vec![ThermalTet {
+            nodes: [0, 1, 2, 3],
+            material: 0,
+            source_w_m3: 0.,
+        }],
+    };
+    let temperatures = [300., 320., 340., 300.];
+    let bc: Vec<_> = temperatures.into_iter().enumerate().collect();
+    let base = surface_solve(&mesh, &bc, &[]);
+    let surfaces = [ThermalSurface {
+        nodes: [0, 1, 2],
+        heat_flux_in_w_m2: 12.,
+        convection: Some(ThermalConvection {
+            coefficient_w_m2_k: 6.,
+            ambient_k: 290.,
+        }),
+    }];
+    let r = surface_solve(&mesh, &bc, &surfaces);
+    // Area=0.5. Consistent h*A/12 entries have diagonal2/off-diagonal1.
+    for (i, temperature) in temperatures.iter().take(3).enumerate() {
+        let added = 0.25 * (temperature + 960.) - 292.;
+        close(r.reaction_w[i] - base.reaction_w[i], added, 1e-8);
+    }
+    close(r.reaction_w[3], base.reaction_w[3], 1e-8);
+    close(r.surface_heat_w[0], -84., 1e-8);
+    close(r.balance_error_w, 0., 1e-8);
+}
+
+#[test]
+fn invalid_interior_duplicate_and_unanchored_surface_conditions_reject() {
+    let mesh = cube(1);
+    let m = material(2.);
+    let laws = [m
+        .isotropic_conduction(MaterialPropertyFilter::default())
+        .unwrap()];
+    let valid = ThermalSurface {
+        nodes: exterior_faces(&mesh, 0, 1.)[0],
+        heat_flux_in_w_m2: 0.,
+        convection: Some(ThermalConvection {
+            coefficient_w_m2_k: 4.,
+            ambient_k: 300.,
+        }),
+    };
+    let run = |surfaces: &[ThermalSurface]| {
+        solve_steady_with_surfaces(
+            &mesh,
+            &laws,
+            &[],
+            &vec![0.; mesh.points_m.len()],
+            surfaces,
+            SolveOptions::default(),
+            || false,
+        )
+    };
+    assert!(run(&[valid, valid])
+        .unwrap_err()
+        .contains("unique exterior"));
+    for nodes in [[0, 3, 7], [0, 0, 1], [0, 1, usize::MAX]] {
+        assert!(run(&[ThermalSurface { nodes, ..valid }]).is_err());
+    }
+    for (h, ambient) in [
+        (-1., 300.),
+        (f64::NAN, 300.),
+        (4., -1.),
+        (4., f64::INFINITY),
+    ] {
+        assert!(run(&[ThermalSurface {
+            convection: Some(ThermalConvection {
+                coefficient_w_m2_k: h,
+                ambient_k: ambient
+            }),
+            ..valid
+        }])
+        .is_err());
+    }
+    assert!(run(&[ThermalSurface {
+        heat_flux_in_w_m2: f64::NAN,
+        ..valid
+    }])
+    .is_err());
+    assert!(run(&[ThermalSurface {
+        convection: Some(ThermalConvection {
+            coefficient_w_m2_k: 0.,
+            ambient_k: 300.
+        }),
+        ..valid
+    }])
+    .unwrap_err()
+    .contains("component"));
+    assert!(run(&[ThermalSurface {
+        convection: None,
+        heat_flux_in_w_m2: 100.,
+        ..valid
+    }])
+    .unwrap_err()
+    .contains("component"));
+}
+
+#[test]
+fn convection_coefficient_underflow_does_not_create_a_false_anchor() {
+    let mesh = cube(1);
+    let m = material(2.);
+    let law = m
+        .isotropic_conduction(MaterialPropertyFilter::default())
+        .unwrap();
+    let surface = ThermalSurface {
+        nodes: exterior_faces(&mesh, 0, 1.)[0],
+        heat_flux_in_w_m2: 0.,
+        convection: Some(ThermalConvection {
+            coefficient_w_m2_k: f64::from_bits(1),
+            ambient_k: 300.,
+        }),
+    };
+    assert!(solve_steady_with_surfaces(
+        &mesh,
+        &[law],
+        &[],
+        &vec![0.; mesh.points_m.len()],
+        &[surface],
+        SolveOptions::default(),
+        || false
+    )
+    .unwrap_err()
+    .contains("representable coefficient"));
+}
