@@ -326,3 +326,5 @@ availability. Unavailable commands and commands blocked by a dialog reject;
 this action operates on document history rather than a focused text field.
 
 Drawing dimension precision accepts 0 through 9 decimal places for both primary and secondary units. This changes displayed rounding, not model accuracy. SVG preserves the selected precision. DXF semantic dimensions support at most 8 places; dimensions requesting 9 places use graphical entities with the full label, rather than an editable DIMENSION with a clamped precision. Other unsupported presentation combinations also retain their existing graphical fallback.
+
+Drawing BOM visibility follows the saved table position in native views and SVG/DXF exports: a position shows the table (including its header when empty); no position hides it without deleting rows. Older files with no position field retain the native hidden default. To include those BOM rows in exports, show and place the BOM in the drawing editor.
