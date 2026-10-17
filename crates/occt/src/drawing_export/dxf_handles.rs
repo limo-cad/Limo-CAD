@@ -15,6 +15,7 @@ mod tests {
     #[test]
     fn graphical_entities_and_unicode_outlines_have_resolvable_unique_owners() {
         let mut paper = Paper {
+            dimensions: Vec::new(),
             size: [297., 210.],
             items: vec![],
         };

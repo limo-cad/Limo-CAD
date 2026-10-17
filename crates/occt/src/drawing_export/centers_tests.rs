@@ -87,6 +87,7 @@ fn export(
 }
 fn art(doc: &DrawingDocumentDto, projection: &DrawingProjectionDto) -> Result<Paper, String> {
     let mut paper = Paper {
+        dimensions: Vec::new(),
         size: [297., 210.],
         items: vec![],
     };

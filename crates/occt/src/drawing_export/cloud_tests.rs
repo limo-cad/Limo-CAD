@@ -217,6 +217,7 @@ fn cloud_presentation_is_fixed_and_other_unsupported_annotations_still_fail() {
     doc.validate().unwrap();
     let error = draw_annotation(
         &mut Paper {
+            dimensions: Vec::new(),
             size: [297., 210.],
             items: Vec::new(),
         },
