@@ -72,6 +72,15 @@ fn send(
     event: WindowEvent,
     point: Vec2,
 ) -> Vec<NativeInterfaceAction> {
+    send_with_consumption(app, handle, event, point).0
+}
+
+fn send_with_consumption(
+    app: &mut App,
+    handle: &NativeInterfaceHandle,
+    event: WindowEvent,
+    point: Vec2,
+) -> (Vec<NativeInterfaceAction>, bool) {
     if let WindowEvent::KeyboardInput(key) = &event {
         app.world_mut().write_message(key.clone());
     }
@@ -92,7 +101,7 @@ fn send(
         "the old native adapter must not activate widgets"
     );
     enqueue_actions(app.world_mut(), handle);
-    handle.take_actions().unwrap()
+    (handle.take_actions().unwrap(), input.consumed)
 }
 
 fn point(_entity: Entity) -> Vec2 {
@@ -406,4 +415,55 @@ fn focus_group_preserves_real_layout_and_camera_across_frames() {
             .unwrap();
         assert_eq!(current, initial);
     }
+}
+
+#[test]
+fn canvas_drag_keeps_motion_and_release_when_crossing_widgets() {
+    let (mut app, handle, entity, window) = fixture();
+    let outside = Vec2::new(950., 750.);
+    let p = point(entity);
+    move_to(&mut app, &handle, window, outside);
+    send(
+        &mut app,
+        &handle,
+        mouse(window, ButtonState::Pressed, MouseButton::Left),
+        outside,
+    );
+    assert!(crate::native_viewport::winit_host::model_pointer_active(
+        app.world()
+    ));
+    for event in [
+        WindowEvent::CursorMoved(CursorMoved {
+            window,
+            position: p,
+            delta: None,
+        }),
+        mouse(window, ButtonState::Released, MouseButton::Left),
+    ] {
+        let (actions, consumed) = send_with_consumption(&mut app, &handle, event, p);
+        assert!(actions.is_empty());
+        assert!(
+            !consumed,
+            "the original canvas drag must receive motion and release"
+        );
+    }
+    assert!(!crate::native_viewport::winit_host::model_pointer_active(
+        app.world()
+    ));
+    send(
+        &mut app,
+        &handle,
+        mouse(window, ButtonState::Pressed, MouseButton::Left),
+        p,
+    );
+    assert_eq!(
+        send(
+            &mut app,
+            &handle,
+            mouse(window, ButtonState::Released, MouseButton::Left),
+            p
+        )
+        .len(),
+        1
+    );
 }

@@ -485,9 +485,22 @@ pub(crate) fn prepare_native_input(
             input.modifiers,
         )?;
         #[cfg(feature = "experimental-ui-widgets")]
-        if !input.consumed {
-            input.consumed =
-                super::interface_shell::widgets::owns_input(world, handle, &mut state, input);
+        {
+            // A drag keeps its original canvas/field owner when crossing a
+            // widget. In particular, its release must reach route_one.
+            let native_pointer_capture = match &input.event {
+                WindowEvent::CursorMoved(_) => {
+                    handle.has_capture() || (!state.model_drag.is_empty() && !state.widget_drag)
+                }
+                WindowEvent::MouseButtonInput(event) => {
+                    handle.has_capture() || state.model_drag.contains(&event.button)
+                }
+                _ => false,
+            };
+            if !input.consumed && !native_pointer_capture {
+                input.consumed =
+                    super::interface_shell::widgets::owns_input(world, handle, &mut state, input);
+            }
         }
         if !input.consumed {
             input.consumed = route_one(handle, &mut state, &input.event)?;
