@@ -16,33 +16,47 @@ See the [drawing workstream](https://github.com/limo-cad/Limo-CAD/issues/93).
 
 ## Export and print
 
-- **Interactive Drawing workspace:** export sheet DXF or use the platform's
-  print/PDF path. A separate 1:1 profile export supplies model-space geometry.
-- **Native MCP/recipe export:** `drawing_export` returns SVG or DXF containing
-  linear, radial and angular dimensions, notes, title information and BOM.
-  Other annotation kinds and dual-unit presentation currently reject export;
-  interactive export supports a wider set of annotations.
+- **Native Drawing workspace:** the File menu exports the active sheet as SVG,
+  graphical DXF or PDF. PDF export uses the CAD-owned Save dialog and does not
+  require a printer. **Print** remains a separate OS-owned printer workflow.
+  A separate 1:1 profile export supplies model-space geometry.
+- **Engine/recipe export:** `drawing_export` returns SVG or graphical DXF.
+  Supported annotations include dimensions, center markings, revision clouds,
+  notes, BOM, chamfer/hole callouts, datums/GD&T and manufacturing symbols.
+  Display units, length tolerances and secondary units use the native formatter.
+  Each annotation must satisfy the geometry and reference requirements in the
+  [native export contract](native-drawing-export.md); unsupported constructions
+  and stale references reject the complete export.
+- **Attached automation:** `cad_interface` with `action: "file"` and command
+  `export_drawing_svg`, `export_drawing_dxf` or `export_drawing_pdf` writes to an
+  absolute `path`. Replacing a file requires explicit `overwrite: true`.
+  This is distinct from the engine operation that returns SVG/DXF content.
 - **Editable source:** save `.limo` to retain views, associations and annotations.
   STEP/STL/3MF geometry exports do not replace that drawing document.
 
-See the [native export contract](native-drawing-export.md) for supported commands
-and reference validation. DWG output and direct headless PDF export are not
-implemented. Review sheet scale, dimensions and manufacturing notes before use.
+The [native export contract](native-drawing-export.md) is authoritative for the
+current native output path and its verification limits. Native DXF is graphical
+LINE/TEXT/SOLID artwork, not associative DXF DIMENSION entities; DWG output is
+not implemented. The richer DXF entity descriptions below document the legacy
+browser drawing path and intended interchange semantics, not native export
+parity. Review sheet scale, dimensions and manufacturing notes before use.
 
 ## Ownership boundary
 
-Rust owns drawing meaning, OCCT owns exact projected geometry, React owns the
-sheet interface, and Bevy owns the native 3D viewport.
+Rust owns drawing meaning and OCCT owns exact projected geometry. Bevy owns the
+current native interface, including drawing paint and interaction. References
+to React and browser checks below describe the retained browser-era design;
+they do not establish current native UI qualification.
 
 | Layer | Responsibility |
 | --- | --- |
 | `limo-cad-sketch` | Persists standards-aware sheets, title blocks, aligned view relationships, semantic annotations, body filters, scale, and display options inside `model.json`. |
 | `limo-cad-occt` | Produces visible/hidden vector curves from exact B-reps with OCCT HLR and exposes stable endpoints and fitted circular topology for annotations. |
 | Native host | Serializes drawing commands and exact projection requests with the live kernel. |
-| React/SVG | Lays out sheets, edits properties, and moves views. SVG remains an internal browser/debug surface. |
-| DXF writer | Emits editable true-size paper geometry, layers, semantic dimensions, leaders, notes, and title-block content for CAD interchange, plus separate 1:1 model profiles. |
-| Browser fallback | Projects tessellated topology for fast UI development when the native kernel is unavailable. It is not an exact manufacturing result. |
-| Bevy | Owns the native 3D viewport only. Its child view is explicitly hidden while the drawing workspace is active. |
+| Bevy | Owns the native 3D viewport, drawing paper, controls and annotation interaction. |
+| Native sheet exporter | Produces SVG and graphical DXF from validated projection and annotation data; native PDF preparation consumes that SVG. Profile DXF is a separate 1:1 model export. |
+| Legacy React/SVG design | Describes browser sheet layout, property editing and view movement. Its semantic DXF and browser checks below do not establish native export or UI coverage. |
+| Legacy browser fallback | Describes tessellated projection for UI development without the native kernel; it is not an exact manufacturing result. |
 
 Generated projection curves are deliberately not saved. A drawing view stores
 projection intent (`direction`, `up`, body IDs, scale, placement, and line
@@ -168,7 +182,10 @@ projected views. From there the user may:
   live topology and requires explicit user confirmation; diagnostic fallback
   coordinates are never silently accepted as manufacturing references.
 
-### Output and document control
+### Legacy browser output and document control
+
+These richer DXF entity semantics are not the current native exporter contract.
+See [Export and print](#export-and-print) above for native delivery behavior.
 
 - AutoCAD 2013 ASCII sheet DXF in paper-space millimetres. It includes distinct
   border, visible, hidden, center, cutting-plane, phantom, break, hatch,
@@ -182,7 +199,8 @@ projected views. From there the user may:
   material region at true 1:1 model scale. Its even-depth outside wire goes to
   `PROFILE_OUTER`, its immediate hole wires go to `PROFILE_HOLES`, and no paper,
   title-block, view-placement, or sheet-scale geometry is included.
-- The platform print dialog is the printable PDF path. SVG is retained as the
+- The legacy browser platform print dialog is its printable PDF path. The native
+  application also provides direct PDF file export. SVG is retained as the
   common internal screen/print representation and browser verification surface,
   not advertised as the industrial interchange format.
 - Revisions carry author/checker/approver, date, change-order, and lifecycle
@@ -274,9 +292,10 @@ carrier edge.
 
 Limo CAD uses the explicit distance-and-angle form as its interoperable
 default. ISO sheets render `3 × 45°`; ANSI/ASME sheets render `3 X 45°`. The
-screen, printable SVG/PDF path, and DXF `LEADER`/`MTEXT` output share the same
-formatter. A shorthand such as `C3` is deliberately not the cross-standard
-default because it depends on drawing/company conventions.
+screen and printable SVG/PDF path share the same formatter. The legacy browser
+DXF path uses `LEADER`/`MTEXT`; native DXF emits graphical artwork as described
+in the native export contract. A shorthand such as `C3` is deliberately not the
+cross-standard default because it depends on drawing/company conventions.
 
 The command accepts only straight chamfer edges shown in true shape. An
 eligible edge must join nonparallel, nonperpendicular straight carrier edges at
@@ -334,9 +353,10 @@ browser end-to-end workflow that creates ISO and ANSI sheets, places aligned
 views, creates/drags associative annotations, exercises undo/redo, and parses
 both sheet and 1:1 profile DXF structure.
 
-DXF and printed PDF are the supported delivery paths in this implementation;
-DWG is not emitted. Company and regulatory drawing release still requires the
-organization to review its chosen template, fonts, tolerances, weld/GD&T
+Current native delivery supports SVG, graphical DXF and direct PDF file export,
+with OS printing qualified separately. DWG is not emitted. Company and regulatory
+drawing release still requires the organization to review its chosen template,
+fonts, tolerances, weld/GD&T
 practice, and approval process. The software keeps the data semantic and
 standards-aware, but does not replace that engineering sign-off.
 
