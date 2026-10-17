@@ -70,8 +70,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         out.join("manifest.json"),
         serde_json::to_vec_pretty(&json!({
             "source":"synthetic projection fixture", "cases":cases,
-            "formats":["svg","graphical_dxf"],"pixel_review":"required",
-            "not_proven":["OCC projection","physical input","editable DXF DIMENSION entities","printing"]
+            "formats":["svg","dxf"],"pixel_review":"required",
+            "semantic_dxf":"Default linear cases use editable DIMENSION entities; angular and full presentation remain graphical",
+            "not_proven":["OCC projection","physical input","model topology association in DXF","printing"]
         }))?,
     )?;
     println!(

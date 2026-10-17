@@ -84,9 +84,16 @@ retains responsibility, material, tolerance and release fields, and positioned
 revision tables retain every revision field. Reserve the bottom-right 180 by
 44 mm for the title block, inside the 10 mm sheet border.
 
-Rust DXF output is **graphical** LINE/TEXT/SOLID artwork, not editable associative
-DXF DIMENSION entities. R2007 graphics, including Unicode outline hatches, have
-unique deterministic handles and explicit model-space block ownership. Model and
+Rust DXF output includes editable linear DIMENSION entities for ordinary endpoint,
+line-length, parallel-line distance and point-line dimensions. Their defining
+points and dimension styles preserve model measurement at the drawing scale,
+mm/cm/in units, precision and plain prefixes/suffixes. Anonymous picture blocks
+reuse the same graphics as SVG. They do not carry model topology associations.
+Angular and other dimension families, complex tolerance/basic/reference/dual-unit
+presentation, precision above eight decimals and CAD-markup prefixes/suffixes
+retain graphical artwork until their regeneration semantics are supported.
+R2007 graphics, including Unicode outline hatches, have unique deterministic
+handles and explicit model-space or picture-block ownership. Model and
 paper-space block records share the same handle namespace as the tables and
 entities; `$HANDSEED` follows all emitted handles. This structure preserves entity
 identity for exchange without changing the native annotation records.

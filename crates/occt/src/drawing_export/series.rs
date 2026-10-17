@@ -66,6 +66,7 @@ pub(super) fn draw(
                 let value =
                     dimension_text(span.value, *precision, prefix, suffix, presentation, units);
                 let mut paper = Paper {
+                    dimensions: Vec::new(),
                     size,
                     items: Vec::new(),
                 };
@@ -92,6 +93,7 @@ pub(super) fn draw(
             )?;
             graphics.budget.scratch(64 * 1024)?;
             let mut paper = Paper {
+                dimensions: Vec::new(),
                 size,
                 items: Vec::new(),
             };

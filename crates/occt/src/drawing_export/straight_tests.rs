@@ -24,24 +24,115 @@ fn export(
 }
 
 fn dxf_entities(dxf: &str, kind: &str) -> Vec<BTreeMap<String, String>> {
-    dxf.split(&format!("0\n{kind}\n"))
-        .skip(1)
-        .map(|entity| {
-            let lines: Vec<_> = entity.split("\n0\n").next().unwrap().lines().collect();
-            lines
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|pair| (pair[0].to_owned(), pair[1].to_owned()))
-                .collect()
-        })
-        .collect()
+    let lines: Vec<_> = dxf.lines().collect();
+    let mut result = Vec::new();
+    let mut current = None;
+    for pair in lines.chunks_exact(2) {
+        if pair[0] == "0" {
+            if let Some(record) = current.take() {
+                result.push(record);
+            }
+            if pair[1] == kind {
+                current = Some(BTreeMap::new());
+            }
+        } else if let Some(record) = &mut current {
+            record.insert(pair[0].to_owned(), pair[1].to_owned());
+        }
+    }
+    if let Some(record) = current {
+        result.push(record);
+    }
+    result
 }
 
 fn replace_annotation(document: &mut DrawingDocumentDto, change: impl FnOnce(&mut Value)) {
     let mut value = serde_json::to_value(&document.sheets[0].annotations[0]).unwrap();
     change(&mut value);
     document.sheets[0].annotations[0] = serde_json::from_value(value).unwrap();
+}
+
+#[test]
+fn semantic_linear_dimensions_preserve_model_measurement_at_each_paper_scale_and_unit() {
+    for kind in ["length", "distance", "point-line"] {
+        for scale in [0.25, 1., 2., 5.] {
+            for (units, unit_mm, label) in [
+                (UnitSystem::Mm, 1., "mm"),
+                (UnitSystem::Cm, 10., "cm"),
+                (UnitSystem::In, 25.4, "in"),
+            ] {
+                let (mut document, scene, projection) = fixture::fixture(kind, 40.);
+                document.sheets[0].views[0].scale = scale;
+                replace_annotation(&mut document, |a| {
+                    a["prefix"] = json!("QA ");
+                    a["suffix"] = json!(" exact");
+                    a["precision"] = json!(3);
+                });
+                let dxf = export(
+                    &document,
+                    &scene,
+                    &projection,
+                    units,
+                    DrawingExportFormat::Dxf,
+                )
+                .unwrap();
+                let dimensions = dxf_entities(&dxf, "DIMENSION");
+                assert_eq!(dimensions.len(), 1);
+                let d = &dimensions[0];
+                assert_eq!(
+                    d["1"], "<>",
+                    "Never freeze the measurement in a text override"
+                );
+                let styles = dxf_entities(&dxf, "DIMSTYLE");
+                let style = styles.iter().find(|s| s.get("2") == Some(&d["3"])).unwrap();
+                let num = |key: &str| d[key].parse::<f64>().unwrap();
+                let angle = num("50").to_radians();
+                let paper_measurement = ((num("14") - num("13")) * angle.cos()
+                    + (num("24") - num("23")) * angle.sin())
+                .abs();
+                let factor = style["144"].parse::<f64>().unwrap();
+                let expected = if kind == "length" { 40. } else { 30. } / unit_mm;
+                assert!(
+                    (paper_measurement * factor - expected).abs() < 1e-8,
+                    "{kind} {scale} {label}"
+                );
+                assert_eq!(style["3"], format!("QA <> {label} exact"));
+                assert_eq!(style["271"], "3");
+                assert!(dxf.contains(&format!("2\n{}\n", d["2"])));
+            }
+        }
+    }
+}
+
+#[test]
+fn unsupported_dimension_presentation_keeps_its_complete_graphical_output() {
+    for prefix in ["literal <> ", "literal % ", "literal \\", "literal { "] {
+        let (mut document, scene, projection) = fixture::fixture("length", 40.);
+        replace_annotation(&mut document, |a| a["prefix"] = json!(prefix));
+        let dxf = export(
+            &document,
+            &scene,
+            &projection,
+            UnitSystem::Mm,
+            DrawingExportFormat::Dxf,
+        )
+        .unwrap();
+        assert!(dxf_entities(&dxf, "DIMENSION").is_empty());
+        assert!(dxf_entities(&dxf, "TEXT")
+            .iter()
+            .any(|t| t["1"] == dxf_text(&format!("{prefix}40.00 mm"))));
+    }
+    let (mut document, scene, projection) = fixture::fixture("length", 40.);
+    fixture::full_presentation(&mut document);
+    let dxf = export(
+        &document,
+        &scene,
+        &projection,
+        UnitSystem::Mm,
+        DrawingExportFormat::Dxf,
+    )
+    .unwrap();
+    assert!(dxf_entities(&dxf, "DIMENSION").is_empty());
+    assert!(!dxf_entities(&dxf, "TEXT").is_empty());
 }
 
 #[test]
@@ -90,9 +181,9 @@ fn straight_relations_export_current_values_and_graphical_entities_without_mutat
                 .count(),
             2
         );
-        assert!(
-            !dxf.contains("0\nDIMENSION\n"),
-            "This exporter promises graphical DXF only"
+        assert_eq!(
+            dxf_entities(&dxf, "DIMENSION").len(),
+            usize::from(kind != "angle")
         );
         assert!(
             !svg.contains("999.00000"),
@@ -364,6 +455,7 @@ fn angular_mask_covers_crossing_art_before_the_basic_box_and_text_in_both_format
     let sheet = &document.sheets[0];
     let projections = BTreeMap::from([(1, projection)]);
     let mut paper = Paper {
+        dimensions: Vec::new(),
         size: [420., 297.],
         items: vec![],
     };
@@ -491,6 +583,7 @@ fn basic_linear_masks_cover_crossing_extensions_before_painting_complete_arrows(
         fixture::full_presentation(&mut document);
         let sheet = &document.sheets[0];
         let mut paper = Paper {
+            dimensions: Vec::new(),
             size: [420., 297.],
             items: vec![],
         };
