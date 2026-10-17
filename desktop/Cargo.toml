@@ -25,7 +25,7 @@ default = []
 native-computer-control = ["limo-cad-mcp/native-computer-control"]
 dev-ui-lab = ["bevy/bevy_log"]
 dev-native-ime-trace = ["bevy/bevy_log"]
-# WIP headless widget behavior using the existing native styling and ownership route.
+# Standard Bevy widget input with native styling; opt-in during workflow qualification.
 experimental-ui-widgets = []
 
 [[bin]]

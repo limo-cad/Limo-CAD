@@ -101,6 +101,8 @@ pub(crate) struct HostInputState {
     pressed: HashSet<KeyCode>,
     model_drag: HashSet<MouseButton>,
     alt_graph: bool,
+    #[cfg(feature = "experimental-ui-widgets")]
+    pub(super) widget_drag: bool,
     click_press: Option<ControlKey>,
     last_click: Option<(Instant, ControlKey, [f64; 2], DocumentContext)>,
 }
@@ -228,6 +230,10 @@ pub(crate) fn cancel_native_pointer(world: &mut World, handle: &NativeInterfaceH
     super::interface_shell::widgets::cancel(world);
     if let Some(mut state) = world.get_resource_mut::<HostInputState>() {
         state.model_drag.clear();
+        #[cfg(feature = "experimental-ui-widgets")]
+        {
+            state.widget_drag = false;
+        }
         state.click_press = None;
         state.last_click = None;
     }
@@ -478,6 +484,11 @@ pub(crate) fn prepare_native_input(
             input.cursor,
             input.modifiers,
         )?;
+        #[cfg(feature = "experimental-ui-widgets")]
+        if !input.consumed {
+            input.consumed =
+                super::interface_shell::widgets::owns_input(world, handle, &mut state, input);
+        }
         if !input.consumed {
             input.consumed = route_one(handle, &mut state, &input.event)?;
         }
@@ -494,8 +505,6 @@ pub(crate) fn prepare_native_input(
             input.modifiers,
         )?;
         input.actions = handle.take_actions()?;
-        #[cfg(feature = "experimental-ui-widgets")]
-        super::interface_shell::widgets::adapt_input(world, handle, input)?;
         Ok(())
     })
 }

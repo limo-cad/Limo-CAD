@@ -1,27 +1,26 @@
-//! WIP: headless Bevy button/checkbox behavior behind the native input fence.
-//!
-//! The ordered host admits input against presented geometry and its original
-//! document/binding. Only that admitted input can reach the existing reducer
-//! through a widget observer. Ordinary picking/focus events have no admission
-//! and cannot enqueue a command. Styling, tab order, menus and text stay native.
+//! Standard Bevy picking, focus and button/checkbox behavior, with CAD commands
+//! as controlled state. No synthetic pointer events or second click recognizer.
 
 use super::*;
 use bevy::{
-    input::ButtonState,
-    input_focus::FocusedInput,
-    picking::{
-        backend::HitData,
-        events::{Pointer, PointerClick, PointerPress, PointerRelease},
-        pointer::{Location, PointerButton as BevyPointerButton, PointerId},
-        PickingSettings,
+    input::{keyboard::KeyCode, ButtonState},
+    input_focus::{
+        tab_navigation::{TabGroup, TabIndex, TabNavigationPlugin},
+        FocusCause, InputDispatchPlugin, InputFocus, InputFocusPlugin, InputFocusSystems,
     },
-    ui::{Checkable, Checked, InteractionDisabled, Pressed},
-    ui_widgets::{Activate, Button, ButtonPlugin, Checkbox, CheckboxPlugin, ValueChange},
-    window::{WindowEvent, WindowRef},
+    picking::{
+        events::PointerState,
+        hover::Hovered,
+        pointer::{PointerAction, PointerButton as BevyPointerButton, PointerId, PointerInput},
+        Pickable, PickingSystems,
+    },
+    ui::{
+        picking_backend::{UiPickingCamera, UiPickingSettings},
+        Checkable, Checked, InteractionDisabled, Pressed,
+    },
+    ui_widgets::{Activate, Button, ButtonPlugin, Checkbox, CheckboxPlugin},
+    window::{PrimaryWindow, WindowEvent},
 };
-use std::time::Duration;
-
-use super::super::winit_host::NativeHostInput;
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 enum WidgetKind {
@@ -29,36 +28,65 @@ enum WidgetKind {
     Checkbox,
 }
 
+/// Published command ownership, not input state. Retained entities can be
+/// rebound; a queued activation must never operate on the replacement target.
+#[derive(Component, Clone, PartialEq, Eq)]
+struct WidgetAction(NativeInterfaceAction);
+
 #[derive(Resource, Default)]
-struct WidgetInput {
-    pressed: Option<NativeInterfaceAction>,
-    admitted: Option<NativeInterfaceAction>,
-    emitted: bool,
-}
+struct WidgetActions(Vec<NativeInterfaceAction>);
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct WidgetLayout;
 
 pub(super) fn install(app: &mut App) {
-    // DefaultPlugins already includes these; headless fixtures install only
-    // the two behavior plugins rather than starting an OS window or renderer.
+    if !app.is_plugin_added::<bevy::input::InputPlugin>() {
+        app.add_plugins(bevy::input::InputPlugin);
+    }
+    if !app.is_plugin_added::<bevy::time::TimePlugin>() {
+        app.add_plugins(bevy::time::TimePlugin);
+    }
+    if !app.is_plugin_added::<bevy::picking::PickingPlugin>() {
+        app.add_plugins(bevy::picking::DefaultPickingPlugins);
+    }
+    if !app.is_plugin_added::<bevy::input_focus::pointer_focus::PointerFocusPlugin>() {
+        app.add_plugins(bevy::input_focus::pointer_focus::PointerFocusPlugin);
+    }
+    app.add_message::<WindowEvent>();
+    if !app.is_plugin_added::<InputFocusPlugin>() {
+        app.add_plugins(InputFocusPlugin);
+    }
+    if !app.is_plugin_added::<InputDispatchPlugin>() {
+        app.add_plugins(InputDispatchPlugin);
+    }
+    if !app.is_plugin_added::<TabNavigationPlugin>() {
+        app.add_plugins(TabNavigationPlugin);
+    }
     if !app.is_plugin_added::<ButtonPlugin>() {
         app.add_plugins(ButtonPlugin);
     }
     if !app.is_plugin_added::<CheckboxPlugin>() {
         app.add_plugins(CheckboxPlugin);
     }
-    app.init_resource::<WidgetInput>()
+    app.init_resource::<WidgetActions>()
+        .insert_resource(UiPickingSettings {
+            require_markers: true,
+        })
         .add_observer(on_activate)
         .add_observer(on_toggle)
+        .add_systems(First, primary_pointer.in_set(PickingSystems::PostInput))
+        .configure_sets(
+            PreUpdate,
+            InputFocusSystems::Dispatch.after(PickingSystems::Last),
+        )
+        .add_systems(PreUpdate, publish_focus.after(InputFocusSystems::Dispatch))
         .add_systems(
-            Update,
+            PostUpdate,
             synchronize
-                .after(InterfaceReduction)
-                .before(update_controls),
+                .in_set(WidgetLayout)
+                .after(InterfaceLayout)
+                .before(bevy::a11y::AccessibilitySystems::Update),
         );
-    // Native input is already ordered and hit-tested by the guarded adapter.
-    // A second picking pipeline would observe the same OS gesture twice.
-    if let Some(mut settings) = app.world_mut().get_resource_mut::<PickingSettings>() {
-        settings.is_input_enabled = false;
-    }
 }
 
 fn kind(control: &InterfaceControl) -> Option<WidgetKind> {
@@ -72,273 +100,261 @@ fn kind(control: &InterfaceControl) -> Option<WidgetKind> {
     }
 }
 
-fn synchronize(world: &mut World) {
-    let controls = world
-        .query_filtered::<(Entity, &InterfaceControl), With<InterfaceButtonStyle>>()
-        .iter(world)
-        .map(|(entity, control)| (entity, control.clone()))
-        .collect::<Vec<_>>();
-    for (entity, control) in controls {
-        synchronize_control(world, entity, &control);
+/// Secondary buttons belong to CAD camera/context-menu gestures. Bevy's
+/// headless widgets accept every pointer button, so select the primary stream
+/// at the input boundary; leave hit testing and gesture recognition to Bevy.
+fn primary_pointer(mut inputs: bevy::ecs::message::MessageMutator<PointerInput>) {
+    for input in inputs.read() {
+        if matches!(input.action, PointerAction::Press(button) | PointerAction::Release(button)
+            if button != BevyPointerButton::Primary)
+        {
+            input.action = PointerAction::Move { delta: Vec2::ZERO };
+        }
     }
-    let Some(handle) = world.get_resource::<NativeInterfaceHandle>() else {
+}
+
+fn publish_focus(focus: Res<InputFocus>, handle: Res<NativeInterfaceHandle>) {
+    let Ok(mut shared) = handle.shared.lock() else {
         return;
     };
-    let still_captured = handle.shared.lock().ok().and_then(|shared| {
-        shared
-            .capture
-            .as_ref()
-            .map(|capture| NativeInterfaceAction {
-                context: capture.context.clone(),
-                control: capture.resolved.clone(),
-            })
-    });
-    if world.resource::<WidgetInput>().pressed != still_captured {
+    let focused = focus
+        .get()
+        .map(|entity| ControlKey(entity.to_bits()))
+        .filter(|key| {
+            shared
+                .registry
+                .frame()
+                .controls
+                .iter()
+                .any(|c| c.key == *key)
+        });
+    if focused != shared.focused && set_focus(&mut shared, focused).is_ok() {
+        shared.revision = shared.revision.wrapping_add(1);
+    }
+}
+
+fn synchronize(world: &mut World) {
+    let handle = world.resource::<NativeInterfaceHandle>().clone();
+    let Ok((context, frame, excluded)) = handle.shared.lock().map(|shared| {
+        (
+            shared.registry.context().cloned(),
+            shared.registry.frame().clone(),
+            shared.tab_excluded.clone(),
+        )
+    }) else {
+        return;
+    };
+    let Some(context) = context else {
+        return;
+    };
+    let window = world
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(world)
+        .ok();
+    if let Some(window) = window {
+        world
+            .entity_mut(window)
+            .insert((TabGroup::default(), Visibility::Visible));
+    }
+    let cameras = world
+        .query_filtered::<Entity, With<InterfaceCamera>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for camera in cameras {
+        world.entity_mut(camera).insert(UiPickingCamera);
+    }
+    // Only actual controls and panel backgrounds participate. Labels and glyphs
+    // are decorative, so a checkbox square and its row have the same target.
+    let blockers = world
+        .query_filtered::<Entity, With<InterfaceOccluder>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for entity in blockers {
+        world.entity_mut(entity).insert(Pickable::default());
+    }
+    let mut retired = false;
+    for (index, published) in frame.controls.iter().enumerate() {
+        let entity = Entity::from_bits(published.key.0);
+        let Some(control) = world.get::<InterfaceControl>(entity).cloned() else {
+            continue;
+        };
+        let next = kind(&control);
+        let previous = world.get::<WidgetKind>(entity).copied();
+        let action = handle
+            .resolve_input(published.key, ControlInput::Click, &context)
+            .ok();
+        let eligible = action.is_some();
+        let old_action = world.get::<WidgetAction>(entity).map(|a| &a.0);
+        if old_action.is_some() && old_action != action.as_ref() {
+            retired = true;
+        }
+        if let Some(window) = window {
+            let mut root = entity;
+            while let Some(parent) = world.get::<ChildOf>(root) {
+                root = parent.parent();
+            }
+            if root != window {
+                world.entity_mut(root).insert(ChildOf(window));
+            }
+        }
+        let mut target = world.entity_mut(entity);
+        if eligible {
+            target.insert(TabIndex(if excluded.contains(&published.key) {
+                -1
+            } else {
+                index as i32
+            }));
+        } else {
+            target.remove::<TabIndex>();
+        }
+        target.insert(if target.contains::<InterfacePointerPassthrough>() {
+            Pickable::IGNORE
+        } else {
+            Pickable::default()
+        });
+        if next != previous {
+            target.remove::<(
+                WidgetKind,
+                Button,
+                Checkbox,
+                Checkable,
+                Checked,
+                Pressed,
+                InteractionDisabled,
+                WidgetAction,
+            )>();
+            match next {
+                Some(WidgetKind::Button) => {
+                    target.insert((WidgetKind::Button, Button, Hovered::default()));
+                }
+                Some(WidgetKind::Checkbox) => {
+                    target.insert((WidgetKind::Checkbox, Checkbox, Hovered::default()));
+                }
+                None => {}
+            }
+        }
+        if next.is_none() {
+            continue;
+        }
+        if let Some(action) = action {
+            target.insert(WidgetAction(action));
+            target.remove::<InteractionDisabled>();
+        } else {
+            target.remove::<WidgetAction>();
+            target.insert(InteractionDisabled);
+        }
+        if matches!(control.field, Field::Toggle(true)) {
+            target.insert(Checked);
+        } else {
+            target.remove::<Checked>();
+        }
+    }
+    if retired {
         cancel(world);
     }
-}
-
-fn synchronize_control(world: &mut World, entity: Entity, control: &InterfaceControl) {
-    let next = kind(control);
-    let previous = world.get::<WidgetKind>(entity).copied();
-    let mut target = world.entity_mut(entity);
-    if next != previous {
-        target.remove::<(
-            WidgetKind,
-            Button,
-            Checkbox,
-            Checkable,
-            Checked,
-            Pressed,
-            InteractionDisabled,
-        )>();
-        match next {
-            Some(WidgetKind::Button) => {
-                target.insert((WidgetKind::Button, Button));
-            }
-            Some(WidgetKind::Checkbox) => {
-                target.insert((WidgetKind::Checkbox, Checkbox));
-            }
-            None => return,
+    // Application-driven changes (modal open/close, restored document, field
+    // editing and accessibility) use the same Bevy focus resource as pointers.
+    let next = handle.focused_key().map(|key| Entity::from_bits(key.0));
+    let mut focus = world.resource_mut::<InputFocus>();
+    if focus.get() != next {
+        if let Some(entity) = next {
+            focus.set(entity, FocusCause::Navigated);
+        } else {
+            focus.clear();
         }
-        // The native host owns its stamped accessibility projection. Widget
-        // requirements must not add a second unnamed control to that tree.
-        target.remove::<bevy::a11y::AccessibilityNode>();
-    }
-    if next.is_none() {
-        return;
-    }
-    if control.disabled || !control.visible {
-        target.insert(InteractionDisabled);
-        target.remove::<Pressed>();
-    } else {
-        target.remove::<InteractionDisabled>();
-    }
-    if matches!(control.field, Field::Toggle(true)) {
-        target.insert(Checked);
-    } else {
-        target.remove::<Checked>();
     }
 }
 
-fn on_activate(event: On<Activate>, mut input: ResMut<WidgetInput>) {
-    if input
-        .admitted
-        .as_ref()
-        .is_some_and(|action| action.control.key == ControlKey(event.entity.to_bits()))
-    {
-        input.emitted = true;
+fn on_activate(
+    event: On<Activate>,
+    bindings: Query<&WidgetAction>,
+    mut pending: ResMut<WidgetActions>,
+) {
+    if let Ok(action) = bindings.get(event.entity) {
+        pending.0.push(action.0.clone());
     }
 }
 
 fn on_toggle(
-    event: On<ValueChange<bool>>,
-    controls: Query<&InterfaceControl>,
-    mut input: ResMut<WidgetInput>,
+    event: On<bevy::ui_widgets::ValueChange<bool>>,
+    bindings: Query<(&WidgetAction, &InterfaceControl)>,
+    mut pending: ResMut<WidgetActions>,
 ) {
-    let admitted = input
-        .admitted
-        .as_ref()
-        .is_some_and(|action| action.control.key == ControlKey(event.source.to_bits()));
-    if admitted
-        && event.is_final
-        && controls.get(event.source).is_ok_and(
-            |control| matches!(control.field, Field::Toggle(checked) if event.value != checked),
-        )
-    {
-        input.emitted = true;
+    if let Ok((action, control)) = bindings.get(event.source) {
+        if event.is_final && matches!(control.field, Field::Toggle(value) if value != event.value) {
+            pending.0.push(action.0.clone());
+        }
     }
-    // Controlled state: the existing native reducer applies the original
-    // click/key intent. Some toggles represent commands (e.g. Fix/Unfix), not
-    // an independently writable boolean. Project Checked after reduction.
+}
+
+/// Reduce after native field edits have been committed. The existing reducer
+/// validates the published owner/binding and projects accepted checkbox state.
+pub(crate) fn enqueue_actions(world: &mut World, handle: &NativeInterfaceHandle) {
+    for action in std::mem::take(&mut world.resource_mut::<WidgetActions>().0) {
+        if let Err(error) = handle.enqueue_action(action) {
+            eprintln!("Widget action rejected: {error}");
+        }
+    }
+}
+
+pub(crate) fn is_widget(world: &World, entity: Entity) -> bool {
+    world.get::<WidgetKind>(entity).is_some()
 }
 
 pub(crate) fn cancel(world: &mut World) {
-    let Some(mut input) = world.get_resource_mut::<WidgetInput>() else {
-        return;
-    };
-    let pressed = input.pressed.take();
-    input.admitted = None;
-    input.emitted = false;
-    if let Some(action) = pressed {
-        if let Ok(mut target) = world.get_entity_mut(Entity::from_bits(action.control.key.0)) {
-            target.remove::<Pressed>();
-        }
+    if let Some(mut state) = world.get_resource_mut::<PointerState>() {
+        state.clear(PointerId::Mouse);
+    }
+    let pressed = world
+        .query_filtered::<Entity, (With<WidgetKind>, With<Pressed>)>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for entity in pressed {
+        world.entity_mut(entity).remove::<Pressed>();
     }
 }
 
-fn pointer(input: &NativeHostInput) -> Pointer {
-    let window = super::super::winit_host::input_window(&input.event)
-        .expect("native pointer event has a window");
-    Pointer::new(
-        PointerId::Mouse,
-        Location {
-            target: bevy::camera::RenderTarget::Window(WindowRef::Entity(window))
-                .normalize(Some(window))
-                .expect("explicit native window"),
-            position: input.cursor.unwrap_or(Vec2::ZERO),
-        },
-    )
-}
-
-fn hit(world: &World, entity: Entity) -> HitData {
-    HitData::new(
-        world
-            .get::<UiTargetCamera>(entity)
-            .map_or(entity, |camera| camera.0),
-        0.,
-        None,
-        None,
-    )
-}
-
-pub(crate) fn adapt_input(
+/// Partition UI and canvas input without recognizing a second widget gesture.
+/// The remaining native adapter owns text/ranges, secondary clicks and CAD keys.
+pub(crate) fn owns_input(
     world: &mut World,
     handle: &NativeInterfaceHandle,
-    input: &mut NativeHostInput,
-) -> Result<(), String> {
-    if !world.contains_resource::<WidgetInput>() {
-        return Ok(());
-    }
-    if matches!(&input.event, WindowEvent::MouseButtonInput(event)
-        if event.button == MouseButton::Left && event.state == ButtonState::Pressed)
-    {
-        cancel(world);
-        let capture = handle
-            .shared
-            .lock()
-            .map_err(|_| "Native interface lock poisoned")?
-            .capture
-            .clone();
-        if let Some(capture) = capture {
-            let entity = Entity::from_bits(capture.resolved.key.0);
-            if let Some(control) = world.get::<InterfaceControl>(entity).cloned() {
-                synchronize_control(world, entity, &control);
-                if kind(&control).is_some() {
-                    let action = NativeInterfaceAction {
-                        context: capture.context,
-                        control: capture.resolved,
-                    };
-                    handle.validate_dispatch_action(&action)?;
-                    world.resource_mut::<WidgetInput>().pressed = Some(action);
-                    world.trigger(PointerPress {
-                        entity,
-                        pointer: pointer(input),
-                        button: BevyPointerButton::Primary,
-                        hit: hit(world, entity),
-                        count: 1,
-                    });
-                    world.flush();
-                }
+    state: &mut super::super::winit_host::HostInputState,
+    input: &super::super::winit_host::NativeHostInput,
+) -> bool {
+    let hit = input
+        .cursor
+        .and_then(|point| handle.hit_key(point.as_dvec2().to_array()))
+        .is_some_and(|key| is_widget(world, Entity::from_bits(key.0)));
+    match &input.event {
+        WindowEvent::MouseButtonInput(event) if event.button == MouseButton::Left => {
+            if event.state == ButtonState::Pressed {
+                state.widget_drag = hit;
+                hit
+            } else {
+                std::mem::take(&mut state.widget_drag) || hit
             }
         }
+        WindowEvent::CursorMoved(_) => hit || state.widget_drag,
+        WindowEvent::KeyboardInput(event) => {
+            event.key_code == KeyCode::Tab
+                || (matches!(event.key_code, KeyCode::Enter | KeyCode::Space)
+                    && handle
+                        .focused_key()
+                        .is_some_and(|key| is_widget(world, Entity::from_bits(key.0))))
+        }
+        WindowEvent::WindowFocused(event) if !event.focused => {
+            state.widget_drag = false;
+            cancel(world);
+            false
+        }
+        WindowEvent::KeyboardFocusLost(_) => {
+            state.widget_drag = false;
+            cancel(world);
+            false
+        }
+        _ => false,
     }
-
-    let result = adapt_actions(world, handle, input);
-    if matches!(&input.event,
-        WindowEvent::MouseButtonInput(event) if event.state == ButtonState::Released)
-        || matches!(&input.event, WindowEvent::WindowFocused(event) if !event.focused)
-        || matches!(&input.event, WindowEvent::KeyboardFocusLost(_))
-        || result.is_err()
-    {
-        cancel(world);
-    }
-    result
-}
-
-fn adapt_actions(
-    world: &mut World,
-    handle: &NativeInterfaceHandle,
-    input: &mut NativeHostInput,
-) -> Result<(), String> {
-    for action in std::mem::take(&mut input.actions) {
-        let entity = Entity::from_bits(action.control.key.0);
-        let control = world.get::<InterfaceControl>(entity).cloned();
-        let activation = match &action.control.input {
-            ControlInput::Click => matches!(&input.event, WindowEvent::MouseButtonInput(event)
-                if event.button == MouseButton::Left && event.state == ButtonState::Released),
-            ControlInput::Key(key) => {
-                !key.ctrl
-                    && !key.meta
-                    && !key.alt
-                    && !key.shift
-                    && matches!(key.key.as_str(), "Enter" | " " | "Space")
-            }
-            _ => false,
-        };
-        let Some(control) = control.filter(|control| activation && kind(control).is_some()) else {
-            input.actions.push(action);
-            continue;
-        };
-        handle.validate_dispatch_action(&action)?;
-        if control.binding != action.control.binding() || control.disabled || !control.visible {
-            return Err("Widget control changed before activation".into());
-        }
-        synchronize_control(world, entity, &control);
-        {
-            let mut dispatch = world.resource_mut::<WidgetInput>();
-            dispatch.admitted = Some(action.clone());
-            dispatch.emitted = false;
-        }
-        match &input.event {
-            WindowEvent::MouseButtonInput(_) => {
-                if world.resource::<WidgetInput>().pressed.as_ref() != Some(&action) {
-                    cancel(world);
-                    return Err("Widget press belongs to an earlier control".into());
-                }
-                world.trigger(PointerClick {
-                    entity,
-                    pointer: pointer(input),
-                    button: BevyPointerButton::Primary,
-                    hit: hit(world, entity),
-                    duration: Duration::ZERO,
-                    count: 1,
-                });
-                world.flush();
-                world.trigger(PointerRelease {
-                    entity,
-                    pointer: pointer(input),
-                    button: BevyPointerButton::Primary,
-                    hit: hit(world, entity),
-                });
-            }
-            WindowEvent::KeyboardInput(event) => {
-                world.trigger(FocusedInput::new(entity, event.clone(), event.window));
-            }
-            _ => {}
-        }
-        world.flush();
-        let emitted = {
-            let mut dispatch = world.resource_mut::<WidgetInput>();
-            dispatch.admitted = None;
-            std::mem::take(&mut dispatch.emitted)
-        };
-        if emitted {
-            handle.validate_dispatch_action(&action)?;
-            input.actions.push(action);
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

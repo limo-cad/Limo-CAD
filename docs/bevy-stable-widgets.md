@@ -40,29 +40,40 @@ controller or create a second UI. Build/run a scratch document for manual review
 cargo run --locked --manifest-path desktop/Cargo.toml --features experimental-ui-widgets
 ```
 
-The ordered native adapter still admits gestures against the presented layout,
-original document, entity generation, binding, disabled state and modal scope.
-Admitted presses/releases and activation keys go through the actual Bevy widget
-observers. Their resulting `Activate`/`ValueChange` must occur inside that
-admission; unadmitted picking/focus events cannot dispatch a native command.
-Automatic picking input is disabled in the experiment to prevent a second copy
-of the OS gesture from bypassing the ordered adapter. Cancellation retires
-Bevy's pressed state on release outside, window deactivation or host cancellation.
+The reworked experiment leaves Bevy's standard picking pipeline enabled. Its UI
+backend chooses the control, `Button`/`Checkbox` recognize primary pointer and
+keyboard activation, `Hovered`/`Pressed` drive the existing theme, and
+`InputFocus` plus `TabNavigationPlugin` own focus. Decorative checkbox squares,
+checks and labels are not separate pick targets. The previous `WidgetInput`,
+`adapt_input`, `adapt_actions` and synthetic pointer/focused-key events are gone.
+The native host bypasses its click recognizer and activation-key path for these
+controls; it does not activate the same control a second time.
 
-Checkbox state is controlled by the existing application reducer. A verified
-boolean proposal forwards the original click/key command intent, because some
-toggles perform commands such as Fix/Unfix rather than writing a standalone
-boolean. `Checked` is projected from the accepted application state; it does
-not optimistically change before command acceptance. Direct MCP/accessibility
-actions continue through their existing stamped reducer route.
+The application still chooses eligible controls and Tab order, blocks controls
+outside the active modal, and distinguishes primary UI input from CAD secondary
+clicks and camera gestures. Published document/binding stamps accompany Bevy's
+`Activate`/`ValueChange` notifications into the existing command reducer. A
+binding/document change cancels pending pointer state. Native text edits are
+flushed before queued widget commands are reduced. These are CAD ownership and
+transaction responsibilities, not a second widget event implementation.
 
-The native host's existing accessibility projection remains authoritative;
-widget-required unnamed accessibility nodes are removed to avoid duplicate
-controls. This adapter still needs human screen-reader verification.
+Checkbox state remains controlled by accepted application commands. Some
+checkboxes perform commands such as Fix/Unfix, so a value proposal preserves the
+command intent and `Checked` is projected from the accepted state. Text editing,
+precision ranges, choices, menus' arrow navigation and other unmigrated controls
+retain their existing adapters. The flag keeps the old default available as the
+visual/workflow baseline during this draft experiment.
 
-The feature is temporary. Remove the experiment flag and the replaced adapter
-behavior only after manual parity is accepted; unresolved control families
-remain explicit work rather than being described as migrated.
+Migrated controls retain their real Bevy accessibility nodes. The native
+projection supplies their localized labels, bounds and command bindings on
+those same entities, instead of creating duplicate proxy controls or deleting
+Bevy's nodes. Unmigrated controls still use their existing accessibility
+projection. Screen-reader behavior remains a separate acceptance item.
+
+The 2026-10-16 results below describe the earlier guarded adapter. They are
+historical evidence, not passes for this standard-input rework. Its affected
+workflow cases must be rechecked on a clean build with PR433 and PR434 locally
+integrated; the broad qualification ledger remains paused.
 
 ## Stable dependency and window-host patch
 

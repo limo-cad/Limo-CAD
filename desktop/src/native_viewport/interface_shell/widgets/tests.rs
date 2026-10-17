@@ -1,23 +1,82 @@
 use super::*;
-use crate::native_viewport::winit_host::{prepare_native_input, HostInputState, Modifiers};
-use bevy::input::keyboard::{Key, KeyCode, KeyboardInput};
-use bevy::input::mouse::MouseButtonInput;
+use crate::native_viewport::winit_host::{
+    prepare_native_input, HostInputState, Modifiers, NativeHostInput,
+};
+use bevy::{
+    input::{
+        keyboard::{Key, KeyboardInput},
+        mouse::MouseButtonInput,
+        InputPlugin,
+    },
+    input_focus::pointer_focus::PointerFocusPlugin,
+    picking::{
+        backend::{HitData, PointerHits},
+        pointer::PointerLocation,
+        DefaultPickingPlugins,
+    },
+    time::TimePlugin,
+    window::CursorMoved,
+};
+
+// Exercise the real Bevy input, picking and focus schedules. A tiny backend
+// supplies one rectangle; no test synthesizes PointerClick or FocusedInput.
+fn hits(
+    pointers: Query<(&PointerId, &PointerLocation)>,
+    controls: Query<(Entity, &InterfaceControl)>,
+    mut hits: MessageWriter<PointerHits>,
+) {
+    for (id, location) in &pointers {
+        let Some(location) = location.location() else {
+            continue;
+        };
+        let picks = controls
+            .iter()
+            .filter(|(_, control)| control.visible)
+            .filter(|_| {
+                (location.position - Vec2::new(140., 140.))
+                    .abs()
+                    .cmple(Vec2::splat(20.))
+                    .all()
+            })
+            .map(|(entity, _)| (entity, HitData::new(entity, 0., None, None)))
+            .collect();
+        hits.write(PointerHits::new(*id, picks, 10.));
+    }
+}
 
 fn fixture() -> (App, NativeInterfaceHandle, Entity, Entity) {
-    let (mut app, handle, control, _) = super::super::tests::fixture();
-    app.init_resource::<HostInputState>();
+    let (mut app, handle, entity, _) = super::super::tests::fixture();
+    app.add_plugins((
+        TimePlugin,
+        InputPlugin,
+        DefaultPickingPlugins,
+        PointerFocusPlugin,
+    ))
+    .add_message::<WindowEvent>()
+    .init_resource::<HostInputState>()
+    .add_systems(PreUpdate, hits.in_set(PickingSystems::Backend));
     install(&mut app);
-    let window = app.world_mut().spawn_empty().id();
-    (app, handle, control, window)
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .observe(bevy::input_focus::tab_navigation::handle_tab_navigation)
+        .id();
+    app.world_mut().spawn(PointerId::Mouse);
+    app.update();
+    (app, handle, entity, window)
 }
 
 fn send(
     app: &mut App,
     handle: &NativeInterfaceHandle,
-    _window: Entity,
     event: WindowEvent,
     point: Vec2,
-) -> Result<Vec<NativeInterfaceAction>, String> {
+) -> Vec<NativeInterfaceAction> {
+    if let WindowEvent::KeyboardInput(key) = &event {
+        app.world_mut().write_message(key.clone());
+    }
+    app.world_mut().write_message(event.clone());
+    app.update();
     let mut input = NativeHostInput {
         ui_scale: 1.,
         context: handle.presented_context(),
@@ -27,10 +86,31 @@ fn send(
         consumed: false,
         actions: vec![],
     };
-    prepare_native_input(app.world_mut(), handle, &mut input)?;
-    Ok(input.actions)
+    prepare_native_input(app.world_mut(), handle, &mut input).unwrap();
+    assert!(
+        input.actions.is_empty(),
+        "the old native adapter must not activate widgets"
+    );
+    enqueue_actions(app.world_mut(), handle);
+    handle.take_actions().unwrap()
 }
 
+fn point(_entity: Entity) -> Vec2 {
+    Vec2::new(140., 140.)
+}
+fn move_to(app: &mut App, handle: &NativeInterfaceHandle, window: Entity, point: Vec2) {
+    assert!(send(
+        app,
+        handle,
+        WindowEvent::CursorMoved(CursorMoved {
+            window,
+            position: point,
+            delta: None
+        }),
+        point
+    )
+    .is_empty());
+}
 fn mouse(window: Entity, state: ButtonState, button: MouseButton) -> WindowEvent {
     WindowEvent::MouseButtonInput(MouseButtonInput {
         window,
@@ -38,200 +118,129 @@ fn mouse(window: Entity, state: ButtonState, button: MouseButton) -> WindowEvent
         button,
     })
 }
-
-fn key(window: Entity, code: KeyCode, logical: Key) -> WindowEvent {
+fn key(window: Entity, code: KeyCode, repeat: bool) -> WindowEvent {
     WindowEvent::KeyboardInput(KeyboardInput {
         window,
         key_code: code,
-        logical_key: logical,
+        logical_key: if code == KeyCode::Tab {
+            Key::Tab
+        } else {
+            Key::Space
+        },
         state: ButtonState::Pressed,
         text: None,
-        repeat: false,
+        repeat,
     })
 }
 
 #[test]
-fn admitted_mouse_gesture_uses_bevy_pressed_and_activates_once_on_release() {
+fn real_picking_activates_once_and_owns_pressed_focus_and_hover() {
     let (mut app, handle, entity, window) = fixture();
-    let point = Vec2::new(140., 140.);
+    let p = point(entity);
+    move_to(&mut app, &handle, window, p);
     assert!(send(
         &mut app,
         &handle,
-        window,
         mouse(window, ButtonState::Pressed, MouseButton::Left),
-        point
+        p
     )
-    .unwrap()
     .is_empty());
-    assert!(app.world().get::<Button>(entity).is_some());
     assert!(app.world().get::<Pressed>(entity).is_some());
-    app.update();
-    assert!(app.world().get::<Pressed>(entity).is_some());
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(entity));
+    assert!(app.world().get::<Hovered>(entity).unwrap().0);
     let actions = send(
         &mut app,
         &handle,
-        window,
         mouse(window, ButtonState::Released, MouseButton::Left),
-        point,
-    )
-    .unwrap();
+        p,
+    );
     assert_eq!(actions.len(), 1);
     assert_eq!(actions[0].control.key, ControlKey(entity.to_bits()));
-    assert_eq!(actions[0].control.input, ControlInput::Click);
     assert!(app.world().get::<Pressed>(entity).is_none());
     assert!(send(
         &mut app,
         &handle,
-        window,
         mouse(window, ButtonState::Released, MouseButton::Left),
-        point
+        p
     )
-    .unwrap()
     .is_empty());
 }
 
 #[test]
-fn release_outside_and_window_deactivation_cancel_without_activation() {
-    let (mut app, handle, entity, window) = fixture();
-    let point = Vec2::new(140., 140.);
-    send(
-        &mut app,
-        &handle,
-        window,
-        mouse(window, ButtonState::Pressed, MouseButton::Left),
-        point,
-    )
-    .unwrap();
-    assert!(send(
-        &mut app,
-        &handle,
-        window,
-        mouse(window, ButtonState::Released, MouseButton::Left),
-        Vec2::new(950., 750.)
-    )
-    .unwrap()
-    .is_empty());
-    assert!(app.world().get::<Pressed>(entity).is_none());
-
-    send(
-        &mut app,
-        &handle,
-        window,
-        mouse(window, ButtonState::Pressed, MouseButton::Left),
-        point,
-    )
-    .unwrap();
-    send(
-        &mut app,
-        &handle,
-        window,
-        WindowEvent::WindowFocused(bevy::window::WindowFocused {
-            window,
-            focused: false,
-        }),
-        point,
-    )
-    .unwrap();
-    assert!(app.world().get::<Pressed>(entity).is_none());
-    assert!(handle.take_actions().unwrap().is_empty());
-}
-
-#[test]
-fn checkbox_proposal_preserves_command_intent_and_projects_only_accepted_state() {
+fn standard_checkbox_space_and_tab_preserve_controlled_state_and_ignore_repeat() {
     let (mut app, handle, entity, window) = fixture();
     {
         let mut control = app.world_mut().get_mut::<InterfaceControl>(entity).unwrap();
-        control.role = "checkbox".into();
         control.field = Field::Toggle(false);
+        control.role = "checkbox".into();
     }
     app.update();
-    let point = Vec2::new(140., 140.);
-    send(
-        &mut app,
-        &handle,
-        window,
-        mouse(window, ButtonState::Pressed, MouseButton::Left),
-        point,
-    )
-    .unwrap();
-    let actions = send(
-        &mut app,
-        &handle,
-        window,
-        mouse(window, ButtonState::Released, MouseButton::Left),
-        point,
-    )
-    .unwrap();
-    assert_eq!(actions.len(), 1);
-    assert!(app.world().get::<Checkbox>(entity).is_some());
-    assert!(app.world().get::<Button>(entity).is_none());
-    assert!(app.world().get::<Checked>(entity).is_none());
-    assert_eq!(actions[0].control.input, ControlInput::Click);
+    let p = point(entity);
+    assert!(send(&mut app, &handle, key(window, KeyCode::Tab, false), p).is_empty());
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(entity));
+    assert_eq!(
+        send(&mut app, &handle, key(window, KeyCode::Space, false), p).len(),
+        1
+    );
+    assert!(
+        app.world().get::<Checked>(entity).is_none(),
+        "only accepted CAD state checks the widget"
+    );
     app.world_mut()
         .get_mut::<InterfaceControl>(entity)
         .unwrap()
         .field = Field::Toggle(true);
-    let actions = send(
-        &mut app,
-        &handle,
-        window,
-        key(window, KeyCode::Space, Key::Space),
-        point,
-    )
-    .unwrap();
-    assert_eq!(actions.len(), 1);
+    app.update();
     assert!(app.world().get::<Checked>(entity).is_some());
+    assert!(send(&mut app, &handle, key(window, KeyCode::Space, true), p).is_empty());
+    assert_eq!(
+        send(&mut app, &handle, key(window, KeyCode::Space, false), p).len(),
+        1
+    );
 }
 
 #[test]
-fn unadmitted_widget_events_cannot_dispatch_to_a_current_or_replacement_document() {
+fn release_outside_cancels_and_secondary_click_never_activates() {
     let (mut app, handle, entity, window) = fixture();
-    let point = Vec2::new(140., 140.);
+    let p = point(entity);
+    move_to(&mut app, &handle, window, p);
     send(
         &mut app,
         &handle,
-        window,
         mouse(window, ButtonState::Pressed, MouseButton::Left),
-        point,
-    )
-    .unwrap();
-    app.world_mut().trigger(Activate { entity });
-    app.world_mut().trigger(ValueChange::<bool> {
-        source: entity,
-        value: true,
-        is_final: true,
-    });
-    app.world_mut().flush();
-    assert!(handle.take_actions().unwrap().is_empty());
-    assert!(!app.world().resource::<WidgetInput>().emitted);
-    handle
-        .present(super::super::tests::frame("replacement", 2))
-        .unwrap();
-    app.update();
-    assert!(app.world().get::<Pressed>(entity).is_none());
+        p,
+    );
+    let outside = Vec2::new(950., 750.);
+    move_to(&mut app, &handle, window, outside);
     assert!(send(
         &mut app,
         &handle,
-        window,
         mouse(window, ButtonState::Released, MouseButton::Left),
-        point
+        outside
     )
-    .unwrap()
     .is_empty());
+    assert!(app.world().get::<Pressed>(entity).is_none());
+    move_to(&mut app, &handle, window, p);
+    // Secondary clicks remain the native context-menu adapter's responsibility.
+    for state in [ButtonState::Pressed, ButtonState::Released] {
+        app.world_mut()
+            .write_message(mouse(window, state, MouseButton::Right));
+        app.update();
+    }
+    assert!(app.world().resource::<WidgetActions>().0.is_empty());
 }
 
 #[test]
-fn rebound_control_does_not_receive_the_original_press() {
+fn disabled_modal_covered_and_rebound_widgets_do_not_activate() {
     let (mut app, handle, entity, window) = fixture();
-    let point = Vec2::new(140., 140.);
+    let p = point(entity);
+    move_to(&mut app, &handle, window, p);
     send(
         &mut app,
         &handle,
-        window,
         mouse(window, ButtonState::Pressed, MouseButton::Left),
-        point,
-    )
-    .unwrap();
+        p,
+    );
     app.world_mut()
         .get_mut::<InterfaceControl>(entity)
         .unwrap()
@@ -240,78 +249,44 @@ fn rebound_control_does_not_receive_the_original_press() {
     assert!(send(
         &mut app,
         &handle,
-        window,
         mouse(window, ButtonState::Released, MouseButton::Left),
-        point
+        p
     )
-    .is_err());
-    assert!(handle.take_actions().unwrap().is_empty());
-}
-
-#[test]
-fn keyboard_uses_bevy_activation_while_context_menu_keeps_its_native_route() {
-    let (mut app, handle, entity, window) = fixture();
-    let point = Vec2::new(140., 140.);
-    send(
-        &mut app,
-        &handle,
-        window,
-        mouse(window, ButtonState::Pressed, MouseButton::Right),
-        point,
-    )
-    .unwrap();
-    let actions = send(
-        &mut app,
-        &handle,
-        window,
-        mouse(window, ButtonState::Released, MouseButton::Right),
-        point,
-    )
-    .unwrap();
-    assert_eq!(actions.len(), 1);
-    assert_eq!(actions[0].control.input, ControlInput::ContextMenu);
-    let actions = send(
-        &mut app,
-        &handle,
-        window,
-        key(window, KeyCode::Enter, Key::Enter),
-        point,
-    )
-    .unwrap();
-    assert_eq!(actions.len(), 1);
-    assert!(app.world().get::<Button>(entity).is_some());
-    assert_eq!(actions[0].control.key, ControlKey(entity.to_bits()));
-}
-
-#[test]
-fn disabling_a_pressed_widget_cancels_its_bevy_state() {
-    let (mut app, handle, entity, window) = fixture();
-    let point = Vec2::new(140., 140.);
-    send(
-        &mut app,
-        &handle,
-        window,
-        mouse(window, ButtonState::Pressed, MouseButton::Left),
-        point,
-    )
-    .unwrap();
-    let snapshot = {
-        let mut control = app.world_mut().get_mut::<InterfaceControl>(entity).unwrap();
-        control.disabled = true;
-        control.clone()
-    };
-    synchronize_control(app.world_mut(), entity, &snapshot);
+    .is_empty());
+    app.world_mut()
+        .get_mut::<InterfaceControl>(entity)
+        .unwrap()
+        .disabled = true;
+    app.update();
+    assert!(send(&mut app, &handle, key(window, KeyCode::Space, false), p).is_empty());
+    app.world_mut()
+        .get_mut::<InterfaceControl>(entity)
+        .unwrap()
+        .disabled = false;
+    let mut frame = handle.frame().unwrap();
+    frame.modal_stack.push("another-dialog".into());
+    handle.present(frame).unwrap();
     app.update();
     assert!(app.world().get::<InteractionDisabled>(entity).is_some());
-    assert!(app.world().get::<Pressed>(entity).is_none());
-    assert!(send(
-        &mut app,
-        &handle,
-        window,
-        mouse(window, ButtonState::Released, MouseButton::Left),
-        point
-    )
-    .unwrap()
-    .is_empty());
+    assert!(app.world().get::<TabIndex>(entity).is_none());
+}
+
+#[test]
+fn queued_activation_cannot_cross_document_replacement() {
+    let (mut app, handle, entity, window) = fixture();
+    let p = point(entity);
+    send(&mut app, &handle, key(window, KeyCode::Tab, false), p);
+    app.world_mut()
+        .write_message(match key(window, KeyCode::Space, false) {
+            WindowEvent::KeyboardInput(input) => input,
+            _ => unreachable!(),
+        });
+    app.update();
+    assert_eq!(app.world().resource::<WidgetActions>().0.len(), 1);
+    let mut frame = handle.frame().unwrap();
+    frame.context.document_id = "replacement".into();
+    handle.present(frame).unwrap();
+    app.update();
+    enqueue_actions(app.world_mut(), &handle);
     assert!(handle.take_actions().unwrap().is_empty());
 }

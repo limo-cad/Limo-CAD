@@ -333,7 +333,7 @@ jobs:
         if: matrix.family == 'all' || matrix.family == 'keyboard'
         run: cargo test --locked --manifest-path desktop/Cargo.toml
 
-      - name: Test the WIP Bevy headless widget adapter
+      - name: Test standard Bevy widget input
         if: matrix.family == 'all' || matrix.family == 'keyboard'
         run: cargo test --locked --manifest-path desktop/Cargo.toml --features experimental-ui-widgets --lib native_viewport::interface_shell::widgets::tests -- --test-threads=1
 
@@ -544,7 +544,7 @@ jobs:
         run: cargo clippy --locked --manifest-path desktop/Cargo.toml --all-targets --all-features --no-deps -- -D warnings
       - name: Test the native Bevy host
         run: cargo test --locked --manifest-path desktop/Cargo.toml --lib
-      - name: Test the WIP Bevy headless widget adapter
+      - name: Test standard Bevy widget input
         run: cargo test --locked --manifest-path desktop/Cargo.toml --features experimental-ui-widgets --lib native_viewport::interface_shell::widgets::tests -- --test-threads=1
       - name: Guard explicit service wakes without an OS redraw
         run: cargo test --locked --manifest-path desktop/Cargo.toml -p bevy_winit explicit_service_wakes_advance_app_without_os_redraw_and_return_to_idle -- --test-threads=1
@@ -631,7 +631,7 @@ jobs:
       - name: Test the native Bevy host
         if: inputs.input-family != 'windows-print'
         run: cargo test --locked --manifest-path desktop/Cargo.toml --lib
-      - name: Test the WIP Bevy headless widget adapter
+      - name: Test standard Bevy widget input
         if: inputs.input-family != 'windows-print'
         run: cargo test --locked --manifest-path desktop/Cargo.toml --features experimental-ui-widgets --lib native_viewport::interface_shell::widgets::tests -- --test-threads=1
       - name: Guard explicit service wakes without an OS redraw

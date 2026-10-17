@@ -1953,6 +1953,10 @@ fn update_controls(
     native_locale: Option<Res<crate::native_viewport::localization::NativeLocale>>,
     mut controls: StyledControlQuery,
     mut labels: Query<(&mut Text, &mut TextColor)>,
+    #[cfg(feature = "experimental-ui-widgets")] widget_state: Query<(
+        &bevy::picking::hover::Hovered,
+        Has<bevy::ui::Pressed>,
+    )>,
     mut cameras: Query<&mut Camera, With<InterfaceCamera>>,
 ) {
     let locale = crate::native_viewport::localization::locale_of(native_locale.as_deref());
@@ -1986,11 +1990,19 @@ fn update_controls(
         let key = ControlKey(entity.to_bits());
         let theme = style.0;
         let hovered = !control.disabled && shared.hovered == Some(key);
+        #[cfg(feature = "experimental-ui-widgets")]
+        let hovered = widget_state
+            .get(entity)
+            .map_or(hovered, |(hover, _)| !control.disabled && hover.0);
         let active = control.selected == Some(true)
             || shared
                 .capture
                 .as_ref()
                 .is_some_and(|capture| capture.resolved.key == key);
+        #[cfg(feature = "experimental-ui-widgets")]
+        let active = widget_state.get(entity).map_or(active, |(_, pressed)| {
+            control.selected == Some(true) || pressed
+        });
         let display = if control.visible {
             Display::Flex
         } else {
