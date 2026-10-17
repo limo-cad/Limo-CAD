@@ -894,6 +894,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "limo-cad-session-publication"
+version = "0.3.0-rc.1"
+dependencies = [
+ "ciborium",
+ "limo-cad-project-file",
+ "limo-cad-session-storage",
+ "serde",
+]
+
+[[package]]
 name = "limo-cad-session-storage"
 version = "0.3.0-rc.1"
 dependencies = [

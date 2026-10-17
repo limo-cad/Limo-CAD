@@ -1,0 +1,19 @@
+; Combine with project-publication.cddl and project-snapshot.cddl.
+publication-commit = {
+  format: "limo-cad-publication-commit",
+  version: 1,
+  slot: 0 / 1,
+  receipt: publication-receipt
+}
+; Commit <=4096 bytes, recursion <=16, no unknown/duplicate/trailing fields.
+; Slot 0/1 names publication-0.cbor / publication-1.cbor, never an input path.
+; Writer holds external exclusive owner lease across prepare and commit.
+; Write inactive slot, then atomically replace publication-commit.cbor.
+; Exact committed retry allowed; same receipt with other content rejects.
+; Same owner/incarnation; revision nondecreasing; export sequence increasing.
+; Reader: read commit, read slot, reread commit; retry if record differs.
+; Exact receipt in capsule must match the stable commit. Never JSON fallback.
+; Completed writes retain two capsules and one commit. Atomic-write temp
+; files are cleaned on ordinary errors; abrupt process termination may leave
+; owned staging files. No broad cleanup is performed by this protocol.
+; Power-loss durability is filesystem-dependent.
