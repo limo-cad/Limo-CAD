@@ -42,4 +42,6 @@ pub use print_handoff::*;
 pub use print_heights::*;
 pub use print_intent::*;
 pub use print_zones::*;
-pub use units::{DimensionStyle, DocumentSettings, UnitSystem};
+pub use units::{
+    physical_value_si, DimensionStyle, DocumentSettings, PhysicalDimension, UnitSystem,
+};

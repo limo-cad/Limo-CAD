@@ -498,19 +498,22 @@ fn quantity(text: &str) -> Result<(MaterialValue, String)> {
     if let Ok(n) = number.parse::<f64>() {
         ensure!(n.is_finite(), "Nonfinite material property");
         let unit = text[split..].trim();
-        let (factor, unit) = match unit {
-            "MPa" => (1e6, "Pa"),
-            "GPa" => (1e9, "Pa"),
-            "g/cm^3" | "g/cm³" => (1000., "kg/m^3"),
-            "µm/m/K" => (1e-6, "1/K"),
-            "m/m/K" => (1., "1/K"),
-            _ => (1., unit),
+        // Keep the existing catalog normalization policy, but share numerical
+        // conversion and dimension checks with runtime material consumers.
+        use limo_cad_core::PhysicalDimension;
+        let dimension = match unit {
+            "MPa" | "GPa" => Some(PhysicalDimension::Pressure),
+            "g/cm^3" | "g/cm³" => Some(PhysicalDimension::Density),
+            "µm/m/K" | "m/m/K" => Some(PhysicalDimension::ThermalExpansionCoefficient),
+            _ => None,
         };
-        ensure!(
-            (n * factor).is_finite(),
-            "Material unit conversion overflow"
-        );
-        Ok((MaterialValue::Number(n * factor), unit.into()))
+        if let Some(dimension) = dimension {
+            let value =
+                limo_cad_core::physical_value_si(n, unit, dimension).map_err(anyhow::Error::msg)?;
+            Ok((MaterialValue::Number(value), dimension.si_unit().into()))
+        } else {
+            Ok((MaterialValue::Number(n), unit.into()))
+        }
     } else {
         ensure!(text.len() <= 4096, "Material value too long");
         Ok((MaterialValue::Text(text.into()), String::new()))
@@ -544,8 +547,13 @@ fn slicer_quantity(name: &str, v: &Value) -> Result<(String, MaterialValue, Stri
     let mut unit = String::new();
     let name: String = if name == "filament_density" {
         if let MaterialValue::Number(n) = &mut value {
-            *n *= 1000.;
-            ensure!(*n > 0. && n.is_finite(), "Invalid filament density");
+            *n = limo_cad_core::physical_value_si(
+                *n,
+                "g/cm^3",
+                limo_cad_core::PhysicalDimension::Density,
+            )
+            .map_err(anyhow::Error::msg)?;
+            ensure!(*n > 0., "Invalid filament density");
         } else {
             bail!("Filament density must be numeric");
         }
