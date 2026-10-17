@@ -1477,6 +1477,21 @@ pub(crate) fn synchronize(
         if world.resource::<Files>().scripts {
             paint_scripts((world, camera), &mut state, width, height, theme)?;
         }
+        #[cfg(feature = "experimental-ui-widgets")]
+        {
+            let members = tabs
+                .iter()
+                .skip(start)
+                .take(available)
+                .filter_map(|tab| {
+                    state
+                        .controls
+                        .get(&format!("tab-{}", tab.owner.document_id))
+                        .map(|c| c.0)
+                })
+                .collect::<Vec<_>>();
+            interface_shell::widgets::tab_group(world, &members, tabs.len() <= available);
+        }
         state.chrome.finish(world);
         state.controls.retain(|key, (entity, _)| {
             if live.contains(key) {

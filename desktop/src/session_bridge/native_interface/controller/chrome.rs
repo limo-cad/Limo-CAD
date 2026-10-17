@@ -144,10 +144,30 @@ impl Widgets {
     }
     pub(crate) fn parent(&self, world: &mut World, key: &str, parent: Entity) {
         if let Some(entity) = self.entity(key) {
+            #[cfg(feature = "experimental-ui-widgets")]
+            if interface_shell::widgets::preserves_parent(world, entity, parent) {
+                return;
+            }
             if world.get::<ChildOf>(entity).map(ChildOf::parent) != Some(parent) {
                 world.entity_mut(entity).insert(ChildOf(parent));
             }
         }
+    }
+    #[cfg(feature = "experimental-ui-widgets")]
+    pub(crate) fn radio_group(&self, world: &mut World, keys: &[&str]) {
+        let members = keys
+            .iter()
+            .filter_map(|key| self.entity(key))
+            .collect::<Vec<_>>();
+        interface_shell::widgets::radio_group(world, &members);
+    }
+    #[cfg(feature = "experimental-ui-widgets")]
+    pub(crate) fn tab_group(&self, world: &mut World, keys: &[&str]) {
+        let members = keys
+            .iter()
+            .filter_map(|key| self.entity(key))
+            .collect::<Vec<_>>();
+        interface_shell::widgets::tab_group(world, &members, true);
     }
     pub(crate) fn begin(&mut self) {
         self.live.clear();

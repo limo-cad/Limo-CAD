@@ -533,3 +533,336 @@ fn standard_tab_navigation_uses_each_native_modifier_snapshot() {
     );
     assert_eq!(handle.focused_key(), Some(ControlKey(second.to_bits())));
 }
+
+fn option(app: &mut App, role: &str, label: &str, selected: bool, x: f32) -> Entity {
+    let mut control = InterfaceControl::button("Viewport", label);
+    control.role = role.into();
+    control.selected = Some(selected);
+    app.world_mut()
+        .spawn((
+            control,
+            ComputedNode {
+                size: Vec2::new(80., 24.),
+                inverse_scale_factor: 1.,
+                ..default()
+            },
+            UiGlobalTransform::from_translation(Vec2::new(x, 42.)),
+            ComputedStackIndex(2),
+            InheritedVisibility::VISIBLE,
+        ))
+        .id()
+}
+
+fn focus(app: &mut App, entity: Entity) {
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(entity, FocusCause::Navigated);
+    app.world_mut().run_system_cached(publish_focus).unwrap();
+}
+
+#[test]
+fn standard_radio_group_skips_disabled_choices_and_reduces_only_the_new_option() {
+    let (mut app, handle, first, window) = fixture();
+    {
+        let mut c = app.world_mut().get_mut::<InterfaceControl>(first).unwrap();
+        c.role = "radio".into();
+        c.selected = Some(true);
+    }
+    let disabled = option(&mut app, "radio", "Unavailable", false, 160.);
+    app.world_mut()
+        .get_mut::<InterfaceControl>(disabled)
+        .unwrap()
+        .disabled = true;
+    let last = option(&mut app, "radio", "Third", false, 260.);
+    radio_group(app.world_mut(), &[first, disabled, last]);
+    app.update();
+    focus(&mut app, first);
+    let actions = send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::ArrowRight, false),
+        point(first),
+    );
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].control.key, ControlKey(last.to_bits()));
+    assert!(
+        app.world().get::<Checked>(first).is_some(),
+        "selection waits for the CAD reducer"
+    );
+    app.world_mut()
+        .get_mut::<InterfaceControl>(first)
+        .unwrap()
+        .selected = Some(false);
+    app.world_mut()
+        .get_mut::<InterfaceControl>(last)
+        .unwrap()
+        .selected = Some(true);
+    app.update();
+    focus(&mut app, last);
+    assert!(send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::Space, false),
+        point(last)
+    )
+    .is_empty());
+    let actions = send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::Home, false),
+        point(last),
+    );
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].control.key, ControlKey(first.to_bits()));
+}
+
+#[test]
+fn standard_tabs_roving_focus_selects_once_and_survives_tab_removal() {
+    let (mut app, handle, first, window) = fixture();
+    {
+        let mut c = app.world_mut().get_mut::<InterfaceControl>(first).unwrap();
+        c.role = "tab".into();
+        c.selected = Some(true);
+    }
+    let second = option(&mut app, "tab", "Second document", false, 160.);
+    tab_group(app.world_mut(), &[first, second], true);
+    app.update();
+    app.update();
+    focus(&mut app, first);
+    let actions = send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::ArrowRight, false),
+        point(first),
+    );
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].control.key, ControlKey(second.to_bits()));
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(second));
+    app.world_mut()
+        .get_mut::<InterfaceControl>(first)
+        .unwrap()
+        .selected = Some(false);
+    app.world_mut()
+        .get_mut::<InterfaceControl>(second)
+        .unwrap()
+        .selected = Some(true);
+    app.update();
+    app.update();
+    assert_eq!(app.world().get::<TabIndex>(first).unwrap().0, -1);
+    assert_eq!(app.world().get::<TabIndex>(second).unwrap().0, 0);
+    assert!(send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::Enter, false),
+        point(second)
+    )
+    .is_empty());
+    app.world_mut().despawn(first);
+    app.update();
+    assert!(send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::ArrowLeft, false),
+        point(second)
+    )
+    .is_empty());
+}
+
+#[test]
+fn standard_slider_keeps_decimal_steps_large_origins_and_exact_endpoints() {
+    let (mut app, handle, entity, window) = fixture();
+    let origin = 1_000_000_000.;
+    {
+        let mut c = app.world_mut().get_mut::<InterfaceControl>(entity).unwrap();
+        c.role = "slider".into();
+        c.field = Field::Range {
+            value: origin + 0.2,
+            min: origin,
+            max: origin + 0.35,
+            step: 0.1,
+        };
+    }
+    app.update();
+    focus(&mut app, entity);
+    for (code, expected) in [
+        (KeyCode::ArrowRight, origin + 0.3),
+        (KeyCode::Home, origin),
+        (KeyCode::End, origin + 0.35),
+    ] {
+        let actions = send(&mut app, &handle, key(window, code, false), point(entity));
+        assert_eq!(actions.len(), 1);
+        let ControlInput::SetValue(value) = &actions[0].control.input else {
+            panic!("expected value")
+        };
+        assert_eq!(value.parse::<f64>().unwrap(), expected);
+        {
+            let mut control = app.world_mut().get_mut::<InterfaceControl>(entity).unwrap();
+            let Field::Range { value, .. } = &mut control.field else {
+                unreachable!()
+            };
+            *value = expected;
+        }
+        app.update();
+    }
+    assert!(
+        !handle.has_capture(),
+        "native range gesture engine must not run"
+    );
+}
+
+#[test]
+fn standard_menu_open_choose_and_escape_do_not_duplicate_or_reopen_the_list() {
+    let (mut app, handle, owner, window) = fixture();
+    {
+        let mut c = app.world_mut().get_mut::<InterfaceControl>(owner).unwrap();
+        c.role = "combobox".into();
+        c.expanded = Some(false);
+        c.field = Field::Choice {
+            value: "a".into(),
+            options: vec![],
+        };
+    }
+    app.update();
+    focus(&mut app, owner);
+    let actions = send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::ArrowDown, false),
+        point(owner),
+    );
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].control.key, ControlKey(owner.to_bits()));
+    app.world_mut()
+        .get_mut::<InterfaceControl>(owner)
+        .unwrap()
+        .expanded = Some(true);
+    let first = option(&mut app, "option", "First choice", true, 160.);
+    let second = option(&mut app, "option", "Second choice", false, 260.);
+    choice_group(app.world_mut(), owner, &[first, second]);
+    app.update();
+    app.update();
+    focus(&mut app, first);
+    let navigated = send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::ArrowDown, false),
+        point(first),
+    );
+    assert!(
+        navigated.is_empty(),
+        "menu navigation unexpectedly reduced {navigated:?}"
+    );
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(second));
+    let actions = send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::Enter, false),
+        point(second),
+    );
+    assert_eq!(
+        actions.len(),
+        1,
+        "choosing closes via the existing reducer; no second toggle"
+    );
+    assert_eq!(actions[0].control.key, ControlKey(second.to_bits()));
+    focus(&mut app, first);
+    let actions = send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::Escape, false),
+        point(first),
+    );
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].control.key, ControlKey(owner.to_bits()));
+}
+
+#[test]
+fn standard_slider_captures_outside_drag_and_releases_without_native_range_capture() {
+    let (mut app, handle, entity, window) = fixture();
+    let mut frame = super::super::tests::frame("document-a", 1);
+    frame.surface = frame.client;
+    handle.present(frame).unwrap();
+    {
+        let mut c = app.world_mut().get_mut::<InterfaceControl>(entity).unwrap();
+        c.role = "slider".into();
+        c.field = Field::Range {
+            value: 0.,
+            min: -10.,
+            max: 10.,
+            step: 0.5,
+        };
+    }
+    app.world_mut().entity_mut(entity).insert((
+        ComputedNode {
+            size: Vec2::new(100., 24.),
+            inverse_scale_factor: 1.,
+            ..default()
+        },
+        UiGlobalTransform::from_translation(Vec2::new(140., 140.)),
+        bevy::ui::ComputedUiRenderTargetInfo::default(),
+    ));
+    app.world_mut().spawn((
+        bevy::ui_widgets::SliderThumb,
+        ComputedNode {
+            size: Vec2::splat(16.),
+            ..default()
+        },
+        ChildOf(entity),
+    ));
+    app.update();
+    let p = point(entity);
+    move_to(&mut app, &handle, window, p);
+    let actions = send(
+        &mut app,
+        &handle,
+        mouse(window, ButtonState::Pressed, MouseButton::Left),
+        p,
+    );
+    assert_eq!(actions.len(), 1);
+    for x in [145., 300.] {
+        send(
+            &mut app,
+            &handle,
+            WindowEvent::CursorMoved(CursorMoved {
+                window,
+                position: Vec2::new(x, 140.),
+                delta: None,
+            }),
+            Vec2::new(x, 140.),
+        );
+    }
+    let actions = send(
+        &mut app,
+        &handle,
+        mouse(window, ButtonState::Released, MouseButton::Left),
+        Vec2::new(300., 140.),
+    );
+    assert_eq!(actions.len(), 1);
+    assert_eq!(
+        actions[0].control.input,
+        ControlInput::SetValue("10".into())
+    );
+    assert!(!handle.has_capture());
+    assert!(!app.world().get::<SliderDragState>(entity).unwrap().dragging);
+    assert!(!app.world().resource::<HostInputState>().widget_drag);
+}
+
+#[test]
+fn overflowing_document_strip_keeps_native_navigation_and_restores_standard_tabs_when_it_fits() {
+    let (mut app, _, first, _) = fixture();
+    app.world_mut()
+        .get_mut::<InterfaceControl>(first)
+        .unwrap()
+        .role = "tab".into();
+    let second = option(&mut app, "tab", "Second document", false, 160.);
+    tab_group(app.world_mut(), &[first, second], true);
+    app.update();
+    assert!(is_widget(app.world(), first));
+    tab_group(app.world_mut(), &[first, second], false);
+    app.update();
+    assert!(!is_widget(app.world(), first));
+    assert!(app.world().get::<Tab>(first).is_none());
+    tab_group(app.world_mut(), &[first, second], true);
+    app.update();
+    assert!(app.world().get::<Tab>(first).is_some());
+}

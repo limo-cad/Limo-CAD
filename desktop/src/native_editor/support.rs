@@ -439,6 +439,8 @@ pub(super) fn synchronize(
                 None,
             )?;
             interface_shell::primary_button(world, e);
+            #[cfg(feature = "experimental-ui-widgets")]
+            widgets.radio_group(world, &["origin-0", "origin-1"]);
             for (i, hint) in [
                 (
                     0,

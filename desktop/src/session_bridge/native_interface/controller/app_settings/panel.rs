@@ -592,6 +592,29 @@ pub(super) fn paint(
     }
     #[cfg(feature = "experimental-ui-widgets")]
     {
+        settings.widgets.radio_group(
+            world,
+            &[
+                "settings-theme-system",
+                "settings-theme-light",
+                "settings-theme-dark",
+            ],
+        );
+        let languages = SUPPORTED
+            .iter()
+            .map(|locale| format!("settings-locale-{}", code(*locale)))
+            .collect::<Vec<_>>();
+        settings.widgets.radio_group(
+            world,
+            &languages.iter().map(String::as_str).collect::<Vec<_>>(),
+        );
+        let scales = (0..preferences::UI_SCALE_OPTIONS.len())
+            .map(|i| format!("settings-interface-size-{i}"))
+            .collect::<Vec<_>>();
+        settings.widgets.radio_group(
+            world,
+            &scales.iter().map(String::as_str).collect::<Vec<_>>(),
+        );
         let root = settings.widgets.entity("settings-card").unwrap();
         let header = settings.widgets.entity("settings-header").unwrap();
         for key in [

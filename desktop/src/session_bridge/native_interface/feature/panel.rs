@@ -564,6 +564,19 @@ fn synchronize_owned(
                         &assets,
                     )?;
                 }
+                #[cfg(feature = "experimental-ui-widgets")]
+                {
+                    let members = options
+                        .iter()
+                        .filter_map(|option| {
+                            state
+                                .controls
+                                .get(&format!("{key}-{}", option.value))
+                                .map(|c| c.0)
+                        })
+                        .collect::<Vec<_>>();
+                    interface_shell::widgets::radio_group(world, &members);
+                }
                 y += options.len().div_ceil(2) as f32 * 36. + 4.;
                 if row.field == super::SolidField::Operation {
                     for (key, hint) in [
@@ -1709,6 +1722,20 @@ fn choice_options(
                     assets,
                 )?;
                 *y += 30.;
+            }
+            #[cfg(feature = "experimental-ui-widgets")]
+            if let Some((owner, _)) = state.controls.get(&key) {
+                let owner = *owner;
+                let members = options
+                    .iter()
+                    .filter_map(|option| {
+                        state
+                            .controls
+                            .get(&format!("{key}-option-{}", option.value))
+                            .map(|c| c.0)
+                    })
+                    .collect::<Vec<_>>();
+                interface_shell::widgets::choice_group(world, owner, &members);
             }
         }
     }

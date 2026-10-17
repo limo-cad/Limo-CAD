@@ -24,16 +24,16 @@ appearance would require an additional design/parity pass.
 | Shared buttons and menu items | `bevy::ui_widgets::Button`, `Pressed`, `Activate` | Manual mouse, keyboard, focus and modal parity |
 | Shared boolean checkboxes/toggles | `Checkbox`, `Checked`, `ValueChange<bool>` | Manual command-state and accessibility parity |
 | Text, dimension and script fields | Existing Bevy `EditableText` plus native adapters | Preserve ordered editor flush, AltGr/Option, IME ownership and multiline behavior before using `TextInput` directly |
-| Sliders/ranges | Existing native range adapter | Bevy sliders use `f32`; CAD ranges use `f64`. Verify precision, step rounding, eight-pixel track inset, drag capture and preview coalescing before migration |
-| Choice fields/dropdowns | Existing native choice adapter | Preserve current cycling/keyboard behavior and controlled reducer values before using list/menu widgets |
-| Workspace tabs and radio groups | Existing controls and selection reducer | Evaluate `TabList`/`Tab` and radio grouping against current focus order and document ownership |
-| Dialogs, popovers and scrolling | Existing native layout/modal policy | Verify stacking, clipping, dismissal, focus return and canvas input ownership before changing behavior |
+| Sliders/ranges | Standard `Slider`, `SliderThumb`, `SliderStep`, `SliderPrecision` and controlled `SliderValue` | Step-index conversion retains CAD `f64` values; oversized/invalid ranges retain the native adapter. Current source/live checks recorded below. |
+| Shared feature dropdowns | Standard `MenuButton`, `MenuPopup` and `MenuItem` over the existing inline choice layout | Existing form reducer owns open/selected state. Other cycling choice fields remain native; no separate popup framework was added. |
+| Radio groups and tabs | Standard `RadioGroup`/`RadioButton` and `TabList`/`Tab` | Settings, feature and sketch-origin radios; assembly and fitting document strips. Overflowing document strips preserve native navigation to hidden documents. |
+| Dialogs and scrolling | Standard dialog title dragging plus a small resize adapter; existing scrolling/modal policy | See the movable/resizable dialog scope and retained limitations below. |
 | Orientation dial and CAD annotations | Existing custom visual/geometry controls | Product-specific controls need their current geometry and hit behavior |
 
 ## Input and state ownership
 
-The temporary `experimental-ui-widgets` Cargo feature changes shared button and
-checkbox behavior in the real native host. It does not start a second document
+The temporary `experimental-ui-widgets` Cargo feature changes the migrated
+control behavior listed above in the real native host. It does not start a second document
 controller or create a second UI. Build/run a scratch document for manual review:
 
 ```sh
@@ -65,9 +65,8 @@ transaction responsibilities, not a second widget event implementation.
 
 Checkbox state remains controlled by accepted application commands. Some
 checkboxes perform commands such as Fix/Unfix, so a value proposal preserves the
-command intent and `Checked` is projected from the accepted state. Text editing,
-precision ranges, choices, menus' arrow navigation and other unmigrated controls
-retain their existing adapters. The flag keeps the old default available as the
+command intent and `Checked` is projected from the accepted state. Text editing, cycling choice fields outside shared feature forms, overflowing
+document strips and ordinary menus retain their existing adapters. The flag keeps the old default available as the
 visual/workflow baseline during this draft experiment.
 
 Migrated controls retain their real Bevy accessibility nodes. The native
@@ -329,3 +328,32 @@ Do not reuse previous qualification passes as evidence for changed controls.
 Keep the PR draft/WIP until a human records these results and explicitly accepts
 the scoped parity. Broad UI/MCP qualification remains governed by the existing
 paused ledger and is not resumed by this exploration.
+
+
+## Standard sliders, choices, radio groups and tabs
+
+This follow-up remains behind `experimental-ui-widgets`. Sliders use Bevy's
+pointer capture, drag and keyboard implementation. The existing theme paints
+the track and thumb; the thumb is two pixels larger to match Bevy's measured
+travel with the existing eight-pixel inset. The widget range is expressed in
+step indices, then converted back to the CAD field's `f64` origin and step.
+Nonfinite or more-than-1,048,576-step ranges keep the existing adapter.
+
+Settings theme/language/scale, shared feature radios and sketch-origin radios
+use `RadioButton`/`RadioGroup`. Assembly tabs and fully visible document strips
+use `Tab`/`TabList` with automatic selection. Document-tab double-click renaming
+uses Bevy's click count. Overflowing document strips keep native navigation,
+because it can reach documents whose tab entities are not rendered. Rebuilding
+that strip just to accommodate a widget would exceed this modest migration.
+
+The shared feature forms retain their inline dropdown appearance and use
+`MenuButton`, `MenuPopup` and `MenuItem` for input, navigation, dismissal and
+focus return. Application code connects menu events to the existing form
+reducer and prevents a completed selection from toggling the list open again.
+Choice fields elsewhere that currently cycle values retain their existing
+behavior. No Bevy fork or alternate pointer recognizer was added.
+
+The focused native-interface, Settings, document and host checks passed: 152
+distinct checks, including the standard-widget input schedules. Strict Clippy
+and formatting checks passed. Fresh native workflow/visual checks are pending;
+earlier evidence above does not qualify this implementation.
