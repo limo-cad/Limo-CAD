@@ -165,8 +165,8 @@ fn invalid_presentation_is_rejected_before_editing_the_typed_draft() {
     for (id, value) in [
         (Id::Upper, "NaN".into()),
         (Id::Lower, "-inf".into()),
-        (Id::Precision, "7".into()),
-        (Id::DualPrecision, "7".into()),
+        (Id::Precision, "10".into()),
+        (Id::DualPrecision, "10".into()),
         (Id::DualPrecision, "2.5".into()),
         (Id::Fit, "\u{96f6}".repeat(65)),
     ] {
@@ -206,8 +206,8 @@ fn shared_drawing_validation_remains_authoritative_for_presentation_limits() {
             match variant {
                 0 => p.tolerance.upper = f64::NAN,
                 1 => p.fit_class = "x".repeat(65),
-                2 => p.dual_units.as_mut().unwrap().precision = 7,
-                _ => *precision = 7,
+                2 => p.dual_units.as_mut().unwrap().precision = 10,
+                _ => *precision = 10,
             }
         }
         assert!(invalid.validate().is_err());
@@ -451,4 +451,35 @@ fn curved_drag_uses_cumulative_paper_geometry_and_preserves_full_intent() {
         curved_document(),
         "Preview never alters the issued shared document"
     );
+}
+
+#[test]
+fn high_precision_inspector_edits_preserve_saved_dimension_metadata() {
+    let before = document();
+    for digits in [7, 8, 9] {
+        let mut draft = linear(&before);
+        let mut fields = from_annotation(draft.annotation());
+        set(&mut fields, Id::Precision, &digits.to_string());
+        set(&mut fields, Id::DualPrecision, &digits.to_string());
+        apply(&mut draft, &fields).unwrap();
+        let edited = draft.apply(&before).unwrap();
+        edited.validate().unwrap();
+        let encoded = serde_json::to_vec(&edited).unwrap();
+        let restored: DrawingDocumentDto = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(edited, restored);
+        let mut expected = before.clone();
+        if let DrawingAnnotationDto::LinearDimension {
+            precision,
+            presentation,
+            ..
+        } = &mut expected.sheets[0].annotations[2]
+        {
+            *precision = digits;
+            presentation.dual_units.as_mut().unwrap().precision = digits;
+        } else {
+            panic!("expected linear dimension");
+        }
+        expected.sheets[0].release.status = DrawingReleaseStatus::Draft;
+        assert_eq!(restored, expected);
+    }
 }
