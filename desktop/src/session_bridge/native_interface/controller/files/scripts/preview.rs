@@ -17,6 +17,7 @@ mod images;
 mod input;
 mod lesson;
 mod panel;
+mod steps;
 pub(crate) use feature::paint_hint;
 pub(crate) use input::input;
 pub(crate) use panel::paint;
@@ -44,6 +45,8 @@ pub(crate) enum Action {
     Model,
     Previous,
     Next,
+    Step(usize),
+    Steps,
     Replay,
     Stop,
     Fit,
@@ -107,6 +110,7 @@ pub(crate) struct State {
     service: Arc<PreviewService>,
     retained: Option<Retained>,
     index: usize,
+    steps_open: bool,
     yaw: f32,
     pitch: f32,
     revision: u64,
@@ -149,6 +153,7 @@ impl Default for State {
             service: Arc::new(PreviewService::default()),
             retained: None,
             index: 0,
+            steps_open: false,
             yaw: HOME.0,
             pitch: HOME.1,
             revision: 1,
@@ -325,6 +330,7 @@ fn open_lesson(
     files.script.chapters.open = false;
     files.script.preview.return_to = Some(previous);
     files.script.preview.playing = false;
+    files.script.preview.steps_open = false;
     files.script.preview.lesson = id;
     files.script.preview.scenario = lesson::CutScenario::default();
     files.script.preview.index_open = id.is_none();
@@ -390,6 +396,7 @@ fn close(world: &mut World) {
     let images = {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.open = false;
+        preview.steps_open = false;
         preview.help = false;
         preview.focus_owner = None;
         preview.retained = None;
@@ -476,6 +483,7 @@ pub(crate) fn command(
         }
         match action {
             Action::Help | Action::Demo => {
+                preview.steps_open = false;
                 preview.help = action == Action::Help;
                 preview.focus_owner = handle.presented_context();
                 preview.playing = false;
@@ -483,11 +491,31 @@ pub(crate) fn command(
                 preview.help_view = feature::HelpView::default();
             }
             Action::HelpBody => {}
+            Action::Steps => {
+                if preview.help || preview.lesson.is_none() || preview.count() == 0 {
+                    return Err("Open a prepared lesson before viewing its steps".into());
+                }
+                preview.steps_open = !preview.steps_open;
+                preview.playing = false;
+                preview.wake = None;
+                preview.focus_owner = handle.presented_context();
+            }
+            Action::Step(index) => {
+                if preview.help || index >= preview.count() {
+                    return Err("Choose a step in the current lesson".into());
+                }
+                preview.index = index;
+                preview.steps_open = false;
+                preview.playing = false;
+                preview.focus_owner = handle.presented_context();
+                preview.changed()?;
+            }
             Action::Scenario(scenario) => {
                 if preview.help || !preview.cut_choices() {
                     return Err("Open the Cut example before choosing its outcome".into());
                 }
                 if preview.scenario != scenario {
+                    preview.steps_open = false;
                     preview.scenario = scenario;
                     preview.index = 0;
                     preview.image_index = None;
@@ -497,6 +525,7 @@ pub(crate) fn command(
             }
             Action::Model => {}
             Action::Previous | Action::Next => {
+                preview.steps_open = false;
                 preview.playing = false;
                 if preview.help {
                     return Err("Return to the demonstration before stepping frames".into());
@@ -509,6 +538,7 @@ pub(crate) fn command(
                 preview.changed()?;
             }
             Action::Replay => {
+                preview.steps_open = false;
                 preview.index = 0;
                 preview.playing = preview.count() > 1;
                 preview.changed()?;

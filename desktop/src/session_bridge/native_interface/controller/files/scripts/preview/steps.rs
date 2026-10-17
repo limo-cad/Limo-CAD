@@ -1,0 +1,143 @@
+//! Localized navigation over the actual retained frames, including Cut variants.
+use super::super::super::super::chrome::{self, rect};
+use super::*;
+
+fn visible(index: usize, count: usize) -> std::ops::Range<usize> {
+    let start = index.saturating_sub(1).min(count.saturating_sub(3));
+    start..(start + 3).min(count)
+}
+
+fn label(language: &str, caption: &str) -> String {
+    let key = match caption {
+        "sketch.plane" => "step.plane",
+        "sketch.outline" => "step.draw",
+        "sketch.close" => "step.close",
+        "sketch.dimension" => "step.dimension",
+        "sketch.finish" => "step.finish",
+        "extrude.profile" => "step.profile",
+        "extrude.start" => "step.extrude",
+        "extrude.distance" => "step.depth",
+        "extrude.width" => return "40 mm".into(),
+        "cut.profile" => "step.profile",
+        "cut.operation" => "step.cut",
+        "cut.through" => "step.through",
+        "cut.measured.depth" => return "4 mm".into(),
+        "fillet.body" => "step.body",
+        "fillet.edges" => "step.edges",
+        "fillet.radius" => "step.radius",
+        _ => "step.apply",
+    };
+    limo_cad_mcp::lessons::text(language, key).into()
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn paint(
+    world: &mut World,
+    camera: Entity,
+    widgets: &mut chrome::Widgets,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    expanded: bool,
+) -> Result<(), String> {
+    let language = lesson::language(world);
+    let state = &world.resource::<Files>().script.preview;
+    let Some(retained) = &state.retained else {
+        return Ok(());
+    };
+    let count = state.count();
+    let current = state.index;
+    let range = if expanded {
+        0..count
+    } else {
+        visible(current, count)
+    };
+    let frames: Vec<_> = range
+        .map(|index| {
+            let actual = if state.cut_choices() {
+                state.scenario.frame(index)
+            } else {
+                index
+            };
+            let caption = &retained.descriptor.captions[actual];
+            (
+                index,
+                label(language, caption),
+                limo_cad_mcp::lessons::caption(language, caption),
+            )
+        })
+        .collect();
+    let cell = if expanded { width } else { (width - 24.) / 3. };
+    let row = if expanded {
+        (height / count.max(1) as f32).min(32.)
+    } else {
+        28.
+    };
+    for (position, (index, title, caption)) in frames.into_iter().enumerate() {
+        let left = x + if expanded {
+            0.
+        } else {
+            position as f32 * (cell + 12.)
+        };
+        let top = y + if expanded { position as f32 * row } else { 0. };
+        let text = if expanded {
+            format!("{}. {title}", index + 1)
+        } else {
+            title
+        };
+        let mut control =
+            InterfaceControl::button("document/scripts", format!("{text}: {caption}"));
+        control.selected = Some(index == current);
+        let entity = widgets.button(
+            world,
+            camera,
+            &format!("lesson-step-{index}"),
+            control,
+            Some(&text),
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Step(index))),
+            rect(left, top, cell, row),
+            None,
+            62,
+        )?;
+        if expanded && index == current {
+            feature::focus_control(world, entity);
+        }
+        if !expanded && position > 0 {
+            widgets.text(
+                world,
+                camera,
+                &format!("lesson-step-separator-{position}"),
+                rect(left - 12., top + 4., 12., 20.),
+                "›",
+                12.,
+                62,
+            );
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn native_script_preview_step_window_keeps_neighbors_and_endpoints() {
+        assert_eq!(visible(0, 5), 0..3);
+        assert_eq!(visible(2, 5), 1..4);
+        assert_eq!(visible(4, 5), 2..5);
+        assert_eq!(visible(0, 1), 0..1);
+        assert_eq!(visible(0, 0), 0..0);
+        for locale in limo_cad_mcp::lessons::LOCALES {
+            for key in [
+                "sketch.outline",
+                "sketch.close",
+                "sketch.finish",
+                "cut.through",
+                "cut.measured.depth",
+            ] {
+                assert!(!label(locale, key).is_empty());
+            }
+        }
+    }
+}

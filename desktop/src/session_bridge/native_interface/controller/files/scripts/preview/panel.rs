@@ -23,8 +23,10 @@ pub(crate) fn paint(
     let image_width = w - 24.;
     let choices = world.resource::<Files>().script.preview.lesson == Some(lesson::Id::Cut);
     let choice_height = if choices { 36. } else { 0. };
-    let image_height =
-        ((image_width * 0.72).min((height - y - 200.).max(64.)) - choice_height).max(64.);
+    let trail_height = if demo.is_some() { 32. } else { 0. };
+    let image_height = ((image_width * 0.72).min((height - y - 200. - trail_height).max(64.))
+        - choice_height)
+        .max(64.);
     let scale = world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .iter(world)
@@ -79,59 +81,101 @@ pub(crate) fn paint(
         camera,
         widgets,
         "demo",
-        image_height + choice_height + 184.,
+        image_height + choice_height + trail_height + 184.,
         demo.map_or(t("ui.showMe"), |d| d.title(language)),
         theme,
     )?;
-    let mut model = InterfaceControl::button(
-        "document/scripts",
-        format!(
-            "{}: {}{caption}",
-            t("ui.modelHint"),
-            if current { "" } else { t("ui.preparing") }
-        ),
-    );
-    model.owned_keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home"]
-        .map(limo_cad_interface::KeyChord::plain)
-        .into();
-    let entity = widgets.button(
-        world,
-        camera,
-        "scripts-preview-model",
-        model,
-        Some(if image.is_some() { "" } else { t("ui.loading") }),
-        NativeCommand::File(FileCommand::ScriptPreview(Action::Model)),
-        Node {
-            border: UiRect::ZERO,
-            border_radius: BorderRadius::all(px(8.)),
-            ..rect(x + 12., y + 44., image_width, image_height)
-        },
-        None,
-        61,
-    )?;
-    feature::focus_control(world, entity);
-    if let Some(image) = image {
-        if world
-            .get::<ImageNode>(entity)
-            .is_none_or(|node| node.image != image)
-        {
-            world.entity_mut(entity).insert(ImageNode::new(image));
+    let expanded = world.resource::<Files>().script.preview.steps_open;
+    if expanded {
+        steps::paint(
+            world,
+            camera,
+            widgets,
+            x + 12.,
+            y + 44.,
+            image_width,
+            image_height,
+            true,
+        )?;
+    } else {
+        let mut model = InterfaceControl::button(
+            "document/scripts",
+            format!(
+                "{}: {}{caption}",
+                t("ui.modelHint"),
+                if current { "" } else { t("ui.preparing") }
+            ),
+        );
+        model.owned_keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home"]
+            .map(limo_cad_interface::KeyChord::plain)
+            .into();
+        let entity = widgets.button(
+            world,
+            camera,
+            "scripts-preview-model",
+            model,
+            Some(if image.is_some() { "" } else { t("ui.loading") }),
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Model)),
+            Node {
+                border: UiRect::ZERO,
+                border_radius: BorderRadius::all(px(8.)),
+                ..rect(x + 12., y + 44., image_width, image_height)
+            },
+            None,
+            61,
+        )?;
+        feature::focus_control(world, entity);
+        if let Some(image) = image {
+            if world
+                .get::<ImageNode>(entity)
+                .is_none_or(|node| node.image != image)
+            {
+                world.entity_mut(entity).insert(ImageNode::new(image));
+            }
+        } else if world.get::<ImageNode>(entity).is_some() {
+            world.entity_mut(entity).remove::<ImageNode>();
         }
-    } else if world.get::<ImageNode>(entity).is_some() {
-        world.entity_mut(entity).remove::<ImageNode>();
     }
-    let top = y + 54. + image_height;
-    // One instruction, with a quiet position indicator instead of four competing headings.
-    widgets.colored_text(
-        world,
-        camera,
-        "scripts-preview-position",
-        rect(x + 16., top, 64., 16.),
-        &format!("{} / {}", index + 1, count.max(1)),
-        11.,
-        61,
-        theme.mute,
-    );
+    let trail_top = y + 50. + image_height;
+    if demo.is_some() && !expanded {
+        steps::paint(
+            world,
+            camera,
+            widgets,
+            x + 12.,
+            trail_top,
+            image_width,
+            28.,
+            false,
+        )?;
+    }
+    let top = y + 54. + image_height + trail_height;
+    // Keep the full sequence one action away from the local step trail.
+    if demo.is_some() {
+        let label = format!(
+            "{} / {}  {}",
+            index + 1,
+            count.max(1),
+            t(if expanded {
+                "ui.hideSteps"
+            } else {
+                "ui.allSteps"
+            })
+        );
+        let mut control = InterfaceControl::button("document/scripts", &label);
+        control.disabled = !ready;
+        widgets.button(
+            world,
+            camera,
+            "lesson-all-steps",
+            control,
+            Some(&label),
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Steps)),
+            rect(x + 8., top - 4., w - 100., 24.),
+            None,
+            61,
+        )?;
+    }
     if demo.is_some() {
         widgets.button(
             world,

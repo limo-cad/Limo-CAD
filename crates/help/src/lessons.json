@@ -1,5 +1,11 @@
 {
   "en": {
+    "step.through": "Through",
+    "ui.allSteps": "All steps",
+    "ui.hideSteps": "Back to model",
+    "step.draw": "Draw",
+    "step.close": "Close",
+    "step.finish": "Finish",
     "ui.showMe": "Show me",
     "ui.help": "Help",
     "ui.close": "Close example",
@@ -84,6 +90,12 @@
     "fillet.outcome": "Round the corners"
   },
   "zh-CN": {
+    "step.through": "贯穿",
+    "ui.allSteps": "全部步骤",
+    "ui.hideSteps": "返回模型",
+    "step.draw": "绘制",
+    "step.close": "闭合",
+    "step.finish": "完成",
     "ui.showMe": "演示",
     "ui.help": "帮助",
     "ui.close": "关闭示例",
@@ -168,6 +180,12 @@
     "fillet.outcome": "圆化边角"
   },
   "es": {
+    "step.through": "Pasante",
+    "ui.allSteps": "Todos los pasos",
+    "ui.hideSteps": "Volver al modelo",
+    "step.draw": "Dibujar",
+    "step.close": "Cerrar",
+    "step.finish": "Finalizar",
     "ui.showMe": "Ver ejemplo",
     "ui.help": "Ayuda",
     "ui.close": "Cerrar ejemplo",
@@ -252,6 +270,12 @@
     "fillet.outcome": "Redondea las esquinas"
   },
   "de": {
+    "step.through": "Durch",
+    "ui.allSteps": "Alle Schritte",
+    "ui.hideSteps": "Zum Modell",
+    "step.draw": "Zeichnen",
+    "step.close": "Schließen",
+    "step.finish": "Abschließen",
     "ui.showMe": "Beispiel",
     "ui.help": "Hilfe",
     "ui.close": "Beispiel schließen",

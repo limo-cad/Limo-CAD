@@ -64,6 +64,35 @@ fn png() -> Vec<u8> {
 }
 
 #[test]
+fn native_script_preview_step_navigation_pauses_and_rejects_invalid_targets() {
+    let mut world = world();
+    let handle = NativeInterfaceHandle::new(|| {});
+    retained(&mut world);
+    world.resource_mut::<Files>().script.preview.lesson = Some(lesson::Id::Sketch);
+    command(&mut world, &handle, Action::Replay, &ControlInput::Click).unwrap();
+    let revision = world.resource::<Files>().script.preview.revision;
+    command(&mut world, &handle, Action::Steps, &ControlInput::Click).unwrap();
+    let state = &world.resource::<Files>().script.preview;
+    assert!(state.steps_open && !state.playing && state.wake.is_none());
+    assert_eq!(
+        state.revision, revision,
+        "Expanding steps does not invalidate pixels"
+    );
+    assert!(command(&mut world, &handle, Action::Step(3), &ControlInput::Click).is_err());
+    assert_eq!(world.resource::<Files>().script.preview.index, 0);
+    command(&mut world, &handle, Action::Step(2), &ControlInput::Click).unwrap();
+    let state = &world.resource::<Files>().script.preview;
+    assert_eq!(state.index, 2);
+    assert!(!state.steps_open && !state.playing);
+    assert!(state.revision > revision);
+    command(&mut world, &handle, Action::Help, &ControlInput::Click).unwrap();
+    assert!(command(&mut world, &handle, Action::Step(0), &ControlInput::Click).is_err());
+    assert!(command(&mut world, &handle, Action::Steps, &ControlInput::Click).is_err());
+    close(&mut world);
+    assert!(command(&mut world, &handle, Action::Step(0), &ControlInput::Click).is_err());
+}
+
+#[test]
 fn native_script_preview_cut_choices_share_opening_frames_and_fence_stale_results() {
     let mut world = world();
     let handle = NativeInterfaceHandle::new(|| {});

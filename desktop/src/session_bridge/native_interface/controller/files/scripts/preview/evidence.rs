@@ -514,6 +514,37 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         }
         render(app.world_mut(), &handle).unwrap();
     }
+    let jobs_before_steps = app.world().resource::<Files>().script.preview.render_jobs;
+    command(
+        app.world_mut(),
+        &handle,
+        Action::Steps,
+        &ControlInput::Click,
+    )
+    .unwrap();
+    widgets.begin();
+    panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
+    widgets.finish(app.world_mut());
+    assert!(widgets.entity("scripts-preview-model").is_none());
+    for index in 0..durations.len() {
+        assert!(widgets.entity(&format!("lesson-step-{index}")).is_some());
+    }
+    capture(&mut app, &target, &out.join("all-steps.png"));
+    for index in 0..durations.len() {
+        command(
+            app.world_mut(),
+            &handle,
+            Action::Step(index),
+            &ControlInput::Click,
+        )
+        .unwrap();
+        render(app.world_mut(), &handle).unwrap();
+    }
+    assert_eq!(
+        app.world().resource::<Files>().script.preview.render_jobs,
+        jobs_before_steps,
+        "Expanded navigation and warmed jumps reuse the existing frames"
+    );
     command(app.world_mut(), &handle, Action::Help, &ControlInput::Click).unwrap();
     widgets.begin();
     panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
@@ -651,6 +682,29 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             );
         }
         app.world_mut().resource_mut::<Files>().script.preview.index = durations.len() - 1;
+        command(
+            app.world_mut(),
+            &handle,
+            Action::Steps,
+            &ControlInput::Click,
+        )
+        .unwrap();
+        widgets.begin();
+        panel::paint(
+            app.world_mut(),
+            camera,
+            &mut widgets,
+            1200. / 1.75,
+            760. / 1.75,
+            light,
+        )
+        .unwrap();
+        widgets.finish(app.world_mut());
+        capture(
+            &mut app,
+            &target,
+            &out.join(format!("steps-175-{language}.png")),
+        );
         command(app.world_mut(), &handle, Action::Help, &ControlInput::Click).unwrap();
         for _ in 0..3 {
             widgets.begin();
