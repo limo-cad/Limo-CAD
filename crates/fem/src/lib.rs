@@ -2,8 +2,13 @@
 //! No mesher, persisted study, native UI or automatic material suitability claim.
 mod element;
 mod steady;
+mod study;
 mod surface;
 pub use steady::{solve_steady, solve_steady_with_surfaces};
+pub use study::{
+    ThermalMaterial, ThermalSolveCompletion, ThermalSolveJob, ThermalStudy, ThermalStudyInput,
+    ThermalStudyResult, ThermalStudyStatus,
+};
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThermalTet {
     pub nodes: [usize; 4],
@@ -16,7 +21,7 @@ pub struct ThermalMesh {
     pub points_m: Vec<[f64; 3]>,
     pub elements: Vec<ThermalTet>,
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SolveOptions {
     pub max_nodes: usize,
     pub max_elements: usize,

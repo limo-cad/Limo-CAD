@@ -76,3 +76,27 @@ absolute temperature error in an ill-conditioned problem. Scaling, conditioning
 and production-range qualification remain necessary, especially with very weak
 convection or extreme conductivity contrasts. No adaptive accuracy guarantee is
 claimed. Positive coefficients that underflow during boundary assembly reject.
+
+## Owned study and worker lifecycle
+
+`ThermalStudy` owns an immutable `ThermalStudyInput` snapshot: mesh, retained
+shared material records and property selections, loads, boundaries and options.
+`begin_solve` returns a single-use `Send` worker request. The worker runs without
+a live document lock. `finish` adopts only the currently owned attempt; edits,
+cancellation, replacement runs and study destruction retire earlier attempts.
+Foreign or late completions cannot change status or the retained successful result.
+
+Draft inputs can be incomplete. Validation occurs in the solver; failure records
+an error and retains the last successful result with its original input and
+catalog provenance. The host must display both the latest attempt status and
+`result_is_current()` when presenting retained results. Cancellation or a failed
+rerun does not erase valid prior evidence. Exact restoration of the result's
+numerical inputs restores freshness; no-op edits do not cancel active work.
+
+This equality is only numerical-input freshness. The host still must resolve CAD
+references and update or invalidate the mesh when the document changes. The
+model is not serialized, does not implement document Undo/Redo, and has no native
+study panel yet. Hosts must cancel before retiring an owned study and avoid
+copying ownership across documents; dropping it also cancels outstanding work.
+Project persistence, stable topology attachments, meshing and UI/result rendering
+remain required integration work. No new wire or file format is introduced here.
