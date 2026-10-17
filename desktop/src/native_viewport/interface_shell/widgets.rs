@@ -45,6 +45,7 @@ struct WidgetActions(Vec<NativeInterfaceAction>);
 pub(crate) struct WidgetLayout;
 
 pub(super) fn install(app: &mut App) {
+    super::dialogs::install(app);
     if !app.is_plugin_added::<bevy::input::InputPlugin>() {
         app.add_plugins(bevy::input::InputPlugin);
     }

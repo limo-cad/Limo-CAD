@@ -131,6 +131,24 @@ qualification. The feature remains opt-in and the PR remains draft.
 
 See [rework evidence](qualification/bevy-widgets-standard-input-20261017.json).
 
+## Movable and resizable dialogs
+
+With `experimental-ui-widgets`, Settings and the shared solid-feature panels
+(Extrude, Revolve, Sweep, Loft, Fillet, Chamfer, Hole, patterns and the other
+forms using that panel) can be moved by their title bar and resized from the
+bottom-right corner. Position and size last for the open dialog; reopening
+starts from its usual placement. The dialog stays inside the client window,
+including after changing interface scale or window size.
+
+Bevy's `Dialog`, `DialogDragHandle` and `DialogPlugin` recognize title dragging
+and retain pointer ownership. One shared adapter adds a resize handle using
+Bevy `PointerDrag`, enforces readable minimum sizes, and keeps CAD's existing
+modal layer order. Existing panel painters use the resulting size, preserving
+scrolling and Apply/Cancel. Canvas dimension fields remain anchored to geometry.
+There is no separate pointer-event recognizer, docking system or saved window
+manager. Other bespoke panels and native operating-system file choosers retain
+their existing behavior.
+
 ## Stable dependency and window-host patch
 
 The desktop pins `bevy`, `bevy_ecs`, `bevy_gizmos` and `bevy_reflect` to

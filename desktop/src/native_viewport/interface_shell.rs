@@ -21,6 +21,8 @@ use limo_cad_interface::{
 
 use super::ui::{ViewportUiAssets, ViewportUiTheme};
 
+#[cfg(feature = "experimental-ui-widgets")]
+pub(crate) mod dialogs;
 pub(crate) mod fields;
 mod geometry;
 mod ime_diagnostics;

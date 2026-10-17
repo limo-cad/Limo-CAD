@@ -18,8 +18,26 @@ pub(super) fn paint(
     let theme = ui::theme(world);
     let w = 480_f32.min((width - 32.).max(240.));
     let h = 700_f32.min((height - 48.).max(220.));
+    #[cfg(feature = "experimental-ui-widgets")]
+    let (w, h) = {
+        let size = interface_shell::dialogs::size(
+            world,
+            settings.widgets.entity("settings-card"),
+            Vec2::new(w, h),
+        );
+        (size.x, size.y)
+    };
     let x = (width - w) * 0.5;
     let y = (height - h) * 0.5;
+    #[cfg(feature = "experimental-ui-widgets")]
+    let (x, y) = {
+        let origin = interface_shell::dialogs::origin(
+            world,
+            settings.widgets.entity("settings-card"),
+            Vec2::new(x, y),
+        );
+        (origin.x, origin.y)
+    };
     settings.widgets.backdrop(
         (world, camera),
         "settings-shade",
@@ -41,6 +59,10 @@ pub(super) fn paint(
         6.,
         72,
     );
+    #[cfg(feature = "experimental-ui-widgets")]
+    let origin = Vec2::new(x, y);
+    #[cfg(feature = "experimental-ui-widgets")]
+    let (x, y) = (0., 0.);
     settings.widgets.panel(
         world,
         camera,
@@ -76,7 +98,19 @@ pub(super) fn paint(
         width: (w - 2.) as f64,
         height: (h - if settings.error.is_some() { 141. } else { 85. }) as f64,
     };
-    settings.content = Some(body);
+    #[cfg(feature = "experimental-ui-widgets")]
+    let screen_body = interface_shell::dialogs::area(
+        world,
+        settings.widgets.entity("settings-card").unwrap(),
+        InterfaceRect {
+            x: body.x + f64::from(origin.x),
+            y: body.y + f64::from(origin.y),
+            ..body
+        },
+    );
+    #[cfg(not(feature = "experimental-ui-widgets"))]
+    let screen_body = body;
+    settings.content = Some(screen_body);
     let content_height = settings
         .widgets
         .entity("settings-content")
@@ -555,6 +589,27 @@ pub(super) fn paint(
             78,
         )?;
         interface_shell::center_caption(world, entity);
+    }
+    #[cfg(feature = "experimental-ui-widgets")]
+    {
+        let root = settings.widgets.entity("settings-card").unwrap();
+        let header = settings.widgets.entity("settings-header").unwrap();
+        for key in [
+            "settings-header",
+            "settings-title",
+            "settings-close",
+            "settings-clip",
+            "settings-error-footer",
+            "settings-error",
+            "settings-retry",
+            "settings-scroll-footer",
+            "settings-scroll-hint",
+            "settings-scroll-up",
+            "settings-scroll-down",
+        ] {
+            settings.widgets.parent(world, key, root);
+        }
+        interface_shell::dialogs::attach(world, root, header, Vec2::new(400., 260.));
     }
     Ok(())
 }
