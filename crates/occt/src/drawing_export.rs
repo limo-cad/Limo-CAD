@@ -607,9 +607,8 @@ pub fn export_sheet_with_units(
             draw_annotation(&mut paper, sheet, &projections, annotation, units)?;
         }
     }
-    if !sheet.bom.is_empty() {
+    if let Some(origin) = sheet.bom_table_position {
         let start = paper.items.len();
-        let origin = sheet.bom_table_position.unwrap_or([14., 18.]);
         paper.text(
             origin,
             "ITEM   PART / DESCRIPTION   QTY   MATERIAL / PROCESS",
