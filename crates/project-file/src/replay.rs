@@ -27,6 +27,31 @@ fn serialize_bytes<S: serde::Serializer>(value: &&[u8], serializer: S) -> Result
 }
 
 impl ReplayPackage {
+    /// Read within the package-specific bound, then validate the complete CBOR
+    /// envelope. Reading does not execute scripts or change a live document.
+    pub fn read_file(path: &std::path::Path) -> Result<Self, ProjectFileError> {
+        let bytes = crate::files::read_bounded(path, MAX_REPLAY_PACKAGE_BYTES as u64)?;
+        Self::decode_cbor(&bytes)
+    }
+    /// Encode fully before touching the destination, then publish atomically.
+    /// Callers own destination selection and replacement authorization.
+    pub fn write_file_atomic(&self, path: &std::path::Path) -> Result<(), ProjectFileError> {
+        crate::files::write_bounded_mode(
+            path,
+            &self.encode_cbor()?,
+            MAX_REPLAY_PACKAGE_BYTES as u64,
+            true,
+        )
+    }
+    /// Create a completed package without overwriting any existing destination.
+    pub fn write_file_new(&self, path: &std::path::Path) -> Result<(), ProjectFileError> {
+        crate::files::write_bounded_mode(
+            path,
+            &self.encode_cbor()?,
+            MAX_REPLAY_PACKAGE_BYTES as u64,
+            false,
+        )
+    }
     pub fn new(script: String, project: Vec<u8>) -> Result<Self, ProjectFileError> {
         check_lengths(script.len(), project.len())?;
         Ok(Self { script, project })
