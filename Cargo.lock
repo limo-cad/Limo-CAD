@@ -699,6 +699,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "limo-cad-fem"
+version = "0.3.0-rc.1"
+dependencies = [
+ "limo-cad-core",
+]
+
+[[package]]
 name = "limo-cad-help"
 version = "0.3.0-rc.1"
 dependencies = [
