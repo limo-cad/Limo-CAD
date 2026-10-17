@@ -172,6 +172,8 @@ mod section_snapshot;
 pub use section_snapshot::{FinishedSectionReview, PreparedSectionReview};
 #[path = "retention.rs"]
 mod retention;
+#[path = "project_snapshot.rs"]
+mod project_snapshot;
 use retention::NativeProject;
 
 #[cfg(test)]
