@@ -569,7 +569,11 @@ fn retry_is_reachable_by_the_shell_pointer_above_the_retained_error_footer() {
     };
     let handle = NativeInterfaceHandle::new(|| {});
     let mut app = native_viewport::interface_scene_fixture();
-    app.add_plugins((bevy::text::TextPlugin, bevy::ui::UiPlugin))
+    app.add_plugins((
+        bevy::time::TimePlugin,
+        bevy::text::TextPlugin,
+        bevy::ui::UiPlugin,
+    ))
         .init_resource::<Assets<Image>>()
         .init_resource::<Assets<bevy::image::TextureAtlasLayout>>()
         .init_resource::<bevy::input_focus::InputFocus>()
