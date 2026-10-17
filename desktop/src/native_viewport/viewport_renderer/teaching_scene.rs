@@ -1,0 +1,350 @@
+//! Isolated teaching geometry in the existing CAD renderer. No live-scene resources are changed.
+use super::*;
+use crate::native_viewport::script_preview::{PreviewDocument, PreviewFinish, RenderRequest};
+
+const LAYER: usize = 2;
+#[derive(Component)]
+struct TeachingOwned;
+#[derive(Component)]
+pub(super) struct TeachingCamera;
+#[derive(Default, Reflect, GizmoConfigGroup)]
+struct TeachingEdges;
+#[derive(Default, Reflect, GizmoConfigGroup)]
+struct TeachingSelection;
+
+#[derive(Resource, Default)]
+struct Scene {
+    active: bool,
+    key: Option<(String, usize)>,
+    palette: Option<ViewportPalette>,
+    geometry: Vec<Entity>,
+    fixtures: Vec<Entity>,
+    meshes: Vec<Handle<Mesh>>,
+    materials: Vec<Handle<StandardMaterial>>,
+    solid: Option<Arc<SolidSceneDto>>,
+    profile: Option<limo_cad_sketch::SketchDto>,
+    selected: Vec<u64>,
+    camera: Option<ViewportCamera>,
+    viewport: Option<ViewportSizeResource>,
+}
+
+pub(super) fn install(app: &mut App) {
+    app.init_resource::<Scene>()
+        .init_gizmo_group::<TeachingEdges>()
+        .init_gizmo_group::<TeachingSelection>()
+        .add_systems(Update, draw);
+    let mut configs = app.world_mut().resource_mut::<GizmoConfigStore>();
+    let edges = configs.config_mut::<TeachingEdges>().0;
+    edges.render_layers = RenderLayers::layer(LAYER);
+    edges.line.width = 1.5;
+    edges.depth_bias = 0.0;
+    let selected = configs.config_mut::<TeachingSelection>().0;
+    selected.render_layers = RenderLayers::layer(LAYER);
+    selected.line.width = 2.0;
+    selected.depth_bias = DIRECT_PICK_FEEDBACK_DEPTH_BIAS;
+}
+
+pub(super) fn show(
+    world: &mut World,
+    document: &PreviewDocument,
+    request: &RenderRequest,
+    target: Handle<Image>,
+) -> Result<(), String> {
+    let frame = document
+        .frames
+        .get(request.frame_index)
+        .ok_or("Unknown teaching frame")?;
+    if !(64..=640).contains(&request.width) || !(64..=400).contains(&request.height) {
+        return Err("Teaching target exceeds its size budget".into());
+    }
+    let camera = document.camera(request);
+    let palette = request
+        .palette
+        .unwrap_or(world.resource::<PaletteResource>().0);
+    let key = (request.preview_id.clone(), request.frame_index);
+    let rebuild = {
+        let scene = world.resource::<Scene>();
+        scene.key.as_ref() != Some(&key) || scene.palette != Some(palette)
+    };
+    if rebuild {
+        clear_geometry(world);
+        let mut entities = Vec::new();
+        let mut mesh_handles = Vec::new();
+        let mut material_handles = Vec::new();
+        for body in &frame.scene.bodies {
+            let Some(mesh) = body_mesh(body) else {
+                continue;
+            };
+            let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
+            let material = world
+                .resource_mut::<Assets<StandardMaterial>>()
+                .add(StandardMaterial {
+                    base_color: if matches!(frame.finish, Some(PreviewFinish::SatinAluminum)) {
+                        Color::srgb(0.75, 0.78, 0.79)
+                    } else {
+                        rgb(palette.body)
+                    },
+                    metallic: if frame.finish.is_some() { 0.55 } else { 0.0 },
+                    perceptual_roughness: if frame.finish.is_some() { 0.34 } else { 0.86 },
+                    cull_mode: None,
+                    ..default()
+                });
+            entities.push(
+                world
+                    .spawn((
+                        TeachingOwned,
+                        Mesh3d(mesh.clone()),
+                        MeshMaterial3d(material.clone()),
+                        Transform::default(),
+                        RenderLayers::layer(LAYER),
+                    ))
+                    .id(),
+            );
+            mesh_handles.push(mesh);
+            material_handles.push(material);
+        }
+        let mut scene = world.resource_mut::<Scene>();
+        scene.geometry = entities;
+        scene.meshes = mesh_handles;
+        scene.materials = material_handles;
+        scene.solid = Some(frame.scene.clone());
+        scene.profile = frame.profile.clone();
+        scene.selected = frame.edges.clone();
+        scene.key = Some(key);
+        scene.palette = Some(palette);
+    }
+    // Retain camera/light entity identities across orbit, resize and reopen.
+    let mut fixtures = world.resource::<Scene>().fixtures.clone();
+    if fixtures.is_empty() {
+        fixtures = (0..3).map(|_| world.spawn_empty().id()).collect();
+    }
+    let distance = Vec3::from_array(camera.position).distance(Vec3::from_array(camera.target));
+    world.entity_mut(fixtures[0]).insert((
+        TeachingOwned,
+        TeachingCamera,
+        Camera3d::default(),
+        bevy::light::AmbientLight {
+            brightness: 350.0,
+            ..default()
+        },
+        ClusterConfig::None,
+        VIEWPORT_MSAA,
+        Camera {
+            clear_color: ClearColorConfig::Custom(rgb(palette.background)),
+            ..default()
+        },
+        bevy::camera::RenderTarget::Image(target.into()),
+        Projection::Perspective(PerspectiveProjection {
+            fov: camera.vertical_fov_degrees.to_radians(),
+            near: (distance / 100_000.0).max(0.001),
+            far: (distance * 3.0).max(100.0),
+            ..default()
+        }),
+        camera_transform(camera),
+        RenderLayers::layer(LAYER),
+    ));
+    let (key_light, fill_light) = camera_relative_light_transforms(camera);
+    for (entity, (transform, illuminance)) in fixtures[1..]
+        .iter()
+        .zip([(key_light, 3_200.0), (fill_light, 650.0)])
+    {
+        world.entity_mut(*entity).insert((
+            TeachingOwned,
+            DirectionalLight {
+                illuminance,
+                shadow_maps_enabled: false,
+                ..default()
+            },
+            transform,
+            RenderLayers::layer(LAYER),
+        ));
+    }
+    let mut scene = world.resource_mut::<Scene>();
+    scene.fixtures = fixtures;
+    scene.camera = Some(camera);
+    scene.viewport = Some(ViewportSizeResource {
+        logical_width: request.width as f32,
+        logical_height: request.height as f32,
+    });
+    scene.active = true;
+    Ok(())
+}
+
+pub(super) fn hide(world: &mut World) {
+    world.resource_mut::<Scene>().active = false;
+    for mut camera in world
+        .query_filtered::<&mut Camera, With<TeachingCamera>>()
+        .iter_mut(world)
+    {
+        camera.is_active = false;
+    }
+}
+
+fn clear_geometry(world: &mut World) {
+    let (entities, meshes, materials) = {
+        let mut scene = world.resource_mut::<Scene>();
+        (
+            std::mem::take(&mut scene.geometry),
+            std::mem::take(&mut scene.meshes),
+            std::mem::take(&mut scene.materials),
+        )
+    };
+    for entity in entities {
+        world.despawn(entity);
+    }
+    for mesh in meshes {
+        world.resource_mut::<Assets<Mesh>>().remove(mesh.id());
+    }
+    for material in materials {
+        world
+            .resource_mut::<Assets<StandardMaterial>>()
+            .remove(material.id());
+    }
+}
+
+pub(super) fn release(world: &mut World) {
+    clear_geometry(world);
+    let fixtures = std::mem::take(&mut world.resource_mut::<Scene>().fixtures);
+    for entity in fixtures {
+        world.despawn(entity);
+    }
+    *world.resource_mut::<Scene>() = Scene::default();
+}
+
+fn draw(
+    scene: Res<Scene>,
+    mut edges: Gizmos<TeachingEdges>,
+    mut selected: Gizmos<TeachingSelection>,
+) {
+    keep_gizmo_asset_resident(&mut edges);
+    keep_gizmo_asset_resident(&mut selected);
+    if !scene.active {
+        return;
+    }
+    let (Some(solid), Some(camera), Some(viewport), Some(palette)) =
+        (&scene.solid, scene.camera, scene.viewport, scene.palette)
+    else {
+        return;
+    };
+    let transform = Transform::default();
+    for body in &solid.bodies {
+        let sides = edge_side_faces(body, &transform);
+        for edge in &body.edges {
+            let side = sides.get(edge.key.as_str()).copied().unwrap_or_default();
+            draw_edge_segments(
+                &mut edges,
+                edge,
+                rgba(palette.edge, 0.92),
+                &transform,
+                Some(EdgeLift {
+                    camera,
+                    viewport,
+                    sides: side,
+                    ceiling: MODEL_EDGE_MAX_LIFT_MM,
+                }),
+            );
+            if scene.selected.contains(&edge.id.0) {
+                draw_edge_segments(
+                    &mut selected,
+                    edge,
+                    rgb(palette.edge_selected),
+                    &transform,
+                    None,
+                );
+            }
+        }
+    }
+    if let Some(profile) = &scene.profile {
+        for entity in &profile.entities {
+            draw_sketch_curve_at_offset(
+                &mut selected,
+                &profile.basis,
+                entity,
+                rgb(palette.accent),
+                DIRECT_PICK_FEEDBACK_OFFSET,
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn teaching_scene_show_keeps_live_resources_and_reuses_camera_and_meshes() {
+        let frame = serde_json::from_value(serde_json::json!({
+            "caption":"sample", "scene":{"bodies":[{"id":1,"name":"Stock","feature_id":2,
+            "faces":[],"edges":[],"mesh":{"positions":[0,0,0, 10,0,0, 0,10,0],
+            "normals":[0,0,1,0,0,1,0,0,1],"indices":[0,1,2]}}],"errors":[]}
+        }))
+        .unwrap();
+        let document = PreviewDocument::new(vec![frame]).unwrap();
+        let mut world = World::new();
+        world.init_resource::<Scene>();
+        world.init_resource::<Assets<Mesh>>();
+        world.init_resource::<Assets<StandardMaterial>>();
+        world.init_resource::<PaletteResource>();
+        world.init_resource::<ModelResource>();
+        world.init_resource::<CameraResource>();
+        world.init_resource::<PresentationResource>();
+        let before = (
+            world.resource::<ModelResource>().session_id.clone(),
+            world.resource::<CameraResource>().revision,
+            world.resource_ref::<PresentationResource>().last_changed(),
+            world.resource_ref::<PaletteResource>().last_changed(),
+        );
+        let mut request = RenderRequest {
+            preview_id: "teaching".into(),
+            view_id: "view".into(),
+            revision: 1,
+            frame_index: 0,
+            width: 300,
+            height: 176,
+            yaw: 0.5,
+            pitch: 0.5,
+            palette: None,
+        };
+        show(&mut world, &document, &request, Handle::default()).unwrap();
+        let fixtures = world.resource::<Scene>().fixtures.clone();
+        let meshes = world.resource::<Scene>().meshes.clone();
+        hide(&mut world);
+        request.yaw = 0.8;
+        show(&mut world, &document, &request, Handle::default()).unwrap();
+        assert_eq!(world.resource::<Scene>().fixtures, fixtures);
+        assert_eq!(world.resource::<Scene>().meshes, meshes);
+        assert_eq!(world.resource::<ModelResource>().session_id, before.0);
+        assert_eq!(world.resource::<CameraResource>().revision, before.1);
+        assert_eq!(
+            world.resource_ref::<PresentationResource>().last_changed(),
+            before.2
+        );
+        assert_eq!(
+            world.resource_ref::<PaletteResource>().last_changed(),
+            before.3
+        );
+        release(&mut world);
+        assert!(world.resource::<Assets<Mesh>>().is_empty());
+        assert!(world.resource::<Assets<StandardMaterial>>().is_empty());
+    }
+
+    #[test]
+    fn teaching_scene_release_only_removes_owned_assets_and_entities() {
+        let mut world = World::new();
+        world.init_resource::<Scene>();
+        world.init_resource::<Assets<Mesh>>();
+        world.init_resource::<Assets<StandardMaterial>>();
+        let live = world.spawn((Camera::default(), NativeViewportCamera)).id();
+        let teaching = world
+            .spawn((Camera::default(), TeachingCamera, TeachingOwned))
+            .id();
+        world.resource_mut::<Scene>().fixtures.push(teaching);
+        hide(&mut world);
+        assert!(world.get::<Camera>(live).unwrap().is_active);
+        assert!(!world.get::<Camera>(teaching).unwrap().is_active);
+        release(&mut world);
+        assert!(world.get_entity(live).is_ok());
+        assert!(world.get_entity(teaching).is_err());
+        assert!(!RenderLayers::layer(LAYER).intersects(&RenderLayers::default()));
+        assert!(!RenderLayers::layer(LAYER).intersects(&RenderLayers::layer(1)));
+    }
+}

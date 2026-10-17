@@ -218,6 +218,18 @@ impl ViewportUiTheme {
                     .chain(assets.fallbacks.iter().cloned().map(FontSource::from)),
             );
         }
+        // Name a complete CJK face after the existing UI/symbol faces. Automatic
+        // script fallback can choose a partial face for mixed Latin/Han labels.
+        // Family lookup stays lazy; do not copy large font collections at startup.
+        #[cfg(target_os = "windows")]
+        let cjk = ["Microsoft YaHei UI", "Microsoft YaHei", "SimSun"];
+        #[cfg(target_os = "macos")]
+        let cjk = ["PingFang SC", "Heiti SC", "Songti SC"];
+        #[cfg(target_os = "linux")]
+        let cjk = ["Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Zen Hei"];
+        text.font = FontSource::list(
+            std::iter::once(text.font).chain(cjk.into_iter().map(FontSource::family)),
+        );
         text
     }
 

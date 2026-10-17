@@ -2,6 +2,181 @@ use super::*;
 use crate::session_bridge::native_interface::tests::Fixture;
 
 #[test]
+fn native_script_preview_tabs_after_extrude_in_the_production_ribbon() {
+    for locale in crate::app_preferences::locale::SUPPORTED {
+        assert_eq!(
+            dictionary::translate(locale, "ribbon.solid.fillet"),
+            limo_cad_mcp::lessons::Id::Fillet.title(crate::app_preferences::locale::code(locale)),
+            "The example must use the real localized operation name"
+        );
+    }
+    use crate::session_bridge::native_interface::workspace::DocumentWorkspace;
+    use bevy::ui::{ComputedStackIndex, UiGlobalTransform};
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let services = NativeServices {
+        engine: fixture.engine.clone(),
+        bridge: fixture.bridge.clone(),
+    };
+    let (_, fixture_handle, _, _) = interface_shell::tests::fixture();
+    let handle = NativeInterfaceHandle::new(|| {});
+    handle.present(fixture_handle.frame().unwrap()).unwrap();
+    let mut app = native_viewport::interface_scene_fixture();
+    app.insert_resource(handle.clone());
+    files::initialize(
+        app.world_mut(),
+        Arc::new(Mutex::new(DocumentWorkspace::default())),
+    );
+    app.world_mut().init_resource::<ViewportUiAssets>();
+    app.world_mut().init_resource::<Assets<Image>>();
+    let camera = app.world_mut().spawn(InterfaceCamera).id();
+    let mut originals = Widgets::default();
+    let mut controls = HashMap::new();
+    for name in [
+        "extrude",
+        "revolve",
+        "sweep",
+        "loft",
+        "solid-fillet",
+        "solid-chamfer",
+    ] {
+        let entity = originals
+            .button(
+                app.world_mut(),
+                camera,
+                name,
+                InterfaceControl::button("solid/build", name),
+                None,
+                if name == "solid-fillet" {
+                    NativeCommand::Feature(feature::FeatureCommand::Open {
+                        kind: feature::SolidFormKind::Fillet,
+                        feature_id: None,
+                    })
+                } else {
+                    NativeCommand::ClearSelection
+                },
+                ribbon::node(0., 0., 48.),
+                None,
+                30,
+            )
+            .unwrap();
+        controls.insert(name.to_owned(), entity);
+    }
+    let extrude = controls["extrude"];
+    let mut state = Workbench::default();
+    state.widgets.begin();
+    synchronize(
+        app.world_mut(),
+        camera,
+        &controls,
+        1900.,
+        false,
+        &services,
+        &mut state,
+    )
+    .unwrap();
+    state.widgets.finish(app.world_mut());
+    // Supply only physical layout; controls and ordering come from the real ribbon.
+    fn layout(app: &mut App) {
+        let nodes: Vec<_> = app
+            .world_mut()
+            .query::<(Entity, &Node, &InterfaceControl)>()
+            .iter(app.world())
+            .filter_map(
+                |(entity, node, _)| match (node.left, node.top, node.width, node.height) {
+                    (Val::Px(x), Val::Px(y), Val::Px(w), Val::Px(h)) => Some((entity, x, y, w, h)),
+                    _ => None,
+                },
+            )
+            .collect();
+        for (entity, x, y, w, h) in nodes {
+            app.world_mut().entity_mut(entity).insert((
+                ComputedNode {
+                    size: Vec2::new(w, h),
+                    inverse_scale_factor: 1.,
+                    ..default()
+                },
+                UiGlobalTransform::from_translation(Vec2::new(x + w / 2., y + h / 2.)),
+                ComputedStackIndex(10),
+                InheritedVisibility::VISIBLE,
+            ));
+        }
+        let handle = app.world().resource::<NativeInterfaceHandle>().clone();
+        interface_shell::tests::publish_layout_once(app.world_mut(), handle);
+    }
+    layout(&mut app);
+    let anchor = handle
+        .resolve_retained(limo_cad_interface::ControlKey(extrude.to_bits()))
+        .unwrap();
+    handle.prepare_activation(&anchor).unwrap();
+    handle.focus_next(false).unwrap();
+    assert_eq!(
+        handle.focused_key(),
+        Some(limo_cad_interface::ControlKey(
+            controls["revolve"].to_bits()
+        ))
+    );
+    handle.prepare_activation(&anchor).unwrap();
+    let mut hint = Widgets::default();
+    hint.begin();
+    files::paint_feature_hint(app.world_mut(), camera, Some(extrude), &mut hint, 1900.).unwrap();
+    hint.finish(app.world_mut());
+    let entry = hint.entity("extrude-show-me").unwrap();
+    layout(&mut app);
+    handle.focus_next(false).unwrap();
+    assert_eq!(
+        handle.focused_key(),
+        Some(limo_cad_interface::ControlKey(entry.to_bits()))
+    );
+    hint.begin();
+    files::paint_feature_hint(app.world_mut(), camera, Some(extrude), &mut hint, 1900.).unwrap();
+    hint.finish(app.world_mut());
+    layout(&mut app);
+    handle.focus_next(true).unwrap();
+    assert_eq!(
+        handle.focused_key(),
+        Some(limo_cad_interface::ControlKey(extrude.to_bits()))
+    );
+    handle.focus_next(false).unwrap();
+    handle.focus_next(false).unwrap();
+    assert_eq!(
+        handle.focused_key(),
+        Some(limo_cad_interface::ControlKey(
+            hint.entity("cut-show-me").unwrap().to_bits()
+        ))
+    );
+    handle.focus_next(false).unwrap();
+    assert_eq!(
+        handle.focused_key(),
+        Some(limo_cad_interface::ControlKey(
+            controls["revolve"].to_bits()
+        ))
+    );
+    // Fillet has one focused example in its own real ribbon position.
+    let fillet = controls["solid-fillet"];
+    let fillet_anchor = handle
+        .resolve_retained(limo_cad_interface::ControlKey(fillet.to_bits()))
+        .unwrap();
+    handle.prepare_activation(&fillet_anchor).unwrap();
+    hint.begin();
+    files::paint_feature_hint(app.world_mut(), camera, Some(extrude), &mut hint, 1900.).unwrap();
+    hint.finish(app.world_mut());
+    let entry = hint.entity("fillet-show-me").unwrap();
+    assert!(hint.entity("extrude-show-me").is_none());
+    layout(&mut app);
+    handle.focus_next(false).unwrap();
+    assert_eq!(
+        handle.focused_key(),
+        Some(limo_cad_interface::ControlKey(entry.to_bits()))
+    );
+    handle.focus_next(true).unwrap();
+    assert_eq!(
+        handle.focused_key(),
+        Some(limo_cad_interface::ControlKey(fillet.to_bits()))
+    );
+}
+
+#[test]
 fn catalog_uses_explicit_keys_and_keeps_visible_fallback_for_missing_translations() {
     let entry = json!({"id":"extrude", "labelKey":"ribbon.solid.extrude"});
     assert_eq!(label(Locale::En, &entry), "Extrude");

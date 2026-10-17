@@ -12,6 +12,39 @@ use std::collections::HashSet;
 mod tests {
     use super::*;
     #[test]
+    fn tinted_native_text_retains_ink_without_marking_unchanged_content_dirty() {
+        let mut world = World::new();
+        world.init_resource::<ViewportUiAssets>();
+        let camera = world.spawn_empty().id();
+        let mut widgets = Widgets::default();
+        let bounds = rect(0., 0., 160., 24.);
+        for pass in 0..2 {
+            widgets.begin();
+            widgets.colored_text(
+                &mut world,
+                camera,
+                "note",
+                bounds.clone(),
+                "Drag to turn",
+                11.,
+                60,
+                Color::WHITE,
+            );
+            widgets.finish(&mut world);
+            let entity = widgets.entity("note").unwrap();
+            if pass == 1 {
+                assert!(!world
+                    .entity(entity)
+                    .get_ref::<TextColor>()
+                    .unwrap()
+                    .is_changed());
+                assert!(!world.entity(entity).get_ref::<Text>().unwrap().is_changed());
+                assert!(!world.entity(entity).get_ref::<Node>().unwrap().is_changed());
+            }
+            world.clear_trackers();
+        }
+    }
+    #[test]
     fn range_controls_survive_panel_styling_and_refresh_without_button_labels() {
         let mut world = World::new();
         world.init_resource::<ViewportUiAssets>();
@@ -395,6 +428,22 @@ impl Widgets {
         size: f32,
         z: i32,
     ) {
+        let color = crate::native_viewport::ui::theme(world).ink;
+        self.colored_text(world, camera, key, bounds, value, size, z, color);
+    }
+    /// Retain the requested ink without toggling TextColor on every paint.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn colored_text(
+        &mut self,
+        world: &mut World,
+        camera: Entity,
+        key: &str,
+        bounds: Node,
+        value: &str,
+        size: f32,
+        z: i32,
+        color: Color,
+    ) {
         self.live.insert(key.into());
         let entity = *self.decoration.entry(key.into()).or_insert_with(|| {
             let assets = world.resource::<ViewportUiAssets>().clone();
@@ -404,16 +453,15 @@ impl Widgets {
                     UiTargetCamera(camera),
                     Text::default(),
                     theme.text(&assets, size, FontWeight::NORMAL),
-                    TextColor(theme.ink),
+                    TextColor(color),
                 ))
                 .id()
         });
         if world.get::<Text>(entity).is_none_or(|text| text.0 != value) {
             world.entity_mut(entity).insert(Text::new(value));
         }
-        let ink = crate::native_viewport::ui::theme(world).ink;
-        if world.get::<TextColor>(entity) != Some(&TextColor(ink)) {
-            world.entity_mut(entity).insert(TextColor(ink));
+        if world.get::<TextColor>(entity) != Some(&TextColor(color)) {
+            world.entity_mut(entity).insert(TextColor(color));
         }
         if world.get::<Node>(entity) != Some(&bounds) {
             world.entity_mut(entity).insert(bounds);

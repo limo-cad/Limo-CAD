@@ -698,6 +698,7 @@ pub(super) fn cad_render_plugin() -> RenderPlugin {
 
 /// The application viewport and immutable script previews run these exact systems
 /// in separate worlds. A preview never replaces the live model or camera.
+#[cfg(any(test, feature = "dev-ui-lab"))]
 pub(super) fn install_cad_scene(app: &mut bevy::app::App) {
     install_cad_renderer(app, true);
 }

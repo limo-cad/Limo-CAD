@@ -29,6 +29,7 @@ fn frames() -> Vec<Frame> {
         .map(|index| Frame {
             caption: format!("Frame {index}"),
             scene: serde_json::from_value(json!({"bodies":[],"errors":[]})).unwrap(),
+            ..default()
         })
         .collect()
 }
@@ -46,9 +47,9 @@ fn retained(world: &mut World) -> (String, String, Arc<PreviewService>) {
     preview.retained = Some(retained);
     result
 }
-fn png() -> Vec<u8> {
+fn image() -> images::FrameImage {
     use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-    crate::native_viewport::screenshot::png_bytes(&Image::new_fill(
+    images::FrameImage::Fixture(Image::new_fill(
         Extent3d {
             width: 2,
             height: 2,
@@ -59,7 +60,411 @@ fn png() -> Vec<u8> {
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::MAIN_WORLD,
     ))
-    .unwrap()
+}
+
+#[test]
+fn native_script_preview_step_navigation_pauses_and_rejects_invalid_targets() {
+    let mut world = world();
+    let handle = NativeInterfaceHandle::new(|| {});
+    retained(&mut world);
+    world.resource_mut::<Files>().script.preview.lesson = Some(lesson::Id::Sketch);
+    command(&mut world, &handle, Action::Replay, &ControlInput::Click).unwrap();
+    let revision = world.resource::<Files>().script.preview.revision;
+    command(&mut world, &handle, Action::Steps, &ControlInput::Click).unwrap();
+    let state = &world.resource::<Files>().script.preview;
+    assert!(state.steps_open && !state.playing && state.wake.is_none());
+    assert_eq!(
+        state.revision, revision,
+        "Expanding steps does not invalidate pixels"
+    );
+    command(
+        &mut world,
+        &handle,
+        Action::StepsPage(true),
+        &ControlInput::Click,
+    )
+    .unwrap();
+    assert_eq!(world.resource::<Files>().script.preview.steps_page, Some(1));
+    assert_eq!(world.resource::<Files>().script.preview.revision, revision);
+    command(
+        &mut world,
+        &handle,
+        Action::StepsPage(false),
+        &ControlInput::Click,
+    )
+    .unwrap();
+    assert_eq!(world.resource::<Files>().script.preview.steps_page, Some(0));
+    command(&mut world, &handle, Action::Steps, &ControlInput::Click).unwrap();
+    assert!(world.resource::<Files>().script.preview.steps_return_focus);
+    assert!(command(
+        &mut world,
+        &handle,
+        Action::StepsPage(true),
+        &ControlInput::Click
+    )
+    .is_err());
+    command(&mut world, &handle, Action::Steps, &ControlInput::Click).unwrap();
+    assert!(command(&mut world, &handle, Action::Step(3), &ControlInput::Click).is_err());
+    assert_eq!(world.resource::<Files>().script.preview.index, 0);
+    command(&mut world, &handle, Action::Step(2), &ControlInput::Click).unwrap();
+    let state = &world.resource::<Files>().script.preview;
+    assert_eq!(state.index, 2);
+    assert!(!state.steps_open && !state.playing);
+    assert!(state.revision > revision);
+    command(&mut world, &handle, Action::Help, &ControlInput::Click).unwrap();
+    assert!(command(&mut world, &handle, Action::Step(0), &ControlInput::Click).is_err());
+    assert!(command(&mut world, &handle, Action::Steps, &ControlInput::Click).is_err());
+    close(&mut world);
+    assert!(command(&mut world, &handle, Action::Step(0), &ControlInput::Click).is_err());
+}
+
+#[test]
+fn native_script_preview_cut_choices_share_opening_frames_and_fence_stale_results() {
+    let mut world = world();
+    let handle = NativeInterfaceHandle::new(|| {});
+    retained(&mut world);
+    {
+        let state = &mut world.resource_mut::<Files>().script.preview;
+        let mut choices = frames();
+        choices.extend(frames());
+        state.retained = Some(Retained::new(state.service.clone(), choices).unwrap());
+        state.lesson = Some(lesson::Id::Cut);
+    }
+    let mut through_keys = vec![];
+    for scenario in lesson::CutScenario::ALL {
+        command(
+            &mut world,
+            &handle,
+            Action::Scenario(scenario),
+            &ControlInput::Click,
+        )
+        .unwrap();
+        assert_eq!(world.resource::<Files>().script.preview.count(), 4);
+        for index in 0..4 {
+            let (view, revision, key) = {
+                let state = &mut world.resource_mut::<Files>().script.preview;
+                state.index = index;
+                state.changed().unwrap();
+                (
+                    state.retained.as_ref().unwrap().view.clone(),
+                    state.revision,
+                    images::Key::current(state),
+                )
+            };
+            if scenario == lesson::CutScenario::ThroughAll {
+                through_keys.push(key);
+            } else {
+                assert_eq!(key == through_keys[index], index < 2);
+            }
+            publish(
+                &mut world,
+                Rendered {
+                    view,
+                    revision,
+                    image: image(),
+                },
+            )
+            .unwrap();
+        }
+    }
+    assert_eq!(
+        world
+            .resource::<Files>()
+            .script
+            .preview
+            .images
+            .footprint()
+            .0,
+        2
+    );
+    let (view, revision) = {
+        let state = &world.resource::<Files>().script.preview;
+        (
+            state.retained.as_ref().unwrap().view.clone(),
+            state.revision,
+        )
+    };
+    command(
+        &mut world,
+        &handle,
+        Action::Scenario(lesson::CutScenario::ThroughAll),
+        &ControlInput::Click,
+    )
+    .unwrap();
+    publish(
+        &mut world,
+        Rendered {
+            view,
+            revision,
+            image: image(),
+        },
+    )
+    .unwrap();
+    assert!(world
+        .resource::<Files>()
+        .script
+        .preview
+        .image_index
+        .is_none());
+    for _ in 0..20 {
+        for scenario in lesson::CutScenario::ALL {
+            command(
+                &mut world,
+                &handle,
+                Action::Scenario(scenario),
+                &ControlInput::Click,
+            )
+            .unwrap();
+            let revision = world.resource::<Files>().script.preview.revision;
+            command(
+                &mut world,
+                &handle,
+                Action::Scenario(scenario),
+                &ControlInput::Click,
+            )
+            .unwrap();
+            assert_eq!(world.resource::<Files>().script.preview.revision, revision);
+            command(&mut world, &handle, Action::Help, &ControlInput::Click).unwrap();
+            assert!(command(
+                &mut world,
+                &handle,
+                Action::Scenario(scenario),
+                &ControlInput::Click
+            )
+            .is_err());
+            command(&mut world, &handle, Action::Demo, &ControlInput::Click).unwrap();
+            assert_eq!(world.resource::<Files>().script.preview.scenario, scenario);
+            command(&mut world, &handle, Action::Replay, &ControlInput::Click).unwrap();
+            for index in 0..4 {
+                if index > 0 {
+                    command(&mut world, &handle, Action::Next, &ControlInput::Click).unwrap();
+                }
+            }
+        }
+    }
+    let state = &world.resource::<Files>().script.preview;
+    assert_eq!(state.render_jobs, 0);
+    assert!(state.build.is_none());
+    close(&mut world);
+    assert!(command(
+        &mut world,
+        &handle,
+        Action::Scenario(lesson::CutScenario::ThroughAll),
+        &ControlInput::Click
+    )
+    .is_err());
+}
+
+#[test]
+fn native_script_preview_cached_frames_skip_gpu_work_and_fence_late_errors() {
+    let mut world = world();
+    let (view, _, _) = retained(&mut world);
+    let handle = NativeInterfaceHandle::new(|| {});
+    let revision = world.resource::<Files>().script.preview.revision;
+    publish(
+        &mut world,
+        Rendered {
+            view,
+            revision,
+            image: image(),
+        },
+    )
+    .unwrap();
+    let original = world.resource::<Files>().script.preview.image.clone();
+    let (send, receive) = mpsc::channel();
+    {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.render = Some(InFlight::Fixture(Mutex::new(receive)));
+        preview.render_revision = revision;
+        preview.changed().unwrap();
+    }
+    render(&mut world, &handle).unwrap();
+    assert_eq!(world.resource::<Files>().script.preview.image, original);
+    assert_eq!(world.resource::<Files>().script.preview.render_jobs, 0);
+    send.send(Err("retired render failure".into())).unwrap();
+    poll(&mut world);
+    let preview = &mut world.resource_mut::<Files>().script.preview;
+    assert!(preview.error.is_none());
+    assert_eq!(preview.rendered, preview.revision);
+    preview.turn(HOME.0 + 0.1, HOME.1).unwrap();
+    assert!(preview.images.get(images::Key::current(preview)).is_none());
+    preview.turn(HOME.0, HOME.1).unwrap();
+    preview.size[0] += 1;
+    assert!(preview.images.get(images::Key::current(preview)).is_none());
+    preview.size[0] -= 1;
+    preview.palette.body[0] += 0.05;
+    assert!(preview.images.get(images::Key::current(preview)).is_none());
+    close(&mut world);
+    assert!(world.resource::<Assets<Image>>().is_empty());
+    assert_eq!(
+        world.resource::<Files>().script.preview.images.footprint(),
+        (0, 0)
+    );
+}
+
+#[test]
+fn native_script_preview_closed_and_paused_poll_do_not_mutate_or_wake() {
+    use std::sync::atomic::AtomicUsize;
+    let mut world = world();
+    let wakes = Arc::new(AtomicUsize::new(0));
+    let counted = wakes.clone();
+    world.insert_resource(NativeInterfaceHandle::new(move || {
+        counted.fetch_add(1, Ordering::Relaxed);
+    }));
+    for open in [false, true] {
+        {
+            let preview = &mut world.resource_mut::<Files>().script.preview;
+            preview.open = open;
+            preview.rendered = preview.revision;
+        }
+        world.clear_trackers();
+        for _ in 0..10_000 {
+            poll(&mut world);
+        }
+        assert!(!world.get_resource_ref::<Files>().unwrap().is_changed());
+        assert_eq!(wakes.load(Ordering::Relaxed), 0);
+        assert_eq!(world.resource::<Files>().script.preview.render_jobs, 0);
+    }
+}
+
+#[test]
+fn native_script_preview_high_dpi_layout_respects_the_bounded_renderer() {
+    let mut world = world();
+    world.init_resource::<ViewportUiAssets>();
+    let camera = world.spawn_empty().id();
+    let mut widgets = super::super::super::super::chrome::Widgets::default();
+    let theme = crate::native_viewport::ui::theme(&world);
+    for scale in [1., 2., 3.5] {
+        world.insert_resource(bevy::ui::UiScale(scale));
+        widgets.begin();
+        panel::paint(&mut world, camera, &mut widgets, 432., 600., theme).unwrap();
+        widgets.finish(&mut world);
+        let size = world.resource::<Files>().script.preview.size;
+        assert!((64..=MAX_RENDER_SIZE[0]).contains(&size[0]));
+        assert!((64..=MAX_RENDER_SIZE[1]).contains(&size[1]));
+    }
+}
+
+#[test]
+fn native_script_preview_all_connected_stages_retain_independent_profiles() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let source = &catalog::examples()
+        .iter()
+        .find(|example| example.id == lesson::RECIPE)
+        .unwrap()
+        .source;
+    for id in lesson::ALL {
+        let frames = prepare_lesson(source, Some(id)).unwrap();
+        assert_eq!(
+            frames.len(),
+            match id {
+                lesson::Id::Cut => 6,
+                lesson::Id::Fillet => 4,
+                _ => 5,
+            }
+        );
+        for frame in &frames {
+            if let Some(profile) = &frame.profile {
+                assert!(
+                    profile.projected_edges.is_empty() && profile.reference_midpoints.is_empty()
+                );
+            }
+        }
+        let retained = Retained::new(Arc::new(PreviewService::default()), frames).unwrap();
+        assert!(!retained.descriptor.captions.is_empty());
+    }
+}
+
+#[test]
+fn native_script_preview_help_entry_is_localized_dormant_and_restores_the_draft() {
+    let mut world = world();
+    world.init_resource::<ViewportUiAssets>();
+    world.resource_mut::<Files>().scripts = false;
+    world.resource_mut::<Files>().script.editor_open = true;
+    let handle = NativeInterfaceHandle::new(|| {});
+    command(&mut world, &handle, Action::Index, &ControlInput::Click).unwrap();
+    let camera = world.spawn_empty().id();
+    let mut widgets = super::super::super::super::chrome::Widgets::default();
+    let theme = crate::native_viewport::ui::theme(&world);
+    for locale in crate::app_preferences::locale::SUPPORTED {
+        crate::native_viewport::localization::set_locale(&mut world, locale);
+        widgets.begin();
+        panel::paint(&mut world, camera, &mut widgets, 700., 440., theme).unwrap();
+        widgets.finish(&mut world);
+        for id in lesson::ALL {
+            assert!(widgets.entity(&format!("help-{}", id.key())).is_some());
+        }
+        for id in lesson::ALL {
+            command(&mut world, &handle, Action::Read(id), &ControlInput::Click).unwrap();
+            widgets.begin();
+            panel::paint(&mut world, camera, &mut widgets, 700., 440., theme).unwrap();
+            widgets.finish(&mut world);
+            let text = widgets.entity("extrude-help-text").unwrap();
+            assert_eq!(
+                world.get::<Text>(text).unwrap().0,
+                feature::help(id, lesson::language(&world))
+            );
+            let preview = &world.resource::<Files>().script.preview;
+            assert!(
+                preview.build.is_none() && preview.render.is_none() && preview.retained.is_none()
+            );
+            assert_eq!(preview.render_jobs, 0);
+        }
+        command(&mut world, &handle, Action::Index, &ControlInput::Click).unwrap();
+    }
+    command(&mut world, &handle, Action::Close, &ControlInput::Click).unwrap();
+    let files = world.resource::<Files>();
+    assert!(!files.scripts && files.script.editor_open);
+}
+
+#[test]
+fn native_script_preview_cached_replay_arms_every_frame_without_gpu_completion_wakes() {
+    let mut world = world();
+    let (view, _, _) = retained(&mut world);
+    world
+        .resource_mut::<Files>()
+        .script
+        .preview
+        .retained
+        .as_mut()
+        .unwrap()
+        .descriptor
+        .captions
+        .truncate(2);
+    let handle = NativeInterfaceHandle::new(|| {});
+    world.insert_resource(handle.clone());
+    for index in 0..2 {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.index = index;
+        preview.changed().unwrap();
+        let revision = preview.revision;
+        publish(
+            &mut world,
+            Rendered {
+                view: view.clone(),
+                revision,
+                image: image(),
+            },
+        )
+        .unwrap();
+    }
+    command(&mut world, &handle, Action::Replay, &ControlInput::Click).unwrap();
+    poll(&mut world);
+    for index in 0..1 {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        assert_eq!(preview.index, index);
+        preview
+            .wake
+            .as_mut()
+            .expect("Cached frame needs its own next wake")
+            .due = Instant::now();
+        poll(&mut world);
+    }
+    let preview = &world.resource::<Files>().script.preview;
+    assert_eq!(preview.index, 1);
+    assert_eq!(preview.render_jobs, 0);
+    assert!(!preview.playing);
+    assert!(preview.wake.is_none());
 }
 
 #[test]
@@ -91,6 +496,61 @@ fn native_script_preview_uses_catalog_policy_and_never_substitutes_edited_source
     assert!(world.resource::<Files>().script.dirty());
     assert!(!world.resource::<Files>().script.preview.building());
     assert!(world.resource::<Files>().lesson.is_none());
+}
+
+#[test]
+fn native_script_preview_extrude_preserves_dirty_source_and_help_does_not_advance_geometry() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let before = fixture.engine.engine_call("project_export_model", "");
+    let mut world = world();
+    select(&mut world, "fillet-basics");
+    editor::edit_source(
+        &mut world,
+        &ControlInput::SetValue("unfinished { draft".into()),
+    )
+    .unwrap();
+    world.resource_mut::<Files>().script.editor_open = true;
+    world.resource_mut::<Files>().scripts = false;
+    let handle = NativeInterfaceHandle::new(|| {});
+    command(&mut world, &handle, Action::Extrude, &ControlInput::Click).unwrap();
+    assert!(
+        !world.resource::<Files>().scripts,
+        "A contextual demo must not select the Scripts workspace"
+    );
+    let channel = world
+        .resource_mut::<Files>()
+        .script
+        .preview
+        .build
+        .take()
+        .unwrap();
+    let frames = channel
+        .lock()
+        .unwrap()
+        .recv_timeout(Duration::from_secs(10))
+        .unwrap()
+        .unwrap();
+    assert_eq!(frames.len(), 5);
+    let preview = &mut world.resource_mut::<Files>().script.preview;
+    preview.retained = Some(Retained::new(preview.service.clone(), frames).unwrap());
+    assert!(!preview.playing, "Contextual lessons wait for the learner");
+    command(&mut world, &handle, Action::Help, &ControlInput::Click).unwrap();
+    assert!(command(&mut world, &handle, Action::Next, &ControlInput::Click).is_err());
+    let preview = &world.resource::<Files>().script.preview;
+    assert_eq!(preview.index, 0);
+    assert!(!preview.playing);
+    command(&mut world, &handle, Action::Demo, &ControlInput::Click).unwrap();
+    command(&mut world, &handle, Action::Close, &ControlInput::Click).unwrap();
+    let files = world.resource::<Files>();
+    assert!(!files.scripts && files.script.editor_open && files.script.dirty());
+    assert_eq!(files.script.source, "unfinished { draft");
+    assert_eq!(files.script.example.unwrap().id, "fillet-basics");
+    assert!(files.script.preview.retained.is_none());
+    assert_eq!(
+        fixture.engine.engine_call("project_export_model", ""),
+        before
+    );
 }
 
 #[test]
@@ -145,7 +605,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
         Rendered {
             view: view.clone(),
             revision,
-            png: png(),
+            image: image(),
         },
     )
     .unwrap();
@@ -161,7 +621,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
         Rendered {
             view: view.clone(),
             revision,
-            png: vec![],
+            image: image(),
         },
     )
     .unwrap();
@@ -171,7 +631,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
         Rendered {
             view: "retired-view".into(),
             revision,
-            png: vec![],
+            image: image(),
         },
     )
     .unwrap();
@@ -180,7 +640,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
         Rendered {
             view: view.clone(),
             revision,
-            png: png(),
+            image: image(),
         },
     )
     .unwrap();
@@ -196,11 +656,12 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
         Rendered {
             view: view.clone(),
             revision,
-            png: vec![],
+            image: image(),
         },
     )
     .unwrap();
     let request = RenderRequest {
+        palette: None,
         preview_id: document,
         view_id: view.clone(),
         revision: revision + 1,
@@ -213,6 +674,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
     assert!(service.render(request).unwrap_err().contains("expired"));
     let reopened = Retained::new(service.clone(), frames()).unwrap();
     let request = RenderRequest {
+        palette: None,
         preview_id: reopened.descriptor.preview_id.clone(),
         view_id: view,
         revision: revision + 1,

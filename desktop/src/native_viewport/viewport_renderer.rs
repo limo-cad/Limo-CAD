@@ -38,6 +38,13 @@ mod shutdown;
 #[path = "viewport_renderer/surface_submission.rs"]
 mod surface_submission;
 
+#[path = "viewport_renderer/teaching_queue.rs"]
+mod teaching_queue;
+#[path = "viewport_renderer/teaching_scene.rs"]
+mod teaching_scene;
+pub(crate) use teaching_queue::connect_preview;
+use teaching_queue::{Job, JobQueue};
+
 const CAD_TARGET_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
 
 fn report_render_error(
@@ -231,7 +238,7 @@ struct HostSurface {
 
 #[derive(Resource)]
 struct Worker {
-    requests: Option<mpsc::SyncSender<Snapshot>>,
+    requests: Option<Arc<JobQueue>>,
     frames: Mutex<Option<mpsc::Receiver<Result<Frame, String>>>>,
     thread: Option<JoinHandle<()>>,
     sent: Option<Stamp>,
@@ -246,7 +253,9 @@ impl Drop for Worker {
     fn drop(&mut self) {
         // Close the request channel before joining. The worker drops its GPU
         // world on its owning thread; no non-send window data lives there.
-        self.requests.take();
+        if let Some(queue) = self.requests.take() {
+            queue.close();
+        }
         self.stopped.store(true, Ordering::Release);
         #[cfg(test)]
         if let Some(release) = &self.gate_release {
@@ -288,6 +297,7 @@ pub(crate) fn interface_plugins() -> bevy::app::PluginGroupBuilder {
 }
 
 pub(crate) fn install(app: &mut App) {
+    crate::native_viewport::script_preview::textures::install(app);
     init_cad_state(app);
     app.insert_resource(SharedPickState(Arc::new(Mutex::new(PickState::default()))))
         .init_resource::<ViewportReady>()
@@ -335,7 +345,8 @@ impl Plugin for ViewportRendererPlugin {
             render.resource::<RenderInstance>().clone(),
         );
         let handle = app.world().resource::<NativeInterfaceHandle>().clone();
-        let (requests, jobs) = mpsc::sync_channel(1);
+        let requests = Arc::new(JobQueue::default());
+        let jobs = requests.clone();
         let (replies, frames) = mpsc::sync_channel(1);
         let stopped = Arc::new(AtomicBool::new(false));
         shutdown::install(app, stopped.clone());
@@ -347,6 +358,7 @@ impl Plugin for ViewportRendererPlugin {
         let thread = std::thread::Builder::new()
             .name("CAD viewport".into())
             .spawn(move || {
+                let closing_queue = jobs.clone();
                 let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
                     render_worker(
                         resources,
@@ -359,6 +371,9 @@ impl Plugin for ViewportRendererPlugin {
                         gate,
                     )
                 }));
+                // Unlike a channel receiver, an Arc queue survives worker exit.
+                // Disconnect it explicitly on success, error and caught panic.
+                closing_queue.close();
                 let error = match result {
                     Ok(Ok(())) => return,
                     Ok(Err(error)) => error,
@@ -558,7 +573,7 @@ fn target_image(size: UVec2) -> Image {
 
 fn render_worker(
     resources: RenderResources,
-    jobs: mpsc::Receiver<Snapshot>,
+    jobs: Arc<JobQueue>,
     replies: &mpsc::SyncSender<Result<Frame, String>>,
     handle: &NativeInterfaceHandle,
     stopped: &Arc<AtomicBool>,
@@ -588,6 +603,7 @@ fn render_worker(
     let plugins = plugins.disable::<bevy::log::LogPlugin>();
     app.add_plugins(plugins);
     install_cad_renderer(&mut app, false);
+    teaching_scene::install(&mut app);
     app.insert_resource(RenderErrorHandler(report_render_error));
     app.finish();
     app.cleanup();
@@ -613,10 +629,53 @@ fn render_worker(
     app.insert_resource(SceneImageTarget(targets[0].image.clone()));
     app.main_mut().update();
     let mut last: Option<Stamp> = None;
-    while let Ok(mut snapshot) = jobs.recv() {
-        for newer in jobs.try_iter() {
-            snapshot = newer;
+    let mut teaching_targets: [Target; 5] = std::array::from_fn(|_| Target {
+        image: app
+            .world_mut()
+            .resource_mut::<Assets<Image>>()
+            .add(target_image(UVec2::ONE)),
+        lease: default(),
+    });
+    while let Some(job) = jobs.next() {
+        if stopped.load(Ordering::Acquire) {
+            return Ok(());
         }
+        let snapshot = match job {
+            Job::Main(snapshot) => *snapshot,
+            Job::Teaching(job) => {
+                let outcome = render_teaching(
+                    &mut app,
+                    &job,
+                    &mut teaching_targets,
+                    &jobs,
+                    stopped,
+                    submission,
+                );
+                match outcome {
+                    Ok(Some(texture)) => {
+                        let _ = job.reply.send(Ok(texture));
+                        handle.request_redraw();
+                    }
+                    Ok(None) => {
+                        // A new main request arrived between preview iterations.
+                        // Keep the same deadline while restoring main priority.
+                        let reply = job.reply.clone();
+                        if let Err(error) = jobs.teaching(job) {
+                            let _ = reply.send(Err(error));
+                            handle.request_redraw();
+                        }
+                    }
+                    Err(error) => {
+                        let _ = job.reply.send(Err(error));
+                        handle.request_redraw();
+                    }
+                }
+                if app.should_exit().is_some() {
+                    return Err("CAD viewport reported a rendering error".into());
+                }
+                continue;
+            }
+        };
         let owner = snapshot.owner;
         let stamp = snapshot.stamp.clone();
         let Some(target) = wait_for_target(&mut targets, stopped) else {
@@ -778,7 +837,123 @@ fn render_worker(
         }
         handle.request_redraw();
     }
+    teaching_scene::release(app.world_mut());
     Ok(())
+}
+
+fn render_teaching(
+    app: &mut App,
+    job: &crate::native_viewport::script_preview::RenderJob,
+    targets: &mut [Target],
+    jobs: &JobQueue,
+    stopped: &AtomicBool,
+    submission: &surface_submission::SharedSubmission,
+) -> Result<Option<crate::native_viewport::script_preview::RenderedTexture>, String> {
+    use crate::native_viewport::script_preview::{check_request, RenderedTexture};
+    check_request(&job.cancelled, job.deadline)?;
+    if jobs.has_main() {
+        return Ok(None);
+    }
+    let target = targets
+        .iter_mut()
+        .find(|target| target.lease.strong_count() == 0)
+        .ok_or("Teaching texture pool is occupied; try again")?;
+    let target_handle = target.image.clone();
+    let size = UVec2::new(job.request.width, job.request.height);
+    {
+        let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+        let mut image = images
+            .get_mut(&target_handle)
+            .ok_or("Teaching target retired")?;
+        if image.size() != size {
+            *image = target_image(size);
+        }
+    }
+    teaching_scene::show(
+        app.world_mut(),
+        &job.document,
+        &job.request,
+        target_handle.clone(),
+    )?;
+    let cameras: Vec<_> = {
+        let world = app.world_mut();
+        world
+            .query_filtered::<(Entity, &mut Camera), With<NativeViewportCamera>>()
+            .iter_mut(world)
+            .map(|(entity, mut camera)| {
+                let active = camera.is_active;
+                camera.is_active = false;
+                (entity, active)
+            })
+            .collect()
+    };
+    let rendered = (|| {
+        loop {
+            check_request(&job.cancelled, job.deadline)?;
+            if stopped.load(Ordering::Acquire) {
+                return Err("CAD renderer stopped".into());
+            }
+            if jobs.has_main() {
+                return Ok(None);
+            }
+            let pipelines = app.sub_app(RenderApp).world().resource::<PipelineCache>();
+            let before = pipelines.pipelines().count();
+            let pending_before = pipelines.waiting_pipelines().next().is_some();
+            app.update();
+            if app.should_exit().is_some() {
+                return Err("CAD viewport reported a rendering error".into());
+            }
+            let pipelines = app.sub_app(RenderApp).world().resource::<PipelineCache>();
+            for pipeline in pipelines.pipelines() {
+                if let bevy::render::render_resource::CachedPipelineState::Err(error) =
+                    &pipeline.state
+                {
+                    if !matches!(
+                        error,
+                        bevy::shader::ShaderCacheError::ShaderNotLoaded(_)
+                            | bevy::shader::ShaderCacheError::ShaderImportNotYetAvailable
+                    ) {
+                        return Err(format!("Teaching viewport shader failed: {error:?}"));
+                    }
+                }
+            }
+            if !surface_submission::compiled_after_draw(app.sub_app(RenderApp).world())
+                && pipelines.waiting_pipelines().next().is_none()
+                && !pending_before
+                && before == pipelines.pipelines().count()
+            {
+                break;
+            }
+            std::thread::yield_now();
+        }
+        check_request(&job.cancelled, job.deadline)?;
+        let image = app
+            .sub_app(RenderApp)
+            .world()
+            .resource::<RenderAssets<GpuImage>>()
+            .get(&target_handle)
+            .ok_or("Teaching viewport target was not prepared")?
+            .clone();
+        let polled = submission
+            .run_until_stopped(stopped, || {
+                app.world()
+                    .resource::<RenderDevice>()
+                    .wgpu_device()
+                    .poll(PollType::Poll)
+            })
+            .ok_or("CAD renderer stopped")?;
+        polled.map_err(|error| error.to_string())?;
+        let lease = Arc::new(());
+        target.lease = Arc::downgrade(&lease);
+        Ok(Some(RenderedTexture { image, lease }))
+    })();
+    teaching_scene::hide(app.world_mut());
+    for (entity, active) in cameras {
+        if let Some(mut camera) = app.world_mut().get_mut::<Camera>(entity) {
+            camera.is_active = active;
+        }
+    }
+    rendered
 }
 
 #[cfg(test)]
@@ -788,3 +963,7 @@ mod tests;
 #[cfg(test)]
 #[path = "viewport_renderer/sketch_commit_tests.rs"]
 mod sketch_commit_tests;
+
+#[cfg(test)]
+#[path = "viewport_renderer/teaching_tests.rs"]
+mod teaching_tests;
