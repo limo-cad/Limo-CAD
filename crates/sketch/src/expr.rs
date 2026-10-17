@@ -23,6 +23,8 @@ pub enum ExprError {
     /// Reference to a parameter that does not exist in the sketch.
     UnknownParameter(String),
     DivisionByZero,
+    /// A literal, reference or arithmetic step produced NaN or infinity.
+    NonFiniteValue,
     /// Circular parameter reference; the vec is the cycle path
     /// (e.g. ["d3", "d5", "d3"]).
     CircularReference(Vec<String>),
@@ -34,6 +36,7 @@ impl fmt::Display for ExprError {
             ExprError::UnexpectedToken(msg) => write!(f, "invalid expression: {msg}"),
             ExprError::UnknownParameter(name) => write!(f, "unknown parameter '{name}'"),
             ExprError::DivisionByZero => write!(f, "division by zero"),
+            ExprError::NonFiniteValue => write!(f, "expression must produce finite values"),
             ExprError::CircularReference(cycle) => {
                 write!(f, "circular reference: {}", cycle.join(" → "))
             }
@@ -366,7 +369,7 @@ pub fn eval(
     ast: &Ast,
     resolver: &mut impl FnMut(&str) -> Result<f64, ExprError>,
 ) -> Result<f64, ExprError> {
-    match ast {
+    let value = match ast {
         Ast::Num(v) => Ok(*v),
         Ast::Ident(name) => resolver(name),
         Ast::UnaryNeg(inner) => Ok(-eval(inner, resolver)?),
@@ -392,6 +395,11 @@ pub fn eval(
                 .collect::<Result<_, _>>()?;
             func.apply(&values)
         }
+    }?;
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(ExprError::NonFiniteValue)
     }
 }
 
