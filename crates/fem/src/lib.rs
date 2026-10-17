@@ -4,7 +4,9 @@ mod element;
 mod persistence;
 mod steady;
 mod study;
-pub use persistence::{SavedThermalStudy, ThermalStudyDocument, MAX_THERMAL_STUDY_BYTES};
+pub use persistence::{
+    SavedThermalStudy, ThermalStudyDocument, MAX_THERMAL_STUDY_BYTES, THERMAL_STUDY_ENTRY,
+};
 use serde::{Deserialize, Serialize};
 mod surface;
 pub use steady::{solve_steady, solve_steady_with_surfaces};

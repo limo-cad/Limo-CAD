@@ -794,7 +794,9 @@ dependencies = [
  "cddl-cat",
  "ciborium",
  "limo-cad-core",
+ "limo-cad-project-file",
  "serde",
+ "tempfile",
 ]
 
 [[package]]

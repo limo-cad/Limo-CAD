@@ -387,3 +387,118 @@ fn cbor_nested_recursion_limit_is_exercised_within_material_value() {
     let error = ThermalStudyDocument::decode_cbor(&encoded).unwrap_err();
     assert!(error.to_lowercase().contains("recursion"), "{error}");
 }
+
+fn project() -> limo_cad_project_file::ProjectArchive {
+    limo_cad_project_file::ProjectArchive::new(
+        r#"{"format":"limo-cad-project","schema_version":14}"#.into(),
+        limo_cad_project_file::SaveMetadata {
+            application_version: "test",
+            saved_at: "2026-10-17",
+        },
+    )
+    .unwrap()
+}
+#[test]
+fn thermal_intent_survives_project_container_replacement_and_legacy_resave() {
+    let mut archive = project();
+    assert_eq!(
+        ThermalStudyDocument::from_project(&archive).unwrap(),
+        ThermalStudyDocument::default()
+    );
+    archive
+        .set_intent("intent/vendor.cbor", Some(b"keep vendor bytes".to_vec()))
+        .unwrap();
+    let mut doc = saved_document();
+    doc.store_in_project(&mut archive).unwrap();
+    let first = archive.encode().unwrap();
+    let mut reopened = limo_cad_project_file::ProjectArchive::decode(first).unwrap();
+    assert_eq!(ThermalStudyDocument::from_project(&reopened).unwrap(), doc);
+    // A container-only reader preserves the unknown intent through model save.
+    reopened
+        .update_model(
+            r#"{"format":"limo-cad-project","schema_version":14,"document":{"name":"Renamed"}}"#
+                .into(),
+            limo_cad_project_file::SaveMetadata {
+                application_version: "test",
+                saved_at: "later",
+            },
+        )
+        .unwrap();
+    reopened = limo_cad_project_file::ProjectArchive::decode(reopened.encode().unwrap()).unwrap();
+    assert_eq!(ThermalStudyDocument::from_project(&reopened).unwrap(), doc);
+    doc.studies[0].input.prescribed_k[1].1 = 320.;
+    doc.store_in_project(&mut reopened).unwrap();
+    let latest = limo_cad_project_file::ProjectArchive::decode(reopened.encode().unwrap()).unwrap();
+    assert_eq!(ThermalStudyDocument::from_project(&latest).unwrap(), doc);
+    assert_eq!(
+        latest
+            .read_intent("intent/vendor.cbor", 100)
+            .unwrap()
+            .unwrap(),
+        b"keep vendor bytes"
+    );
+}
+#[test]
+fn future_or_invalid_thermal_intent_is_not_silently_overwritten() {
+    let doc = saved_document();
+    for original in [raw_wire(&doc, 2), vec![0xff, 1, 2]] {
+        let mut archive = project();
+        archive
+            .set_intent(THERMAL_STUDY_ENTRY, Some(original.clone()))
+            .unwrap();
+        assert!(ThermalStudyDocument::from_project(&archive).is_err());
+        assert!(doc.store_in_project(&mut archive).is_err());
+        assert_eq!(
+            archive
+                .read_intent(THERMAL_STUDY_ENTRY, MAX_THERMAL_STUDY_BYTES)
+                .unwrap()
+                .unwrap(),
+            original
+        );
+        assert!(archive.encode().is_ok());
+    }
+    let mut archive = project();
+    doc.store_in_project(&mut archive).unwrap();
+    let before = archive
+        .read_intent(THERMAL_STUDY_ENTRY, MAX_THERMAL_STUDY_BYTES)
+        .unwrap();
+    let mut invalid = doc;
+    invalid.studies[0].id = 0;
+    assert!(invalid.store_in_project(&mut archive).is_err());
+    assert_eq!(
+        archive
+            .read_intent(THERMAL_STUDY_ENTRY, MAX_THERMAL_STUDY_BYTES)
+            .unwrap(),
+        before
+    );
+}
+
+#[test]
+fn thermal_project_file_roundtrip_uses_existing_atomic_boundary() {
+    use limo_cad_project_file::{
+        read_binary_file, write_binary_file_atomic, write_binary_file_new, ProjectArchive,
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("study.limo");
+    let mut archive = project();
+    let mut doc = saved_document();
+    doc.store_in_project(&mut archive).unwrap();
+    let first = archive.encode().unwrap();
+    write_binary_file_new(&path, &first).unwrap();
+    let reopened = ProjectArchive::decode(read_binary_file(&path).unwrap()).unwrap();
+    assert_eq!(ThermalStudyDocument::from_project(&reopened).unwrap(), doc);
+    assert!(write_binary_file_new(&path, b"must not replace").is_err());
+    assert_eq!(read_binary_file(&path).unwrap(), first);
+    doc.studies[0].name = "Edited study".into();
+    doc.store_in_project(&mut archive).unwrap();
+    write_binary_file_atomic(&path, &archive.encode().unwrap()).unwrap();
+    let reopened = ProjectArchive::decode(read_binary_file(&path).unwrap()).unwrap();
+    assert_eq!(ThermalStudyDocument::from_project(&reopened).unwrap(), doc);
+    assert!(ThermalStudyDocument::from_project(&reopened)
+        .unwrap()
+        .studies[0]
+        .open()
+        .result()
+        .is_none());
+    assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+}

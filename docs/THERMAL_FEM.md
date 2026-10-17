@@ -121,11 +121,34 @@ unsigned 32-bit values for portable decoding. Existing catalog bounds also apply
 The bounded writer fails before extending past the payload limit.
 
 A host must decode a candidate successfully before replacing live intent, and
-use the existing atomic file boundary when saving. This codec is not yet connected
-to the .limo container or native Save/Open controls. Integration must preserve
-old projects and unknown ancillary data, add stable CAD attachments, and qualify
-actual save/reopen, recovery and document history workflows.
+use the existing atomic file boundary when saving. The container adapter below
+carries the codec in .limo archives. Native Save/Open controls still need study
+state integration, stable CAD attachments, and qualification of user-facing
+save/reopen, recovery and document history workflows.
 
 CBOR is handled by [Ciborium](https://docs.rs/ciborium/0.2.2/ciborium/), using its
 explicit recursion-limited decoder. Tests check emitted records against CDDL
 with cddl-cat as well as round-trip, incomplete draft, failure and resource cases.
+
+
+## Project container integration
+
+ThermalStudyDocument::from_project reads intent/thermal-studies.cbor from the
+shared ProjectArchive. Missing intent means a legacy project with no studies;
+malformed or future-version intent is an error. store_in_project validates any
+existing thermal payload and the replacement before staging a change, so an
+older domain reader cannot silently overwrite newer saved study data.
+
+ProjectArchive::read_intent/set_intent form a shared bounded attachment API under
+intent/. They do not accept manifest.json, model.json, absolute paths, traversal,
+backslashes or empty path segments. A staged replacement/removal affects only
+that exact entry; unrelated recipes, images, vendor data and ZIP metadata retain
+the existing preservation checks. At most 64 names can be staged at once, and
+combined payloads and final archives remain subject to existing size limits.
+The caller owns domain validation and must not overwrite another domain's entry.
+
+Container tests cover legacy absence, repeated replacement, explicit removal,
+unknown data preservation, unsupported payload refusal and bounded reads/writes.
+An actual temporary .limo file is written, reopened, edited and atomically
+replaced through the existing file API, with no leftover save temporary. This is
+file-boundary evidence, not a native UI or crash-recovery acceptance claim.
