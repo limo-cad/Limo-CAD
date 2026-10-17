@@ -1,27 +1,33 @@
 //! Analysis kernels. Mesh coordinates are SI metres, not CAD millimetres.
-//! No mesher, persisted study, native UI or automatic material suitability claim.
+//! Versioned study intent; no mesher, native UI or automatic material suitability claim.
 mod element;
+mod persistence;
 mod steady;
 mod study;
+pub use persistence::{SavedThermalStudy, ThermalStudyDocument, MAX_THERMAL_STUDY_BYTES};
+use serde::{Deserialize, Serialize};
 mod surface;
 pub use steady::{solve_steady, solve_steady_with_surfaces};
 pub use study::{
     ThermalMaterial, ThermalSolveCompletion, ThermalSolveJob, ThermalStudy, ThermalStudyInput,
     ThermalStudyResult, ThermalStudyStatus,
 };
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ThermalTet {
     pub nodes: [usize; 4],
     pub material: usize,
     /// Constant volumetric heat source, W/m^3; negative means cooling.
     pub source_w_m3: f64,
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ThermalMesh {
     pub points_m: Vec<[f64; 3]>,
     pub elements: Vec<ThermalTet>,
 }
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SolveOptions {
     pub max_nodes: usize,
     pub max_elements: usize,
@@ -56,7 +62,8 @@ pub struct ThermalResult {
 }
 
 /// Constant convection against an ambient temperature.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ThermalConvection {
     pub coefficient_w_m2_k: f64,
     pub ambient_k: f64,
@@ -65,7 +72,8 @@ pub struct ThermalConvection {
 /// One exterior mesh triangle. Order does not define flux direction: positive
 /// heat_flux_in_w_m2 always enters the domain. Flux and convection may coexist.
 /// Use at most one record per face; prescribed nodal temperatures may overlap.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ThermalSurface {
     pub nodes: [usize; 3],
     pub heat_flux_in_w_m2: f64,

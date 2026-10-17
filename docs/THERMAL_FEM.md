@@ -95,8 +95,37 @@ numerical inputs restores freshness; no-op edits do not cancel active work.
 
 This equality is only numerical-input freshness. The host still must resolve CAD
 references and update or invalidate the mesh when the document changes. The
-model is not serialized, does not implement document Undo/Redo, and has no native
-study panel yet. Hosts must cancel before retiring an owned study and avoid
+live model does not implement document Undo/Redo and has no native study panel
+yet. Its intent can be serialized through the separate document codec below. Hosts must cancel before retiring an owned study and avoid
 copying ownership across documents; dropping it also cancels outstanding work.
 Project persistence, stable topology attachments, meshing and UI/result rendering
-remain required integration work. No new wire or file format is introduced here.
+remain required integration work. Worker tokens and computed results are not serialized.
+
+
+## Versioned study intent persistence
+
+The CBOR v1 contract is [thermal-study.cddl](thermal-study.cddl).
+ThermalStudyDocument::encode_cbor/decode_cbor retain stable study IDs, names,
+mesh coordinates in metres, original material records and explicit selections,
+loads, boundary conditions and solver options. Opening a SavedThermalStudy starts
+idle with no result. Solves must be recomputed; worker identity never survives reopen.
+
+The reader rejects unknown versions, unknown/duplicate fields, trailing bytes,
+invalid identity/provenance, nonfinite numbers and excessive data. Incomplete
+finite drafts and unresolved mesh indices can be saved; storage acceptance does
+not mean a physically valid or solvable study. Solver validation remains separate.
+Names are limited to 256 UTF-8 bytes, collections to 64 studies, 65,536 points,
+262,144 tetrahedra/surfaces, 256 materials and 65,536 nodal values per study.
+The payload is capped at 16 MiB, nesting at 32, and indices/solver budgets at
+unsigned 32-bit values for portable decoding. Existing catalog bounds also apply.
+The bounded writer fails before extending past the payload limit.
+
+A host must decode a candidate successfully before replacing live intent, and
+use the existing atomic file boundary when saving. This codec is not yet connected
+to the .limo container or native Save/Open controls. Integration must preserve
+old projects and unknown ancillary data, add stable CAD attachments, and qualify
+actual save/reopen, recovery and document history workflows.
+
+CBOR is handled by [Ciborium](https://docs.rs/ciborium/0.2.2/ciborium/), using its
+explicit recursion-limited decoder. Tests check emitted records against CDDL
+with cddl-cat as well as round-trip, incomplete draft, failure and resource cases.

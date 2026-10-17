@@ -1,5 +1,6 @@
-//! Owned inputs and race-safe result adoption for a host's thermal study.
-//! This is an in-memory domain model, not project persistence or a UI controller.
+use serde::{Deserialize, Serialize};
+// Owned inputs and race-safe result adoption for a host's thermal study.
+// This is an in-memory domain model, not project persistence or a UI controller.
 use crate::{solve_steady_with_surfaces, SolveOptions, ThermalMesh, ThermalResult, ThermalSurface};
 use limo_cad_core::{MaterialDetails, MaterialPropertyFilter};
 use std::sync::{
@@ -8,7 +9,8 @@ use std::sync::{
 };
 
 /// A retained catalog record and explicit selection, shared with other domains.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ThermalMaterial {
     pub details: MaterialDetails,
     pub context: Option<String>,
@@ -17,7 +19,8 @@ pub struct ThermalMaterial {
 
 /// Every numerical input is owned. Hosts resolve CAD references and units before
 /// constructing this snapshot; no pointers into a mutable document are retained.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ThermalStudyInput {
     pub mesh: ThermalMesh,
     pub materials: Vec<ThermalMaterial>,
