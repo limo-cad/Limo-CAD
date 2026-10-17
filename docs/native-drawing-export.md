@@ -85,7 +85,13 @@ revision tables retain every revision field. Reserve the bottom-right 180 by
 44 mm for the title block, inside the 10 mm sheet border.
 
 Rust DXF output is **graphical** LINE/TEXT/SOLID artwork, not editable associative
-DXF DIMENSION entities. The native File menu exports the active drawing as SVG,
+DXF DIMENSION entities. R2007 graphics, including Unicode outline hatches, have
+unique deterministic handles and explicit model-space block ownership. Model and
+paper-space block records share the same handle namespace as the tables and
+entities; `$HANDSEED` follows all emitted handles. This structure preserves entity
+identity for exchange without changing the native annotation records.
+
+The native File menu exports the active drawing as SVG,
 DXF or PDF using this shared engine command. PDF uses the validated SVG and the
 same bounded, font-resolved page preparation as native printing, preserving the
 physical sheet dimensions. **Export Drawing PDF…** uses the CAD-owned native

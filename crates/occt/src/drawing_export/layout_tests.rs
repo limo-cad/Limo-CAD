@@ -163,9 +163,11 @@ fn caption_clears_six_mm_dimension_and_labels_clear_neighbors_and_dxf_keeps_glyp
     assert!(dxf.contains(glyphs), "CJK and technical characters must remain in the DXF text");
     assert!(!dxf.contains("NOBS_EMBEDDED_FONT"));
     assert!(dxf.contains("0\nHATCH\n"), "Unicode labels have actual filled font outlines");
-    let text_start = dxf.find(&format!("1\n{glyphs}\n")).unwrap();
-    assert!(dxf[text_start..].starts_with(&format!("1\n{glyphs}\n60\n1\n")),
-        "mixed labels must not double paint their source TEXT over the glyphs");
+    let record = dxf.split("0\nTEXT\n").skip(1)
+        .map(|tail| tail.split("\n0\n").next().unwrap())
+        .find(|record| record.contains(&format!("1\n{glyphs}\n"))).unwrap();
+    assert!(record.contains("60\n1\n100\nAcDbText\n"),
+        "mixed labels must retain invisible source TEXT in AcDbEntity");
     assert!(
         dxf.contains("1000\nArial\n"),
         "the sheet family is still recorded"

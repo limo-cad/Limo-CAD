@@ -102,7 +102,11 @@ fn triangle_quad_and_loaded_polygon_export_exact_native_scallops_and_preserve_in
         assert!(svg.contains("REV B&lt;2&gt; &amp; cω"));
         let dxf = export(&doc, &scene, DrawingExportFormat::Dxf).unwrap();
         assert!(dxf.contains("420\n12860237\n"));
-        assert!(dxf.contains("0\nTEXT\n8\nREVISION\n"));
+        assert!(dxf.split("0\nTEXT\n").skip(1).any(|record| record
+            .split("\n0\n")
+            .next()
+            .unwrap()
+            .contains("8\nREVISION\n")));
         assert!(dxf.contains("370\n40\n") || dxf.contains("370\n50\n"));
         assert!(dxf.contains("REV B<2> & cω"));
         assert_eq!(export(&doc, &scene, DrawingExportFormat::Svg).unwrap(), svg);
