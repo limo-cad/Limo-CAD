@@ -1268,3 +1268,91 @@ fn typed_dimension_default_offset_scales_with_the_measured_feature() {
         "large geometry should cap the initial extension-line offset"
     );
 }
+
+#[test]
+fn dimension_delete_rejects_missing_target_without_consuming_redo() {
+    let mut s = session();
+    s.add_line(v(0.0, 0.0), v(10.0, 2.0), false).unwrap();
+    s.undo().unwrap();
+    let before = serde_json::to_value(s.sketch().snapshot()).unwrap();
+    let result = s.delete_dimension(limo_cad_sketch::ConstraintId(u64::MAX));
+    assert!(
+        result.is_err(),
+        "a stale dimension target must not report success"
+    );
+    assert_eq!(serde_json::to_value(s.sketch().snapshot()).unwrap(), before);
+    assert!(s.can_redo(), "rejected deletion must preserve redo history");
+    assert_eq!(s.redo().unwrap().sketch.entities.len(), 3);
+}
+
+#[test]
+fn dimension_delete_rejects_geometric_constraint_without_removing_it() {
+    let mut s = session();
+    let line = s.add_line(v(3.0, 4.0), v(13.0, 6.0), false).unwrap();
+    let fixed = s.toggle_fix(line.start_point_id).unwrap().constraint_id;
+    let before = serde_json::to_value(s.sketch().snapshot()).unwrap();
+    let error = s.delete_dimension(fixed).unwrap_err();
+    assert!(error.to_string().contains("not a dimension"));
+    assert_eq!(serde_json::to_value(s.sketch().snapshot()).unwrap(), before);
+    s.undo().unwrap();
+    assert!(
+        s.sketch().constraint(fixed).is_none(),
+        "undo must still undo the preceding Fix operation"
+    );
+}
+
+#[test]
+fn dimension_delete_retains_formula_dependencies_through_history_and_reopen() {
+    let mut s = session();
+    let first = s
+        .add_line_locked(&locked_seg_text(
+            v(0.0, 0.0),
+            v(40.0, 0.0),
+            Some("40"),
+            None,
+        ))
+        .unwrap();
+    let second = s
+        .add_line_locked(&locked_seg_text(
+            v(0.0, 20.0),
+            v(20.0, 20.0),
+            Some("=d1/2"),
+            None,
+        ))
+        .unwrap();
+    let cid = s
+        .dto()
+        .dimensions
+        .iter()
+        .find(|d| d.entities.contains(&first.entity_id))
+        .unwrap()
+        .constraint_id;
+    let pid = s.sketch().dim_param(&cid).unwrap();
+    s.delete_dimension(cid).unwrap();
+    assert!(s.sketch().constraint(cid).is_none());
+    assert!(
+        s.sketch().params().get(pid).is_some(),
+        "a referenced driving value must survive deleting its annotation"
+    );
+    assert_eq!(
+        s.sketch()
+            .params()
+            .by_name("d2")
+            .unwrap()
+            .expression
+            .as_deref(),
+        Some("d1/2")
+    );
+    s.undo().unwrap();
+    assert_eq!(s.sketch().dim_param(&cid), Some(pid));
+    s.redo().unwrap();
+    assert!(s.sketch().constraint(cid).is_none());
+    let saved = serde_json::to_string(&s.sketch().snapshot()).unwrap();
+    let mut reopened = limo_cad_sketch::Sketch::new();
+    reopened.restore(serde_json::from_str(&saved).unwrap());
+    reopened.params_mut().reevaluate().unwrap();
+    reopened.solve().unwrap();
+    assert_eq!(reopened.params().by_name("d2").unwrap().value, 20.0);
+    let (start, end) = reopened.resolved_line(second.entity_id).unwrap();
+    assert!((start.distance(end) - 20.0).abs() < 1e-7);
+}
