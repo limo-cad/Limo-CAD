@@ -153,3 +153,118 @@ fn sketch_history_view_keeps_the_exact_upstream_geometry_and_retires_on_replacem
     assert!(replacement.document.active_sketch.is_none());
     assert!(replacement.document.finished_sketches.is_empty());
 }
+
+#[test]
+fn sketch_history_placement_tracks_live_visibility_and_assembly_without_replacing_geometry() {
+    for hide_occurrence in [false, true] {
+        let host = NativeEngineHost::new();
+        sketch(&host, 4.);
+        feature(&host, false, "Sketch1");
+        let upstream = host.solid_scene_snapshot();
+        let body = upstream.bodies[0].id;
+        let component = call(
+            &host,
+            "assembly_create_component",
+            json!({"name":"Part","body_ids":[body],"absorb_promoted_bodies":true}),
+        );
+        let occurrence = call(
+            &host,
+            "assembly_create_occurrence",
+            json!({
+                "component_id":component["id"],"name":"Repeat",
+                "local_pose":{"translation":[20.,0.,0.],"rotation":[0.,0.,0.,1.]}
+            }),
+        )["id"]
+            .as_u64()
+            .unwrap();
+        sketch(&host, 30.);
+        feature(&host, false, "Sketch2");
+        value(
+            host.solid_body_feature(
+                &json!({"type":"move_copy","request":{"body_ids":[body],
+                    "translation":{"x":0.,"y":0.,"z":20.},
+                    "pivot":{"x":0.,"y":0.,"z":0.},"copy":false}
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap();
+        let live_scene = host.solid_scene_snapshot();
+        assert_ne!(
+            live_scene.bodies[0].mesh.positions,
+            upstream.bodies[0].mesh.positions
+        );
+        if hide_occurrence {
+            call(
+                &host,
+                "assembly_update_occurrence",
+                json!({"occurrence":{"id":occurrence,"visible":false}}),
+            );
+        } else {
+            call(
+                &host,
+                "project_set_visibility",
+                json!({"hidden_body_ids":[body]}),
+            );
+        }
+        call(&host, "edit_sketch", json!("Sketch2"));
+        let hidden = host.viewport_frame();
+        assert_eq!(hidden.document.scene.bodies, upstream.bodies);
+        let previous_poses = hidden.instance_body_poses.as_ref().clone();
+        let hidden_repeat = previous_poses
+            .iter()
+            .find(|pose| pose.occurrence_id.0 == occurrence)
+            .unwrap();
+        assert!(!hidden_repeat.visible);
+        assert_eq!(hidden_repeat.translation, [20., 0., 0.]);
+        if hide_occurrence {
+            call(
+                &host,
+                "assembly_update_occurrence",
+                json!({"occurrence":{"id":occurrence,"visible":true}}),
+            );
+        } else {
+            call(&host, "project_set_visibility", json!({}));
+        }
+        let shown = host.viewport_frame();
+        assert!(shown
+            .instance_body_poses
+            .iter()
+            .filter(|pose| pose.body_id == body)
+            .all(|pose| pose.visible));
+        assert!(Arc::ptr_eq(&hidden.document, &shown.document));
+        assert!(!Arc::ptr_eq(
+            &hidden.instance_body_poses,
+            &shown.instance_body_poses
+        ));
+        call(
+            &host,
+            "assembly_set_occurrence_pose",
+            json!({
+                "occurrence_id":occurrence,
+                "local_pose":{"translation":[50.,7.,9.],"rotation":[0.,0.,0.,1.]}
+            }),
+        );
+        let moved = host.viewport_frame();
+        let moved_repeat = moved
+            .instance_body_poses
+            .iter()
+            .find(|pose| pose.occurrence_id.0 == occurrence)
+            .unwrap();
+        assert!(moved_repeat.visible);
+        assert_eq!(moved_repeat.translation, [50., 7., 9.]);
+        assert!(Arc::ptr_eq(&hidden.document, &moved.document));
+        assert!(Arc::ptr_eq(&hidden.document.scene, &moved.document.scene));
+        assert!(Arc::ptr_eq(&live_scene, &host.solid_scene_snapshot()));
+        assert_eq!(hidden.instance_body_poses.as_ref(), &previous_poses);
+        assert!(Arc::ptr_eq(
+            &moved.instance_body_poses,
+            &host.viewport_frame().instance_body_poses
+        ));
+        value(host.engine_call("end_sketch", "")).unwrap();
+        assert!(Arc::ptr_eq(
+            &live_scene,
+            &host.viewport_frame().document.scene
+        ));
+    }
+}

@@ -1577,11 +1577,8 @@ impl NativeEngineHost {
             }
         });
         let placement = cached.placement.get_or_insert_with(|| {
-            if let Some(history) = &inner.sketch_history_view {
-                return CachedPlacement {
-                    body_poses: Arc::clone(&history.frame.body_poses),
-                    instance_body_poses: Arc::clone(&history.frame.instance_body_poses),
-                };
+            if let Some(placement) = sketch_history::placement(inner) {
+                return placement;
             }
             let assembly = inner
                 .manager

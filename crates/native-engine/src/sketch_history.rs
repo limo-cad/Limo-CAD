@@ -84,6 +84,29 @@ pub(super) fn filter_metadata(manager: &SketchManager, document: &mut NativeView
         .retain(|plane| active.contains(&plane.feature_id));
 }
 
+pub(super) fn placement(source: &NativeEngine) -> Option<CachedPlacement> {
+    let history = source.sketch_history_view.as_ref()?;
+    // Geometry stays at the sketch's input stage, while placement and visibility
+    // follow the live assembly and Browser choices throughout the edit.
+    let mut solution = source
+        .manager
+        .assembly_document_ref()
+        .solve(history.frame.document.scene.as_ref());
+    let hidden = source
+        .manager
+        .project_visibility()
+        .hidden_body_ids
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    for instance in &mut solution.instance_body_poses {
+        instance.visible &= !hidden.contains(&instance.body_id.0);
+    }
+    Some(CachedPlacement {
+        body_poses: Arc::new(solution.body_poses),
+        instance_body_poses: Arc::new(solution.instance_body_poses),
+    })
+}
+
 pub(super) fn document(source: &NativeEngine) -> Option<NativeViewportDocument> {
     let history = source.sketch_history_view.as_ref()?;
     let sketch = source.manager.active_snapshot()?;
