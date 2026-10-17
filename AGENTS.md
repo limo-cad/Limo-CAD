@@ -12,3 +12,7 @@ activate the documented sequence.
 
 Preserve incoming work and saved/recovery data. Do not merge into main without
 Jack's approval.
+
+Follow `.cursor/rules/pr-lifecycle.mdc` for PR and merge work. For UI, Help or
+teaching changes, also follow `.cursor/rules/localized-ui.mdc` and
+`.cursor/rules/visual-change-evidence.mdc`.
