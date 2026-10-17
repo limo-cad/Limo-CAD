@@ -2,8 +2,10 @@
 //! Neither preparing nor rendering a preview receives the live CAD document.
 use super::*;
 use crate::native_viewport::script_preview::{
-    Frame, PreviewDescriptor, PreviewService, RenderRequest, MAX_RENDER_SIZE,
+    Frame, PendingRender, PreviewDescriptor, PreviewService, RenderRequest, RenderedTexture,
+    MAX_RENDER_SIZE,
 };
+#[cfg(test)]
 use bevy::{
     asset::RenderAssetUsages,
     image::{CompressedImageFormats, ImageSampler, ImageType},
@@ -88,7 +90,52 @@ impl Drop for Retained {
 struct Rendered {
     view: String,
     revision: u64,
-    png: Vec<u8>,
+    image: images::FrameImage,
+}
+enum InFlight {
+    Gpu {
+        view: String,
+        revision: u64,
+        pending: Mutex<PendingRender>,
+    },
+    #[cfg(test)]
+    Fixture(ResultChannel<Rendered>),
+}
+impl InFlight {
+    fn receive(&self) -> Option<Result<Rendered, String>> {
+        match self {
+            Self::Gpu {
+                view,
+                revision,
+                pending,
+            } => {
+                let result = pending
+                    .lock()
+                    .map_err(|_| "Preview response lock poisoned".to_owned())
+                    .and_then(|pending| pending.try_recv());
+                match result {
+                    Ok(Some(texture)) => Some(Ok(Rendered {
+                        view: view.clone(),
+                        revision: *revision,
+                        image: images::FrameImage::Gpu(texture),
+                    })),
+                    Ok(None) => None,
+                    Err(error) => Some(Err(error)),
+                }
+            }
+            #[cfg(test)]
+            Self::Fixture(channel) => Some(match channel.lock() {
+                Ok(channel) => match channel.try_recv() {
+                    Ok(value) => value,
+                    Err(mpsc::TryRecvError::Empty) => return None,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        Err("Preview fixture disconnected".into())
+                    }
+                },
+                Err(_) => Err("Preview fixture lock poisoned".into()),
+            }),
+        }
+    }
 }
 type ResultChannel<T> = Mutex<mpsc::Receiver<Result<T, String>>>;
 struct Wake {
@@ -105,7 +152,7 @@ pub(crate) struct State {
     pub open: bool,
     generation: u64,
     build: Option<ResultChannel<Vec<Frame>>>,
-    render: Option<ResultChannel<Rendered>>,
+    render: Option<InFlight>,
     render_revision: u64,
     #[cfg(test)]
     render_jobs: usize,
@@ -406,6 +453,7 @@ fn close(world: &mut World) {
     let images = {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.open = false;
+        preview.render = None;
         preview.steps_open = false;
         preview.steps_return_focus = false;
         preview.help = false;
@@ -421,10 +469,8 @@ fn close(world: &mut World) {
         preview.image = None;
         preview.images.drain()
     };
-    if let Some(mut assets) = world.get_resource_mut::<Assets<Image>>() {
-        for image in images {
-            assets.remove(image.id());
-        }
+    for image in images {
+        crate::native_viewport::script_preview::textures::remove(world, image.id());
     }
 }
 
@@ -601,22 +647,10 @@ fn publish(world: &mut World, rendered: Rendered) -> Result<(), String> {
     if !world.resource::<Files>().script.preview.accepts(&rendered) {
         return Ok(());
     }
-    let image = Image::from_buffer(
-        &rendered.png,
-        ImageType::Extension("png"),
-        CompressedImageFormats::NONE,
-        true,
-        ImageSampler::Default,
-        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-    )
-    .map_err(|error| format!("Cannot display lesson preview: {error}"))?;
     world.resource_scope(|world, mut files: Mut<Files>| {
         let preview = &mut files.script.preview;
         let key = images::Key::current(preview);
-        let handle =
-            preview
-                .images
-                .store(&mut world.resource_mut::<Assets<Image>>(), key, image)?;
+        let handle = preview.images.store(world, key, rendered.image)?;
         preview.image = Some(handle);
         preview.image_index = Some(preview.index);
         preview.rendered = rendered.revision;
@@ -625,7 +659,23 @@ fn publish(world: &mut World, rendered: Rendered) -> Result<(), String> {
     })
 }
 
-fn render(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String> {
+fn render(world: &mut World, _handle: &NativeInterfaceHandle) -> Result<(), String> {
+    let service = world.resource::<Files>().script.preview.service.clone();
+    // Host supplies its existing device/queue and completion wake callback.
+    // Connecting is cheap and idempotent; no secondary adapter/device is created.
+    // Cached frames and test fixtures need no connection at all.
+    let needs_connection = {
+        let preview = &world.resource::<Files>().script.preview;
+        preview.open
+            && !preview.help
+            && preview.attempted != preview.revision
+            && preview.render.is_none()
+            && preview.retained.is_some()
+            && preview.images.get(images::Key::current(preview)).is_none()
+    };
+    if needs_connection {
+        crate::native_viewport::script_preview::connect(world, &service)?;
+    }
     let preview = &mut world.resource_mut::<Files>().script.preview;
     if !preview.open || preview.help || preview.attempted == preview.revision {
         return Ok(());
@@ -644,7 +694,6 @@ fn render(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), Strin
         return Ok(());
     };
     let revision = preview.revision;
-    preview.attempted = revision;
     let view = retained.view.clone();
     let request = RenderRequest {
         palette: Some(preview.palette),
@@ -658,25 +707,16 @@ fn render(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), Strin
         pitch: preview.pitch,
     };
     let pending = retained.service.render(request)?;
+    preview.attempted = revision;
     #[cfg(test)]
     {
         preview.render_jobs += 1;
     }
-    let (send, receive) = mpsc::channel();
-    let wake = handle.clone();
-    std::thread::Builder::new()
-        .name("cad-preview-pixels".into())
-        .spawn(move || {
-            let result = pending.wait().map(|png| Rendered {
-                view,
-                revision,
-                png,
-            });
-            let _ = send.send(result);
-            wake.request_redraw();
-        })
-        .map_err(|error| format!("Cannot wait for preview pixels: {error}"))?;
-    preview.render = Some(Mutex::new(receive));
+    preview.render = Some(InFlight::Gpu {
+        view,
+        revision,
+        pending: Mutex::new(pending),
+    });
     preview.render_revision = revision;
     Ok(())
 }
@@ -748,7 +788,14 @@ pub(super) fn poll(world: &mut World) {
             preview.transition = None;
         }
     }
-    if let Some(result) = receive(&world.resource::<Files>().script.preview.render) {
+    let completed = world
+        .resource::<Files>()
+        .script
+        .preview
+        .render
+        .as_ref()
+        .and_then(InFlight::receive);
+    if let Some(result) = completed {
         world.resource_mut::<Files>().script.preview.render = None;
         if let Err(error) = result.and_then(|result| publish(world, result)) {
             let preview = &mut world.resource_mut::<Files>().script.preview;

@@ -2,6 +2,7 @@
 //! Limits account serialized payload, not renderer/device resident memory.
 use super::*;
 use std::{collections::VecDeque, io::Write};
+mod bundled;
 
 const MAX_SOURCE_BYTES: usize = 256 * 1024;
 const MAX_PAYLOAD_BYTES: usize = 16 * 1024 * 1024;
@@ -104,7 +105,10 @@ pub(super) fn prepare(
     source: &str,
     id: Option<lesson::Id>,
 ) -> Result<Vec<Frame>, String> {
-    prepare_with(cache, source, id, || prepare_lesson(source, id))
+    prepare_with(cache, source, id, || match authored(source, id) {
+        Some(id) => bundled::load(source, id),
+        None => prepare_lesson(source, id),
+    })
 }
 
 fn prepare_with(

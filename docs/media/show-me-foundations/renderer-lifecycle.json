@@ -1,16 +1,40 @@
 {
-  "scope": "isolated native renderer, debug test profile, one sample per open; process memory excludes dedicated GPU allocations",
-  "cold_open_ms": 2094.3251,
-  "reopen_ms": [
-    105.5677,
-    104.1353
+  "renderer": "One existing CAD worker/app/device/queue; separate teaching scene and bounded texture pool",
+  "controller_texture_ready_first_open_ms": {
+    "sketch": 58.7155,
+    "extrude": 71.9315,
+    "cut": 1112.9201,
+    "cut-measured": 1150.9917,
+    "fillet": 781.2307
+  },
+  "controller_texture_ready_same_lesson_reopen_ms": {
+    "sketch": 38.3874,
+    "extrude": 39.8234,
+    "cut": 166.8338,
+    "cut-measured": 168.6348,
+    "fillet": 48.845600000000005
+  },
+  "ui_texture_cache_max_bytes": 2097152,
+  "worker_color_target_pool_max_bytes": 5120000,
+  "excluded_from_color_bounds": [
+    "depth/MSAA attachments",
+    "geometry",
+    "shared pipelines",
+    "driver allocations"
   ],
-  "renderer_constructions": 1,
-  "before_working_set_bytes": 19574784,
-  "after_first_close_working_set_bytes": 335380480,
-  "after_second_reopen_working_set_bytes": 335794176,
-  "before_private_bytes": 5406720,
-  "after_first_close_private_bytes": 473071616,
-  "after_second_reopen_private_bytes": 473636864,
-  "startup_policy": "lazy first use, parked persistent worker until host teardown; no startup allocation"
+  "closed_ui_imports": 0,
+  "closed_worker_pool": "Retained for reuse; closing is not total GPU deallocation",
+  "idle_poll_samples_per_state_per_variant": 100000,
+  "idle_preview_wakes": 0,
+  "limitations": "Single Windows debug-profile run; final test crate has no debug symbols. Cold solid shader compilation remains visible. No low-end hardware or dedicated GPU memory benchmark.",
+  "validation": {
+    "targeted_cpu_tests_passed": 51,
+    "native_gpu_tests_passed": 4,
+    "native_ui_capture_suites_passed": 1,
+    "ci_tooling_tests_passed": 241,
+    "ci_tooling_tests_ignored": 2,
+    "strict_desktop_clippy": "passed",
+    "adversarial_reviewers": 3
+  },
+  "existing_ui_followup": "Initial Sketch plane frame is blank, as before this renderer change; add an explicit plane cue in a future UI refinement."
 }

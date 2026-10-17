@@ -47,9 +47,9 @@ fn retained(world: &mut World) -> (String, String, Arc<PreviewService>) {
     preview.retained = Some(retained);
     result
 }
-fn png() -> Vec<u8> {
+fn image() -> images::FrameImage {
     use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-    crate::native_viewport::screenshot::png_bytes(&Image::new_fill(
+    images::FrameImage::Fixture(Image::new_fill(
         Extent3d {
             width: 2,
             height: 2,
@@ -60,7 +60,6 @@ fn png() -> Vec<u8> {
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::MAIN_WORLD,
     ))
-    .unwrap()
 }
 
 #[test]
@@ -162,7 +161,7 @@ fn native_script_preview_cut_choices_share_opening_frames_and_fence_stale_result
                 Rendered {
                     view,
                     revision,
-                    png: png(),
+                    image: image(),
                 },
             )
             .unwrap();
@@ -176,7 +175,7 @@ fn native_script_preview_cut_choices_share_opening_frames_and_fence_stale_result
             .images
             .footprint()
             .0,
-        6
+        2
     );
     let (view, revision) = {
         let state = &world.resource::<Files>().script.preview;
@@ -197,7 +196,7 @@ fn native_script_preview_cut_choices_share_opening_frames_and_fence_stale_result
         Rendered {
             view,
             revision,
-            png: vec![],
+            image: image(),
         },
     )
     .unwrap();
@@ -240,7 +239,6 @@ fn native_script_preview_cut_choices_share_opening_frames_and_fence_stale_result
                 if index > 0 {
                     command(&mut world, &handle, Action::Next, &ControlInput::Click).unwrap();
                 }
-                render(&mut world, &handle).unwrap();
             }
         }
     }
@@ -268,7 +266,7 @@ fn native_script_preview_cached_frames_skip_gpu_work_and_fence_late_errors() {
         Rendered {
             view,
             revision,
-            png: png(),
+            image: image(),
         },
     )
     .unwrap();
@@ -276,7 +274,7 @@ fn native_script_preview_cached_frames_skip_gpu_work_and_fence_late_errors() {
     let (send, receive) = mpsc::channel();
     {
         let preview = &mut world.resource_mut::<Files>().script.preview;
-        preview.render = Some(Mutex::new(receive));
+        preview.render = Some(InFlight::Fixture(Mutex::new(receive)));
         preview.render_revision = revision;
         preview.changed().unwrap();
     }
@@ -423,9 +421,19 @@ fn native_script_preview_help_entry_is_localized_dormant_and_restores_the_draft(
 fn native_script_preview_cached_replay_arms_every_frame_without_gpu_completion_wakes() {
     let mut world = world();
     let (view, _, _) = retained(&mut world);
+    world
+        .resource_mut::<Files>()
+        .script
+        .preview
+        .retained
+        .as_mut()
+        .unwrap()
+        .descriptor
+        .captions
+        .truncate(2);
     let handle = NativeInterfaceHandle::new(|| {});
     world.insert_resource(handle.clone());
-    for index in 0..3 {
+    for index in 0..2 {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.index = index;
         preview.changed().unwrap();
@@ -435,14 +443,14 @@ fn native_script_preview_cached_replay_arms_every_frame_without_gpu_completion_w
             Rendered {
                 view: view.clone(),
                 revision,
-                png: png(),
+                image: image(),
             },
         )
         .unwrap();
     }
     command(&mut world, &handle, Action::Replay, &ControlInput::Click).unwrap();
     poll(&mut world);
-    for index in 0..2 {
+    for index in 0..1 {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         assert_eq!(preview.index, index);
         preview
@@ -453,7 +461,7 @@ fn native_script_preview_cached_replay_arms_every_frame_without_gpu_completion_w
         poll(&mut world);
     }
     let preview = &world.resource::<Files>().script.preview;
-    assert_eq!(preview.index, 2);
+    assert_eq!(preview.index, 1);
     assert_eq!(preview.render_jobs, 0);
     assert!(!preview.playing);
     assert!(preview.wake.is_none());
@@ -597,7 +605,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
         Rendered {
             view: view.clone(),
             revision,
-            png: png(),
+            image: image(),
         },
     )
     .unwrap();
@@ -613,7 +621,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
         Rendered {
             view: view.clone(),
             revision,
-            png: vec![],
+            image: image(),
         },
     )
     .unwrap();
@@ -623,7 +631,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
         Rendered {
             view: "retired-view".into(),
             revision,
-            png: vec![],
+            image: image(),
         },
     )
     .unwrap();
@@ -632,7 +640,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
         Rendered {
             view: view.clone(),
             revision,
-            png: png(),
+            image: image(),
         },
     )
     .unwrap();
@@ -648,7 +656,7 @@ fn native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_
         Rendered {
             view: view.clone(),
             revision,
-            png: vec![],
+            image: image(),
         },
     )
     .unwrap();

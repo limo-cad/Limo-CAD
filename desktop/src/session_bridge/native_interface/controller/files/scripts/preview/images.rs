@@ -1,9 +1,54 @@
-//! A bounded set of uploaded frames. Replay reuses textures instead of GPU jobs.
+//! Two GPU-resident teaching frames; no PNG decode, readback, or image upload.
 use super::*;
+use crate::native_viewport::script_preview::textures;
 use std::collections::VecDeque;
 
-const MAX_BYTES: usize = 16 * 1024 * 1024;
-const MAX_FRAMES: usize = 16;
+const MAX_BYTES: usize = 2 * 1024 * 1024;
+const MAX_FRAMES: usize = 2;
+
+pub(super) enum FrameImage {
+    Gpu(RenderedTexture),
+    /// CPU-only controller tests exercise fencing/eviction without a GPU device.
+    #[cfg(test)]
+    Fixture(Image),
+}
+impl FrameImage {
+    fn bytes(&self) -> Result<usize, String> {
+        match self {
+            Self::Gpu(texture) => {
+                use bevy::render::render_resource::{TextureDimension, TextureFormat};
+                let descriptor = &texture.image.texture_descriptor;
+                if descriptor.dimension != TextureDimension::D2
+                    || descriptor.size.depth_or_array_layers != 1
+                    || descriptor.mip_level_count != 1
+                    || descriptor.sample_count != 1
+                    || !matches!(
+                        descriptor.format,
+                        TextureFormat::Rgba8UnormSrgb
+                            | TextureFormat::Rgba8Unorm
+                            | TextureFormat::Bgra8UnormSrgb
+                            | TextureFormat::Bgra8Unorm
+                    )
+                {
+                    return Err("Unsupported preview texture format".into());
+                }
+                (descriptor.size.width as usize)
+                    .checked_mul(descriptor.size.height as usize)
+                    .and_then(|pixels| pixels.checked_mul(4))
+                    .ok_or_else(|| "Preview texture size overflow".into())
+            }
+            #[cfg(test)]
+            Self::Fixture(image) => Ok(image.data.as_ref().map_or(0, Vec::len)),
+        }
+    }
+    fn insert(self, world: &mut World) -> Handle<Image> {
+        match self {
+            Self::Gpu(texture) => textures::insert(world, texture),
+            #[cfg(test)]
+            Self::Fixture(image) => world.resource_mut::<Assets<Image>>().add(image),
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct Key {
@@ -42,25 +87,25 @@ impl Cache {
     }
     pub fn store(
         &mut self,
-        assets: &mut Assets<Image>,
+        world: &mut World,
         key: Key,
-        image: Image,
+        image: FrameImage,
     ) -> Result<Handle<Image>, String> {
-        let bytes = image.data.as_ref().map_or(0, Vec::len);
+        let bytes = image.bytes()?;
         if bytes > MAX_BYTES {
-            return Err("Preview image exceeds its 16 MiB texture budget".into());
+            return Err("Preview image exceeds its 2 MiB texture budget".into());
         }
         if let Some(index) = self.frames.iter().position(|(k, _, _)| *k == key) {
             let (_, old, size) = self.frames.remove(index).unwrap();
-            assets.remove(old.id());
+            textures::remove(world, old.id());
             self.bytes -= size;
         }
         while self.frames.len() >= MAX_FRAMES || self.bytes + bytes > MAX_BYTES {
             let (_, old, size) = self.frames.pop_front().unwrap();
-            assets.remove(old.id());
+            textures::remove(world, old.id());
             self.bytes -= size;
         }
-        let image = assets.add(image);
+        let image = image.insert(world);
         self.frames.push_back((key, image.clone(), bytes));
         self.bytes += bytes;
         Ok(image)
@@ -77,7 +122,8 @@ mod tests {
     use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
     #[test]
     fn native_script_preview_texture_budget_evicts_and_releases_owned_assets() {
-        let mut assets = Assets::<Image>::default();
+        let mut world = World::new();
+        world.init_resource::<Assets<Image>>();
         let mut cache = Cache::default();
         let state = State::default();
         let mut key = Key::current(&state);
@@ -85,8 +131,8 @@ mod tests {
             key.index = index;
             let image = Image::new_fill(
                 Extent3d {
-                    width: 1024,
-                    height: 1024,
+                    width: 512,
+                    height: 512,
                     depth_or_array_layers: 1,
                 },
                 TextureDimension::D2,
@@ -94,16 +140,18 @@ mod tests {
                 TextureFormat::Rgba8UnormSrgb,
                 RenderAssetUsages::MAIN_WORLD,
             );
-            cache.store(&mut assets, key, image).unwrap();
+            cache
+                .store(&mut world, key, FrameImage::Fixture(image))
+                .unwrap();
         }
-        assert_eq!(assets.len(), 4);
-        assert_eq!(cache.footprint(), (4, MAX_BYTES));
+        assert_eq!(world.resource::<Assets<Image>>().len(), 2);
+        assert_eq!(cache.footprint(), (2, MAX_BYTES));
         key.index = 0;
         assert!(cache.get(key).is_none());
         for image in cache.drain() {
-            assets.remove(image.id());
+            textures::remove(&mut world, image.id());
         }
-        assert!(assets.is_empty());
+        assert!(world.resource::<Assets<Image>>().is_empty());
         for index in 0..17 {
             key.index = index;
             let image = Image::new_fill(
@@ -117,8 +165,10 @@ mod tests {
                 TextureFormat::Rgba8UnormSrgb,
                 RenderAssetUsages::MAIN_WORLD,
             );
-            cache.store(&mut assets, key, image).unwrap();
+            cache
+                .store(&mut world, key, FrameImage::Fixture(image))
+                .unwrap();
         }
-        assert_eq!(assets.len(), MAX_FRAMES);
+        assert_eq!(world.resource::<Assets<Image>>().len(), MAX_FRAMES);
     }
 }

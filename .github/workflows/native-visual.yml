@@ -11,6 +11,8 @@ on:
       - 'desktop/src/session_bridge/native_interface/controller/files/panel.rs'
       - 'desktop/Cargo.toml'
       - 'desktop/Cargo.lock'
+      - 'desktop/assets/show-me/**'
+      - 'mcp-server/examples/generate_show_me.rs'
       - 'crates/core/**'
       - 'crates/solid/**'
       - 'crates/sketch/**'
@@ -70,6 +72,8 @@ jobs:
         run: cargo xtask ci native-ignored-test sketch-visual
       - name: Verify grid visibility restores without pointer input
         run: cargo xtask ci native-ignored-test grid-redraw
+      - name: Verify bundled lesson source freshness and geometry budgets
+        run: cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_bundled_assets
       - name: Verify the Extrude lesson profile and solid on the GPU
         env:
           LIMO_CAD_PREVIEW_PROOF_DIR: ${{ github.workspace }}/docs/qa/native-boundary

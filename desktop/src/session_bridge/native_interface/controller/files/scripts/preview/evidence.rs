@@ -34,13 +34,16 @@ fn process_memory() -> Value {
     })
 }
 
-fn lifecycle(world: &mut World, handle: &NativeInterfaceHandle, id: lesson::Id) -> Value {
-    let service = world.resource::<Files>().script.preview.service.clone();
-    let prepared = world.resource::<Files>().script.preview.prepared.clone();
+fn lifecycle(app: &mut App, handle: &NativeInterfaceHandle, id: lesson::Id) -> Value {
+    let prepared = app
+        .world()
+        .resource::<Files>()
+        .script
+        .preview
+        .prepared
+        .clone();
     let before = prepared.lock().unwrap().metrics();
     assert_eq!((before.0, before.1), (0, 1));
-    let constructions = service.renderer_constructions();
-    assert_eq!(constructions, 1, "One renderer serves the entire lesson");
     let closed_memory = process_memory();
     let mut timings = vec![];
     let other = if id == lesson::Id::Sketch {
@@ -50,11 +53,18 @@ fn lifecycle(world: &mut World, handle: &NativeInterfaceHandle, id: lesson::Id) 
     };
     for lesson in [id, other, id] {
         let begin = Instant::now();
-        command(world, handle, Action::Lesson(lesson), &ControlInput::Click).unwrap();
+        command(
+            app.world_mut(),
+            handle,
+            Action::Lesson(lesson),
+            &ControlInput::Click,
+        )
+        .unwrap();
         let deadline = Instant::now() + Duration::from_secs(45);
         loop {
-            poll(world);
-            let preview = &world.resource::<Files>().script.preview;
+            update(app);
+            poll(app.world_mut());
+            let preview = &app.world().resource::<Files>().script.preview;
             assert!(preview.error.is_none(), "{:?}", preview.error);
             if preview.build.is_none()
                 && preview.image.is_some()
@@ -66,13 +76,13 @@ fn lifecycle(world: &mut World, handle: &NativeInterfaceHandle, id: lesson::Id) 
             std::thread::sleep(Duration::from_millis(2));
         }
         timings.push(begin.elapsed().as_secs_f64() * 1000.);
-        assert_eq!(service.renderer_constructions(), constructions);
-        command(world, handle, Action::Close, &ControlInput::Click).unwrap();
+        command(app.world_mut(), handle, Action::Close, &ControlInput::Click).unwrap();
+        released_textures(app);
     }
     let after = prepared.lock().unwrap().metrics();
     assert_eq!((after.0, after.1, after.2), (2, 2, 2));
     json!({"reopen_same_lesson_ms":timings[0], "open_other_lesson_ms":timings[1],
-        "return_to_first_lesson_ms":timings[2], "renderer_constructions":constructions,
+        "return_to_first_lesson_ms":timings[2], "renderer":"existing shared CAD worker and device",
         "authored_cache_hits":after.0,"authored_cache_misses":after.1,
         "authored_cache_entries":after.2,"authored_cache_serialized_bytes":after.3,
         "closed_memory_before_reopen":closed_memory,"closed_memory_after_reopen":process_memory(),
@@ -89,6 +99,51 @@ fn update(app: &mut App) {
             timeout: Some(Duration::from_secs(5)),
         })
         .unwrap();
+}
+
+fn settle(app: &mut App) {
+    let deadline = Instant::now() + Duration::from_secs(45);
+    loop {
+        update(app);
+        poll(app.world_mut());
+        let preview = &app.world().resource::<Files>().script.preview;
+        assert!(preview.error.is_none(), "{:?}", preview.error);
+        let footprint = preview.images.footprint();
+        assert!(footprint.0 <= 2 && footprint.1 <= 2 * 1024 * 1024);
+        assert!(crate::native_viewport::script_preview::textures::retained_count(app.world()) <= 2);
+        assert!(
+            crate::native_viewport::script_preview::textures::imported_count(
+                app.sub_app(bevy::render::RenderApp).world()
+            ) <= 2
+        );
+        if preview.build.is_none()
+            && preview.image.is_some()
+            && preview.rendered == preview.revision
+        {
+            break;
+        }
+        assert!(Instant::now() < deadline, "Shared preview did not settle");
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+fn released_textures(app: &mut App) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        update(app);
+        let retained =
+            crate::native_viewport::script_preview::textures::retained_count(app.world());
+        let imported = crate::native_viewport::script_preview::textures::imported_count(
+            app.sub_app(bevy::render::RenderApp).world(),
+        );
+        if retained == 0 && imported == 0 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Closed teaching textures were retained: {retained}/{imported}"
+        );
+    }
 }
 fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
     for _ in 0..8 {
@@ -206,10 +261,9 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     );
     let mut app = App::new();
     app.add_plugins(
-        DefaultPlugins
-            .build()
+        crate::native_viewport::script_preview::shared_fixture_plugins()
             .set(WindowPlugin {
-                primary_window: None,
+                primary_window: Some(Window::default()),
                 exit_condition: ExitCondition::DontExit,
                 close_when_requested: false,
                 ..default()
@@ -223,7 +277,7 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         count.fetch_add(1, Ordering::Relaxed);
     });
     interface_shell::install(&mut app, handle.clone(), |_, _| {});
-    app.add_systems(Startup, crate::native_viewport::ui::load_system_font);
+    crate::native_viewport::script_preview::install_shared_fixture(&mut app);
     app.init_resource::<Capture>();
     app.finish();
     app.cleanup();
@@ -411,6 +465,7 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         .build
         .is_some()
     {
+        update(&mut app);
         poll(app.world_mut());
         assert!(
             Instant::now() < deadline,
@@ -448,6 +503,7 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         let begin = Instant::now();
         let deadline = begin + Duration::from_secs(45);
         loop {
+            update(&mut app);
             poll(app.world_mut());
             let preview = &app.world().resource::<Files>().script.preview;
             assert!(preview.error.is_none(), "{:?}", preview.error);
@@ -513,76 +569,63 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         .preview
         .images
         .footprint();
-    let begin = Instant::now();
+    // The two most recent textures support immediate back/forward without work.
+    let before_adjacent = app.world().resource::<Files>().script.preview.render_jobs;
     for _ in 0..100 {
-        command(
-            app.world_mut(),
-            &handle,
-            Action::Replay,
-            &ControlInput::Click,
-        )
-        .unwrap();
-        for index in 0..durations.len() {
-            if index > 0 {
-                command(app.world_mut(), &handle, Action::Next, &ControlInput::Click).unwrap();
-            }
+        for index in [durations.len() - 2, durations.len() - 1] {
+            command(
+                app.world_mut(),
+                &handle,
+                Action::Step(index),
+                &ControlInput::Click,
+            )
+            .unwrap();
             render(app.world_mut(), &handle).unwrap();
         }
     }
-    let warm_ms = begin.elapsed().as_secs_f64() * 1000. / 100.;
     assert_eq!(
         app.world().resource::<Files>().script.preview.render_jobs,
-        jobs,
-        "Warm replay must not submit GPU jobs"
+        before_adjacent
     );
+    // A complete replay deliberately renders evicted frames instead of retaining
+    // every frame's GPU texture. Measure this separate, memory-bounded tradeoff.
+    let begin = Instant::now();
+    let before_replay = app.world().resource::<Files>().script.preview.render_jobs;
+    for _ in 0..3 {
+        for index in 0..durations.len() {
+            command(
+                app.world_mut(),
+                &handle,
+                Action::Step(index),
+                &ControlInput::Click,
+            )
+            .unwrap();
+            settle(&mut app);
+        }
+    }
+    let warm_ms = begin.elapsed().as_secs_f64() * 1000. / 3.;
+    let warm_jobs = app.world().resource::<Files>().script.preview.render_jobs - before_replay;
     let mut scenario_cached_frames = None;
+    let mut scenario_jobs = None;
     if id == lesson::Id::Cut {
-        // Warm both choices once, then exercise actual commands and every step.
-        // The two opening frames are shared, so only six textures are needed.
-        let mut warm_jobs = 0;
-        for round in 0..=100 {
-            for option in lesson::CutScenario::ALL {
+        let before_scenarios = app.world().resource::<Files>().script.preview.render_jobs;
+        for option in lesson::CutScenario::ALL {
+            command(
+                app.world_mut(),
+                &handle,
+                Action::Scenario(option),
+                &ControlInput::Click,
+            )
+            .unwrap();
+            for index in 0..4 {
                 command(
                     app.world_mut(),
                     &handle,
-                    Action::Scenario(option),
+                    Action::Step(index),
                     &ControlInput::Click,
                 )
                 .unwrap();
-                command(
-                    app.world_mut(),
-                    &handle,
-                    Action::Replay,
-                    &ControlInput::Click,
-                )
-                .unwrap();
-                for index in 0..4 {
-                    if index > 0 {
-                        command(app.world_mut(), &handle, Action::Next, &ControlInput::Click)
-                            .unwrap();
-                    }
-                    render(app.world_mut(), &handle).unwrap();
-                    let deadline = Instant::now() + Duration::from_secs(45);
-                    loop {
-                        poll(app.world_mut());
-                        let state = &app.world().resource::<Files>().script.preview;
-                        assert!(state.error.is_none(), "{:?}", state.error);
-                        if state.rendered == state.revision {
-                            break;
-                        }
-                        assert!(Instant::now() < deadline);
-                        std::thread::sleep(Duration::from_millis(2));
-                    }
-                }
-            }
-            let state = &app.world().resource::<Files>().script.preview;
-            if round == 0 {
-                warm_jobs = state.render_jobs;
-            } else {
-                assert_eq!(
-                    state.render_jobs, warm_jobs,
-                    "Warm scenario switches must not render again"
-                );
+                settle(&mut app);
             }
         }
         let count = app
@@ -593,8 +636,10 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             .images
             .footprint()
             .0;
-        assert_eq!(count, 6);
+        assert_eq!(count, 2);
         scenario_cached_frames = Some(count);
+        scenario_jobs =
+            Some(app.world().resource::<Files>().script.preview.render_jobs - before_scenarios);
         command(
             app.world_mut(),
             &handle,
@@ -602,10 +647,14 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             &ControlInput::Click,
         )
         .unwrap();
-        for _ in 0..3 {
-            command(app.world_mut(), &handle, Action::Next, &ControlInput::Click).unwrap();
-        }
-        render(app.world_mut(), &handle).unwrap();
+        command(
+            app.world_mut(),
+            &handle,
+            Action::Step(3),
+            &ControlInput::Click,
+        )
+        .unwrap();
+        settle(&mut app);
     }
     let jobs_before_steps = app.world().resource::<Files>().script.preview.render_jobs;
     command(
@@ -636,6 +685,11 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         );
     }
     capture(&mut app, &target, &out.join("all-steps.png"));
+    assert_eq!(
+        app.world().resource::<Files>().script.preview.render_jobs,
+        jobs_before_steps,
+        "Expanding navigation must not submit work"
+    );
     for index in 0..durations.len() {
         command(
             app.world_mut(),
@@ -644,13 +698,8 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             &ControlInput::Click,
         )
         .unwrap();
-        render(app.world_mut(), &handle).unwrap();
+        settle(&mut app);
     }
-    assert_eq!(
-        app.world().resource::<Files>().script.preview.render_jobs,
-        jobs_before_steps,
-        "Expanded navigation and warmed jumps reuse the existing frames"
-    );
     command(app.world_mut(), &handle, Action::Help, &ControlInput::Click).unwrap();
     widgets.begin();
     panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
@@ -678,6 +727,7 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     widgets.finish(app.world_mut());
     let deadline = Instant::now() + Duration::from_secs(45);
     loop {
+        update(&mut app);
         poll(app.world_mut());
         let preview = &app.world().resource::<Files>().script.preview;
         if preview.rendered == preview.revision {
@@ -731,6 +781,7 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         widgets.finish(app.world_mut());
         let deadline = Instant::now() + Duration::from_secs(45);
         loop {
+            update(&mut app);
             poll(app.world_mut());
             let preview = &app.world().resource::<Files>().script.preview;
             assert!(preview.error.is_none(), "{:?}", preview.error);
@@ -903,6 +954,7 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     for open in [true, false] {
         if !open {
             close(app.world_mut());
+            released_textures(&mut app);
         }
         app.world_mut()
             .resource_mut::<Files>()
@@ -932,18 +984,14 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             .footprint(),
         (0, 0)
     );
-    let report = json!({"lesson":id,"scope":"windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization", "prepare_ms":prepare_ms,"cold_frame_ms":cold_ms,"cold_gpu_jobs":jobs,"warm_replay_ms":warm_ms,"warm_gpu_jobs":0,"cached_frames":footprint.0,"cached_rgba_bytes":footprint.1,"texture_budget_bytes":16*1024*1024,"paused_poll_ns":idle_ns[0],"closed_poll_ns":idle_ns[1],"idle_poll_samples":100_000,"idle_preview_wakes":0,"closed_cached_bytes":0,"durations_ms":durations});
+    let report = json!({"lesson":id,"scope":"windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization", "prepare_ms":prepare_ms,"cold_frame_ms":cold_ms,"cold_gpu_jobs":jobs,"warm_replay_ms":warm_ms,"warm_gpu_jobs":warm_jobs,"cached_adjacent_gpu_jobs":0,"cached_frames":footprint.0,"cached_gpu_texture_bytes":footprint.1,"texture_budget_bytes":2*1024*1024,"paused_poll_ns":idle_ns[0],"closed_poll_ns":idle_ns[1],"idle_poll_samples":100_000,"idle_preview_wakes":0,"closed_cached_bytes":0,"durations_ms":durations});
     let mut report = report;
     report["controller_first_open_ms"] = json!(first_open_ms);
     report["memory_before_controller_open"] = memory_before;
-    report["lifecycle"] = lifecycle(app.world_mut(), &handle, id);
+    report["lifecycle"] = lifecycle(&mut app, &handle, id);
     report["scenario"] = json!(scenario);
     report["scenario_cached_frames"] = json!(scenario_cached_frames);
-    report["warm_scenario_gpu_jobs"] = if scenario_cached_frames.is_some() {
-        json!(0)
-    } else {
-        serde_json::Value::Null
-    };
+    report["scenario_gpu_jobs"] = json!(scenario_jobs);
     std::fs::write(
         out.join("performance.json"),
         serde_json::to_vec_pretty(&report).unwrap(),
