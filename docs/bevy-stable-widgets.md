@@ -149,11 +149,30 @@ There is no separate pointer-event recognizer, docking system or saved window
 manager. Other bespoke panels and native operating-system file choosers retain
 their existing behavior.
 
-The focused source checks pass: 100 interface tests, seven Settings tests,
-strict release checks, and a clean packaged macOS build with PR433 and PR434
-locally integrated. Live drag/resize workflow checks remain pending: macOS
-automation reported the Mac locked when launching the new app. This is a
-source checkpoint, not a live UI pass. See [dialog evidence](qualification/bevy-dialogs-20261017.json).
+The focused source checks pass: 101 interface tests, seven Settings tests,
+strict release checks, and a clean V8 macOS build (`3a688963`) with PR433 and
+PR434 locally integrated. Real GUI startup exposed duplicate `DialogPlugin`
+registration in V7; `bafaf561` reuses the plugin installed by Bevy and adds a
+regression test.
+
+Eleven focused live cases passed: Settings movement/resizing, scrolling,
+forward/reverse Tab, 125% scaling and default geometry on reopening; Extrude
+draft/annotation preservation, scrolling and Cancel; Revolve boundary/minimum
+width and validation; apply/undo/save; and operation after disk cleanup. Applying
+14 mm from a moved Extrude dialog worked. Undo and Save restored the original
+12 mm model byte-for-byte.
+
+One functional item remains open: some large automated Settings drags dismiss
+the dialog or focus a different control instead of dragging. Ordinary move and
+resize gestures passed, but input delivery versus a product defect is not yet
+isolated. Exact minimum-height and host-window-resize live cases remain unrun.
+This remains a draft, opt-in prototype; the large-drag issue is not accepted as
+a minor visual difference. Native host CI was still running when recorded.
+See [dialog evidence](qualification/bevy-dialogs-20261017.json).
+
+![Settings moved and resized using Bevy dialog handling](qualification/bevy-dialogs-20261017/settings-dragged.png)
+
+![Extrude draft retained in a moved and resized dialog](qualification/bevy-dialogs-20261017/extrude-resized.png)
 
 ## Stable dependency and window-host patch
 
