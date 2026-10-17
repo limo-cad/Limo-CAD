@@ -14,3 +14,5 @@ zip = { workspace = true, features = ["deflate"] }
 
 [dev-dependencies]
 zip = { workspace = true, features = ["unreserved"] }
+[dependencies.ciborium]
+version = "=0.2.2"

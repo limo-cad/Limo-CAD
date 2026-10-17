@@ -1,0 +1,12 @@
+﻿; Native composite project snapshot, CBOR v1. Domain payloads are opaque bytes.
+; CAD/domain validation precedes live adoption; this envelope alone is not proof.
+project-snapshot = {
+  format: "limo-cad-project-snapshot",
+  version: 1,
+  model_json: tstr,
+  intents: [*64 { name: tstr, payload: bstr }]
+}
+; Model header: canonical project format and positive integral schema version.
+; Intent names: unique safe relative names under intent/, <=256 ASCII bytes.
+; Encoded payload <=256 MiB; recursion <=16. Unknown domain bytes are retained.
+; Model/domain live state, history and publication must commit as one revision.

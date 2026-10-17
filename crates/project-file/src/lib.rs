@@ -5,6 +5,8 @@
 
 mod archive;
 mod files;
+mod snapshot;
+pub use snapshot::{ProjectSnapshot, SnapshotIntent, MAX_SNAPSHOT_BYTES};
 
 pub use archive::{
     ProjectArchive, SaveMetadata, CONTAINER_VERSION, LEGACY_FORMAT, PREVIOUS_FORMAT,
