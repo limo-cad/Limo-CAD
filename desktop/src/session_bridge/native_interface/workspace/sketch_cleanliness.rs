@@ -102,17 +102,16 @@ impl DocumentWorkspace {
             tab.clean_sketch = Some(entry);
             return Ok(false);
         }
-        let model = engine_text(
-            parse_engine_envelope(engine.engine_call("project_export_model", ""))?,
-            "Clean sketch reconciliation requires a finished project model",
-        )?;
+        let snapshot = engine.project_snapshot()?;
         let archive = archive
             .lock()
             .map_err(|_| "Project archive lock poisoned")?;
-        // Borrow both strings; outer JSON whitespace is insignificant. Other
-        // formatting/migration differences conservatively keep the tab dirty.
-        if model.trim_matches([' ', '\r', '\n', '\t'])
-            != archive.model_json().trim_matches([' ', '\r', '\n', '\t'])
+        let saved = archive.snapshot().map_err(|error| error.to_string())?;
+        // Outer model whitespace is insignificant; domain intent must match
+        // exactly. Other formatting/migration differences keep the tab dirty.
+        if snapshot.model_json().trim_matches([' ', '\r', '\n', '\t'])
+            != saved.model_json().trim_matches([' ', '\r', '\n', '\t'])
+            || snapshot.intents() != saved.intents()
         {
             return Ok(false);
         }
