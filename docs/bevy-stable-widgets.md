@@ -12,6 +12,9 @@ workflow. Minor differences are acceptable when they do not obscure state,
 change command meaning, clip required content, or prevent an existing action.
 Pixel identity is useful evidence, but is not an adoption requirement.
 
+Latest focused follow-up: [Snap focus is fixed and verified; large Settings
+drags remain blocked](#settings-dragging-and-snap-focus-follow-up).
+
 ## Why headless widgets
 
 Bevy's headless widgets supply behavior without a visual theme. Keep the current
@@ -59,7 +62,8 @@ The application still chooses eligible controls and Tab order, blocks controls
 outside the active modal, and distinguishes primary UI input from CAD secondary
 clicks and camera gestures. Published document/binding stamps accompany Bevy's
 `Activate`/`ValueChange` notifications into the existing command reducer. A
-binding/document change cancels pending pointer state. Native text edits are
+document change cancels pending pointer state; rebinding or disabling an
+unrelated control no longer cancels a dialog-owned gesture. Native text edits are
 flushed before queued widget commands are reduced. These are CAD ownership and
 transaction responsibilities, not a second widget event implementation.
 
@@ -94,7 +98,8 @@ earlier-sketch editing, Undo/Redo, save/reopen, and canceling an edited feature.
 The saved schema-15 model is exactly equal to the default baseline's model.
 The Snap square now toggles successfully; the existing focus retirement after
 changing Snap remains, so a subsequent Space does not toggle it until focus is
-reacquired. This is an unresolved baseline limitation, not a visual difference.
+reacquired. This was an unresolved baseline limitation at that revision; the
+[latest follow-up](#settings-dragging-and-snap-focus-follow-up) fixes and verifies it.
 
 Thirteen capture pairs are retained with raw differences and revision identities.
 The controls retain comparable labels, layout and sizing. Some pairs have
@@ -269,10 +274,9 @@ as a universal pixel-identity pass.
 **Shared baseline observation:** in both apps, clicking the displayed Snap
 square did nothing, while clicking its row toggled it. After the row toggled,
 inspection reported no focused control and Space did not toggle it. Snap was
-restored in both fixtures. This remains unresolved and needs human reproduction
-and inspection of native hit targets/focus retirement; no widget-specific cause
-was established. It is recorded as an issue, not a pass or an accepted cosmetic
-difference.
+restored in both fixtures. This historical case remains recorded as an issue,
+not a retroactive pass. The [latest follow-up](#settings-dragging-and-snap-focus-follow-up)
+fixes the remaining focus loss and verifies square clicking and Space.
 
 The updated PR433 integration passed two profile-selection migration tests and
 five native OCCT region tests. The earlier integration passed all 97 native
@@ -394,7 +398,59 @@ and theme remain comparable, with a slightly larger slider thumb. All live input
 used the native app, with matched clean read-only MCP inspection/capture. No MCP
 mutations or broad ledger changes were made. Other platforms, every feature form,
 long dropdown lists and full screen-reader behavior remain unqualified. The prior
-large Settings drag issue and Snap focus limitation remain separate open items.
+large Settings drag issue remains open; Snap focus is resolved in the follow-up below.
 See the [focused evidence record](qualification/bevy-controls-20261017.json),
 [input model](qualification/bevy-controls-20261017/standard-controls-input.limo)
 and [applied model](qualification/bevy-controls-20261017/standard-controls-applied.limo).
+
+
+## Settings dragging and Snap focus follow-up
+
+Clean native macOS build `46ecca2a` fixes Snap focus through the temporary disabled
+state used while a command runs. It keeps the existing Bevy `InputFocus` and
+`InteractionDisabled` behavior: disabled controls cannot activate, while an
+existing focus resumes when the control becomes available. Hidden, removed,
+modal-covered and replaced-document targets still retire. There is no
+Snap-specific restoration or second keyboard handler.
+
+![Snap focus before and after](qualification/bevy-settings-snap-20261017/snap-focus-comparison.png)
+
+![Snap pointer and keyboard workflow](qualification/bevy-settings-snap-20261017/snap-focus-workflow.gif)
+
+Five focused live cases passed: clicking the displayed Snap square and Space;
+production Tab/Shift+Tab and subsequent Space; Finish Sketch; dependent
+Undo/Redo; and save, close and reopen. In this fixture Tab moves from Snap to
+Constraint 2: horizontal; Shift+Tab returns to Snap. The saved `model.json` is
+byte-identical to the input fixture, and editing the reopened sketch shows Snap
+on. The palette layout remains comparable, with a visible retained focus ring.
+These GIFs are labeled native step captures, not real-time recordings.
+
+![Finish, Undo/Redo and reopen workflow](qualification/bevy-settings-snap-20261017/snap-model-workflow.gif)
+
+The small dialog repair uses Bevy's existing press/drag ownership, including
+child targets such as slider thumbs. A clipped or disabled sibling no longer
+clears a dialog-owned pointer gesture. The regression exercises the actual
+Bevy event schedules and dialog plugin, but **large native Settings drags still
+fail**. On clean trial `a76749a7`, dragging the title from screenshot (1150,270)
+to (550,270), with and without a prior title click, left the dialog unchanged
+and focused its backdrop. The standard 60 Hz reactive-update trial did not help
+and was removed in `46ecca2a`.
+
+![Unresolved large Settings drag](qualification/bevy-settings-snap-20261017/settings-drag-blocker.png)
+
+The repository's qualification rule limits one initial repair investigation to
+two repair/rebuild cycles or 30 minutes. That limit was reached. A future bounded
+investigation should compare native event delivery with Bevy's final-position
+hit selection; this is a hypothesis, not a proven event trace. No extra pointer
+recognizer, replay queue or Bevy fork was added. Prior small-dialog passes keep
+their original revision identities; no full Settings drag/resize pass is claimed.
+
+All 129 focused checks pass on final source: 109 native-interface, 13 native-host
+and seven Settings tests, plus strict release Clippy and formatting. The new
+regressions cover disabled-focus retention/activation gating and unrelated-control
+changes during standard dialog dragging. The clean packaged GUI and read-only
+MCP builds match. Broad UI/MCP coverage stays paused; there were no MCP mutations.
+PR420 remains draft and the widget feature remains opt-in.
+
+See the [focused evidence record](qualification/bevy-settings-snap-20261017.json)
+and [saved fixture](qualification/bevy-settings-snap-20261017/snap-focus-saved.limo).

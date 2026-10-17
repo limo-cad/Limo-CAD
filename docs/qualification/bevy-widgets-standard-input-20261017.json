@@ -803,5 +803,12 @@
       "path": "v6/widgets/slider-drag-crossing-close.png",
       "sha256": "2f8d6866eac1f3cd461201c4215ec9d85b0cb773dd97bfd96ab0e98bc4c89348"
     }
-  ]
+  ],
+  "settings_snap_followup": {
+    "source_revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+    "evidence": "docs/qualification/bevy-settings-snap-20261017.json",
+    "snap_focus": "fixed; native click/Space/Tab/Shift+Tab and saved-model checks passed",
+    "settings_large_drag": "still blocked; ineffective timed-update trial removed; unrelated-control cancellation fix source-tested",
+    "historical_case_statuses_preserved": true
+  }
 }

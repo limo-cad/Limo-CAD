@@ -593,5 +593,12 @@
       "document strip group and overflow toggle"
     ],
     "live_fallback_claimed": false
+  },
+  "settings_snap_followup": {
+    "source_revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+    "evidence": "docs/qualification/bevy-settings-snap-20261017.json",
+    "snap_focus": "fixed; native click/Space/Tab/Shift+Tab and saved-model checks passed",
+    "settings_large_drag": "still blocked; ineffective timed-update trial removed; unrelated-control cancellation fix source-tested",
+    "historical_case_statuses_preserved": true
   }
 }
