@@ -574,12 +574,12 @@ fn retry_is_reachable_by_the_shell_pointer_above_the_retained_error_footer() {
         bevy::text::TextPlugin,
         bevy::ui::UiPlugin,
     ))
-        .init_resource::<Assets<Image>>()
-        .init_resource::<Assets<bevy::image::TextureAtlasLayout>>()
-        .init_resource::<bevy::input_focus::InputFocus>()
-        .init_resource::<ViewportUiAssets>()
-        .insert_resource(services.clone())
-        .insert_resource(settings);
+    .init_resource::<Assets<Image>>()
+    .init_resource::<Assets<bevy::image::TextureAtlasLayout>>()
+    .init_resource::<bevy::input_focus::InputFocus>()
+    .init_resource::<ViewportUiAssets>()
+    .insert_resource(services.clone())
+    .insert_resource(settings);
     files::initialize(
         app.world_mut(),
         Arc::new(Mutex::new(workspace::DocumentWorkspace::default())),
