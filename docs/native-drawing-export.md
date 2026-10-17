@@ -87,9 +87,12 @@ revision tables retain every revision field. Reserve the bottom-right 180 by
 Rust DXF output includes editable linear DIMENSION entities for ordinary endpoint,
 line-length, parallel-line distance and point-line dimensions. Their defining
 points and dimension styles preserve model measurement at the drawing scale,
-mm/cm/in units, precision and plain prefixes/suffixes. Anonymous picture blocks
+mm/cm/in units, precision and plain prefixes/suffixes. Ordinary line-angle and
+three-point angular dimensions export editable three-point DIMENSION entities
+with degree units, angular precision and the selected minor-angle sector.
+Anonymous picture blocks
 reuse the same graphics as SVG. They do not carry model topology associations.
-Angular and other dimension families, complex tolerance/basic/reference/dual-unit
+Other dimension families, complex tolerance/basic/reference/dual-unit
 presentation, precision above eight decimals and CAD-markup prefixes/suffixes
 retain graphical artwork until their regeneration semantics are supported.
 R2007 graphics, including Unicode outline hatches, have unique deterministic
@@ -199,7 +202,7 @@ For reproducible artifacts without opening a window, run from the repository:
 cargo run -p limo-cad-occt --example drawing_straight_export -- C:\absolute\fresh\straight-export-evidence
 ```
 
-The example preserves prior evidence and writes 24 SVG/DXF pairs plus their
+The example preserves prior evidence and writes 30 SVG/DXF pairs plus their
 source drawing, scene, projection and unit records: Length, Distance, Angle and
 Point-line, each in mm/cm/in and default/full presentation. This is an explicit
 **synthetic projection** fixture, not proof of OCC projection or physical input.

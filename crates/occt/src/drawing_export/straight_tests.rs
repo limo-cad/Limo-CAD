@@ -52,6 +52,60 @@ fn replace_annotation(document: &mut DrawingDocumentDto, change: impl FnOnce(&mu
 }
 
 #[test]
+fn semantic_angles_keep_degrees_across_scales_units_and_both_reference_families() {
+    for kind in ["angle", "angle-three-point"] {
+        for scale in [0.25, 1., 5.] {
+            for units in [UnitSystem::Mm, UnitSystem::Cm, UnitSystem::In] {
+                let (mut document, scene, projection) = fixture::fixture(kind, 40.);
+                document.sheets[0].views[0].scale = scale;
+                replace_annotation(&mut document, |a| {
+                    a["prefix"] = json!("QA ");
+                    a["suffix"] = json!(" exact");
+                    a["precision"] = json!(3);
+                });
+                let dxf = export(
+                    &document,
+                    &scene,
+                    &projection,
+                    units,
+                    DrawingExportFormat::Dxf,
+                )
+                .unwrap();
+                let dimensions = dxf_entities(&dxf, "DIMENSION");
+                assert_eq!(dimensions.len(), 1);
+                let d = &dimensions[0];
+                assert_eq!(d["70"], "165");
+                assert_eq!(d["1"], "<>");
+                let num = |k: &str| d[k].parse::<f64>().unwrap();
+                let a = (num("23") - num("25")).atan2(num("13") - num("15"));
+                let b = (num("24") - num("25")).atan2(num("14") - num("15"));
+                let expected = if kind == "angle" {
+                    90.
+                } else {
+                    30_f64.atan2(40.).to_degrees()
+                };
+                assert!(((b - a).to_degrees().rem_euclid(360.) - expected).abs() < 1e-7);
+                let styles = dxf_entities(&dxf, "DIMSTYLE");
+                let style = styles.iter().find(|s| s.get("2") == Some(&d["3"])).unwrap();
+                assert_eq!(style["179"], "3");
+                assert_eq!(style["275"], "0");
+                assert_eq!(style["3"], "QA <> exact");
+                fixture::full_presentation(&mut document);
+                let fallback = export(
+                    &document,
+                    &scene,
+                    &projection,
+                    units,
+                    DrawingExportFormat::Dxf,
+                )
+                .unwrap();
+                assert!(dxf_entities(&fallback, "DIMENSION").is_empty());
+            }
+        }
+    }
+}
+
+#[test]
 fn semantic_linear_dimensions_preserve_model_measurement_at_each_paper_scale_and_unit() {
     for kind in ["length", "distance", "point-line"] {
         for scale in [0.25, 1., 2., 5.] {
@@ -181,10 +235,7 @@ fn straight_relations_export_current_values_and_graphical_entities_without_mutat
                 .count(),
             2
         );
-        assert_eq!(
-            dxf_entities(&dxf, "DIMENSION").len(),
-            usize::from(kind != "angle")
-        );
+        assert_eq!(dxf_entities(&dxf, "DIMENSION").len(), 1);
         assert!(
             !svg.contains("999.00000"),
             "diagnostic fallbacks must never be measured"

@@ -214,7 +214,7 @@ pub(super) fn draw(
                         presentation,
                         units,
                     );
-                    let semantic = dxf_dimensions::Linear::resolve(
+                    let semantic = dxf_dimensions::Dimension::resolve(
                         &geometry,
                         presentation,
                         *precision,
@@ -234,7 +234,20 @@ pub(super) fn draw(
                     let mut format = presentation.clone();
                     format.basic = false;
                     let value = text::angular(geometry.value, *precision, prefix, suffix, &format);
+                    let semantic = dxf_dimensions::Dimension::angular(
+                        &geometry,
+                        presentation,
+                        *precision,
+                        prefix,
+                        suffix,
+                        &sheet.style,
+                    );
+                    let start = paper.items.len();
                     draw_angular(paper, sheet, geometry, value, presentation)?;
+                    if let Some(mut dimension) = semantic {
+                        dimension.range = start..paper.items.len();
+                        paper.dimensions.push(dimension);
+                    }
                 }
             }
         }
@@ -261,7 +274,7 @@ pub(super) fn draw(
                 presentation,
                 units,
             );
-            let semantic = dxf_dimensions::Linear::resolve(
+            let semantic = dxf_dimensions::Dimension::resolve(
                 &geometry,
                 presentation,
                 *precision,
