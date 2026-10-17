@@ -26,6 +26,7 @@ mod centers_tests;
 mod cloud;
 #[cfg(test)]
 mod cloud_tests;
+mod dxf_handles;
 mod font;
 mod graphics;
 mod hole;
@@ -1671,9 +1672,12 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
     }
     let layer_table_handle = styles.len() + 4;
     let style_table_handle = layer_table_handle + layers.len() + 1;
+    let mut handles = dxf_handles::Handles::new(style_table_handle + 4);
+    let block_table = handles.next();
+    let model_space = handles.next();
+    let paper_space = handles.next();
     let mut s = format!(
-        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n9\n$INSUNITS\n70\n4\n9\n$HANDSEED\n5\n{:X}\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLTYPE\n5\n2\n330\n0\n100\nAcDbSymbolTable\n70\n{}\n",
-        style_table_handle + 4,
+        "0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLTYPE\n5\n2\n330\n0\n100\nAcDbSymbolTable\n70\n{}\n",
         styles.len() + 1,
     );
     s.push_str("0\nLTYPE\n5\n3\n330\n2\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n2\nCONTINUOUS\n70\n0\n3\nSolid line\n72\n65\n73\n0\n40\n0\n");
@@ -1707,6 +1711,17 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
     }
     s.push_str("0\nENDTAB\n");
     font::tables(&mut s, style_table_handle, &font_family);
+    writeln!(
+        s,
+        "0\nTABLE\n2\nBLOCK_RECORD\n5\n{block_table:X}\n330\n0\n100\nAcDbSymbolTable\n70\n2"
+    )
+    .unwrap();
+    for (name, handle) in [("*Model_Space", model_space), ("*Paper_Space", paper_space)] {
+        writeln!(s, "0\nBLOCK_RECORD\n5\n{handle:X}\n330\n{block_table:X}\n100\nAcDbSymbolTableRecord\n100\nAcDbBlockTableRecord\n2\n{name}\n70\n4\n280\n1\n281\n0").unwrap();
+    }
+    s.push_str("0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nBLOCKS\n");
+    handles.empty_space(&mut s, "*Model_Space", model_space);
+    handles.empty_space(&mut s, "*Paper_Space", paper_space);
     s.push_str("0\nENDSEC\n0\nSECTION\n2\nENTITIES\n");
     for item in &p.items {
         match item {
@@ -1717,11 +1732,14 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
                 width,
             } => {
                 if points.len() > 2 && !dash.is_empty() {
+                    handles.entity(&mut s, "LWPOLYLINE", model_space, layer);
                     writeln!(
                         s,
-                        "0\nLWPOLYLINE\n100\nAcDbEntity\n8\n{layer}\n6\nNBS_{layer}\n370\n{}\n100\nAcDbPolyline\n90\n{}\n70\n128",
-                        dxf_lineweight(*width), points.len()
-                    ).unwrap();
+                        "6\nNBS_{layer}\n370\n{}\n100\nAcDbPolyline\n90\n{}\n70\n128",
+                        dxf_lineweight(*width),
+                        points.len()
+                    )
+                    .unwrap();
                     for point in points {
                         writeln!(s, "10\n{:.5}\n20\n{:.5}", point[0], p.size[1] - point[1])
                             .unwrap();
@@ -1729,7 +1747,22 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
                     continue;
                 }
                 for pair in points.windows(2) {
-                    writeln!(s,"0\nLINE\n8\n{layer}\n6\n{}\n370\n{}\n10\n{:.5}\n20\n{:.5}\n11\n{:.5}\n21\n{:.5}",if dash.is_empty(){"CONTINUOUS".into()}else{format!("NBS_{layer}")},dxf_lineweight(*width),pair[0][0],p.size[1]-pair[0][1],pair[1][0],p.size[1]-pair[1][1]).unwrap();
+                    handles.entity(&mut s, "LINE", model_space, layer);
+                    writeln!(
+                        s,
+                        "6\n{}\n370\n{}\n100\nAcDbLine\n10\n{:.5}\n20\n{:.5}\n11\n{:.5}\n21\n{:.5}",
+                        if dash.is_empty() {
+                            "CONTINUOUS".into()
+                        } else {
+                            format!("NBS_{layer}")
+                        },
+                        dxf_lineweight(*width),
+                        pair[0][0],
+                        p.size[1] - pair[0][1],
+                        pair[1][0],
+                        p.size[1] - pair[1][1]
+                    )
+                    .unwrap();
                 }
             }
             Primitive::Text {
@@ -1752,13 +1785,16 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
                     *fitted_width,
                     layer,
                     &font_family,
+                    &mut handles,
+                    model_space,
                 )?;
             }
             Primitive::Triangle { points, layer } => {
-                writeln!(s, "0\nSOLID\n8\n{layer}").unwrap();
+                handles.entity(&mut s, "SOLID", model_space, layer);
                 if *layer == TEXT_MASK {
                     s.push_str("420\n16777215\n");
                 }
+                s.push_str("100\nAcDbTrace\n");
                 for (index, point) in [points[0], points[1], points[2], points[2]]
                     .iter()
                     .enumerate()
@@ -1778,7 +1814,7 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
     }
     s.push_str("0\nENDSEC\n");
     s.push_str("0\nEOF\n");
-    Ok(s)
+    Ok(format!("0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n9\n$INSUNITS\n70\n4\n9\n$HANDSEED\n5\n{:X}\n0\nENDSEC\n{s}", handles.seed()))
 }
 
 #[cfg(test)]
@@ -2376,7 +2412,7 @@ mod tests {
                 assert!(svg.contains("textLength="));
                 assert!(svg.contains("lengthAdjust=\"spacingAndGlyphs\""));
                 let dxf = exported(DrawingExportFormat::Dxf);
-                assert!(dxf.contains("72\n5\n73\n0\n11\n"));
+                assert!(dxf.contains("72\n5\n11\n") && dxf.contains("100\nAcDbText\n73\n0\n"));
                 for item in &paper.items {
                     if let Primitive::Text { value, .. } = item {
                         assert!(svg.contains(&format!(">{}</text>", xml(value))));
@@ -2484,7 +2520,7 @@ mod tests {
         assert_eq!(svg.matches("text-anchor=\"middle\">A-A</text>").count(), 2);
         assert!(!svg.contains("999.00000"));
         let dxf = export(DrawingExportFormat::Dxf, &doc, &projection).unwrap();
-        assert_eq!(dxf.matches("0\nSOLID\n8\nCUTTING_PLANE\n").count(), 2);
+        assert_eq!(dxf.matches("8\nCUTTING_PLANE\n100\nAcDbTrace\n").count(), 2);
         assert!(dxf.contains(
             "10\n76.00000\n20\n140.00000\n11\n75.08800\n21\n137.60000\n12\n76.91200\n22\n137.60000"
         ));

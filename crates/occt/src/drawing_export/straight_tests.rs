@@ -439,7 +439,11 @@ fn angular_mask_covers_crossing_art_before_the_basic_box_and_text_in_both_format
         .collect::<Vec<_>>();
     assert_eq!(masks.len(), 2);
     assert!(masks.iter().all(|e| e["420"] == "16777215"));
-    assert!(dxf.find("0\nSOLID\n8\nTEXT_MASK\n").unwrap() < dxf.find("0\nTEXT\n").unwrap());
+    assert!(
+        dxf.find("8\nTEXT_MASK\n420\n16777215\n100\nAcDbTrace\n")
+            .unwrap()
+            < dxf.find("0\nTEXT\n").unwrap()
+    );
 }
 
 #[test]
@@ -579,9 +583,10 @@ fn basic_linear_masks_cover_crossing_extensions_before_painting_complete_arrows(
                     "<polygon data-layer=\"TEXT_MASK\"",
                     "<polygon data-layer=\"DIMENSION\"",
                 ),
-                DrawingExportFormat::Dxf => {
-                    ("0\nSOLID\n8\nTEXT_MASK\n", "0\nSOLID\n8\nDIMENSION\n")
-                }
+                DrawingExportFormat::Dxf => (
+                    "8\nTEXT_MASK\n420\n16777215\n100\nAcDbTrace\n",
+                    "8\nDIMENSION\n100\nAcDbTrace\n",
+                ),
             };
             assert!(output.find(mask).unwrap() < output.find(arrow).unwrap());
         }
