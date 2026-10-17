@@ -121,7 +121,7 @@ impl Write for LimitedOutput {
         Ok(())
     }
 }
-mod bytes {
+pub(crate) mod bytes {
     use serde::{
         de::{Error, Visitor},
         Deserializer, Serializer,
