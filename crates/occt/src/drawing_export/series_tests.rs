@@ -47,6 +47,94 @@ fn chain_baseline_and_continued_export_every_exact_span_without_mutating_intent(
 }
 
 #[test]
+fn multiple_series_batches_keep_independent_dimension_blocks_and_scaled_measurements() {
+    use super::straight_tests::dxf_entities;
+    for layout in ["chain", "baseline", "continued"] {
+        for scale in [0.5, 2.] {
+            for (units, unit_mm) in [
+                (UnitSystem::Mm, 1.),
+                (UnitSystem::Cm, 10.),
+                (UnitSystem::In, 25.4),
+            ] {
+                let (mut d, s, p) = fixture::fixture(layout);
+                d.sheets[0].views[0].scale = scale;
+                let mut extra = serde_json::to_value(&d.sheets[0].annotations[0]).unwrap();
+                extra["id"] = json!(3);
+                extra["offset"] = json!(22.);
+                d.sheets[0]
+                    .annotations
+                    .push(serde_json::from_value(extra).unwrap());
+                d.next_annotation_id = 4;
+                let output = export(&d, &s, &p, DrawingExportFormat::Dxf, units).unwrap();
+                let dimensions = dxf_entities(&output, "DIMENSION");
+                let styles = dxf_entities(&output, "DIMSTYLE");
+                assert_eq!(dimensions.len(), 4);
+                let blocks: std::collections::BTreeSet<_> =
+                    dimensions.iter().map(|v| &v["2"]).collect();
+                assert_eq!(blocks.len(), 4);
+                for (i, dim) in dimensions.iter().enumerate() {
+                    let num = |k: &str| dim[k].parse::<f64>().unwrap();
+                    let angle = num("50").to_radians();
+                    let paper = ((num("14") - num("13")) * angle.cos()
+                        + (num("24") - num("23")) * angle.sin())
+                    .abs();
+                    let style = styles
+                        .iter()
+                        .find(|s| s.get("2") == Some(&dim["3"]))
+                        .unwrap();
+                    let expected = if i % 2 == 0 {
+                        40.
+                    } else if layout == "baseline" {
+                        50.
+                    } else {
+                        30.
+                    };
+                    assert!(
+                        (paper * style["144"].parse::<f64>().unwrap() - expected / unit_mm).abs()
+                            < 1e-8
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn series_semantic_metadata_is_charged_to_the_retained_budget() {
+    let (d, _, p) = fixture::fixture("chain");
+    let sheet = &d.sheets[0];
+    let projections = BTreeMap::from([(1, p)]);
+    let mut budget = PaperGraphicsBudget::default();
+    let batch = series::draw(
+        sheet,
+        &projections,
+        &sheet.annotations[0],
+        UnitSystem::Mm,
+        &mut budget,
+    )
+    .unwrap();
+    assert_eq!(batch.dimensions.len(), 2);
+    let metadata = batch
+        .dimensions
+        .iter()
+        .map(|v| v.retained_bytes().unwrap() * 8)
+        .sum::<usize>();
+    let limit = budget.usage().retained_bytes - metadata;
+    let mut bounded = PaperGraphicsBudget::new(graphics::PaperGraphicsLimits {
+        retained_bytes: limit,
+        ..Default::default()
+    });
+    assert!(series::draw(
+        sheet,
+        &projections,
+        &sheet.annotations[0],
+        UnitSystem::Mm,
+        &mut bounded
+    )
+    .is_err());
+}
+
+#[test]
 fn series_uses_existing_units_tolerances_and_atomic_stale_reference_rejection() {
     let (mut d, s, mut p) = fixture::fixture("baseline");
     fixture::full_presentation(&mut d);

@@ -92,6 +92,10 @@ three-point angular dimensions export editable three-point DIMENSION entities
 with degree units, angular precision and the selected minor-angle sector.
 Radius and diameter dimensions retain editable circle definition points and
 scaled measurements, with their symbols and units in the dimension style.
+Ordinary chain, baseline and continued dimensions export one editable linear
+entity per span, using the existing resolved series layout. These DXF spans are
+independently editable; native series relationships are not serialized as DXF
+constraints. The saved native annotation remains unchanged.
 Anonymous picture blocks
 reuse the same graphics as SVG. They do not carry model topology associations.
 Other dimension families, complex tolerance/basic/reference/dual-unit

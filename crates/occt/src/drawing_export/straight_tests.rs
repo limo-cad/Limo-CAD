@@ -23,7 +23,7 @@ fn export(
     )
 }
 
-fn dxf_entities(dxf: &str, kind: &str) -> Vec<BTreeMap<String, String>> {
+pub(super) fn dxf_entities(dxf: &str, kind: &str) -> Vec<BTreeMap<String, String>> {
     let lines: Vec<_> = dxf.lines().collect();
     let mut result = Vec::new();
     let mut current = None;
