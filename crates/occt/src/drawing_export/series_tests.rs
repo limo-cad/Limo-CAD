@@ -205,3 +205,57 @@ fn ordinate_exports_signed_axes_origin_ring_complete_leader_and_shared_presentat
         assert_eq!(d, before);
     }
 }
+
+#[test]
+fn signed_ordinates_follow_datum_crossings_and_current_geometry_without_frozen_overrides() {
+    for axis in ["x", "y", "both"] {
+        for scale in [0.5, 2.] {
+            for units in [UnitSystem::Mm, UnitSystem::Cm, UnitSystem::In] {
+                let (mut d, s, p) = fixture::fixture("chain");
+                d.sheets[0].views[0].scale = scale;
+                let anchors =
+                    serde_json::to_value(&d.sheets[0].annotations[0]).unwrap()["anchors"].clone();
+                let (_, edited_scene, edited_projection) = rectangle::fixture("length", 55.);
+                for reverse in [false, true] {
+                    let (origin, target) = if reverse { (2, 0) } else { (0, 2) };
+                    d.sheets[0].annotations = vec![serde_json::from_value(json!({
+                        "id":1,"kind":"ordinate_dimension","view_id":1,
+                        "origin":anchors[origin],"target":anchors[target],
+                        "axis":axis,"offset":-12.,"precision":2
+                    }))
+                    .unwrap()];
+                    let saved = serde_json::to_value(&d).unwrap();
+                    for (scene, projection, width) in
+                        [(&s, &p, 40.), (&edited_scene, &edited_projection, 55.)]
+                    {
+                        let (divisor, suffix) = match units {
+                            UnitSystem::Mm => (1., "mm"),
+                            UnitSystem::Cm => (10., "cm"),
+                            UnitSystem::In => (25.4, "in"),
+                        };
+                        let sign = if reverse { -1. } else { 1. };
+                        let x = format!("X{:.2} {suffix}", sign * width / divisor);
+                        let y = format!("Y{:.2} {suffix}", sign * 30. / divisor);
+                        let expected = match axis {
+                            "x" => x,
+                            "y" => y,
+                            _ => format!("{x}  {y}"),
+                        };
+                        let svg =
+                            export(&d, scene, projection, DrawingExportFormat::Svg, units).unwrap();
+                        let dxf =
+                            export(&d, scene, projection, DrawingExportFormat::Dxf, units).unwrap();
+                        assert!(svg.contains(&format!(">{expected}</text>")), "{expected}");
+                        assert!(super::straight_tests::dxf_entities(&dxf, "TEXT")
+                            .iter()
+                            .any(|e| e["1"] == dxf_text(&expected)));
+                        // AutoCAD's ordinate type uses absolute distances. A frozen
+                        // sign or number override cannot preserve a crossing edit.
+                        assert!(super::straight_tests::dxf_entities(&dxf, "DIMENSION").is_empty());
+                    }
+                    assert_eq!(saved, serde_json::to_value(&d).unwrap());
+                }
+            }
+        }
+    }
+}
