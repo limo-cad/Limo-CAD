@@ -1,0 +1,101 @@
+{
+  "recorded_utc": "2026-10-17T13:49:55.751948+00:00",
+  "scope": "PR420 movable/resizable Settings and shared feature dialogs",
+  "status": "source_checks_passed_live_checks_blocked",
+  "publication_source": "47675d74211ebe6dfd45df9faac6b0c36fc3c415",
+  "dialog_implementation_commit": "682fb6921aaa57b7e31a405033e2bf6640837a8b",
+  "integration_source": "db7448455a8b44125f5dc6a3c5caeeb8bead5cc9",
+  "main": "49dec66db7a0707c9fcd715a003a7abaa61b8801",
+  "dependencies": {
+    "433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "implementation": {
+    "standard_bevy": [
+      "Dialog",
+      "DialogDragHandle",
+      "DialogPlugin",
+      "PointerDrag"
+    ],
+    "shared_adapter_lines": 173,
+    "adapter_scope": [
+      "resize handle and minimum dimensions",
+      "clamp whole dialog to client window",
+      "preserve existing modal layer order",
+      "translated scroll and annotation bounds"
+    ],
+    "geometry_lifetime": "open dialog only; close/reopen restores usual geometry",
+    "excluded": [
+      "bespoke panels not using the shared feature painter",
+      "OS file choosers",
+      "docking and persistent window layouts"
+    ]
+  },
+  "source_checks": {
+    "distinct_interface_tests_passed": 100,
+    "distinct_settings_tests_passed": 7,
+    "strict_release_library_and_test_clippy": "passed",
+    "release_application_build": "passed",
+    "workflow_yaml_parse": "passed",
+    "diff_check": "passed",
+    "logs": [
+      "interface-tests.log",
+      "title-drag-recheck.log",
+      "settings-tests.log",
+      "settings-layout-recheck.log",
+      "settings-theme-recheck.log",
+      "settings-retry-final.log",
+      "final-clippy.log",
+      "build-widgets.log"
+    ],
+    "repair_history": [
+      "Title-drag test begins its captured drag inside the window before crossing the edge, matching Bevy drag-start semantics.",
+      "Settings Retry fixture now uses real Bevy hierarchy/layout/stack with TimePlugin rather than top-level-only mock rectangles.",
+      "Earlier failed runs and lock-poison cascades remain in logs; each failed case was rechecked successfully."
+    ],
+    "validation_scope": "Distinct passing cases across focused runs; later changes were isolated to the Settings test fixture and formatting."
+  },
+  "package": {
+    "recorded_utc": "2026-10-17T08:43:00.287175+00:00",
+    "build": {
+      "channel": "development",
+      "modified": false,
+      "revision": "db7448455a8b44125f5dc6a3c5caeeb8bead5cc9",
+      "version": "0.3.0-rc.1"
+    },
+    "features": [
+      "experimental-ui-widgets"
+    ],
+    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v7/widgets/Limo CAD PR420 Widgets V7.app",
+    "engine_sha256": "bed6046a48b812be7d60b43cc51d19f1885e812121ac445f8c2ed9b4fa5f3a29",
+    "signature": "ad-hoc; deep strict verification passed",
+    "bundled_occt_loaded": true,
+    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "baseline": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
+    "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "live_ui": {
+    "input_method": "Native macOS CUA only; read-only MCP inspection/capture permitted",
+    "passed": 0,
+    "pending": 7,
+    "blocker": "macOS automation reported the Mac locked and automatic unlock unavailable when launching V7 at 2026-10-17T13:48Z. User asked to unlock; no V7 UI workflow pass claimed.",
+    "cases": [
+      "Settings title drag, resize and window bounds",
+      "Settings scroll and forward/reverse Tab after moving and resizing",
+      "Settings at 125% UI size",
+      "Extrude edit draft preservation while moving/resizing, geometry annotation placement, Cancel preserves original model",
+      "A second common tool dialog drag/resize/Cancel",
+      "Reopening returns default placement",
+      "Post-cleanup read-only inspection and preserved model identity"
+    ]
+  },
+  "fixture": {
+    "path": "v7/fixtures/widgets-profile.limo",
+    "model_sha256": "718af2d51860cc86ff02a136edf7e982241546266badbaaef20007d353f4761b",
+    "baseline_model_equal": true
+  },
+  "broad_qualification": "paused; existing UI/MCP ledger unchanged; no MCP mutations or modeling scripts",
+  "prior_standard_input_evidence": "bevy-widgets-standard-input-20261017.json",
+  "feature": "experimental-ui-widgets remains opt-in; PR remains draft"
+}

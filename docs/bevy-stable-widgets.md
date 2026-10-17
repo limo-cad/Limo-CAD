@@ -149,6 +149,12 @@ There is no separate pointer-event recognizer, docking system or saved window
 manager. Other bespoke panels and native operating-system file choosers retain
 their existing behavior.
 
+The focused source checks pass: 100 interface tests, seven Settings tests,
+strict release checks, and a clean packaged macOS build with PR433 and PR434
+locally integrated. Live drag/resize workflow checks remain pending: macOS
+automation reported the Mac locked when launching the new app. This is a
+source checkpoint, not a live UI pass. See [dialog evidence](qualification/bevy-dialogs-20261017.json).
+
 ## Stable dependency and window-host patch
 
 The desktop pins `bevy`, `bevy_ecs`, `bevy_gizmos` and `bevy_reflect` to
