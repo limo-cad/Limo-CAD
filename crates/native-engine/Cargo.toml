@@ -11,7 +11,7 @@ default = []
 native-occt = [
     "dep:base64",
     "dep:limo-cad-cam", "dep:limo-cad-core", "dep:limo-cad-export", "dep:limo-cad-occt",
-    "dep:limo-cad-sketch", "dep:limo-cad-solid", "dep:serde", "dep:serde_json",
+    "dep:limo-cad-sketch", "dep:limo-cad-solid", "dep:limo-cad-project-file", "dep:serde", "dep:serde_json",
     "limo-cad-occt/native-occt",
 ]
 
@@ -23,8 +23,10 @@ limo-cad-export = { path = "../export", optional = true }
 limo-cad-occt = { path = "../occt", optional = true }
 limo-cad-sketch = { path = "../sketch", optional = true }
 limo-cad-solid = { path = "../solid", optional = true }
+limo-cad-project-file = { path = "../project-file", optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, features = ["float_roundtrip"], optional = true }
 
 [dev-dependencies]
 limo-cad-export = { path = "../export", features = ["test-utils"] }
+limo-cad-fem = { path = "../fem" }
