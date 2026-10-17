@@ -106,7 +106,6 @@ pub(super) fn install(app: &mut App) {
         .add_observer(on_toggle)
         .add_observer(on_range)
         .add_observer(on_tab)
-        .add_observer(on_tab_double_click)
         .add_systems(First, primary_pointer.in_set(PickingSystems::PostInput))
         .configure_sets(
             PreUpdate,
@@ -247,21 +246,6 @@ fn synchronize(world: &mut World) {
     for entity in blockers {
         world.entity_mut(entity).insert(Pickable::default());
     }
-    // Document activation retires command bindings and clears CAD focus. The
-    // selected tab itself survives; keep Bevy's focus on that same eligible
-    // entity so another arrow key can continue navigating the strip.
-    let restore_tab_focus = handle.focused_key().is_none()
-        && world.resource::<InputFocus>().get().is_some_and(|entity| {
-            world
-                .get::<WidgetAction>(entity)
-                .is_some_and(|action| action.0.context != context)
-                && world
-                    .get::<InterfaceControl>(entity)
-                    .is_some_and(|control| {
-                        control.surface == "document/session" && control.selected == Some(true)
-                    })
-                && world.get::<Tab>(entity).is_some()
-        });
     let mut retired = false;
     for (index, published) in frame.controls.iter().enumerate() {
         let entity = Entity::from_bits(published.key.0);
@@ -399,15 +383,6 @@ fn synchronize(world: &mut World) {
     if retired {
         cancel(world);
     }
-    if restore_tab_focus
-        && world.resource::<InputFocus>().get().is_some_and(|entity| {
-            world.get::<WidgetAction>(entity).is_some() && world.get::<Tab>(entity).is_some()
-        })
-    {
-        if let Err(error) = world.run_system_cached(publish_focus) {
-            eprintln!("Document tab focus publication failed: {error}");
-        }
-    }
     // Application-driven changes (modal open/close, restored document, field
     // editing and accessibility) use the same Bevy focus resource as pointers.
     let next = handle.focused_key().map(|key| Entity::from_bits(key.0));
@@ -528,24 +503,6 @@ fn on_tab(
     if let Some(entity) = event.value {
         if let Ok(action) = bindings.get(entity) {
             pending.0.push(action.0.clone());
-        }
-    }
-}
-
-// Document-tab renaming is an application action. Bevy supplies the click count.
-fn on_tab_double_click(
-    event: On<bevy::picking::events::PointerClick>,
-    bindings: Query<(&WidgetAction, &InterfaceControl), With<Tab>>,
-    mut pending: ResMut<WidgetActions>,
-) {
-    if event.button != BevyPointerButton::Primary || event.count != 2 {
-        return;
-    }
-    if let Ok((action, control)) = bindings.get(event.entity) {
-        if control.surface == "document/session" && control.selected == Some(true) {
-            let mut action = action.0.clone();
-            action.control.input = ControlInput::DoubleClick;
-            pending.0.push(action);
         }
     }
 }

@@ -39,13 +39,9 @@ pub(crate) fn radio_group(world: &mut World, members: &[Entity]) {
     }
 }
 
-pub(crate) fn tab_group(world: &mut World, members: &[Entity], enabled: bool) {
+pub(crate) fn tab_group(world: &mut World, members: &[Entity]) {
     if let Some(group) = group(world, members, SelectionGroup::Tabs) {
-        if !enabled {
-            // The existing overflow strip can navigate to documents that have no
-            // visible tab entity. Preserve that route instead of rebuilding it.
-            world.entity_mut(group).remove::<(TabList, SelectedTab)>();
-        } else if world.get::<TabList>(group).is_none() {
+        if world.get::<TabList>(group).is_none() {
             world.entity_mut(group).insert(TabList {
                 activation: TabActivation::Automatic,
                 ..default()

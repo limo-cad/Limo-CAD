@@ -167,7 +167,7 @@ impl Widgets {
             .iter()
             .filter_map(|key| self.entity(key))
             .collect::<Vec<_>>();
-        interface_shell::widgets::tab_group(world, &members, true);
+        interface_shell::widgets::tab_group(world, &members);
     }
     pub(crate) fn begin(&mut self) {
         self.live.clear();
