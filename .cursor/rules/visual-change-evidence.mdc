@@ -1,0 +1,25 @@
+---
+description: Compare UI work with its reference and qualify visual and performance claims.
+globs: desktop/src/**/*.rs,examples/scripts/**,docs/media/**
+alwaysApply: false
+---
+
+# Visual changes and evidence
+
+- Inspect an existing reference before choosing model proportions, orientation or
+  camera framing. Compare the result beside that reference before presenting it.
+  For AI-generated images, document inferred dimensions without claiming exact CAD.
+- Lead UI PRs with current screenshots or short GIFs of the actual native result.
+  Keep prose concise and put detailed checks or measurements in expandable evidence.
+- Distinguish component captures, isolated geometry tests and live interaction
+  qualification. Record source identity and do not imply broader coverage than exercised.
+- Exercise keyboard navigation in the production control hierarchy. A two-control
+  fixture cannot prove traversal through the real ribbon and its neighboring tools.
+- Each teaching clip should explain one operation. Reuse the same editable part and
+  link prerequisites rather than repeating their construction in every clip.
+- Separate cold opening, warm replay and idle costs. Measure work submitted, wakeups,
+  memory bounds and release on Close. State build/profile and measurement scope.
+- Do not claim zero performance impact from zero warm render jobs. Keep expensive
+  work off hover/read-only Help and bound timers, workers and cached assets.
+- Freeze the relevant source before a validation batch, combine compatible checks in
+  the existing build lane and repeat only checks affected by later changes.
