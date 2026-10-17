@@ -188,3 +188,202 @@ fn every_input_category_invalidates_retained_result() {
         assert!(study.result_is_current());
     }
 }
+
+fn saved_document() -> ThermalStudyDocument {
+    ThermalStudyDocument {
+        studies: vec![SavedThermalStudy {
+            id: 7,
+            name: "Thermal study".into(),
+            input: input(),
+        }],
+    }
+}
+fn raw_wire(document: &ThermalStudyDocument, version: u32) -> Vec<u8> {
+    #[derive(serde::Serialize)]
+    struct Wire<'a> {
+        format: &'static str,
+        version: u32,
+        studies: &'a [SavedThermalStudy],
+    }
+    let mut bytes = Vec::new();
+    ciborium::into_writer(
+        &Wire {
+            format: "limo-cad-thermal-studies",
+            version,
+            studies: &document.studies,
+        },
+        &mut bytes,
+    )
+    .unwrap();
+    bytes
+}
+#[test]
+fn cbor_roundtrip_reopens_idle_and_recomputes_without_persisting_results() {
+    let mut document = saved_document();
+    document.studies[0].name = "Heat \u{0394} study".into();
+    document.studies[0].input.surfaces.push(ThermalSurface {
+        nodes: [0, 1, 2],
+        heat_flux_in_w_m2: 2.,
+        convection: Some(ThermalConvection {
+            coefficient_w_m2_k: 4.,
+            ambient_k: 290.,
+        }),
+    });
+    let bytes = document.encode_cbor().unwrap();
+    let reopened = ThermalStudyDocument::decode_cbor(&bytes).unwrap();
+    assert_eq!(document, reopened);
+    assert_eq!(bytes, reopened.encode_cbor().unwrap());
+    let mut study = reopened.studies[0].open();
+    assert_eq!(study.status(), &ThermalStudyStatus::Idle);
+    assert!(study.result().is_none());
+    assert!(!study.result_is_current());
+    let result = study.begin_solve().run();
+    assert!(study.finish(result));
+    assert!(study.result_is_current());
+    assert_eq!(
+        study.result().unwrap().result().temperature_k,
+        vec![300., 310., 300., 300.]
+    );
+    assert_eq!(bytes, reopened.encode_cbor().unwrap());
+}
+#[test]
+fn cbor_preserves_incomplete_draft_without_claiming_a_solution() {
+    let mut document = saved_document();
+    document.studies[0].input.prescribed_k.clear();
+    document.studies[0].input.mesh.elements[0].nodes[0] = 99;
+    let reopened = ThermalStudyDocument::decode_cbor(&document.encode_cbor().unwrap()).unwrap();
+    assert_eq!(document, reopened);
+    let mut study = reopened.studies[0].open();
+    let done = study.begin_solve().run();
+    study.finish(done);
+    assert!(matches!(study.status(), ThermalStudyStatus::Failed(_)));
+    assert!(study.result().is_none());
+}
+#[test]
+fn cbor_rejects_new_versions_truncation_trailing_data_and_unknown_fields() {
+    let doc = saved_document();
+    let bytes = doc.encode_cbor().unwrap();
+    for end in 0..bytes.len() {
+        assert!(
+            ThermalStudyDocument::decode_cbor(&bytes[..end]).is_err(),
+            "prefix {end}"
+        );
+    }
+    for version in [0, 2, u32::MAX] {
+        assert!(ThermalStudyDocument::decode_cbor(&raw_wire(&doc, version)).is_err());
+    }
+    let mut trailing = bytes.clone();
+    trailing.push(0);
+    assert!(ThermalStudyDocument::decode_cbor(&trailing).is_err());
+    let mut value: ciborium::Value = ciborium::from_reader(bytes.as_slice()).unwrap();
+    value
+        .as_map_mut()
+        .unwrap()
+        .push(("future".into(), true.into()));
+    let mut unknown = Vec::new();
+    ciborium::into_writer(&value, &mut unknown).unwrap();
+    assert!(ThermalStudyDocument::decode_cbor(&unknown).is_err());
+    let mut value: ciborium::Value = ciborium::from_reader(bytes.as_slice()).unwrap();
+    value
+        .as_map_mut()
+        .unwrap()
+        .push(("version".into(), 1.into()));
+    let mut duplicate = Vec::new();
+    ciborium::into_writer(&value, &mut duplicate).unwrap();
+    assert!(ThermalStudyDocument::decode_cbor(&duplicate).is_err());
+}
+#[test]
+fn cbor_storage_validation_rejects_invalid_identity_numeric_data_and_provenance() {
+    type Edit = Box<dyn Fn(&mut ThermalStudyDocument)>;
+    let edits: Vec<Edit> = vec![
+        Box::new(|d| d.studies[0].id = 0),
+        Box::new(|d| d.studies.push(d.studies[0].clone())),
+        Box::new(|d| d.studies[0].name = " ".into()),
+        Box::new(|d| d.studies[0].name = "x".repeat(257)),
+        Box::new(|d| d.studies[0].input.mesh.points_m[0][0] = f64::NAN),
+        Box::new(|d| d.studies[0].input.nodal_load_w[0] = f64::INFINITY),
+        Box::new(|d| d.studies[0].input.materials[0].details.sources[0].sha256 = "invalid".into()),
+        Box::new(|d| d.studies[0].input.materials[0].context = Some("x".repeat(513))),
+        Box::new(|d| d.studies[0].input.options.absolute_tolerance_w = f64::NEG_INFINITY),
+    ];
+    for edit in edits {
+        let mut doc = saved_document();
+        edit(&mut doc);
+        assert!(doc.encode_cbor().is_err());
+        assert!(ThermalStudyDocument::decode_cbor(&raw_wire(&doc, 1)).is_err());
+    }
+}
+#[test]
+fn cbor_limits_bound_input_and_collections() {
+    assert!(ThermalStudyDocument::decode_cbor(&vec![0; MAX_THERMAL_STUDY_BYTES + 1]).is_err());
+    let mut doc = saved_document();
+    doc.studies[0].input.mesh.points_m = vec![[0.; 3]; 65_537];
+    assert!(doc.encode_cbor().is_err());
+    assert!(ThermalStudyDocument::decode_cbor(&raw_wire(&doc, 1)).is_err());
+    let mut doc = saved_document();
+    let item = doc.studies[0].clone();
+    doc.studies = (1..=65)
+        .map(|id| SavedThermalStudy { id, ..item.clone() })
+        .collect();
+    assert!(doc.encode_cbor().is_err());
+    assert!(ThermalStudyDocument::decode_cbor(&raw_wire(&doc, 1)).is_err());
+    // Declared huge arrays and deeply nested containers must reject promptly.
+    for bytes in [
+        vec![0x9b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+        vec![0x81; 100],
+    ] {
+        assert!(ThermalStudyDocument::decode_cbor(&bytes).is_err());
+    }
+}
+
+#[test]
+fn emitted_studies_conform_to_cddl_and_contract_rejects_future_versions() {
+    let contract = include_str!("../../../docs/thermal-study.cddl").trim_start_matches('\u{feff}');
+    let mut doc = saved_document();
+    doc.studies[0].input.surfaces.push(ThermalSurface {
+        nodes: [0, 1, 2],
+        heat_flux_in_w_m2: -2.,
+        convection: Some(ThermalConvection {
+            coefficient_w_m2_k: 4.,
+            ambient_k: 290.,
+        }),
+    });
+    for d in [&doc, &ThermalStudyDocument::default()] {
+        cddl_cat::validate_cbor_bytes("thermal-studies", contract, &d.encode_cbor().unwrap())
+            .unwrap();
+    }
+    assert!(
+        cddl_cat::validate_cbor_bytes("thermal-studies", contract, &raw_wire(&doc, 2)).is_err()
+    );
+}
+#[test]
+fn cbor_nested_recursion_limit_is_exercised_within_material_value() {
+    let bytes = saved_document().encode_cbor().unwrap();
+    let mut value: ciborium::Value = ciborium::from_reader(bytes.as_slice()).unwrap();
+    fn field<'a>(v: &'a mut ciborium::Value, name: &str) -> &'a mut ciborium::Value {
+        &mut v
+            .as_map_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|(k, _)| k.as_text() == Some(name))
+            .unwrap()
+            .1
+    }
+    let studies = field(&mut value, "studies");
+    let study = &mut studies.as_array_mut().unwrap()[0];
+    let input = field(study, "input");
+    let materials = field(input, "materials");
+    let material = &mut materials.as_array_mut().unwrap()[0];
+    let details = field(material, "details");
+    let properties = field(details, "properties");
+    let property = &mut properties.as_array_mut().unwrap()[0];
+    let mut nested = ciborium::Value::Null;
+    for _ in 0..40 {
+        nested = ciborium::Value::Array(vec![nested]);
+    }
+    *field(property, "value") = nested;
+    let mut encoded = Vec::new();
+    ciborium::into_writer(&value, &mut encoded).unwrap();
+    let error = ThermalStudyDocument::decode_cbor(&encoded).unwrap_err();
+    assert!(error.to_lowercase().contains("recursion"), "{error}");
+}

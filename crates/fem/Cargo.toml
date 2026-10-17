@@ -8,3 +8,8 @@ description = "Finite element analysis kernels over shared Limo CAD material mod
 
 [dependencies]
 limo-cad-core = { path = "../core" }
+
+serde = { workspace = true, features = ["derive"] }
+ciborium = "=0.2.2"
+[dev-dependencies]
+cddl-cat = { version = "=0.7.1", default-features = false, features = ["ciborium"] }
