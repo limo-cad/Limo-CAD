@@ -148,6 +148,50 @@ mod tests {
     use super::*;
 
     #[test]
+    fn catalog_material_drives_explicit_constitutive_models_without_copying_properties() {
+        use limo_cad_core::MaterialPropertyFilter;
+        let material = find_preset("material.aluminum-6061-t6")
+            .unwrap()
+            .material
+            .as_ref()
+            .unwrap();
+        let before = serde_json::to_string(material).unwrap();
+        let selection = MaterialPropertyFilter {
+            context: Some("Engineering reference: Aluminum 6061-T6"),
+            source_id: None,
+        };
+        let elastic = material.isotropic_elasticity(selection, selection).unwrap();
+        let stress = elastic
+            .stress_pa([0.001, -0.00033, -0.00033, 0., 0., 0.])
+            .unwrap();
+        assert!((stress[0] - 68_900_000.).abs() < 1e-6);
+        assert!(stress[1..].iter().all(|v| v.abs() < 1e-6));
+        let thermal = material.isotropic_conduction(selection).unwrap();
+        assert_eq!(thermal.conductivity_w_m_k(), 167.);
+        assert_eq!(
+            thermal.heat_flux_w_m2([-100., 0., 0.]).unwrap(),
+            [16_700., 0., 0.]
+        );
+        for property in [
+            elastic.youngs_property(),
+            elastic.poisson_property(),
+            thermal.conductivity_property(),
+        ] {
+            assert!(material
+                .properties
+                .iter()
+                .any(|p| std::ptr::eq(p, property)));
+            assert!(material
+                .sources
+                .iter()
+                .any(|source| source.id == property.source_id));
+        }
+        assert_eq!(serde_json::to_string(material).unwrap(), before);
+        // This verifies numerical consumption of an explicit law. It does not
+        // certify alloy data or qualify isotropy for a manufactured component.
+    }
+
+    #[test]
     fn catalog_has_bambu_and_prusa() {
         assert!(brands().contains(&"Bambu Lab"));
         assert!(brands().contains(&"Prusa"));
