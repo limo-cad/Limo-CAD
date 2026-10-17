@@ -12,7 +12,7 @@ fn bracket_lessons_share_one_editable_build_and_localized_help() {
         .unwrap();
     assert_eq!(
         report["summary"]["bodies"][0]["size"],
-        json!([40., 20., 30.])
+        json!([30., 40., 40.])
     );
     let lessons = &report["exports"]["lessons"];
     assert_eq!(lessons["sketch"].as_array().unwrap().len(), 5);
@@ -38,16 +38,16 @@ fn bracket_lessons_share_one_editable_build_and_localized_help() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|f| f["cylinder"]["radius"] == 3.));
+        .any(|f| f["cylinder"]["radius"] == 12.));
     let openings: Vec<_> = body["edges"]
         .as_array()
         .unwrap()
         .iter()
-        .filter(|e| e["circle"]["closed"] == true && e["circle"]["radius"] == 3.)
+        .filter(|e| e["circle"]["closed"] == true && e["circle"]["radius"] == 12.)
         .map(|e| e["circle"]["center"]["x"].as_f64().unwrap())
         .collect();
     assert!(openings.iter().any(|x| x.abs() < 1e-6));
-    assert!(openings.iter().any(|x| (*x - 5.).abs() < 1e-6));
+    assert!(openings.iter().any(|x| (*x - 6.).abs() < 1e-6));
     let saved = report["exports"]["final_model"].clone();
     let mut reopened = CadServer::new().unwrap();
     reopened

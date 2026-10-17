@@ -14,7 +14,7 @@
     },
     {
       "chapter": "Constrain the section",
-      "note": "Draw one closed six-edge L. Horizontal and vertical relations establish square corners; four driving lengths set a 40 × 30 mm envelope and 5 mm walls.",
+      "note": "Draw one closed six-edge L. Horizontal and vertical relations establish square corners; four driving lengths set a 30 × 40 mm envelope and 6 mm walls.",
       "duration_ms": 1000
     },
     {
@@ -42,7 +42,7 @@
             "y": 0
           },
           "to_raw": {
-            "x": 40,
+            "x": 30,
             "y": 0
           },
           "ctrl_held": true
@@ -74,12 +74,12 @@
         "operation": "sketch_add_line",
         "arguments": {
           "from": {
-            "x": 40,
+            "x": 30,
             "y": 0
           },
           "to_raw": {
-            "x": 40,
-            "y": 5
+            "x": 30,
+            "y": 6
           },
           "ctrl_held": true
         }
@@ -110,12 +110,12 @@
         "operation": "sketch_add_line",
         "arguments": {
           "from": {
-            "x": 40,
-            "y": 5
+            "x": 30,
+            "y": 6
           },
           "to_raw": {
-            "x": 5,
-            "y": 5
+            "x": 6,
+            "y": 6
           },
           "ctrl_held": true
         }
@@ -146,12 +146,12 @@
         "operation": "sketch_add_line",
         "arguments": {
           "from": {
-            "x": 5,
-            "y": 5
+            "x": 6,
+            "y": 6
           },
           "to_raw": {
-            "x": 5,
-            "y": 30
+            "x": 6,
+            "y": 40
           },
           "ctrl_held": true
         }
@@ -182,12 +182,12 @@
         "operation": "sketch_add_line",
         "arguments": {
           "from": {
-            "x": 5,
-            "y": 30
+            "x": 6,
+            "y": 40
           },
           "to_raw": {
             "x": 0,
-            "y": 30
+            "y": 40
           },
           "ctrl_held": true
         }
@@ -219,7 +219,7 @@
         "arguments": {
           "from": {
             "x": 0,
-            "y": 30
+            "y": 40
           },
           "to_raw": {
             "x": 0,
@@ -542,10 +542,10 @@
             }
           ],
           "text_pos": {
-            "x": 20,
-            "y": -6
+            "x": 15,
+            "y": -7
           },
-          "value_text": "40"
+          "value_text": "30"
         }
       }
     },
@@ -561,10 +561,10 @@
             }
           ],
           "text_pos": {
-            "x": 47,
-            "y": 2.5
+            "x": 37,
+            "y": 3
           },
-          "value_text": "5"
+          "value_text": "6"
         }
       }
     },
@@ -580,10 +580,10 @@
             }
           ],
           "text_pos": {
-            "x": 2.5,
-            "y": 37
+            "x": 3,
+            "y": 47
           },
-          "value_text": "5"
+          "value_text": "6"
         }
       }
     },
@@ -600,9 +600,9 @@
           ],
           "text_pos": {
             "x": -7,
-            "y": 15
+            "y": 20
           },
-          "value_text": "30"
+          "value_text": "40"
         }
       }
     },
@@ -613,7 +613,7 @@
     },
     {
       "chapter": "Give the bracket width",
-      "note": "Extrude the fully located section by 20 mm. The section dimensions and extrusion width remain independent editable parameters.",
+      "note": "Extrude the fully located section by 40 mm. The section dimensions and extrusion width remain independent editable parameters.",
       "duration_ms": 1000
     },
     {
@@ -651,7 +651,7 @@
           "operation": "new_body",
           "extent": {
             "type": "distance",
-            "distance": 5
+            "distance": 6
           },
           "taper_angle_deg": 0,
           "flip": true,
@@ -674,7 +674,7 @@
       }
     },
     {
-      "id": "depth_12",
+      "id": "depth_24",
       "call": {
         "group": "solid/build",
         "operation": "solid_edit_extrude",
@@ -690,7 +690,7 @@
             "operation": "new_body",
             "extent": {
               "type": "distance",
-              "distance": 12
+              "distance": 24
             },
             "taper_angle_deg": 0,
             "flip": true,
@@ -700,7 +700,7 @@
       }
     },
     {
-      "id": "depth_20",
+      "id": "depth_40",
       "call": {
         "group": "solid/build",
         "operation": "solid_edit_extrude",
@@ -716,7 +716,7 @@
             "operation": "new_body",
             "extent": {
               "type": "distance",
-              "distance": 20
+              "distance": 40
             },
             "taper_angle_deg": 0,
             "flip": true,
@@ -730,7 +730,7 @@
         "bracket_body": {
           "$select": {
             "from": {
-              "$ref": "depth_20"
+              "$ref": "depth_40"
             },
             "path": "/scene/bodies",
             "where": {
@@ -766,7 +766,7 @@
     },
     {
       "chapter": "Cut the mounting hole",
-      "note": "A second sketch is setup for Cut, not another Sketch demonstration. Use the upright face and a 6 mm circle, then Extrude with Cut and Through all.",
+      "note": "A second sketch is setup for Cut, not another Sketch demonstration. Use the upright face and a 24 mm circle, then Extrude with Cut and Through all.",
       "duration_ms": 1400
     },
     {
@@ -779,7 +779,7 @@
             "path": "/faces",
             "where": {
               "/plane/normal/0": 1,
-              "/plane/origin/0": 5
+              "/plane/origin/0": 6
             },
             "take": "one"
           }
@@ -814,9 +814,9 @@
           "anchor": {
             "$project": {
               "point": [
-                5,
-                10,
-                20
+                6,
+                20,
+                24
               ],
               "basis": {
                 "$ref": "hole_begin",
@@ -827,9 +827,9 @@
           "edge_hint": {
             "$project": {
               "point": [
-                5,
-                13,
-                20
+                6,
+                32,
+                24
               ],
               "basis": {
                 "$ref": "hole_begin",
@@ -837,7 +837,7 @@
               }
             }
           },
-          "diameter_mm": 6,
+          "diameter_mm": 24,
           "ctrl_held": true
         }
       }
@@ -1013,7 +1013,7 @@
           {
             "caption": "extrude.distance",
             "scene": {
-              "$ref": "depth_12",
+              "$ref": "depth_24",
               "pointer": "/scene"
             },
             "cue": "depth",
@@ -1022,7 +1022,7 @@
           {
             "caption": "extrude.width",
             "scene": {
-              "$ref": "depth_20",
+              "$ref": "depth_40",
               "pointer": "/scene"
             },
             "cue": "depth",
@@ -1031,7 +1031,7 @@
           {
             "caption": "extrude.apply",
             "scene": {
-              "$ref": "depth_20",
+              "$ref": "depth_40",
               "pointer": "/scene"
             },
             "cue": "apply",
@@ -1042,7 +1042,7 @@
           {
             "caption": "cut.profile",
             "scene": {
-              "$ref": "depth_20",
+              "$ref": "depth_40",
               "pointer": "/scene"
             },
             "cue": "profile",

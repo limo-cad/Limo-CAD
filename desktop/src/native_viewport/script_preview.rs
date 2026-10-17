@@ -870,6 +870,8 @@ mod tests {
         let mut renderer = PreviewRenderer::new().unwrap();
         let cancelled = AtomicBool::new(false);
         let mut request = request("extrude-profile".into(), "proof".into(), 1);
+        request.yaw = -40. * std::f32::consts::PI / 180.;
+        request.pitch = 22. * std::f32::consts::PI / 180.;
         request.width = 600;
         request.height = 400;
         let mut render = |document: &PreviewDocument, request: &RenderRequest| {

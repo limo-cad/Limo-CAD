@@ -1,5 +1,7 @@
 Three native Show me examples share one editable angle bracket: Sketch, Extrude and Cut. The Cut starts with its circle already prepared; it links back to the earlier operations.
 
+The proportions and orientation follow the README's AI-generated [branding concept](../../assets/branding/limo-proposal-concept-en.png): a broad upright, shorter base and large central opening. Inferred dimensions are 30 mm base length, 40 mm width, 40 mm height, 6 mm walls and a 24 mm upright hole centered 20 mm across and 24 mm above the origin. Preview yaw is -40 degrees and elevation 22 degrees, so the base projects toward the lower left. These are deliberate CAD dimensions inferred from the concept, not measurements of an exact source model.
+
 The GIFs sequence real production Bevy component captures at their authored timings (5/5/4 frames). PNGs use the native CAD renderer, dark/light themes and supported 1200 x 760 / 175% layout. These are windowless component captures, not OS recordings or broad live UI/MCP qualification. The hint anchor is a native fixture; normal traversal is separately tested against the production ribbon.
 
 Access: hover Create Sketch or Extrude for 700 ms; keyboard focus reveals the hint immediately. Extrude offers both Extrude and Cut. The top-bar Help index uses the same teaching catalog, with written instructions in English, Simplified Chinese, Spanish and German. Full build opens the bundled `extrude-basics` recipe in Scripts using its existing save/run safeguards.

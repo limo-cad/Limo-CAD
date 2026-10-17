@@ -11,12 +11,28 @@
     760
   ],
   "localized_ui_scale": 1.75,
+  "reference_image": {
+    "path": "docs/assets/branding/limo-proposal-concept-en.png",
+    "sha256": "91cf6063ead08051ae7c85c037c13fab0b2a20f1832563ce238e59e8e9799470",
+    "interpretation": "AI concept; inferred dimensions, not exact CAD"
+  },
+  "inferred_dimensions_mm": {
+    "base_length": 30,
+    "width": 40,
+    "height": 40,
+    "wall": 6,
+    "upright_hole_diameter": 24
+  },
+  "preview_view_degrees": {
+    "yaw": -40,
+    "pitch": 22
+  },
   "source_sha256_lf": {
-    "crates/help/src/lessons.json": "81577618255fe2f111f5153786a7144c4b1412929805a8716e1afcbc3538bad2",
+    "crates/help/src/lessons.json": "bd380f7a591be167b0c4de54788758effb49f3e0d35ef93c1e3aef1baa0b2730",
     "crates/help/src/lessons.rs": "18f359ec95cdecc0f888c6a9f8843265f4c3065fbbd011d056944c2ca8e9b6b1",
     "crates/help/src/lib.rs": "668521ba76fcecf383584ad12ed4187b9bf09514d0dd8ae7dbca8a6b24789f30",
     "desktop/src/native_viewport/interface_shell.rs": "8a5346d4c89c594ddfe32d12ac94db40f3c2ff5d68dec093a125ac6166c600c6",
-    "desktop/src/native_viewport/script_preview.rs": "d797ceb87bd090209dc31c3b66bfa47b74b48d2763a4933ae79fc75d7055ae5d",
+    "desktop/src/native_viewport/script_preview.rs": "fc9a251508ea972cd6e86a48d34557f51b10ed6c32ffeb713c1a31a291edf9bd",
     "desktop/src/native_viewport/ui/font_tests.rs": "e3c970682e26ae20fce59fe296650a57e56a15ee5197f4908c008a0afe0069cf",
     "desktop/src/native_viewport/ui.rs": "98e57cbd6c66e555fdf56264715764e9f2181213ddbeaa880a5b5fc8dc45de28",
     "desktop/src/session_bridge/native_interface/controller/files/panel.rs": "ce5d28c799a6d9918a5eb530ddb6d4d392946b25837d6c97d9e3dc6bc4334eb0",
@@ -29,9 +45,9 @@
     "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/lesson.rs": "885f8f9c25d072f3c44f8727ec59b08db7ccf0ff632f742c40b7413f5a021d57",
     "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/panel.rs": "a44cd4d4e4d70f62c1e78c11484841985057c3674a6c9760afe05267b3ed3615",
     "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/tests.rs": "94c1f867df639ed8d00e4ce11fac5436dcfddff9e2946c7348f4f4f2d7cf6ac9",
-    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs": "1c24fc0ce3fe87ddd9867e5bb535de1288537fa99b13b1d120c514da89f71f54",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs": "d9e9484f7a4705d76e39afb48692c957345072ecda3b4e57edd438eb23fd20b3",
     "desktop/src/session_bridge/native_interface/controller/workbench/ribbon_menu/localization_tests.rs": "2fef28a3ba867ee015b32b61b2233d160339d291a907d36b1092ae6afbaf4d63",
-    "examples/scripts/extrude-basics.limo.jsonc": "a9b22b71987221b990c2c2ca7379bacccf66e8ebfda4814002f8c734fed24d44",
-    "mcp-server/src/lesson_tests.rs": "d93310c81e259ccf4ec52e1bb4ea64b2c4e47f323de4c106c7526c11163144f6"
+    "examples/scripts/extrude-basics.limo.jsonc": "4d09310acf608cfa4c9f073b82b5ffd49b8a863a8777e1b9ff588e04c55f4666",
+    "mcp-server/src/lesson_tests.rs": "b411171b55eb8af469da071659b223adacd7500970fadbb97bc51d1618496f5c"
   }
 }

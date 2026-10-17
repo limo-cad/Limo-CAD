@@ -21,7 +21,11 @@ pub(crate) use feature::paint_hint;
 pub(crate) use input::input;
 pub(crate) use panel::paint;
 
-const HOME: (f32, f32) = (std::f32::consts::FRAC_PI_4, std::f32::consts::FRAC_PI_6);
+// Match the README concept: broad upright, with the base toward the lower left.
+const HOME: (f32, f32) = (
+    320. * std::f32::consts::PI / 180.,
+    22. * std::f32::consts::PI / 180.,
+);
 const FRAME_DELAY: Duration = Duration::from_millis(1800);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
