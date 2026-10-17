@@ -48,6 +48,9 @@ pub fn fixture(
         "line" => {
             json!({"kind":"center_line","id":1,"view_id":1,"first":reference(1),"second":reference(2),"extension":4.})
         }
+        "radius" | "diameter" => {
+            json!({"kind":"radial_dimension","id":1,"view_id":1,"feature":reference(1),"mode":kind,"leader_angle_deg":35.,"offset":8.,"prefix":"QA ","suffix":" exact"})
+        }
         _ => panic!("Unknown center fixture"),
     };
     sheet

@@ -1489,6 +1489,15 @@ fn draw_annotation(
             let direction = [angle.cos(), -angle.sin()];
             let edge = [center[0] + radius * direction[0], center[1] + radius * direction[1]];
             let label = [center[0] + (radius + offset) * direction[0], center[1] + (radius + offset) * direction[1]];
+            let diameter = matches!(mode, DrawingRadialDimensionMode::Diameter);
+            let opposite = if diameter { [2. * center[0] - edge[0], 2. * center[1] - edge[1]] } else { center };
+            let semantic = dxf_dimensions::Dimension::radial(
+                &crate::drawing_presentation::geometry::Linear {
+                    first: opposite, second: edge, start: opposite, end: edge,
+                    value: circle.radius * if diameter { 2. } else { 1. },
+                }, diameter, presentation, *precision, units, (prefix, suffix), style,
+            );
+            let start = paper.items.len();
             paper.line(vec![edge, label], "DIMENSION", &style.dimension);
             arrow(paper, edge, label, style);
             let (value, symbol) = match mode {
@@ -1500,6 +1509,10 @@ fn draw_annotation(
                 dimension_text(value, *precision, &format!("{prefix}{symbol}"), suffix, presentation, units),
                 presentation, style, None,
             );
+            if let Some(mut dimension) = semantic {
+                dimension.range = start..paper.items.len();
+                paper.dimensions.push(dimension);
+            }
         }
         DrawingAnnotationDto::AngularDimension {
             view_id, vertex, first, second, radius, prefix, suffix, precision, presentation, ..

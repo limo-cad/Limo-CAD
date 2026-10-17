@@ -5,16 +5,22 @@ use crate::drawing_presentation::{geometry, text};
 use limo_cad_core::UnitSystem;
 use std::ops::Range;
 
+enum Kind {
+    Linear { angle: f64 },
+    Angular { vertex: P },
+    Radial { diameter: bool },
+}
+
 pub(super) struct Dimension {
     pub range: Range<usize>,
     first: P,
     second: P,
     definition: P,
-    angle: f64,
-    vertex: Option<P>,
+    kind: Kind,
     factor: f64,
     precision: u8,
     post: String,
+    text: String,
     text_height: f64,
     arrow_size: f64,
 }
@@ -36,6 +42,37 @@ fn supported(
 }
 
 impl Dimension {
+    pub(super) fn radial(
+        span: &geometry::Linear,
+        diameter: bool,
+        presentation: &DrawingDimensionPresentationDto,
+        precision: u8,
+        units: UnitSystem,
+        affixes: (&str, &str),
+        style: &DrawingSheetStyleDto,
+    ) -> Option<Self> {
+        let mut dimension = Self::resolve(
+            span,
+            presentation,
+            precision,
+            units,
+            affixes.0,
+            affixes.1,
+            style,
+        )?;
+        dimension.kind = Kind::Radial { diameter };
+        dimension.definition = span.first;
+        // The symbol belongs to the style, so editing keeps the live value.
+        dimension.text = format!("{}<>", affixes.0);
+        dimension.post = format!(
+            "{}<> {}{}",
+            if diameter { "\u{00d8}" } else { "R" },
+            text::unit_label(units),
+            affixes.1
+        );
+        Some(dimension)
+    }
+
     /// Complex presentation stays graphical until its regeneration semantics
     /// are implemented. Never replace it with an overridden, stale number.
     pub(super) fn resolve(
@@ -66,11 +103,13 @@ impl Dimension {
             first: geometry.first,
             second: geometry.second,
             definition: geometry.end,
-            angle: (-span[1]).atan2(span[0]).to_degrees(),
-            vertex: None,
+            kind: Kind::Linear {
+                angle: (-span[1]).atan2(span[0]).to_degrees(),
+            },
             factor,
             precision,
             post: format!("{prefix}<> {}{suffix}", text::unit_label(units)),
+            text: "<>".into(),
             text_height: style.text_height_mm,
             arrow_size: style.arrow_size_mm,
         })
@@ -104,11 +143,13 @@ impl Dimension {
             first,
             second,
             definition: *geometry.points.get(geometry.points.len() / 2)?,
-            angle: 0.,
-            vertex: Some(geometry.vertex),
+            kind: Kind::Angular {
+                vertex: geometry.vertex,
+            },
             factor: 1.,
             precision,
             post: format!("{prefix}<>{suffix}"),
+            text: "<>".into(),
             text_height: style.text_height_mm,
             arrow_size: style.arrow_size_mm,
         })
@@ -123,7 +164,7 @@ impl Dimension {
         font: usize,
     ) {
         writeln!(out, "0\nDIMSTYLE\n105\n{handle:X}\n330\n{table:X}\n100\nAcDbSymbolTableRecord\n100\nAcDbDimStyleTableRecord\n2\nLIMO_DIM_{index}\n70\n0\n3\n{}\n40\n1\n41\n{}\n140\n{}\n144\n{}\n271\n{}\n277\n2\n278\n46\n78\n0\n77\n1\n340\n{font:X}", dxf_text(&self.post), self.arrow_size, self.text_height, self.factor, self.precision).unwrap();
-        if self.vertex.is_some() {
+        if matches!(self.kind, Kind::Angular { .. }) {
             writeln!(out, "179\n{}\n275\n0\n79\n0", self.precision).unwrap();
         }
     }
@@ -139,8 +180,18 @@ impl Dimension {
         handles.entity(out, "DIMENSION", owner, "DIMENSION");
         writeln!(
             out,
-            "100\nAcDbDimension\n2\n*D{index}\n3\nLIMO_DIM_{index}\n70\n{}\n71\n5\n1\n<>",
-            if self.vertex.is_some() { 165 } else { 160 }
+            "100\nAcDbDimension\n2\n*D{index}\n3\nLIMO_DIM_{index}\n70\n{}\n71\n5\n1\n{}",
+            match self.kind {
+                Kind::Angular { .. } => 165,
+                Kind::Linear { .. } => 160,
+                Kind::Radial { diameter } =>
+                    if diameter {
+                        163
+                    } else {
+                        164
+                    },
+            },
+            dxf_text(&self.text)
         )
         .unwrap();
         point(out, 10, self.definition, paper.size[1]);
@@ -165,17 +216,28 @@ impl Dimension {
             })
             .unwrap_or(self.definition);
         point(out, 11, text, paper.size[1]);
-        out.push_str(if self.vertex.is_some() {
-            "100\nAcDb3PointAngularDimension\n"
-        } else {
-            "100\nAcDbAlignedDimension\n"
-        });
-        point(out, 13, self.first, paper.size[1]);
-        point(out, 14, self.second, paper.size[1]);
-        if let Some(vertex) = self.vertex {
-            point(out, 15, vertex, paper.size[1]);
-        } else {
-            writeln!(out, "50\n{}\n100\nAcDbRotatedDimension", self.angle).unwrap();
+        match self.kind {
+            Kind::Linear { angle } => {
+                out.push_str("100\nAcDbAlignedDimension\n");
+                point(out, 13, self.first, paper.size[1]);
+                point(out, 14, self.second, paper.size[1]);
+                writeln!(out, "50\n{angle}\n100\nAcDbRotatedDimension").unwrap();
+            }
+            Kind::Angular { vertex } => {
+                out.push_str("100\nAcDb3PointAngularDimension\n");
+                point(out, 13, self.first, paper.size[1]);
+                point(out, 14, self.second, paper.size[1]);
+                point(out, 15, vertex, paper.size[1]);
+            }
+            Kind::Radial { diameter } => {
+                out.push_str(if diameter {
+                    "100\nAcDbDiametricDimension\n"
+                } else {
+                    "100\nAcDbRadialDimension\n"
+                });
+                point(out, 15, self.second, paper.size[1]);
+                out.push_str("40\n0\n");
+            }
         }
     }
 }
@@ -235,7 +297,7 @@ mod tests {
                         (measured - degrees).abs() < 1e-7,
                         "rotation={rotation} angle={degrees} winding={winding}: {measured}"
                     );
-                    assert_eq!(dimension.vertex, Some(vertex));
+                    assert!(matches!(dimension.kind, Kind::Angular { vertex: v } if v == vertex));
                 }
             }
         }

@@ -90,6 +90,8 @@ points and dimension styles preserve model measurement at the drawing scale,
 mm/cm/in units, precision and plain prefixes/suffixes. Ordinary line-angle and
 three-point angular dimensions export editable three-point DIMENSION entities
 with degree units, angular precision and the selected minor-angle sector.
+Radius and diameter dimensions retain editable circle definition points and
+scaled measurements, with their symbols and units in the dimension style.
 Anonymous picture blocks
 reuse the same graphics as SVG. They do not carry model topology associations.
 Other dimension families, complex tolerance/basic/reference/dual-unit
@@ -202,9 +204,11 @@ For reproducible artifacts without opening a window, run from the repository:
 cargo run -p limo-cad-occt --example drawing_straight_export -- C:\absolute\fresh\straight-export-evidence
 ```
 
-The example preserves prior evidence and writes 30 SVG/DXF pairs plus their
-source drawing, scene, projection and unit records: Length, Distance, Angle and
-Point-line, each in mm/cm/in and default/full presentation. This is an explicit
+The example preserves prior evidence and writes 42 SVG/DXF pairs plus their
+source drawing, scene, projection and unit records: length, distance, line-angle,
+point-line, three-point angle, radius and diameter, each in mm/cm/in and
+default/full presentation. Pass `--radial-only` after the destination to retain
+just the 12 radius/diameter cases when checking those changes. This is an explicit
 **synthetic projection** fixture, not proof of OCC projection or physical input.
 Render the SVG and inspect DXF through an independent parser/renderer before
 claiming visual parity. The manifest deliberately leaves pixel review required.

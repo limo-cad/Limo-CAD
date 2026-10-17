@@ -1,4 +1,6 @@
 //! Retain deterministic synthetic SVG/DXF artifacts without starting a host/GUI.
+#[path = "../tests/support/center_export.rs"]
+mod circular_fixture;
 #[path = "../tests/support/straight_export.rs"]
 mod fixture;
 use limo_cad_core::UnitSystem;
@@ -11,6 +13,11 @@ use serde_json::json;
 use std::{fs, path::PathBuf};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let radial_only = match std::env::args().nth(2).as_deref() {
+        None => false,
+        Some("--radial-only") => true,
+        _ => return Err("Optional second argument must be --radial-only".into()),
+    };
     let out = PathBuf::from(
         std::env::args_os()
             .nth(1)
@@ -29,14 +36,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "angle",
         "point-line",
         "angle-three-point",
+        "radius",
+        "diameter",
     ] {
+        if radial_only && !matches!(kind, "radius" | "diameter") {
+            continue;
+        }
         for (unit_name, units) in [
             ("mm", UnitSystem::Mm),
             ("cm", UnitSystem::Cm),
             ("in", UnitSystem::In),
         ] {
             for full in [false, true] {
-                let (mut document, scene, projection) = fixture::fixture(kind, 40.);
+                let (mut document, scene, projection) = if matches!(kind, "radius" | "diameter") {
+                    circular_fixture::fixture(kind, 2., false)
+                } else {
+                    fixture::fixture(kind, 40.)
+                };
                 if full {
                     fixture::full_presentation(&mut document);
                 }
@@ -77,12 +93,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_vec_pretty(&json!({
             "source":"synthetic projection fixture", "cases":cases,
             "formats":["svg","dxf"],"pixel_review":"required",
-            "semantic_dxf":"Default linear and angular cases use editable DIMENSION entities; full presentation remains graphical",
+            "semantic_dxf":"Default linear, angular, radius and diameter cases use editable DIMENSION entities; full presentation remains graphical",
             "not_proven":["OCC projection","physical input","model topology association in DXF","printing"]
         }))?,
     )?;
     println!(
-        "Saved 30 paired SVG/DXF cases and source records in {}",
+        "Saved {} paired SVG/DXF cases and source records in {}",
+        cases.len(),
         out.display()
     );
     Ok(())

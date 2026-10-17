@@ -52,6 +52,62 @@ fn replace_annotation(document: &mut DrawingDocumentDto, change: impl FnOnce(&mu
 }
 
 #[test]
+fn semantic_radius_and_diameter_preserve_measurement_after_scale_and_leader_changes() {
+    for mode in ["radius", "diameter"] {
+        for scale in [0.25, 1., 5.] {
+            for angle in [-145., 35., 135.] {
+                for (units, unit_mm) in [
+                    (UnitSystem::Mm, 1.),
+                    (UnitSystem::Cm, 10.),
+                    (UnitSystem::In, 25.4),
+                ] {
+                    let (mut document, scene, mut projection) =
+                        super::center_fixture::fixture(mode, scale, false);
+                    replace_annotation(&mut document, |a| {
+                        a["leader_angle_deg"] = json!(angle);
+                        a["prefix"] = json!("QA ");
+                        a["suffix"] = json!(" exact");
+                    });
+                    let dxf = export(
+                        &document,
+                        &scene,
+                        &projection,
+                        units,
+                        DrawingExportFormat::Dxf,
+                    )
+                    .unwrap();
+                    let dimensions = dxf_entities(&dxf, "DIMENSION");
+                    assert_eq!(dimensions.len(), 1);
+                    let d = &dimensions[0];
+                    assert_eq!(d["70"], if mode == "diameter" { "163" } else { "164" });
+                    assert_eq!(d["1"], "QA <>");
+                    let num = |k: &str| d[k].parse::<f64>().unwrap();
+                    let paper = (num("15") - num("10")).hypot(num("25") - num("20"));
+                    let styles = dxf_entities(&dxf, "DIMSTYLE");
+                    let style = styles.iter().find(|s| s.get("2") == Some(&d["3"])).unwrap();
+                    let expected = if mode == "diameter" { 10. } else { 5. } / unit_mm;
+                    assert!((paper * style["144"].parse::<f64>().unwrap() - expected).abs() < 1e-8);
+                    assert!(style["3"].starts_with(if mode == "diameter" {
+                        "\u{00d8}<>"
+                    } else {
+                        "R<>"
+                    }));
+                    projection.circles.clear();
+                    assert!(export(
+                        &document,
+                        &scene,
+                        &projection,
+                        units,
+                        DrawingExportFormat::Dxf
+                    )
+                    .is_err());
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn semantic_angles_keep_degrees_across_scales_units_and_both_reference_families() {
     for kind in ["angle", "angle-three-point"] {
         for scale in [0.25, 1., 5.] {
