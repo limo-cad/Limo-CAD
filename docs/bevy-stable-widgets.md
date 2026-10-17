@@ -77,9 +77,59 @@ Bevy's nodes. Unmigrated controls still use their existing accessibility
 projection. Screen-reader behavior remains a separate acceptance item.
 
 The 2026-10-16 results below describe the earlier guarded adapter. They are
-historical evidence, not passes for this standard-input rework. Its affected
-workflow cases must be rechecked on a clean build with PR433 and PR434 locally
-integrated; the broad qualification ledger remains paused.
+historical evidence, not passes for this standard-input rework. The separate
+rework checks below use clean builds with PR433 and PR434 locally integrated;
+the broad qualification ledger remains paused.
+
+## Standard-input rework, 2026-10-17
+
+PR420 source `8b0051f4` replaces the guarded adapter with standard Bevy picking,
+button/checkbox activation, hover/press state, and focus navigation. The local
+validation branch combines main `49dec66d`, PR433 `5cde5c0d`, and PR434 `fcbde1b7`.
+The dependencies are not included in PR420's published branch.
+
+Fresh native macOS checks on clean integration `62e3572f` verified File/Settings,
+light and dark themes, Chinese labels at 125%, scrolling, pointer/Space settings
+toggles, two-profile Merge extrusion, 12 mm field editing and single Apply,
+earlier-sketch editing, Undo/Redo, save/reopen, and canceling an edited feature.
+The saved schema-15 model is exactly equal to the default baseline's model.
+The Snap square now toggles successfully; the existing focus retirement after
+changing Snap remains, so a subsequent Space does not toggle it until focus is
+reacquired. This is an unresolved baseline limitation, not a visual difference.
+
+Thirteen capture pairs are retained with raw differences and revision identities.
+The controls retain comparable labels, layout and sizing. Some pairs have
+intentionally different selected settings, preview distances, camera positions,
+focus, or browser expansion; those pairs are layout comparisons, not pixel
+identity claims. The reopened Extrude dialog differs by 62 pixels within its
+640-by-1252-pixel region. Checkbox glyph/focus differences do not block the tested
+workflows.
+
+Three regressions were found and repaired: a non-UI focus parent excluded roots
+from layout (use Bevy's `GhostNode`); widget input partitioning could consume an
+existing native drag release (preserve its current owner); and Shift+Tab moved
+forward on macOS (pass the native event's modifiers to Bevy's `TabNavigation`).
+Final integration `5ebe37bc` passed strict library/test Clippy, 98 interface tests,
+13 native-host tests, and the release package build. Live native input then
+verified reverse Tab in Settings, focus across native fields and Bevy controls,
+Space activation, release outside Finish Sketch followed by a normal click,
+and canvas/slider drags released over buttons. The slider stayed active through
+release without closing Settings; subsequent Reset and Close clicks worked.
+After editing/canceling and finishing the sketch, the saved model still matches
+the default baseline byte for byte. The scoped result is **12 passed behavior
+cases and one shared Snap focus issue**, with no pending affected rechecks.
+
+![Default and standard Bevy reopened Extrude dialog](qualification/bevy-widgets-standard-input-20261017/extrude-edit-reopened.png)
+
+![Default and standard Bevy dark Chinese settings](qualification/bevy-widgets-standard-input-20261017/settings-dark-zh-125.png)
+
+MCP was used only for matched-build inspection and image capture. All modeling
+input used the user-authorized native app automation. No scripts, replay,
+raw inbox writes, or MCP mutations were used. The broad qualification ledger
+remains paused; this is a focused comparison, not complete UI or screen-reader
+qualification. The feature remains opt-in and the PR remains draft.
+
+See [rework evidence](qualification/bevy-widgets-standard-input-20261017.json).
 
 ## Stable dependency and window-host patch
 

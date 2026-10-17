@@ -1,0 +1,807 @@
+{
+  "recorded_utc": "2026-10-17T07:50:16.284303+00:00",
+  "scope": "PR420 standard Bevy buttons/checks with PR433 and PR434 locally integrated",
+  "state": "focused_check_complete_with_baseline_issue",
+  "pr420_source": "8b0051f4dcc720b4cf679f689ed310789bdb1164",
+  "integration_source": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+  "baseline_source": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
+  "main": "49dec66db7a0707c9fcd715a003a7abaa61b8801",
+  "dependencies": {
+    "433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "input_method": "User-authorized native macOS CUA; read-only MCP inspect/capture; no scripted modeling, replay, raw inbox writes or MCP mutations",
+  "retained_passes": {
+    "started_utc": "2026-10-17T06:55:03.123716+00:00",
+    "scope": "PR420 standard Bevy input rework, assuming PR433 and PR434 merged locally",
+    "state": "in_progress",
+    "baseline": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8 default V2 app",
+    "dependency_heads": {
+      "433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+      "434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+    },
+    "cases": [
+      {
+        "name": "File menu and Settings",
+        "status": "passed",
+        "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+        "actual": "Native coordinate File click opens once; Space reopens it; End focuses Exit, Up focuses Settings, Return opens Settings.",
+        "evidence": [
+          "widgets/file-menu-dark.png",
+          "widgets/settings-light.png"
+        ]
+      },
+      {
+        "name": "theme locale and density",
+        "status": "passed",
+        "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+        "actual": "Light/English/100% and dark/Chinese/125% retain readable labels, selected state, layout, and access to lower settings.",
+        "evidence": [
+          "widgets/settings-light.png",
+          "widgets/settings-dark-zh-125.png"
+        ]
+      },
+      {
+        "name": "pointer and keyboard checkbox",
+        "status": "passed",
+        "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+        "actual": "GPU stock-removal toggle: coordinate click off and Space on with focus retained.",
+        "evidence": [
+          "widgets/settings-toggle-off-inspect.json",
+          "widgets/settings-toggle-on-keyboard-inspect.json"
+        ]
+      },
+      {
+        "name": "Tab and Shift+Tab",
+        "status": "failed",
+        "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+        "expected": "Tab from unfocused Settings -> Close dialog; Shift+Tab wraps to More settings",
+        "actual": "Tab -> Close dialog; Shift+Tab -> Close settings; held Shift+Tab -> System (forward traversal)",
+        "evidence": [
+          "widgets/settings-shift-tab-inspect.json"
+        ]
+      },
+      {
+        "name": "two-region Merge extrusion and distance editing",
+        "status": "passed",
+        "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+        "actual": "Coordinate toolbar click opens Extrude; two canvas region clicks select two profiles; checkbox square turns Merge on; native field accepts 12; one Apply creates Body1 and two history features.",
+        "evidence": [
+          "widgets/extrude-merge-preview.png",
+          "widgets/extrude-applied.png"
+        ]
+      },
+      {
+        "name": "earlier sketch editing and release outside",
+        "status": "partial",
+        "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+        "actual": "Coordinate context-menu Edit sketch hides the later extrusion. Finish through accessibility restores it. Release-outside live input was blocked twice by macOS noWindowsAvailable; source regression passes; final app recheck pending.",
+        "evidence": [
+          "widgets/history-sketch-edit.png"
+        ]
+      },
+      {
+        "name": "Snap square and row",
+        "status": "baseline_issue_retained",
+        "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+        "actual": "Coordinate square now toggles Snap off, row toggles it back on. As in baseline, focus retires after command and Space has no effect.",
+        "evidence": [
+          "widgets/sketch-snap-hit-target-inspect.json"
+        ]
+      },
+      {
+        "name": "Undo and Redo",
+        "status": "passed",
+        "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+        "actual": "Native keyboard shortcuts remove and restore Body1/Extrude1; history count returns to two.",
+        "evidence": [
+          "widgets/undo-extrude.png",
+          "widgets/redo-saved.png"
+        ]
+      },
+      {
+        "name": "save and reopen",
+        "status": "passed",
+        "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+        "actual": "Native save, Open chooser and reopen retain two profiles, Merge and 12 mm. Saved schema-15 model equals the baseline payload exactly.",
+        "evidence": [
+          "widgets/redo-saved.png",
+          "widgets/extrude-edit-reopened.png",
+          "comparison/report.json"
+        ]
+      },
+      {
+        "name": "feature edit and Cancel",
+        "status": "passed",
+        "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+        "actual": "Coordinate context-menu Edit feature; Flip square changes preview; coordinate Cancel restores original body. Save afterward preserves exact model payload.",
+        "evidence": [
+          "widgets/extrude-edit-reopened.png",
+          "widgets/extrude-cancel-result.png"
+        ]
+      }
+    ],
+    "broad_qualification": "paused; no MCP mutations",
+    "generation": "v4",
+    "publication_rework": "6e323265416cae3dc9d5f018f1810f241e5dc48e",
+    "publication_layout_repair": "87859217",
+    "integration_revision": "62e3572f",
+    "source_checks": {
+      "interface_passed": 96,
+      "host_passed": 13,
+      "logs": [
+        "interface-tests.log",
+        "host-tests.log"
+      ],
+      "build": "passed"
+    },
+    "resolved_automation_issue": "Restarted the isolated empty Default V2 app through its File menu; coordinate pointer input now works. User confirmed unlocked/foreground; no lock diagnosis.",
+    "failed_build_evidence": "../v3/widgets/layout-failure.png",
+    "layout_repair": "Bevy GhostNode groups Tab navigation without removing roots from the UI layout pass.",
+    "fixtures": {
+      "v4/fixtures/widgets-profile.limo": "e8ddce8165e0e23a08139289be8699f447604674e9ae3cb22fd8c94d45b1c6e6",
+      "v4/fixtures/widgets-existing-extrude.limo": "3afde7d592115591c76b05f8ae6cf7bbdab2ff1654b781e55b6240dbd7088bb0"
+    },
+    "publication_layout_test": "c66b8a41",
+    "queued_findings": [
+      {
+        "case": "model/field drag crossing controls",
+        "status": "fixed in publication c625d5f9; seven source widget tests passed on fadb10eb",
+        "cause": "widget partition runs before native capture/model-drag guard, so motion/release over a widget can be consumed before the existing owner releases",
+        "next": "Live final-build drag check pending"
+      }
+    ],
+    "layout_repair_result": {
+      "status": "passed",
+      "verified_utc": "2026-10-17T07:14:58.335289+00:00",
+      "actual": "Labels and icons render again; native coordinate File click opens the menu once. Real layout regression passes with a primary window.",
+      "evidence": "widgets/file-menu-dark.png"
+    },
+    "settings_toggle": {
+      "status": "passed",
+      "actual": "Native pointer click sets selected=false; focused Space sets selected=true.",
+      "evidence": [
+        "widgets/settings-toggle-off-inspect.json",
+        "widgets/settings-toggle-on-keyboard-inspect.json"
+      ]
+    },
+    "saved_model": {
+      "baseline_equal": true,
+      "model_sha256": "718af2d51860cc86ff02a136edf7e982241546266badbaaef20007d353f4761b",
+      "after_cancel_save": true
+    },
+    "visual_comparison": {
+      "pairs": 13,
+      "report": "comparison/report.json",
+      "result": "Comparable controls; raw pixel deltas retained. Different camera zoom/position before Fit; System vs explicit Light selection; build hash, fixture labels, focus, browser expansion and checkbox glyph differences. Reopened feature dialog differs by 62 pixels in its region. Preview captures differ in distance (baseline 10 mm, rework 12 mm) and focused control; they compare layout only."
+    },
+    "tab_repair": {
+      "publication_commit": "8b0051f4",
+      "integration_commit": "5ebe37bc",
+      "status": "strict Clippy passed; source tests and build running",
+      "approach": "Call standard Bevy TabNavigation with per-event native Shift modifier; no custom traversal algorithm."
+    },
+    "record_note": "Historical V4 checkpoint; failed/partial results below are preserved. See final_cases and final_rechecks for their V6 disposition. Relative evidence paths in this checkpoint start at v4/."
+  },
+  "final_rechecks": [
+    {
+      "case": "Tab and Shift+Tab",
+      "expected": "Tab from unfocused Settings reaches Close dialog; Shift+Tab wraps backward to More settings.",
+      "actual": "Tab reached Close dialog and Shift+Tab reached More settings. File also opened with Tab then Space.",
+      "evidence": [
+        "v6/widgets/settings-shift-tab.png",
+        "v6/widgets/settings-shift-tab-inspect.json"
+      ],
+      "status": "passed",
+      "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "functional": "passed",
+      "polish": "No clipping, obscured state or layout regression observed in the exercised state."
+    },
+    {
+      "case": "field to button focus",
+      "expected": "Native field values remain editable; Tab and reverse Tab follow published visual order across native fields and Bevy checkboxes/buttons; Space activates once.",
+      "actual": "Distance changed from 12 to 14, Tab reached Taper then Flip, Space enabled Flip, and Shift+Tab reached the 14 mm canvas distance field in visual order. Tab returned to Flip then Cancel; Space canceled and restored the saved 12 mm, unflipped body.",
+      "evidence": [
+        "v6/widgets/field-widget-reverse-tab.png",
+        "v6/widgets/field-widget-reverse-tab-inspect.json",
+        "v6/widgets/final-solid-inspect.json"
+      ],
+      "status": "passed",
+      "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "functional": "passed",
+      "polish": "No clipping, obscured state or layout regression observed in the exercised state."
+    },
+    {
+      "case": "earlier sketch editing and release outside",
+      "expected": "Earlier-sketch editing hides later geometry. Releasing Finish Sketch outside its bounds does not finish; the next normal click finishes once and restores the body.",
+      "actual": "Native context-menu Edit sketch hid the extrusion. Dragging palette Finish Sketch to the canvas stayed in sketch mode. The next normal pointer click finished and restored Body1; native Save retained the exact baseline model.",
+      "evidence": [
+        "v4/widgets/history-sketch-edit.png",
+        "v6/widgets/release-outside-finish.png",
+        "v6/widgets/release-outside-finish-inspect.json",
+        "v6/widgets/final-solid-inspect.json"
+      ],
+      "status": "passed",
+      "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "functional": "passed",
+      "polish": "No clipping, obscured state or layout regression observed in the exercised state."
+    },
+    {
+      "case": "canvas drag across controls",
+      "expected": "A drag started on the canvas keeps ownership through release over a Bevy button; that release does not activate the button, and a subsequent normal click does.",
+      "actual": "Canvas drag released over File did not open its menu. The next coordinate File click opened it once; Escape closed it.",
+      "evidence": [
+        "v6/widgets/canvas-drag-next-click.png",
+        "v6/widgets/canvas-drag-next-click-inspect.json"
+      ],
+      "status": "passed",
+      "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "functional": "passed",
+      "polish": "No clipping, obscured state or layout regression observed in the exercised state."
+    },
+    {
+      "case": "native slider drag across controls",
+      "expected": "The native slider retains its drag through release over Close settings, without activating Close. Subsequent Reset and Close clicks work.",
+      "actual": "Dragging 3D mouse speed from 1.5 and releasing over Close changed it to 2.95 while Settings stayed open. Coordinate Reset restored 1.5; a normal Close click dismissed Settings and restored File focus.",
+      "evidence": [
+        "v6/widgets/slider-drag-crossing-close.png",
+        "v6/widgets/slider-drag-crossing-close-inspect.json",
+        "v6/widgets/final-solid-inspect.json"
+      ],
+      "status": "passed",
+      "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "functional": "passed",
+      "polish": "No clipping, obscured state or layout regression observed in the exercised state."
+    }
+  ],
+  "fixes": [
+    {
+      "commit": "87859217",
+      "issue": "Window parent excluded UI roots from layout",
+      "resolution": "Use standard Bevy GhostNode for focus group; live V4 layout and real-layout regression pass."
+    },
+    {
+      "commit": "c625d5f9",
+      "issue": "Widget partition could consume an existing native drag release",
+      "resolution": "Preserve native ownership before partition; final source tests and native canvas/slider drag checks passed."
+    },
+    {
+      "commit": "8b0051f4",
+      "issue": "Shift+Tab traversed forward on macOS",
+      "resolution": "Call Bevy TabNavigation with the native event modifier snapshot; strict Clippy, source regression and live reverse-Tab checks passed."
+    }
+  ],
+  "limits": [
+    "Draft, opt-in feature; dependency PRs locally integrated only; no merge into main.",
+    "Broad qualification ledger stays paused. This focused UI comparison does not complete its inventory or phase gates.",
+    "Snap focus retirement remains the same as baseline; Space after toggling Snap does not act until focus is reacquired. This remains an issue, not an accepted cosmetic difference.",
+    "Text/IME, precision ranges, choices and workspace tabs retain existing adapters. The slider drag interoperability check does not qualify range precision or migrate the slider.",
+    "Complete UI catalog, screen readers, IME, held-key/re-entry/deactivation combinations, other display densities and Windows/Linux visual checks remain outside this focused run.",
+    "MCP mutation coverage: zero; read-only inspection/capture only.",
+    "CI source checkpoint still has two jobs running."
+  ],
+  "final_source_checks": {
+    "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+    "clippy": "passed, library/tests with experiment and warnings denied",
+    "interface": {
+      "passed": 98,
+      "failed": 0,
+      "log": "v6/interface-tests.log"
+    },
+    "host": {
+      "passed": 13,
+      "failed": 0,
+      "log": "v6/host-tests.log"
+    },
+    "binary_build": "passed; release app packaged and signature verified",
+    "widget_regressions": 8,
+    "reviewed_utc": "2026-10-17T07:50:16.284303+00:00",
+    "clippy_log": "v6/clippy.log",
+    "binary_build_log": "v6/build-widgets.log",
+    "package_log": "v6/package-widgets.log"
+  },
+  "artifact_root": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
+  "final_build": {
+    "recorded_utc": "2026-10-17T07:40:18.391555+00:00",
+    "build": {
+      "channel": "development",
+      "modified": false,
+      "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "version": "0.3.0-rc.1"
+    },
+    "features": [
+      "experimental-ui-widgets"
+    ],
+    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v6/widgets/Limo CAD PR420 Widgets V6.app",
+    "engine_sha256": "ac7f760e574c1671513d1e11093def0dbce7258ef03039283a0c87d350b67c0b",
+    "signature": "ad-hoc; deep strict verification passed",
+    "bundled_occt_loaded": true,
+    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "baseline": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
+    "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "final_cases": [
+    {
+      "status": "passed",
+      "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+      "actual": "Native coordinate File click opens once; Space reopens it; End focuses Exit, Up focuses Settings, Return opens Settings.",
+      "evidence": [
+        "v4/widgets/file-menu-dark.png",
+        "v4/widgets/settings-light.png"
+      ],
+      "case": "File menu and Settings",
+      "expected": "File activates once using pointer or Space; menu keyboard navigation opens Settings.",
+      "integration_revision": "62e3572f30fb2c9518e000b03c81e8221cb24108",
+      "functional": "passed",
+      "polish": "Comparable labels, layout, sizing and visible state; capture differences documented in visual_comparison."
+    },
+    {
+      "status": "passed",
+      "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+      "actual": "Light/English/100% and dark/Chinese/125% retain readable labels, selected state, layout, and access to lower settings.",
+      "evidence": [
+        "v4/widgets/settings-light.png",
+        "v4/widgets/settings-dark-zh-125.png"
+      ],
+      "case": "theme locale and density",
+      "expected": "Light/English/100% and dark/Chinese/125% have readable labels and comparable spacing, selected state and scrolling.",
+      "integration_revision": "62e3572f30fb2c9518e000b03c81e8221cb24108",
+      "functional": "passed",
+      "polish": "Comparable labels, layout, sizing and visible state; capture differences documented in visual_comparison."
+    },
+    {
+      "status": "passed",
+      "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+      "actual": "GPU stock-removal toggle: coordinate click off and Space on with focus retained.",
+      "evidence": [
+        "v4/widgets/settings-toggle-off-inspect.json",
+        "v4/widgets/settings-toggle-on-keyboard-inspect.json"
+      ],
+      "case": "pointer and keyboard checkbox",
+      "expected": "Pointer and Space toggle the accepted setting once each while focus is retained.",
+      "integration_revision": "62e3572f30fb2c9518e000b03c81e8221cb24108",
+      "functional": "passed",
+      "polish": "Comparable labels, layout, sizing and visible state; capture differences documented in visual_comparison."
+    },
+    {
+      "case": "Tab and Shift+Tab",
+      "expected": "Tab from unfocused Settings reaches Close dialog; Shift+Tab wraps backward to More settings.",
+      "actual": "Tab reached Close dialog and Shift+Tab reached More settings. File also opened with Tab then Space.",
+      "evidence": [
+        "v6/widgets/settings-shift-tab.png",
+        "v6/widgets/settings-shift-tab-inspect.json"
+      ],
+      "status": "passed",
+      "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "functional": "passed",
+      "polish": "No clipping, obscured state or layout regression observed in the exercised state."
+    },
+    {
+      "status": "passed",
+      "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+      "actual": "Coordinate toolbar click opens Extrude; two canvas region clicks select two profiles; checkbox square turns Merge on; native field accepts 12; one Apply creates Body1 and two history features.",
+      "evidence": [
+        "v4/widgets/extrude-merge-preview.png",
+        "v4/widgets/extrude-applied.png"
+      ],
+      "case": "two-region Merge extrusion and distance editing",
+      "expected": "Two profiles select independently; Merge combines them; editing distance to 12 before Apply creates one body and one extrusion.",
+      "integration_revision": "62e3572f30fb2c9518e000b03c81e8221cb24108",
+      "functional": "passed",
+      "polish": "Comparable labels, layout, sizing and visible state; capture differences documented in visual_comparison."
+    },
+    {
+      "case": "earlier sketch editing and release outside",
+      "expected": "Earlier-sketch editing hides later geometry. Releasing Finish Sketch outside its bounds does not finish; the next normal click finishes once and restores the body.",
+      "actual": "Native context-menu Edit sketch hid the extrusion. Dragging palette Finish Sketch to the canvas stayed in sketch mode. The next normal pointer click finished and restored Body1; native Save retained the exact baseline model.",
+      "evidence": [
+        "v4/widgets/history-sketch-edit.png",
+        "v6/widgets/release-outside-finish.png",
+        "v6/widgets/release-outside-finish-inspect.json",
+        "v6/widgets/final-solid-inspect.json"
+      ],
+      "status": "passed",
+      "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "functional": "passed",
+      "polish": "No clipping, obscured state or layout regression observed in the exercised state."
+    },
+    {
+      "status": "baseline_issue_retained",
+      "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+      "actual": "Coordinate square now toggles Snap off, row toggles it back on. As in baseline, focus retires after command and Space has no effect.",
+      "evidence": [
+        "v4/widgets/sketch-snap-hit-target-inspect.json"
+      ],
+      "case": "Snap square and row",
+      "expected": "Square or row toggles Snap; focus remains usable for a subsequent Space activation.",
+      "integration_revision": "62e3572f30fb2c9518e000b03c81e8221cb24108",
+      "functional": "baseline_issue_retained",
+      "polish": "Comparable labels, layout, sizing and visible state; capture differences documented in visual_comparison."
+    },
+    {
+      "status": "passed",
+      "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+      "actual": "Native keyboard shortcuts remove and restore Body1/Extrude1; history count returns to two.",
+      "evidence": [
+        "v4/widgets/undo-extrude.png",
+        "v4/widgets/redo-saved.png"
+      ],
+      "case": "Undo and Redo",
+      "expected": "Undo removes the extrusion and body; Redo restores them without duplicate history.",
+      "integration_revision": "62e3572f30fb2c9518e000b03c81e8221cb24108",
+      "functional": "passed",
+      "polish": "Comparable labels, layout, sizing and visible state; capture differences documented in visual_comparison."
+    },
+    {
+      "status": "passed",
+      "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+      "actual": "Native save, Open chooser and reopen retain two profiles, Merge and 12 mm. Saved schema-15 model equals the baseline payload exactly.",
+      "evidence": [
+        "v4/widgets/redo-saved.png",
+        "v4/widgets/extrude-edit-reopened.png",
+        "v4/comparison/report.json"
+      ],
+      "case": "save and reopen",
+      "expected": "Saved/reopened document retains two selected profiles, Merge enabled and 12 mm distance.",
+      "integration_revision": "62e3572f30fb2c9518e000b03c81e8221cb24108",
+      "functional": "passed",
+      "polish": "Comparable labels, layout, sizing and visible state; capture differences documented in visual_comparison."
+    },
+    {
+      "status": "passed",
+      "reason": "Standard picking/focus replaces the prior native gesture adapter.",
+      "actual": "Coordinate context-menu Edit feature; Flip square changes preview; coordinate Cancel restores original body. Save afterward preserves exact model payload.",
+      "evidence": [
+        "v4/widgets/extrude-edit-reopened.png",
+        "v4/widgets/extrude-cancel-result.png"
+      ],
+      "case": "feature edit and Cancel",
+      "expected": "Editing Flip changes the preview; Cancel restores the committed geometry and parameters.",
+      "integration_revision": "62e3572f30fb2c9518e000b03c81e8221cb24108",
+      "functional": "passed",
+      "polish": "Comparable labels, layout, sizing and visible state; capture differences documented in visual_comparison."
+    },
+    {
+      "case": "field to button focus",
+      "expected": "Native field values remain editable; Tab and reverse Tab follow published visual order across native fields and Bevy checkboxes/buttons; Space activates once.",
+      "actual": "Distance changed from 12 to 14, Tab reached Taper then Flip, Space enabled Flip, and Shift+Tab reached the 14 mm canvas distance field in visual order. Tab returned to Flip then Cancel; Space canceled and restored the saved 12 mm, unflipped body.",
+      "evidence": [
+        "v6/widgets/field-widget-reverse-tab.png",
+        "v6/widgets/field-widget-reverse-tab-inspect.json",
+        "v6/widgets/final-solid-inspect.json"
+      ],
+      "status": "passed",
+      "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "functional": "passed",
+      "polish": "No clipping, obscured state or layout regression observed in the exercised state."
+    },
+    {
+      "case": "canvas drag across controls",
+      "expected": "A drag started on the canvas keeps ownership through release over a Bevy button; that release does not activate the button, and a subsequent normal click does.",
+      "actual": "Canvas drag released over File did not open its menu. The next coordinate File click opened it once; Escape closed it.",
+      "evidence": [
+        "v6/widgets/canvas-drag-next-click.png",
+        "v6/widgets/canvas-drag-next-click-inspect.json"
+      ],
+      "status": "passed",
+      "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "functional": "passed",
+      "polish": "No clipping, obscured state or layout regression observed in the exercised state."
+    },
+    {
+      "case": "native slider drag across controls",
+      "expected": "The native slider retains its drag through release over Close settings, without activating Close. Subsequent Reset and Close clicks work.",
+      "actual": "Dragging 3D mouse speed from 1.5 and releasing over Close changed it to 2.95 while Settings stayed open. Coordinate Reset restored 1.5; a normal Close click dismissed Settings and restored File focus.",
+      "evidence": [
+        "v6/widgets/slider-drag-crossing-close.png",
+        "v6/widgets/slider-drag-crossing-close-inspect.json",
+        "v6/widgets/final-solid-inspect.json"
+      ],
+      "status": "passed",
+      "integration_revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+      "functional": "passed",
+      "polish": "No clipping, obscured state or layout regression observed in the exercised state."
+    }
+  ],
+  "case_counts": {
+    "passed": 12,
+    "baseline_issue_retained": 1,
+    "pending_rechecks": 0,
+    "unresolved_rework_regressions": 0,
+    "scope": "13 focused behavior cases, not the complete UI inventory"
+  },
+  "final_saved_model": {
+    "paths": [
+      "fixtures/default-profile.limo",
+      "v6/fixtures/widgets-profile.limo"
+    ],
+    "schema": 15,
+    "entire_model_json_equal": true,
+    "model_sha256": "718af2d51860cc86ff02a136edf7e982241546266badbaaef20007d353f4761b",
+    "history_features": 2,
+    "merge_profiles": true,
+    "distance_mm": 12,
+    "flip": false,
+    "snap": true,
+    "after_native_edit_cancel_finish_save": true
+  },
+  "visual_comparison": {
+    "pairs": 13,
+    "baseline_revision": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
+    "rework_revision": "62e3572f30fb2c9518e000b03c81e8221cb24108",
+    "report": "v4/comparison/report.json",
+    "result": "Comparable controls; raw pixel deltas retained. Different camera zoom/position before Fit; System vs explicit Light selection; build hash, fixture labels, focus, browser expansion and checkbox glyph differences. Reopened feature dialog differs by 62 pixels in its region. Preview captures differ in distance (baseline 10 mm, rework 12 mm) and focused control; they compare layout only.",
+    "committed_review_images": [
+      "docs/qualification/bevy-widgets-standard-input-20261017/extrude-edit-reopened.png",
+      "docs/qualification/bevy-widgets-standard-input-20261017/settings-dark-zh-125.png"
+    ],
+    "committed_report": "docs/qualification/bevy-widgets-standard-input-20261017/visual-comparison.json"
+  },
+  "final_capture_checks": [
+    {
+      "case": "settings-shift-tab",
+      "build_pair": {
+        "desktop": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "mcp": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "status": "matched"
+      },
+      "view_mode": "solid",
+      "focused_control": "control-1-4-74",
+      "focused_label": "More settings"
+    },
+    {
+      "case": "canvas-drag-next-click",
+      "build_pair": {
+        "desktop": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "mcp": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "status": "matched"
+      },
+      "view_mode": "solid",
+      "focused_control": null,
+      "focused_label": null
+    },
+    {
+      "case": "field-widget-reverse-tab",
+      "build_pair": {
+        "desktop": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "mcp": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "status": "matched"
+      },
+      "view_mode": "solid",
+      "focused_control": "control-1-10-74",
+      "focused_label": "Extrude canvas distance"
+    },
+    {
+      "case": "release-outside-finish",
+      "build_pair": {
+        "desktop": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "mcp": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "status": "matched"
+      },
+      "view_mode": "sketch",
+      "focused_control": null,
+      "focused_label": null
+    },
+    {
+      "case": "slider-drag-crossing-close",
+      "build_pair": {
+        "desktop": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "mcp": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "status": "matched"
+      },
+      "view_mode": "solid",
+      "focused_control": "control-1-16-67",
+      "focused_label": "3D mouse speed"
+    },
+    {
+      "case": "final-solid",
+      "build_pair": {
+        "desktop": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "mcp": {
+          "channel": "development",
+          "modified": false,
+          "revision": "5ebe37bc272f05a5eeafee6ce6d460300ba6f2d6",
+          "version": "0.3.0-rc.1"
+        },
+        "status": "matched"
+      },
+      "view_mode": "solid",
+      "focused_control": "control-1-19-1",
+      "focused_label": "File"
+    }
+  ],
+  "ci_checkpoint": {
+    "recorded_utc": "2026-10-17T07:50:16.284303+00:00",
+    "head": "8b0051f4dcc720b4cf679f689ed310789bdb1164",
+    "draft": true,
+    "counts": {
+      "IN_PROGRESS": 2,
+      "SKIPPED": 7,
+      "SUCCESS": 13,
+      "NEUTRAL": 1
+    },
+    "result": "No failures at this checkpoint; two jobs still in progress. This is not a green-CI claim."
+  },
+  "evidence_files": [
+    {
+      "path": "v4/comparison/report.json",
+      "sha256": "e5a0f9e66042b3dca69ca2c79fb3466b334595ecbb5e29bbb2c60ae9a64f6776"
+    },
+    {
+      "path": "v4/widgets/extrude-applied.png",
+      "sha256": "a7e2c9577d39f8b3e99101760d9d0ec2f61dcadb29ebf3128a32b9a9b76f9842"
+    },
+    {
+      "path": "v4/widgets/extrude-cancel-result.png",
+      "sha256": "dc0d44e38b8568a6add56d0a5a503676c455fe8b00898b43fdd8fd1bf62997f5"
+    },
+    {
+      "path": "v4/widgets/extrude-edit-reopened.png",
+      "sha256": "07c22bef63eb8e19a1b1590cadc74f6f9d87dbdbf02bd57e453c38205350b780"
+    },
+    {
+      "path": "v4/widgets/extrude-merge-preview.png",
+      "sha256": "cefc4fed3a2dd25c7d5d6c38f5b950b7bc1c437bb1152135591799da21c1f0f6"
+    },
+    {
+      "path": "v4/widgets/file-menu-dark.png",
+      "sha256": "a6ebc72cb2730daf995803b85999d0da85bf9fab4bfb169eeaf733f02adbd59f"
+    },
+    {
+      "path": "v4/widgets/history-sketch-edit.png",
+      "sha256": "714f3f0f5cb0fa7165a827b1bf178a0c83bce1009214e5a02192e9259fef8ca3"
+    },
+    {
+      "path": "v4/widgets/redo-saved.png",
+      "sha256": "6663231efda119080fa6a1fc7d31c6822fb5560f492d3cde658eb61eddb33f4c"
+    },
+    {
+      "path": "v4/widgets/settings-dark-zh-125.png",
+      "sha256": "7bcf83f1a8b3ab04f39183a65e33680b75ab99032b5a6bb90a51b6313c412e51"
+    },
+    {
+      "path": "v4/widgets/settings-light.png",
+      "sha256": "e2c923f5a3ceb7713f56369870eeb46b706b9a7b399e67604d9c76b95887c212"
+    },
+    {
+      "path": "v4/widgets/settings-toggle-off-inspect.json",
+      "sha256": "796abfbfd48d27c5e72f9d7a07ded5cc9a93c0f7c2a74385f1082a10c6aee0d5"
+    },
+    {
+      "path": "v4/widgets/settings-toggle-on-keyboard-inspect.json",
+      "sha256": "54ae8d74df207006a500906ece62fbf502bbec70a6f5bd468263e67a7de446b5"
+    },
+    {
+      "path": "v4/widgets/sketch-snap-hit-target-inspect.json",
+      "sha256": "1486c310d4ad3db16f1c41af25f782f9aed413d694b0d775b6e8cb5bf481d8db"
+    },
+    {
+      "path": "v4/widgets/undo-extrude.png",
+      "sha256": "16e07607cacd4667815296c2b70ccad092b13f97786fafb607cbf10f3adb0fea"
+    },
+    {
+      "path": "v6/build-widgets.log",
+      "sha256": "3717d3f43d0df04e52129677d8d252724f7c7843c7562e383220eeb80bb98f4e"
+    },
+    {
+      "path": "v6/clippy.log",
+      "sha256": "f697d872b6e95f02bc1f6ce49a51911e614bb51d0214f35abd763204b6f2e458"
+    },
+    {
+      "path": "v6/host-tests.log",
+      "sha256": "db2ff6f4b738ec5a729d6105601ee710923482c097ba0e2cef8c8eb1808a0b8c"
+    },
+    {
+      "path": "v6/interface-tests.log",
+      "sha256": "87969865dc7ca303a9b4a09d616b1fad20854c029430d1e7a18d3c07b0e1f8df"
+    },
+    {
+      "path": "v6/package-widgets.log",
+      "sha256": "f3e3b4f9836a43747f93de288c99c546031613a5658ade6119100bf4ef3032a5"
+    },
+    {
+      "path": "v6/widgets/build-identity.json",
+      "sha256": "f66f728b942bd380608176baa6c1bc789392abe275f2e010c5c2364ebdb40fb1"
+    },
+    {
+      "path": "v6/widgets/canvas-drag-next-click-inspect.json",
+      "sha256": "e91ff6bd7983fd40b94e3350bd71defddb70b535f65bc5a454d943ee500b8ce3"
+    },
+    {
+      "path": "v6/widgets/canvas-drag-next-click.png",
+      "sha256": "635e57549d3a9e897d7961a10004e81a3c0ac167f49de261495cef05c9c3a894"
+    },
+    {
+      "path": "v6/widgets/field-widget-reverse-tab-inspect.json",
+      "sha256": "7b813849f95677c34ed217b408b7464bd5b46bbd17963cb91bd91a850689b7bf"
+    },
+    {
+      "path": "v6/widgets/field-widget-reverse-tab.png",
+      "sha256": "20b62ea07146716a05612e76582000063d8598c82de8c45d00ae8964956cf33d"
+    },
+    {
+      "path": "v6/widgets/final-solid-inspect.json",
+      "sha256": "6a9432e5501e0feb7865668b3bfdcdb76f0c894c14e812771117520310f9d12c"
+    },
+    {
+      "path": "v6/widgets/release-outside-finish-inspect.json",
+      "sha256": "b38798002f4a8c5a008a1abcebf017ec854bf6c2ba5fe0023304b5907deb6a62"
+    },
+    {
+      "path": "v6/widgets/release-outside-finish.png",
+      "sha256": "839ba362f15c980dc9f38ec7264e98d83d9e83cb726e54bcb3e79ea3f541ee89"
+    },
+    {
+      "path": "v6/widgets/settings-shift-tab-inspect.json",
+      "sha256": "785120bc59e1495cc27e46175c194818158565bd281bac1f47c146c8cb4970a3"
+    },
+    {
+      "path": "v6/widgets/settings-shift-tab.png",
+      "sha256": "8557193142bd8e9f361b57aa8e9f210d7a029f6613a35e6ac1b87f5f36c5dfef"
+    },
+    {
+      "path": "v6/widgets/slider-drag-crossing-close-inspect.json",
+      "sha256": "63a2174f8df6bc467538e9aa60baded999553c1695b50e2e06bea799b47413fa"
+    },
+    {
+      "path": "v6/widgets/slider-drag-crossing-close.png",
+      "sha256": "2f8d6866eac1f3cd461201c4215ec9d85b0cb773dd97bfd96ab0e98bc4c89348"
+    }
+  ]
+}
