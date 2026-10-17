@@ -9,8 +9,8 @@ keywords: bracket, cut
 related_recipes: extrude-basics
 ---
 
-1. This example starts with the same extruded bracket and a prepared 24 mm circle on its upright face. The circle is setup for this cut; use Sketch for drawing instructions.
+1. The rounded corners and two 7 mm base holes are already complete. Start with the prepared 26 mm circle on the upright face; Sketch explains drawing it.
 
 2. Choose Extrude, select the circular profile and set Operation to Subtract. Choose Through All and point the cut into the wall.
 
-3. Apply and check that the hole passes through the 6 mm wall. Both sketches and both extrusion features remain editable.
+3. Apply and check that the new hole passes through the 5 mm wall. The sketches, extrusions and fillets remain editable.

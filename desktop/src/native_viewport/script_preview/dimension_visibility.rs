@@ -44,6 +44,7 @@ fn native_sketch_dimension_leaders_remain_visible_over_solid_faces() {
         profile: None,
         cue: None,
         duration_ms: None,
+        finish: None,
         caption: "Cube".into(),
         scene,
     }])

@@ -28,7 +28,7 @@
     "sketch.plane": "Start a sketch on the XZ plane.",
     "sketch.outline": "Draw the connected edges of the L-profile.",
     "sketch.close": "Close the outline to make one usable profile.",
-    "sketch.dimension": "Set 30 × 40 mm outer dimensions and 6 mm walls.",
+    "sketch.dimension": "Set 32 × 44 mm outer dimensions and 5 mm walls.",
     "sketch.finish": "Finish the sketch. It is ready for Extrude.",
     "extrude.title": "Extrude",
     "extrude.summary": "Give the completed L-profile its width.",
@@ -39,13 +39,13 @@
     "extrude.apply": "Apply the extrusion. The sketch and feature stay editable.",
     "cut.title": "Cut",
     "cut.summary": "Cut a hole through the same bracket.",
-    "cut.profile": "Start with the bracket and its prepared 24 mm circle.",
+    "cut.profile": "Start with the rounded bracket, two base holes and a prepared 26 mm circle.",
     "cut.operation": "Choose Extrude and set Operation to Subtract.",
     "cut.through": "Use Through All and point the cut into the upright wall.",
     "cut.apply": "Apply. The same bracket now has a through hole.",
     "sketch.instructions": [
       "Choose Create Sketch and the XZ plane. Draw one connected, closed L-profile.",
-      "Constrain the outer dimensions to 30 × 40 mm and the wall thickness to 6 mm. Keep all six edges connected.",
+      "Constrain the outer dimensions to 32 × 44 mm and the wall thickness to 5 mm. Keep all six edges connected.",
       "Finish the sketch. Extrude uses this exact profile in the next example."
     ],
     "extrude.instructions": [
@@ -54,9 +54,9 @@
       "Edit the sketch to change the L-section; edit the extrusion to change its width. Creating the sketch belongs to the linked Sketch example."
     ],
     "cut.instructions": [
-      "This example starts with the same extruded bracket and a prepared 24 mm circle on its upright face. The circle is setup for this cut; use Sketch for drawing instructions.",
+      "The rounded corners and two 7 mm base holes are already complete. Start with the prepared 26 mm circle on the upright face; Sketch explains drawing it.",
       "Choose Extrude, select the circular profile and set Operation to Subtract. Choose Through All and point the cut into the wall.",
-      "Apply and check that the hole passes through the 6 mm wall. Both sketches and both extrusion features remain editable."
+      "Apply and check that the new hole passes through the 5 mm wall. The sketches, extrusions and fillets remain editable."
     ],
     "ui.footer": "Drag to turn · Design unchanged"
   },
@@ -89,7 +89,7 @@
     "sketch.plane": "在 XZ 平面上开始草图。",
     "sketch.outline": "绘制首尾相连的 L 形边线。",
     "sketch.close": "闭合轮廓，形成一个可用的封闭区域。",
-    "sketch.dimension": "将外形设为 30 × 40 毫米，壁厚设为 6 毫米。",
+    "sketch.dimension": "将外形设为 32 × 44 毫米，壁厚设为 5 毫米。",
     "sketch.finish": "完成草图。现在可以拉伸了。",
     "extrude.title": "拉伸",
     "extrude.summary": "为已完成的 L 形轮廓设置宽度。",
@@ -100,13 +100,13 @@
     "extrude.apply": "应用拉伸。草图和特征仍可编辑。",
     "cut.title": "切除",
     "cut.summary": "在同一个支架上切出通孔。",
-    "cut.profile": "从支架和已准备好的直径 24 毫米圆开始。",
+    "cut.profile": "从已倒圆角、带两个底座孔和预备好的 26 毫米圆的支架开始。",
     "cut.operation": "选择“拉伸”，将操作设为“减去”。",
     "cut.through": "使用“贯穿所有”，使切除方向指向立壁内部。",
     "cut.apply": "应用。原来的支架现在带有一个通孔。",
     "sketch.instructions": [
       "选择“创建草图”和 XZ 平面，绘制首尾相连的封闭 L 形轮廓。",
-      "将外形尺寸约束为 30 × 40 毫米，壁厚约束为 6 毫米。确保六条边保持连接。",
+      "将外形尺寸约束为 32 × 44 毫米，壁厚约束为 5 毫米。确保六条边保持连接。",
       "完成草图。下一个拉伸示例将使用这个相同的轮廓。"
     ],
     "extrude.instructions": [
@@ -115,9 +115,9 @@
       "编辑草图可改变 L 形截面；编辑拉伸可改变宽度。轮廓的绘制方法见链接的草图示例。"
     ],
     "cut.instructions": [
-      "本示例从同一个已拉伸支架开始，其立面上已准备好直径 24 毫米的圆。这个圆是切除的前置设置；绘制方法见草图示例。",
+      "圆角和两个 7 毫米底座孔已完成。从立面上预备好的 26 毫米圆开始；绘制方法见草图示例。",
       "选择“拉伸”和圆形轮廓，将操作设为“减去”。选择“贯穿所有”，使切除方向指向壁内。",
-      "应用并检查孔是否贯穿 6 毫米厚的立壁。两个草图和两个拉伸特征仍可编辑。"
+      "应用并确认新孔贯穿 5 毫米壁厚。草图、拉伸和圆角特征仍可编辑。"
     ],
     "ui.footer": "拖动旋转 · 当前设计不会改变"
   },
@@ -150,7 +150,7 @@
     "sketch.plane": "Inicia un boceto en el plano XZ.",
     "sketch.outline": "Dibuja las aristas conectadas del perfil en L.",
     "sketch.close": "Cierra el contorno para obtener un perfil utilizable.",
-    "sketch.dimension": "Fija el exterior en 30 × 40 mm y las paredes en 6 mm.",
+    "sketch.dimension": "Fija el exterior en 32 × 44 mm y las paredes en 5 mm.",
     "sketch.finish": "Finaliza el boceto. Ya se puede extruir.",
     "extrude.title": "Extruir",
     "extrude.summary": "Da anchura al perfil en L terminado.",
@@ -161,13 +161,13 @@
     "extrude.apply": "Aplica la extrusión. El boceto y la operación siguen editables.",
     "cut.title": "Cortar",
     "cut.summary": "Abre un agujero en la misma escuadra.",
-    "cut.profile": "Parte de la escuadra y del círculo de 24 mm ya preparado.",
+    "cut.profile": "Parte del soporte redondeado, con dos agujeros en la base y un círculo de 26 mm preparado.",
     "cut.operation": "Elige Extruir y establece la operación en Restar.",
     "cut.through": "Usa A través de todo y dirige el corte hacia la pared vertical.",
     "cut.apply": "Aplica. La misma escuadra tiene ahora un agujero pasante.",
     "sketch.instructions": [
       "Elige Crear croquis y el plano XZ. Dibuja un único perfil en L, conectado y cerrado.",
-      "Acota el exterior a 30 × 40 mm y el espesor de las paredes a 6 mm. Mantén unidas las seis aristas.",
+      "Acota el exterior a 32 × 44 mm y el espesor de las paredes a 5 mm. Mantén unidas las seis aristas.",
       "Finaliza el boceto. El siguiente ejemplo usa exactamente este perfil para extruir."
     ],
     "extrude.instructions": [
@@ -176,9 +176,9 @@
       "Edita el boceto para cambiar la sección en L; edita la extrusión para cambiar su anchura. El ejemplo enlazado de Boceto enseña a dibujar el perfil."
     ],
     "cut.instructions": [
-      "Este ejemplo parte de la misma escuadra extruida con un círculo de 24 mm ya preparado en su cara vertical. El círculo prepara el corte; consulta Boceto para aprender a dibujarlo.",
+      "Las esquinas redondeadas y los dos agujeros de 7 mm de la base ya están hechos. Parte del círculo de 26 mm preparado en la cara vertical; Croquis explica cómo dibujarlo.",
       "Elige Extruir, selecciona el perfil circular y establece la operación en Restar. Elige A través de todo y dirige el corte hacia el interior de la pared.",
-      "Aplica y comprueba que el agujero atraviesa la pared de 6 mm. Los dos bocetos y las dos operaciones de extrusión siguen editables."
+      "Aplica y comprueba que el nuevo agujero atraviesa la pared de 5 mm. Los croquis, las extrusiones y los redondeos siguen siendo editables."
     ],
     "ui.footer": "Arrastra para girar · Diseño intacto"
   },
@@ -211,7 +211,7 @@
     "sketch.plane": "Beginne eine Skizze auf der XZ-Ebene.",
     "sketch.outline": "Zeichne die verbundenen Kanten des L-Profils.",
     "sketch.close": "Schließe die Kontur zu einem verwendbaren Profil.",
-    "sketch.dimension": "Lege 30 × 40 mm Außenmaße und 6 mm Wandstärke fest.",
+    "sketch.dimension": "Lege 32 × 44 mm Außenmaße und 5 mm Wandstärke fest.",
     "sketch.finish": "Beende die Skizze. Sie ist für die Extrusion bereit.",
     "extrude.title": "Extrusion",
     "extrude.summary": "Gib dem fertigen L-Profil seine Breite.",
@@ -222,13 +222,13 @@
     "extrude.apply": "Wende die Extrusion an. Skizze und Merkmal bleiben bearbeitbar.",
     "cut.title": "Schnitt",
     "cut.summary": "Schneide ein Loch durch denselben Winkel.",
-    "cut.profile": "Beginne mit dem Winkel und dem vorbereiteten Kreis mit 24 mm Durchmesser.",
+    "cut.profile": "Beginne mit dem abgerundeten Winkel, zwei Bohrungen im Fuß und einem vorbereiteten Kreis mit 26 mm Durchmesser.",
     "cut.operation": "Wähle Extrudieren und stelle die Operation auf Subtrahieren.",
     "cut.through": "Wähle Durch alles und richte den Schnitt in die senkrechte Wand.",
     "cut.apply": "Wende den Schnitt an. Derselbe Winkel hat jetzt ein Durchgangsloch.",
     "sketch.instructions": [
       "Wähle Skizze erstellen und die XZ-Ebene. Zeichne ein zusammenhängendes, geschlossenes L-Profil.",
-      "Bemaße die Außenmaße mit 30 × 40 mm und die Wandstärke mit 6 mm. Alle sechs Kanten müssen verbunden bleiben.",
+      "Bemaße die Außenmaße mit 32 × 44 mm und die Wandstärke mit 5 mm. Alle sechs Kanten müssen verbunden bleiben.",
       "Beende die Skizze. Das nächste Beispiel verwendet genau dieses Profil für die Extrusion."
     ],
     "extrude.instructions": [
@@ -237,9 +237,9 @@
       "Bearbeite die Skizze, um den L-Querschnitt zu ändern, oder die Extrusion für die Breite. Das verknüpfte Skizzenbeispiel zeigt das Zeichnen des Profils."
     ],
     "cut.instructions": [
-      "Dieses Beispiel beginnt mit demselben extrudierten Winkel und einem vorbereiteten Kreis mit 24 mm Durchmesser auf der senkrechten Fläche. Der Kreis bereitet den Schnitt vor; Zeichenanweisungen stehen im Skizzenbeispiel.",
+      "Die Rundungen und die zwei Bohrungen mit 7 mm Durchmesser im Fuß sind bereits fertig. Beginne mit dem vorbereiteten Kreis mit 26 mm Durchmesser auf der aufrechten Fläche; das Zeichnen erklärt das Skizzenbeispiel.",
       "Wähle Extrudieren, das Kreisprofil und die Operation Subtrahieren. Wähle Durch alles und richte den Schnitt in die Wand.",
-      "Wende den Schnitt an und prüfe, dass das Loch die 6 mm starke Wand durchdringt. Beide Skizzen und beide Extrusionsmerkmale bleiben bearbeitbar."
+      "Wende die Funktion an und prüfe, dass die neue Bohrung die 5 mm starke Wand durchdringt. Skizzen, Extrusionen und Rundungen bleiben bearbeitbar."
     ],
     "ui.footer": "Ziehen zum Drehen · Entwurf unverändert"
   }

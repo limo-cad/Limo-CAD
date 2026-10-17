@@ -42,7 +42,7 @@
             "y": 0
           },
           "to_raw": {
-            "x": 30,
+            "x": 32,
             "y": 0
           },
           "ctrl_held": true
@@ -74,12 +74,12 @@
         "operation": "sketch_add_line",
         "arguments": {
           "from": {
-            "x": 30,
+            "x": 32,
             "y": 0
           },
           "to_raw": {
-            "x": 30,
-            "y": 6
+            "x": 32,
+            "y": 5
           },
           "ctrl_held": true
         }
@@ -110,12 +110,12 @@
         "operation": "sketch_add_line",
         "arguments": {
           "from": {
-            "x": 30,
-            "y": 6
+            "x": 32,
+            "y": 5
           },
           "to_raw": {
-            "x": 6,
-            "y": 6
+            "x": 5,
+            "y": 5
           },
           "ctrl_held": true
         }
@@ -146,12 +146,12 @@
         "operation": "sketch_add_line",
         "arguments": {
           "from": {
-            "x": 6,
-            "y": 6
+            "x": 5,
+            "y": 5
           },
           "to_raw": {
-            "x": 6,
-            "y": 40
+            "x": 5,
+            "y": 44
           },
           "ctrl_held": true
         }
@@ -182,12 +182,12 @@
         "operation": "sketch_add_line",
         "arguments": {
           "from": {
-            "x": 6,
-            "y": 40
+            "x": 5,
+            "y": 44
           },
           "to_raw": {
             "x": 0,
-            "y": 40
+            "y": 44
           },
           "ctrl_held": true
         }
@@ -219,7 +219,7 @@
         "arguments": {
           "from": {
             "x": 0,
-            "y": 40
+            "y": 44
           },
           "to_raw": {
             "x": 0,
@@ -542,10 +542,10 @@
             }
           ],
           "text_pos": {
-            "x": 15,
+            "x": 16,
             "y": -7
           },
-          "value_text": "30"
+          "value_text": "32"
         }
       }
     },
@@ -561,10 +561,10 @@
             }
           ],
           "text_pos": {
-            "x": 37,
-            "y": 3
+            "x": 39,
+            "y": 2.5
           },
-          "value_text": "6"
+          "value_text": "5"
         }
       }
     },
@@ -580,10 +580,10 @@
             }
           ],
           "text_pos": {
-            "x": 3,
-            "y": 47
+            "x": 2.5,
+            "y": 51
           },
-          "value_text": "6"
+          "value_text": "5"
         }
       }
     },
@@ -600,9 +600,9 @@
           ],
           "text_pos": {
             "x": -7,
-            "y": 20
+            "y": 22
           },
-          "value_text": "40"
+          "value_text": "44"
         }
       }
     },
@@ -766,20 +766,437 @@
     },
     {
       "chapter": "Cut the mounting hole",
-      "note": "A second sketch is setup for Cut, not another Sketch demonstration. Use the upright face and a 24 mm circle, then Extrude with Cut and Through all.",
+      "note": "The rounded corners, two base mounting holes and upright circle are prepared before Cut. This example only teaches subtracting the large upright hole.",
       "duration_ms": 1400
+    },
+    {
+      "chapter": "Prepare the shared bracket for Cut",
+      "note": "Supporting setup, outside the focused operation clips: round the bend and corners, cut two base holes and assign satin aluminum."
+    },
+    {
+      "let": {
+        "bend_edges": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_finished_body"
+            },
+            "path": "/edges",
+            "where": {
+              "/refinable": true,
+              "$every": {
+                "path": "/points",
+                "where": {
+                  "/x": 5,
+                  "/z": 5
+                }
+              }
+            },
+            "take": "all",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "bend_edges"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "bend",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_fillet",
+        "arguments": {
+          "body_id": {
+            "$ref": "bracket_body",
+            "pointer": "/id"
+          },
+          "edge_ids": {
+            "$ref": "bend_edges"
+          },
+          "radius": 4,
+          "tangent_chain": false
+        }
+      }
+    },
+    {
+      "let": {
+        "bend_body": {
+          "$select": {
+            "from": {
+              "$ref": "bend"
+            },
+            "path": "/scene/bodies",
+            "where": {},
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "corners_edges": {
+          "$select": {
+            "from": {
+              "$ref": "bend_body"
+            },
+            "path": "/edges",
+            "where": {
+              "/refinable": true,
+              "$or": [
+                {
+                  "$every": {
+                    "path": "/points",
+                    "where": {
+                      "/y": 0,
+                      "/z": 44
+                    }
+                  }
+                },
+                {
+                  "$every": {
+                    "path": "/points",
+                    "where": {
+                      "/y": 40,
+                      "/z": 44
+                    }
+                  }
+                },
+                {
+                  "$every": {
+                    "path": "/points",
+                    "where": {
+                      "/x": 32,
+                      "/y": 0
+                    }
+                  }
+                },
+                {
+                  "$every": {
+                    "path": "/points",
+                    "where": {
+                      "/x": 32,
+                      "/y": 40
+                    }
+                  }
+                }
+              ]
+            },
+            "take": "all",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "corners_edges"
+        }
+      },
+      "equals": 4
+    },
+    {
+      "id": "corners",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_fillet",
+        "arguments": {
+          "body_id": {
+            "$ref": "bracket_body",
+            "pointer": "/id"
+          },
+          "edge_ids": {
+            "$ref": "corners_edges"
+          },
+          "radius": 3,
+          "tangent_chain": false
+        }
+      }
+    },
+    {
+      "let": {
+        "corners_body": {
+          "$select": {
+            "from": {
+              "$ref": "corners"
+            },
+            "path": "/scene/bodies",
+            "where": {},
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "edge_break_edges": {
+          "$select": {
+            "from": {
+              "$ref": "corners_body"
+            },
+            "path": "/edges",
+            "where": {
+              "/refinable": true,
+              "$or": [
+                {
+                  "$every": {
+                    "path": "/points",
+                    "where": {
+                      "/y": 0
+                    }
+                  }
+                },
+                {
+                  "$every": {
+                    "path": "/points",
+                    "where": {
+                      "/y": 40
+                    }
+                  }
+                }
+              ]
+            },
+            "take": "all",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "edge_break_edges"
+        }
+      },
+      "equals": 10
+    },
+    {
+      "id": "edge_break",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_fillet",
+        "arguments": {
+          "body_id": {
+            "$ref": "bracket_body",
+            "pointer": "/id"
+          },
+          "edge_ids": {
+            "$ref": "edge_break_edges"
+          },
+          "radius": 0.6,
+          "tangent_chain": false
+        }
+      }
+    },
+    {
+      "let": {
+        "edge_break_body": {
+          "$select": {
+            "from": {
+              "$ref": "edge_break"
+            },
+            "path": "/scene/bodies",
+            "where": {},
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "base_face": {
+          "$select": {
+            "from": {
+              "$ref": "edge_break_body"
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 5
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "base_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / base mounting holes",
+          "plane": {
+            "type": "planar_face",
+            "face_id": {
+              "$ref": "base_face",
+              "pointer": "/id"
+            }
+          },
+          "face_origin": "global_origin_projection"
+        }
+      }
+    },
+    {
+      "id": "base_circle_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked",
+        "arguments": {
+          "mode": "center_diameter",
+          "anchor": {
+            "$project": {
+              "point": [
+                24,
+                8,
+                5
+              ],
+              "basis": {
+                "$ref": "base_begin",
+                "pointer": "/basis"
+              }
+            }
+          },
+          "edge_hint": {
+            "$project": {
+              "point": [
+                27.5,
+                8,
+                5
+              ],
+              "basis": {
+                "$ref": "base_begin",
+                "pointer": "/basis"
+              }
+            }
+          },
+          "diameter_mm": 7,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "base_circle_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked",
+        "arguments": {
+          "mode": "center_diameter",
+          "anchor": {
+            "$project": {
+              "point": [
+                24,
+                32,
+                5
+              ],
+              "basis": {
+                "$ref": "base_begin",
+                "pointer": "/basis"
+              }
+            }
+          },
+          "edge_hint": {
+            "$project": {
+              "point": [
+                27.5,
+                32,
+                5
+              ],
+              "basis": {
+                "$ref": "base_begin",
+                "pointer": "/basis"
+              }
+            }
+          },
+          "diameter_mm": 7,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "base_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "base_cut",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "Bracket / base mounting holes",
+          "profile_indices": [
+            0,
+            1
+          ],
+          "operation": "cut",
+          "extent": {
+            "type": "through_all"
+          },
+          "taper_angle_deg": 0,
+          "flip": true,
+          "target_body_ids": [
+            {
+              "$ref": "bracket_body",
+              "pointer": "/id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "aluminum",
+      "call": {
+        "group": "document/appearance",
+        "operation": "set_body_appearance",
+        "arguments": {
+          "body_id": {
+            "$ref": "bracket_body",
+            "pointer": "/id"
+          },
+          "preset_id": "material.aluminum-6061-t6",
+          "color": {
+            "r": 190,
+            "g": 198,
+            "b": 201,
+            "a": 255
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "prepared_body": {
+          "$select": {
+            "from": {
+              "$ref": "base_cut"
+            },
+            "path": "/scene/bodies",
+            "where": {},
+            "take": "one"
+          }
+        }
+      }
     },
     {
       "let": {
         "hole_face": {
           "$select": {
             "from": {
-              "$ref": "bracket_body"
+              "$ref": "prepared_body"
             },
             "path": "/faces",
             "where": {
               "/plane/normal/0": 1,
-              "/plane/origin/0": 6
+              "/plane/origin/0": 5
             },
             "take": "one"
           }
@@ -814,9 +1231,9 @@
           "anchor": {
             "$project": {
               "point": [
-                6,
+                5,
                 20,
-                24
+                27
               ],
               "basis": {
                 "$ref": "hole_begin",
@@ -827,9 +1244,9 @@
           "edge_hint": {
             "$project": {
               "point": [
-                6,
-                32,
-                24
+                5,
+                33,
+                27
               ],
               "basis": {
                 "$ref": "hole_begin",
@@ -837,7 +1254,7 @@
               }
             }
           },
-          "diameter_mm": 24,
+          "diameter_mm": 26,
           "ctrl_held": true
         }
       }
@@ -999,7 +1416,8 @@
             "profile": {
               "$ref": "finished_profile",
               "pointer": "/0"
-            }
+            },
+            "finish": "satin_aluminum"
           },
           {
             "caption": "extrude.start",
@@ -1008,7 +1426,8 @@
               "pointer": "/scene"
             },
             "cue": "extrude",
-            "duration_ms": 500
+            "duration_ms": 500,
+            "finish": "satin_aluminum"
           },
           {
             "caption": "extrude.distance",
@@ -1017,7 +1436,8 @@
               "pointer": "/scene"
             },
             "cue": "depth",
-            "duration_ms": 500
+            "duration_ms": 500,
+            "finish": "satin_aluminum"
           },
           {
             "caption": "extrude.width",
@@ -1026,7 +1446,8 @@
               "pointer": "/scene"
             },
             "cue": "depth",
-            "duration_ms": 1400
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
           },
           {
             "caption": "extrude.apply",
@@ -1035,14 +1456,15 @@
               "pointer": "/scene"
             },
             "cue": "apply",
-            "duration_ms": 1400
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
           }
         ],
         "cut_frames": [
           {
             "caption": "cut.profile",
             "scene": {
-              "$ref": "depth_40",
+              "$ref": "base_cut",
               "pointer": "/scene"
             },
             "cue": "profile",
@@ -1050,7 +1472,8 @@
             "profile": {
               "$ref": "hole_profile",
               "pointer": "/sketch"
-            }
+            },
+            "finish": "satin_aluminum"
           },
           {
             "caption": "cut.operation",
@@ -1059,7 +1482,8 @@
               "pointer": "/scene"
             },
             "cue": "cut",
-            "duration_ms": 1400
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
           },
           {
             "caption": "cut.through",
@@ -1068,7 +1492,8 @@
               "pointer": "/scene"
             },
             "cue": "depth",
-            "duration_ms": 1400
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
           },
           {
             "caption": "cut.apply",
@@ -1077,7 +1502,8 @@
               "pointer": "/scene"
             },
             "cue": "apply",
-            "duration_ms": 1400
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
           }
         ]
       }
@@ -1119,7 +1545,7 @@
           "pointer": "/document/history/features"
         }
       },
-      "equals": 4
+      "equals": 9
     },
     {
       "id": "final_sketches",
@@ -1135,7 +1561,7 @@
           "$ref": "final_sketches"
         }
       },
-      "equals": 2
+      "equals": 3
     }
   ],
   "exports": {

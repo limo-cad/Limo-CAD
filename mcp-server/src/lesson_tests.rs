@@ -12,7 +12,7 @@ fn bracket_lessons_share_one_editable_build_and_localized_help() {
         .unwrap();
     assert_eq!(
         report["summary"]["bodies"][0]["size"],
-        json!([30., 40., 40.])
+        json!([32., 40., 44.])
     );
     let lessons = &report["exports"]["lessons"];
     assert_eq!(lessons["sketch"].as_array().unwrap().len(), 5);
@@ -22,7 +22,28 @@ fn bracket_lessons_share_one_editable_build_and_localized_help() {
         lessons["sketch"][4]["profile"],
         lessons["extrude"][0]["profile"]
     );
-    assert_eq!(lessons["extrude"][4]["scene"], lessons["cut"][0]["scene"]);
+    let stock = &lessons["extrude"][4]["scene"]["bodies"][0];
+    let prepared = &lessons["cut"][0]["scene"]["bodies"][0];
+    assert_eq!(stock["id"], prepared["id"]);
+    assert_ne!(stock, prepared, "Cut starts after supporting setup");
+    let cylinders = prepared["faces"].as_array().unwrap();
+    for y in [8., 32.] {
+        assert!(
+            cylinders.iter().any(|face| {
+                let cylinder = &face["cylinder"];
+                cylinder["radius"] == 3.5
+                    && cylinder["origin"]["x"] == 24.
+                    && cylinder["origin"]["y"] == y
+            }),
+            "Both lower holes must exist before Cut at y={y}: {cylinders:?}"
+        );
+    }
+    assert!(!cylinders
+        .iter()
+        .any(|face| face["cylinder"]["radius"] == 13.));
+    assert!(cylinders
+        .iter()
+        .any(|face| face["cylinder"]["radius"] == 4.));
     assert_eq!(
         lessons["cut"][0]["profile"]["entities"]
             .as_array()
@@ -38,17 +59,28 @@ fn bracket_lessons_share_one_editable_build_and_localized_help() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|f| f["cylinder"]["radius"] == 12.));
+        .any(|f| f["cylinder"]["radius"]
+            .as_f64()
+            .is_some_and(|r| (r - 13.).abs() < 1e-6)));
     let openings: Vec<_> = body["edges"]
         .as_array()
         .unwrap()
         .iter()
-        .filter(|e| e["circle"]["closed"] == true && e["circle"]["radius"] == 12.)
+        .filter(|e| {
+            e["circle"]["closed"] == true
+                && e["circle"]["radius"]
+                    .as_f64()
+                    .is_some_and(|r| (r - 13.).abs() < 1e-6)
+        })
         .map(|e| e["circle"]["center"]["x"].as_f64().unwrap())
         .collect();
     assert!(openings.iter().any(|x| x.abs() < 1e-6));
-    assert!(openings.iter().any(|x| (*x - 6.).abs() < 1e-6));
+    assert!(openings.iter().any(|x| (*x - 5.).abs() < 1e-6));
     let saved = report["exports"]["final_model"].clone();
+    assert_eq!(
+        saved["body_appearances"][0]["preset_id"],
+        "material.aluminum-6061-t6"
+    );
     let mut reopened = CadServer::new().unwrap();
     reopened
         .call_tool(

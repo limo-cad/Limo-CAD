@@ -53,6 +53,34 @@ pub(crate) struct Frame {
     pub cue: Option<PreviewCue>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish: Option<PreviewFinish>,
+}
+
+/// An opt-in teaching finish; never changes the main viewport's materials.
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PreviewFinish {
+    SatinAluminum,
+}
+
+#[derive(Resource, Default)]
+struct TeachingFinish(Option<PreviewFinish>);
+
+fn apply_teaching_finish(
+    finish: Res<TeachingFinish>,
+    bodies: Query<&MeshMaterial3d<StandardMaterial>, With<NativeCadBody>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    if let Some(PreviewFinish::SatinAluminum) = finish.0 {
+        for handle in &bodies {
+            if let Some(mut material) = materials.get_mut(&handle.0) {
+                material.base_color = Color::srgb(0.75, 0.78, 0.79);
+                material.metallic = 0.55;
+                material.perceptual_roughness = 0.34;
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -91,6 +119,8 @@ struct RetainedFrame {
     cue: Option<PreviewCue>,
     #[serde(skip_serializing_if = "Option::is_none")]
     duration_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    finish: Option<PreviewFinish>,
 }
 
 fn serialize_scene<S: serde::Serializer>(
@@ -267,6 +297,7 @@ impl PreviewDocument {
                     profile: frame.profile,
                     cue: frame.cue,
                     duration_ms: frame.duration_ms,
+                    finish: frame.finish,
                 })
                 .collect(),
             center,
@@ -584,6 +615,9 @@ impl PreviewRenderer {
         let plugins = plugins.disable::<bevy::winit::WinitPlugin>();
         app.add_plugins(plugins);
         install_cad_scene(&mut app);
+        app.init_resource::<TeachingFinish>();
+        // Last runs after the normal scene material updates, before render extraction.
+        app.add_systems(Last, apply_teaching_finish);
         app.add_systems(
             Startup,
             (|mut config: ResMut<GizmoConfigStore>| {
@@ -709,6 +743,7 @@ impl PreviewRenderer {
             self.model_key = Some(model_key);
         }
         let world = self.app.world_mut();
+        world.resource_mut::<TeachingFinish>().0 = document.frames[request.frame_index].finish;
         if let Some(palette) = request.palette {
             apply_interface_palette(world, palette);
         }
@@ -889,7 +924,7 @@ mod tests {
         let cancelled = AtomicBool::new(false);
         let mut request = request("extrude-profile".into(), "proof".into(), 1);
         request.yaw = -40. * std::f32::consts::PI / 180.;
-        request.pitch = 22. * std::f32::consts::PI / 180.;
+        request.pitch = 32. * std::f32::consts::PI / 180.;
         request.width = 600;
         request.height = 400;
         let mut render = |document: &PreviewDocument, request: &RenderRequest| {
@@ -906,6 +941,10 @@ mod tests {
         request.frame_index = 4;
         request.revision += 1;
         let solid = render(&document, &request);
+        document.frames[4].finish = None;
+        request.preview_id = "extrude-matte-control".into();
+        request.revision += 1;
+        let matte = render(&document, &request);
         document.frames[0].profile = None;
         request.frame_index = 0;
         request.preview_id = "extrude-negative-control".into();
@@ -913,6 +952,7 @@ mod tests {
         let blank = render(&document, &request);
         let (_, _, profile_pixels) = decode_rgba(&profile);
         let (_, _, solid_pixels) = decode_rgba(&solid);
+        let (_, _, matte_pixels) = decode_rgba(&matte);
         let (_, _, blank_pixels) = decode_rgba(&blank);
         let changed = |left: &[u8], right: &[u8]| {
             left.as_chunks::<4>()
@@ -929,6 +969,10 @@ mod tests {
         assert!(
             changed(&profile_pixels, &solid_pixels) > 1000,
             "Extrusion must visibly change real geometry"
+        );
+        assert!(
+            changed(&solid_pixels, &matte_pixels) > 1000,
+            "The opt-in metal finish must visibly differ from default matte shading"
         );
         let mut cut_frames: Vec<Frame> =
             serde_json::from_value(report["exports"]["lessons"]["cut"].take()).unwrap();
@@ -961,6 +1005,7 @@ mod tests {
             for (name, bytes) in [
                 ("extrude-profile.png", profile),
                 ("extrude-solid.png", solid),
+                ("extrude-matte-control.png", matte),
                 ("extrude-blank-control.png", blank),
                 ("cut-profile.png", cut_profile),
                 ("cut-blank-control.png", cut_blank),
