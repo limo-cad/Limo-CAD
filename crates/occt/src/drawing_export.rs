@@ -91,7 +91,7 @@ pub enum PaperPrimitive {
 type Primitive = PaperPrimitive;
 const TEXT_MASK: &str = "TEXT_MASK";
 struct Paper {
-    dimensions: Vec<dxf_dimensions::Linear>,
+    dimensions: Vec<dxf_dimensions::Dimension>,
     size: P,
     items: Vec<Primitive>,
 }
@@ -1447,7 +1447,7 @@ fn draw_annotation(
                      [b[0] + normal[0] * offset, b[1] + normal[1] * offset])
                 }
             };
-            let semantic = dxf_dimensions::Linear::resolve(
+            let semantic = dxf_dimensions::Dimension::resolve(
                 &crate::drawing_presentation::geometry::Linear { first: a, second: b, start: c, end: d, value },
                 presentation, *precision, units, prefix, suffix, style,
             );
@@ -1522,6 +1522,13 @@ fn draw_annotation(
                 let angle = start + sweep * index as f64 / 48.;
                 [origin[0] + radius * angle.cos(), origin[1] + radius * angle.sin()]
             }).collect::<Vec<_>>();
+            let semantic = dxf_dimensions::Dimension::angular(
+                &crate::drawing_presentation::geometry::Angular {
+                    vertex: origin, first, second, points: vec![points[24]],
+                    text: points[24], value: sweep.abs().to_degrees(),
+                }, presentation, *precision, prefix, suffix, style,
+            );
+            let start = paper.items.len();
             paper.line(vec![origin, points[0]], "EXTENSION", &style.extension);
             paper.line(vec![origin, points[48]], "EXTENSION", &style.extension);
             let middle = points[24];
@@ -1537,6 +1544,10 @@ fn draw_annotation(
                 },
                 presentation, style, None,
             );
+            if let Some(mut dimension) = semantic {
+                dimension.range = start..paper.items.len();
+                paper.dimensions.push(dimension);
+            }
         }
         _ => return Err(format!(
             "Native sheet export does not yet support annotation {}; use the interactive drawing export for this sheet",

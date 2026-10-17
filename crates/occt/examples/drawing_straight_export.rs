@@ -23,7 +23,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     fs::create_dir_all(&out)?;
     let mut cases = vec![];
-    for kind in ["length", "distance", "angle", "point-line"] {
+    for kind in [
+        "length",
+        "distance",
+        "angle",
+        "point-line",
+        "angle-three-point",
+    ] {
         for (unit_name, units) in [
             ("mm", UnitSystem::Mm),
             ("cm", UnitSystem::Cm),
@@ -71,12 +77,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_vec_pretty(&json!({
             "source":"synthetic projection fixture", "cases":cases,
             "formats":["svg","dxf"],"pixel_review":"required",
-            "semantic_dxf":"Default linear cases use editable DIMENSION entities; angular and full presentation remain graphical",
+            "semantic_dxf":"Default linear and angular cases use editable DIMENSION entities; full presentation remains graphical",
             "not_proven":["OCC projection","physical input","model topology association in DXF","printing"]
         }))?,
     )?;
     println!(
-        "Saved 24 paired SVG/DXF cases and source records in {}",
+        "Saved 30 paired SVG/DXF cases and source records in {}",
         out.display()
     );
     Ok(())
