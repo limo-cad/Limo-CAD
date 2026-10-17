@@ -96,6 +96,13 @@ Ordinary chain, baseline and continued dimensions export one editable linear
 entity per span, using the existing resolved series layout. These DXF spans are
 independently editable; native series relationships are not serialized as DXF
 constraints. The saved native annotation remains unchanged.
+Signed ordinate X/Y values (including the combined X/Y label) remain graphical.
+AutoCAD ordinate dimensions use absolute coordinate distances; adding a fixed
+minus sign or negative measurement factor would become incorrect when an edited
+feature crosses the datum. Editable signed-coordinate exchange therefore needs
+an explicitly qualified representation, not an ordinary ordinate DIMENSION with
+a frozen text/sign override. See Autodesk's
+[ordinate dimension semantics](https://help.autodesk.com/cloudhelp/2018/ENU/OARX-DevGuide-Managed/files/GUID-7CA392C3-307C-4794-9EE6-30246672943F.htm).
 Anonymous picture blocks
 reuse the same graphics as SVG. They do not carry model topology associations.
 Other dimension families, complex tolerance/basic/reference/dual-unit
