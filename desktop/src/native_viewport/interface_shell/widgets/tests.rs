@@ -866,3 +866,54 @@ fn overflowing_document_strip_keeps_native_navigation_and_restores_standard_tabs
     app.update();
     assert!(app.world().get::<Tab>(first).is_some());
 }
+
+#[test]
+fn document_tabs_keep_focus_across_context_retirement_but_not_modal_exclusion() {
+    let (mut app, handle, first, window) = fixture();
+    let second = option(&mut app, "tab", "Second document", false, 160.);
+    for entity in [first, second] {
+        let mut control = app.world_mut().get_mut::<InterfaceControl>(entity).unwrap();
+        control.role = "tab".into();
+        control.surface = "document/session".into();
+        control.selected = Some(entity == first);
+    }
+    tab_group(app.world_mut(), &[first, second], true);
+    app.update();
+    app.update();
+    focus(&mut app, first);
+    let actions = send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::ArrowRight, false),
+        point(first),
+    );
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].control.key, ControlKey(second.to_bits()));
+    for entity in [first, second] {
+        app.world_mut()
+            .get_mut::<InterfaceControl>(entity)
+            .unwrap()
+            .selected = Some(entity == second);
+    }
+    let mut frame = handle.frame().unwrap();
+    frame.context.document_id = "second-document".into();
+    handle.present(frame.clone()).unwrap();
+    app.update();
+    assert_eq!(handle.focused_key(), Some(ControlKey(second.to_bits())));
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(second));
+    let actions = send(
+        &mut app,
+        &handle,
+        key(window, KeyCode::ArrowLeft, false),
+        point(second),
+    );
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0].control.key, ControlKey(first.to_bits()));
+    focus(&mut app, second);
+    frame.context.epoch += 1;
+    frame.modal_stack.push("another-dialog".into());
+    handle.present(frame).unwrap();
+    app.update();
+    assert_eq!(handle.focused_key(), None);
+    assert_eq!(app.world().resource::<InputFocus>().get(), None);
+}

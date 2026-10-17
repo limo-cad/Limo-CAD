@@ -247,6 +247,21 @@ fn synchronize(world: &mut World) {
     for entity in blockers {
         world.entity_mut(entity).insert(Pickable::default());
     }
+    // Document activation retires command bindings and clears CAD focus. The
+    // selected tab itself survives; keep Bevy's focus on that same eligible
+    // entity so another arrow key can continue navigating the strip.
+    let restore_tab_focus = handle.focused_key().is_none()
+        && world.resource::<InputFocus>().get().is_some_and(|entity| {
+            world
+                .get::<WidgetAction>(entity)
+                .is_some_and(|action| action.0.context != context)
+                && world
+                    .get::<InterfaceControl>(entity)
+                    .is_some_and(|control| {
+                        control.surface == "document/session" && control.selected == Some(true)
+                    })
+                && world.get::<Tab>(entity).is_some()
+        });
     let mut retired = false;
     for (index, published) in frame.controls.iter().enumerate() {
         let entity = Entity::from_bits(published.key.0);
@@ -383,6 +398,15 @@ fn synchronize(world: &mut World) {
     choices::activate_ready(world);
     if retired {
         cancel(world);
+    }
+    if restore_tab_focus
+        && world.resource::<InputFocus>().get().is_some_and(|entity| {
+            world.get::<WidgetAction>(entity).is_some() && world.get::<Tab>(entity).is_some()
+        })
+    {
+        if let Err(error) = world.run_system_cached(publish_focus) {
+            eprintln!("Document tab focus publication failed: {error}");
+        }
     }
     // Application-driven changes (modal open/close, restored document, field
     // editing and accessibility) use the same Bevy focus resource as pointers.
