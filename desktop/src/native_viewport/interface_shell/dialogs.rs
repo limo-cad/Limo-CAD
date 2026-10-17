@@ -147,23 +147,7 @@ fn keep_in_window(
     window: Option<Single<&Window, With<PrimaryWindow>>>,
     scale: Res<UiScale>,
     mut dialogs: Query<(&Node, &mut UiTransform, Option<&mut GlobalZIndex>), With<FloatingDialog>>,
-    settings: Option<ResMut<bevy::winit::WinitSettings>>,
-    mut idle_mode: Local<Option<bevy::winit::UpdateMode>>,
 ) {
-    if let Some(mut settings) = settings {
-        if dialogs.is_empty() {
-            if let Some(mode) = idle_mode.take() {
-                settings.focused_mode = mode;
-            }
-        } else if idle_mode.is_none() {
-            // Keep standard picking responsive while a floating dialog is open.
-            // Restore the host's idle policy when the final dialog closes.
-            *idle_mode = Some(settings.focused_mode);
-            settings.focused_mode = bevy::winit::UpdateMode::reactive_low_power(
-                std::time::Duration::from_secs_f64(1. / 60.),
-            );
-        }
-    }
     let Some(window) = window else {
         return;
     };
