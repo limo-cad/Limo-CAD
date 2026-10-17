@@ -7,9 +7,11 @@ repository.workspace = true
 description = "Finite element analysis kernels over shared Limo CAD material models"
 
 [dependencies]
+limo-cad-project-file = { path = "../project-file" }
 limo-cad-core = { path = "../core" }
 
 serde = { workspace = true, features = ["derive"] }
 ciborium = "=0.2.2"
 [dev-dependencies]
+tempfile.workspace = true
 cddl-cat = { version = "=0.7.1", default-features = false, features = ["ciborium"] }

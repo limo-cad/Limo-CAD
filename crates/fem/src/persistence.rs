@@ -177,6 +177,34 @@ fn validate_input(i: &ThermalStudyInput) -> Result<(), String> {
     Ok(())
 }
 
+/// Reserved project-container entry for the versioned thermal document.
+pub const THERMAL_STUDY_ENTRY: &str = "intent/thermal-studies.cbor";
+impl ThermalStudyDocument {
+    /// Legacy containers without the entry have no thermal studies. Invalid or
+    /// newer data is an error, never silently converted to an empty document.
+    pub fn from_project(archive: &limo_cad_project_file::ProjectArchive) -> Result<Self, String> {
+        match archive
+            .read_intent(THERMAL_STUDY_ENTRY, MAX_THERMAL_STUDY_BYTES)
+            .map_err(|e| e.to_string())?
+        {
+            Some(bytes) => Self::decode_cbor(&bytes),
+            None => Ok(Self::default()),
+        }
+    }
+    /// Validate both the existing payload and the replacement before staging.
+    /// This prevents an older reader from overwriting unknown future intent.
+    pub fn store_in_project(
+        &self,
+        archive: &mut limo_cad_project_file::ProjectArchive,
+    ) -> Result<(), String> {
+        Self::from_project(archive)?;
+        let bytes = self.encode_cbor()?;
+        archive
+            .set_intent(THERMAL_STUDY_ENTRY, Some(bytes))
+            .map_err(|e| e.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
