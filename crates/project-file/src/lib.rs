@@ -7,7 +7,9 @@ mod archive;
 mod files;
 mod publication;
 mod replay;
-pub use replay::{ReplayPackage, MAX_REPLAY_PACKAGE_BYTES, MAX_REPLAY_SCRIPT_BYTES};
+pub use replay::{
+    ReplayPackage, ReplayPackageIdentity, MAX_REPLAY_PACKAGE_BYTES, MAX_REPLAY_SCRIPT_BYTES,
+};
 mod snapshot;
 pub use publication::{ProjectPublication, PublicationReceipt, MAX_PUBLICATION_BYTES};
 pub use snapshot::{ProjectSnapshot, SnapshotIntent, MAX_SNAPSHOT_BYTES};

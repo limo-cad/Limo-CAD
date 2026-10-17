@@ -11,3 +11,11 @@ replay-package = {
 }
 ; project is the exact .limo archive, including ancillary entries.
 ; Existing archive expansion and snapshot/domain limits continue to apply.
+
+; Compact integrity descriptor for an admitted request. Not an authorization token.
+; SHA-256 covers the exact original package wire bytes, before decoding.
+; The serde descriptor represents the digest as exactly 32 unsigned octets.
+replay-package-identity = {
+  "byte_length": 1..285278208,
+  "sha256": [32*32 uint .le 255]
+}
