@@ -31,14 +31,22 @@ fn supported(
     prefix: &str,
     suffix: &str,
 ) -> bool {
-    presentation == &DrawingDimensionPresentationDto::default()
+    !presentation.basic
+        && presentation.dual_units.is_none()
+        && presentation.tolerance.mode == DrawingDimensionToleranceMode::None
         && precision <= 8
         && !prefix.contains("<>")
         && !suffix.contains("<>")
+        && !presentation.fit_class.contains("<>")
         && !prefix
             .chars()
             .chain(suffix.chars())
+            .chain(presentation.fit_class.chars())
             .any(|c| c.is_control() || "\\{}%".contains(c))
+}
+
+fn label_template(value: String, presentation: &DrawingDimensionPresentationDto) -> String {
+    text::finish(text::with_fit(value, presentation), presentation)
 }
 
 impl Dimension {
@@ -72,9 +80,9 @@ impl Dimension {
         // The symbol belongs to the style, so editing keeps the live value.
         dimension.text = format!("{}<>", affixes.0);
         dimension.post = format!(
-            "{}<> {}{}",
+            "{}{}{}",
             if diameter { "\u{00d8}" } else { "R" },
-            text::unit_label(units),
+            label_template(format!("<> {}", text::unit_label(units)), presentation),
             affixes.1
         );
         Some(dimension)
@@ -115,7 +123,10 @@ impl Dimension {
             },
             factor,
             precision,
-            post: format!("{prefix}<> {}{suffix}", text::unit_label(units)),
+            post: format!(
+                "{prefix}{}{suffix}",
+                label_template(format!("<> {}", text::unit_label(units)), presentation)
+            ),
             text: "<>".into(),
             text_height: style.text_height_mm,
             arrow_size: style.arrow_size_mm,
@@ -155,7 +166,10 @@ impl Dimension {
             },
             factor: 1.,
             precision,
-            post: format!("{prefix}<>{suffix}"),
+            post: format!(
+                "{prefix}{}{suffix}",
+                label_template("<>".into(), presentation)
+            ),
             text: "<>".into(),
             text_height: style.text_height_mm,
             arrow_size: style.arrow_size_mm,
@@ -264,6 +278,28 @@ fn point(out: &mut String, code: u8, p: P, height: f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn presentation_controls_never_become_dxf_format_instructions() {
+        for fit in ["H7<>", "H7%", "H7\\", "H7{", "H7}", "H7\n"] {
+            let p = DrawingDimensionPresentationDto {
+                fit_class: fit.into(),
+                ..Default::default()
+            };
+            assert!(!supported(&p, 2, "", ""));
+        }
+        let mut p = DrawingDimensionPresentationDto {
+            reference: true,
+            fit_class: " H7 ".into(),
+            ..Default::default()
+        };
+        assert!(supported(&p, 2, "QA ", " exact"));
+        p.basic = true;
+        assert!(!supported(&p, 2, "", ""));
+        p.basic = false;
+        p.tolerance.mode = DrawingDimensionToleranceMode::Limits;
+        assert!(!supported(&p, 2, "", ""));
+    }
 
     #[test]
     fn angular_definitions_preserve_minor_sector_across_winding_and_angle_seam() {

@@ -259,3 +259,27 @@ fn signed_ordinates_follow_datum_crossings_and_current_geometry_without_frozen_o
         }
     }
 }
+
+#[test]
+fn series_reference_fit_labels_share_the_live_span_formatter() {
+    for layout in ["chain", "baseline", "continued"] {
+        let (mut d, s, p) = fixture::fixture(layout);
+        let mut value = serde_json::to_value(&d.sheets[0].annotations[0]).unwrap();
+        value["presentation"] = json!({"reference":true, "fit_class":" H7 "});
+        d.sheets[0].annotations[0] = serde_json::from_value(value).unwrap();
+        let before = d.clone();
+        let output = export(&d, &s, &p, DrawingExportFormat::Dxf, UnitSystem::Mm).unwrap();
+        let dims = super::straight_tests::dxf_entities(&output, "DIMENSION");
+        let styles = super::straight_tests::dxf_entities(&output, "DIMSTYLE");
+        assert_eq!(dims.len(), 2);
+        for dim in dims {
+            assert_eq!(dim["1"], "<>");
+            let style = styles
+                .iter()
+                .find(|v| v.get("2") == Some(&dim["3"]))
+                .unwrap();
+            assert_eq!(style["3"], "(<> mm H7)");
+        }
+        assert_eq!(d, before);
+    }
+}

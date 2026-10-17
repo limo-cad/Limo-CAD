@@ -792,3 +792,51 @@ fn basic_linear_masks_cover_crossing_extensions_before_painting_complete_arrows(
         }
     }
 }
+
+#[test]
+fn reference_and_fit_labels_keep_live_values_and_literal_presentation() {
+    for kind in [
+        "length",
+        "distance",
+        "angle",
+        "point-line",
+        "angle-three-point",
+        "radius",
+        "diameter",
+    ] {
+        for units in [UnitSystem::Mm, UnitSystem::Cm, UnitSystem::In] {
+            for (reference, fit) in [(true, ""), (false, " H7 "), (true, " H7 ")] {
+                let (mut document, scene, projection) = if matches!(kind, "radius" | "diameter") {
+                    super::center_fixture::fixture(kind, 2., false)
+                } else {
+                    fixture::fixture(kind, 40.)
+                };
+                replace_annotation(&mut document, |a| {
+                    a["prefix"] = json!("QA ");
+                    a["suffix"] = json!(" exact");
+                    a["presentation"] = json!({"reference":reference,"fit_class":fit});
+                });
+                let before = document.clone();
+                let dxf = export(
+                    &document,
+                    &scene,
+                    &projection,
+                    units,
+                    DrawingExportFormat::Dxf,
+                )
+                .unwrap();
+                let dimensions = dxf_entities(&dxf, "DIMENSION");
+                assert_eq!(dimensions.len(), 1, "{kind}");
+                assert!(dimensions[0]["1"].contains("<>"));
+                let styles = dxf_entities(&dxf, "DIMSTYLE");
+                let style = styles
+                    .iter()
+                    .find(|s| s.get("2") == Some(&dimensions[0]["3"]))
+                    .unwrap();
+                assert_eq!(style["3"].contains("(<>"), reference);
+                assert_eq!(style["3"].contains(" H7"), !fit.is_empty());
+                assert_eq!(document, before);
+            }
+        }
+    }
+}
