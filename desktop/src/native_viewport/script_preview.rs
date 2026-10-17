@@ -584,6 +584,18 @@ impl PreviewRenderer {
         let plugins = plugins.disable::<bevy::winit::WinitPlugin>();
         app.add_plugins(plugins);
         install_cad_scene(&mut app);
+        app.add_systems(
+            Startup,
+            (|mut config: ResMut<GizmoConfigStore>| {
+                // Keep the teaching profile readable after thumbnail downsampling.
+                config
+                    .config_mut::<CadDirectPickFeedbackGizmos>()
+                    .0
+                    .line
+                    .width = 2.;
+            })
+            .after(setup_scene),
+        );
         app.init_resource::<CapturedImage>();
         app.finish();
         app.cleanup();
@@ -732,7 +744,13 @@ impl PreviewRenderer {
                     profile
                         .entities
                         .iter()
-                        .filter(|entity| matches!(entity, limo_cad_sketch::EntityDto::Line { .. }))
+                        .filter(|entity| {
+                            matches!(
+                                entity,
+                                limo_cad_sketch::EntityDto::Line { .. }
+                                    | limo_cad_sketch::EntityDto::Circle { .. }
+                            )
+                        })
                         .map(|entity| FinishedSketchEntityPickRef {
                             sketch_name: profile.name.clone(),
                             entity_id: entity.id().0,
@@ -912,16 +930,48 @@ mod tests {
             changed(&profile_pixels, &solid_pixels) > 1000,
             "Extrusion must visibly change real geometry"
         );
+        let mut cut_frames: Vec<Frame> =
+            serde_json::from_value(report["exports"]["lessons"]["cut"].take()).unwrap();
+        for frame in &mut cut_frames {
+            if let Some(profile) = &mut frame.profile {
+                profile.projected_edges.clear();
+                profile.reference_midpoints.clear();
+            }
+        }
+        let mut cut_document = PreviewDocument::new(cut_frames).unwrap();
+        request.preview_id = "cut-profile-contrast".into();
+        request.revision += 1;
+        let cut_profile = render(&cut_document, &request);
+        cut_document.frames[0].profile = None;
+        request.preview_id = "cut-profile-negative-control".into();
+        request.revision += 1;
+        let cut_blank = render(&cut_document, &request);
+        let accent_pixels = |png: &[u8]| {
+            let (_, _, pixels) = decode_rgba(png);
+            pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .filter(|p| p[2] as i16 > p[1] as i16 + 30 && p[0] as i16 > p[1] as i16 + 10)
+                .count()
+        };
+        let contrast = (accent_pixels(&cut_profile), accent_pixels(&cut_blank));
         if let Ok(path) = std::env::var("LIMO_CAD_PREVIEW_PROOF_DIR") {
             std::fs::create_dir_all(&path).unwrap();
             for (name, bytes) in [
                 ("extrude-profile.png", profile),
                 ("extrude-solid.png", solid),
                 ("extrude-blank-control.png", blank),
+                ("cut-profile.png", cut_profile),
+                ("cut-blank-control.png", cut_blank),
             ] {
                 std::fs::write(std::path::Path::new(&path).join(name), bytes).unwrap();
             }
         }
+        assert!(
+            contrast.0 > contrast.1 + 50,
+            "The prepared circle must contrast with the solid in the selection accent: {contrast:?}"
+        );
     }
 
     #[test]

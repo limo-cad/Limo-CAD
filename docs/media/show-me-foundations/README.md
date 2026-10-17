@@ -17,4 +17,4 @@ $env:LIMO_CAD_PREVIEW_PROOF_DIR = '<fresh geometry directory>'
 cargo xtask ci native-ignored-test extrude-preview
 ```
 
-The first command captures all three operations in dark/light English views and four localized light views, including high-scale Help clipping, scroll-to-end and missing-glyph checks. CI retains full-resolution captures. Committed images are cropped; GIFs are downsampled to 504 x 570 using a common palette per clip. `provenance.json` records LF-normalized source hashes. Media budget: 8 MiB.
+The first command captures all three operations in dark/light English views and four localized light views, including high-scale Help clipping, scroll-to-end and missing-glyph checks. The geometry check also compares the prepared circle with the same solid without a profile, requiring a visible accent outline. CI retains full-resolution captures. Committed images are cropped; GIFs are downsampled to 504 x 570 using a common palette per clip. `provenance.json` records LF-normalized source hashes. Media budget: 8 MiB.

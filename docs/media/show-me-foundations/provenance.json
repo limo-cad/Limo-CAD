@@ -32,7 +32,7 @@
     "crates/help/src/lessons.rs": "18f359ec95cdecc0f888c6a9f8843265f4c3065fbbd011d056944c2ca8e9b6b1",
     "crates/help/src/lib.rs": "668521ba76fcecf383584ad12ed4187b9bf09514d0dd8ae7dbca8a6b24789f30",
     "desktop/src/native_viewport/interface_shell.rs": "8a5346d4c89c594ddfe32d12ac94db40f3c2ff5d68dec093a125ac6166c600c6",
-    "desktop/src/native_viewport/script_preview.rs": "fc9a251508ea972cd6e86a48d34557f51b10ed6c32ffeb713c1a31a291edf9bd",
+    "desktop/src/native_viewport/script_preview.rs": "08acd54d113ae60ea7f62876040575f98b5791e05de4e0549e85cc4e1d65b7fb",
     "desktop/src/native_viewport/ui/font_tests.rs": "e3c970682e26ae20fce59fe296650a57e56a15ee5197f4908c008a0afe0069cf",
     "desktop/src/native_viewport/ui.rs": "98e57cbd6c66e555fdf56264715764e9f2181213ddbeaa880a5b5fc8dc45de28",
     "desktop/src/session_bridge/native_interface/controller/files/panel.rs": "ce5d28c799a6d9918a5eb530ddb6d4d392946b25837d6c97d9e3dc6bc4334eb0",
