@@ -46,15 +46,26 @@ impl Card {
         if world.get::<BoxShadow>(entity) != Some(&shadow) {
             world.entity_mut(entity).insert(shadow);
         }
+        let suffix = lesson::text(
+            world,
+            if view == "help" {
+                "ui.help"
+            } else {
+                "ui.showMe"
+            },
+        );
+        let heading = if view == "index" {
+            title.to_owned()
+        } else {
+            format!("{title} · {suffix}")
+        };
+        let close = lesson::text(world, "ui.close");
         widgets.text(
             world,
             camera,
             &key("heading"),
             rect(x + 12., y + 10., w - 52., 24.),
-            &format!(
-                "{title} · {}",
-                if view == "help" { "Help" } else { "Show me" }
-            ),
+            &heading,
             14.,
             61,
         );
@@ -62,7 +73,7 @@ impl Card {
             world,
             camera,
             &key("close"),
-            InterfaceControl::button("document/scripts", "Close demonstration"),
+            InterfaceControl::button("document/scripts", close),
             Some(""),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Close)),
             rect(x + w - 36., y + 10., 24., 24.),

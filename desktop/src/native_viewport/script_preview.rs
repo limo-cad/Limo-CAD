@@ -58,10 +58,26 @@ pub(crate) struct Frame {
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum PreviewCue {
+    Plane,
+    Dimension,
+    Cut,
     Profile,
     Extrude,
     Depth,
     Apply,
+}
+impl PreviewCue {
+    pub(crate) const fn key(self) -> &'static str {
+        match self {
+            Self::Plane => "plane",
+            Self::Dimension => "dimension",
+            Self::Cut => "cut",
+            Self::Profile => "profile",
+            Self::Extrude => "extrude",
+            Self::Depth => "depth",
+            Self::Apply => "apply",
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -135,9 +151,20 @@ impl PreviewDocument {
                             point(*start)?;
                             point(*end)?;
                         }
+                        limo_cad_sketch::EntityDto::Circle { center, radius, .. } => {
+                            if !radius.is_finite() || *radius <= 0. || *radius > 10_000. {
+                                return Err("Invalid preview circle radius".into());
+                            }
+                            for (x, y) in [(1., 0.), (-1., 0.), (0., 1.), (0., -1.)] {
+                                point(limo_cad_sketch::Vec2::new(
+                                    center.x + x * radius,
+                                    center.y + y * radius,
+                                ))?;
+                            }
+                        }
                         _ => {
                             return Err(
-                                "Preview profiles currently support straight segments".into()
+                                "Preview profiles support straight segments and circles".into()
                             )
                         }
                     }
@@ -837,7 +864,8 @@ mod tests {
             "../../../examples/scripts/extrude-basics.limo.jsonc"
         ))
         .unwrap();
-        let frames = serde_json::from_value(report["exports"]["preview_frames"].take()).unwrap();
+        let frames =
+            serde_json::from_value(report["exports"]["lessons"]["extrude"].take()).unwrap();
         let mut document = PreviewDocument::new(frames).unwrap();
         let mut renderer = PreviewRenderer::new().unwrap();
         let cancelled = AtomicBool::new(false);
@@ -855,7 +883,7 @@ mod tests {
                 .unwrap()
         };
         let profile = render(&document, &request);
-        request.frame_index = 6;
+        request.frame_index = 4;
         request.revision += 1;
         let solid = render(&document, &request);
         document.frames[0].profile = None;

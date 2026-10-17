@@ -1,20 +1,19 @@
-//! Content for a feature demo; geometry and playback stay in the shared runner.
-use crate::native_viewport::script_preview::PreviewCue;
-
-pub(super) struct Demo {
-    pub recipe: &'static str,
-    pub title: &'static str,
-    pub help: &'static str,
-    pub steps: [(PreviewCue, &'static str); 4],
+//! Native presentation uses the shared, localized Help teaching catalog.
+use super::*;
+pub(super) use limo_cad_mcp::lessons::{Id, ALL, RECIPE};
+pub(super) fn language(world: &World) -> &'static str {
+    crate::app_preferences::locale::code(crate::native_viewport::localization::locale(world))
 }
-pub(super) const EXTRUDE: Demo = Demo {
-    recipe: "extrude-basics",
-    title: "Extrude",
-    help: "concepts.extrude-basics",
-    steps: [
-        (PreviewCue::Profile, "Profile"),
-        (PreviewCue::Extrude, "Extrude"),
-        (PreviewCue::Depth, "Distance"),
-        (PreviewCue::Apply, "Apply"),
-    ],
-};
+pub(super) fn text(world: &World, key: &str) -> &'static str {
+    limo_cad_mcp::lessons::text(language(world), key)
+}
+pub(super) fn current(world: &World) -> Option<Id> {
+    let preview = &world.resource::<Files>().script.preview;
+    preview.lesson.or_else(|| {
+        preview.retained.as_ref().and_then(|r| {
+            let caption = r.descriptor.captions.get(preview.index)?;
+            ALL.into_iter()
+                .find(|id| caption.starts_with(&format!("{}.", id.key())))
+        })
+    })
+}

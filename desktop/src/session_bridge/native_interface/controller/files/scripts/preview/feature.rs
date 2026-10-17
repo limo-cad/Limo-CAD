@@ -1,19 +1,22 @@
-//! Contextual entry and guidance for one real, isolated Extrude example.
+//! Contextual hints and Help use the same three operation lessons.
 use super::super::super::super::chrome::{self, rect};
 use super::*;
 use crate::native_viewport::script_preview::PreviewCue;
 use std::sync::OnceLock;
 
+const HOVER_DELAY: Duration = Duration::from_millis(700);
 #[derive(Resource, Default)]
-struct Hint(bool);
-
+struct Hint {
+    anchor: Option<Entity>,
+    open: bool,
+    wake: Option<Wake>,
+}
 fn contains(point: Vec2, bounds: [f32; 4]) -> bool {
     point.x >= bounds[0]
         && point.y >= bounds[1]
         && point.x <= bounds[0] + bounds[2]
         && point.y <= bounds[1] + bounds[3]
 }
-
 fn keep_hint(point: Vec2, anchor: [f32; 4], card: [f32; 4], open: bool) -> bool {
     contains(point, anchor)
         || (open
@@ -27,6 +30,29 @@ fn keep_hint(point: Vec2, anchor: [f32; 4], card: [f32; 4], open: bool) -> bool 
                         (card[1] - anchor[1] - anchor[3]).max(0.),
                     ],
                 )))
+}
+fn ready_hint(
+    hint: &mut Hint,
+    anchor: Entity,
+    keyboard: bool,
+    hovered: bool,
+    now: Instant,
+) -> bool {
+    if hint.anchor != Some(anchor) {
+        hint.anchor = Some(anchor);
+        hint.open = false;
+        hint.wake = None;
+    }
+    if keyboard {
+        hint.open = true;
+        hint.wake = None;
+    } else if !hovered {
+        hint.open = false;
+        hint.wake = None;
+    } else if hint.wake.as_ref().is_some_and(|wake| now >= wake.due) {
+        hint.open = true;
+    }
+    hint.open
 }
 
 pub(crate) fn paint_hint(
@@ -43,54 +69,112 @@ pub(crate) fn paint_hint(
         && world
             .get_resource::<NativeInterfaceHandle>()
             .and_then(NativeInterfaceHandle::presented_pointer_context)
-            .is_none_or(|(_, modal_empty, _)| modal_empty)
+            .is_none_or(|(_, empty, _)| empty)
         && crate::session_bridge::native_interface::feature::panel(world).is_none();
-    let anchor = extrude
-        .filter(|entity| {
-            allowed
-                && world
-                    .get::<InterfaceControl>(*entity)
-                    .is_some_and(|c| c.visible)
-        })
-        .and_then(|entity| {
-            let node = world.get::<Node>(entity)?;
-            match (node.left, node.top, node.width, node.height) {
-                (Val::Px(x), Val::Px(y), Val::Px(w), Val::Px(h)) => Some((entity, [x, y, w, h])),
-                _ => None,
-            }
-        });
-    let Some((entity, anchor)) = anchor else {
-        world.resource_mut::<Hint>().0 = false;
+    if !allowed {
+        *world.resource_mut::<Hint>() = Hint::default();
         return Ok(());
-    };
-    let w = (width - 24.).clamp(260., 280.);
-    let x = anchor[0].min((width - w - 8.).max(4.));
-    let y = anchor[1] + anchor[3] + 6.;
+    }
     let scale = world
         .get_resource::<bevy::ui::UiScale>()
         .map_or(1., |s| s.0);
-    let point = world
+    let window = world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .iter(world)
-        .find(|window| window.focused)
+        .next();
+    let point = window
+        .filter(|w| w.focused)
         .and_then(Window::cursor_position)
         .map(|p| p / scale);
     let focused = world
         .get_resource::<NativeInterfaceHandle>()
         .and_then(NativeInterfaceHandle::focused_key)
-        .is_some_and(|key| {
-            key.0 == entity.to_bits()
-                || widgets
-                    .entity("extrude-show-me")
-                    .is_some_and(|button| key.0 == button.to_bits())
+        .filter(|_| window.is_none_or(|w| w.focused));
+    let sketch = world
+        .query::<(Entity, &NativeCommandBinding)>()
+        .iter(world)
+        .find_map(|(entity, binding)| {
+            matches!(
+                binding.command,
+                NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
+                    crate::native_editor::support::Command::Start
+                ))
+            )
+            .then_some(entity)
         });
-    let open = focused
-        || point.is_some_and(|p| keep_hint(p, anchor, [x, y, w, 100.], world.resource::<Hint>().0));
-    world.resource_mut::<Hint>().0 = open;
+    let mut selected = None;
+    for (entity, id) in [(sketch, lesson::Id::Sketch), (extrude, lesson::Id::Extrude)] {
+        let Some(entity) =
+            entity.filter(|e| world.get::<InterfaceControl>(*e).is_some_and(|c| c.visible))
+        else {
+            continue;
+        };
+        let Some(node) = world.get::<Node>(entity) else {
+            continue;
+        };
+        let (Val::Px(x), Val::Px(y), Val::Px(w), Val::Px(h)) =
+            (node.left, node.top, node.width, node.height)
+        else {
+            continue;
+        };
+        let anchor = [x, y, w, h];
+        let cw = (width - 24.).clamp(260., 280.);
+        let cx = x.min((width - cw - 8.).max(4.));
+        let cy = y + h + 6.;
+        let entries = if id == lesson::Id::Sketch {
+            &[lesson::Id::Sketch][..]
+        } else {
+            &[lesson::Id::Extrude, lesson::Id::Cut][..]
+        };
+        let keyboard = focused.is_some_and(|key| {
+            key.0 == entity.to_bits()
+                || entries.iter().any(|id| {
+                    widgets
+                        .entity(&format!("{}-show-me", id.key()))
+                        .is_some_and(|e| e.to_bits() == key.0)
+                })
+        });
+        let hovered = point.is_some_and(|p| {
+            keep_hint(
+                p,
+                anchor,
+                [cx, cy, cw, 100.],
+                world.resource::<Hint>().anchor == Some(entity) && world.resource::<Hint>().open,
+            )
+        });
+        if keyboard || hovered {
+            selected = Some((entity, id, cx, cy, cw, keyboard, hovered));
+            break;
+        }
+    }
+    let Some((anchor, id, x, y, w, keyboard, hovered)) = selected else {
+        *world.resource_mut::<Hint>() = Hint::default();
+        return Ok(());
+    };
+    let now = Instant::now();
+    let open = ready_hint(
+        &mut world.resource_mut::<Hint>(),
+        anchor,
+        keyboard,
+        hovered,
+        now,
+    );
     if !open {
+        if world.resource::<Hint>().wake.is_none() {
+            if let Some(handle) = world.get_resource::<NativeInterfaceHandle>().cloned() {
+                let cancelled = Arc::new(AtomicBool::new(false));
+                hover::arm(world, handle, now + HOVER_DELAY, cancelled.clone())?;
+                world.resource_mut::<Hint>().wake = Some(Wake {
+                    due: now + HOVER_DELAY,
+                    cancelled,
+                });
+            }
+        }
         return Ok(());
     }
     let theme = crate::native_viewport::ui::theme(world);
+    let language = lesson::language(world);
+    let t = |key: &str| limo_cad_mcp::lessons::text(language, key);
     widgets.panel(
         world,
         camera,
@@ -108,7 +192,7 @@ pub(crate) fn paint_hint(
         camera,
         "extrude-help-title",
         rect(x + 12., y + 8., w - 24., 20.),
-        "Extrude",
+        id.title(language),
         13.,
         66,
     );
@@ -117,28 +201,45 @@ pub(crate) fn paint_hint(
         camera,
         "extrude-help-description",
         rect(x + 12., y + 30., w - 24., 32.),
-        "Give a closed sketch profile depth to make a solid.",
+        id.summary(language),
         12.,
         66,
     );
-    let mut control = InterfaceControl::button("solid/build", "Show me how to Extrude");
-    control.disabled = available(world).is_err();
-    let entry = widgets.button(
-        world,
-        camera,
-        "extrude-show-me",
-        control,
-        Some("Show me"),
-        NativeCommand::File(FileCommand::ScriptPreview(Action::Extrude)),
-        rect(x + 8., y + 66., 100., 26.),
-        Some(interface_shell::ribbon::Icon::Book),
-        66,
-    )?;
-    if let Some(handle) = world.get_resource::<NativeInterfaceHandle>() {
-        handle.place_in_tab_order_after(
-            limo_cad_interface::ControlKey(entry.to_bits()),
-            limo_cad_interface::ControlKey(entity.to_bits()),
+    let entries = if id == lesson::Id::Sketch {
+        &[lesson::Id::Sketch][..]
+    } else {
+        &[lesson::Id::Extrude, lesson::Id::Cut][..]
+    };
+    let mut previous = anchor;
+    for (index, id) in entries.iter().enumerate() {
+        let mut control = InterfaceControl::button(
+            "solid/build",
+            format!("{}: {}", t("ui.showMe"), id.title(language)),
+        );
+        control.disabled = available(world).is_err();
+        let caption = if entries.len() == 1 {
+            t("ui.showMe")
+        } else {
+            id.title(language)
+        };
+        let entry = widgets.button(
+            world,
+            camera,
+            &format!("{}-show-me", id.key()),
+            control,
+            Some(caption),
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Lesson(*id))),
+            rect(x + 8. + index as f32 * 132., y + 66., 128., 26.),
+            Some(interface_shell::ribbon::Icon::Book),
+            66,
         )?;
+        if let Some(handle) = world.get_resource::<NativeInterfaceHandle>() {
+            handle.place_in_tab_order_after(
+                limo_cad_interface::ControlKey(entry.to_bits()),
+                limo_cad_interface::ControlKey(previous.to_bits()),
+            )?;
+        }
+        previous = entry;
     }
     Ok(())
 }
@@ -148,14 +249,15 @@ pub(super) fn guide(
     camera: Entity,
     widgets: &mut chrome::Widgets,
     (x, y, w): (f32, f32, f32),
-    demo: &lesson::Demo,
+    demo: lesson::Id,
     cue: Option<PreviewCue>,
     theme: ViewportUiTheme,
 ) {
     let width = (w - 12.) / 4.;
-    for (index, (step, label)) in demo.steps.iter().enumerate() {
+    for (index, step) in demo.cues().iter().enumerate() {
         let left = x + index as f32 * (width + 4.);
-        let selected = cue == Some(*step);
+        let selected = cue.is_some_and(|cue| cue.key() == *step);
+        let label = lesson::text(world, &format!("step.{step}"));
         widgets.colored_text(
             world,
             camera,
@@ -176,18 +278,23 @@ pub(super) fn guide(
         );
     }
 }
-pub(super) fn help() -> &'static Result<Vec<String>, String> {
-    static PAGE: OnceLock<Result<Vec<String>, String>> = OnceLock::new();
-    PAGE.get_or_init(|| {
-        let page = limo_cad_mcp::help_page(lesson::EXTRUDE.help)?;
-        let body = page["body"].as_str().ok_or("Extrude help has no content")?;
-        Ok(body
-            .split("\n\n")
-            .map(str::trim)
-            .filter(|p| !p.is_empty())
-            .map(str::to_owned)
-            .collect())
-    })
+pub(super) fn help(id: lesson::Id, language: &'static str) -> &'static str {
+    static PAGES: OnceLock<HashMap<(lesson::Id, &'static str), String>> = OnceLock::new();
+    &PAGES.get_or_init(|| {
+        lesson::ALL
+            .into_iter()
+            .flat_map(|id| {
+                limo_cad_mcp::lessons::LOCALES
+                    .into_iter()
+                    .map(move |language| {
+                        (
+                            (id, language),
+                            limo_cad_mcp::lessons::page(language, id).body,
+                        )
+                    })
+            })
+            .collect()
+    })[&(id, language)]
 }
 
 /// Resolve only after layout publishes this control, against the original owner.
@@ -288,23 +395,15 @@ pub(super) fn paint_help(
     height: f32,
     theme: ViewportUiTheme,
 ) -> Result<(), String> {
+    let id = lesson::current(world).unwrap_or(lesson::Id::Sketch);
+    let language = lesson::language(world);
+    let t = |key: &str| limo_cad_mcp::lessons::text(language, key);
     let card = card::Card::new(width);
     let (x, y, w) = (card.x, card.y, card.width);
     let h = 364_f32.min((height - y - 16.).max(180.));
-    card.paint(
-        world,
-        camera,
-        widgets,
-        "help",
-        h,
-        lesson::EXTRUDE.title,
-        theme,
-    )?;
-    let body = match help() {
-        Ok(paragraphs) => paragraphs.join("\n\n"),
-        Err(error) => error.clone(),
-    };
-    let bounds = [x + 12., y + 44., w - 28., h - 96.];
+    card.paint(world, camera, widgets, "help", h, id.title(language), theme)?;
+    let body = help(id, language);
+    let bounds = [x + 12., y + 44., w - 28., h - 156.];
     let content_height = widgets
         .entity("extrude-help-text")
         .and_then(|entity| world.get::<ComputedNode>(entity))
@@ -316,7 +415,7 @@ pub(super) fn paint_help(
     let (offset, max) = (view.offset, view.max);
     let mut control = InterfaceControl::button(
         "document/scripts",
-        "Extrude help; scroll with arrows or Page Up and Page Down",
+        format!("{}: {}", id.title(language), t("ui.help")),
     );
     control.role = "region".into();
     control.owned_keys = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"]
@@ -342,7 +441,7 @@ pub(super) fn paint_help(
             align_items: AlignItems::Start,
             ..rect(0., -offset, bounds[2] - 4., 0.)
         },
-        &body,
+        body,
         12.,
         1,
     );
@@ -363,23 +462,158 @@ pub(super) fn paint_help(
             62,
         );
     }
+    let retained = world.resource::<Files>().script.preview.retained.is_some();
+    let back_label = if retained {
+        t("ui.back")
+    } else {
+        t("ui.lessons")
+    };
+    let back_action = if retained {
+        Action::Demo
+    } else {
+        Action::Index
+    };
     widgets.button(
         world,
         camera,
         "extrude-help-back",
-        InterfaceControl::button("document/scripts", "Back to demonstration"),
-        Some("Back to demonstration"),
-        NativeCommand::File(FileCommand::ScriptPreview(Action::Demo)),
+        InterfaceControl::button("document/scripts", back_label),
+        Some(back_label),
+        NativeCommand::File(FileCommand::ScriptPreview(back_action)),
         rect(x + 8., y + h - 40., w - 16., 28.),
         None,
         61,
     )?;
+    widgets.button(
+        world,
+        camera,
+        "lesson-play",
+        InterfaceControl::button("document/scripts", t("ui.showMe")),
+        Some(t("ui.showMe")),
+        NativeCommand::File(FileCommand::ScriptPreview(Action::Lesson(id))),
+        rect(x + 8., y + h - 104., 140., 28.),
+        Some(interface_shell::ribbon::Icon::Book),
+        61,
+    )?;
+    if let Some(previous) = id.prerequisite() {
+        let label = format!("{} {}", t("ui.prerequisite"), previous.title(language));
+        widgets.button(
+            world,
+            camera,
+            "lesson-prerequisite",
+            InterfaceControl::button("document/scripts", &label),
+            Some(&label),
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Read(previous))),
+            rect(x + 8., y + h - 72., w - 16., 28.),
+            None,
+            61,
+        )?;
+    }
     focus_control(world, clip);
+    Ok(())
+}
+
+pub(super) fn paint_index(
+    world: &mut World,
+    camera: Entity,
+    widgets: &mut chrome::Widgets,
+    width: f32,
+    _height: f32,
+    theme: ViewportUiTheme,
+) -> Result<(), String> {
+    let language = lesson::language(world);
+    let t = |key: &str| limo_cad_mcp::lessons::text(language, key);
+    let card = card::Card::new(width);
+    let (x, y, w) = (card.x, card.y, card.width);
+    card.paint(
+        world,
+        camera,
+        widgets,
+        "index",
+        310.,
+        t("ui.lessons"),
+        theme,
+    )?;
+    for (index, id) in lesson::ALL.into_iter().enumerate() {
+        let top = y + 44. + index as f32 * 62.;
+        let entry = widgets.button(
+            world,
+            camera,
+            &format!("help-{}", id.key()),
+            InterfaceControl::button("document/scripts", id.title(language)),
+            Some(id.title(language)),
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Read(id))),
+            rect(x + 8., top, w - 16., 28.),
+            Some(interface_shell::ribbon::Icon::Book),
+            61,
+        )?;
+        widgets.colored_text(
+            world,
+            camera,
+            &format!("help-summary-{}", id.key()),
+            rect(x + 12., top + 28., w - 24., 28.),
+            id.summary(language),
+            11.,
+            61,
+            theme.mute,
+        );
+        if index == 0 {
+            focus_control(world, entry);
+        }
+    }
+    widgets.button(
+        world,
+        camera,
+        "help-full-build",
+        InterfaceControl::button("document/scripts", t("ui.fullBuild")),
+        Some(t("ui.fullBuild")),
+        NativeCommand::File(FileCommand::ScriptPreview(Action::FullBuild)),
+        rect(x + 8., y + 252., w - 16., 32.),
+        None,
+        61,
+    )?;
     Ok(())
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_script_preview_long_hover_waits_and_cancels_without_repeated_wakes() {
+        let now = Instant::now();
+        let anchor = Entity::from_bits(100);
+        let mut hint = Hint::default();
+        assert!(!ready_hint(&mut hint, anchor, false, true, now));
+        let token = Arc::new(AtomicBool::new(false));
+        hint.wake = Some(Wake {
+            due: now + HOVER_DELAY,
+            cancelled: token.clone(),
+        });
+        assert!(!ready_hint(
+            &mut hint,
+            anchor,
+            false,
+            true,
+            now + HOVER_DELAY - Duration::from_millis(1)
+        ));
+        assert!(ready_hint(
+            &mut hint,
+            anchor,
+            false,
+            true,
+            now + HOVER_DELAY
+        ));
+        assert!(!ready_hint(
+            &mut hint,
+            anchor,
+            false,
+            false,
+            now + HOVER_DELAY
+        ));
+        assert!(token.load(Ordering::Acquire));
+        assert!(hint.wake.is_none());
+        assert!(ready_hint(&mut hint, anchor, true, false, now));
+        assert!(hint.wake.is_none(), "Keyboard entry has no hover timer");
+    }
     #[test]
     fn native_script_preview_help_scroll_is_bounded_and_preserves_navigation() {
         let mut world = World::new();

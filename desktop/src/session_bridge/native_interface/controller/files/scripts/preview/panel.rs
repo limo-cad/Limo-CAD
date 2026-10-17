@@ -9,15 +9,15 @@ pub(crate) fn paint(
     height: f32,
     theme: ViewportUiTheme,
 ) -> Result<(), String> {
+    if world.resource::<Files>().script.preview.index_open {
+        return feature::paint_index(world, camera, widgets, width, height, theme);
+    }
     if world.resource::<Files>().script.preview.help {
         return feature::paint_help(world, camera, widgets, width, height, theme);
     }
-    let script = &world.resource::<Files>().script;
-    let demo = (script.preview.return_to.is_some()
-        || script
-            .example
-            .is_some_and(|e| e.id == lesson::EXTRUDE.recipe))
-    .then_some(&lesson::EXTRUDE);
+    let demo = lesson::current(world);
+    let language = lesson::language(world);
+    let t = |key: &str| limo_cad_mcp::lessons::text(language, key);
     let card = card::Card::new(width);
     let (x, y, w) = (card.x, card.y, card.width);
     let image_width = w - 24.;
@@ -58,8 +58,8 @@ pub(crate) fn paint(
         preview
             .retained
             .as_ref()
-            .map(|r| r.descriptor.captions[index].clone())
-            .unwrap_or_else(|| "Preparing your example…".into())
+            .map(|r| limo_cad_mcp::lessons::caption(language, &r.descriptor.captions[index]))
+            .unwrap_or_else(|| t("ui.preparing").into())
     });
     let cue = preview
         .retained
@@ -73,14 +73,15 @@ pub(crate) fn paint(
         widgets,
         "demo",
         image_height + if demo.is_some() { 188. } else { 162. },
-        demo.map_or("Lesson preview", |d| d.title),
+        demo.map_or(t("ui.showMe"), |d| d.title(language)),
         theme,
     )?;
     let mut model = InterfaceControl::button(
         "document/scripts",
         format!(
-            "Lesson preview model: {}{caption}",
-            if current { "" } else { "Preparing image — " }
+            "{}: {}{caption}",
+            t("ui.modelHint"),
+            if current { "" } else { t("ui.preparing") }
         ),
     );
     model.owned_keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home"]
@@ -91,11 +92,7 @@ pub(crate) fn paint(
         camera,
         "scripts-preview-model",
         model,
-        Some(if image.is_some() {
-            ""
-        } else {
-            "Loading example…"
-        }),
+        Some(if image.is_some() { "" } else { t("ui.loading") }),
         NativeCommand::File(FileCommand::ScriptPreview(Action::Model)),
         Node {
             border: UiRect::all(px(1.)),
@@ -143,7 +140,7 @@ pub(crate) fn paint(
     let buttons = top + extra + 44.;
     for (i, (label, caption, action, disabled, left, width)) in [
         (
-            "Previous",
+            t("ui.previous"),
             "‹",
             Action::Previous,
             !ready || index == 0,
@@ -151,8 +148,16 @@ pub(crate) fn paint(
             28.,
         ),
         (
-            if playing { "Pause" } else { "Replay" },
-            if playing { "Pause" } else { "Replay" },
+            if playing {
+                t("ui.pause")
+            } else {
+                t("ui.replay")
+            },
+            if playing {
+                t("ui.pause")
+            } else {
+                t("ui.replay")
+            },
             if playing {
                 Action::Stop
             } else {
@@ -163,7 +168,7 @@ pub(crate) fn paint(
             64.,
         ),
         (
-            "Next",
+            t("ui.next"),
             "›",
             Action::Next,
             !ready || index + 1 >= count,
@@ -195,10 +200,10 @@ pub(crate) fn paint(
         world,
         camera,
         "scripts-preview-fit",
-        InterfaceControl::button("document/scripts", "Fit preview (Home)"),
+        InterfaceControl::button("document/scripts", t("ui.fit")),
         Some(""),
         NativeCommand::File(FileCommand::ScriptPreview(Action::Fit)),
-        rect(x + w - 100., buttons, 28., 28.),
+        rect(x + w - 116., buttons, 28., 28.),
         Some(interface_shell::ribbon::Icon::Fit),
         61,
     )?;
@@ -207,10 +212,10 @@ pub(crate) fn paint(
             world,
             camera,
             "extrude-open-help",
-            InterfaceControl::button("document/scripts", "Open Extrude help"),
-            Some("Help"),
+            InterfaceControl::button("document/scripts", t("ui.help")),
+            Some(t("ui.help")),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Help)),
-            rect(x + w - 68., buttons, 56., 28.),
+            rect(x + w - 84., buttons, 72., 28.),
             Some(interface_shell::ribbon::Icon::Book),
             61,
         )?;
@@ -220,7 +225,7 @@ pub(crate) fn paint(
         camera,
         "scripts-preview-safety",
         rect(x + 12., buttons + 36., w - 24., 16.),
-        "Drag to turn · Your design stays unchanged",
+        t("ui.footer"),
         10.,
         61,
         theme.mute,

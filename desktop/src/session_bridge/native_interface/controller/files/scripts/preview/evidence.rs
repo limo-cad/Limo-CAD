@@ -44,6 +44,24 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
     loop {
         update(app);
         if let Some(bytes) = app.world_mut().resource_mut::<Capture>().0.take() {
+            for (text, block) in app
+                .world_mut()
+                .query::<(&Text, &bevy::text::ComputedTextBlock)>()
+                .iter(app.world())
+            {
+                assert!(
+                    block
+                        .buffer()
+                        .lines()
+                        .flat_map(|line| line.runs())
+                        .all(|run| run
+                            .clusters()
+                            .flat_map(|cluster| cluster.glyphs())
+                            .all(|glyph| glyph.id != 0)),
+                    "Missing native glyph in {}",
+                    text.0
+                );
+            }
             assert!(
                 bytes.len() > 10_000,
                 "Native UI capture must contain actual pixels"
@@ -68,9 +86,9 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
                     .query::<(&Text, &ComputedNode, &bevy::ui::UiGlobalTransform)>()
                     .iter(app.world())
                     .find_map(|(text, node, transform)| {
-                        text.0
-                            .starts_with("Extrude ·")
-                            .then_some((*node, *transform))
+                        (text.0.contains(" · ")
+                            || text.0 == lesson::text(app.world(), "ui.lessons"))
+                        .then_some((*node, *transform))
                     })
                     .expect("Native title is laid out");
                 let start = transform.translation - node.size / 2.;
@@ -100,11 +118,15 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
 #[test]
 #[ignore = "requires a native graphics adapter; writes native UI screenshots and performance evidence"]
 fn native_show_me_ui_evidence_and_performance() {
+    let root = std::env::var("LIMO_CAD_SHOW_ME_PROOF_DIR")
+        .expect("Choose a fresh LIMO_CAD_SHOW_ME_PROOF_DIR");
+    for id in lesson::ALL {
+        capture_lesson(id, &Path::new(&root).join(id.key()));
+    }
+}
+fn capture_lesson(id: lesson::Id, out: &Path) {
     use crate::native_viewport::interface_shell::{InterfaceCamera, InterfaceFrame};
     use limo_cad_interface::{DocumentContext, Rect, Surface};
-    let out = std::env::var("LIMO_CAD_SHOW_ME_PROOF_DIR")
-        .expect("Choose a fresh LIMO_CAD_SHOW_ME_PROOF_DIR");
-    let out = Path::new(&out);
     std::fs::create_dir_all(out).unwrap();
     assert!(
         !out.join("performance.json").exists(),
@@ -197,10 +219,27 @@ fn native_show_me_ui_evidence_and_performance() {
             app.world_mut(),
             camera,
             "fixture-extrude",
-            InterfaceControl::button("solid/build", "Extrude"),
-            Some("Extrude"),
-            NativeCommand::File(FileCommand::ScriptPreview(Action::Model)),
-            chrome::rect(24., 4., 92., 32.),
+            InterfaceControl::button(
+                "solid/build",
+                if id == lesson::Id::Sketch {
+                    "Create Sketch"
+                } else {
+                    "Extrude"
+                },
+            ),
+            Some(if id == lesson::Id::Sketch {
+                "Create Sketch"
+            } else {
+                "Extrude"
+            }),
+            if id == lesson::Id::Sketch {
+                NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
+                    crate::native_editor::support::Command::Start,
+                ))
+            } else {
+                NativeCommand::File(FileCommand::ScriptPreview(Action::Model))
+            },
+            chrome::rect(24., 4., 128., 32.),
             Some(interface_shell::ribbon::Icon::Extrude),
             50,
         )
@@ -216,13 +255,36 @@ fn native_show_me_ui_evidence_and_performance() {
     feature::paint_hint(app.world_mut(), camera, Some(anchor), &mut widgets, 432.).unwrap();
     widgets.finish(app.world_mut());
     capture(&mut app, &target, &out.join("entry.png"));
+    command(
+        app.world_mut(),
+        &handle,
+        Action::Index,
+        &ControlInput::Click,
+    )
+    .unwrap();
+    widgets.begin();
+    panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
+    widgets.finish(app.world_mut());
+    capture(&mut app, &target, &out.join("help-index.png"));
+    assert_eq!(
+        app.world().resource::<Files>().script.preview.render_jobs,
+        0
+    );
+    command(
+        app.world_mut(),
+        &handle,
+        Action::Close,
+        &ControlInput::Click,
+    )
+    .unwrap();
     let prepared = Instant::now();
-    let frames = prepare(
+    let frames = prepare_lesson(
         &catalog::examples()
             .iter()
-            .find(|e| e.id == lesson::EXTRUDE.recipe)
+            .find(|e| e.id == lesson::RECIPE)
             .unwrap()
             .source,
+        Some(id),
     )
     .unwrap();
     let prepare_ms = prepared.elapsed().as_secs_f64() * 1000.;
@@ -239,6 +301,7 @@ fn native_show_me_ui_evidence_and_performance() {
         let files = &mut app.world_mut().resource_mut::<Files>();
         files.scripts = true;
         files.script.preview.open = true;
+        files.script.preview.lesson = Some(id);
         files.script.preview.return_to = Some((false, false, false, false));
         files.script.preview.retained = Some(retained);
     }
@@ -368,7 +431,15 @@ fn native_show_me_ui_evidence_and_performance() {
         .resource_mut::<Assets<Image>>()
         .insert(target.id(), texture)
         .unwrap();
-    for _ in 0..3 {
+    for locale in crate::app_preferences::locale::SUPPORTED {
+        crate::native_viewport::localization::set_locale(app.world_mut(), locale);
+        app.world_mut()
+            .resource_mut::<Files>()
+            .script
+            .preview
+            .help_view = feature::HelpView::default();
+        let language = crate::app_preferences::locale::code(locale);
+        command(app.world_mut(), &handle, Action::Demo, &ControlInput::Click).unwrap();
         widgets.begin();
         panel::paint(
             app.world_mut(),
@@ -380,46 +451,121 @@ fn native_show_me_ui_evidence_and_performance() {
         )
         .unwrap();
         widgets.finish(app.world_mut());
-        update(&mut app);
+        let deadline = Instant::now() + Duration::from_secs(45);
+        loop {
+            poll(app.world_mut());
+            let preview = &app.world().resource::<Files>().script.preview;
+            assert!(preview.error.is_none(), "{:?}", preview.error);
+            if preview.rendered == preview.revision {
+                break;
+            }
+            assert!(Instant::now() < deadline, "Localized preview timed out");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        widgets.begin();
+        panel::paint(
+            app.world_mut(),
+            camera,
+            &mut widgets,
+            1200. / 1.75,
+            760. / 1.75,
+            light,
+        )
+        .unwrap();
+        widgets.finish(app.world_mut());
+        capture(
+            &mut app,
+            &target,
+            &out.join(format!("demo-175-{language}.png")),
+        );
+        command(app.world_mut(), &handle, Action::Help, &ControlInput::Click).unwrap();
+        for _ in 0..3 {
+            widgets.begin();
+            panel::paint(
+                app.world_mut(),
+                camera,
+                &mut widgets,
+                1200. / 1.75,
+                760. / 1.75,
+                light,
+            )
+            .unwrap();
+            widgets.finish(app.world_mut());
+            update(&mut app);
+        }
+        capture(
+            &mut app,
+            &target,
+            &out.join(format!("help-175-{language}-top.png")),
+        );
+        let clip = widgets.entity("extrude-help-body").unwrap();
+        let back = widgets.entity("lesson-play").unwrap();
+        let clip_node = app.world().get::<ComputedNode>(clip).unwrap();
+        let clip_center = app
+            .world()
+            .get::<bevy::ui::UiGlobalTransform>(clip)
+            .unwrap()
+            .translation;
+        let back_node = app.world().get::<ComputedNode>(back).unwrap();
+        let back_center = app
+            .world()
+            .get::<bevy::ui::UiGlobalTransform>(back)
+            .unwrap()
+            .translation;
+        assert!(
+            clip_center.y + clip_node.size.y / 2. + 8. <= back_center.y - back_node.size.y / 2.,
+            "{language}: Help stays above fixed navigation"
+        );
+        let text = widgets.entity("extrude-help-text").unwrap();
+        let actual_clip = app
+            .world()
+            .get::<bevy::ui::CalculatedClip>(text)
+            .expect("Help text must inherit a real clipping region")
+            .rects()
+            .expect("Help is visible")
+            .iter()
+            .map(|clip| {
+                clip.world_to_clip_local
+                    .inverse()
+                    .transform_point2(clip.rect.max)
+                    .y
+            })
+            .fold(f32::INFINITY, f32::min);
+        assert!(actual_clip <= back_center.y - back_node.size.y / 2. - 8.);
+        command(
+            app.world_mut(),
+            &handle,
+            Action::HelpBody,
+            &ControlInput::Key(limo_cad_interface::KeyChord::plain("End")),
+        )
+        .unwrap();
+        widgets.begin();
+        panel::paint(
+            app.world_mut(),
+            camera,
+            &mut widgets,
+            1200. / 1.75,
+            760. / 1.75,
+            light,
+        )
+        .unwrap();
+        widgets.finish(app.world_mut());
+        capture(
+            &mut app,
+            &target,
+            &out.join(format!("help-175-{language}-bottom.png")),
+        );
+        let text_node = app.world().get::<ComputedNode>(text).unwrap();
+        let text_center = app
+            .world()
+            .get::<bevy::ui::UiGlobalTransform>(text)
+            .unwrap()
+            .translation;
+        assert!(
+            text_center.y + text_node.size.y / 2. <= actual_clip + 1.,
+            "{language}: End reveals the final instruction"
+        );
     }
-    capture(&mut app, &target, &out.join("help-175-top.png"));
-    let clip = widgets.entity("extrude-help-body").unwrap();
-    let back = widgets.entity("extrude-help-back").unwrap();
-    let clip_node = app.world().get::<ComputedNode>(clip).unwrap();
-    let clip_center = app
-        .world()
-        .get::<bevy::ui::UiGlobalTransform>(clip)
-        .unwrap()
-        .translation;
-    let back_node = app.world().get::<ComputedNode>(back).unwrap();
-    let back_center = app
-        .world()
-        .get::<bevy::ui::UiGlobalTransform>(back)
-        .unwrap()
-        .translation;
-    assert!(
-        clip_center.y + clip_node.size.y / 2. + 8. <= back_center.y - back_node.size.y / 2.,
-        "Help has a real clipped reading region above its fixed return action"
-    );
-    command(
-        app.world_mut(),
-        &handle,
-        Action::HelpBody,
-        &ControlInput::Key(limo_cad_interface::KeyChord::plain("End")),
-    )
-    .unwrap();
-    widgets.begin();
-    panel::paint(
-        app.world_mut(),
-        camera,
-        &mut widgets,
-        1200. / 1.75,
-        760. / 1.75,
-        light,
-    )
-    .unwrap();
-    widgets.finish(app.world_mut());
-    capture(&mut app, &target, &out.join("help-175-bottom.png"));
     let mut idle_ns = vec![];
     for open in [true, false] {
         if !open {
@@ -453,7 +599,7 @@ fn native_show_me_ui_evidence_and_performance() {
             .footprint(),
         (0, 0)
     );
-    let report = json!({"scope":"windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization", "prepare_ms":prepare_ms,"cold_frame_ms":cold_ms,"cold_gpu_jobs":jobs,"warm_replay_ms":warm_ms,"warm_gpu_jobs":0,"cached_frames":footprint.0,"cached_rgba_bytes":footprint.1,"texture_budget_bytes":16*1024*1024,"paused_poll_ns":idle_ns[0],"closed_poll_ns":idle_ns[1],"idle_poll_samples":100_000,"idle_preview_wakes":0,"closed_cached_bytes":0,"durations_ms":durations});
+    let report = json!({"lesson":id,"scope":"windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization", "prepare_ms":prepare_ms,"cold_frame_ms":cold_ms,"cold_gpu_jobs":jobs,"warm_replay_ms":warm_ms,"warm_gpu_jobs":0,"cached_frames":footprint.0,"cached_rgba_bytes":footprint.1,"texture_budget_bytes":16*1024*1024,"paused_poll_ns":idle_ns[0],"closed_poll_ns":idle_ns[1],"idle_poll_samples":100_000,"idle_preview_wakes":0,"closed_cached_bytes":0,"durations_ms":durations});
     std::fs::write(
         out.join("performance.json"),
         serde_json::to_vec_pretty(&report).unwrap(),

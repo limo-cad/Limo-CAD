@@ -121,6 +121,13 @@ fn native_script_preview_tabs_after_extrude_in_the_production_ribbon() {
     assert_eq!(
         handle.focused_key(),
         Some(limo_cad_interface::ControlKey(
+            hint.entity("cut-show-me").unwrap().to_bits()
+        ))
+    );
+    handle.focus_next(false).unwrap();
+    assert_eq!(
+        handle.focused_key(),
+        Some(limo_cad_interface::ControlKey(
             controls["revolve"].to_bits()
         ))
     );

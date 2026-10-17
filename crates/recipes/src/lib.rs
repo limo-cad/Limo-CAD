@@ -17,9 +17,9 @@ pub const RECIPES: &[Recipe] = &[
     Recipe {
         id: "extrude-basics",
         source: include_str!("../../../examples/scripts/extrude-basics.limo.jsonc"),
-        summary: "Select a closed rectangle, set a 12 mm distance and apply an editable extrusion.",
+        summary: "Build one angle bracket through Sketch, Extrude and Cut examples, then recreate the complete editable part.",
         kind: "lesson",
-        focus_operations: &["solid_extrude"],
+        focus_operations: &["sketch_begin", "solid_extrude", "solid_edit_extrude"],
         preview: true,
     },
     Recipe {

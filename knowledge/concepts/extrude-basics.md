@@ -1,18 +1,16 @@
 ---
 type: Concept
-title: Extrude a closed profile
-description: Turn a finished sketch profile into an editable solid.
+title: Extrude
+description: Give the completed L-profile its width.
 status: stable
 updated: 2026-10-16
-topics: sketch, solid, extrude
-keywords: extrude, profile, distance, new body, thickness
+topics: sketch, extrude, cut
+keywords: bracket, extrude
 related_recipes: extrude-basics
 ---
 
-Finish a sketch containing a closed outline. Choose Extrude in the Model ribbon and select the profile you want to use.
+1. Use the completed L-profile from Sketch. Choose Extrude in the Model ribbon, then select the profile.
 
-Set the distance, check the direction, and choose New body to create a separate solid. In this example a 40 by 24 mm rectangle becomes a 12 mm thick block.
+2. Choose Create Body and a distance of 20 mm. Check the direction and Apply.
 
-Choose Apply to commit. Cancel leaves the design unchanged. Edit the extrusion in History to change its depth later; edit the sketch to change its footprint.
-
-If no profile is available, finish the active sketch and check for gaps or overlapping lines. The miniature demo uses a separate example, so replaying it leaves your current design and script draft intact.
+3. Edit the sketch to change the L-section; edit the extrusion to change its width. Creating the sketch belongs to the linked Sketch example.

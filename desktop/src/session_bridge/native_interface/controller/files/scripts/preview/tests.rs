@@ -154,6 +154,71 @@ fn native_script_preview_high_dpi_layout_respects_the_bounded_renderer() {
 }
 
 #[test]
+fn native_script_preview_all_connected_stages_retain_independent_profiles() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let source = &catalog::examples()
+        .iter()
+        .find(|example| example.id == lesson::RECIPE)
+        .unwrap()
+        .source;
+    for id in lesson::ALL {
+        let frames = prepare_lesson(source, Some(id)).unwrap();
+        assert_eq!(frames.len(), if id == lesson::Id::Cut { 4 } else { 5 });
+        for frame in &frames {
+            if let Some(profile) = &frame.profile {
+                assert!(
+                    profile.projected_edges.is_empty() && profile.reference_midpoints.is_empty()
+                );
+            }
+        }
+        let retained = Retained::new(Arc::new(PreviewService::default()), frames).unwrap();
+        assert!(!retained.descriptor.captions.is_empty());
+    }
+}
+
+#[test]
+fn native_script_preview_help_entry_is_localized_dormant_and_restores_the_draft() {
+    let mut world = world();
+    world.init_resource::<ViewportUiAssets>();
+    world.resource_mut::<Files>().scripts = false;
+    world.resource_mut::<Files>().script.editor_open = true;
+    let handle = NativeInterfaceHandle::new(|| {});
+    command(&mut world, &handle, Action::Index, &ControlInput::Click).unwrap();
+    let camera = world.spawn_empty().id();
+    let mut widgets = super::super::super::super::chrome::Widgets::default();
+    let theme = crate::native_viewport::ui::theme(&world);
+    for locale in crate::app_preferences::locale::SUPPORTED {
+        crate::native_viewport::localization::set_locale(&mut world, locale);
+        widgets.begin();
+        panel::paint(&mut world, camera, &mut widgets, 700., 440., theme).unwrap();
+        widgets.finish(&mut world);
+        for id in lesson::ALL {
+            assert!(widgets.entity(&format!("help-{}", id.key())).is_some());
+        }
+        for id in lesson::ALL {
+            command(&mut world, &handle, Action::Read(id), &ControlInput::Click).unwrap();
+            widgets.begin();
+            panel::paint(&mut world, camera, &mut widgets, 700., 440., theme).unwrap();
+            widgets.finish(&mut world);
+            let text = widgets.entity("extrude-help-text").unwrap();
+            assert_eq!(
+                world.get::<Text>(text).unwrap().0,
+                feature::help(id, lesson::language(&world))
+            );
+            let preview = &world.resource::<Files>().script.preview;
+            assert!(
+                preview.build.is_none() && preview.render.is_none() && preview.retained.is_none()
+            );
+            assert_eq!(preview.render_jobs, 0);
+        }
+        command(&mut world, &handle, Action::Index, &ControlInput::Click).unwrap();
+    }
+    command(&mut world, &handle, Action::Close, &ControlInput::Click).unwrap();
+    let files = world.resource::<Files>();
+    assert!(!files.scripts && files.script.editor_open);
+}
+
+#[test]
 fn native_script_preview_cached_replay_arms_every_frame_without_gpu_completion_wakes() {
     let mut world = world();
     let (view, _, _) = retained(&mut world);
@@ -257,7 +322,7 @@ fn native_script_preview_extrude_preserves_dirty_source_and_help_does_not_advanc
         .recv_timeout(Duration::from_secs(10))
         .unwrap()
         .unwrap();
-    assert_eq!(frames.len(), 7);
+    assert_eq!(frames.len(), 5);
     let preview = &mut world.resource_mut::<Files>().script.preview;
     preview.retained = Some(Retained::new(preview.service.clone(), frames).unwrap());
     assert!(preview.playing);

@@ -1,0 +1,37 @@
+{
+  "capture": "Windowless production Bevy widgets and real isolated CAD preview renderer; not an OS screen recording. Hint uses a native anchor fixture; production ribbon traversal is separately regression tested.",
+  "animation": "Three lesson clips, 5/5/4 captured frames at descriptor timings; cropped and downsampled with shared GIF palettes.",
+  "native_capture_size": [
+    864,
+    1200
+  ],
+  "ui_scale": 2,
+  "localized_capture_size": [
+    1200,
+    760
+  ],
+  "localized_ui_scale": 1.75,
+  "source_sha256_lf": {
+    "crates/help/src/lessons.json": "81577618255fe2f111f5153786a7144c4b1412929805a8716e1afcbc3538bad2",
+    "crates/help/src/lessons.rs": "18f359ec95cdecc0f888c6a9f8843265f4c3065fbbd011d056944c2ca8e9b6b1",
+    "crates/help/src/lib.rs": "668521ba76fcecf383584ad12ed4187b9bf09514d0dd8ae7dbca8a6b24789f30",
+    "desktop/src/native_viewport/interface_shell.rs": "8a5346d4c89c594ddfe32d12ac94db40f3c2ff5d68dec093a125ac6166c600c6",
+    "desktop/src/native_viewport/script_preview.rs": "d797ceb87bd090209dc31c3b66bfa47b74b48d2763a4933ae79fc75d7055ae5d",
+    "desktop/src/native_viewport/ui/font_tests.rs": "e3c970682e26ae20fce59fe296650a57e56a15ee5197f4908c008a0afe0069cf",
+    "desktop/src/native_viewport/ui.rs": "98e57cbd6c66e555fdf56264715764e9f2181213ddbeaa880a5b5fc8dc45de28",
+    "desktop/src/session_bridge/native_interface/controller/files/panel.rs": "ce5d28c799a6d9918a5eb530ddb6d4d392946b25837d6c97d9e3dc6bc4334eb0",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/card.rs": "b68d2e7279914fc1b4e73462cb11d6177e411d68f9f70cab2616755e779c7738",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/evidence.rs": "c60c1240d40e498d566cf09f6ef430f9f4d13dc03c7eea33165ce76a7927e754",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/feature.rs": "c18e4ed300d3d5e182be0d3804a777dcc1f72ec7ee4ac051fb87d40a5924c485",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/hover.rs": "f2885eb10f8b8d1c313601d1417a8ee5a021929b451ddc3b5c0a0ff1422deeed",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/images.rs": "58fe7942c67f90e226c0e45932d691ca8fa258b1f4337c4efd2e160be40d8955",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/input.rs": "01a52660b444edb5dbf9131318f43bdac34dc3b85d10906f21dd37d8db0d0bf5",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/lesson.rs": "885f8f9c25d072f3c44f8727ec59b08db7ccf0ff632f742c40b7413f5a021d57",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/panel.rs": "a44cd4d4e4d70f62c1e78c11484841985057c3674a6c9760afe05267b3ed3615",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/tests.rs": "94c1f867df639ed8d00e4ce11fac5436dcfddff9e2946c7348f4f4f2d7cf6ac9",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs": "1c24fc0ce3fe87ddd9867e5bb535de1288537fa99b13b1d120c514da89f71f54",
+    "desktop/src/session_bridge/native_interface/controller/workbench/ribbon_menu/localization_tests.rs": "2fef28a3ba867ee015b32b61b2233d160339d291a907d36b1092ae6afbaf4d63",
+    "examples/scripts/extrude-basics.limo.jsonc": "a9b22b71987221b990c2c2ca7379bacccf66e8ebfda4814002f8c734fed24d44",
+    "mcp-server/src/lesson_tests.rs": "d93310c81e259ccf4ec52e1bb4ea64b2c4e47f323de4c106c7526c11163144f6"
+  }
+}

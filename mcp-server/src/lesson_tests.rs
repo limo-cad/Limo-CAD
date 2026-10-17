@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn extrude_demo_replays_real_geometry_and_shares_help() {
+fn bracket_lessons_share_one_editable_build_and_localized_help() {
     let recipe = limo_cad_recipes::find("extrude-basics").unwrap();
     let mut server = CadServer::new().unwrap();
     let report = server
@@ -12,35 +12,63 @@ fn extrude_demo_replays_real_geometry_and_shares_help() {
         .unwrap();
     assert_eq!(
         report["summary"]["bodies"][0]["size"],
-        json!([40., 24., 12.])
+        json!([40., 20., 30.])
     );
-    let frames = report["exports"]["preview_frames"].as_array().unwrap();
-    assert_eq!(frames.len(), 7);
-    assert!(frames[0]["scene"]["bodies"].as_array().unwrap().is_empty());
-    assert!(frames[0]["profile"]["entities"].as_array().unwrap().len() >= 4);
-    for (frame, depth) in frames[2..6].iter().zip([3., 6., 9., 12.]) {
-        let positions = frame["scene"]["bodies"][0]["mesh"]["positions"]
+    let lessons = &report["exports"]["lessons"];
+    assert_eq!(lessons["sketch"].as_array().unwrap().len(), 5);
+    assert_eq!(lessons["extrude"].as_array().unwrap().len(), 5);
+    assert_eq!(lessons["cut"].as_array().unwrap().len(), 4);
+    assert_eq!(
+        lessons["sketch"][4]["profile"],
+        lessons["extrude"][0]["profile"]
+    );
+    assert_eq!(lessons["extrude"][4]["scene"], lessons["cut"][0]["scene"]);
+    assert_eq!(
+        lessons["cut"][0]["profile"]["entities"]
             .as_array()
-            .unwrap();
-        let top = positions
-            .as_chunks::<3>()
-            .0
+            .unwrap()
             .iter()
-            .map(|p| p[2].as_f64().unwrap())
-            .fold(f64::NEG_INFINITY, f64::max);
-        assert!((top - depth).abs() < 1e-6);
-    }
+            .filter(|entity| entity["kind"] == "circle")
+            .count(),
+        1
+    );
+    assert_ne!(lessons["cut"][0]["scene"], lessons["cut"][3]["scene"]);
+    let body = &report["exports"]["final_scene"]["bodies"][0];
+    assert!(body["faces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| f["cylinder"]["radius"] == 3.));
+    let openings: Vec<_> = body["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["circle"]["closed"] == true && e["circle"]["radius"] == 3.)
+        .map(|e| e["circle"]["center"]["x"].as_f64().unwrap())
+        .collect();
+    assert!(openings.iter().any(|x| x.abs() < 1e-6));
+    assert!(openings.iter().any(|x| (*x - 5.).abs() < 1e-6));
+    let saved = report["exports"]["final_model"].clone();
+    let mut reopened = CadServer::new().unwrap();
+    reopened
+        .call_tool(
+            "cad_load_project_model",
+            json!({"model_json":saved.to_string()}),
+        )
+        .unwrap();
     let replay = preview_script(recipe.source).unwrap();
     assert_eq!(
         report["exports"]["final_model"],
         replay["exports"]["final_model"]
     );
-    let help = help_page("concepts.extrude-basics").unwrap();
-    assert!(help["related_recipes"]
-        .as_array()
-        .unwrap()
-        .contains(&json!(recipe.id)));
-    assert!(help["body"].as_str().unwrap().contains("12 mm"));
+    for id in lessons::ALL {
+        for language in lessons::LOCALES {
+            let help = help_page_localized(id.help(), language).unwrap();
+            assert_eq!(help["title"], id.title(language));
+            assert_eq!(help["body"], lessons::page(language, id).body);
+            assert_eq!(help["demonstrations"], json!([id]));
+        }
+    }
 }
 
 #[test]

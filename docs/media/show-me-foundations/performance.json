@@ -1,0 +1,90 @@
+{
+  "sketch": {
+    "cached_frames": 5,
+    "cached_rgba_bytes": 4108480,
+    "closed_cached_bytes": 0,
+    "closed_poll_ns": 948.309,
+    "cold_frame_ms": [
+      1587.8086,
+      226.8253,
+      281.1152,
+      236.84810000000002,
+      220.86169999999998
+    ],
+    "cold_gpu_jobs": 5,
+    "durations_ms": [
+      1400,
+      1400,
+      1400,
+      1400,
+      1400
+    ],
+    "idle_poll_samples": 100000,
+    "idle_preview_wakes": 0,
+    "lesson": "sketch",
+    "paused_poll_ns": 1045.472,
+    "prepare_ms": 199.7365,
+    "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+    "texture_budget_bytes": 16777216,
+    "warm_gpu_jobs": 0,
+    "warm_replay_ms": 0.017471
+  },
+  "extrude": {
+    "cached_frames": 5,
+    "cached_rgba_bytes": 4108480,
+    "closed_cached_bytes": 0,
+    "closed_poll_ns": 1017.468,
+    "cold_frame_ms": [
+      1435.5509,
+      749.2173,
+      251.1461,
+      220.081,
+      223.8826
+    ],
+    "cold_gpu_jobs": 5,
+    "durations_ms": [
+      1400,
+      500,
+      500,
+      1400,
+      1400
+    ],
+    "idle_poll_samples": 100000,
+    "idle_preview_wakes": 0,
+    "lesson": "extrude",
+    "paused_poll_ns": 1044.53,
+    "prepare_ms": 80.4358,
+    "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+    "texture_budget_bytes": 16777216,
+    "warm_gpu_jobs": 0,
+    "warm_replay_ms": 0.016097
+  },
+  "cut": {
+    "cached_frames": 4,
+    "cached_rgba_bytes": 3286784,
+    "closed_cached_bytes": 0,
+    "closed_poll_ns": 923.787,
+    "cold_frame_ms": [
+      1897.7838,
+      232.8448,
+      225.0474,
+      227.2905
+    ],
+    "cold_gpu_jobs": 4,
+    "durations_ms": [
+      1400,
+      1400,
+      1400,
+      1400
+    ],
+    "idle_poll_samples": 100000,
+    "idle_preview_wakes": 0,
+    "lesson": "cut",
+    "paused_poll_ns": 843.155,
+    "prepare_ms": 84.16460000000001,
+    "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+    "texture_budget_bytes": 16777216,
+    "warm_gpu_jobs": 0,
+    "warm_replay_ms": 0.012899
+  }
+}

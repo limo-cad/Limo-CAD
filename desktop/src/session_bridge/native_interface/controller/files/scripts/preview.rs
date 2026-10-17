@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 mod card;
 mod feature;
+mod hover;
 mod images;
 mod input;
 mod lesson;
@@ -27,6 +28,10 @@ const FRAME_DELAY: Duration = Duration::from_millis(1800);
 pub(crate) enum Action {
     Open,
     Extrude,
+    Lesson(limo_cad_mcp::lessons::Id),
+    Read(limo_cad_mcp::lessons::Id),
+    Index,
+    FullBuild,
     Help,
     HelpBody,
     Demo,
@@ -114,6 +119,9 @@ pub(crate) struct State {
     return_to: Option<(bool, bool, bool, bool)>,
     help: bool,
     help_view: feature::HelpView,
+    lesson: Option<lesson::Id>,
+    index_open: bool,
+    transition: Option<Retained>,
     focus_owner: Option<DocumentContext>,
 }
 pub(in super::super) fn cancel_pointer(world: &mut World) {
@@ -152,6 +160,9 @@ impl Default for State {
             return_to: None,
             help: false,
             help_view: feature::HelpView::default(),
+            lesson: None,
+            index_open: false,
+            transition: None,
             focus_owner: None,
         }
     }
@@ -207,10 +218,27 @@ fn eligible(state: &super::State) -> Result<&'static catalog::Example, String> {
     Ok(example)
 }
 
+#[cfg(test)]
 fn prepare(source: &str) -> Result<Vec<Frame>, String> {
+    prepare_lesson(source, None)
+}
+fn prepare_lesson(source: &str, lesson: Option<lesson::Id>) -> Result<Vec<Frame>, String> {
     let mut report = limo_cad_mcp::preview_script(source)?;
-    serde_json::from_value(report["exports"]["preview_frames"].take())
-        .map_err(|error| format!("Preview frames are unavailable: {error}"))
+    let frames = match lesson {
+        Some(lesson) => report["exports"]["lessons"][lesson.key()].take(),
+        None => report["exports"]["preview_frames"].take(),
+    };
+    let mut frames: Vec<Frame> = serde_json::from_value(frames)
+        .map_err(|error| format!("Preview frames are unavailable: {error}"))?;
+    for frame in &mut frames {
+        if let Some(profile) = &mut frame.profile {
+            // Face sketches carry passive snapping aids. The isolated viewer
+            // draws authored entities against the owned solid, without snapping.
+            profile.projected_edges.clear();
+            profile.reference_midpoints.clear();
+        }
+    }
+    Ok(frames)
 }
 
 fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String> {
@@ -223,28 +251,51 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
 }
 
 fn open_extrude(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String> {
+    open_lesson(world, handle, Some(lesson::Id::Extrude), false)
+}
+fn open_lesson(
+    world: &mut World,
+    handle: &NativeInterfaceHandle,
+    id: Option<lesson::Id>,
+    help: bool,
+) -> Result<(), String> {
     available(world)?;
     editor::retain_source_error(world);
-    if world.resource::<Files>().script.preview.open {
-        return Err("Close the current lesson preview first".into());
+    if world.resource::<Files>().script.preview.building() {
+        return Err("Wait for the current example to finish preparing".into());
     }
     let example = catalog::examples()
         .iter()
-        .find(|example| example.id == lesson::EXTRUDE.recipe)
+        .find(|example| example.id == lesson::RECIPE)
         .ok_or("The Extrude example is unavailable")?;
     let files = world.resource::<Files>();
-    let previous = (
+    let previous = files.script.preview.return_to.unwrap_or((
         files.scripts,
         files.script.editor_open,
         files.script.library.open,
         files.script.chapters.open,
-    );
+    ));
     let generation = files.script.generation;
-    start(world, handle, example.source.clone(), generation)?;
+    let transition = world.resource_mut::<Files>().script.preview.retained.take();
+    if help {
+        close(world);
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.open = true;
+        preview.help = true;
+        preview.generation = generation;
+    } else {
+        start_lesson(world, handle, example.source.clone(), generation, id)?;
+    }
     let files = &mut world.resource_mut::<Files>();
+    files.script.editor_open = false;
+    files.script.library.open = false;
     files.script.chapters.open = false;
     files.script.preview.return_to = Some(previous);
-    files.script.preview.playing = true;
+    files.script.preview.playing = !help;
+    files.script.preview.lesson = id;
+    files.script.preview.index_open = id.is_none();
+    files.script.preview.transition = if help { None } else { transition };
+    files.script.preview.help_view = feature::HelpView::default();
     files.script.preview.focus_owner = handle.presented_context();
     Ok(())
 }
@@ -254,6 +305,15 @@ fn start(
     handle: &NativeInterfaceHandle,
     source: String,
     generation: u64,
+) -> Result<(), String> {
+    start_lesson(world, handle, source, generation, None)
+}
+fn start_lesson(
+    world: &mut World,
+    handle: &NativeInterfaceHandle,
+    source: String,
+    generation: u64,
+    lesson: Option<lesson::Id>,
 ) -> Result<(), String> {
     let state = &world.resource::<Files>().script;
     let revision = state
@@ -267,11 +327,10 @@ fn start(
     std::thread::Builder::new()
         .name("cad-preview-prepare".into())
         .spawn(move || {
-            let result =
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| prepare(&source)))
-                    .unwrap_or_else(|_| {
-                        Err("Lesson preview preparation stopped unexpectedly".into())
-                    });
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                prepare_lesson(&source, lesson)
+            }))
+            .unwrap_or_else(|_| Err("Lesson preview preparation stopped unexpectedly".into()));
             let _ = send.send(result);
             wake.request_redraw();
         })
@@ -300,6 +359,9 @@ fn close(world: &mut World) {
         preview.help = false;
         preview.focus_owner = None;
         preview.retained = None;
+        preview.transition = None;
+        preview.lesson = None;
+        preview.index_open = false;
         preview.playing = false;
         preview.wake = None;
         preview.drag = None;
@@ -348,6 +410,17 @@ pub(crate) fn command(
     }
     if action == Action::Open {
         open(world, handle)?;
+    } else if action == Action::Demo && world.resource::<Files>().script.preview.retained.is_none()
+    {
+        let id = world.resource::<Files>().script.preview.lesson;
+        open_lesson(world, handle, id, false)?;
+    } else if let Action::Lesson(id) | Action::Read(id) = action {
+        open_lesson(world, handle, Some(id), matches!(action, Action::Read(_)))?;
+    } else if action == Action::Index {
+        open_lesson(world, handle, None, true)?;
+    } else if action == Action::FullBuild {
+        let _ = command(world, handle, Action::Close, &ControlInput::Click)?;
+        super::catalog::open_recipe(world, lesson::RECIPE)?;
     } else if action == Action::Extrude {
         open_extrude(world, handle)?;
     } else if action == Action::Close {
@@ -570,6 +643,7 @@ pub(super) fn poll(world: &mut World) {
                 Ok(retained) => preview.retained = Some(retained),
                 Err(error) => preview.error = Some(error),
             }
+            preview.transition = None;
         }
     }
     if let Some(result) = receive(&world.resource::<Files>().script.preview.render) {
