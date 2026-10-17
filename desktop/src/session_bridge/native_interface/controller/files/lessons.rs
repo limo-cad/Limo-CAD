@@ -87,6 +87,33 @@ pub(super) fn start_source_with_options(
     Ok(())
 }
 
+/// Adopt only this running lesson's committed baseline, before presentation
+/// observation and before the runner is allowed to submit the first step.
+pub(super) fn acknowledge_replay_baseline(
+    world: &mut World,
+    services: &NativeServices,
+    source_generation: u64,
+    handoff: &super::super::super::workspace::ReplayBaselineHandoff,
+) -> Result<(), String> {
+    let files = world.resource::<Files>();
+    let running = files
+        .lesson
+        .as_ref()
+        .ok_or("The replay lesson is no longer running")?;
+    if files.script.generation != source_generation
+        || running.source_generation != source_generation
+        || running.owner != handoff.previous().owner
+    {
+        return Err("The replay source or lesson owner changed before acknowledgement".into());
+    }
+    super::super::presentation::adopt_replay_owner(world, services, handoff, |world| {
+        // No fallible work remains after playback transfer. World is exclusively
+        // borrowed, so the validated lesson cannot disappear between these updates.
+        world.resource_mut::<Files>().lesson.as_mut().unwrap().owner =
+            handoff.successor().owner.clone();
+    })
+}
+
 pub(super) fn poll(world: &mut World, services: &NativeServices) {
     let result = world
         .resource::<Files>()
@@ -168,5 +195,115 @@ mod tests {
             before,
             fixture.engine.engine_call("project_export_model", "")
         );
+    }
+    #[test]
+    fn baseline_acknowledgement_updates_only_matching_lesson_and_exact_successor() {
+        let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+        for stale_revision in [false, true] {
+            let fixture = super::super::super::super::tests::Fixture::new();
+            let services = NativeServices {
+                engine: fixture.engine.clone(),
+                bridge: fixture.bridge.clone(),
+            };
+            let workspace = Arc::new(Mutex::new(DocumentWorkspace::default()));
+            let initial = workspace
+                .lock()
+                .unwrap()
+                .observe(&fixture.bridge, &fixture.engine, "main")
+                .unwrap();
+            let mut world = World::new();
+            initialize(&mut world, workspace.clone());
+            let generation = world.resource::<Files>().script.generation;
+            let (_send, receive) = mpsc::channel();
+            world.resource_mut::<Files>().lesson = Some(Running {
+                owner: initial.owner.clone(),
+                source_generation: generation,
+                result: Mutex::new(receive),
+            });
+            let handle = NativeInterfaceHandle::new(|| {});
+            super::super::super::presentation::request(
+                &mut world,
+                &handle,
+                &services,
+                &initial.owner,
+                &json!({"command":"configure","mode":"present"}),
+            )
+            .unwrap();
+            super::super::super::presentation::request(
+                &mut world,
+                &handle,
+                &services,
+                &initial.owner,
+                &json!({"command":"stop"}),
+            )
+            .unwrap();
+            let archive = limo_cad_project_file::ProjectArchive::new(
+                fixture
+                    .engine
+                    .project_snapshot()
+                    .unwrap()
+                    .model_json()
+                    .to_owned(),
+                SaveMetadata {
+                    application_version: "test",
+                    saved_at: "2026-10-17T00:00:00Z",
+                },
+            )
+            .unwrap();
+            let (_, handoff) = workspace
+                .lock()
+                .unwrap()
+                .load_replay_baseline_guarded(
+                    &fixture.bridge,
+                    &fixture.engine,
+                    &initial,
+                    archive,
+                    || Ok(()),
+                )
+                .unwrap();
+            assert!(acknowledge_replay_baseline(
+                &mut world,
+                &services,
+                generation.wrapping_add(1),
+                &handoff
+            )
+            .is_err());
+            assert_eq!(
+                world.resource::<Files>().lesson.as_ref().unwrap().owner,
+                initial.owner
+            );
+            if stale_revision {
+                fixture
+                    .rename(&handoff.successor().owner, "Changed after commit")
+                    .unwrap();
+                assert!(
+                    acknowledge_replay_baseline(&mut world, &services, generation, &handoff)
+                        .is_err()
+                );
+                assert_eq!(
+                    world.resource::<Files>().lesson.as_ref().unwrap().owner,
+                    initial.owner
+                );
+            } else {
+                acknowledge_replay_baseline(&mut world, &services, generation, &handoff).unwrap();
+                assert_eq!(
+                    world.resource::<Files>().lesson.as_ref().unwrap().owner,
+                    handoff.successor().owner
+                );
+                let status = super::super::super::presentation::request(
+                    &mut world,
+                    &handle,
+                    &services,
+                    &handoff.successor().owner,
+                    &json!({"command":"status"}),
+                )
+                .unwrap();
+                assert_eq!(status["presentation"]["stopped"], true);
+                assert!(
+                    acknowledge_replay_baseline(&mut world, &services, generation, &handoff)
+                        .is_err()
+                );
+            }
+        }
     }
 }

@@ -21,6 +21,21 @@ pub(crate) struct DocumentReceipt {
     pub revision: u64,
 }
 
+/// In-process evidence produced only after guarded baseline commit and archive
+/// adoption. Never construct this from a transport response or active-tab lookup.
+pub(crate) struct ReplayBaselineHandoff {
+    previous: DocumentReceipt,
+    successor: DocumentReceipt,
+}
+impl ReplayBaselineHandoff {
+    pub(crate) fn previous(&self) -> &DocumentReceipt {
+        &self.previous
+    }
+    pub(crate) fn successor(&self) -> &DocumentReceipt {
+        &self.successor
+    }
+}
+
 struct Tab {
     owner: DocumentContext,
     file_epoch: u64,
@@ -495,7 +510,7 @@ impl DocumentWorkspace {
         expected: &DocumentReceipt,
         archive: ProjectArchive,
         validate: impl FnOnce() -> Result<(), String>,
-    ) -> Result<NativeMutationResult, String> {
+    ) -> Result<(NativeMutationResult, ReplayBaselineHandoff), String> {
         let tab = self
             .tabs
             .iter()
@@ -517,7 +532,14 @@ impl DocumentWorkspace {
             Ok(())
         })?;
         result.value["replay_baseline_loaded"] = json!(true);
-        Ok(result)
+        let handoff = ReplayBaselineHandoff {
+            previous: expected.clone(),
+            successor: DocumentReceipt {
+                owner: result.context.clone(),
+                revision: result.engine_revision,
+            },
+        };
+        Ok((result, handoff))
     }
 
     fn adopt_archive_guarded(

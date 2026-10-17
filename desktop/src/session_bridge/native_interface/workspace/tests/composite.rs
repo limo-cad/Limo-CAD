@@ -296,11 +296,14 @@ fn replay_baseline_stays_dirty_and_pathless_until_save_as() {
     let initial = observe(&mut workspace, &fixture);
     let archive = replay_archive(&fixture);
     let retained = archive.encode().unwrap();
-    let loaded = workspace
+    let (loaded, handoff) = workspace
         .load_replay_baseline_guarded(&fixture.bridge, &fixture.engine, &initial, archive, || {
             Ok(())
         })
         .unwrap();
+    assert_eq!(handoff.previous(), &initial);
+    assert_eq!(handoff.successor().owner, loaded.context);
+    assert_eq!(handoff.successor().revision, loaded.engine_revision);
     assert_ne!(loaded.context, initial.owner);
     assert_eq!(loaded.value["replay_baseline_loaded"], true);
     assert!(loaded.value.get("opened").is_none());

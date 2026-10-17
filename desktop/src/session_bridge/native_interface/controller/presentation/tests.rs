@@ -490,3 +490,85 @@ fn presentation_pace_and_camera_duration_use_the_same_configuration() {
     .unwrap();
     assert_eq!(motion_duration(&world, &owner, 500), 500);
 }
+
+#[test]
+fn replay_transfer_preserves_playback_and_rejects_unrelated_owners() {
+    let now = Instant::now();
+    let old = DocumentContext {
+        window_id: "main".into(),
+        document_id: "replay".into(),
+        epoch: 7,
+    };
+    let next = DocumentContext {
+        epoch: 12,
+        ..old.clone()
+    };
+    for stopped in [false, true] {
+        let mut playback = Playback::default();
+        playback.observe(&old, now);
+        command(
+            &mut playback,
+            now,
+            json!({"command":"configure","mode":"present","speed":2.0,"step_count":8}),
+        )
+        .unwrap();
+        command(
+            &mut playback,
+            now,
+            json!({"command":"note","text":"Retain me","duration_ms":1000}),
+        )
+        .unwrap();
+        command(&mut playback, now, json!({"command":"pause"})).unwrap();
+        command(&mut playback, now, json!({"command":"step"})).unwrap();
+        if stopped {
+            command(&mut playback, now, json!({"command":"stop"})).unwrap();
+        }
+        let before = serde_json::to_value(&playback.state).unwrap();
+        let timing = (
+            playback.remaining_ms,
+            playback.clock,
+            playback.credits,
+            playback.pace_ms,
+        );
+        for wrong in [
+            old.clone(),
+            DocumentContext {
+                document_id: "other".into(),
+                ..next.clone()
+            },
+            DocumentContext {
+                window_id: "other".into(),
+                ..next.clone()
+            },
+            DocumentContext {
+                epoch: 6,
+                ..next.clone()
+            },
+        ] {
+            assert!(playback.transfer_replay_owner(&old, &wrong).is_err());
+            assert_eq!(playback.owner.as_ref(), Some(&old));
+            assert_eq!(serde_json::to_value(&playback.state).unwrap(), before);
+        }
+        playback.transfer_replay_owner(&old, &next).unwrap();
+        playback.observe(&next, now);
+        assert_eq!(serde_json::to_value(&playback.state).unwrap(), before);
+        assert_eq!(
+            (
+                playback.remaining_ms,
+                playback.clock,
+                playback.credits,
+                playback.pace_ms
+            ),
+            timing
+        );
+        assert!(playback.transfer_replay_owner(&old, &next).is_err());
+        playback.observe(
+            &DocumentContext {
+                epoch: 13,
+                ..next.clone()
+            },
+            now,
+        );
+        assert!(!playback.state.active && !playback.state.stopped && playback.credits == 0);
+    }
+}
