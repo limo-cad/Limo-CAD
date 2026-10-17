@@ -470,6 +470,64 @@ impl DocumentWorkspace {
             limo_cad_project_file::read_binary_file(&path).map_err(|error| error.to_string())?,
         )
         .map_err(|error| error.to_string())?;
+        let mut result = self.adopt_archive_guarded(bridge, engine, expected, archive, validate)?;
+        let tab = self
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.owner == result.context)
+            .ok_or("Opened document is unavailable")?;
+        tab.path = Some(path);
+        tab.saved = Some(DocumentReceipt {
+            owner: result.context.clone(),
+            revision: result.engine_revision,
+        });
+        result.value["opened"] = json!(true);
+        Ok(result)
+    }
+
+    /// Load a replay baseline into a clean blank document. The archive is kept
+    /// for later Save As, but replay does not acquire a project save path or
+    /// clean receipt. Playback ownership transfer belongs to the caller.
+    pub(crate) fn load_replay_baseline_guarded(
+        &mut self,
+        bridge: &SessionBridgeState,
+        engine: &AppState,
+        expected: &DocumentReceipt,
+        archive: ProjectArchive,
+        validate: impl FnOnce() -> Result<(), String>,
+    ) -> Result<NativeMutationResult, String> {
+        let tab = self
+            .tabs
+            .iter()
+            .find(|tab| tab.owner == expected.owner)
+            .ok_or("The document tab was removed or replaced")?;
+        if tab.saving.upgrade().is_some() {
+            return Err("Wait for this document's save before loading a replay baseline".into());
+        }
+        if tab.saved.as_ref() != Some(expected) {
+            return Err("Replay requires a clean blank document".into());
+        }
+        let mut result = self.adopt_archive_guarded(bridge, engine, expected, archive, || {
+            // apply_native_snapshot_at holds the owner/revision fence while
+            // invoking this callback; blankness cannot be checked earlier.
+            validate()?;
+            if !engine.is_blank_for_script() {
+                return Err("Replay requires a clean blank document".into());
+            }
+            Ok(())
+        })?;
+        result.value["replay_baseline_loaded"] = json!(true);
+        Ok(result)
+    }
+
+    fn adopt_archive_guarded(
+        &mut self,
+        bridge: &SessionBridgeState,
+        engine: &AppState,
+        expected: &DocumentReceipt,
+        archive: ProjectArchive,
+        validate: impl FnOnce() -> Result<(), String>,
+    ) -> Result<NativeMutationResult, String> {
         let snapshot = archive.snapshot().map_err(|error| error.to_string())?;
         let mut result = bridge.apply_native_snapshot_at(
             engine,
@@ -483,14 +541,11 @@ impl DocumentWorkspace {
             .tabs
             .iter_mut()
             .find(|tab| tab.owner == result.context)
-            .ok_or("Opened document is unavailable")?;
-        tab.path = Some(path);
+            .ok_or("Loaded document is unavailable")?;
         tab.archive = Some(Arc::new(Mutex::new(archive)));
-        tab.saved = Some(DocumentReceipt {
-            owner: result.context.clone(),
-            revision: result.engine_revision,
-        });
-        // File Open acknowledges a document transition. The renderer reads
+        tab.path = None;
+        tab.saved = None;
+        // Archive adoption acknowledges a document transition. The renderer reads
         // its prepared native scene separately; returning the load operation's
         // tessellated scene here duplicates it in the MCP completion envelope
         // and can make a successful large-project open exceed transport caps.
@@ -511,7 +566,7 @@ impl DocumentWorkspace {
                 Some(json!({"body_id":body["id"],"warnings":warnings}))
             })
             .collect();
-        result.value = json!({"opened":true,"body_count":body_count,
+        result.value = json!({"body_count":body_count,
             "errors":errors,"display_warnings":display_warnings});
         Ok(result)
     }
