@@ -1733,6 +1733,21 @@ impl CadServer {
             self.live_snapshot_dirty = false;
             return Ok(false);
         }
+        // Prepare fallible transport encoding before staging or committing the
+        // model. A failed refresh must not leave a new document with an old trace.
+        let baseline = match &composite {
+            Some(value) if !value.snapshot().intents().is_empty() => json!({
+                "name": "cad_load_project_snapshot",
+                "arguments": {
+                    "snapshot_cbor_base64": value.snapshot().encode_base64()
+                        .map_err(|error| error.to_string())?
+                },
+            }),
+            _ => json!({
+                "name": "cad_load_project_model",
+                "arguments": { "model_json": &model_json },
+            }),
+        };
         let plan: RecomputePlanDto = if let Some(value) = &composite {
             self.manager
                 .prepare_load_project_snapshot(value.snapshot())
@@ -1767,7 +1782,7 @@ impl CadServer {
             )
             .map_err(|e| e.to_string())?;
 
-        self.seed_script_baseline_from_model(&model_json);
+        self.seed_script_baseline(baseline);
         self.loaded_snapshot_json = Some(model_json);
         self.loaded_snapshot_intents = intents.to_vec();
         self.attached_generation = publication_generation;
@@ -1838,7 +1853,7 @@ impl CadServer {
         script_export::export_script_result(source, "lossy_session_trace", false, notes)
     }
 
-    /// Clear `tool_trace` and seed `cad_load_project_model` with the loaded model JSON.
+    /// Keep public export gated until complete native and portable replay is verified.
     fn require_complete_script_baseline(&self) -> Result<(), String> {
         if !self.manager.project_intents().is_empty() {
             return Err("Script replay does not yet carry project domain intent; save the complete project archive instead".into());
@@ -1846,14 +1861,12 @@ impl CadServer {
         Ok(())
     }
 
-    fn seed_script_baseline_from_model(&mut self, model_json: &str) {
+    /// Adopt a pre-encoded baseline only after successful model/domain commit.
+    fn seed_script_baseline(&mut self, baseline: Value) {
         self.last_script_source = None;
         self.last_script_mutations = self.modeling_mutations;
         self.tool_trace.clear();
-        self.tool_trace.push(json!({
-            "name": "cad_load_project_model",
-            "arguments": { "model_json": model_json },
-        }));
+        self.tool_trace.push(baseline);
     }
 
     fn apply_snapshot_focus(&mut self, session_id: &str) {
