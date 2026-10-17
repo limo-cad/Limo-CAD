@@ -262,6 +262,7 @@ struct CadServer {
     /// can acknowledge without changing it; avoid replaying identical geometry.
     loaded_snapshot_json: Option<String>,
     loaded_snapshot_intents: Vec<limo_cad_project_file::SnapshotIntent>,
+    loaded_publication: Option<limo_cad_project_file::PublicationReceipt>,
     /// A completed UI transition whose snapshot could not be loaded. Model
     /// commands remain blocked until an explicit attach/refresh succeeds.
     failed_attachment: Option<AttachmentFailure>,
@@ -318,6 +319,7 @@ impl CadServer {
             attached_generation: None,
             loaded_snapshot_json: None,
             loaded_snapshot_intents: Vec::new(),
+            loaded_publication: None,
             failed_attachment: None,
             pending_recompute_transaction: None,
             tool_trace: Vec::new(),
@@ -836,6 +838,7 @@ impl CadServer {
                 self.attached_generation = None;
                 self.loaded_snapshot_json = None;
                 self.loaded_snapshot_intents.clear();
+                self.loaded_publication = None;
                 self.live_snapshot_dirty = false;
                 if let Some(binding) = &mut self.desktop_binding {
                     binding.initial_selection_pending = false;
@@ -1715,7 +1718,22 @@ impl CadServer {
         session_id: &str,
         skip_unchanged: bool,
     ) -> Result<bool, String> {
-        let composite = session::read_composite_publication(session_id)?;
+        self.load_snapshot_model_checked(session_id, skip_unchanged, None)
+    }
+
+    fn load_snapshot_model_checked(
+        &mut self,
+        session_id: &str,
+        skip_unchanged: bool,
+        expected: Option<&limo_cad_project_file::PublicationReceipt>,
+    ) -> Result<bool, String> {
+        let composite = match expected {
+            Some(receipt) if receipt.session_id == session_id => {
+                Some(session::read_replay_publication(receipt)?)
+            }
+            Some(_) => return Err("Replay publication route differs from its successor".into()),
+            None => session::read_composite_publication(session_id)?,
+        };
         let publication_generation = composite
             .as_ref()
             .map(|value| value.receipt().engine_revision)
@@ -1731,6 +1749,7 @@ impl CadServer {
             && self.loaded_snapshot_json.as_deref() == Some(model_json.as_str())
             && self.loaded_snapshot_intents == intents
         {
+            self.loaded_publication = composite.as_ref().map(|value| value.receipt().clone());
             self.attached_generation = publication_generation;
             self.live_snapshot_dirty = false;
             return Ok(false);
@@ -1774,6 +1793,12 @@ impl CadServer {
                 ));
             }
         };
+        if let Some(expected) = expected {
+            if let Err(error) = session::require_current_replay_publication(expected) {
+                self.manager.cancel_solid_recompute(transaction_id);
+                return Err(error);
+            }
+        }
         self.manager
             .commit_solid_with_verified_supports(
                 CommitKernelRequest {
@@ -1785,6 +1810,7 @@ impl CadServer {
             .map_err(|e| e.to_string())?;
 
         self.seed_script_baseline(baseline);
+        self.loaded_publication = composite.as_ref().map(|value| value.receipt().clone());
         self.loaded_snapshot_json = Some(model_json);
         self.loaded_snapshot_intents = intents.to_vec();
         self.attached_generation = publication_generation;

@@ -165,3 +165,115 @@ mod tests {
         assert!(error.contains("belongs to"), "{error}");
     }
 }
+
+impl crate::CadServer {
+    /// Called only by the project replay host after its admitted baseline has
+    /// returned an exact successor publication receipt. Ordinary interface and
+    /// inbox replacement paths keep their existing stop-on-replacement guards.
+    pub(super) fn adopt_replay_successor(
+        &mut self,
+        previous: &limo_cad_project_file::PublicationReceipt,
+        successor: &limo_cad_project_file::PublicationReceipt,
+    ) -> Result<(), String> {
+        if !self.script_running
+            || self.failed_attachment.is_some()
+            || self.attached_document_id.as_deref() != Some(previous.session_id.as_str())
+            || self.loaded_publication.as_ref() != Some(previous)
+            || self.attached_generation != Some(previous.engine_revision)
+        {
+            return Err("Replay no longer owns its original loaded publication".into());
+        }
+        validate_successor(previous, successor)?;
+        if let Err(error) =
+            self.load_snapshot_model_checked(&successor.session_id, false, Some(successor))
+        {
+            self.failed_attachment = Some(crate::AttachmentFailure {
+                session_id: successor.session_id.clone(),
+                error: error.clone(),
+            });
+            return Err(error);
+        }
+        self.attached_document_id = Some(successor.session_id.clone());
+        self.apply_snapshot_focus(&successor.session_id);
+        Ok(())
+    }
+}
+
+fn validate_successor(
+    previous: &limo_cad_project_file::PublicationReceipt,
+    successor: &limo_cad_project_file::PublicationReceipt,
+) -> Result<(), String> {
+    if successor.process_instance_id != previous.process_instance_id
+        || successor.window_id != previous.window_id
+        || successor.document_id != previous.document_id
+        || successor.session_id == previous.session_id
+        || successor.epoch <= previous.epoch
+        || successor.engine_revision == 0
+        || successor.export_sequence == 0
+    {
+        return Err(
+            "Replay baseline did not acknowledge a successor of its original document".into(),
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod successor_tests {
+    use super::*;
+    use limo_cad_project_file::PublicationReceipt;
+    fn original() -> PublicationReceipt {
+        PublicationReceipt {
+            process_instance_id: "process".into(),
+            session_id: "old".into(),
+            window_id: "main".into(),
+            document_id: "document".into(),
+            epoch: 3,
+            engine_revision: 5,
+            export_sequence: 9,
+        }
+    }
+    #[test]
+    fn only_same_document_new_publisher_can_be_a_replay_successor() {
+        let old = original();
+        let next = PublicationReceipt {
+            session_id: "next".into(),
+            epoch: 7,
+            engine_revision: 1,
+            export_sequence: 1,
+            ..old.clone()
+        };
+        validate_successor(&old, &next).unwrap();
+        for case in 0..8 {
+            let mut bad = next.clone();
+            match case {
+                0 => bad.process_instance_id = "other".into(),
+                1 => bad.window_id = "other".into(),
+                2 => bad.document_id = "other".into(),
+                3 => bad.session_id = old.session_id.clone(),
+                4 => bad.epoch = old.epoch,
+                5 => bad.epoch = 2,
+                6 => bad.engine_revision = 0,
+                _ => bad.export_sequence = 0,
+            }
+            assert!(validate_successor(&old, &bad).is_err(), "{case}");
+        }
+    }
+    #[test]
+    fn successor_adoption_cannot_start_outside_an_owned_run() {
+        let mut server = crate::CadServer::new().unwrap();
+        let old = original();
+        let next = PublicationReceipt {
+            session_id: "next".into(),
+            epoch: 7,
+            engine_revision: 1,
+            export_sequence: 1,
+            ..old.clone()
+        };
+        let before = server.manager.export_project_snapshot().unwrap();
+        assert!(server.adopt_replay_successor(&old, &next).is_err());
+        assert!(server.attached_document_id.is_none());
+        assert!(server.loaded_publication.is_none());
+        assert_eq!(server.manager.export_project_snapshot().unwrap(), before);
+    }
+}
