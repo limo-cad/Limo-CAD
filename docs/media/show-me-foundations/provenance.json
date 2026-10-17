@@ -1,7 +1,7 @@
 {
   "capture": "Windowless production Bevy widgets and real isolated CAD preview renderer; not an OS screen recording. Hint uses a native anchor fixture; production ribbon traversal is separately regression tested.",
   "animation": "Four lessons and two Cut choices, 5/5/4/4/4 captured user-paced steps assembled at descriptor timings; cropped and downsampled with shared GIF palettes.",
-  "local_test_executable_sha256": "2692ba3668202e2da973e0d921aef3f9f4a90cb559a8b4ff64196fbce3d51856",
+  "local_test_executable_sha256": "55deef243316748183bec26fe2a1144faff95d04ec169e42dd618290e7b3cb76",
   "local_test_linker": "MSVC /DEBUG:NONE on the test executable only; Rust debug assertions and optimization unchanged",
   "native_capture_size": [
     864,
@@ -59,27 +59,28 @@
   "source_sha256_lf": {
     "assets/i18n/de.json": "40e8e036162c67d48941281cbaf58f4f67e7001ffc068e6c1e173581555ae5db",
     "assets/i18n/es.json": "b38302808d83bbb49a1fc04f519540f15c8477e396cc81bd995456d63c111667",
-    "crates/help/src/lessons.json": "ee9901e353a38d633e5dd7259d670b2dcaa9941b3b76724ed8427b70a5d056c2",
-    "crates/help/src/lessons.rs": "a725ac6e7c4eef148b811b789545020cff518e55374187a2e71920a9853688b9",
+    "crates/help/src/lessons.json": "b1613819c34733100e98e5f6e9ba738618cbdb2be9a3ddec19c30a89d924cf9f",
+    "crates/help/src/lessons.rs": "71287439c7cfebd08aa3f48e5b6f61275ddf4c15f12e799cca5e8c89906bf202",
     "crates/help/src/lib.rs": "668521ba76fcecf383584ad12ed4187b9bf09514d0dd8ae7dbca8a6b24789f30",
     "crates/recipes/src/lib.rs": "cd11d23a3c0c717712d05b8acaff3cc1d7fbb7280178ee0b763d0938ac7293a0",
     "desktop/src/native_viewport/interface_shell.rs": "8a5346d4c89c594ddfe32d12ac94db40f3c2ff5d68dec093a125ac6166c600c6",
     "desktop/src/native_viewport/script_preview/dimension_visibility.rs": "f42674fceb03a8c99740bc877b5e97de474481155e6d1b4eb01e128eeb00eb90",
-    "desktop/src/native_viewport/script_preview.rs": "da4325283b3cf4b38fc12f9c43ab555a3ce99eec0fe7320fc9cac3b8e09a0209",
+    "desktop/src/native_viewport/script_preview.rs": "c57a7abffccc70d56d9ac5387477e4244b21ce6c1417b4ee00cd95f7f3d72e20",
     "desktop/src/native_viewport/ui/font_tests.rs": "e3c970682e26ae20fce59fe296650a57e56a15ee5197f4908c008a0afe0069cf",
     "desktop/src/native_viewport/ui.rs": "98e57cbd6c66e555fdf56264715764e9f2181213ddbeaa880a5b5fc8dc45de28",
     "desktop/src/session_bridge/native_interface/controller/files/panel.rs": "ce5d28c799a6d9918a5eb530ddb6d4d392946b25837d6c97d9e3dc6bc4334eb0",
     "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/card.rs": "7477c05db577b64e9fca6ed308f0fcbd35fe20ff5a213ed07a85305a5ab571d7",
-    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/evidence.rs": "3525607dd4269ec9080d8f7810f0236ca95090f9bdfc5177118d2d46cbb2fb72",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/evidence.rs": "94493b3aeb3a5ef1f493a344789b2fccd134dc1a250d4f47e05f16066587be30",
     "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/feature.rs": "50334efc8c12404dc5a3ce8c4f4304fd32aa17cb211273279495b66aef4aba96",
     "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/hover.rs": "f2885eb10f8b8d1c313601d1417a8ee5a021929b451ddc3b5c0a0ff1422deeed",
     "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/images.rs": "bcbb987cb3bc0188a810aa95c801dd12f70c6280571088ece0101a3e4781b816",
-    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/input.rs": "01a52660b444edb5dbf9131318f43bdac34dc3b85d10906f21dd37d8db0d0bf5",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/input.rs": "09b6eedeac5e5f53bbf7f657797ac1ed4d2b17700f117fc61c665ab89e16d91c",
     "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/lesson.rs": "13a4aa68cd4076891b63b78d8f2916c076d41ef3adc94b6a1c2db3415a561dc6",
-    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/panel.rs": "001a0d2f12d586a6908f2a831a1b601dec6a22e1b619449cbb966c71545444db",
-    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/steps.rs": "d6011bf2804439e3539c9fe0c01ceae7799f3ed8a8fd32a891a0638d083d3b4d",
-    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/tests.rs": "923390e3a16bb6cf29408b2ebc7faabe07a4c8a80784fd8f163df704132e6968",
-    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs": "1adfd07f26a5720d5be4c8bcd5c845ba854870015a9ece203995dbccabd1b691",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/panel.rs": "80e07d7751d93be20814bec73c42819b76903cf321d66fd5b916223c7abd5b39",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/prepared.rs": "fed8078302b94b85f6172c6ca5026521bb5df5d6a1e3af4329805d152a495d4d",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/steps.rs": "007606dfca88ceb6ef2016fb1a80d3bb4207f587867794f0faa69f4143679034",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/tests.rs": "00b1d2256586710a826bb9ec45ab2bb3d57aa8261524ec639937c1fc1e3bbf6d",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs": "cec77ded7b2ef411bc6cdb4b4713cac00fd9cce739a8e42bbd99248a214bd48c",
     "desktop/src/session_bridge/native_interface/controller/workbench/ribbon_menu/localization_tests.rs": "5b6536e09e2ef9dd4f10921020bcae6e493940b88992fb2de3be095bff6337d6",
     "examples/scripts/extrude-basics.limo.jsonc": "9346e79bd42002314e0c29fc50daefcbe260b4dd7b70dc2e1bd3f71dd4b45513",
     "knowledge/concepts/bracket-cut.md": "f7b3238c0ccd497608ab92f05726d92d54f96f73297c6553424d43f7ac401848",
@@ -95,5 +96,6 @@
       "crates/sketch/src/params.rs": "5984fe4d2a0ee80e9583e0efe77b8d08f56c07d7dd502e0442fa6a1fff098c55",
       "crates/sketch/tests/expr_params.rs": "4b5b92f7cdedbac12230e679dd50e054764d64063c48b4a3ce68c22e2ce07ad3"
     }
-  }
+  },
+  "navigation_animation": "Three production native captures: final Fillet frame, expanded chooser, then selected edges frame; assembled illustration of navigation, not recorded pointer input."
 }

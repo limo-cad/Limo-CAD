@@ -16,6 +16,69 @@ use std::{path::Path, sync::atomic::AtomicUsize};
 #[derive(Resource, Default)]
 struct Capture(Option<Vec<u8>>);
 
+fn process_memory() -> Value {
+    let Ok(pid) = sysinfo::get_current_pid() else {
+        return Value::Null;
+    };
+    let mut system = sysinfo::System::new();
+    system.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::Some(&[pid]),
+        true,
+        sysinfo::ProcessRefreshKind::nothing().with_memory(),
+    );
+    system.process(pid).map_or(Value::Null, |process| {
+        json!({"resident_bytes":process.memory(),
+            "virtual_memory_bytes":process.virtual_memory(),
+            "virtual_memory_semantics":if cfg!(windows) { "Windows private bytes" } else { "sysinfo virtual memory" },
+            "scope":"whole test process; GPU dedicated memory excluded"})
+    })
+}
+
+fn lifecycle(world: &mut World, handle: &NativeInterfaceHandle, id: lesson::Id) -> Value {
+    let service = world.resource::<Files>().script.preview.service.clone();
+    let prepared = world.resource::<Files>().script.preview.prepared.clone();
+    let before = prepared.lock().unwrap().metrics();
+    assert_eq!((before.0, before.1), (0, 1));
+    let constructions = service.renderer_constructions();
+    assert_eq!(constructions, 1, "One renderer serves the entire lesson");
+    let closed_memory = process_memory();
+    let mut timings = vec![];
+    let other = if id == lesson::Id::Sketch {
+        lesson::Id::Extrude
+    } else {
+        lesson::Id::Sketch
+    };
+    for lesson in [id, other, id] {
+        let begin = Instant::now();
+        command(world, handle, Action::Lesson(lesson), &ControlInput::Click).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(45);
+        loop {
+            poll(world);
+            let preview = &world.resource::<Files>().script.preview;
+            assert!(preview.error.is_none(), "{:?}", preview.error);
+            if preview.build.is_none()
+                && preview.image.is_some()
+                && preview.rendered == preview.revision
+            {
+                break;
+            }
+            assert!(Instant::now() < deadline, "Controller reopen timed out");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        timings.push(begin.elapsed().as_secs_f64() * 1000.);
+        assert_eq!(service.renderer_constructions(), constructions);
+        command(world, handle, Action::Close, &ControlInput::Click).unwrap();
+    }
+    let after = prepared.lock().unwrap().metrics();
+    assert_eq!((after.0, after.1, after.2), (2, 2, 2));
+    json!({"reopen_same_lesson_ms":timings[0], "open_other_lesson_ms":timings[1],
+        "return_to_first_lesson_ms":timings[2], "renderer_constructions":constructions,
+        "authored_cache_hits":after.0,"authored_cache_misses":after.1,
+        "authored_cache_entries":after.2,"authored_cache_serialized_bytes":after.3,
+        "closed_memory_before_reopen":closed_memory,"closed_memory_after_reopen":process_memory(),
+        "scope":"actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"})
+}
+
 fn update(app: &mut App) {
     app.update();
     app.world()
@@ -322,47 +385,62 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         &ControlInput::Click,
     )
     .unwrap();
-    let prepared = Instant::now();
-    let frames = prepare_lesson(
-        &catalog::examples()
-            .iter()
-            .find(|e| e.id == lesson::RECIPE)
-            .unwrap()
-            .source,
-        Some(id),
+    let memory_before = process_memory();
+    let controller_open = Instant::now();
+    command(
+        app.world_mut(),
+        &handle,
+        Action::Lesson(id),
+        &ControlInput::Click,
     )
     .unwrap();
-    let prepare_ms = prepared.elapsed().as_secs_f64() * 1000.;
-    let service = app
+    app.world_mut()
+        .resource_mut::<Files>()
+        .script
+        .preview
+        .scenario = scenario;
+    widgets.begin();
+    panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
+    widgets.finish(app.world_mut());
+    let deadline = Instant::now() + Duration::from_secs(45);
+    while app
         .world()
         .resource::<Files>()
         .script
         .preview
-        .service
-        .clone();
-    let retained = Retained::new(service, frames).unwrap();
-    let durations = if id == lesson::Id::Cut {
+        .build
+        .is_some()
+    {
+        poll(app.world_mut());
+        assert!(
+            Instant::now() < deadline,
+            "Controller preparation timed out"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let prepare_ms = controller_open.elapsed().as_secs_f64() * 1000.;
+    let preview = &app.world().resource::<Files>().script.preview;
+    assert!(preview.error.is_none(), "{:?}", preview.error);
+    let retained = preview
+        .retained
+        .as_ref()
+        .expect("Controller retains lesson");
+    let durations: Vec<_> = if id == lesson::Id::Cut {
         (0..4)
             .map(|index| retained.descriptor.durations_ms[scenario.frame(index)])
             .collect()
     } else {
         retained.descriptor.durations_ms.clone()
     };
-    {
-        let files = &mut app.world_mut().resource_mut::<Files>();
-        files.scripts = true;
-        files.script.preview.open = true;
-        files.script.preview.lesson = Some(id);
-        files.script.preview.scenario = scenario;
-        files.script.preview.return_to = Some((false, false, false, false));
-        files.script.preview.retained = Some(retained);
-    }
+    let mut first_open_ms = 0.;
     let mut cold_ms = vec![];
     for index in 0..durations.len() {
         {
             let preview = &mut app.world_mut().resource_mut::<Files>().script.preview;
             preview.index = index;
-            preview.changed().unwrap();
+            if index != 0 {
+                preview.changed().unwrap();
+            }
         }
         widgets.begin();
         panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
@@ -380,6 +458,9 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             std::thread::sleep(Duration::from_millis(2));
         }
         cold_ms.push(begin.elapsed().as_secs_f64() * 1000.);
+        if index == 0 {
+            first_open_ms = controller_open.elapsed().as_secs_f64() * 1000.;
+        }
         app.world_mut()
             .resource_mut::<Files>()
             .script
@@ -389,6 +470,18 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
         widgets.finish(app.world_mut());
         let primary = widgets.entity("scripts-preview-primary").unwrap();
+        let all_steps = widgets.entity("lesson-all-steps").unwrap();
+        assert_eq!(
+            app.world()
+                .get::<InterfaceControl>(all_steps)
+                .unwrap()
+                .expanded,
+            Some(false)
+        );
+        assert_eq!(
+            app.world().get::<Node>(all_steps).unwrap().border,
+            UiRect::all(px(1.))
+        );
         assert_eq!(
             app.world()
                 .get::<NativeCommandBinding>(primary)
@@ -526,8 +619,21 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
     widgets.finish(app.world_mut());
     assert!(widgets.entity("scripts-preview-model").is_none());
+    assert!(widgets.entity("scripts-preview-primary").is_none());
+    assert!(widgets.entity("scripts-preview-caption").is_none());
+    let all_steps = widgets.entity("lesson-all-steps").unwrap();
+    assert_eq!(
+        app.world()
+            .get::<InterfaceControl>(all_steps)
+            .unwrap()
+            .expanded,
+        Some(true)
+    );
     for index in 0..durations.len() {
-        assert!(widgets.entity(&format!("lesson-step-{index}")).is_some());
+        let step = widgets.entity(&format!("lesson-step-{index}")).unwrap();
+        assert!(
+            matches!(app.world().get::<Node>(step).unwrap().height, Val::Px(height) if height >= 32.)
+        );
     }
     capture(&mut app, &target, &out.join("all-steps.png"));
     for index in 0..durations.len() {
@@ -828,6 +934,9 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     );
     let report = json!({"lesson":id,"scope":"windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization", "prepare_ms":prepare_ms,"cold_frame_ms":cold_ms,"cold_gpu_jobs":jobs,"warm_replay_ms":warm_ms,"warm_gpu_jobs":0,"cached_frames":footprint.0,"cached_rgba_bytes":footprint.1,"texture_budget_bytes":16*1024*1024,"paused_poll_ns":idle_ns[0],"closed_poll_ns":idle_ns[1],"idle_poll_samples":100_000,"idle_preview_wakes":0,"closed_cached_bytes":0,"durations_ms":durations});
     let mut report = report;
+    report["controller_first_open_ms"] = json!(first_open_ms);
+    report["memory_before_controller_open"] = memory_before;
+    report["lifecycle"] = lifecycle(app.world_mut(), &handle, id);
     report["scenario"] = json!(scenario);
     report["scenario_cached_frames"] = json!(scenario_cached_frames);
     report["warm_scenario_gpu_jobs"] = if scenario_cached_frames.is_some() {

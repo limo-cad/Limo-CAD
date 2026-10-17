@@ -78,6 +78,33 @@ fn native_script_preview_step_navigation_pauses_and_rejects_invalid_targets() {
         state.revision, revision,
         "Expanding steps does not invalidate pixels"
     );
+    command(
+        &mut world,
+        &handle,
+        Action::StepsPage(true),
+        &ControlInput::Click,
+    )
+    .unwrap();
+    assert_eq!(world.resource::<Files>().script.preview.steps_page, Some(1));
+    assert_eq!(world.resource::<Files>().script.preview.revision, revision);
+    command(
+        &mut world,
+        &handle,
+        Action::StepsPage(false),
+        &ControlInput::Click,
+    )
+    .unwrap();
+    assert_eq!(world.resource::<Files>().script.preview.steps_page, Some(0));
+    command(&mut world, &handle, Action::Steps, &ControlInput::Click).unwrap();
+    assert!(world.resource::<Files>().script.preview.steps_return_focus);
+    assert!(command(
+        &mut world,
+        &handle,
+        Action::StepsPage(true),
+        &ControlInput::Click
+    )
+    .is_err());
+    command(&mut world, &handle, Action::Steps, &ControlInput::Click).unwrap();
     assert!(command(&mut world, &handle, Action::Step(3), &ControlInput::Click).is_err());
     assert_eq!(world.resource::<Files>().script.preview.index, 0);
     command(&mut world, &handle, Action::Step(2), &ControlInput::Click).unwrap();

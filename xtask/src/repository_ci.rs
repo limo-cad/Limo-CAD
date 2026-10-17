@@ -149,6 +149,10 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             "native_show_me_ui_evidence_and_performance",
             &["native_show_me_ui_evidence_and_performance"],
         )),
+        "show-me-lifecycle" => Ok((
+            "native_script_preview_reopen_reuses_renderer_and_recovers_disconnected_worker",
+            &["native_script_preview_reopen_reuses_renderer_and_recovers_disconnected_worker"],
+        )),
         _ => bail!(
             "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit, extrude-preview or show-me-ui"
         ),
@@ -350,6 +354,7 @@ mod tests {
             "sketch-commit",
             "extrude-preview",
             "show-me-ui",
+            "show-me-lifecycle",
         ] {
             let (filter, expected) = native_ignored_suite(suite).unwrap();
             let inventory = expected

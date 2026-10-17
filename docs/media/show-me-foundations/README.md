@@ -10,19 +10,30 @@ The five GIFs sequence real production Bevy component captures of the user-paced
 
 Access: hover Create Sketch, Extrude or Fillet for 700 ms; keyboard focus reveals the hint immediately. Extrude offers both Extrude and Cut. The top-bar Help index uses the same teaching catalog, with written instructions in English, Simplified Chinese, Spanish and German. Help explains both Cut choices; returning to the demonstration preserves the selected choice. Full build opens the bundled `extrude-basics` recipe in Scripts using its existing save/run safeguards.
 
-Performance: no CAD or preview GPU work starts on hover or read-only Help. First opening prepares isolated geometry and renders on demand; warm replay reuses textures. Switching Cut choices reuses the retained model, with six distinct cached frames after both choices are warmed. A 100-round switch/replay check submits zero additional render jobs. `performance.json` records debug controller timings, not whole-app utilization; `cached_rgba_bytes` describes the initially captured choice, and `scenario_cached_frames` describes the warmed pair. The 16 MiB cap covers decoded cached RGBA, not every renderer allocation. Close clears the image cache.
+The outlined **All steps** button separates navigation from the step count and exposes its expanded state to accessibility tools. The chooser uses action labels, fixed 32 px targets and bounded pages for longer lessons. Playback controls disappear while choosing. Escape returns to the model with focus on All steps; a second Escape closes the lesson.
+
+Performance: no CAD or preview GPU work starts on hover or read-only Help. The first opening allocates one isolated renderer on its worker. It survives closing and reopening and parks without updates or timers while idle. Ordinary cancellation fences late captures without rebuilding the device; genuine rendering failures rebuild it, and a disconnected worker retries once. Closing a view sends no redundant worker message.
+
+Exact bundled lesson snapshots are cached per host, with at most four entries and 16 MiB of serialized payload including source. Edited scripts bypass this cache. Displayed image textures still clear on close, avoiding cross-lesson image reuse. Their separate 16 MiB bound covers decoded RGBA. Neither bound includes the renderer/device, retained scene, allocator overhead or temporary clones. Allocation remains lazy: preallocating a device during startup would compete with startup and would not warm lesson-specific pipelines.
+
+Warm replay and Cut-choice switching reuse textures. `performance.json` records component measurements in the debug test profile, not whole-app utilization. `controller_first_open_ms` measures the actual controller open through first image; `lifecycle` measures same-lesson reopen, another lesson, and returning to the first, with renderer construction counts and snapshot-cache hits. Memory observations cover the entire test process and exclude dedicated GPU memory; Windows virtual-memory values are private bytes. `cold_frame_ms[0]` is only the remaining wait after asynchronous preparation, not a standalone first-open measurement.
 
 Reproduce with a graphics adapter, the configured OCCT SDK and the registered Cargo build lane:
 
 ```powershell
 $env:LIMO_CAD_SHOW_ME_PROOF_DIR = '<fresh directory>'
 cargo xtask ci native-ignored-test show-me-ui
+cargo xtask ci native-ignored-test show-me-lifecycle
 $env:LIMO_CAD_PREVIEW_PROOF_DIR = '<fresh geometry directory>'
 cargo xtask ci native-ignored-test extrude-preview
 ```
 
 The first command captures all four operations and both Cut choices in dark/light English views and four localized light views, including a fit check for every localized instruction, high-scale Help clipping, scroll-to-end and missing-glyph checks. The geometry check compares selected Fillet edges against an unselected control, blind and through outcomes, the prepared circle against the same solid without a profile, and aluminum against default matte shading. CI retains full-resolution captures. Committed images are cropped; GIFs are downsampled to 504 x 681 using a common palette per clip. `provenance.json` records LF-normalized source hashes. Media budget: 8 MiB.
 
-This Windows capture used `cargo rustc --locked --manifest-path desktop/Cargo.toml --lib --profile test -- -C link-arg=/DEBUG:NONE` to avoid writing the large optional MSVC debug database on the constrained build disk. The compiled test executable ran 24 preview/ribbon tests and both ignored GPU suites directly, after exact 24/1/1 inventory checks. Rust debug assertions and optimization are unchanged. The standard CI commands above continue to use their normal build settings.
+This Windows capture used `cargo rustc --locked --manifest-path desktop/Cargo.toml --lib --profile test -- -C link-arg=/DEBUG:NONE` to avoid writing the large optional MSVC debug database on the constrained build disk. The compiled executable passed 30 preview/ribbon tests plus the queue and immutable-geometry checks, the native UI capture suite and the renderer lifecycle suite. Strict desktop Clippy passed. Help and CI-tooling tests passed; the corrected translation checks were rerun after the final text repair. Rust debug assertions and optimization are unchanged. CI uses its normal build settings.
+
+Observed controller cold opens were 1.98–3.81 seconds; same-lesson reopen was 119–362 ms across five variants, with one renderer constructed per host. The isolated renderer diagnostic measured 2.09 seconds cold and 104–106 ms on reopen. Its process working set rose from 18.7 MiB to 319.8 MiB after closing the first preview, remaining about 320.2 MiB after two reopens. This retained baseline is a real memory cost, not part of either 16 MiB cache budget. These are single debug-run observations, not release performance guarantees. See `renderer-lifecycle.json` and `performance.json`.
+
+`step-navigation.gif` assembles native captures of the final Fillet frame, the expanded chooser and the selected-edge frame. It illustrates the interaction states rather than recording pointer input.
 
 The trail captures also include the expanded sequence in all four locales at 175%. A warmed jump through every step adds no render jobs. The capture checkout retained concurrent PR436 sketch parameter fixes; their source hashes are recorded separately in provenance and those changes are not included in this PR.

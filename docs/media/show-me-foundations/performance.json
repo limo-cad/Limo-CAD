@@ -3,15 +3,16 @@
     "cached_frames": 5,
     "cached_rgba_bytes": 4448000,
     "closed_cached_bytes": 0,
-    "closed_poll_ns": 1313.704,
+    "closed_poll_ns": 1139.462,
     "cold_frame_ms": [
-      1238.0303,
-      135.90869999999998,
-      155.8862,
-      152.6362,
-      156.3476
+      1229.0312999999999,
+      145.84,
+      170.4068,
+      173.3791,
+      159.327
     ],
     "cold_gpu_jobs": 5,
+    "controller_first_open_ms": 1977.5674,
     "durations_ms": [
       1400,
       1400,
@@ -22,29 +23,59 @@
     "idle_poll_samples": 100000,
     "idle_preview_wakes": 0,
     "lesson": "sketch",
-    "paused_poll_ns": 1010.075,
-    "prepare_ms": 646.9264000000001,
+    "lifecycle": {
+      "authored_cache_entries": 2,
+      "authored_cache_hits": 2,
+      "authored_cache_misses": 2,
+      "authored_cache_serialized_bytes": 141523,
+      "closed_memory_after_reopen": {
+        "resident_bytes": 587739136,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 958963712,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "closed_memory_before_reopen": {
+        "resident_bytes": 586993664,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 951492608,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "open_other_lesson_ms": 1038.286,
+      "renderer_constructions": 1,
+      "reopen_same_lesson_ms": 118.83340000000001,
+      "return_to_first_lesson_ms": 115.5821,
+      "scope": "actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"
+    },
+    "memory_before_controller_open": {
+      "resident_bytes": 355012608,
+      "scope": "whole test process; GPU dedicated memory excluded",
+      "virtual_memory_bytes": 499949568,
+      "virtual_memory_semantics": "Windows private bytes"
+    },
+    "paused_poll_ns": 1363.919,
+    "prepare_ms": 747.1913999999999,
     "scenario": "through_all",
     "scenario_cached_frames": null,
     "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
     "texture_budget_bytes": 16777216,
     "warm_gpu_jobs": 0,
-    "warm_replay_ms": 0.017497,
+    "warm_replay_ms": 0.021657000000000003,
     "warm_scenario_gpu_jobs": null
   },
   "extrude": {
     "cached_frames": 5,
     "cached_rgba_bytes": 4448000,
     "closed_cached_bytes": 0,
-    "closed_poll_ns": 887.978,
+    "closed_poll_ns": 1065.608,
     "cold_frame_ms": [
-      1445.1739,
-      655.8239,
-      190.9611,
-      202.96030000000002,
-      202.879
+      1543.2871000000002,
+      890.7428,
+      242.4192,
+      257.52750000000003,
+      260.61830000000003
     ],
     "cold_gpu_jobs": 5,
+    "controller_first_open_ms": 2344.2567,
     "durations_ms": [
       1400,
       500,
@@ -55,28 +86,58 @@
     "idle_poll_samples": 100000,
     "idle_preview_wakes": 0,
     "lesson": "extrude",
-    "paused_poll_ns": 823.777,
-    "prepare_ms": 783.6206,
+    "lifecycle": {
+      "authored_cache_entries": 2,
+      "authored_cache_hits": 2,
+      "authored_cache_misses": 2,
+      "authored_cache_serialized_bytes": 141523,
+      "closed_memory_after_reopen": {
+        "resident_bytes": 624250880,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 1063772160,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "closed_memory_before_reopen": {
+        "resident_bytes": 632160256,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 1069752320,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "open_other_lesson_ms": 882.3524,
+      "renderer_constructions": 1,
+      "reopen_same_lesson_ms": 180.46699999999998,
+      "return_to_first_lesson_ms": 130.1746,
+      "scope": "actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"
+    },
+    "memory_before_controller_open": {
+      "resident_bytes": 494133248,
+      "scope": "whole test process; GPU dedicated memory excluded",
+      "virtual_memory_bytes": 692645888,
+      "virtual_memory_semantics": "Windows private bytes"
+    },
+    "paused_poll_ns": 1276.316,
+    "prepare_ms": 799.4995,
     "scenario": "through_all",
     "scenario_cached_frames": null,
     "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
     "texture_budget_bytes": 16777216,
     "warm_gpu_jobs": 0,
-    "warm_replay_ms": 0.017434,
+    "warm_replay_ms": 0.031974,
     "warm_scenario_gpu_jobs": null
   },
   "cut": {
     "cached_frames": 4,
     "cached_rgba_bytes": 3353088,
     "closed_cached_bytes": 0,
-    "closed_poll_ns": 907.448,
+    "closed_poll_ns": 1064.177,
     "cold_frame_ms": [
-      1797.3992,
-      217.6133,
-      209.38129999999998,
-      203.0478
+      2437.2031,
+      264.558,
+      262.08799999999997,
+      235.4253
     ],
     "cold_gpu_jobs": 4,
+    "controller_first_open_ms": 3595.3661,
     "durations_ms": [
       1400,
       1400,
@@ -86,28 +147,58 @@
     "idle_poll_samples": 100000,
     "idle_preview_wakes": 0,
     "lesson": "cut",
-    "paused_poll_ns": 984.725,
-    "prepare_ms": 647.0025,
+    "lifecycle": {
+      "authored_cache_entries": 2,
+      "authored_cache_hits": 2,
+      "authored_cache_misses": 2,
+      "authored_cache_serialized_bytes": 3104657,
+      "closed_memory_after_reopen": {
+        "resident_bytes": 660717568,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 1141342208,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "closed_memory_before_reopen": {
+        "resident_bytes": 652894208,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 1132204032,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "open_other_lesson_ms": 994.7732,
+      "renderer_constructions": 1,
+      "reopen_same_lesson_ms": 340.0477,
+      "return_to_first_lesson_ms": 382.4418,
+      "scope": "actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"
+    },
+    "memory_before_controller_open": {
+      "resident_bytes": 526069760,
+      "scope": "whole test process; GPU dedicated memory excluded",
+      "virtual_memory_bytes": 792555520,
+      "virtual_memory_semantics": "Windows private bytes"
+    },
+    "paused_poll_ns": 1239.761,
+    "prepare_ms": 1156.8373000000001,
     "scenario": "through_all",
     "scenario_cached_frames": 6,
     "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
     "texture_budget_bytes": 16777216,
     "warm_gpu_jobs": 0,
-    "warm_replay_ms": 0.015005999999999999,
+    "warm_replay_ms": 0.024794999999999998,
     "warm_scenario_gpu_jobs": 0
   },
   "cut-measured": {
     "cached_frames": 4,
     "cached_rgba_bytes": 3353088,
     "closed_cached_bytes": 0,
-    "closed_poll_ns": 921.063,
+    "closed_poll_ns": 1258.123,
     "cold_frame_ms": [
-      2268.4701999999997,
-      251.859,
-      238.3657,
-      228.24859999999998
+      2595.1555,
+      276.0376,
+      271.648,
+      246.6102
     ],
     "cold_gpu_jobs": 4,
+    "controller_first_open_ms": 3814.9502,
     "durations_ms": [
       1400,
       1400,
@@ -117,28 +208,58 @@
     "idle_poll_samples": 100000,
     "idle_preview_wakes": 0,
     "lesson": "cut",
-    "paused_poll_ns": 852.368,
-    "prepare_ms": 911.7636,
+    "lifecycle": {
+      "authored_cache_entries": 2,
+      "authored_cache_hits": 2,
+      "authored_cache_misses": 2,
+      "authored_cache_serialized_bytes": 3104657,
+      "closed_memory_after_reopen": {
+        "resident_bytes": 719765504,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 1289945088,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "closed_memory_before_reopen": {
+        "resident_bytes": 752463872,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 1320873984,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "open_other_lesson_ms": 984.7419,
+      "renderer_constructions": 1,
+      "reopen_same_lesson_ms": 362.0221,
+      "return_to_first_lesson_ms": 360.67929999999996,
+      "scope": "actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"
+    },
+    "memory_before_controller_open": {
+      "resident_bytes": 587812864,
+      "scope": "whole test process; GPU dedicated memory excluded",
+      "virtual_memory_bytes": 996298752,
+      "virtual_memory_semantics": "Windows private bytes"
+    },
+    "paused_poll_ns": 1083.446,
+    "prepare_ms": 1218.5129,
     "scenario": "measured_depth",
     "scenario_cached_frames": 6,
     "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
     "texture_budget_bytes": 16777216,
     "warm_gpu_jobs": 0,
-    "warm_replay_ms": 0.026651,
+    "warm_replay_ms": 0.014624,
     "warm_scenario_gpu_jobs": 0
   },
   "fillet": {
     "cached_frames": 4,
     "cached_rgba_bytes": 3558400,
     "closed_cached_bytes": 0,
-    "closed_poll_ns": 1042.005,
+    "closed_poll_ns": 883.057,
     "cold_frame_ms": [
-      1848.9821,
-      213.13660000000002,
-      201.1946,
-      200.52710000000002
+      2706.5762,
+      279.5005,
+      275.447,
+      274.8245
     ],
     "cold_gpu_jobs": 4,
+    "controller_first_open_ms": 3673.5312000000004,
     "durations_ms": [
       1400,
       1400,
@@ -148,14 +269,43 @@
     "idle_poll_samples": 100000,
     "idle_preview_wakes": 0,
     "lesson": "fillet",
-    "paused_poll_ns": 781.679,
-    "prepare_ms": 630.1851,
+    "lifecycle": {
+      "authored_cache_entries": 2,
+      "authored_cache_hits": 2,
+      "authored_cache_misses": 2,
+      "authored_cache_serialized_bytes": 256305,
+      "closed_memory_after_reopen": {
+        "resident_bytes": 688189440,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 1218228224,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "closed_memory_before_reopen": {
+        "resident_bytes": 689954816,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 1220112384,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "open_other_lesson_ms": 945.0122,
+      "renderer_constructions": 1,
+      "reopen_same_lesson_ms": 204.69219999999999,
+      "return_to_first_lesson_ms": 180.5542,
+      "scope": "actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"
+    },
+    "memory_before_controller_open": {
+      "resident_bytes": 498524160,
+      "scope": "whole test process; GPU dedicated memory excluded",
+      "virtual_memory_bytes": 782209024,
+      "virtual_memory_semantics": "Windows private bytes"
+    },
+    "paused_poll_ns": 1382.197,
+    "prepare_ms": 965.2859000000001,
     "scenario": "through_all",
     "scenario_cached_frames": null,
     "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
     "texture_budget_bytes": 16777216,
     "warm_gpu_jobs": 0,
-    "warm_replay_ms": 0.022691999999999997,
+    "warm_replay_ms": 0.01381,
     "warm_scenario_gpu_jobs": null
   }
 }

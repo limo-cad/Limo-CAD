@@ -1644,6 +1644,10 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
     )?;
     requires_command(lesson, "cargo xtask ci native-ignored-test extrude-preview")?;
     requires_command(lesson, "cargo xtask ci native-ignored-test show-me-ui")?;
+    requires_command(
+        lesson,
+        "cargo xtask ci native-ignored-test show-me-lifecycle",
+    )?;
     ensure!(
         lesson["if"].is_null() && lesson["continue-on-error"].is_null(),
         "Extrude GPU acceptance must execute and propagate failures"

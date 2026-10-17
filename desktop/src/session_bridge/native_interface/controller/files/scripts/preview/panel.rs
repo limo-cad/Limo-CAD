@@ -81,22 +81,60 @@ pub(crate) fn paint(
         camera,
         widgets,
         "demo",
-        image_height + choice_height + trail_height + 184.,
+        image_height + choice_height + trail_height + 192.,
         demo.map_or(t("ui.showMe"), |d| d.title(language)),
         theme,
     )?;
     let expanded = world.resource::<Files>().script.preview.steps_open;
     if expanded {
+        let label = format!("‹  {}", t("ui.hideSteps"));
+        let mut control = InterfaceControl::button("document/scripts", &label);
+        control.expanded = Some(true);
+        widgets.button(
+            world,
+            camera,
+            "lesson-all-steps",
+            control,
+            Some(&label),
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Steps)),
+            Node {
+                border: UiRect::all(px(1.)),
+                ..rect(x + 12., y + 44., w - 104., 32.)
+            },
+            None,
+            61,
+        )?;
+        widgets.button(
+            world,
+            camera,
+            "extrude-open-help",
+            InterfaceControl::button("document/scripts", t("ui.help")),
+            Some(t("ui.help")),
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Help)),
+            rect(x + w - 84., y + 44., 68., 32.),
+            None,
+            61,
+        )?;
+        widgets.text(
+            world,
+            camera,
+            "lesson-steps-heading",
+            rect(x + 16., y + 84., w - 32., 24.),
+            t("ui.chooseStep"),
+            14.,
+            61,
+        );
         steps::paint(
             world,
             camera,
             widgets,
             x + 12.,
-            y + 44.,
+            y + 112.,
             image_width,
-            image_height,
+            image_height + choice_height + trail_height + 64.,
             true,
         )?;
+        return Ok(());
     } else {
         let mut model = InterfaceControl::button(
             "document/scripts",
@@ -124,7 +162,9 @@ pub(crate) fn paint(
             None,
             61,
         )?;
-        feature::focus_control(world, entity);
+        if !world.resource::<Files>().script.preview.steps_return_focus {
+            feature::focus_control(world, entity);
+        }
         if let Some(image) = image {
             if world
                 .get::<ImageNode>(entity)
@@ -152,29 +192,49 @@ pub(crate) fn paint(
     let top = y + 54. + image_height + trail_height;
     // Keep the full sequence one action away from the local step trail.
     if demo.is_some() {
-        let label = format!(
-            "{} / {}  {}",
-            index + 1,
-            count.max(1),
-            t(if expanded {
-                "ui.hideSteps"
-            } else {
-                "ui.allSteps"
-            })
+        widgets.text(
+            world,
+            camera,
+            "lesson-step-count",
+            rect(x + 16., top, 44., 24.),
+            &format!("{} / {}", index + 1, count.max(1)),
+            12.,
+            61,
         );
-        let mut control = InterfaceControl::button("document/scripts", &label);
+        let label = format!("{}  ▾", t("ui.allSteps"));
+        let mut control = InterfaceControl::button("document/scripts", t("ui.allSteps"));
         control.disabled = !ready;
-        widgets.button(
+        control.expanded = Some(false);
+        let entity = widgets.button(
             world,
             camera,
             "lesson-all-steps",
             control,
             Some(&label),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Steps)),
-            rect(x + 8., top - 4., w - 100., 24.),
+            Node {
+                border: UiRect::all(px(1.)),
+                ..rect(x + 64., top - 4., w - 156., 32.)
+            },
             None,
             61,
         )?;
+        if world.resource::<Files>().script.preview.steps_return_focus {
+            feature::focus_control(world, entity);
+            if world
+                .resource::<Files>()
+                .script
+                .preview
+                .focus_owner
+                .is_none()
+            {
+                world
+                    .resource_mut::<Files>()
+                    .script
+                    .preview
+                    .steps_return_focus = false;
+            }
+        }
     }
     if demo.is_some() {
         widgets.button(
@@ -193,12 +253,12 @@ pub(crate) fn paint(
         world,
         camera,
         "scripts-preview-caption",
-        rect(x + 16., top + 24., w - 32., 52.),
+        rect(x + 16., top + 36., w - 32., 52.),
         &caption,
         14.,
         61,
     );
-    let buttons = top + 84.;
+    let buttons = top + 92.;
     let mut previous = InterfaceControl::button("document/scripts", t("ui.previous"));
     previous.disabled = !ready || index == 0;
     widgets.button(

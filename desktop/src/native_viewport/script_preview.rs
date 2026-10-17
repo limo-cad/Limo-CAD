@@ -11,7 +11,7 @@ use bevy::render::{
         TextureUsages,
     },
     renderer::RenderDevice,
-    view::screenshot::{Screenshot, ScreenshotCaptured},
+    view::screenshot::{Capturing, Screenshot, ScreenshotCaptured},
     RenderApp,
 };
 use bevy::window::{ExitCondition, WindowPlugin};
@@ -32,6 +32,8 @@ const MAX_DOCUMENTS: usize = 8;
 const MAX_VIEWS: usize = 8;
 pub(crate) const MAX_RENDER_SIZE: [u32; 2] = [640, 400];
 const REQUEST_LIFETIME: Duration = Duration::from_secs(20);
+const PREVIEW_CLOSED: &str = "Feature preview closed";
+const PREVIEW_TIMED_OUT: &str = "Feature preview request timed out";
 
 fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
     if let Some(message) = payload.downcast_ref::<&str>() {
@@ -374,15 +376,11 @@ impl RenderRequest {
 struct ServiceState {
     documents: VecDeque<(String, Arc<PreviewDocument>)>,
     views: HashMap<String, (u64, Arc<AtomicBool>)>,
-    worker: Option<mpsc::SyncSender<WorkerCommand>>,
+    worker: Option<mpsc::SyncSender<Box<RenderJob>>>,
 }
 
 #[derive(Default)]
 pub(crate) struct PreviewService(Mutex<ServiceState>, Arc<AtomicUsize>);
-enum WorkerCommand {
-    Render(Box<RenderJob>),
-    Release,
-}
 struct RenderJob {
     document: Arc<PreviewDocument>,
     request: RenderRequest,
@@ -412,16 +410,21 @@ impl Drop for PendingRender {
 
 fn check_request(cancelled: &AtomicBool, deadline: Instant) -> Result<(), String> {
     if cancelled.load(Ordering::Acquire) {
-        return Err("Feature preview closed".into());
+        return Err(PREVIEW_CLOSED.into());
     }
     if Instant::now() >= deadline {
         cancelled.store(true, Ordering::Release);
-        return Err("Feature preview request timed out".into());
+        return Err(PREVIEW_TIMED_OUT.into());
     }
     Ok(())
 }
 
 impl PreviewService {
+    #[cfg(test)]
+    pub(crate) fn renderer_constructions(&self) -> usize {
+        self.1.load(Ordering::Relaxed)
+    }
+
     pub fn open_view(&self) -> Result<String, String> {
         let mut state = self.0.lock().map_err(|_| "Preview cache lock poisoned")?;
         if state.views.len() >= MAX_VIEWS {
@@ -431,7 +434,6 @@ impl PreviewService {
         state
             .views
             .insert(id.clone(), (0, Arc::new(AtomicBool::new(false))));
-        self.1.fetch_add(1, Ordering::AcqRel);
         Ok(id)
     }
 
@@ -479,11 +481,6 @@ impl PreviewService {
         if let Ok(mut state) = self.0.lock() {
             if let Some((_, cancelled)) = state.views.remove(view_id) {
                 cancelled.store(true, Ordering::Release);
-                self.1.fetch_sub(1, Ordering::AcqRel);
-
-                if let Some(worker) = &state.worker {
-                    let _ = worker.try_send(WorkerCommand::Release);
-                }
             }
         }
     }
@@ -510,29 +507,40 @@ impl PreviewService {
         let cancelled = Arc::new(AtomicBool::new(false));
         let (reply, response) = mpsc::sync_channel(1);
         let deadline = Instant::now() + REQUEST_LIFETIME;
-        if state.worker.is_none() {
-            let (sender, jobs) = mpsc::sync_channel::<WorkerCommand>(2);
-            let active_views = self.1.clone();
-            std::thread::Builder::new()
-                .name("CAD feature previews".into())
-                .spawn(move || render_worker(jobs, active_views))
-                .map_err(|error| error.to_string())?;
-            state.worker = Some(sender);
-        }
         let view_id = request.view_id.clone();
         let revision = request.revision;
-        state
-            .worker
-            .as_ref()
-            .unwrap()
-            .try_send(WorkerCommand::Render(Box::new(RenderJob {
-                document,
-                request,
-                cancelled: cancelled.clone(),
-                reply,
-                deadline,
-            })))
-            .map_err(|_| "Feature preview renderer is busy; try again")?;
+        let mut command = Box::new(RenderJob {
+            document,
+            request,
+            cancelled: cancelled.clone(),
+            reply,
+            deadline,
+        });
+        // Full means backpressure; disconnected means replace and retry once.
+        for attempt in 0..2 {
+            if state.worker.is_none() {
+                let (sender, jobs) = mpsc::sync_channel::<Box<RenderJob>>(2);
+                let constructions = self.1.clone();
+                std::thread::Builder::new()
+                    .name("CAD feature previews".into())
+                    .spawn(move || render_worker(jobs, constructions))
+                    .map_err(|error| error.to_string())?;
+                state.worker = Some(sender);
+            }
+            match state.worker.as_ref().unwrap().try_send(command) {
+                Ok(()) => break,
+                Err(mpsc::TrySendError::Full(_)) => {
+                    return Err("Feature preview renderer is busy; try again".into());
+                }
+                Err(mpsc::TrySendError::Disconnected(returned)) => {
+                    state.worker = None;
+                    if attempt == 1 {
+                        return Err("Feature preview worker stopped; reopen the example".into());
+                    }
+                    command = returned;
+                }
+            }
+        }
         if let Some((_, previous)) = state.views.insert(view_id, (revision, cancelled.clone())) {
             previous.store(true, Ordering::Release);
         }
@@ -544,35 +552,46 @@ impl PreviewService {
     }
 }
 
-fn render_worker(jobs: mpsc::Receiver<WorkerCommand>, active_views: Arc<AtomicUsize>) {
+fn render_worker(jobs: mpsc::Receiver<Box<RenderJob>>, constructions: Arc<AtomicUsize>) {
+    render_worker_with(
+        jobs,
+        || {
+            let renderer = PreviewRenderer::new()?;
+            constructions.fetch_add(1, Ordering::Relaxed);
+            Ok(renderer)
+        },
+        |renderer, job| renderer.render(&job.document, &job.request, &job.cancelled, job.deadline),
+        PreviewRenderer::abort_capture,
+    );
+}
+
+// One renderer per service. Park without updates/timers until actual work arrives.
+fn render_worker_with<R>(
+    jobs: mpsc::Receiver<Box<RenderJob>>,
+    mut create: impl FnMut() -> Result<R, String>,
+    mut render: impl FnMut(&mut R, &RenderJob) -> Result<Vec<u8>, String>,
+    mut abort: impl FnMut(&mut R),
+) {
     let mut renderer = None;
-    while let Ok(command) = jobs.recv() {
-        let job = match command {
-            WorkerCommand::Release => {
-                if active_views.load(Ordering::Acquire) == 0 {
-                    renderer = None;
-                }
-                continue;
-            }
-            WorkerCommand::Render(job) => job,
-        };
+    while let Ok(job) = jobs.recv() {
         if let Err(error) = check_request(&job.cancelled, job.deadline) {
-            if active_views.load(Ordering::Acquire) == 0 {
-                renderer = None;
-            }
             let _ = job.reply.send(Err(error));
             continue;
         }
         let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
             if renderer.is_none() {
-                renderer = Some(PreviewRenderer::new()?);
+                renderer = Some(create()?);
             }
-            renderer.as_mut().unwrap().render(
-                &job.document,
-                &job.request,
-                &job.cancelled,
-                job.deadline,
-            )
+            let result = render(renderer.as_mut().unwrap(), &job);
+            if matches!(
+                result.as_ref().err().map(String::as_str),
+                Some(PREVIEW_CLOSED | PREVIEW_TIMED_OUT)
+            ) {
+                abort(renderer.as_mut().unwrap());
+            } else if result.is_err() {
+                renderer = None;
+            }
+            result
         }))
         .unwrap_or_else(|failure| {
             renderer = None;
@@ -581,10 +600,6 @@ fn render_worker(jobs: mpsc::Receiver<WorkerCommand>, active_views: Arc<AtomicUs
                 panic_message(failure)
             ))
         });
-
-        if result.is_err() || active_views.load(Ordering::Acquire) == 0 {
-            renderer = None;
-        }
         let _ = job.reply.send(result);
     }
 }
@@ -660,6 +675,21 @@ impl PreviewRenderer {
             geometry_revision: 0,
             model_key: None,
         })
+    }
+
+    fn abort_capture(&mut self) {
+        // Fence late readbacks. Submitted captures must live until Bevy retires
+        // them: its completion handler inserts Captured on the original entity.
+        // Only screenshots not yet submitted may be safely despawned here.
+        let world = self.app.world_mut();
+        *world.resource_mut::<CapturedImage>() = CapturedImage::default();
+        let pending: Vec<Entity> = world
+            .query_filtered::<Entity, (With<Screenshot>, Without<Capturing>)>()
+            .iter(world)
+            .collect();
+        for entity in pending {
+            world.despawn(entity);
+        }
     }
 
     fn update(&mut self, cancelled: &AtomicBool, deadline: Instant) -> Result<(), String> {
@@ -836,8 +866,7 @@ impl PreviewRenderer {
                 .result
                 .take();
             Ok(captured.is_some())
-        })
-        .map_err(|_| "Feature preview capture did not complete".to_owned())?;
+        })?;
         check_request(cancelled, deadline)?;
         captured.ok_or_else(|| "Feature preview capture did not complete".to_owned())?
     }
@@ -873,6 +902,128 @@ mod tests {
             height: 176,
             yaw: std::f32::consts::FRAC_PI_4,
             pitch: std::f32::consts::PI / 6.0,
+        }
+    }
+
+    #[test]
+    fn native_script_preview_cancel_fences_capture_without_destroying_inflight_entity() {
+        let mut app = bevy::app::App::new();
+        app.insert_resource(CapturedImage {
+            revision: 9,
+            result: Some(Ok(vec![1])),
+        });
+        let target = Handle::<Image>::default();
+        let queued = app
+            .world_mut()
+            .spawn(Screenshot::image(target.clone()))
+            .id();
+        let submitted = app
+            .world_mut()
+            .spawn((Screenshot::image(target.clone()), Capturing))
+            .id();
+        let mut renderer = PreviewRenderer {
+            app,
+            target,
+            size: (300, 176),
+            revision: 9,
+            geometry_revision: 0,
+            model_key: None,
+        };
+        renderer.abort_capture();
+        let world = renderer.app.world();
+        assert!(world.get_entity(queued).is_err());
+        assert!(world.get_entity(submitted).is_ok());
+        assert_eq!(world.resource::<CapturedImage>().revision, 0);
+        assert!(world.resource::<CapturedImage>().result.is_none());
+        assert_eq!(
+            renderer.revision, 9,
+            "next render must advance beyond old callback revision"
+        );
+    }
+
+    #[test]
+    fn native_script_preview_worker_reuses_after_close_and_cancel_but_recovers_failures() {
+        let (send, receive) = mpsc::sync_channel(2);
+        let creations = Arc::new(AtomicUsize::new(0));
+        let cleanups = Arc::new(AtomicUsize::new(0));
+        let count = creations.clone();
+        let cleaned = cleanups.clone();
+        let worker = std::thread::spawn(move || {
+            render_worker_with(
+                receive,
+                || {
+                    count.fetch_add(1, Ordering::Relaxed);
+                    Ok(())
+                },
+                |_, job| match job.request.revision {
+                    2 => Err(PREVIEW_CLOSED.into()),
+                    3 => Err(PREVIEW_TIMED_OUT.into()),
+                    4 => Err("Feature preview GPU wait failed: injected".into()),
+                    6 => panic!("injected renderer failure"),
+                    _ => Ok(vec![1]),
+                },
+                |_| {
+                    cleaned.fetch_add(1, Ordering::Relaxed);
+                },
+            )
+        });
+        for (revision, expected) in [(1, 1), (2, 1), (3, 1), (4, 1), (5, 2), (6, 2), (7, 3)] {
+            let (reply, response) = mpsc::sync_channel(1);
+            send.send(Box::new(RenderJob {
+                document: Arc::new(PreviewDocument::new(vec![frame(0.0)]).unwrap()),
+                request: request("document".into(), "view".into(), revision),
+                cancelled: Arc::new(AtomicBool::new(false)),
+                reply,
+                deadline: Instant::now() + REQUEST_LIFETIME,
+            }))
+            .unwrap();
+            let result = response.recv_timeout(REQUEST_LIFETIME).unwrap();
+            assert_eq!(result.is_ok(), matches!(revision, 1 | 5 | 7));
+            assert_eq!(creations.load(Ordering::Relaxed), expected);
+        }
+        drop(send);
+        worker.join().unwrap();
+        assert_eq!(cleanups.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    #[ignore = "requires native GPU; reports cold and reopened viewport timing"]
+    fn native_script_preview_reopen_reuses_renderer_and_recovers_disconnected_worker() {
+        fn memory(label: &str) {
+            let mut system = sysinfo::System::new();
+            let pid = sysinfo::get_current_pid().unwrap();
+            system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
+            let process = system.process(pid).unwrap();
+            // sysinfo Windows maps these to WorkingSetSize and PrivateUsage.
+            eprintln!(
+                "{label}: working_set_bytes={} private_bytes={}",
+                process.memory(),
+                process.virtual_memory()
+            );
+        }
+        memory("before first request");
+        let service = PreviewService::default();
+        let descriptor = service.retain(vec![frame(0.0)]).unwrap();
+        let (dead, receiver) = mpsc::sync_channel(2);
+        drop(receiver);
+        service.0.lock().unwrap().worker = Some(dead);
+        for iteration in 0..3 {
+            let view = service.open_view().unwrap();
+            let started = Instant::now();
+            let png = service
+                .render(request(descriptor.preview_id.clone(), view.clone(), 1))
+                .unwrap()
+                .wait()
+                .unwrap();
+            assert!(!png.is_empty());
+            memory(&format!("after open {iteration}"));
+            service.close_view(&view);
+            memory(&format!("after close {iteration}"));
+            assert_eq!(service.1.load(Ordering::Relaxed), 1);
+            eprintln!(
+                "preview open {iteration}: {:?}; renderer constructions=1",
+                started.elapsed()
+            );
         }
     }
 
@@ -1102,17 +1253,12 @@ mod tests {
         let _second_reply = service.render(next.clone()).unwrap();
         next.revision = 3;
         assert!(service.render(next.clone()).unwrap_err().contains("busy"));
-        let WorkerCommand::Render(stale) = jobs.try_recv().unwrap() else {
-            panic!("expected render")
-        };
+        let stale = jobs.try_recv().unwrap();
         assert!(stale.cancelled.load(Ordering::Acquire));
-        let WorkerCommand::Render(current) = jobs.try_recv().unwrap() else {
-            panic!("expected render")
-        };
+        let current = jobs.try_recv().unwrap();
         service.close_view(&view);
         assert!(current.cancelled.load(Ordering::Acquire));
         assert!(service.render(next).unwrap_err().contains("closed"));
-        assert!(matches!(jobs.try_recv(), Ok(WorkerCommand::Release)));
         assert!(jobs.try_recv().is_err());
         let replacement = service.open_view().unwrap();
         assert_ne!(replacement, view);

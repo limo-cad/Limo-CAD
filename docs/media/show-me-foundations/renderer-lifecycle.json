@@ -1,0 +1,16 @@
+{
+  "scope": "isolated native renderer, debug test profile, one sample per open; process memory excludes dedicated GPU allocations",
+  "cold_open_ms": 2094.3251,
+  "reopen_ms": [
+    105.5677,
+    104.1353
+  ],
+  "renderer_constructions": 1,
+  "before_working_set_bytes": 19574784,
+  "after_first_close_working_set_bytes": 335380480,
+  "after_second_reopen_working_set_bytes": 335794176,
+  "before_private_bytes": 5406720,
+  "after_first_close_private_bytes": 473071616,
+  "after_second_reopen_private_bytes": 473636864,
+  "startup_policy": "lazy first use, parked persistent worker until host teardown; no startup allocation"
+}

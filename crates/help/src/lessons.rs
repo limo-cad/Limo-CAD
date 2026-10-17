@@ -137,6 +137,25 @@ pub fn from_help(id: &str) -> Option<Id> {
 mod tests {
     use super::*;
     #[test]
+    fn step_chooser_labels_preserve_translated_unicode() {
+        for locale in LOCALES {
+            let dictionary = catalog()[locale].as_object().unwrap();
+            for (key, value) in dictionary {
+                if key.starts_with("action.") || key == "ui.chooseStep" {
+                    let value = value.as_str().unwrap();
+                    assert!(
+                        !value.is_empty() && !value.contains(['?', '\u{fffd}']),
+                        "Corrupted chooser label {locale}/{key}: {value}"
+                    );
+                }
+            }
+        }
+        assert_eq!(text("zh-CN", "ui.chooseStep"), "选择步骤");
+        assert_eq!(text("de", "ui.chooseStep"), "Schritt wählen");
+        assert_eq!(text("es", "action.extrude.apply"), "Aplicar la extrusión");
+    }
+
+    #[test]
     fn lessons_have_complete_locales_and_one_connected_build() {
         let english = catalog()["en"].as_object().unwrap();
         for locale in LOCALES {

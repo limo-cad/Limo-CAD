@@ -7,6 +7,22 @@ fn visible(index: usize, count: usize) -> std::ops::Range<usize> {
     start..(start + 3).min(count)
 }
 
+const ROW_HEIGHT: f32 = 32.;
+
+fn page_range(
+    page: Option<usize>,
+    current: usize,
+    count: usize,
+    height: f32,
+) -> (usize, std::ops::Range<usize>) {
+    let capacity = ((height - 36.).max(ROW_HEIGHT) / ROW_HEIGHT).floor() as usize;
+    let page = page
+        .unwrap_or(current / capacity)
+        .min(count.saturating_sub(1) / capacity);
+    let start = page * capacity;
+    (page, start..(start + capacity).min(count))
+}
+
 fn label(language: &str, caption: &str) -> String {
     let key = match caption {
         "sketch.plane" => "step.plane",
@@ -48,11 +64,15 @@ pub(super) fn paint(
     };
     let count = state.count();
     let current = state.index;
-    let range = if expanded {
-        0..count
+    let (page, range) = if expanded {
+        page_range(state.steps_page, current, count, height)
     } else {
-        visible(current, count)
+        (0, visible(current, count))
     };
+    let pages = expanded && (range.start > 0 || range.end < count);
+    let previous_page = range.start > 0;
+    let next_page = range.end < count;
+    let page_label = format!("{}–{} / {}", range.start + 1, range.end, count);
     let frames: Vec<_> = range
         .map(|index| {
             let actual = if state.cut_choices() {
@@ -63,17 +83,20 @@ pub(super) fn paint(
             let caption = &retained.descriptor.captions[actual];
             (
                 index,
-                label(language, caption),
+                if expanded {
+                    limo_cad_mcp::lessons::text(language, &format!("action.{caption}")).into()
+                } else {
+                    label(language, caption)
+                },
                 limo_cad_mcp::lessons::caption(language, caption),
             )
         })
         .collect();
     let cell = if expanded { width } else { (width - 24.) / 3. };
-    let row = if expanded {
-        (height / count.max(1) as f32).min(32.)
-    } else {
-        28.
-    };
+    let row = if expanded { ROW_HEIGHT } else { 28. };
+    if expanded {
+        world.resource_mut::<Files>().script.preview.steps_page = Some(page);
+    }
     for (position, (index, title, caption)) in frames.into_iter().enumerate() {
         let left = x + if expanded {
             0.
@@ -115,12 +138,60 @@ pub(super) fn paint(
             );
         }
     }
+    if pages {
+        for (next, enabled, left, title) in [
+            (false, previous_page, x, "ui.previous"),
+            (true, next_page, x + width - 96., "ui.next"),
+        ] {
+            let title = limo_cad_mcp::lessons::text(language, title);
+            let mut control = InterfaceControl::button("document/scripts", title);
+            control.disabled = !enabled;
+            widgets.button(
+                world,
+                camera,
+                if next {
+                    "lesson-steps-page-next"
+                } else {
+                    "lesson-steps-page-previous"
+                },
+                control,
+                Some(title),
+                NativeCommand::File(FileCommand::ScriptPreview(Action::StepsPage(next))),
+                Node {
+                    border: UiRect::all(px(1.)),
+                    ..rect(left, y + height - ROW_HEIGHT, 96., ROW_HEIGHT)
+                },
+                None,
+                62,
+            )?;
+        }
+        widgets.text(
+            world,
+            camera,
+            "lesson-steps-page-count",
+            rect(x + 100., y + height - ROW_HEIGHT, width - 200., ROW_HEIGHT),
+            &page_label,
+            12.,
+            62,
+        );
+    }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_script_preview_step_pages_preserve_readable_rows_and_reach_every_step() {
+        assert_eq!(page_range(None, 4, 5, 196.), (0, 0..5));
+        assert_eq!(page_range(None, 15, 16, 196.), (3, 15..16));
+        assert_eq!(page_range(Some(99), 0, 16, 196.), (3, 15..16));
+        let visited: Vec<_> = (0..4)
+            .flat_map(|p| page_range(Some(p), 0, 16, 196.).1)
+            .collect();
+        assert_eq!(visited, (0..16).collect::<Vec<_>>());
+        assert_eq!(page_range(None, 4, 5, 64.), (4, 4..5));
+    }
     #[test]
     fn native_script_preview_step_window_keeps_neighbors_and_endpoints() {
         assert_eq!(visible(0, 5), 0..3);

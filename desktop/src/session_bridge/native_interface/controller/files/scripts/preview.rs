@@ -17,6 +17,7 @@ mod images;
 mod input;
 mod lesson;
 mod panel;
+mod prepared;
 mod steps;
 pub(crate) use feature::paint_hint;
 pub(crate) use input::input;
@@ -47,6 +48,7 @@ pub(crate) enum Action {
     Next,
     Step(usize),
     Steps,
+    StepsPage(bool),
     Replay,
     Stop,
     Fit,
@@ -109,8 +111,11 @@ pub(crate) struct State {
     render_jobs: usize,
     service: Arc<PreviewService>,
     retained: Option<Retained>,
+    prepared: Arc<Mutex<prepared::Cache>>,
     index: usize,
     steps_open: bool,
+    steps_page: Option<usize>,
+    steps_return_focus: bool,
     yaw: f32,
     pitch: f32,
     revision: u64,
@@ -152,8 +157,11 @@ impl Default for State {
             render_jobs: 0,
             service: Arc::new(PreviewService::default()),
             retained: None,
+            prepared: Arc::new(Mutex::new(prepared::Cache::default())),
             index: 0,
             steps_open: false,
+            steps_page: None,
+            steps_return_focus: false,
             yaw: HOME.0,
             pitch: HOME.1,
             revision: 1,
@@ -331,6 +339,7 @@ fn open_lesson(
     files.script.preview.return_to = Some(previous);
     files.script.preview.playing = false;
     files.script.preview.steps_open = false;
+    files.script.preview.steps_return_focus = false;
     files.script.preview.lesson = id;
     files.script.preview.scenario = lesson::CutScenario::default();
     files.script.preview.index_open = id.is_none();
@@ -364,11 +373,12 @@ fn start_lesson(
     close(world);
     let (send, receive) = mpsc::channel();
     let wake = handle.clone();
+    let prepared = world.resource::<Files>().script.preview.prepared.clone();
     std::thread::Builder::new()
         .name("cad-preview-prepare".into())
         .spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                prepare_lesson(&source, lesson)
+                prepared::prepare(&prepared, &source, lesson)
             }))
             .unwrap_or_else(|_| Err("Lesson preview preparation stopped unexpectedly".into()));
             let _ = send.send(result);
@@ -397,6 +407,7 @@ fn close(world: &mut World) {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.open = false;
         preview.steps_open = false;
+        preview.steps_return_focus = false;
         preview.help = false;
         preview.focus_owner = None;
         preview.retained = None;
@@ -484,6 +495,7 @@ pub(crate) fn command(
         match action {
             Action::Help | Action::Demo => {
                 preview.steps_open = false;
+                preview.steps_return_focus = false;
                 preview.help = action == Action::Help;
                 preview.focus_owner = handle.presented_context();
                 preview.playing = false;
@@ -496,9 +508,22 @@ pub(crate) fn command(
                     return Err("Open a prepared lesson before viewing its steps".into());
                 }
                 preview.steps_open = !preview.steps_open;
+                preview.steps_page = None;
+                preview.steps_return_focus = !preview.steps_open;
                 preview.playing = false;
                 preview.wake = None;
                 preview.focus_owner = handle.presented_context();
+            }
+            Action::StepsPage(next) => {
+                if !preview.steps_open {
+                    return Err("Open the step list before changing its page".into());
+                }
+                let page = preview.steps_page.unwrap_or(0);
+                preview.steps_page = Some(if next {
+                    page.saturating_add(1)
+                } else {
+                    page.saturating_sub(1)
+                });
             }
             Action::Step(index) => {
                 if preview.help || index >= preview.count() {
@@ -506,6 +531,7 @@ pub(crate) fn command(
                 }
                 preview.index = index;
                 preview.steps_open = false;
+                preview.steps_return_focus = false;
                 preview.playing = false;
                 preview.focus_owner = handle.presented_context();
                 preview.changed()?;
