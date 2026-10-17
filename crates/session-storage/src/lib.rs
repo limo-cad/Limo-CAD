@@ -161,6 +161,13 @@ pub fn read_to_string_bounded(path: impl AsRef<Path>, limit: usize) -> io::Resul
     read_to_string_with_limit(path.as_ref(), Some(limit))
 }
 
+/// Read binary session payloads with the same regular-file and platform privacy
+/// checks as text reads. At most `limit + 1` bytes are consumed to detect excess,
+/// including when the file grows after opening. No UTF-8 conversion is applied.
+pub fn read_bounded(path: impl AsRef<Path>, limit: usize) -> io::Result<Vec<u8>> {
+    read_with_limit(path.as_ref(), Some(limit))
+}
+
 /// Atomically move a regular session payload within one directory, refusing to
 /// replace any existing destination. There is no unlink/copy fallback: if the
 /// filesystem cannot make this claim, callers must not start the requested work.
@@ -270,6 +277,11 @@ fn rename_no_replace_native(_: &Path, _: &Path) -> io::Result<()> {
 }
 
 fn read_to_string_with_limit(path: &Path, limit: Option<usize>) -> io::Result<String> {
+    String::from_utf8(read_with_limit(path, limit)?)
+        .map_err(|error| io::Error::new(ErrorKind::InvalidData, error))
+}
+
+fn read_with_limit(path: &Path, limit: Option<usize>) -> io::Result<Vec<u8>> {
     #[cfg(unix)]
     readable_directory(
         &root(),
@@ -282,7 +294,7 @@ fn read_to_string_with_limit(path: &Path, limit: Option<usize>) -> io::Result<St
         use std::os::unix::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
-    let mut file = options.read(true).open(path)?;
+    let file = options.read(true).open(path)?;
     let metadata = file.metadata()?;
     if !metadata.is_file() {
         return Err(io::Error::new(
@@ -300,11 +312,15 @@ fn read_to_string_with_limit(path: &Path, limit: Option<usize>) -> io::Result<St
             ));
         }
     }
-    let mut content = String::new();
+    read_content_with_limit(file, limit)
+}
+
+fn read_content_with_limit(mut reader: impl Read, limit: Option<usize>) -> io::Result<Vec<u8>> {
+    let mut content = Vec::new();
     if let Some(limit) = limit {
-        (&mut file)
+        (&mut reader)
             .take((limit as u64).saturating_add(1))
-            .read_to_string(&mut content)?;
+            .read_to_end(&mut content)?;
         if content.len() > limit {
             return Err(io::Error::new(
                 ErrorKind::InvalidData,
@@ -312,7 +328,7 @@ fn read_to_string_with_limit(path: &Path, limit: Option<usize>) -> io::Result<St
             ));
         }
     } else {
-        file.read_to_string(&mut content)?;
+        reader.read_to_end(&mut content)?;
     }
     Ok(content)
 }
@@ -521,6 +537,51 @@ mod tests {
             }
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn bounded_binary_reads_preserve_bytes_and_reject_excess_or_nonfiles() {
+        let _environment = ENVIRONMENT.lock().unwrap();
+        let fixture = TestRoot::new();
+        let path = fixture.path.join("snapshot.cbor");
+        let bytes = [0, 255, 128, 7];
+        atomic_write(&path, &bytes).unwrap();
+        assert_eq!(read_bounded(&path, bytes.len()).unwrap(), bytes);
+        assert_eq!(read_bounded(&path, bytes.len() + 1).unwrap(), bytes);
+        assert_eq!(
+            read_bounded(&path, bytes.len() - 1).unwrap_err().kind(),
+            ErrorKind::InvalidData
+        );
+        assert_eq!(
+            read_to_string_bounded(&path, bytes.len())
+                .unwrap_err()
+                .kind(),
+            ErrorKind::InvalidData
+        );
+        assert!(read_bounded(&fixture.path, 4).is_err());
+        assert!(read_bounded(fixture.path.join("missing"), 4).is_err());
+        assert!(read_bounded(&path, 0).is_err());
+        atomic_write(&path, &[]).unwrap();
+        assert!(read_bounded(&path, 0).unwrap().is_empty());
+    }
+
+    #[test]
+    fn read_limit_is_enforced_by_stream_consumption() {
+        // The input has no metadata length: the same limit protects a file
+        // that grows between opening and reading, without trusting stat size.
+        let mut input = io::Cursor::new(vec![255; 64]);
+        assert_eq!(
+            read_content_with_limit(&mut input, Some(4))
+                .unwrap_err()
+                .kind(),
+            ErrorKind::InvalidData
+        );
+        assert_eq!(input.position(), 5);
+        let mut exact = io::Cursor::new(vec![255; 4]);
+        assert_eq!(
+            read_content_with_limit(&mut exact, Some(4)).unwrap(),
+            vec![255; 4]
+        );
     }
 
     #[test]
@@ -743,17 +804,21 @@ mod tests {
         );
         fs::set_permissions(&fixture.path, fs::Permissions::from_mode(0o755)).unwrap();
         assert!(read_to_string(document.join("model.json")).is_err());
+        assert!(read_bounded(document.join("model.json"), 1024).is_err());
         assert!(read_dir(&fixture.path).is_err());
         fs::set_permissions(&fixture.path, fs::Permissions::from_mode(0o777)).unwrap();
         assert!(read_to_string(document.join("model.json")).is_err());
+        assert!(read_bounded(document.join("model.json"), 1024).is_err());
         assert!(read_dir(&fixture.path).is_err());
         fs::set_permissions(&fixture.path, fs::Permissions::from_mode(0o700)).unwrap();
         let directory_link = fixture.path.join("_ui");
         symlink(&document, &directory_link).unwrap();
         assert!(read_dir(&directory_link).is_err());
         assert!(read_to_string(directory_link.join("model.json")).is_err());
+        assert!(read_bounded(directory_link.join("model.json"), 1024).is_err());
         symlink(document.join("model.json"), document.join("linked.json")).unwrap();
         assert!(read_to_string(document.join("linked.json")).is_err());
+        assert!(read_bounded(document.join("linked.json"), 1024).is_err());
     }
 
     #[cfg(unix)]
@@ -776,10 +841,12 @@ mod tests {
         };
         change_owner(&payload, 1);
         assert!(read_to_string(&payload).is_err());
+        assert!(read_bounded(&payload, 1024).is_err());
         change_owner(&payload, 0);
         change_owner(&document, 1);
         assert!(read_dir(&document).is_err());
         assert!(read_to_string(&payload).is_err());
+        assert!(read_bounded(&payload, 1024).is_err());
     }
 
     #[cfg(unix)]
@@ -799,6 +866,7 @@ mod tests {
         assert!(validate_root().is_err());
         assert!(read_dir(&registry).is_err());
         assert!(read_to_string(&payload).is_err());
+        assert!(read_bounded(&payload, 1024).is_err());
         assert!(atomic_write(&payload, b"replacement").is_err());
         assert_eq!(fs::read_to_string(&payload).unwrap(), "unchanged snapshot");
         let new_registry = shared.join("new-registry");
@@ -834,6 +902,7 @@ mod tests {
         fs::set_permissions(&shared, fs::Permissions::from_mode(0o777)).unwrap();
         assert!(validate_root().is_err());
         assert!(read_to_string(registry.join("model.json")).is_err());
+        assert!(read_bounded(registry.join("model.json"), 1024).is_err());
         assert!(atomic_write(&registry.join("model.json"), b"replacement").is_err());
         assert_eq!(
             fs::read_to_string(parent.join("registry/model.json")).unwrap(),
@@ -889,7 +958,11 @@ mod tests {
         assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
         let started = std::time::Instant::now();
         assert_eq!(
-            read_to_string(path).unwrap_err().kind(),
+            read_to_string(&path).unwrap_err().kind(),
+            ErrorKind::InvalidInput
+        );
+        assert_eq!(
+            read_bounded(&path, 1024).unwrap_err().kind(),
             ErrorKind::InvalidInput
         );
         assert!(started.elapsed() < std::time::Duration::from_secs(1));
