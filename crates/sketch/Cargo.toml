@@ -7,6 +7,8 @@ license = "LGPL-2.1-or-later"
 repository.workspace = true
 
 [dependencies]
+limo-cad-project-file = { path = "../project-file" }
+limo-cad-fem = { path = "../fem" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 uuid = { version = "1.28.0", features = ["v4", "js"] }
