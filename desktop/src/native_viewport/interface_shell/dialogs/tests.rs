@@ -167,3 +167,12 @@ fn corner_resize_preserves_origin_and_has_readable_minimums() {
         "Closing retires geometry with its dialog"
     );
 }
+
+#[test]
+fn installs_with_bevys_dialog_plugin_already_present() {
+    // The full native app has already installed this through DefaultPlugins.
+    let mut app = App::new();
+    app.add_plugins(DialogPlugin);
+    install(&mut app);
+    app.update();
+}

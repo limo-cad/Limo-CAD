@@ -17,8 +17,10 @@ struct FloatingDialog {
 struct ResizeHandle;
 
 pub(super) fn install(app: &mut App) {
+    if !app.is_plugin_added::<DialogPlugin>() {
+        app.add_plugins(DialogPlugin);
+    }
     app.init_resource::<UiScale>()
-        .add_plugins(DialogPlugin)
         .add_observer(resize)
         .add_systems(PostUpdate, keep_in_window.before(UiSystems::Layout));
 }
