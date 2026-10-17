@@ -42,6 +42,13 @@ fn supported(
 }
 
 impl Dimension {
+    pub(super) fn retained_bytes(&self) -> Result<usize, String> {
+        std::mem::size_of::<Self>()
+            .checked_add(self.post.capacity())
+            .and_then(|n| n.checked_add(self.text.capacity()))
+            .ok_or_else(|| "Dimension metadata storage overflow".into())
+    }
+
     pub(super) fn radial(
         span: &geometry::Linear,
         diameter: bool,

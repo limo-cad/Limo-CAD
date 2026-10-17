@@ -583,7 +583,18 @@ pub fn export_sheet_with_units(
                 | DrawingAnnotationDto::OrdinateDimension { .. }
         ) {
             let batch = series::draw(sheet, &projections, annotation, units, &mut graphics_budget)?;
-            graphics_budget.append(&mut paper.items, batch)?;
+            let offset = paper.items.len();
+            graphics_budget.append(&mut paper.items, batch.items)?;
+            paper
+                .dimensions
+                .try_reserve(batch.dimensions.len())
+                .map_err(|_| "Cannot allocate dimension metadata")?;
+            paper
+                .dimensions
+                .extend(batch.dimensions.into_iter().map(|mut dimension| {
+                    dimension.range = dimension.range.start + offset..dimension.range.end + offset;
+                    dimension
+                }));
         } else if advanced::supports(annotation) {
             let weld = matches!(annotation, DrawingAnnotationDto::WeldSymbol { .. });
             let batch =
