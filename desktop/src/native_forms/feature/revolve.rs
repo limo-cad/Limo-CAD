@@ -128,14 +128,8 @@ impl SolidForm {
             sketch_name: definition.sketch_name.clone(),
             indices: definition.profile_indices.clone(),
         };
-        let legacy_merge =
-            definition.operation == ExtrudeOperation::Join && definition.target_body_ids.is_empty();
-        form.operation = if legacy_merge {
-            ExtrudeOperation::NewBody
-        } else {
-            definition.operation
-        };
-        form.merge_profiles = definition.merge_profiles || legacy_merge;
+        form.operation = definition.operation;
+        form.merge_profiles = definition.merge_profiles;
         form.operation_manual = true;
         form.targets = definition.target_body_ids.clone();
         form.flip = definition.flip;
@@ -309,7 +303,9 @@ impl SolidForm {
             if let Err(e) = validate_targets(&self.targets, model) {
                 errors.push((F::Targets, e));
             }
-            if self.targets.is_empty() {
+            let joined_profiles =
+                self.operation == ExtrudeOperation::Join && profile_indices.len() > 1;
+            if self.targets.is_empty() && !joined_profiles {
                 errors.push((F::Targets, "Select a target body for this operation".into()));
             }
         }

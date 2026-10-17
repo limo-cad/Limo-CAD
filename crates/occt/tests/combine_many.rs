@@ -11,6 +11,7 @@ use limo_cad_solid::{
 fn joining_many_adjacent_tools_preserves_exact_solid_and_keep_tools() {
     let block = |id: u64, x: f64| {
         KernelJobDto::Extrude(KernelExtrudeJobDto {
+            require_single_solid: false,
             feature_id: FeatureId(id),
             operation: ExtrudeOperation::NewBody,
             source_face: None,

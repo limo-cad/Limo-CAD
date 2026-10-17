@@ -1238,6 +1238,9 @@ pub enum KernelCurveDto {
 pub struct KernelExtrudeJobDto {
     pub feature_id: FeatureId,
     pub operation: ExtrudeOperation,
+    /// Explicit Merge profiles intent; legacy targetless Join may be a compound.
+    #[serde(default)]
+    pub require_single_solid: bool,
     /// Exact B-rep face source. When set, `profiles` is empty and the OCCT
     /// adapter resolves the unique face matching the validated signature.
     #[serde(default)]
@@ -1278,6 +1281,8 @@ pub struct PlanarFaceSignatureDto {
 pub struct KernelRevolveJobDto {
     pub feature_id: FeatureId,
     pub operation: ExtrudeOperation,
+    #[serde(default)]
+    pub require_single_solid: bool,
     pub profiles: Vec<KernelProfileDto>,
     pub axis_origin: Point3Dto,
     pub axis_direction: Point3Dto,

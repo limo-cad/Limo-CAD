@@ -74,6 +74,7 @@ fn native_dimension_edit_stays_associated_but_boolean_ordinal_alias_rejects() {
         z: 1.,
     };
     let stock = KernelExtrudeJobDto {
+        require_single_solid: false,
         feature_id: FeatureId(1),
         operation: ExtrudeOperation::NewBody,
         source_face: None,

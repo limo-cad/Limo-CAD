@@ -2724,6 +2724,8 @@ fn make_jobs(
                     ExtrudeOperation::Cut | ExtrudeOperation::Intersect => {}
                 }
                 jobs.push(KernelJobDto::Extrude(KernelExtrudeJobDto {
+                    require_single_solid: definition.operation == ExtrudeOperation::NewBody
+                        && definition.merge_profiles,
                     feature_id: definition.feature_id,
                     operation,
                     source_face,
@@ -2847,6 +2849,8 @@ fn make_jobs(
                 let angle_rad =
                     definition.angle_deg.to_radians() * if definition.flip { -1.0 } else { 1.0 };
                 jobs.push(KernelJobDto::Revolve(KernelRevolveJobDto {
+                    require_single_solid: definition.operation == ExtrudeOperation::NewBody
+                        && definition.merge_profiles,
                     feature_id: definition.feature_id,
                     operation,
                     profiles,

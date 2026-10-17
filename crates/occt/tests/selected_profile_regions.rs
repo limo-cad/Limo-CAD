@@ -403,3 +403,80 @@ fn separate_and_corner_only_regions_cannot_be_disguised_as_one_body() {
         }
     }
 }
+
+#[test]
+fn legacy_targetless_join_preserves_disjoint_bodies_and_downstream_targets_on_reopen() {
+    for tool in ["extrude", "revolve"] {
+        let mut manager = fixture("separate");
+        let indices: Vec<_> = manager.profile_catalog()[0]
+            .profiles
+            .iter()
+            .map(|profile| profile.index)
+            .collect();
+        let plan = if tool == "extrude" {
+            let mut request = extrude(&indices, false);
+            request.operation = ExtrudeOperation::Join;
+            manager.prepare_extrude(request).unwrap()
+        } else {
+            let mut request = revolve(&indices, false);
+            request.operation = ExtrudeOperation::Join;
+            manager.prepare_revolve(request).unwrap()
+        };
+        let mut kernel = OcctKernel::new().unwrap();
+        apply(&mut manager, &mut kernel, plan);
+        assert_eq!(manager.solid_scene().bodies.len(), 1, "{tool}");
+        let body = manager.solid_scene().bodies[0].id;
+        let joined_volume = volume(&kernel, body);
+        let expected_joined = if tool == "extrude" {
+            2000.
+        } else {
+            // Two annular cylinders, radii 10..20 and 30..40, height 10.
+            std::f64::consts::PI * 10_000.
+        };
+        assert!(
+            (joined_volume - expected_joined).abs() < expected_joined * 1e-8,
+            "{tool}"
+        );
+
+        // The single historic BodyId must remain usable by later features,
+        // even though the old targetless Join contains disjoint solids.
+        let mut cut = extrude(&indices[..1], false);
+        cut.operation = ExtrudeOperation::Cut;
+        cut.target_body_ids = vec![body];
+        cut.extent = ExtrudeExtent::Distance { distance: 5. };
+        let plan = manager.prepare_extrude(cut).unwrap();
+        apply(&mut manager, &mut kernel, plan);
+        let expected = volume(&kernel, body);
+        assert!(expected > 0. && expected < joined_volume, "{tool}");
+        let current: Value =
+            serde_json::from_str(&manager.export_project_model().unwrap()).unwrap();
+        for version in [14, limo_cad_sketch::PROJECT_SCHEMA_VERSION] {
+            let mut model = current.clone();
+            model["schema_version"] = json!(version);
+            if version == 14 {
+                for key in ["extrudes", "revolves"] {
+                    for definition in model[key].as_array_mut().unwrap() {
+                        definition.as_object_mut().unwrap().remove("merge_profiles");
+                    }
+                }
+            }
+            let mut saved = model.to_string();
+            for _ in 0..2 {
+                let mut reopened = SketchManager::new();
+                let mut reopened_kernel = OcctKernel::new().unwrap();
+                let plan = reopened.prepare_load_project(saved).unwrap();
+                apply(&mut reopened, &mut reopened_kernel, plan);
+                assert_eq!(reopened.solid_scene().bodies.len(), 1, "{tool}, v{version}");
+                assert_eq!(reopened.solid_scene().bodies[0].id, body);
+                assert!(
+                    (volume(&reopened_kernel, body) - expected).abs() < expected * 1e-8,
+                    "{tool}, v{version}"
+                );
+                let cut = reopened.extrude_definitions().last().unwrap().clone();
+                assert_eq!(cut.operation, ExtrudeOperation::Cut);
+                assert_eq!(cut.target_body_ids, vec![body]);
+                saved = reopened.export_project_model().unwrap();
+            }
+        }
+    }
+}

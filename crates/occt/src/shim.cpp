@@ -3197,7 +3197,8 @@ void Kernel::apply_job_impl(const FfiJob& job) {
     const TopoDS_Shape merged = fuse_shapes(tools);
     TopTools_IndexedMapOfShape solids;
     TopExp::MapShapes(merged, TopAbs_SOLID, solids);
-    if (solids.Extent() != 1 || !BRepCheck_Analyzer(merged).IsValid()) {
+    if (job.require_single_solid &&
+        (solids.Extent() != 1 || !BRepCheck_Analyzer(merged).IsValid())) {
       throw std::runtime_error(
           "Merge profiles requires contacting regions that form one solid; "
           "separate regions and point-only contact cannot be merged");

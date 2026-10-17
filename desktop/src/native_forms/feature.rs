@@ -482,14 +482,8 @@ impl SolidForm {
                 sketch_name: definition.sketch_name.clone(),
                 indices: definition.profile_indices.clone(),
             });
-        let legacy_merge =
-            definition.operation == ExtrudeOperation::Join && definition.target_body_ids.is_empty();
-        form.operation = if legacy_merge {
-            ExtrudeOperation::NewBody
-        } else {
-            definition.operation
-        };
-        form.merge_profiles = definition.merge_profiles || legacy_merge;
+        form.operation = definition.operation;
+        form.merge_profiles = definition.merge_profiles;
         form.operation_manual = true;
         form.extent = definition.extent;
         form.flip = definition.flip;
