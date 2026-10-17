@@ -27,3 +27,30 @@ This is the shared snapshot boundary, not completed native history or recovery
 integration. Native mutation receipts, Undo/Redo tickets, Save/Open and session
 publication still need to adopt it. Results, worker identities and UI state do
 not belong in persistent domain intent. Live native qualification remains open.
+
+## Authoritative manager integration
+
+`SketchManager` owns domain intent alongside its model. Its complete snapshot
+export retains every known or unknown domain payload. Ordinary model-only export
+rejects a document containing domain intent, preventing older history/save paths
+from silently discarding it. Documents without domain intent keep their existing
+model export behavior.
+
+`prepare_load_project_snapshot` validates known thermal payloads before preparing
+the existing model replay transaction. Only the matching kernel commit replaces
+both model and domain intent. Cancellation and stale commits retain the live
+pair. Explicit New or a legacy project load creates an empty domain set in the
+candidate and clears the old set only on commit.
+
+`replace_project_intents` validates the complete replacement before mutation,
+returns false for a no-op, and rejects during an active sketch or pending solid
+or project transaction. Snapshot capture also rejects pending solid work.
+Unknown payloads remain opaque; a caller editing one domain must preserve all
+other entries unless their removal was explicitly requested. A document with
+any domain intent is not blank for automatic script playback.
+
+These are Rust manager APIs. Native callers must still route them through the
+existing owner/revision mutation fence and adopt complete snapshots in history,
+Save/Open and session publication. No new MCP tools or native controls are
+exposed by this layer. Until those paths migrate, model-only export reports an
+explicit error for domain-bearing documents rather than losing their content.

@@ -142,6 +142,8 @@ pub struct SketchManager {
     print_intent: limo_cad_core::PrintIntentDocumentDto,
     /// Persistent 3-axis manufacturing setups, tools, and operation intent.
     cam: CamDocumentDto,
+    /// Domain intent participates in complete snapshots and staged project loads.
+    project_intents: Vec<limo_cad_project_file::SnapshotIntent>,
     /// Candidate manager held until its OCCT replay commits successfully.
     /// Keeping the current manager alive makes Open transactional.
     pending_project: Option<PendingProject>,
@@ -196,6 +198,8 @@ fn stable_cam_fingerprint<T: Serialize + ?Sized>(value: &T) -> Result<String, Se
     Ok(format!("{hash:032x}"))
 }
 
+mod project_snapshot;
+
 impl SketchManager {
     pub fn new() -> Self {
         Self {
@@ -226,6 +230,7 @@ impl SketchManager {
             active_named_view: None,
             print_intent: limo_cad_core::PrintIntentDocumentDto::default(),
             cam: CamDocumentDto::default(),
+            project_intents: Vec::new(),
             pending_project: None,
             pending_joint_body_deletion: None,
         }
@@ -248,6 +253,7 @@ impl SketchManager {
             && self.drawings.sheets.is_empty()
             && self.assembly == AssemblyDocumentDto::default()
             && self.cam == CamDocumentDto::default()
+            && self.project_intents.is_empty()
             && self.named_views.is_empty()
             && self.print_intent == limo_cad_core::PrintIntentDocumentDto::default()
     }
@@ -313,6 +319,15 @@ impl SketchManager {
     /// Serialize the authoritative parametric model. Tessellation and B-reps
     /// are intentionally excluded and are regenerated on Open.
     pub fn export_project_model(&self) -> Result<String, SessionError> {
+        if !self.project_intents.is_empty() {
+            return Err(SessionError::Solid(
+                "This document has domain intent; export a complete project snapshot".into(),
+            ));
+        }
+        self.export_model_content()
+    }
+
+    fn export_model_content(&self) -> Result<String, SessionError> {
         if self.active.is_some() {
             return Err(SessionError::Solid(
                 "finish the active sketch before saving the project".to_string(),
@@ -486,6 +501,7 @@ impl SketchManager {
             active_named_view: None,
             print_intent: model.print_intent,
             cam: model.cam,
+            project_intents: Vec::new(),
             pending_project: None,
             pending_joint_body_deletion: None,
         };
