@@ -26,7 +26,7 @@ appearance would require an additional design/parity pass.
 | Text, dimension and script fields | Existing Bevy `EditableText` plus native adapters | Preserve ordered editor flush, AltGr/Option, IME ownership and multiline behavior before using `TextInput` directly |
 | Sliders/ranges | Standard `Slider`, `SliderThumb`, `SliderStep`, `SliderPrecision` and controlled `SliderValue` | Step-index conversion retains CAD `f64` values; oversized/invalid ranges retain the native adapter. Current source/live checks recorded below. |
 | Shared feature dropdowns | Standard `MenuButton`, `MenuPopup` and `MenuItem` over the existing inline choice layout | Existing form reducer owns open/selected state. Other cycling choice fields remain native; no separate popup framework was added. |
-| Radio groups and tabs | Standard `RadioGroup`/`RadioButton` and `TabList`/`Tab` | Settings, feature and sketch-origin radios; assembly and fitting document strips. Overflowing document strips preserve native navigation to hidden documents. |
+| Radio groups and tabs | Standard `RadioGroup`/`RadioButton` and `TabList`/`Tab` | Settings, feature and sketch-origin radios; Assembly tabs. Document tabs keep native navigation after the standard-tab trial failed focus continuity. |
 | Dialogs and scrolling | Standard dialog title dragging plus a small resize adapter; existing scrolling/modal policy | See the movable/resizable dialog scope and retained limitations below. |
 | Orientation dial and CAD annotations | Existing custom visual/geometry controls | Product-specific controls need their current geometry and hit behavior |
 
@@ -65,7 +65,7 @@ transaction responsibilities, not a second widget event implementation.
 
 Checkbox state remains controlled by accepted application commands. Some
 checkboxes perform commands such as Fix/Unfix, so a value proposal preserves the
-command intent and `Checked` is projected from the accepted state. Text editing, cycling choice fields outside shared feature forms, overflowing
+command intent and `Checked` is projected from the accepted state. Text editing, cycling choice fields outside shared feature forms,
 document strips and ordinary menus retain their existing adapters. The flag keeps the old default available as the
 visual/workflow baseline during this draft experiment.
 
@@ -340,11 +340,11 @@ step indices, then converted back to the CAD field's `f64` origin and step.
 Nonfinite or more-than-1,048,576-step ranges keep the existing adapter.
 
 Settings theme/language/scale, shared feature radios and sketch-origin radios
-use `RadioButton`/`RadioGroup`. Assembly tabs and fully visible document strips
-use `Tab`/`TabList` with automatic selection. Document-tab double-click renaming
-uses Bevy's click count. Overflowing document strips keep native navigation,
-because it can reach documents whose tab entities are not rendered. Rebuilding
-that strip just to accommodate a widget would exceed this modest migration.
+use `RadioButton`/`RadioGroup`. Assembly tabs use `Tab`/`TabList` with automatic
+selection. Document tabs keep the native strip, including navigation to hidden
+tabs and double-click renaming. The standard document-tab trial exposed a focus
+lifetime issue; replacing that path would need more custom handling than this
+migration permits.
 
 The shared feature forms retain their inline dropdown appearance and use
 `MenuButton`, `MenuPopup` and `MenuItem` for input, navigation, dismissal and
@@ -353,7 +353,48 @@ reducer and prevents a completed selection from toggling the list open again.
 Choice fields elsewhere that currently cycle values retain their existing
 behavior. No Bevy fork or alternate pointer recognizer was added.
 
-The focused native-interface, Settings, document and host checks passed: 152
-distinct checks, including the standard-widget input schedules. Strict Clippy
-and formatting checks passed. Fresh native workflow/visual checks are pending;
-earlier evidence above does not qualify this implementation.
+The focused native-interface, Settings, document and host checks passed: 215
+distinct checks, including the standard-widget input schedules and native
+document-tab input ownership. Strict release Clippy and formatting checks passed.
+
+Clean native macOS build `54c6a644` passed the Settings slider's track click,
+drag/release outside and keyboard endpoints; radio selection by pointer/arrows;
+production Tab/Shift+Tab traversal; English/Chinese, light/dark and 125% Settings;
+feature-menu pointer/keyboard selection and Escape; feature radios; and Assembly
+tab selection and disabled-state checks. Extrude Apply, Undo, Redo, save/reopen
+and Cancel preserved the expected model. The saved `model.json` after Undo is
+exactly equal to the original fixture, and after Cancel to the applied model.
+This also completes the targeted Extrude recheck requested by the rebase record.
+
+The standard document-tab trial retained click, rename and close, but document
+switching cleared focus and broke consecutive arrow navigation. One small focus
+repair passed its source fixture and still failed in the clean native build
+`b9f1a556`. Final source `881ef366` therefore keeps all document tabs on their
+original native path and removes the document-specific focus and double-click
+adapters. The document-tab painter is byte-identical to the pre-migration source.
+The final fallback has routing/source checks; no new live fallback pass is
+claimed. Assembly tabs continue using Bevy's standard `Tab`/`TabList` directly.
+
+Eight focused live behavior cases remain qualified for the adopted controls.
+The document click case is historical and the document-arrow trial is recorded
+as failed, not counted as a pass. This keeps the migration bounded instead of
+adding more custom focus machinery.
+
+![Slider pointer and keyboard workflow](qualification/bevy-controls-20261017/slider-workflow.gif)
+
+![Feature dropdown keyboard selection and Escape](qualification/bevy-controls-20261017/dropdown-workflow.gif)
+
+![Assembly tab navigation](qualification/bevy-controls-20261017/assembly-tabs.gif)
+
+![Settings appearance before and after](qualification/bevy-controls-20261017/settings-comparison.png)
+
+The GIFs are labeled sequences of native step captures, not real-time recordings.
+The Settings comparison uses historical V8 `3a688963` beside `54c6a644`; layout
+and theme remain comparable, with a slightly larger slider thumb. All live input
+used the native app, with matched clean read-only MCP inspection/capture. No MCP
+mutations or broad ledger changes were made. Other platforms, every feature form,
+long dropdown lists and full screen-reader behavior remain unqualified. The prior
+large Settings drag issue and Snap focus limitation remain separate open items.
+See the [focused evidence record](qualification/bevy-controls-20261017.json),
+[input model](qualification/bevy-controls-20261017/standard-controls-input.limo)
+and [applied model](qualification/bevy-controls-20261017/standard-controls-applied.limo).
