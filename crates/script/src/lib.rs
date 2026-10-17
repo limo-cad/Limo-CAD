@@ -8,6 +8,8 @@ use std::{
 };
 mod includes;
 mod manufacturing;
+mod project;
+pub use project::{ProjectReplayHost, ProjectScript};
 mod source_navigation;
 pub use includes::{
     flatten_includes, has_unresolved_includes, parse_with_includes, resolve_include_path,
@@ -40,6 +42,10 @@ impl Default for RunOptions {
 
 impl Script {
     pub fn parse(source: &str) -> Result<Self, String> {
+        Self::parse_version(source, false)
+    }
+
+    fn parse_version(source: &str, project: bool) -> Result<Self, String> {
         if source.len() > MAX_SCRIPT_BYTES {
             return Err("Script exceeds 16 MiB".into());
         }
@@ -54,8 +60,9 @@ impl Script {
                 "This script includes other files. Open it from its file path so those files can be loaded.".into(),
             );
         }
-        if document["version"] != 1 {
-            return Err("Unsupported script version; expected 1".into());
+        let version = if project { 2 } else { 1 };
+        if document["version"] != version {
+            return Err(format!("Unsupported script version; expected {version}"));
         }
         if document["name"].as_str().is_none_or(str::is_empty) {
             return Err("Script needs a name".into());
@@ -63,7 +70,7 @@ impl Script {
         let steps = document["steps"]
             .as_array()
             .ok_or("Script needs a steps array")?;
-        if steps.is_empty() {
+        if steps.is_empty() && !project {
             return Err("Script needs at least one step".into());
         }
         if document.get("checks").is_some_and(|v| !v.is_array()) {
@@ -75,7 +82,11 @@ impl Script {
         {
             return Err("Unknown final verification gate".into());
         }
-        if document.get("starting_state").is_some_and(|v| v != "empty") {
+        if project {
+            if document["starting_state"] != "project" {
+                return Err("Version 2 scripts require starting_state project".into());
+            }
+        } else if document.get("starting_state").is_some_and(|v| v != "empty") {
             return Err("Version 1 scripts require starting_state empty".into());
         }
         let mut available = BTreeSet::<String>::new();
@@ -1077,11 +1088,17 @@ where
 
 /// Run the same interpreter with progress carried on existing host calls;
 /// observing progress never adds calls or changes authored execution order.
-pub fn run_with_progress<F>(
-    script: &Script,
-    mut host: F,
-    options: RunOptions,
-) -> Result<Value, String>
+pub fn run_with_progress<F>(script: &Script, host: F, options: RunOptions) -> Result<Value, String>
+where
+    F: FnMut(&str, Value, RunProgress) -> Result<Value, String>,
+{
+    if script.document["version"] != 1 {
+        return Err("Project-backed scripts require the project baseline runner".into());
+    }
+    run_steps(script, host, options)
+}
+
+fn run_steps<F>(script: &Script, mut host: F, options: RunOptions) -> Result<Value, String>
 where
     F: FnMut(&str, Value, RunProgress) -> Result<Value, String>,
 {
