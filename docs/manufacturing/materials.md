@@ -53,3 +53,5 @@ guessing. Consumers must select the intended property, source and context, and
 validate constitutive assumptions, physical bounds and temperature/process
 applicability themselves. This scalar conversion boundary is not a general unit
 expression parser, temperature-offset converter, or a FEM/BIM solver.
+
+Engineering consumers select properties through `MaterialDetails::select_property(name, context, source_id)`, then call `value_si` with the required physical dimension. Selection validates provenance and rejects missing or ambiguous matches; optional context/source filters match exactly. Reordering records cannot change the selected result. Equal numbers with different provenance still need an explicit selection. The legacy print-density preference remains print metadata, not a solver selection policy.

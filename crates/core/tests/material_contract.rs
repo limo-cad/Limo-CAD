@@ -158,3 +158,71 @@ fn broader_families_do_not_weaken_identity_and_source_validation() {
     source.properties[0].value = MaterialValue::Number(f64::INFINITY);
     assert!(source.validate().is_err());
 }
+
+#[test]
+fn property_selection_requires_unambiguous_context_and_survives_reordering() {
+    let mut source = material("plastic", "kg/m^3", MaterialValue::Number(1060.0));
+    source.properties[0].context = "Engineering reference".into();
+    let mut print = source.properties[0].clone();
+    print.context = "Print profile".into();
+    print.value = MaterialValue::Number(1040.0);
+    source.properties.push(print);
+    for _ in 0..2 {
+        assert!(source.select_property("Density", None, None).is_err());
+        assert!(source
+            .select_property("Density", Some("Engineering"), None)
+            .is_err());
+        assert!(source.select_property("Missing", None, None).is_err());
+        assert!(source
+            .select_property("Density", Some("Print profile"), Some("missing"))
+            .is_err());
+        assert_eq!(
+            source
+                .select_property("Density", Some("Engineering reference"), None)
+                .unwrap()
+                .value_si(D::Density)
+                .unwrap(),
+            1060.0
+        );
+        assert_eq!(
+            source
+                .select_property("Density", Some("Print profile"), Some("fixture"))
+                .unwrap()
+                .value_si(D::Density)
+                .unwrap(),
+            1040.0
+        );
+        source.properties.reverse();
+    }
+    let reopened: MaterialDetails =
+        serde_json::from_str(&serde_json::to_string(&source).unwrap()).unwrap();
+    assert!(reopened.select_property("Density", None, None).is_err());
+}
+
+#[test]
+fn property_selection_preserves_provenance_even_when_values_match() {
+    let mut source = material("metal", "kg/m^3", MaterialValue::Number(2700.0));
+    let mut alternate = source.sources[0].clone();
+    alternate.id = "alternate".into();
+    source.sources.push(alternate);
+    let mut property = source.properties[0].clone();
+    property.source_id = "alternate".into();
+    source.properties.push(property);
+    assert!(source.select_property("Density", None, None).is_err());
+    assert_eq!(
+        source
+            .select_property("Density", None, Some("alternate"))
+            .unwrap()
+            .source_id,
+        "alternate"
+    );
+    source.properties.push(source.properties[1].clone());
+    assert!(source
+        .select_property("Density", None, Some("alternate"))
+        .is_err());
+    source.properties.pop();
+    source.sources.pop();
+    assert!(source
+        .select_property("Density", None, Some("alternate"))
+        .is_err());
+}

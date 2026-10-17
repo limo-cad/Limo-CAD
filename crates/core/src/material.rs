@@ -76,6 +76,33 @@ pub struct MaterialDetails {
     pub warnings: Vec<String>,
 }
 impl MaterialDetails {
+    /// Select a unique, validated property without guessing between engineering
+    /// references and print profiles. Optional filters are exact matches, not
+    /// prefixes. Even numerically equal records remain ambiguous when their
+    /// provenance differs. Callers can display candidates before selecting.
+    pub fn select_property(
+        &self,
+        name: &str,
+        context: Option<&str>,
+        source_id: Option<&str>,
+    ) -> Result<&MaterialProperty, String> {
+        self.validate()?;
+        let mut candidates = self.properties.iter().filter(|property| {
+            property.name == name
+                && context.is_none_or(|value| property.context == value)
+                && source_id.is_none_or(|value| property.source_id == value)
+        });
+        let selected = candidates.next().ok_or_else(|| {
+            format!("No material property '{name}' matches the selected context/source")
+        })?;
+        if candidates.next().is_some() {
+            return Err(format!(
+                "Material property '{name}' is ambiguous; select its exact context and source"
+            ));
+        }
+        Ok(selected)
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if !matches!(
             self.kind.as_str(),

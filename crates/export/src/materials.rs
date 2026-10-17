@@ -250,6 +250,42 @@ mod tests {
     }
 
     #[test]
+    fn engineering_density_requires_explicit_context_for_mixed_catalog_records() {
+        for (id, engineering_context, engineering_density) in [
+            ("generic.abs.black", "Engineering reference: ABS", 1060.0),
+            (
+                "generic.pa.natural",
+                "Engineering reference: Polyamide 6",
+                1150.0,
+            ),
+            (
+                "generic.pc.clear",
+                "Engineering reference: PC-Molded",
+                1200.0,
+            ),
+        ] {
+            let material = find_preset(id).unwrap().material.as_ref().unwrap();
+            assert!(
+                material.select_property("Density", None, None).is_err(),
+                "{id}"
+            );
+            let selected = material
+                .select_property("Density", Some(engineering_context), None)
+                .unwrap();
+            assert_eq!(
+                selected
+                    .value_si(limo_cad_core::PhysicalDimension::Density)
+                    .unwrap(),
+                engineering_density
+            );
+            assert!(material
+                .sources
+                .iter()
+                .any(|source| source.id == selected.source_id));
+        }
+    }
+
+    #[test]
     fn full_snapshot_survives_missing_preset_and_shorthand_resolves_catalog() {
         let mut appearance = find_preset("generic.pla.gray")
             .unwrap()
