@@ -939,6 +939,7 @@ dependencies = [
 name = "limo-cad-project-file"
 version = "0.3.0-rc.1"
 dependencies = [
+ "base64",
  "ciborium",
  "serde",
  "serde_json",

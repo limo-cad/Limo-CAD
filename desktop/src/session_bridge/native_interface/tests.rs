@@ -772,3 +772,49 @@ pub(crate) fn assert_motion_csv(csv: &str, rate: usize) {
         }
     }
 }
+
+#[test]
+fn composite_command_retires_owner_only_after_valid_snapshot_load() {
+    let _lock = super::super::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let owner = fixture.owner();
+    let original = fixture.engine.project_snapshot().unwrap();
+    let snapshot = limo_cad_project_file::ProjectSnapshot::new(
+        original.model_json().to_owned(),
+        vec![limo_cad_project_file::SnapshotIntent {
+            name: "intent/command.cbor".into(),
+            payload: vec![0, 255, 7],
+        }],
+    )
+    .unwrap();
+    let loaded = fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &owner,
+            "cad_load_project_snapshot",
+            &json!({"snapshot_cbor_base64":snapshot.encode_base64().unwrap()}),
+            || Ok(()),
+        )
+        .unwrap();
+    assert_ne!(loaded.context, owner);
+    assert_eq!(
+        fixture.engine.project_snapshot().unwrap().intents(),
+        snapshot.intents()
+    );
+    assert!(fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &loaded.context,
+            "cad_load_project_snapshot",
+            &json!({"snapshot_cbor_base64":"***"}),
+            || Ok(())
+        )
+        .is_err());
+    assert_eq!(fixture.owner(), loaded.context);
+    assert_eq!(
+        fixture.engine.project_snapshot().unwrap().intents(),
+        snapshot.intents()
+    );
+}

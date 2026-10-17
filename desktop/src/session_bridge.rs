@@ -857,7 +857,10 @@ fn reserve_project_export(
 }
 
 fn is_project_replacement(name: &str) -> bool {
-    matches!(name, "cad_new_project" | "cad_load_project_model")
+    matches!(
+        name,
+        "cad_new_project" | "cad_load_project_model" | "cad_load_project_snapshot"
+    )
 }
 
 /// The native interface and inbox use the same replacement dispatcher and
@@ -879,6 +882,8 @@ fn dispatch_project_replacement(
         Ok(payload) => {
             let raw = if name == "cad_load_project_model" {
                 engine.project_load(&payload)
+            } else if name == "cad_load_project_snapshot" {
+                engine.project_load_snapshot_encoded(&payload)
             } else {
                 engine.project_new()
             };

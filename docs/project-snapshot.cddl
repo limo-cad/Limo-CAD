@@ -10,3 +10,8 @@ project-snapshot = {
 ; Intent names: unique safe relative names under intent/, <=256 ASCII bytes.
 ; Encoded payload <=256 MiB; recursion <=16. Unknown domain bytes are retained.
 ; Model/domain live state, history and publication must commit as one revision.
+
+; JSON command wrapper: snapshot_cbor_base64 is standard padded base64 of this
+; CBOR map (maximum 357913944 encoded bytes). This wrapper is not native CBOR.
+; Decode checks encoded length before allocation, then enforces CBOR limits.
+; Script/native-control admission limits remain independent and smaller.

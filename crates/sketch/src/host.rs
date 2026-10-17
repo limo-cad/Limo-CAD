@@ -400,6 +400,11 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
             manager.set_document_name(name)
         }),
         "project_prepare_new" => to_json(manager.prepare_new_project()),
+        "project_prepare_load_snapshot" => with_payload(payload, |encoded: String| {
+            let snapshot = limo_cad_project_file::ProjectSnapshot::decode_base64(&encoded)
+                .map_err(|error| SessionError::Solid(error.to_string()))?;
+            manager.prepare_load_project_snapshot(&snapshot)
+        }),
         "project_prepare_load" => {
             with_payload(payload, |model: String| manager.prepare_load_project(model))
         }
