@@ -1,0 +1,319 @@
+{
+  "recorded_utc": "2026-10-17T15:22:47.814724+00:00",
+  "scope": "PR420 movable/resizable Settings and shared feature dialogs",
+  "status": "focused_live_checks_completed_with_open_drag_issue",
+  "publication_source": "bafaf561080acbf968f1ce2799274b4b3ed09cba",
+  "dialog_implementation_commit": "682fb6921aaa57b7e31a405033e2bf6640837a8b",
+  "integration_source": "3a6889632775c58c5010bd95c8a8b7919918a86d",
+  "main": "49dec66db7a0707c9fcd715a003a7abaa61b8801",
+  "dependencies": {
+    "433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "implementation": {
+    "standard_bevy": [
+      "Dialog",
+      "DialogDragHandle",
+      "DialogPlugin",
+      "PointerDrag"
+    ],
+    "shared_adapter_lines": 175,
+    "adapter_scope": [
+      "resize handle and minimum dimensions",
+      "clamp whole dialog to client window",
+      "preserve existing modal layer order",
+      "translated scroll and annotation bounds"
+    ],
+    "geometry_lifetime": "open dialog only; close/reopen restores usual geometry",
+    "excluded": [
+      "bespoke panels not using the shared feature painter",
+      "OS file choosers",
+      "docking and persistent window layouts"
+    ]
+  },
+  "source_checks": {
+    "distinct_interface_tests_passed": 101,
+    "distinct_settings_tests_passed": 7,
+    "strict_release_library_and_test_clippy": "passed",
+    "release_application_build": "passed",
+    "workflow_yaml_parse": "passed",
+    "diff_check": "passed",
+    "logs": [
+      "v7/interface-tests.log",
+      "v7/title-drag-recheck.log",
+      "v7/settings-tests.log",
+      "v7/settings-layout-recheck.log",
+      "v7/settings-theme-recheck.log",
+      "v7/settings-retry-final.log",
+      "v7/final-clippy.log",
+      "v7/build-widgets.log",
+      "v8/dialog-tests.log",
+      "v8/clippy.log",
+      "v8/build-widgets.log"
+    ],
+    "repair_history": [
+      "Title-drag test begins its captured drag inside the window before crossing the edge, matching Bevy drag-start semantics.",
+      "Settings Retry fixture now uses real Bevy hierarchy/layout/stack with TimePlugin rather than top-level-only mock rectangles.",
+      "Earlier failed runs and lock-poison cascades remain in logs; each failed case was rechecked successfully.",
+      "Real V7 GUI startup exposed duplicate DialogPlugin installation through DefaultPlugins. bafaf561 guards registration and adds installs_with_bevys_dialog_plugin_already_present. All three dialog tests, strict Clippy, release build and real V8 GUI startup passed."
+    ],
+    "validation_scope": "108 distinct focused cases across retained runs; the three dialog tests, strict release library/test Clippy and release build were rerun after the startup fix. Prior unaffected passes retained."
+  },
+  "package": {
+    "recorded_utc": "2026-10-17T14:55:23.121108+00:00",
+    "build": {
+      "channel": "development",
+      "modified": false,
+      "revision": "3a6889632775c58c5010bd95c8a8b7919918a86d",
+      "version": "0.3.0-rc.1"
+    },
+    "features": [
+      "experimental-ui-widgets"
+    ],
+    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v8/widgets/Limo CAD PR420 Widgets V8.app",
+    "engine_sha256": "004af36102ae09b68bca35fd0b9cf35f831d071375224045246a530000adcc5c",
+    "signature": "ad-hoc; deep strict verification passed",
+    "bundled_occt_loaded": true,
+    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "baseline": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
+    "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "live_ui": {
+    "input_method": "Native macOS CUA only; read-only MCP inspection/capture verifies rendered effects. File reads verify saved model; no MCP mutations.",
+    "build_pair": "matched, clean 3a6889632775c58c5010bd95c8a8b7919918a86d",
+    "passed": 11,
+    "blocked": 1,
+    "not_run": 2,
+    "cases": [
+      {
+        "id": "settings_basic_drag_resize",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Title moves Settings; corner changes size without losing controls.",
+        "actual": "Settings moved from (440,80) to (315,145) UI pixels and resized from 480x700 to 620x460; content reflowed and footer stayed visible.",
+        "evidence": [
+          "v8/widgets/settings-default.png",
+          "v8/widgets/settings-dragged.png",
+          "v8/widgets/settings-dragged-inspect.json"
+        ]
+      },
+      {
+        "id": "settings_scroll_resized",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Resized content remains reachable by scrolling.",
+        "actual": "At 468x546, wheel scrolling reached interface size and GPU options; previous/next availability updated. This case did not separately exercise scrolling after a title translation.",
+        "evidence": [
+          "v8/widgets/settings-short-resize-inspect.json",
+          "v8/widgets/settings-scrolled-focus.png",
+          "v8/widgets/settings-scrolled-focus-inspect.json"
+        ]
+      },
+      {
+        "id": "settings_keyboard_resized",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Tab moves forward and Shift-Tab reverses within Settings.",
+        "actual": "Tab focused Close settings, another Tab focused 3D mouse speed, and Shift-Tab returned to Close settings; focus stayed in the modal.",
+        "evidence": [
+          "v8/widgets/settings-scrolled-focus-inspect.json"
+        ]
+      },
+      {
+        "id": "settings_scale_125",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Interface size changes preserve usable content and footer.",
+        "actual": "125% selected, readable content and footer inside the window; restored 100% afterward.",
+        "evidence": [
+          "v8/widgets/settings-125.png",
+          "v8/widgets/settings-125-inspect.json"
+        ]
+      },
+      {
+        "id": "settings_reopen_geometry",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Closing and reopening discards floating geometry.",
+        "actual": "Close button and footer bounds returned exactly to default positions after the moved/resized dialog was closed.",
+        "evidence": [
+          "v8/widgets/settings-default-inspect.json",
+          "v8/widgets/settings-reopened-inspect.json"
+        ]
+      },
+      {
+        "id": "extrude_draft_and_annotation",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Moving/resizing retains draft values, selected profiles and a clear canvas distance field.",
+        "actual": "Existing 12 mm feature edited to a 14 mm draft; title moved -250,+50 UI pixels, width grew 320 to 425 and height decreased by 133. Both distance fields stayed 14, Merge profiles stayed selected, and the canvas field moved left to avoid the panel.",
+        "evidence": [
+          "v8/widgets/extrude-draft.png",
+          "v8/widgets/extrude-moved-inspect.json",
+          "v8/widgets/extrude-resized.png",
+          "v8/widgets/extrude-resized-inspect.json"
+        ]
+      },
+      {
+        "id": "extrude_scroll_resized",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Lower options remain reachable with Apply/Cancel visible.",
+        "actual": "Wheel scrolling in the moved/resized form exposed Taper angle and Flip direction while retaining the footer.",
+        "evidence": [
+          "v8/widgets/extrude-scrolled.png",
+          "v8/widgets/extrude-scrolled-inspect.json"
+        ]
+      },
+      {
+        "id": "extrude_cancel_restore",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Cancel discards the resized dialog draft.",
+        "actual": "Reopening the existing feature showed 12 in both distance fields and Merge profiles selected.",
+        "evidence": [
+          "v8/widgets/extrude-cancelled.png",
+          "v8/widgets/extrude-restored-inspect.json"
+        ]
+      },
+      {
+        "id": "revolve_shared_bounds_minimum_cancel",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Another shared form respects window bounds, minimum width, validation and Cancel.",
+        "actual": "Rightward title drag clamped the 320-wide form to x=1032 in a 1360-wide window (8 px margin). Shrinking stopped at 280 UI px wide. Angle remained 360; missing-profile Apply stayed disabled. Cancel returned to the unchanged model.",
+        "evidence": [
+          "v8/widgets/revolve-right-bound.png",
+          "v8/widgets/revolve-right-bound-inspect.json",
+          "v8/widgets/revolve-resized.png",
+          "v8/widgets/revolve-resized-inspect.json"
+        ]
+      },
+      {
+        "id": "extrude_apply_undo_save",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Apply from a translated dialog works; Undo and Save restore the original model.",
+        "actual": "Coordinate-clicked translated Apply. Saved model contained distance 14. Undo and Save restored distance 12, two valid history features and byte-identical model.json.",
+        "evidence": [
+          "v8/widgets/extrude-before-apply-inspect.json",
+          "v8/widgets/extrude-applied.png",
+          "v8/widgets/extrude-applied-saved.json",
+          "v8/widgets/extrude-undo-saved.json",
+          "v8/widgets/extrude-undo.png"
+        ]
+      },
+      {
+        "id": "post_cleanup",
+        "status": "passed",
+        "functional": "passed",
+        "polish": "passed",
+        "expected": "Current app, inspection and saved fixture survive disposable-build cleanup.",
+        "actual": "Live capture succeeded with clean matching GUI/MCP revision 3a688963; saved model SHA-256 still matches the baseline after removing the rebuild target and obsolete V7 app.",
+        "evidence": [
+          "v8/widgets/post-cleanup.png",
+          "v8/widgets/post-cleanup-inspect.json",
+          "../disk-cleanup-20261017/final-verification.json"
+        ]
+      },
+      {
+        "id": "settings_large_repeated_drag",
+        "status": "blocked",
+        "functional": "unresolved",
+        "polish": "not_qualified",
+        "expected": "Every title/corner drag starts at its handle and never activates the backdrop or another control.",
+        "actual": "Basic drags pass, but some large CUA gestures are inconsistent: a second title drag dismissed Settings and one large resize focused Light without changing dimensions. Product behavior versus input delivery/event batching is unresolved; no workaround added.",
+        "reproduction": [
+          "At 100%, open centered Settings, click title at native screenshot (1150,270), drag to (550,270), then capture completed frame.",
+          "Drag from the now-visible title (550,270) to (30,270). Native accessibility reported the dialog removed and File focused.",
+          "Separate reopened attempt: prime corner (1824,1608), drag to (1300,650). Settings stayed 480x700 and Light gained focus. Shorter corner drag to (1800,1300) subsequently resized correctly."
+        ],
+        "evidence": [
+          "v8/widgets/settings-left.png",
+          "v8/widgets/settings-left-inspect.json",
+          "v8/widgets/settings-minimum-inspect.json",
+          "v8/widgets/settings-short-resize-inspect.json"
+        ],
+        "next_hypothesis": "Check native input delivery and Bevy picking when press/move/release are coalesced by the idle host; distinguish this from ordinary human dragging before altering standard handling.",
+        "repair_policy": "Bounded initial investigation; unresolved item recorded while unaffected cases were completed."
+      },
+      {
+        "id": "minimum_height_live",
+        "status": "not_run",
+        "reason": "Minimum height has source coverage; an exact live minimum-height boundary was not established."
+      },
+      {
+        "id": "host_window_resize_live",
+        "status": "not_run",
+        "reason": "Host window resizing after moving a dialog was not exercised live; source bounds/UI-scale tests passed."
+      }
+    ],
+    "prior_blockers": [
+      "Mac lock cleared after user confirmation.",
+      "V7 GUI startup failure fixed by bafaf561; V7 headless initialization had not qualified GUI startup."
+    ],
+    "visual_comparison": "Themed controls, title/content/footer structure and canvas annotation remain similar. Extra resize corner and scroll arrows are acceptable differences. Large-gesture issue is functional and not accepted as cosmetic."
+  },
+  "fixture": {
+    "path": "v8/fixtures/widgets-profile.limo",
+    "model_sha256": "718af2d51860cc86ff02a136edf7e982241546266badbaaef20007d353f4761b",
+    "baseline_model_equal": true,
+    "after_undo_model_equal": true,
+    "applied_distance_mm": 14,
+    "restored_distance_mm": 12
+  },
+  "broad_qualification": "paused; existing UI/MCP ledger unchanged; no MCP mutations or modeling scripts",
+  "prior_standard_input_evidence": "bevy-widgets-standard-input-20261017.json",
+  "feature": "experimental-ui-widgets remains opt-in; PR remains draft",
+  "artifact_root": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
+  "disk_cleanup": {
+    "initial_recovered_bytes": 68668850176,
+    "final_rebuild_cleanup_recovered_bytes": 2694721536,
+    "measured_total_recovered_bytes": 71363571712,
+    "removed_fully_merged_local_refs": [
+      "ci/cache-desktop-builds",
+      "review/sketch-and-macos-fixes"
+    ],
+    "preserved": [
+      "unmerged refs and all source worktrees",
+      "saved models and recovery/runtime data",
+      "V8 review app and Default V2 comparison app",
+      "captures, logs, reusable OCCT SDK and capture utility"
+    ],
+    "evidence": [
+      "../disk-cleanup-20261017/removed.json",
+      "../disk-cleanup-20261017/final-cleanup.json",
+      "../disk-cleanup-20261017/final-verification.json"
+    ]
+  },
+  "ci": {
+    "source_head": "bafaf561080acbf968f1ce2799274b4b3ed09cba",
+    "checked_utc": "2026-10-17T15:20:00Z",
+    "failed": 0,
+    "running": [
+      "Ubuntu desktop shell and native host",
+      "macOS native Bevy host",
+      "Windows native Bevy host",
+      "CodeQL (rust)"
+    ],
+    "note": "Passed source/security/visual jobs are distinct from live dialog acceptance. Native host jobs still running; no all-platform pass claimed."
+  },
+  "settings_snap_followup": {
+    "source_revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+    "evidence": "docs/qualification/bevy-settings-snap-20261017.json",
+    "snap_focus": "fixed; native click/Space/Tab/Shift+Tab and saved-model checks passed",
+    "settings_large_drag": "still blocked; ineffective timed-update trial removed; unrelated-control cancellation fix source-tested",
+    "historical_case_statuses_preserved": true
+  }
+}

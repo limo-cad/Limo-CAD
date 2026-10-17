@@ -101,6 +101,8 @@ pub(crate) struct HostInputState {
     pressed: HashSet<KeyCode>,
     model_drag: HashSet<MouseButton>,
     alt_graph: bool,
+    #[cfg(feature = "experimental-ui-widgets")]
+    pub(super) widget_drag: bool,
     click_press: Option<ControlKey>,
     last_click: Option<(Instant, ControlKey, [f64; 2], DocumentContext)>,
 }
@@ -224,8 +226,14 @@ impl HostInputState {
 /// Clear a completed/rejected atomic gesture without synthesizing a release
 /// that could activate a control under its last cursor position.
 pub(crate) fn cancel_native_pointer(world: &mut World, handle: &NativeInterfaceHandle) {
+    #[cfg(feature = "experimental-ui-widgets")]
+    super::interface_shell::widgets::cancel(world);
     if let Some(mut state) = world.get_resource_mut::<HostInputState>() {
         state.model_drag.clear();
+        #[cfg(feature = "experimental-ui-widgets")]
+        {
+            state.widget_drag = false;
+        }
         state.click_press = None;
         state.last_click = None;
     }
@@ -307,7 +315,7 @@ fn key_chord(input: &KeyboardInput, modifiers: Modifiers) -> KeyChord {
     }
 }
 
-fn input_window(event: &WindowEvent) -> Option<Entity> {
+pub(super) fn input_window(event: &WindowEvent) -> Option<Entity> {
     match event {
         WindowEvent::CursorMoved(event) => Some(event.window),
         WindowEvent::CursorEntered(event) => Some(event.window),
@@ -476,6 +484,24 @@ pub(crate) fn prepare_native_input(
             input.cursor,
             input.modifiers,
         )?;
+        #[cfg(feature = "experimental-ui-widgets")]
+        {
+            // A drag keeps its original canvas/field owner when crossing a
+            // widget. In particular, its release must reach route_one.
+            let native_pointer_capture = match &input.event {
+                WindowEvent::CursorMoved(_) => {
+                    handle.has_capture() || (!state.model_drag.is_empty() && !state.widget_drag)
+                }
+                WindowEvent::MouseButtonInput(event) => {
+                    handle.has_capture() || state.model_drag.contains(&event.button)
+                }
+                _ => false,
+            };
+            if !input.consumed && !native_pointer_capture {
+                input.consumed =
+                    super::interface_shell::widgets::owns_input(world, handle, &mut state, input);
+            }
+        }
         if !input.consumed {
             input.consumed = route_one(handle, &mut state, &input.event)?;
         }

@@ -131,3 +131,10 @@ recorder, persist raw 6DoF/touchpad packets or camera traces, or periodically
 capture the user's viewport. Regression debugging uses synthetic automated
 inputs. The feature-gated visual lab captures only its fixed development fixture and
 never attaches to a live user document or input stream.
+
+## Native widget styling
+
+The native host uses Bevy `=0.20.0` stable. The opt-in
+[headless widget exploration](../bevy-stable-widgets.md) preserves the current
+`ViewportUiTheme` and retained component builders while evaluating shared
+button and checkbox behavior.

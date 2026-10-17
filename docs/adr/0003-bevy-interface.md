@@ -10,6 +10,11 @@ Implementation checkpoints remain in the
 [pre-merge record](https://github.com/limo-cad/Limo-CAD/blob/c537f0232ab86f28b1be3ee46fa6bf5ff46db5b9/docs/adr/0003-bevy-interface.md).
 [Qualification receipts](../qualification/) record their source revisions and limits.
 
+The default desktop uses Bevy `=0.20.0` stable. The draft
+[headless widget exploration](../bevy-stable-widgets.md) adds a temporary opt-in
+experiment for shared buttons and checkboxes. Previous qualification receipts
+do not establish parity for the stable upgrade or the widget experiment.
+
 ## Decision
 
 Move the existing application's complete interface to Rust and Bevy. This is

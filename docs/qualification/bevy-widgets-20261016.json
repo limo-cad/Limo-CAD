@@ -1,0 +1,1364 @@
+{
+  "scope": "PR420 widget visual parity with PR433 and PR434 assumed merged",
+  "status": "scoped_comparison_recorded_with_shared_baseline_issue",
+  "tested_revision": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
+  "publication_code_revision": "21e0ef5dd70473a07defacaa41d037203170f250",
+  "main_revision": "49dec66db7a0707c9fcd715a003a7abaa61b8801",
+  "dependency_heads": {
+    "433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "dependencies_locally_merged_only": true,
+  "platform": "macOS Apple silicon",
+  "builds": {
+    "default": {
+      "experimental_ui_widgets": false,
+      "engine_sha256": "c651f077e4f200704e7e1d29d69d973d3462be85d2632f2fc7b09fd69d8b96b5",
+      "clean_build_identity": {
+        "channel": "development",
+        "modified": false,
+        "revision": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
+        "version": "0.3.0-rc.1"
+      },
+      "signature": "ad-hoc; deep strict verification passed",
+      "bundled_occt_loaded": true
+    },
+    "widgets": {
+      "experimental_ui_widgets": true,
+      "engine_sha256": "eceb01a4c957b1476f634fcb164f9019a6572d307f232ab5eea9f2593a52fa7b",
+      "clean_build_identity": {
+        "channel": "development",
+        "modified": false,
+        "revision": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
+        "version": "0.3.0-rc.1"
+      },
+      "signature": "ad-hoc; deep strict verification passed",
+      "bundled_occt_loaded": true
+    }
+  },
+  "appearance": {
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "locales": [
+      "en",
+      "zh-CN"
+    ],
+    "interface_scales": [
+      1,
+      1.25
+    ],
+    "display_scale": 2,
+    "logical_client": [
+      1360,
+      860
+    ],
+    "capture_pixels": [
+      2720,
+      1720
+    ]
+  },
+  "acceptance": "Comparable appearance; minor differences acceptable when existing workflow remains intact.",
+  "input_gate": {
+    "status": "user_authorized_scoped_macos_exception",
+    "rule": ".cursor/rules/surface-qualification.mdc",
+    "authorization": "User authorized the scoped macOS app automation and then instructed: push it, and start testing again.",
+    "mechanism": "CUA native app pointer/keyboard actions with fresh observations; isolated signed PR420 test apps and fixture copies.",
+    "modeling_scripts_or_mcp_mutations_used": false
+  },
+  "ui_summary": {
+    "passed": 11,
+    "shared_baseline_issues": 1,
+    "new_widget_regressions_observed": 0,
+    "paired_visual_states": 13,
+    "scope_complete": true,
+    "full_adoption_gate_passed": false
+  },
+  "ui_cases": [
+    {
+      "id": "file-menu",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "Untitled isolated scratch document",
+      "expected": "Open File menu and Settings once; labels, icons and disabled entries remain legible.",
+      "actual": "The native pointer opens each surface once with comparable labels and disabled styling.",
+      "evidence": [
+        "v2/default/file-menu-inspect.json",
+        "v2/widgets/file-menu-inspect.json",
+        "v2/default/file-menu.png",
+        "v2/widgets/file-menu.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "light-settings",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "Untitled isolated scratch document",
+      "expected": "Preserve light-theme settings labels, spacing and selection states.",
+      "actual": "Settings layout and selected controls match; only background grid position and edge pixels differ.",
+      "evidence": [
+        "v2/default/settings-light-inspect.json",
+        "v2/widgets/settings-light-inspect.json",
+        "v2/default/settings-light.png",
+        "v2/widgets/settings-light.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "dark-chinese-125",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "Untitled isolated scratch document",
+      "expected": "Switch to dark, Chinese and 125% interface size; retain readable controls and scrolling.",
+      "actual": "All three choices apply; translated labels and selected/focus styling match. Lower content remains reachable by scrolling.",
+      "evidence": [
+        "v2/default/settings-dark-zh-125-inspect.json",
+        "v2/widgets/settings-dark-zh-125-inspect.json",
+        "v2/default/settings-dark-zh-125.png",
+        "v2/widgets/settings-dark-zh-125.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "settings-scroll-toggle-keyboard",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "Untitled isolated scratch document",
+      "expected": "Scroll to the stock-removal toggle, switch it off with the pointer and back on with Space.",
+      "actual": "Both variants show selected=false then selected=true in native inspection, with matching focus and selected styling.",
+      "evidence": [
+        "v2/default/settings-toggle-off-inspect.json",
+        "v2/default/settings-toggle-on-keyboard-inspect.json",
+        "v2/widgets/settings-toggle-off-inspect.json",
+        "v2/widgets/settings-toggle-on-keyboard-inspect.json",
+        "v2/default/settings-toggle-off.png",
+        "v2/default/settings-toggle-on-keyboard.png",
+        "v2/widgets/settings-toggle-off.png",
+        "v2/widgets/settings-toggle-on-keyboard.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "two-profile-merge",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "fixtures/{variant}-profile.limo",
+      "expected": "Select the center region and surrounding ring, then enable Merge profiles.",
+      "actual": "Two source regions are selected; the checkbox becomes checked and the preview shows one combined volume.",
+      "evidence": [
+        "v2/default/extrude-merge-preview-inspect.json",
+        "v2/widgets/extrude-merge-preview-inspect.json",
+        "v2/default/extrude-merge-preview.png",
+        "v2/widgets/extrude-merge-preview.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "distance-commit-single-apply",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "fixtures/{variant}-profile.limo",
+      "expected": "Enter 12 mm, apply once and fit; create one body and one extrusion history step.",
+      "actual": "Both distance fields show 12 before application. Body1 and Extrude1 appear once; the history contains Sketch1 and Extrude1.",
+      "evidence": [
+        "v2/default/extrude-applied-inspect.json",
+        "v2/widgets/extrude-applied-inspect.json",
+        "v2/default/extrude-applied.png",
+        "v2/widgets/extrude-applied.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "earlier-sketch-edit",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "fixtures/{variant}-profile.limo",
+      "expected": "Edit Sketch1 through history and hide later extrusion geometry while editing.",
+      "actual": "Both variants show the nested sketch regions without the later body in the canvas; finishing restores the body.",
+      "evidence": [
+        "v2/default/history-sketch-edit-inspect.json",
+        "v2/widgets/history-sketch-edit-inspect.json",
+        "v2/default/history-sketch-edit.png",
+        "v2/widgets/history-sketch-edit.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "release-outside",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "widgets"
+      ],
+      "fixture": "fixtures/{variant}-profile.limo",
+      "expected": "Press Finish Sketch and release over the canvas without activating the button.",
+      "actual": "The widget-enabled build remains in sketch mode; Finish Sketch remains present. A subsequent keyboard Space on the still-focused button finishes the sketch.",
+      "evidence": [
+        "v2/widgets/finish-release-outside-inspect.json",
+        "v2/widgets/finish-release-outside.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "undo-redo",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "fixtures/{variant}-profile.limo",
+      "expected": "Undo the extrusion and redo it without duplicate history entries.",
+      "actual": "Undo leaves Sketch1 and no body; redo restores Body1 and Extrude1. Final saved history contains exactly two features.",
+      "evidence": [
+        "v2/default/undo-extrude-inspect.json",
+        "v2/default/redo-saved-inspect.json",
+        "v2/widgets/undo-extrude-inspect.json",
+        "v2/widgets/redo-saved-inspect.json",
+        "v2/default/undo-extrude.png",
+        "v2/default/redo-saved.png",
+        "v2/widgets/undo-extrude.png",
+        "v2/widgets/redo-saved.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "save-reopen",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "fixtures/{variant}-profile.limo",
+      "expected": "Save each disposable fixture, reopen it through the native chooser and preserve profile semantics.",
+      "actual": "Fresh sessions show Body1, Sketch1 and Extrude1. Both schema-15 model.json payloads are exactly equal, including distance=12, merge_profiles=true and flip=false.",
+      "evidence": [
+        "v2/default/redo-saved-inspect.json",
+        "v2/default/extrude-edit-reopened-inspect.json",
+        "v2/widgets/redo-saved-inspect.json",
+        "v2/widgets/extrude-edit-reopened-inspect.json",
+        "v2/default/redo-saved.png",
+        "v2/default/extrude-edit-reopened.png",
+        "v2/widgets/redo-saved.png",
+        "v2/widgets/extrude-edit-reopened.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "feature-edit-cancel",
+      "functional_status": "passed",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "fixtures/{variant}-profile.limo",
+      "expected": "Reopen Extrude1, verify its values, toggle Flip direction, then cancel.",
+      "actual": "Both edit dialogs restore two profiles, Merge checked and 12 mm. Flip can be checked, then Cancel dismisses the dialog and restores the original upright body.",
+      "evidence": [
+        "v2/default/extrude-edit-reopened-inspect.json",
+        "v2/default/extrude-cancel-result-inspect.json",
+        "v2/widgets/extrude-edit-reopened-inspect.json",
+        "v2/widgets/extrude-cancel-result-inspect.json",
+        "v2/default/extrude-edit-reopened.png",
+        "v2/default/extrude-cancel-result.png",
+        "v2/widgets/extrude-edit-reopened.png",
+        "v2/widgets/extrude-cancel-result.png"
+      ],
+      "fix_commit": null
+    },
+    {
+      "id": "sketch-palette-snap",
+      "functional_status": "shared_baseline_issue",
+      "visual_status": "comparable",
+      "variants": [
+        "default",
+        "widgets"
+      ],
+      "fixture": "fixtures/{variant}-profile.limo",
+      "expected": "The displayed Snap square and row both toggle and retain a usable keyboard focus target.",
+      "actual": "A pointer click at screenshot (2678,614), inside the displayed square, had no effect in both builds. Clicking the row at (2520,614) toggled it. Inspection then showed focused_control=null, and Space did not toggle it. Restored Snap using the row in both builds.",
+      "evidence": [
+        "v2/default/sketch-snap-hit-target-inspect.json",
+        "v2/widgets/sketch-snap-hit-target-inspect.json",
+        "v2/default/sketch-snap-hit-target.png",
+        "v2/widgets/sketch-snap-hit-target.png"
+      ],
+      "fix_commit": null
+    }
+  ],
+  "visual_comparison": {
+    "interpretation": "Comparable tested control appearance with no newly observed clipping or workflow obstruction from widgets. Names differ intentionally. Modeling scenes differ only in a two-pixel history-track line after masking the two filename labels. Settings/menu captures have different empty-grid positions; control bounds and states agree. Feature-edit/cancel captures also differ in browser expansion and small header details; the edit-dialog pixels are identical. Full raw differences are retained below rather than treated as a pixel-perfect pass.",
+    "pairs": [
+      {
+        "case": "extrude-applied",
+        "captures": {
+          "default": {
+            "path": "v2/default/extrude-applied.png",
+            "sha256": "1deb3815f92b800cb11b878be809000d80a7d3e2a58ae1c1fde3a20e9471a7ee"
+          },
+          "widgets": {
+            "path": "v2/widgets/extrude-applied.png",
+            "sha256": "a9439a00e9c18013e4904b74ccacd35b1313e5cfc89129b90813d299961fa078"
+          }
+        },
+        "raw": {
+          "changed_pixels": 7893,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            52,
+            21,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 207,
+          "mean_channel_difference": [
+            0.10614697332421341,
+            0.10160247093023256,
+            0.09680660054719563
+          ]
+        },
+        "filename_mask_boxes_inclusive": [
+          [
+            220,
+            16,
+            450,
+            54
+          ],
+          [
+            48,
+            313,
+            300,
+            348
+          ]
+        ],
+        "filename_normalized": {
+          "changed_pixels": 3969,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            676,
+            1670,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 41,
+          "mean_channel_difference": [
+            0.030266971614227086,
+            0.026499658002735977,
+            0.022829599863201093
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      },
+      {
+        "case": "extrude-cancel-result",
+        "captures": {
+          "default": {
+            "path": "v2/default/extrude-cancel-result.png",
+            "sha256": "a5e530803f156194e13118858a1e365e9a01ed0d7ff94f054f13f347c7341424"
+          },
+          "widgets": {
+            "path": "v2/widgets/extrude-cancel-result.png",
+            "sha256": "d0765d641305bd8c59e32b087f49c23aee7079dc0332ee9e43f5a6ee7a2659bd"
+          }
+        },
+        "raw": {
+          "changed_pixels": 11607,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            47,
+            21,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 207,
+          "mean_channel_difference": [
+            0.1800641244870041,
+            0.17447161422708618,
+            0.16967275136798907
+          ]
+        },
+        "filename_mask_boxes_inclusive": [
+          [
+            220,
+            16,
+            450,
+            54
+          ],
+          [
+            48,
+            313,
+            300,
+            348
+          ]
+        ],
+        "filename_normalized": {
+          "changed_pixels": 7683,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            47,
+            24,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 206,
+          "mean_channel_difference": [
+            0.10418412277701779,
+            0.09936880129958961,
+            0.09569575068399452
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": false
+      },
+      {
+        "case": "extrude-edit-reopened",
+        "captures": {
+          "default": {
+            "path": "v2/default/extrude-edit-reopened.png",
+            "sha256": "b94f001c3fedfeae385130a559c8d10d39f0501385c497cc4e948bc7721f4d8a"
+          },
+          "widgets": {
+            "path": "v2/widgets/extrude-edit-reopened.png",
+            "sha256": "009824e003c0309413e5b4a1c4701831c024c470e2f2717baab1b9f13589a936"
+          }
+        },
+        "raw": {
+          "changed_pixels": 11607,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            47,
+            21,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 207,
+          "mean_channel_difference": [
+            0.1799858926128591,
+            0.17441048221614228,
+            0.16963406292749658
+          ]
+        },
+        "filename_mask_boxes_inclusive": [
+          [
+            220,
+            16,
+            450,
+            54
+          ],
+          [
+            48,
+            313,
+            300,
+            348
+          ]
+        ],
+        "filename_normalized": {
+          "changed_pixels": 7683,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            47,
+            24,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 206,
+          "mean_channel_difference": [
+            0.10410589090287278,
+            0.09930766928864569,
+            0.09565706224350205
+          ]
+        },
+        "dialog_region": {
+          "box_exclusive": [
+            2040,
+            264,
+            2680,
+            1516
+          ],
+          "changed_pixels": 0,
+          "total_pixels": 801280,
+          "difference_bbox": null,
+          "max_channel_difference": 0,
+          "mean_channel_difference": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": false
+      },
+      {
+        "case": "extrude-merge-preview",
+        "captures": {
+          "default": {
+            "path": "v2/default/extrude-merge-preview.png",
+            "sha256": "ed7aef3a0ce03ddc1846034cc22b00b7d12cc2d7078120ce628aabd479ae94cc"
+          },
+          "widgets": {
+            "path": "v2/widgets/extrude-merge-preview.png",
+            "sha256": "98cea156374b85c2a1aed006ceeb2caed8e9309fb636d74d5288d41455499c8c"
+          }
+        },
+        "raw": {
+          "changed_pixels": 7913,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            52,
+            21,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 207,
+          "mean_channel_difference": [
+            0.10841291894664842,
+            0.10362517099863201,
+            0.09851957934336525
+          ]
+        },
+        "filename_mask_boxes_inclusive": [
+          [
+            220,
+            16,
+            450,
+            54
+          ],
+          [
+            48,
+            313,
+            300,
+            348
+          ]
+        ],
+        "filename_normalized": {
+          "changed_pixels": 3989,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            676,
+            1670,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 41,
+          "mean_channel_difference": [
+            0.03253291723666211,
+            0.028522358071135432,
+            0.024542578659370724
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      },
+      {
+        "case": "file-menu",
+        "captures": {
+          "default": {
+            "path": "v2/default/file-menu.png",
+            "sha256": "4bab0f29cd10591ece00969cd7e29d1f8cdd6fd92701cd255dc88d5036d342af"
+          },
+          "widgets": {
+            "path": "v2/widgets/file-menu.png",
+            "sha256": "190a517b0ffbc486d3133abf6a5d120bbfe18640b6d77662737965da1f0fcc50"
+          }
+        },
+        "raw": {
+          "changed_pixels": 1698488,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            480,
+            240,
+            2720,
+            1678
+          ],
+          "max_channel_difference": 41,
+          "mean_channel_difference": [
+            1.242671426128591,
+            1.1315191090971273,
+            1.040217382010944
+          ]
+        },
+        "filename_normalized": {
+          "changed_pixels": 1698488,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            480,
+            240,
+            2720,
+            1678
+          ],
+          "max_channel_difference": 41,
+          "mean_channel_difference": [
+            1.242671426128591,
+            1.1315191090971273,
+            1.040217382010944
+          ]
+        },
+        "dialog_region": {
+          "box_exclusive": [
+            12,
+            56,
+            522,
+            1450
+          ],
+          "changed_pixels": 1,
+          "total_pixels": 710940,
+          "difference_bbox": [
+            509,
+            1391,
+            510,
+            1392
+          ],
+          "max_channel_difference": 1,
+          "mean_channel_difference": [
+            0.0,
+            0.0,
+            1.4065884603482712e-06
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      },
+      {
+        "case": "history-sketch-edit",
+        "captures": {
+          "default": {
+            "path": "v2/default/history-sketch-edit.png",
+            "sha256": "65de55ead9dcad4774bbe9ab42d9352740079a3eeceba08224209133f0d4e392"
+          },
+          "widgets": {
+            "path": "v2/widgets/history-sketch-edit.png",
+            "sha256": "19af53da09adecd40c7bd99003d352ba69796296f340807a905a2ac062295f72"
+          }
+        },
+        "raw": {
+          "changed_pixels": 7624,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            52,
+            21,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 207,
+          "mean_channel_difference": [
+            0.10597618844049247,
+            0.10148832934336526,
+            0.09670229138166894
+          ]
+        },
+        "filename_mask_boxes_inclusive": [
+          [
+            220,
+            16,
+            450,
+            54
+          ],
+          [
+            48,
+            313,
+            300,
+            348
+          ]
+        ],
+        "filename_normalized": {
+          "changed_pixels": 3700,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            814,
+            1670,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 41,
+          "mean_channel_difference": [
+            0.030096186730506156,
+            0.026385516415868674,
+            0.022725290697674417
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      },
+      {
+        "case": "redo-saved",
+        "captures": {
+          "default": {
+            "path": "v2/default/redo-saved.png",
+            "sha256": "c1fcfa617a82542d27752ca71beb8812c095ea9d71f94b9216aa4f916257f75b"
+          },
+          "widgets": {
+            "path": "v2/widgets/redo-saved.png",
+            "sha256": "14b6b4411b3f52d7b93bb9fe37e7c601dd43a5a8d1479bb237820a160b2921b7"
+          }
+        },
+        "raw": {
+          "changed_pixels": 7893,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            52,
+            21,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 207,
+          "mean_channel_difference": [
+            0.10614697332421341,
+            0.10160247093023256,
+            0.09680660054719563
+          ]
+        },
+        "filename_mask_boxes_inclusive": [
+          [
+            220,
+            16,
+            450,
+            54
+          ],
+          [
+            48,
+            313,
+            300,
+            348
+          ]
+        ],
+        "filename_normalized": {
+          "changed_pixels": 3969,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            676,
+            1670,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 41,
+          "mean_channel_difference": [
+            0.030266971614227086,
+            0.026499658002735977,
+            0.022829599863201093
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      },
+      {
+        "case": "settings-dark-zh-125",
+        "captures": {
+          "default": {
+            "path": "v2/default/settings-dark-zh-125.png",
+            "sha256": "c7f407f4ac1b41f8e643fc2d87a86702acf12a9c2f6f9f778243863ed6a7c9d1"
+          },
+          "widgets": {
+            "path": "v2/widgets/settings-dark-zh-125.png",
+            "sha256": "b0e3c4dfc649b9a46deb2f555a27ac3db44393ae26ea84762777145bc819b18a"
+          }
+        },
+        "raw": {
+          "changed_pixels": 580766,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            600,
+            300,
+            2720,
+            1668
+          ],
+          "max_channel_difference": 23,
+          "mean_channel_difference": [
+            0.28460349692202463,
+            0.27732900136798905,
+            0.3495545485636115
+          ]
+        },
+        "filename_normalized": {
+          "changed_pixels": 580766,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            600,
+            300,
+            2720,
+            1668
+          ],
+          "max_channel_difference": 23,
+          "mean_channel_difference": [
+            0.28460349692202463,
+            0.27732900136798905,
+            0.3495545485636115
+          ]
+        },
+        "dialog_region": {
+          "box_exclusive": [
+            760,
+            60,
+            1960,
+            1660
+          ],
+          "changed_pixels": 2227,
+          "total_pixels": 1920000,
+          "difference_bbox": [
+            86,
+            1598,
+            1200,
+            1600
+          ],
+          "max_channel_difference": 20,
+          "mean_channel_difference": [
+            0.0001734375,
+            0.00018489583333333333,
+            0.0013520833333333334
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      },
+      {
+        "case": "settings-light",
+        "captures": {
+          "default": {
+            "path": "v2/default/settings-light.png",
+            "sha256": "91e028946bf0743f9e6df7df4166c409587af3d41788511c2b9156b41050e1e8"
+          },
+          "widgets": {
+            "path": "v2/widgets/settings-light.png",
+            "sha256": "6cc4839aabe41e78e244cf8ba8f39792777b9e44e162d3335dc3b9cda1e0b040"
+          }
+        },
+        "raw": {
+          "changed_pixels": 989355,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            480,
+            240,
+            2720,
+            1678
+          ],
+          "max_channel_difference": 36,
+          "mean_channel_difference": [
+            0.717265304377565,
+            0.6564569083447332,
+            0.6005309507523939
+          ]
+        },
+        "filename_normalized": {
+          "changed_pixels": 989355,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            480,
+            240,
+            2720,
+            1678
+          ],
+          "max_channel_difference": 36,
+          "mean_channel_difference": [
+            0.717265304377565,
+            0.6564569083447332,
+            0.6005309507523939
+          ]
+        },
+        "dialog_region": {
+          "box_exclusive": [
+            880,
+            160,
+            1840,
+            1560
+          ],
+          "changed_pixels": 26,
+          "total_pixels": 1344000,
+          "difference_bbox": [
+            0,
+            591,
+            960,
+            1400
+          ],
+          "max_channel_difference": 5,
+          "mean_channel_difference": [
+            4.3898809523809523e-05,
+            4.2410714285714285e-05,
+            4.0178571428571427e-05
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      },
+      {
+        "case": "settings-toggle-off",
+        "captures": {
+          "default": {
+            "path": "v2/default/settings-toggle-off.png",
+            "sha256": "7ddb409c6ef73cb3ca12bd94de773e3715ac05be9b781a901ba1c2ecef35880a"
+          },
+          "widgets": {
+            "path": "v2/widgets/settings-toggle-off.png",
+            "sha256": "3b69c9d163e8ed7ac87bf67cc0459fc8527a060e9d4856e6667242023060e288"
+          }
+        },
+        "raw": {
+          "changed_pixels": 989355,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            480,
+            240,
+            2720,
+            1678
+          ],
+          "max_channel_difference": 36,
+          "mean_channel_difference": [
+            0.717265304377565,
+            0.6564569083447332,
+            0.6005309507523939
+          ]
+        },
+        "filename_normalized": {
+          "changed_pixels": 989355,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            480,
+            240,
+            2720,
+            1678
+          ],
+          "max_channel_difference": 36,
+          "mean_channel_difference": [
+            0.717265304377565,
+            0.6564569083447332,
+            0.6005309507523939
+          ]
+        },
+        "dialog_region": {
+          "box_exclusive": [
+            880,
+            160,
+            1840,
+            1560
+          ],
+          "changed_pixels": 26,
+          "total_pixels": 1344000,
+          "difference_bbox": [
+            0,
+            591,
+            960,
+            1400
+          ],
+          "max_channel_difference": 5,
+          "mean_channel_difference": [
+            4.3898809523809523e-05,
+            4.2410714285714285e-05,
+            4.0178571428571427e-05
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      },
+      {
+        "case": "settings-toggle-on-keyboard",
+        "captures": {
+          "default": {
+            "path": "v2/default/settings-toggle-on-keyboard.png",
+            "sha256": "f2b568d6e3329c5207797fbbef8687ce489d3c21a80311b81cfe7c211442cd17"
+          },
+          "widgets": {
+            "path": "v2/widgets/settings-toggle-on-keyboard.png",
+            "sha256": "2018211dfc3b0452d50f6acd5eb82490e340d1cf425be97e7a34836faa93bc86"
+          }
+        },
+        "raw": {
+          "changed_pixels": 989355,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            480,
+            240,
+            2720,
+            1678
+          ],
+          "max_channel_difference": 36,
+          "mean_channel_difference": [
+            0.717265304377565,
+            0.6564569083447332,
+            0.6005309507523939
+          ]
+        },
+        "filename_normalized": {
+          "changed_pixels": 989355,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            480,
+            240,
+            2720,
+            1678
+          ],
+          "max_channel_difference": 36,
+          "mean_channel_difference": [
+            0.717265304377565,
+            0.6564569083447332,
+            0.6005309507523939
+          ]
+        },
+        "dialog_region": {
+          "box_exclusive": [
+            880,
+            160,
+            1840,
+            1560
+          ],
+          "changed_pixels": 26,
+          "total_pixels": 1344000,
+          "difference_bbox": [
+            0,
+            591,
+            960,
+            1400
+          ],
+          "max_channel_difference": 5,
+          "mean_channel_difference": [
+            4.3898809523809523e-05,
+            4.2410714285714285e-05,
+            4.0178571428571427e-05
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      },
+      {
+        "case": "sketch-snap-hit-target",
+        "captures": {
+          "default": {
+            "path": "v2/default/sketch-snap-hit-target.png",
+            "sha256": "f47011db4fc98292a076c4d3be6e395503e311e6ed77187b943aad94f25200e6"
+          },
+          "widgets": {
+            "path": "v2/widgets/sketch-snap-hit-target.png",
+            "sha256": "d693203c5b549aa72a0f854fed9397ad835e233f0abefa3e1ced4d26e80bfc35"
+          }
+        },
+        "raw": {
+          "changed_pixels": 7640,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            52,
+            21,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 207,
+          "mean_channel_difference": [
+            0.10605100034199727,
+            0.10155501880984952,
+            0.09675872093023256
+          ]
+        },
+        "filename_mask_boxes_inclusive": [
+          [
+            220,
+            16,
+            450,
+            54
+          ],
+          [
+            48,
+            313,
+            300,
+            348
+          ]
+        ],
+        "filename_normalized": {
+          "changed_pixels": 3716,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            676,
+            1670,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 41,
+          "mean_channel_difference": [
+            0.030170998632010945,
+            0.02645220588235294,
+            0.022781720246238032
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      },
+      {
+        "case": "undo-extrude",
+        "captures": {
+          "default": {
+            "path": "v2/default/undo-extrude.png",
+            "sha256": "1f7058d777df63059b022fb7090b10867a510fd0b7b2f88e0208c7080d883452"
+          },
+          "widgets": {
+            "path": "v2/widgets/undo-extrude.png",
+            "sha256": "7e909b6a6a467a0360a31175a5086e23d352e1f13d7b6728419d711505552360"
+          }
+        },
+        "raw": {
+          "changed_pixels": 7660,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            52,
+            21,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 207,
+          "mean_channel_difference": [
+            0.10855271032831737,
+            0.10379253590971273,
+            0.09868074555403557
+          ]
+        },
+        "filename_mask_boxes_inclusive": [
+          [
+            220,
+            16,
+            450,
+            54
+          ],
+          [
+            48,
+            313,
+            300,
+            348
+          ]
+        ],
+        "filename_normalized": {
+          "changed_pixels": 3736,
+          "total_pixels": 4678400,
+          "difference_bbox": [
+            676,
+            1670,
+            2680,
+            1672
+          ],
+          "max_channel_difference": 41,
+          "mean_channel_difference": [
+            0.032672708618331055,
+            0.028689722982216143,
+            0.02470374487004104
+          ]
+        },
+        "ui_controls_equal_except_ids_and_fixture_name": true
+      }
+    ]
+  },
+  "saved_model_comparison": {
+    "saved_model_json_equal": true,
+    "saved_feature_parameters_equal": true,
+    "saved_extrusion": {
+      "feature_id": 2,
+      "name": "Extrude1",
+      "source_face": null,
+      "source_face_key": null,
+      "source_face_signature": null,
+      "source_face_basis": null,
+      "sketch_name": "Sketch1",
+      "profile_indices": [
+        1,
+        0
+      ],
+      "merge_profiles": true,
+      "operation": "new_body",
+      "extent": {
+        "type": "distance",
+        "distance": 12.0
+      },
+      "taper_angle_deg": 0.0,
+      "flip": false,
+      "target_body_ids": [],
+      "to_face_basis": null,
+      "new_body_ids": [
+        1,
+        2
+      ]
+    },
+    "saved_history": {
+      "features": [
+        {
+          "id": 1,
+          "name": "Sketch1",
+          "kind": "sketch",
+          "suppressed": false,
+          "status": {
+            "state": "ok"
+          }
+        },
+        {
+          "id": 2,
+          "name": "Extrude1",
+          "kind": "extrude",
+          "suppressed": false,
+          "status": {
+            "state": "ok"
+          }
+        }
+      ],
+      "rollback_index": 2
+    }
+  },
+  "source_tests": {
+    "current_integration_revision": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
+    "profile_selection_migration_passed": 2,
+    "selected_profile_regions_native_occt_passed": 5,
+    "logs": [
+      "v2/profile-migration-tests.log",
+      "v2/selected-profile-tests-root.log"
+    ],
+    "historical_native_interface_revision": "1e3935854e38a726bd2badf046aa0287fd149a5e",
+    "historical_native_interface_passed": 97,
+    "historical_included_widget_tests": 7,
+    "historical_native_gpu_compositing_passed": 1,
+    "note": "The selected-profile test was initially invoked through the desktop manifest, where that package is not a workspace member. The corrected root-workspace invocation passed all five tests. No product failure is attributed to the invocation error."
+  },
+  "open_observations": [
+    {
+      "id": "shared-snap-hit-focus",
+      "status": "observed_in_both_variants_not_fixed",
+      "reproduction": "While editing Sketch1, click the right-hand Snap square, then the row, then Space. See sketch-palette-snap case.",
+      "next_hypothesis": "Inspect native palette child hit targets and focus retirement after palette reconstruction; confirm with a human pointer/keyboard before attributing all missed input to the product.",
+      "scope_effect": "No widget-specific regression established; this case is not counted as a functional pass."
+    }
+  ],
+  "automation_notes": [
+    "Earlier window enumeration/capture failures were retried after the user confirmed the Mac was unlocked and the test app visible. No locked-screen or product-cause conclusion is made.",
+    "The native macOS Go To Folder sheet intermittently ignored short key presses. Re-entering the verified full path and using a 120 ms Return press completed the widget save/reopen check."
+  ],
+  "not_run": [
+    "Live Revolve profile/axis workflow; its region semantics have source-test coverage only.",
+    "Full UI catalog including CAM, drawings, printing, export, other feature dialogs and all control families.",
+    "Held-key repeat, rapid/double clicks, capture re-entry and live window-deactivation cancellation.",
+    "Full Tab/Shift-Tab traversal, screen reader, clipboard/AltGr and IME.",
+    "Additional display densities, locales and interface sizes beyond the combinations above.",
+    "Windows/Linux physical visual comparison.",
+    "MCP mutation coverage; MCP was used only for read-only inspection and capture."
+  ],
+  "human_manual_acceptance": false,
+  "broad_qualification_ledger_changed": false,
+  "broad_run_state": "paused",
+  "evidence_root": "artifacts/pr420-visual-parity-20261016",
+  "initial_read_only_run": {
+    "scope": "PR420 widget visual parity with PR433 and PR434 assumed merged",
+    "tested_revision": "1e3935854e38a726bd2badf046aa0287fd149a5e",
+    "baseline_revision": "3a96e1f96c58add71dd3404aeebf34d789babefd",
+    "main_revision": "49dec66db7a0707c9fcd715a003a7abaa61b8801",
+    "dependency_heads": {
+      "433": "467fe8b9eb245b40c76632067ad9f35162ec51f5",
+      "434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+    },
+    "dependencies_locally_merged_only": true,
+    "platform": "macOS Apple silicon",
+    "builds": {
+      "default": {
+        "experimental_ui_widgets": false,
+        "engine_sha256": "6eeb8e27aafc2b660947a1399ae8bafebbafdab44b2f003844ca5b2a89f2a0a1"
+      },
+      "widgets": {
+        "experimental_ui_widgets": true,
+        "engine_sha256": "bdd2759ea655b09d91feec94b067229755f06a5fda75f5d2ce61ea411f7404ba"
+      }
+    },
+    "package_checks": {
+      "clean_build_identity": true,
+      "deep_strict_ad_hoc_signature": true,
+      "bundled_occt_8_0_1_loaded": true
+    },
+    "appearance": {
+      "theme": "light",
+      "locale": "en",
+      "interface_scale": 1,
+      "display_scale": 2,
+      "logical_client": [
+        1360,
+        860
+      ],
+      "capture_pixels": [
+        2720,
+        1720
+      ]
+    },
+    "acceptance": "Comparable appearance; minor differences acceptable when existing workflow remains intact.",
+    "initial_window": {
+      "status": "passed_read_only_visual_comparison",
+      "expected": "Comparable ribbon, labels, glyphs, disabled controls, browser tree, navigation bar and history layout.",
+      "actual": "Matching initial layout with no visible clipping. Pixel differences are confined to the empty history track.",
+      "functional_interaction_verified": false,
+      "pixel_comparison": {
+        "size_default": [
+          2720,
+          1720
+        ],
+        "size_widgets": [
+          2720,
+          1720
+        ],
+        "changed_pixels": 16028,
+        "difference_bbox": [
+          676,
+          1670,
+          2680,
+          1678
+        ],
+        "max_channel_difference": 41,
+        "mean_channel_difference": [
+          0.14038389192886458,
+          0.12326436388508892,
+          0.10614483584131328
+        ]
+      }
+    },
+    "source_tests": {
+      "native_interface_passed": 97,
+      "included_widget_tests": 7,
+      "native_gpu_compositing_passed": 1
+    },
+    "captures": [
+      {
+        "variant": "default",
+        "path": "artifacts/pr420-visual-parity-20261016/default/initial-light.png",
+        "sha256": "9171ca8f88c72784201ca722206a35bd2a87f3245ab2da9e74309c8f4f0b407a"
+      },
+      {
+        "variant": "widgets",
+        "path": "artifacts/pr420-visual-parity-20261016/widgets/initial-light.png",
+        "sha256": "6e2b44d77949c2b6aeaa47fd136721c395f1543aa233e9b48320029512ff0a76"
+      }
+    ],
+    "evidence_root": "artifacts/pr420-visual-parity-20261016",
+    "not_run": [
+      "Live button/menu/checkbox interaction",
+      "Extrude/Revolve profile selection and Merge profiles",
+      "Creation-time sketch and feature history editing",
+      "Dark theme, additional locales and interface scales",
+      "Live keyboard repeat/focus, IME and screen reader",
+      "Windows/Linux visual comparison"
+    ],
+    "input_gate": {
+      "status": "pending_user_scope_exception",
+      "rule": ".cursor/rules/surface-qualification.mdc",
+      "requirement": "All CAD input uses guarded Rust computer control with observation before every input.",
+      "implementation_platform": "Windows only",
+      "requested_exception": "macOS app automation for the scoped visual check; isolated documents and fresh observations"
+    },
+    "human_manual_acceptance": false,
+    "broad_qualification_ledger_changed": false,
+    "broad_run_state": "paused"
+  }
+}

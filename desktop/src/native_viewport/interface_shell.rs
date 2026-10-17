@@ -21,12 +21,16 @@ use limo_cad_interface::{
 
 use super::ui::{ViewportUiAssets, ViewportUiTheme};
 
+#[cfg(feature = "experimental-ui-widgets")]
+pub(crate) mod dialogs;
 pub(crate) mod fields;
 mod geometry;
 mod ime_diagnostics;
 pub(crate) mod ranges;
 pub(crate) mod ribbon;
 mod shortcut_diagnostics;
+#[cfg(feature = "experimental-ui-widgets")]
+pub(crate) mod widgets;
 mod window_focus;
 
 use geometry::HitArea;
@@ -1892,6 +1896,8 @@ pub(crate) fn install(
     handle: NativeInterfaceHandle,
     reducer: impl Fn(&mut World, &NativeInterfaceHandle) + Send + Sync + 'static,
 ) {
+    #[cfg(feature = "experimental-ui-widgets")]
+    widgets::install(app);
     app.insert_resource(handle)
         .insert_resource(InterfaceReducer(Arc::new(reducer)))
         .add_systems(Startup, setup_camera)
@@ -1949,6 +1955,10 @@ fn update_controls(
     native_locale: Option<Res<crate::native_viewport::localization::NativeLocale>>,
     mut controls: StyledControlQuery,
     mut labels: Query<(&mut Text, &mut TextColor)>,
+    #[cfg(feature = "experimental-ui-widgets")] widget_state: Query<(
+        &bevy::picking::hover::Hovered,
+        Has<bevy::ui::Pressed>,
+    )>,
     mut cameras: Query<&mut Camera, With<InterfaceCamera>>,
 ) {
     let locale = crate::native_viewport::localization::locale_of(native_locale.as_deref());
@@ -1982,11 +1992,19 @@ fn update_controls(
         let key = ControlKey(entity.to_bits());
         let theme = style.0;
         let hovered = !control.disabled && shared.hovered == Some(key);
+        #[cfg(feature = "experimental-ui-widgets")]
+        let hovered = widget_state
+            .get(entity)
+            .map_or(hovered, |(hover, _)| !control.disabled && hover.0);
         let active = control.selected == Some(true)
             || shared
                 .capture
                 .as_ref()
                 .is_some_and(|capture| capture.resolved.key == key);
+        #[cfg(feature = "experimental-ui-widgets")]
+        let active = widget_state.get(entity).map_or(active, |(_, pressed)| {
+            control.selected == Some(true) || pressed
+        });
         let display = if control.visible {
             Display::Flex
         } else {
@@ -2275,11 +2293,11 @@ fn publish_layout(
             .then(a.bounds.x.total_cmp(&b.bounds.x))
             .then(a.key.0.cmp(&b.key.0))
     });
-    let eligible = |key| {
+    let eligible = |key, allow_disabled| {
         published.iter().any(|control| {
             control.key == key
                 && control.visible
-                && !control.disabled
+                && (allow_disabled || !control.disabled)
                 && frame
                     .modal_stack
                     .last()
@@ -2289,12 +2307,15 @@ fn publish_layout(
     shared
         .tab_excluded
         .retain(|key| published.iter().any(|control| control.key == *key));
-    shared.focused = shared.focused.filter(|key| eligible(*key));
-    shared.hovered = shared.hovered.filter(|key| eligible(*key));
+    // A worker temporarily disables controls while their commands run. Keep
+    // the existing focus so Bevy can resume keyboard activation on completion.
+    // Hidden, removed, modal-covered and replaced-document controls still retire.
+    shared.focused = shared.focused.filter(|key| eligible(*key, true));
+    shared.hovered = shared.hovered.filter(|key| eligible(*key, false));
     if shared
         .capture
         .as_ref()
-        .is_some_and(|capture| !eligible(capture.resolved.key))
+        .is_some_and(|capture| !eligible(capture.resolved.key, false))
     {
         shared.capture = None;
     }

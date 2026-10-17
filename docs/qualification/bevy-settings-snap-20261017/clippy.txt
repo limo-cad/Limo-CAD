@@ -1,0 +1,1124 @@
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1167:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1168:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1167 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1184:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1185:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1184 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1201:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1202:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1201 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1213:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1214:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1213 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1225:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1226:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1225 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1237:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1238:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1237 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1249:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1250:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1249 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1261:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1262:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1261 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1273:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1274:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1273 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1285:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1286:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1285 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1297:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1298:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1297 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1309:21: note: in instantiation of function template specialization 'rust::behavior::trycatch<(lambda at /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/sources/limo-cad-occt/src/native.rs.cc:1310:7), rust::detail::Fail>' requested here
+warning: limo-cad-occt@0.3.0-rc.1:  1309 |   ::rust::behavior::trycatch(
+warning: limo-cad-occt@0.3.0-rc.1:       |                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: 13 warnings generated.
+warning: limo-cad-occt@0.3.0-rc.1: In file included from src/shim.cpp:1:
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/pr420-controls-target/release/build/limo-cad-occt-b556aadefd23a956/out/cxxbridge/include/limo-cad-occt/src/native.rs.h:2:
+warning: limo-cad-occt@0.3.0-rc.1: include/shim.hpp:16:33: warning: 'GetMessageString' is deprecated: Use what() instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:    16 |     const char* message = error.GetMessageString();
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Failure.hxx:59:3: note: 'GetMessageString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 |   Standard_DEPRECATED("Use what() instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from src/shim.cpp:74:
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColgp_Array2OfPnt.hxx:26:1: warning: TColgp_Array2OfPnt.hxx is deprecated since OCCT 8.0.0. Use NCollection_Array2<gp_Pnt> directly. [-W#pragma-messages]
+warning: limo-cad-occt@0.3.0-rc.1:    26 | Standard_HEADER_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:53:44: note: expanded from macro 'Standard_HEADER_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:    53 | #define Standard_HEADER_DEPRECATED(theMsg) Standard_DEPRECATED_WARNING(theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:35:47: note: expanded from macro 'Standard_DEPRECATED_WARNING'
+warning: limo-cad-occt@0.3.0-rc.1:    35 |   #define Standard_DEPRECATED_WARNING(theMsg) Standard_DEPRECATED_WARNING_PRAGMA(GCC warning theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                               ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:34:49: note: expanded from macro 'Standard_DEPRECATED_WARNING_PRAGMA'
+warning: limo-cad-occt@0.3.0-rc.1:    34 |   #define Standard_DEPRECATED_WARNING_PRAGMA(x) _Pragma(#x)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: <scratch space>:232:6: note: expanded from here
+warning: limo-cad-occt@0.3.0-rc.1:   232 |  GCC warning "TColgp_Array2OfPnt.hxx is deprecated since OCCT 8.0.0. Use NCollection_Array2<gp_Pnt> directly."
+warning: limo-cad-occt@0.3.0-rc.1:       |      ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from src/shim.cpp:75:
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColStd_Array2OfReal.hxx:25:1: warning: TColStd_Array2OfReal.hxx is deprecated since OCCT 8.0.0. Use NCollection_Array2<double> directly. [-W#pragma-messages]
+warning: limo-cad-occt@0.3.0-rc.1:    25 | Standard_HEADER_DEPRECATED("TColStd_Array2OfReal.hxx is deprecated since OCCT 8.0.0. Use "
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:53:44: note: expanded from macro 'Standard_HEADER_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:    53 | #define Standard_HEADER_DEPRECATED(theMsg) Standard_DEPRECATED_WARNING(theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:35:47: note: expanded from macro 'Standard_DEPRECATED_WARNING'
+warning: limo-cad-occt@0.3.0-rc.1:    35 |   #define Standard_DEPRECATED_WARNING(theMsg) Standard_DEPRECATED_WARNING_PRAGMA(GCC warning theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                               ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:34:49: note: expanded from macro 'Standard_DEPRECATED_WARNING_PRAGMA'
+warning: limo-cad-occt@0.3.0-rc.1:    34 |   #define Standard_DEPRECATED_WARNING_PRAGMA(x) _Pragma(#x)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: <scratch space>:235:6: note: expanded from here
+warning: limo-cad-occt@0.3.0-rc.1:   235 |  GCC warning "TColStd_Array2OfReal.hxx is deprecated since OCCT 8.0.0. Use " "NCollection_Array2<double> directly."
+warning: limo-cad-occt@0.3.0-rc.1:       |      ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from src/shim.cpp:76:
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColStd_Array1OfReal.hxx:25:1: warning: TColStd_Array1OfReal.hxx is deprecated since OCCT 8.0.0. Use NCollection_Array1<double> directly. [-W#pragma-messages]
+warning: limo-cad-occt@0.3.0-rc.1:    25 | Standard_HEADER_DEPRECATED("TColStd_Array1OfReal.hxx is deprecated since OCCT 8.0.0. Use "
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:53:44: note: expanded from macro 'Standard_HEADER_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:    53 | #define Standard_HEADER_DEPRECATED(theMsg) Standard_DEPRECATED_WARNING(theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:35:47: note: expanded from macro 'Standard_DEPRECATED_WARNING'
+warning: limo-cad-occt@0.3.0-rc.1:    35 |   #define Standard_DEPRECATED_WARNING(theMsg) Standard_DEPRECATED_WARNING_PRAGMA(GCC warning theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                               ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:34:49: note: expanded from macro 'Standard_DEPRECATED_WARNING_PRAGMA'
+warning: limo-cad-occt@0.3.0-rc.1:    34 |   #define Standard_DEPRECATED_WARNING_PRAGMA(x) _Pragma(#x)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: <scratch space>:238:6: note: expanded from here
+warning: limo-cad-occt@0.3.0-rc.1:   238 |  GCC warning "TColStd_Array1OfReal.hxx is deprecated since OCCT 8.0.0. Use " "NCollection_Array1<double> directly."
+warning: limo-cad-occt@0.3.0-rc.1:       |      ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from src/shim.cpp:77:
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColStd_Array1OfInteger.hxx:26:1: warning: TColStd_Array1OfInteger.hxx is deprecated since OCCT 8.0.0. Use NCollection_Array1<int> directly. [-W#pragma-messages]
+warning: limo-cad-occt@0.3.0-rc.1:    26 | Standard_HEADER_DEPRECATED("TColStd_Array1OfInteger.hxx is deprecated since OCCT 8.0.0. Use "
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:53:44: note: expanded from macro 'Standard_HEADER_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:    53 | #define Standard_HEADER_DEPRECATED(theMsg) Standard_DEPRECATED_WARNING(theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:35:47: note: expanded from macro 'Standard_DEPRECATED_WARNING'
+warning: limo-cad-occt@0.3.0-rc.1:    35 |   #define Standard_DEPRECATED_WARNING(theMsg) Standard_DEPRECATED_WARNING_PRAGMA(GCC warning theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                               ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:34:49: note: expanded from macro 'Standard_DEPRECATED_WARNING_PRAGMA'
+warning: limo-cad-occt@0.3.0-rc.1:    34 |   #define Standard_DEPRECATED_WARNING_PRAGMA(x) _Pragma(#x)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: <scratch space>:2:6: note: expanded from here
+warning: limo-cad-occt@0.3.0-rc.1:     2 |  GCC warning "TColStd_Array1OfInteger.hxx is deprecated since OCCT 8.0.0. Use " "NCollection_Array1<int> directly."
+warning: limo-cad-occt@0.3.0-rc.1:       |      ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from src/shim.cpp:94:
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Interface_HArray1OfHAsciiString.hxx:25:
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Interface_Array1OfHAsciiString.hxx:27:1: warning: Interface_Array1OfHAsciiString.hxx is deprecated since OCCT 8.0.0. Use NCollection_Array1<opencascade::handle<TCollection_HAsciiString>> directly. [-W#pragma-messages]
+warning: limo-cad-occt@0.3.0-rc.1:    27 | Standard_HEADER_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:53:44: note: expanded from macro 'Standard_HEADER_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:    53 | #define Standard_HEADER_DEPRECATED(theMsg) Standard_DEPRECATED_WARNING(theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:35:47: note: expanded from macro 'Standard_DEPRECATED_WARNING'
+warning: limo-cad-occt@0.3.0-rc.1:    35 |   #define Standard_DEPRECATED_WARNING(theMsg) Standard_DEPRECATED_WARNING_PRAGMA(GCC warning theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                               ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:34:49: note: expanded from macro 'Standard_DEPRECATED_WARNING_PRAGMA'
+warning: limo-cad-occt@0.3.0-rc.1:    34 |   #define Standard_DEPRECATED_WARNING_PRAGMA(x) _Pragma(#x)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: <scratch space>:33:6: note: expanded from here
+warning: limo-cad-occt@0.3.0-rc.1:    33 |  GCC warning "Interface_Array1OfHAsciiString.hxx is deprecated since OCCT 8.0.0. Use " "NCollection_Array1<opencascade::handle<TCollection_HAsciiString>> directly."
+warning: limo-cad-occt@0.3.0-rc.1:       |      ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from src/shim.cpp:94:
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Interface_HArray1OfHAsciiString.hxx:28:1: warning: Interface_HArray1OfHAsciiString.hxx is deprecated since OCCT 8.0.0. Use NCollection_HArray1<opencascade::handle<TCollection_HAsciiString>> directly. [-W#pragma-messages]
+warning: limo-cad-occt@0.3.0-rc.1:    28 | Standard_HEADER_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:53:44: note: expanded from macro 'Standard_HEADER_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:    53 | #define Standard_HEADER_DEPRECATED(theMsg) Standard_DEPRECATED_WARNING(theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:35:47: note: expanded from macro 'Standard_DEPRECATED_WARNING'
+warning: limo-cad-occt@0.3.0-rc.1:    35 |   #define Standard_DEPRECATED_WARNING(theMsg) Standard_DEPRECATED_WARNING_PRAGMA(GCC warning theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                               ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:34:49: note: expanded from macro 'Standard_DEPRECATED_WARNING_PRAGMA'
+warning: limo-cad-occt@0.3.0-rc.1:    34 |   #define Standard_DEPRECATED_WARNING_PRAGMA(x) _Pragma(#x)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: <scratch space>:37:6: note: expanded from here
+warning: limo-cad-occt@0.3.0-rc.1:    37 |  GCC warning "Interface_HArray1OfHAsciiString.hxx is deprecated since OCCT 8.0.0. Use " "NCollection_HArray1<opencascade::handle<TCollection_HAsciiString>> directly."
+warning: limo-cad-occt@0.3.0-rc.1:       |      ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from src/shim.cpp:112:
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:26:1: warning: TopTools_IndexedMapOfShape.hxx is deprecated since OCCT 8.0.0. Use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly. [-W#pragma-messages]
+warning: limo-cad-occt@0.3.0-rc.1:    26 | Standard_HEADER_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:53:44: note: expanded from macro 'Standard_HEADER_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:    53 | #define Standard_HEADER_DEPRECATED(theMsg) Standard_DEPRECATED_WARNING(theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:35:47: note: expanded from macro 'Standard_DEPRECATED_WARNING'
+warning: limo-cad-occt@0.3.0-rc.1:    35 |   #define Standard_DEPRECATED_WARNING(theMsg) Standard_DEPRECATED_WARNING_PRAGMA(GCC warning theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                               ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:34:49: note: expanded from macro 'Standard_DEPRECATED_WARNING_PRAGMA'
+warning: limo-cad-occt@0.3.0-rc.1:    34 |   #define Standard_DEPRECATED_WARNING_PRAGMA(x) _Pragma(#x)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: <scratch space>:108:6: note: expanded from here
+warning: limo-cad-occt@0.3.0-rc.1:   108 |  GCC warning "TopTools_IndexedMapOfShape.hxx is deprecated since OCCT 8.0.0. Use " "NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly."
+warning: limo-cad-occt@0.3.0-rc.1:       |      ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from src/shim.cpp:114:
+warning: limo-cad-occt@0.3.0-rc.1: In file included from /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedDataMapOfShapeListOfShape.hxx:25:
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:26:1: warning: TopTools_ListOfShape.hxx is deprecated since OCCT 8.0.0. Use NCollection types directly. [-W#pragma-messages]
+warning: limo-cad-occt@0.3.0-rc.1:    26 | Standard_HEADER_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:53:44: note: expanded from macro 'Standard_HEADER_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:    53 | #define Standard_HEADER_DEPRECATED(theMsg) Standard_DEPRECATED_WARNING(theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:35:47: note: expanded from macro 'Standard_DEPRECATED_WARNING'
+warning: limo-cad-occt@0.3.0-rc.1:    35 |   #define Standard_DEPRECATED_WARNING(theMsg) Standard_DEPRECATED_WARNING_PRAGMA(GCC warning theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                               ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:34:49: note: expanded from macro 'Standard_DEPRECATED_WARNING_PRAGMA'
+warning: limo-cad-occt@0.3.0-rc.1:    34 |   #define Standard_DEPRECATED_WARNING_PRAGMA(x) _Pragma(#x)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: <scratch space>:111:6: note: expanded from here
+warning: limo-cad-occt@0.3.0-rc.1:   111 |  GCC warning "TopTools_ListOfShape.hxx is deprecated since OCCT 8.0.0. Use NCollection types directly."
+warning: limo-cad-occt@0.3.0-rc.1:       |      ^
+warning: limo-cad-occt@0.3.0-rc.1: In file included from src/shim.cpp:114:
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedDataMapOfShapeListOfShape.hxx:29:1: warning: TopTools_IndexedDataMapOfShapeListOfShape.hxx is deprecated since OCCT 8.0.0. Use NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, TopTools_ShapeMapHasher> directly. [-W#pragma-messages]
+warning: limo-cad-occt@0.3.0-rc.1:    29 | Standard_HEADER_DEPRECATED("TopTools_IndexedDataMapOfShapeListOfShape.hxx is deprecated since OCCT "
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:53:44: note: expanded from macro 'Standard_HEADER_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:    53 | #define Standard_HEADER_DEPRECATED(theMsg) Standard_DEPRECATED_WARNING(theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:35:47: note: expanded from macro 'Standard_DEPRECATED_WARNING'
+warning: limo-cad-occt@0.3.0-rc.1:    35 |   #define Standard_DEPRECATED_WARNING(theMsg) Standard_DEPRECATED_WARNING_PRAGMA(GCC warning theMsg)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                               ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:34:49: note: expanded from macro 'Standard_DEPRECATED_WARNING_PRAGMA'
+warning: limo-cad-occt@0.3.0-rc.1:    34 |   #define Standard_DEPRECATED_WARNING_PRAGMA(x) _Pragma(#x)
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: <scratch space>:114:6: note: expanded from here
+warning: limo-cad-occt@0.3.0-rc.1:   114 |  GCC warning "TopTools_IndexedDataMapOfShapeListOfShape.hxx is deprecated since OCCT " "8.0.0. Use NCollection_IndexedDataMap<TopoDS_Shape, " "TopTools_ListOfShape, TopTools_ShapeMapHasher> directly."
+warning: limo-cad-occt@0.3.0-rc.1:       |      ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:181:3: warning: 'Standard_Boolean' is deprecated: Standard_Boolean is deprecated, use bool directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   181 |   Standard_Boolean UserBreak() override { return expired(); }
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:79:1: note: 'Standard_Boolean' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    79 | Standard_DEPRECATED("Standard_Boolean is deprecated, use bool directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:182:43: warning: 'Standard_Boolean' is deprecated: Standard_Boolean is deprecated, use bool directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   182 |   void Show(const Message_ProgressScope&, Standard_Boolean) override {}
+warning: limo-cad-occt@0.3.0-rc.1:       |                                           ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:79:1: note: 'Standard_Boolean' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    79 | Standard_DEPRECATED("Standard_Boolean is deprecated, use bool directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:294:3: warning: 'TColgp_Array2OfPnt' is deprecated: TColgp_Array2OfPnt is deprecated, use NCollection_Array2<gp_Pnt> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   294 |   TColgp_Array2OfPnt poles(1, helix->NbPoles(), 1, profile->NbPoles());
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColgp_Array2OfPnt.hxx:29:3: note: 'TColgp_Array2OfPnt' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED("TColgp_Array2OfPnt is deprecated, use NCollection_Array2<gp_Pnt> directly")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:295:3: warning: 'TColStd_Array2OfReal' is deprecated: TColStd_Array2OfReal is deprecated, use NCollection_Array2<double> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   295 |   TColStd_Array2OfReal weights(1, helix->NbPoles(), 1, profile->NbPoles());
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColStd_Array2OfReal.hxx:28:3: note: 'TColStd_Array2OfReal' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    28 |   Standard_DEPRECATED("TColStd_Array2OfReal is deprecated, use NCollection_Array2<double> directly")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:307:3: warning: 'TColStd_Array1OfReal' is deprecated: TColStd_Array1OfReal is deprecated, use NCollection_Array1<double> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   307 |   TColStd_Array1OfReal u_knots(1, helix->NbKnots());
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColStd_Array1OfReal.hxx:28:3: note: 'TColStd_Array1OfReal' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    28 |   Standard_DEPRECATED("TColStd_Array1OfReal is deprecated, use NCollection_Array1<double> directly")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:308:3: warning: 'TColStd_Array1OfReal' is deprecated: TColStd_Array1OfReal is deprecated, use NCollection_Array1<double> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   308 |   TColStd_Array1OfReal v_knots(1, profile->NbKnots());
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColStd_Array1OfReal.hxx:28:3: note: 'TColStd_Array1OfReal' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    28 |   Standard_DEPRECATED("TColStd_Array1OfReal is deprecated, use NCollection_Array1<double> directly")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:309:3: warning: 'TColStd_Array1OfInteger' is deprecated: TColStd_Array1OfInteger is deprecated, use NCollection_Array1<int> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   309 |   TColStd_Array1OfInteger u_mults(1, helix->NbKnots());
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColStd_Array1OfInteger.hxx:29:3: note: 'TColStd_Array1OfInteger' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED("TColStd_Array1OfInteger is deprecated, use NCollection_Array1<int> directly")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:310:3: warning: 'TColStd_Array1OfInteger' is deprecated: TColStd_Array1OfInteger is deprecated, use NCollection_Array1<int> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   310 |   TColStd_Array1OfInteger v_mults(1, profile->NbKnots());
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColStd_Array1OfInteger.hxx:29:3: note: 'TColStd_Array1OfInteger' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED("TColStd_Array1OfInteger is deprecated, use NCollection_Array1<int> directly")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:311:10: warning: 'Knots' is deprecated: use Knots() returning const reference instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   311 |   helix->Knots(u_knots); helix->Multiplicities(u_mults);
+warning: limo-cad-occt@0.3.0-rc.1:       |          ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Geom_BSplineCurve.hxx:637:3: note: 'Knots' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:   637 |   Standard_DEPRECATED("use Knots() returning const reference instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:311:33: warning: 'Multiplicities' is deprecated: use Multiplicities() returning const reference instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   311 |   helix->Knots(u_knots); helix->Multiplicities(u_mults);
+warning: limo-cad-occt@0.3.0-rc.1:       |                                 ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Geom_BSplineCurve.hxx:755:3: note: 'Multiplicities' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:   755 |   Standard_DEPRECATED("use Multiplicities() returning const reference instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:312:12: warning: 'Knots' is deprecated: use Knots() returning const reference instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   312 |   profile->Knots(v_knots); profile->Multiplicities(v_mults);
+warning: limo-cad-occt@0.3.0-rc.1:       |            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Geom_BSplineCurve.hxx:637:3: note: 'Knots' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:   637 |   Standard_DEPRECATED("use Knots() returning const reference instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:312:37: warning: 'Multiplicities' is deprecated: use Multiplicities() returning const reference instead [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   312 |   profile->Knots(v_knots); profile->Multiplicities(v_mults);
+warning: limo-cad-occt@0.3.0-rc.1:       |                                     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Geom_BSplineCurve.hxx:755:3: note: 'Multiplicities' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:   755 |   Standard_DEPRECATED("use Multiplicities() returning const reference instead")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:732:3: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   732 |   TopTools_ListOfShape arguments;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:734:3: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:   734 |   TopTools_ListOfShape tools;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:1582:3: warning: 'TColStd_Array1OfReal' is deprecated: TColStd_Array1OfReal is deprecated, use NCollection_Array1<double> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  1582 |   TColStd_Array1OfReal parameters(1, intervals + 1);
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TColStd_Array1OfReal.hxx:28:3: note: 'TColStd_Array1OfReal' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    28 |   Standard_DEPRECATED("TColStd_Array1OfReal is deprecated, use NCollection_Array1<double> directly")
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:1810:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  1810 |   TopTools_IndexedMapOfShape wires;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:1811:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  1811 |   TopTools_IndexedMapOfShape edges;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:1884:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  1884 |   TopTools_IndexedMapOfShape faces;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:1953:11: warning: 'TopTools_IndexedDataMapOfShapeListOfShape' is deprecated: TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  1953 |     const TopTools_IndexedDataMapOfShapeListOfShape& edge_faces,
+warning: limo-cad-occt@0.3.0-rc.1:       |           ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedDataMapOfShapeListOfShape.hxx:33:3: note: 'TopTools_IndexedDataMapOfShapeListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    33 |   Standard_DEPRECATED("TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:1954:11: warning: 'TopTools_IndexedDataMapOfShapeListOfShape' is deprecated: TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  1954 |     const TopTools_IndexedDataMapOfShapeListOfShape& vertex_faces,
+warning: limo-cad-occt@0.3.0-rc.1:       |           ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedDataMapOfShapeListOfShape.hxx:33:3: note: 'TopTools_IndexedDataMapOfShapeListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    33 |   Standard_DEPRECATED("TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:1959:9: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  1959 |   const TopTools_ListOfShape& adjacent = edge_faces.FindFromKey(edge);
+warning: limo-cad-occt@0.3.0-rc.1:       |         ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2040:11: warning: 'TopTools_IndexedDataMapOfShapeListOfShape' is deprecated: TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2040 |     const TopTools_IndexedDataMapOfShapeListOfShape& edge_faces,
+warning: limo-cad-occt@0.3.0-rc.1:       |           ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedDataMapOfShapeListOfShape.hxx:33:3: note: 'TopTools_IndexedDataMapOfShapeListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    33 |   Standard_DEPRECATED("TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2053:9: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2053 |   const TopTools_ListOfShape& adjacent = edge_faces.FindFromKey(edge);
+warning: limo-cad-occt@0.3.0-rc.1:       |         ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2075:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2075 |   TopTools_IndexedMapOfShape boundaries;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2119:3: warning: 'TopTools_IndexedDataMapOfShapeListOfShape' is deprecated: TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2119 |   TopTools_IndexedDataMapOfShapeListOfShape edge_faces;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedDataMapOfShapeListOfShape.hxx:33:3: note: 'TopTools_IndexedDataMapOfShapeListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    33 |   Standard_DEPRECATED("TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2120:3: warning: 'TopTools_IndexedDataMapOfShapeListOfShape' is deprecated: TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2120 |   TopTools_IndexedDataMapOfShapeListOfShape vertex_faces;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedDataMapOfShapeListOfShape.hxx:33:3: note: 'TopTools_IndexedDataMapOfShapeListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    33 |   Standard_DEPRECATED("TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2195:5: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2195 |     TopTools_ListOfShape arguments;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2197:5: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2197 |     TopTools_ListOfShape tools;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2366:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2366 |     TopTools_IndexedMapOfShape edge_map;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2395:7: warning: 'TopTools_IndexedDataMapOfShapeListOfShape' is deprecated: TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2395 |       TopTools_IndexedDataMapOfShapeListOfShape edge_faces;
+warning: limo-cad-occt@0.3.0-rc.1:       |       ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedDataMapOfShapeListOfShape.hxx:33:3: note: 'TopTools_IndexedDataMapOfShapeListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    33 |   Standard_DEPRECATED("TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2608:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2608 |     TopTools_IndexedMapOfShape face_map;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2772:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2772 |     TopTools_IndexedMapOfShape face_map;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2774:5: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2774 |     TopTools_ListOfShape closing_faces;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2916:7: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2916 |       TopTools_ListOfShape arguments;
+warning: limo-cad-occt@0.3.0-rc.1:       |       ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2918:7: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2918 |       TopTools_ListOfShape tools;
+warning: limo-cad-occt@0.3.0-rc.1:       |       ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2997:5: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2997 |     TopTools_ListOfShape arguments;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:2999:5: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  2999 |     TopTools_ListOfShape tools;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:3198:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  3198 |     TopTools_IndexedMapOfShape solids;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:3280:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  3280 |     TopTools_IndexedMapOfShape faces;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:3303:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  3303 |   TopTools_IndexedMapOfShape vertices, edges, faces;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:3389:3: warning: 'Standard_Boolean' is deprecated: Standard_Boolean is deprecated, use bool directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  3389 |   Standard_Boolean DiscretizeFaces(const Message_ProgressRange& range) override {
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:79:1: note: 'Standard_Boolean' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    79 | Standard_DEPRECATED("Standard_Boolean is deprecated, use bool directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:3528:3: warning: 'Standard_Boolean' is deprecated: Standard_Boolean is deprecated, use bool directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  3528 |   Standard_Boolean HealModel() override {
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:79:1: note: 'Standard_Boolean' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    79 | Standard_DEPRECATED("Standard_Boolean is deprecated, use bool directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:3541:3: warning: 'Standard_Boolean' is deprecated: Standard_Boolean is deprecated, use bool directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  3541 |   Standard_Boolean RefineBoundaries(bool healed, RefinementBudget& budget) {
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:79:1: note: 'Standard_Boolean' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    79 | Standard_DEPRECATED("Standard_Boolean is deprecated, use bool directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:8634:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  8634 |   TopTools_IndexedMapOfShape strip_original_faces_;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:3981:14: warning: 'Standard_True' is deprecated: Standard_True is deprecated, use true directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  3981 |       return Standard_True;
+warning: limo-cad-occt@0.3.0-rc.1:       |              ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:63:1: note: 'Standard_True' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    63 | Standard_DEPRECATED("Standard_True is deprecated, use true directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:4114:63: warning: 'Standard_True' is deprecated: Standard_True is deprecated, use true directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  4114 |       if (!crossing) return healed ? check_repaired_faces() : Standard_True;
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                               ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:63:1: note: 'Standard_True' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    63 | Standard_DEPRECATED("Standard_True is deprecated, use true directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:5126:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  5126 |     TopTools_IndexedMapOfShape native_edges;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:5488:7: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  5488 |       TopTools_IndexedMapOfShape edges,vertices;
+warning: limo-cad-occt@0.3.0-rc.1:       |       ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:6126:7: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  6126 |       TopTools_IndexedMapOfShape native_edges,vertices;
+warning: limo-cad-occt@0.3.0-rc.1:       |       ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:6462:13: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  6462 |             TopTools_IndexedMapOfShape native_edges;TopExp::MapShapes(GetModel()->GetShape(),TopAbs_EDGE,native_edges);
+warning: limo-cad-occt@0.3.0-rc.1:       |             ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:7014:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  7014 |     TopTools_IndexedMapOfShape native_edges; TopExp::MapShapes(model->GetShape(),TopAbs_EDGE,native_edges);
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:7959:108: warning: missing field 'crossing' initializer [-Wmissing-field-initializers]
+warning: limo-cad-occt@0.3.0-rc.1:  7959 |         summed_wedges+=area;wedges.push_back({alias.first,(trace+count-1)%count,(trace+1)%count,points,area});
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                                                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9040:54: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9040 |   NativeExportIndex(const TopoDS_Shape& shape, const TopTools_IndexedMapOfShape& edges, double deflection,
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                      ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9529:9: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9529 |   const TopTools_IndexedMapOfShape& edges_;
+warning: limo-cad-occt@0.3.0-rc.1:       |         ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9530:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9530 |   TopTools_IndexedMapOfShape shells_,vertices_;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9531:3: warning: 'TopTools_IndexedDataMapOfShapeListOfShape' is deprecated: TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9531 |   TopTools_IndexedDataMapOfShapeListOfShape face_shells_;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedDataMapOfShapeListOfShape.hxx:33:3: note: 'TopTools_IndexedDataMapOfShapeListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    33 |   Standard_DEPRECATED("TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9298:7: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9298 |       TopTools_IndexedMapOfShape native_faces; TopExp::MapShapes(shape_,TopAbs_FACE,native_faces);
+warning: limo-cad-occt@0.3.0-rc.1:       |       ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9551:38: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9551 |     const TopoDS_Shape& shape, const TopTools_IndexedMapOfShape& faces,
+warning: limo-cad-occt@0.3.0-rc.1:       |                                      ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9552:11: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9552 |     const TopTools_IndexedMapOfShape& edges) {
+warning: limo-cad-occt@0.3.0-rc.1:       |           ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9594:7: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9594 |       TopTools_IndexedMapOfShape material_faces, material_edges;
+warning: limo-cad-occt@0.3.0-rc.1:       |       ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9597:46: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9597 |       const auto same_body_shapes = [](const TopTools_IndexedMapOfShape& body,
+warning: limo-cad-occt@0.3.0-rc.1:       |                                              ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9598:46: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9598 |                                        const TopTools_IndexedMapOfShape& member) {
+warning: limo-cad-occt@0.3.0-rc.1:       |                                              ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9651:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9651 |     TopTools_IndexedMapOfShape shells;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9663:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9663 |     TopTools_IndexedMapOfShape exterior_faces;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9681:36: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9681 |     const TopoDS_Face& face, const TopTools_IndexedMapOfShape& body_edges) {
+warning: limo-cad-occt@0.3.0-rc.1:       |                                    ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9688:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9688 |     TopTools_IndexedMapOfShape seen_wires, seen_edges, prior_wire_vertices;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9699:7: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9699 |       TopTools_IndexedMapOfShape wire_vertices;
+warning: limo-cad-occt@0.3.0-rc.1:       |       ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9771:3: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9771 |   TopTools_ListOfShape arguments, tools;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9838:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9838 |     TopTools_IndexedMapOfShape seen;
+warning: limo-cad-occt@0.3.0-rc.1:       |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9864:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9864 |   TopTools_IndexedMapOfShape faces;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9889:3: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9889 |   TopTools_ListOfShape arguments, tools;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:9960:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  9960 |   TopTools_IndexedMapOfShape faces, contact_faces;
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10047:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10047 |   TopTools_IndexedMapOfShape solids;
+warning: limo-cad-occt@0.3.0-rc.1:        |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10087:5: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10087 |     TopTools_ListOfShape arguments, tools;
+warning: limo-cad-occt@0.3.0-rc.1:        |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10114:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10114 |   TopTools_IndexedMapOfShape faces, edges;
+warning: limo-cad-occt@0.3.0-rc.1:        |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10150:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10150 |     TopTools_IndexedMapOfShape face_edges;
+warning: limo-cad-occt@0.3.0-rc.1:        |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10250:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10250 |   TopTools_IndexedMapOfShape solids;
+warning: limo-cad-occt@0.3.0-rc.1:        |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10368:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10368 |   TopTools_IndexedMapOfShape face_map;
+warning: limo-cad-occt@0.3.0-rc.1:        |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10370:3: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10370 |   TopTools_IndexedMapOfShape edge_map;
+warning: limo-cad-occt@0.3.0-rc.1:        |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10475:5: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10475 |     TopTools_IndexedMapOfShape boundary;
+warning: limo-cad-occt@0.3.0-rc.1:        |     ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10628:3: warning: 'TopTools_IndexedDataMapOfShapeListOfShape' is deprecated: TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use NCollection_IndexedDataMap<TopoDS_Shape, TopTools_ListOfShape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10628 |   TopTools_IndexedDataMapOfShapeListOfShape edge_faces;
+warning: limo-cad-occt@0.3.0-rc.1:        |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedDataMapOfShapeListOfShape.hxx:33:3: note: 'TopTools_IndexedDataMapOfShapeListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    33 |   Standard_DEPRECATED("TopTools_IndexedDataMapOfShapeListOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10636:13: warning: 'TopTools_ListOfShape' is deprecated: TopTools_ListOfShape is deprecated, use NCollection_List<TopoDS_Shape> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10636 |       const TopTools_ListOfShape& adjacent_faces =
+warning: limo-cad-occt@0.3.0-rc.1:        |             ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_ListOfShape.hxx:29:3: note: 'TopTools_ListOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    29 |   Standard_DEPRECATED(
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:10887:7: warning: 'TopTools_IndexedMapOfShape' is deprecated: TopTools_IndexedMapOfShape is deprecated, use NCollection_IndexedMap<TopoDS_Shape, TopTools_ShapeMapHasher> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  10887 |       TopTools_IndexedMapOfShape topology;
+warning: limo-cad-occt@0.3.0-rc.1:        |       ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/TopTools_IndexedMapOfShape.hxx:30:3: note: 'TopTools_IndexedMapOfShape' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    30 |   Standard_DEPRECATED("TopTools_IndexedMapOfShape is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:11264:22: warning: 'Standard_True' is deprecated: Standard_True is deprecated, use true directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  11264 |   (void)writer.Model(Standard_True);
+warning: limo-cad-occt@0.3.0-rc.1:        |                      ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:63:1: note: 'Standard_True' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    63 | Standard_DEPRECATED("Standard_True is deprecated, use true directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:11362:59: warning: 'Standard_False' is deprecated: Standard_False is deprecated, use false directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  11362 |     const Handle(StepData_StepModel) model = writer.Model(Standard_False);
+warning: limo-cad-occt@0.3.0-rc.1:        |                                                           ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:59:1: note: 'Standard_False' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 | Standard_DEPRECATED("Standard_False is deprecated, use false directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:11364:12: warning: 'Interface_HArray1OfHAsciiString' is deprecated: Interface_HArray1OfHAsciiString is deprecated, use NCollection_HArray1<opencascade::handle<TCollection_HAsciiString>> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  11364 |     Handle(Interface_HArray1OfHAsciiString) descriptions =
+warning: limo-cad-occt@0.3.0-rc.1:        |            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Interface_HArray1OfHAsciiString.hxx:32:3: note: 'Interface_HArray1OfHAsciiString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    32 |   Standard_DEPRECATED("Interface_HArray1OfHAsciiString is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:11365:13: warning: 'Interface_HArray1OfHAsciiString' is deprecated: Interface_HArray1OfHAsciiString is deprecated, use NCollection_HArray1<opencascade::handle<TCollection_HAsciiString>> directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  11365 |         new Interface_HArray1OfHAsciiString(1, 1);
+warning: limo-cad-occt@0.3.0-rc.1:        |             ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Interface_HArray1OfHAsciiString.hxx:32:3: note: 'Interface_HArray1OfHAsciiString' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    32 |   Standard_DEPRECATED("Interface_HArray1OfHAsciiString is deprecated, use "
+warning: limo-cad-occt@0.3.0-rc.1:       |   ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:11393:44: warning: 'Standard_True' is deprecated: Standard_True is deprecated, use true directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  11393 |         new Message_PrinterOStream("cerr", Standard_True);
+warning: limo-cad-occt@0.3.0-rc.1:        |                                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:63:1: note: 'Standard_True' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    63 | Standard_DEPRECATED("Standard_True is deprecated, use true directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: src/shim.cpp:11394:28: warning: 'Standard_False' is deprecated: Standard_False is deprecated, use false directly [-Wdeprecated-declarations]
+warning: limo-cad-occt@0.3.0-rc.1:  11394 |     printer->SetToColorize(Standard_False);
+warning: limo-cad-occt@0.3.0-rc.1:        |                            ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_TypeDef.hxx:59:1: note: 'Standard_False' has been explicitly marked deprecated here
+warning: limo-cad-occt@0.3.0-rc.1:    59 | Standard_DEPRECATED("Standard_False is deprecated, use false directly")
+warning: limo-cad-occt@0.3.0-rc.1:       | ^
+warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-sdk/include/opencascade/Standard_Macro.hxx:136:56: note: expanded from macro 'Standard_DEPRECATED'
+warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
+warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
+warning: limo-cad-occt@0.3.0-rc.1: 99 warnings generated.
+   Compiling limo-cad-build-info v0.3.0-rc.1 (/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD/crates/build-info)
+    Checking limo-cad-mcp v0.3.0-rc.1 (/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD/mcp-server)
+    Checking limo-cad v0.3.0-rc.1 (/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD/desktop)
+    Finished `release` profile [optimized] target(s) in 34.28s
