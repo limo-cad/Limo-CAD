@@ -1,7 +1,8 @@
 //! Portable replay envelope. This codec validates framing and byte limits only.
 //! Hosts must parse script v2 and validate archive/domain semantics before mutation.
 use crate::{error, ProjectArchive, ProjectFileError, MAX_FILE_BYTES};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 pub const MAX_REPLAY_SCRIPT_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_REPLAY_PACKAGE_BYTES: usize =
@@ -12,6 +13,29 @@ const FORMAT: &str = "limo-cad-replay";
 pub struct ReplayPackage {
     script: String,
     project: Vec<u8>,
+}
+
+/// Identity of the original wire bytes, not a re-encoded package. Integrity
+/// only: callers must still enforce admission, ownership and execution policy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReplayPackageIdentity {
+    pub byte_length: u64,
+    pub sha256: [u8; 32],
+}
+impl ReplayPackageIdentity {
+    fn from_bytes(bytes: &[u8]) -> Self {
+        Self {
+            byte_length: bytes.len() as u64,
+            sha256: Sha256::digest(bytes).into(),
+        }
+    }
+    fn validate_length(&self) -> Result<(), ProjectFileError> {
+        if self.byte_length == 0 || self.byte_length > MAX_REPLAY_PACKAGE_BYTES as u64 {
+            return Err(error("invalid replay package identity length"));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Serialize)]
@@ -31,6 +55,30 @@ impl ReplayPackage {
     /// envelope. Reading does not execute scripts or change a live document.
     pub fn read_file(path: &std::path::Path) -> Result<Self, ProjectFileError> {
         let bytes = crate::files::read_bounded(path, MAX_REPLAY_PACKAGE_BYTES as u64)?;
+        Self::decode_cbor(&bytes)
+    }
+    /// Select a package and retain the identity of the exact bounded bytes decoded.
+    pub fn read_file_with_identity(
+        path: &std::path::Path,
+    ) -> Result<(Self, ReplayPackageIdentity), ProjectFileError> {
+        let bytes = crate::files::read_bounded(path, MAX_REPLAY_PACKAGE_BYTES as u64)?;
+        let package = Self::decode_cbor(&bytes)?;
+        Ok((package, ReplayPackageIdentity::from_bytes(&bytes)))
+    }
+    /// Reopen a selected package, verify its identity and decode the same buffer.
+    /// No second read or re-encoding may occur between verification and decoding.
+    pub fn read_file_verified(
+        path: &std::path::Path,
+        expected: &ReplayPackageIdentity,
+    ) -> Result<Self, ProjectFileError> {
+        expected.validate_length()?;
+        let bytes = crate::files::read_bounded(path, expected.byte_length)?;
+        if bytes.len() as u64 != expected.byte_length {
+            return Err(error("replay package length changed after selection"));
+        }
+        if ReplayPackageIdentity::from_bytes(&bytes) != *expected {
+            return Err(error("replay package contents changed after selection"));
+        }
         Self::decode_cbor(&bytes)
     }
     /// Encode fully before touching the destination, then publish atomically.
@@ -292,5 +340,84 @@ mod tests {
         assert!(Reader(&input).bytes(2, MAX_FILE_BYTES as usize).is_err());
         assert_eq!(Reader(&[0x43, 1, 2, 3]).bytes(2, 3).unwrap(), &[1, 2, 3]);
         assert!(Reader(&[0x44, 1, 2, 3, 4]).bytes(2, 3).is_err());
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    #[test]
+    fn sha256_known_vector_and_descriptor_bounds() {
+        assert_eq!(
+            ReplayPackageIdentity::from_bytes(b"abc").sha256,
+            [
+                0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae,
+                0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61,
+                0xf2, 0x00, 0x15, 0xad
+            ]
+        );
+        for length in [0, MAX_REPLAY_PACKAGE_BYTES as u64 + 1, u64::MAX] {
+            let identity = ReplayPackageIdentity {
+                byte_length: length,
+                sha256: [0; 32],
+            };
+            assert!(identity.validate_length().is_err());
+        }
+        let identity = ReplayPackageIdentity::from_bytes(b"abc");
+        let mut value = serde_json::to_value(&identity).unwrap();
+        assert_eq!(
+            serde_json::from_value::<ReplayPackageIdentity>(value.clone()).unwrap(),
+            identity
+        );
+        value
+            .as_object_mut()
+            .unwrap()
+            .insert("extra".into(), true.into());
+        assert!(serde_json::from_value::<ReplayPackageIdentity>(value).is_err());
+    }
+    #[test]
+    fn verifies_original_encoding_and_rejects_changed_or_malformed_file() {
+        let path = std::env::temp_dir().join(format!(
+            "limo-replay-identity-{}-{}.cbor",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let package = ReplayPackage::new("version: 2".into(), vec![1, 2, 3]).unwrap();
+        let canonical = package.encode_cbor().unwrap();
+        // A nonminimal definite map length is accepted, but has a distinct identity.
+        let mut original = vec![0xb8, 4];
+        original.extend_from_slice(&canonical[1..]);
+        std::fs::write(&path, &original).unwrap();
+        let (loaded, identity) = ReplayPackage::read_file_with_identity(&path).unwrap();
+        assert_eq!(loaded, package);
+        assert_eq!(identity, ReplayPackageIdentity::from_bytes(&original));
+        assert_ne!(identity, ReplayPackageIdentity::from_bytes(&canonical));
+        assert_eq!(
+            ReplayPackage::read_file_verified(&path, &identity).unwrap(),
+            package
+        );
+        let mut changed = original.clone();
+        *changed.last_mut().unwrap() ^= 1;
+        for bytes in [
+            changed,
+            original[..original.len() - 1].to_vec(),
+            [original.clone(), vec![0]].concat(),
+        ] {
+            std::fs::write(&path, bytes).unwrap();
+            assert!(ReplayPackage::read_file_verified(&path, &identity).is_err());
+        }
+        // Correct integrity never substitutes for valid framing.
+        let malformed = [0xff];
+        std::fs::write(&path, malformed).unwrap();
+        assert!(ReplayPackage::read_file_verified(
+            &path,
+            &ReplayPackageIdentity::from_bytes(&malformed)
+        )
+        .is_err());
+        assert!(ReplayPackage::read_file_with_identity(&path).is_err());
+        std::fs::remove_file(path).unwrap();
     }
 }
