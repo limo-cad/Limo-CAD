@@ -13,14 +13,43 @@ pub enum Id {
     Sketch,
     Extrude,
     Cut,
+    Fillet,
 }
-pub const ALL: [Id; 3] = [Id::Sketch, Id::Extrude, Id::Cut];
+pub const ALL: [Id; 4] = [Id::Sketch, Id::Extrude, Id::Cut, Id::Fillet];
+
+/// A small choice of outcomes within Cut, independent of lesson navigation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CutScenario {
+    #[default]
+    ThroughAll,
+    MeasuredDepth,
+}
+impl CutScenario {
+    pub const ALL: [Self; 2] = [Self::ThroughAll, Self::MeasuredDepth];
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::ThroughAll => "through_all",
+            Self::MeasuredDepth => "measured_depth",
+        }
+    }
+    pub fn label(self, locale: &str) -> &'static str {
+        text(locale, &format!("cut.scenario.{}", self.key()))
+    }
+    pub const fn frame(self, index: usize) -> usize {
+        match (self, index) {
+            (Self::MeasuredDepth, 2..=3) => index + 2,
+            _ => index,
+        }
+    }
+}
 impl Id {
     pub const fn key(self) -> &'static str {
         match self {
             Self::Sketch => "sketch",
             Self::Extrude => "extrude",
             Self::Cut => "cut",
+            Self::Fillet => "fillet",
         }
     }
     pub const fn help(self) -> &'static str {
@@ -28,13 +57,14 @@ impl Id {
             Self::Sketch => "concepts.bracket-sketch",
             Self::Extrude => "concepts.extrude-basics",
             Self::Cut => "concepts.bracket-cut",
+            Self::Fillet => "concepts.bracket-fillet",
         }
     }
     pub const fn prerequisite(self) -> Option<Id> {
         match self {
             Self::Sketch => None,
             Self::Extrude => Some(Self::Sketch),
-            Self::Cut => Some(Self::Extrude),
+            Self::Cut | Self::Fillet => Some(Self::Extrude),
         }
     }
     pub const fn cues(self) -> [&'static str; 4] {
@@ -42,6 +72,7 @@ impl Id {
             Self::Sketch => ["plane", "profile", "dimension", "apply"],
             Self::Extrude => ["profile", "extrude", "depth", "apply"],
             Self::Cut => ["profile", "cut", "depth", "apply"],
+            Self::Fillet => ["body", "edges", "radius", "apply"],
         }
     }
     pub fn title(self, locale: &str) -> &'static str {
@@ -85,7 +116,12 @@ pub fn page(locale: &str, id: Id) -> Page {
     Page {
         id: id.help().into(),
         title: id.title(locale).into(),
-        topics: vec!["sketch".into(), "extrude".into(), "cut".into()],
+        topics: vec![
+            "sketch".into(),
+            "extrude".into(),
+            "cut".into(),
+            "fillet".into(),
+        ],
         keywords: vec!["bracket".into(), id.key().into()],
         description: id.summary(locale).into(),
         body,

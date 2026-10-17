@@ -4,7 +4,7 @@ title: Sketch
 description: Draw the L-profile used by the bracket.
 status: stable
 updated: 2026-10-17
-topics: sketch, extrude, cut
+topics: sketch, extrude, cut, fillet
 keywords: bracket, sketch
 related_recipes: extrude-basics
 ---

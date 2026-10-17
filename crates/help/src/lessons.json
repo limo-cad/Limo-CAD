@@ -38,7 +38,7 @@
     "extrude.width": "Set Distance to 40 mm.",
     "extrude.apply": "Apply the extrusion. The sketch and feature stay editable.",
     "cut.title": "Cut",
-    "cut.summary": "Cut a hole through the same bracket.",
+    "cut.summary": "Choose a through hole or a measured blind cut.",
     "cut.profile": "Start with the rounded bracket, two base holes and a prepared 26 mm circle.",
     "cut.operation": "Choose Extrude and set Operation to Subtract.",
     "cut.through": "Use Through All and point the cut into the upright wall.",
@@ -55,10 +55,28 @@
     ],
     "cut.instructions": [
       "The rounded corners and two 7 mm base holes are already complete. Start with the prepared 26 mm circle on the upright face; Sketch explains drawing it.",
-      "Choose Extrude, select the circular profile and set Operation to Subtract. Choose Through All and point the cut into the wall.",
-      "Apply and check that the new hole passes through the 8 mm wall. The sketches, extrusions and fillets remain editable."
+      "Choose Extrude, select the circular profile and set Operation to Subtract. Point the cut into the wall. Through All makes a through hole; Distance of 4 mm makes a blind cut in the 8 mm wall.",
+      "Apply and inspect the result. A through hole opens on both faces; the measured cut leaves 4 mm of material behind it. Switch the example choice to compare. The sketches, extrusions and fillets remain editable."
     ],
-    "ui.footer": "Drag to turn · Design unchanged"
+    "ui.footer": "Drag to turn · Design unchanged",
+    "step.body": "Body",
+    "step.edges": "Edges",
+    "step.radius": "Radius",
+    "fillet.title": "Fillet",
+    "fillet.summary": "Round four outer corners of the same bracket.",
+    "fillet.body": "Start with the extruded bracket. Its inner bend is already rounded.",
+    "fillet.edges": "Choose Fillet and select the four highlighted outer corner edges.",
+    "fillet.radius": "Set Radius to 3 mm. Check the rounded corners.",
+    "fillet.apply": "Apply. The fillet and earlier features stay editable.",
+    "fillet.instructions": [
+      "Start with the extruded bracket. The inner bend is already rounded; this example focuses on the four outer corners.",
+      "Choose Fillet and select the four outer corner edges shown in the example. Set Radius to 3 mm and check the preview.",
+      "Apply. Edit the fillet to change its radius or selected edges. Cut uses this same bracket after the remaining edge breaks and base holes are prepared."
+    ],
+    "cut.scenario.through_all": "Through all",
+    "cut.scenario.measured_depth": "Measured depth",
+    "cut.measured.depth": "Set Distance to 4 mm. Leave 4 mm of the 8 mm wall.",
+    "cut.measured.apply": "Apply. The blind cut retains its floor."
   },
   "zh-CN": {
     "ui.showMe": "演示",
@@ -99,7 +117,7 @@
     "extrude.width": "将距离设为 40 毫米。",
     "extrude.apply": "应用拉伸。草图和特征仍可编辑。",
     "cut.title": "切除",
-    "cut.summary": "在同一个支架上切出通孔。",
+    "cut.summary": "选择通孔或指定深度的盲孔。",
     "cut.profile": "从已倒圆角、带两个底座孔和预备好的 26 毫米圆的支架开始。",
     "cut.operation": "选择“拉伸”，将操作设为“减去”。",
     "cut.through": "使用“贯穿所有”，使切除方向指向立壁内部。",
@@ -115,11 +133,29 @@
       "编辑草图可改变 L 形截面；编辑拉伸可改变宽度。轮廓的绘制方法见链接的草图示例。"
     ],
     "cut.instructions": [
-      "圆角和两个 7 毫米底座孔已完成。从立面上预备好的 26 毫米圆开始；绘制方法见草图示例。",
-      "选择“拉伸”和圆形轮廓，将操作设为“减去”。选择“贯穿所有”，使切除方向指向壁内。",
-      "应用并确认新孔贯穿 8 毫米壁厚。草图、拉伸和圆角特征仍可编辑。"
+      "圆角和两个 7 毫米底座孔已完成。从立面上准备好的 26 毫米圆开始；绘制方法见草图示例。",
+      "选择“拉伸”和圆形轮廓，将操作设为“减去”，使切除方向指向壁内。“贯穿所有”形成通孔；将“距离”设为 4 毫米则在 8 毫米厚的壁上形成盲孔。",
+      "应用并检查结果。通孔贯穿两个表面；指定深度的切除在孔底保留 4 毫米材料。切换示例选项进行比较。草图、拉伸和圆角特征仍可编辑。"
     ],
-    "ui.footer": "拖动旋转 · 当前设计不会改变"
+    "ui.footer": "拖动旋转 · 当前设计不会改变",
+    "step.body": "实体",
+    "step.edges": "边线",
+    "step.radius": "半径",
+    "fillet.title": "圆角",
+    "fillet.summary": "为同一支架的四个外角倒圆角。",
+    "fillet.body": "从拉伸后的支架开始。内侧弯角已倒圆。",
+    "fillet.edges": "选择“圆角”，再选择高亮的四条外角边线。",
+    "fillet.radius": "将半径设为 3 毫米。检查圆角。",
+    "fillet.apply": "应用。圆角和之前的特征仍可编辑。",
+    "fillet.instructions": [
+      "从拉伸后的支架开始。内侧弯角已倒圆；此示例只演示四个外角。",
+      "选择“圆角”，再选择示例中显示的四条外角边线。将半径设为 3 毫米并检查预览。",
+      "应用。编辑圆角可更改半径或所选边线。完成其余边缘圆角和底座孔后，切除示例将使用同一支架。"
+    ],
+    "cut.scenario.through_all": "贯穿所有",
+    "cut.scenario.measured_depth": "指定深度",
+    "cut.measured.depth": "将距离设为 4 毫米。8 毫米壁厚中保留 4 毫米。",
+    "cut.measured.apply": "应用。盲孔保留孔底。"
   },
   "es": {
     "ui.showMe": "Ver ejemplo",
@@ -160,7 +196,7 @@
     "extrude.width": "Fija Distancia en 40 mm.",
     "extrude.apply": "Aplica la extrusión. El boceto y la operación siguen editables.",
     "cut.title": "Cortar",
-    "cut.summary": "Abre un agujero en la misma escuadra.",
+    "cut.summary": "Elige un agujero pasante o un corte ciego con profundidad fija.",
     "cut.profile": "Parte del soporte redondeado, con dos agujeros en la base y un círculo de 26 mm preparado.",
     "cut.operation": "Elige Extruir y establece la operación en Restar.",
     "cut.through": "Usa A través de todo y dirige el corte hacia la pared vertical.",
@@ -177,10 +213,28 @@
     ],
     "cut.instructions": [
       "Las esquinas redondeadas y los dos agujeros de 7 mm de la base ya están hechos. Parte del círculo de 26 mm preparado en la cara vertical; Croquis explica cómo dibujarlo.",
-      "Elige Extruir, selecciona el perfil circular y establece la operación en Restar. Elige A través de todo y dirige el corte hacia el interior de la pared.",
-      "Aplica y comprueba que el nuevo agujero atraviesa la pared de 8 mm. Los croquis, las extrusiones y los redondeos siguen siendo editables."
+      "Elige Extruir, el perfil circular y la operación Restar. Dirige el corte hacia la pared. A través de todo crea un agujero pasante; Distancia de 4 mm crea un corte ciego en la pared de 8 mm.",
+      "Aplica e inspecciona el resultado. El agujero pasante se abre en ambas caras; el corte de profundidad fija deja 4 mm de material detrás. Cambia la opción del ejemplo para comparar. Los croquis, las extrusiones y los redondeos siguen editables."
     ],
-    "ui.footer": "Arrastra para girar · Diseño intacto"
+    "ui.footer": "Arrastra para girar · Diseño intacto",
+    "step.body": "Cuerpo",
+    "step.edges": "Aristas",
+    "step.radius": "Radio",
+    "fillet.title": "Redondeo",
+    "fillet.summary": "Redondea cuatro esquinas exteriores de la misma escuadra.",
+    "fillet.body": "Parte de la escuadra extruida. El codo interior ya está redondeado.",
+    "fillet.edges": "Elige Redondeo y selecciona las cuatro aristas exteriores resaltadas.",
+    "fillet.radius": "Fija el radio en 3 mm. Comprueba las esquinas redondeadas.",
+    "fillet.apply": "Aplica. El redondeo y las operaciones anteriores siguen editables.",
+    "fillet.instructions": [
+      "Parte de la escuadra extruida. El codo interior ya está redondeado; este ejemplo se centra en las cuatro esquinas exteriores.",
+      "Elige Redondeo y selecciona las cuatro aristas exteriores que muestra el ejemplo. Fija el radio en 3 mm y comprueba la vista previa.",
+      "Aplica. Edita el redondeo para cambiar el radio o las aristas seleccionadas. Cortar usa la misma escuadra tras preparar los demás redondeos y los agujeros de la base."
+    ],
+    "cut.scenario.through_all": "Pasante",
+    "cut.scenario.measured_depth": "Profundidad fija",
+    "cut.measured.depth": "Fija Distancia en 4 mm. Conserva 4 mm de la pared de 8 mm.",
+    "cut.measured.apply": "Aplica. El corte ciego conserva su fondo."
   },
   "de": {
     "ui.showMe": "Beispiel",
@@ -221,7 +275,7 @@
     "extrude.width": "Stelle den Abstand auf 40 mm.",
     "extrude.apply": "Wende die Extrusion an. Skizze und Merkmal bleiben bearbeitbar.",
     "cut.title": "Schnitt",
-    "cut.summary": "Schneide ein Loch durch denselben Winkel.",
+    "cut.summary": "Wähle eine Durchgangsbohrung oder einen Schnitt mit fester Tiefe.",
     "cut.profile": "Beginne mit dem abgerundeten Winkel, zwei Bohrungen im Fuß und einem vorbereiteten Kreis mit 26 mm Durchmesser.",
     "cut.operation": "Wähle Extrudieren und stelle die Operation auf Subtrahieren.",
     "cut.through": "Wähle Durch alles und richte den Schnitt in die senkrechte Wand.",
@@ -238,9 +292,27 @@
     ],
     "cut.instructions": [
       "Die Rundungen und die zwei Bohrungen mit 7 mm Durchmesser im Fuß sind bereits fertig. Beginne mit dem vorbereiteten Kreis mit 26 mm Durchmesser auf der aufrechten Fläche; das Zeichnen erklärt das Skizzenbeispiel.",
-      "Wähle Extrudieren, das Kreisprofil und die Operation Subtrahieren. Wähle Durch alles und richte den Schnitt in die Wand.",
-      "Wende die Funktion an und prüfe, dass die neue Bohrung die 8 mm starke Wand durchdringt. Skizzen, Extrusionen und Rundungen bleiben bearbeitbar."
+      "Wähle Extrudieren, das Kreisprofil und Subtrahieren. Richte den Schnitt in die Wand. Durch alles erzeugt eine Durchgangsbohrung; ein Abstand von 4 mm erzeugt ein Sackloch in der 8 mm starken Wand.",
+      "Wende die Funktion an und prüfe das Ergebnis. Die Durchgangsbohrung öffnet beide Seiten; beim Schnitt mit fester Tiefe bleiben dahinter 4 mm Material stehen. Wechsle zum Vergleich die Beispieloption. Skizzen, Extrusionen und Rundungen bleiben bearbeitbar."
     ],
-    "ui.footer": "Ziehen zum Drehen · Entwurf unverändert"
+    "ui.footer": "Ziehen zum Drehen · Entwurf unverändert",
+    "step.body": "Körper",
+    "step.edges": "Kanten",
+    "step.radius": "Radius",
+    "fillet.title": "Verrundung",
+    "fillet.summary": "Runde vier Außenecken desselben Winkels ab.",
+    "fillet.body": "Beginne mit dem extrudierten Winkel. Die innere Biegung ist schon abgerundet.",
+    "fillet.edges": "Wähle Verrundung und die vier hervorgehobenen äußeren Eckkanten.",
+    "fillet.radius": "Stelle den Radius auf 3 mm. Prüfe die abgerundeten Ecken.",
+    "fillet.apply": "Wende die Verrundung an. Alle Merkmale bleiben bearbeitbar.",
+    "fillet.instructions": [
+      "Beginne mit dem extrudierten Winkel. Die innere Biegung ist bereits abgerundet; dieses Beispiel zeigt die vier Außenecken.",
+      "Wähle Verrundung und die vier im Beispiel gezeigten äußeren Eckkanten. Stelle den Radius auf 3 mm und prüfe die Vorschau.",
+      "Wende die Funktion an. Bearbeite die Verrundung, um Radius oder Kantenauswahl zu ändern. Schnitt verwendet denselben Winkel nach den übrigen Kantenrundungen und den Bohrungen im Fuß."
+    ],
+    "cut.scenario.through_all": "Durch alles",
+    "cut.scenario.measured_depth": "Feste Tiefe",
+    "cut.measured.depth": "Stelle den Abstand auf 4 mm. Von der 8-mm-Wand bleiben 4 mm stehen.",
+    "cut.measured.apply": "Wende den Schnitt an. Das Sackloch behält seinen Boden."
   }
 }

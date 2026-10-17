@@ -4,7 +4,7 @@ title: Extrude
 description: Give the completed L-profile its width.
 status: stable
 updated: 2026-10-17
-topics: sketch, extrude, cut
+topics: sketch, extrude, cut, fillet
 keywords: bracket, extrude
 related_recipes: extrude-basics
 ---

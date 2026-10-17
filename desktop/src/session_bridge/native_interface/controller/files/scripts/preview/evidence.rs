@@ -121,10 +121,19 @@ fn native_show_me_ui_evidence_and_performance() {
     let root = std::env::var("LIMO_CAD_SHOW_ME_PROOF_DIR")
         .expect("Choose a fresh LIMO_CAD_SHOW_ME_PROOF_DIR");
     for id in lesson::ALL {
-        capture_lesson(id, &Path::new(&root).join(id.key()));
+        capture_lesson(
+            id,
+            lesson::CutScenario::ThroughAll,
+            &Path::new(&root).join(id.key()),
+        );
     }
+    capture_lesson(
+        lesson::Id::Cut,
+        lesson::CutScenario::MeasuredDepth,
+        &Path::new(&root).join("cut-measured"),
+    );
 }
-fn capture_lesson(id: lesson::Id, out: &Path) {
+fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     use crate::native_viewport::interface_shell::{InterfaceCamera, InterfaceFrame};
     use limo_cad_interface::{DocumentContext, Rect, Surface};
     std::fs::create_dir_all(out).unwrap();
@@ -221,26 +230,38 @@ fn capture_lesson(id: lesson::Id, out: &Path) {
             "fixture-extrude",
             InterfaceControl::button(
                 "solid/build",
-                if id == lesson::Id::Sketch {
-                    "Create Sketch"
-                } else {
-                    "Extrude"
+                match id {
+                    lesson::Id::Sketch => "Create Sketch",
+                    lesson::Id::Fillet => "Fillet",
+                    _ => "Extrude",
                 },
             ),
-            Some(if id == lesson::Id::Sketch {
-                "Create Sketch"
-            } else {
-                "Extrude"
+            Some(match id {
+                lesson::Id::Sketch => "Create Sketch",
+                lesson::Id::Fillet => "Fillet",
+                _ => "Extrude",
             }),
             if id == lesson::Id::Sketch {
                 NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
                     crate::native_editor::support::Command::Start,
                 ))
+            } else if id == lesson::Id::Fillet {
+                NativeCommand::Feature(
+                    crate::session_bridge::native_interface::feature::FeatureCommand::Open {
+                        kind:
+                            crate::session_bridge::native_interface::feature::SolidFormKind::Fillet,
+                        feature_id: None,
+                    },
+                )
             } else {
                 NativeCommand::File(FileCommand::ScriptPreview(Action::Model))
             },
             chrome::rect(24., 4., 128., 32.),
-            Some(interface_shell::ribbon::Icon::Extrude),
+            Some(if id == lesson::Id::Fillet {
+                interface_shell::ribbon::Icon::Fillet
+            } else {
+                interface_shell::ribbon::Icon::Extrude
+            }),
             50,
         )
         .unwrap();
@@ -252,7 +273,31 @@ fn capture_lesson(id: lesson::Id, out: &Path) {
         .resolve_retained(limo_cad_interface::ControlKey(anchor.to_bits()))
         .unwrap();
     handle.prepare_activation(&action).unwrap();
-    feature::paint_hint(app.world_mut(), camera, Some(anchor), &mut widgets, 432.).unwrap();
+    feature::paint_hint(
+        app.world_mut(),
+        camera,
+        if id == lesson::Id::Fillet {
+            None
+        } else {
+            Some(anchor)
+        },
+        &mut widgets,
+        432.,
+    )
+    .unwrap();
+    assert!(
+        widgets
+            .entity(&format!(
+                "{}-show-me",
+                if id == lesson::Id::Cut {
+                    "cut"
+                } else {
+                    id.key()
+                }
+            ))
+            .is_some(),
+        "The native hint must teach its actual operation"
+    );
     widgets.finish(app.world_mut());
     capture(&mut app, &target, &out.join("entry.png"));
     command(
@@ -296,12 +341,19 @@ fn capture_lesson(id: lesson::Id, out: &Path) {
         .service
         .clone();
     let retained = Retained::new(service, frames).unwrap();
-    let durations = retained.descriptor.durations_ms.clone();
+    let durations = if id == lesson::Id::Cut {
+        (0..4)
+            .map(|index| retained.descriptor.durations_ms[scenario.frame(index)])
+            .collect()
+    } else {
+        retained.descriptor.durations_ms.clone()
+    };
     {
         let files = &mut app.world_mut().resource_mut::<Files>();
         files.scripts = true;
         files.script.preview.open = true;
         files.script.preview.lesson = Some(id);
+        files.script.preview.scenario = scenario;
         files.script.preview.return_to = Some((false, false, false, false));
         files.script.preview.retained = Some(retained);
     }
@@ -373,6 +425,78 @@ fn capture_lesson(id: lesson::Id, out: &Path) {
         jobs,
         "Warm replay must not submit GPU jobs"
     );
+    let mut scenario_cached_frames = None;
+    if id == lesson::Id::Cut {
+        // Warm both choices once, then exercise actual commands and every step.
+        // The two opening frames are shared, so only six textures are needed.
+        let mut warm_jobs = 0;
+        for round in 0..=100 {
+            for option in lesson::CutScenario::ALL {
+                command(
+                    app.world_mut(),
+                    &handle,
+                    Action::Scenario(option),
+                    &ControlInput::Click,
+                )
+                .unwrap();
+                command(
+                    app.world_mut(),
+                    &handle,
+                    Action::Replay,
+                    &ControlInput::Click,
+                )
+                .unwrap();
+                for index in 0..4 {
+                    if index > 0 {
+                        command(app.world_mut(), &handle, Action::Next, &ControlInput::Click)
+                            .unwrap();
+                    }
+                    render(app.world_mut(), &handle).unwrap();
+                    let deadline = Instant::now() + Duration::from_secs(45);
+                    loop {
+                        poll(app.world_mut());
+                        let state = &app.world().resource::<Files>().script.preview;
+                        assert!(state.error.is_none(), "{:?}", state.error);
+                        if state.rendered == state.revision {
+                            break;
+                        }
+                        assert!(Instant::now() < deadline);
+                        std::thread::sleep(Duration::from_millis(2));
+                    }
+                }
+            }
+            let state = &app.world().resource::<Files>().script.preview;
+            if round == 0 {
+                warm_jobs = state.render_jobs;
+            } else {
+                assert_eq!(
+                    state.render_jobs, warm_jobs,
+                    "Warm scenario switches must not render again"
+                );
+            }
+        }
+        let count = app
+            .world()
+            .resource::<Files>()
+            .script
+            .preview
+            .images
+            .footprint()
+            .0;
+        assert_eq!(count, 6);
+        scenario_cached_frames = Some(count);
+        command(
+            app.world_mut(),
+            &handle,
+            Action::Scenario(scenario),
+            &ControlInput::Click,
+        )
+        .unwrap();
+        for _ in 0..3 {
+            command(app.world_mut(), &handle, Action::Next, &ControlInput::Click).unwrap();
+        }
+        render(app.world_mut(), &handle).unwrap();
+    }
     command(app.world_mut(), &handle, Action::Help, &ControlInput::Click).unwrap();
     widgets.begin();
     panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
@@ -600,6 +724,14 @@ fn capture_lesson(id: lesson::Id, out: &Path) {
         (0, 0)
     );
     let report = json!({"lesson":id,"scope":"windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization", "prepare_ms":prepare_ms,"cold_frame_ms":cold_ms,"cold_gpu_jobs":jobs,"warm_replay_ms":warm_ms,"warm_gpu_jobs":0,"cached_frames":footprint.0,"cached_rgba_bytes":footprint.1,"texture_budget_bytes":16*1024*1024,"paused_poll_ns":idle_ns[0],"closed_poll_ns":idle_ns[1],"idle_poll_samples":100_000,"idle_preview_wakes":0,"closed_cached_bytes":0,"durations_ms":durations});
+    let mut report = report;
+    report["scenario"] = json!(scenario);
+    report["scenario_cached_frames"] = json!(scenario_cached_frames);
+    report["warm_scenario_gpu_jobs"] = if scenario_cached_frames.is_some() {
+        json!(0)
+    } else {
+        serde_json::Value::Null
+    };
     std::fs::write(
         out.join("performance.json"),
         serde_json::to_vec_pretty(&report).unwrap(),

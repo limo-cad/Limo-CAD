@@ -55,6 +55,8 @@ pub(crate) struct Frame {
     pub duration_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finish: Option<PreviewFinish>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub edges: Vec<u64>,
 }
 
 /// An opt-in teaching finish; never changes the main viewport's materials.
@@ -93,6 +95,9 @@ pub(crate) enum PreviewCue {
     Extrude,
     Depth,
     Apply,
+    Body,
+    Edges,
+    Radius,
 }
 impl PreviewCue {
     pub(crate) const fn key(self) -> &'static str {
@@ -104,6 +109,9 @@ impl PreviewCue {
             Self::Extrude => "extrude",
             Self::Depth => "depth",
             Self::Apply => "apply",
+            Self::Body => "body",
+            Self::Edges => "edges",
+            Self::Radius => "radius",
         }
     }
 }
@@ -121,6 +129,8 @@ struct RetainedFrame {
     duration_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     finish: Option<PreviewFinish>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    edges: Vec<u64>,
 }
 
 fn serialize_scene<S: serde::Serializer>(
@@ -150,6 +160,17 @@ impl PreviewDocument {
         let mut faces = 0;
         let mut edges = 0;
         for frame in &frames {
+            if frame.edges.len() > 16
+                || frame.edges.iter().any(|id| {
+                    !frame
+                        .scene
+                        .bodies
+                        .iter()
+                        .any(|body| body.edges.iter().any(|edge| edge.id.0 == *id))
+                })
+            {
+                return Err("Preview edge selection must reference at most 16 owned edges".into());
+            }
             if frame
                 .duration_ms
                 .is_some_and(|delay| !(100..=5000).contains(&delay))
@@ -298,6 +319,7 @@ impl PreviewDocument {
                     cue: frame.cue,
                     duration_ms: frame.duration_ms,
                     finish: frame.finish,
+                    edges: frame.edges,
                 })
                 .collect(),
             center,
@@ -771,6 +793,10 @@ impl PreviewRenderer {
             world
                 .resource_mut::<PresentationResource>()
                 .0
+                .selected_edge_ids = document.frames[request.frame_index].edges.clone();
+            world
+                .resource_mut::<PresentationResource>()
+                .0
                 .selected_finished_sketch_entities = document.frames[request.frame_index]
                 .profile
                 .as_ref()
@@ -1000,6 +1026,56 @@ mod tests {
                 .count()
         };
         let contrast = (accent_pixels(&cut_profile), accent_pixels(&cut_blank));
+        let fillet_frames: Vec<Frame> =
+            serde_json::from_value(report["exports"]["lessons"]["fillet"].take()).unwrap();
+        let mut invalid = fillet_frames.clone();
+        invalid[1].edges.push(u64::MAX);
+        assert!(
+            PreviewDocument::new(invalid).is_err(),
+            "Selection must belong to the retained scene"
+        );
+        let mut fillet = PreviewDocument::new(fillet_frames).unwrap();
+        request.frame_index = 1;
+        request.preview_id = "fillet-selection".into();
+        request.revision += 1;
+        let fillet_selected = render(&fillet, &request);
+        fillet.frames[1].edges.clear();
+        request.preview_id = "fillet-selection-negative-control".into();
+        request.revision += 1;
+        let fillet_blank = render(&fillet, &request);
+        let selected_edge_pixels = |png: &[u8]| {
+            decode_rgba(png)
+                .2
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .filter(|p| p[0] > 180 && p[1] > 150 && p[2] as i16 + 30 < p[1] as i16)
+                .count()
+        };
+        let fillet_contrast = (
+            selected_edge_pixels(&fillet_selected),
+            selected_edge_pixels(&fillet_blank),
+        );
+        let mut measured_frames: Vec<Frame> =
+            serde_json::from_value(report["exports"]["lessons"]["cut_measured"].take()).unwrap();
+        for frame in &mut measured_frames {
+            if let Some(profile) = &mut frame.profile {
+                profile.projected_edges.clear();
+                profile.reference_midpoints.clear();
+            }
+        }
+        let measured = PreviewDocument::new(measured_frames).unwrap();
+        request.frame_index = 3;
+        request.preview_id = "cut-measured-floor".into();
+        request.revision += 1;
+        let blind = render(&measured, &request);
+        request.preview_id = "cut-through-opening".into();
+        request.revision += 1;
+        let through = render(&cut_document, &request);
+        assert!(
+            changed(&decode_rgba(&blind).2, &decode_rgba(&through).2) > 1000,
+            "Blind floor must visibly differ from a through opening"
+        );
         if let Ok(path) = std::env::var("LIMO_CAD_PREVIEW_PROOF_DIR") {
             std::fs::create_dir_all(&path).unwrap();
             for (name, bytes) in [
@@ -1009,6 +1085,10 @@ mod tests {
                 ("extrude-blank-control.png", blank),
                 ("cut-profile.png", cut_profile),
                 ("cut-blank-control.png", cut_blank),
+                ("fillet-selected.png", fillet_selected),
+                ("fillet-selection-control.png", fillet_blank),
+                ("cut-measured.png", blind),
+                ("cut-through.png", through),
             ] {
                 std::fs::write(std::path::Path::new(&path).join(name), bytes).unwrap();
             }
@@ -1016,6 +1096,10 @@ mod tests {
         assert!(
             contrast.0 > contrast.1 + 50,
             "The prepared circle must contrast with the solid in the selection accent: {contrast:?}"
+        );
+        assert!(
+            fillet_contrast.0 > fillet_contrast.1 + 50,
+            "Selected Fillet edges must visibly contrast with the solid: {fillet_contrast:?}"
         );
     }
 

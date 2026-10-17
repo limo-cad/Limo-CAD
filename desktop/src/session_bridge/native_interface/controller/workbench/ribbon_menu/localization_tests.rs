@@ -3,6 +3,13 @@ use crate::session_bridge::native_interface::tests::Fixture;
 
 #[test]
 fn native_script_preview_tabs_after_extrude_in_the_production_ribbon() {
+    for locale in crate::app_preferences::locale::SUPPORTED {
+        assert_eq!(
+            dictionary::translate(locale, "ribbon.solid.fillet"),
+            limo_cad_mcp::lessons::Id::Fillet.title(crate::app_preferences::locale::code(locale)),
+            "The example must use the real localized operation name"
+        );
+    }
     use crate::session_bridge::native_interface::workspace::DocumentWorkspace;
     use bevy::ui::{ComputedStackIndex, UiGlobalTransform};
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
@@ -25,7 +32,14 @@ fn native_script_preview_tabs_after_extrude_in_the_production_ribbon() {
     let camera = app.world_mut().spawn(InterfaceCamera).id();
     let mut originals = Widgets::default();
     let mut controls = HashMap::new();
-    for name in ["extrude", "revolve", "sweep", "loft"] {
+    for name in [
+        "extrude",
+        "revolve",
+        "sweep",
+        "loft",
+        "solid-fillet",
+        "solid-chamfer",
+    ] {
         let entity = originals
             .button(
                 app.world_mut(),
@@ -33,7 +47,14 @@ fn native_script_preview_tabs_after_extrude_in_the_production_ribbon() {
                 name,
                 InterfaceControl::button("solid/build", name),
                 None,
-                NativeCommand::ClearSelection,
+                if name == "solid-fillet" {
+                    NativeCommand::Feature(feature::FeatureCommand::Open {
+                        kind: feature::SolidFormKind::Fillet,
+                        feature_id: None,
+                    })
+                } else {
+                    NativeCommand::ClearSelection
+                },
                 ribbon::node(0., 0., 48.),
                 None,
                 30,
@@ -130,6 +151,28 @@ fn native_script_preview_tabs_after_extrude_in_the_production_ribbon() {
         Some(limo_cad_interface::ControlKey(
             controls["revolve"].to_bits()
         ))
+    );
+    // Fillet has one focused example in its own real ribbon position.
+    let fillet = controls["solid-fillet"];
+    let fillet_anchor = handle
+        .resolve_retained(limo_cad_interface::ControlKey(fillet.to_bits()))
+        .unwrap();
+    handle.prepare_activation(&fillet_anchor).unwrap();
+    hint.begin();
+    files::paint_feature_hint(app.world_mut(), camera, Some(extrude), &mut hint, 1900.).unwrap();
+    hint.finish(app.world_mut());
+    let entry = hint.entity("fillet-show-me").unwrap();
+    assert!(hint.entity("extrude-show-me").is_none());
+    layout(&mut app);
+    handle.focus_next(false).unwrap();
+    assert_eq!(
+        handle.focused_key(),
+        Some(limo_cad_interface::ControlKey(entry.to_bits()))
+    );
+    handle.focus_next(true).unwrap();
+    assert_eq!(
+        handle.focused_key(),
+        Some(limo_cad_interface::ControlKey(fillet.to_bits()))
     );
 }
 

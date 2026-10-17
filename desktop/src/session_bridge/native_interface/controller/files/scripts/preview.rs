@@ -33,6 +33,7 @@ pub(crate) enum Action {
     Open,
     Extrude,
     Lesson(limo_cad_mcp::lessons::Id),
+    Scenario(limo_cad_mcp::lessons::CutScenario),
     Read(limo_cad_mcp::lessons::Id),
     Index,
     FullBuild,
@@ -124,6 +125,7 @@ pub(crate) struct State {
     help: bool,
     help_view: feature::HelpView,
     lesson: Option<lesson::Id>,
+    scenario: lesson::CutScenario,
     index_open: bool,
     transition: Option<Retained>,
     focus_owner: Option<DocumentContext>,
@@ -165,6 +167,7 @@ impl Default for State {
             help: false,
             help_view: feature::HelpView::default(),
             lesson: None,
+            scenario: lesson::CutScenario::default(),
             index_open: false,
             transition: None,
             focus_owner: None,
@@ -179,9 +182,26 @@ impl State {
         self.build.is_some()
     }
     fn count(&self) -> usize {
+        if self.cut_choices() {
+            return 4;
+        }
         self.retained
             .as_ref()
             .map_or(0, |r| r.descriptor.captions.len())
+    }
+    fn cut_choices(&self) -> bool {
+        self.lesson == Some(lesson::Id::Cut)
+            && self
+                .retained
+                .as_ref()
+                .is_some_and(|r| r.descriptor.captions.len() == 6)
+    }
+    fn frame_index(&self) -> usize {
+        if self.cut_choices() {
+            self.scenario.frame(self.index)
+        } else {
+            self.index
+        }
     }
     fn changed(&mut self) -> Result<(), String> {
         self.revision = self
@@ -234,6 +254,15 @@ fn prepare_lesson(source: &str, lesson: Option<lesson::Id>) -> Result<Vec<Frame>
     };
     let mut frames: Vec<Frame> = serde_json::from_value(frames)
         .map_err(|error| format!("Preview frames are unavailable: {error}"))?;
+    if lesson == Some(lesson::Id::Cut) {
+        let measured: Vec<Frame> =
+            serde_json::from_value(report["exports"]["lessons"]["cut_measured"].take())
+                .map_err(|error| format!("Measured cut frames are unavailable: {error}"))?;
+        if frames.len() != 4 || measured.len() != 4 {
+            return Err("Cut needs two four-frame scenarios".into());
+        }
+        frames.extend(measured.into_iter().skip(2));
+    }
     for frame in &mut frames {
         if let Some(profile) = &mut frame.profile {
             // Face sketches carry passive snapping aids. The isolated viewer
@@ -297,6 +326,7 @@ fn open_lesson(
     files.script.preview.return_to = Some(previous);
     files.script.preview.playing = !help;
     files.script.preview.lesson = id;
+    files.script.preview.scenario = lesson::CutScenario::default();
     files.script.preview.index_open = id.is_none();
     files.script.preview.transition = if help { None } else { transition };
     files.script.preview.help_view = feature::HelpView::default();
@@ -453,6 +483,18 @@ pub(crate) fn command(
                 preview.help_view = feature::HelpView::default();
             }
             Action::HelpBody => {}
+            Action::Scenario(scenario) => {
+                if preview.help || !preview.cut_choices() {
+                    return Err("Open the Cut example before choosing its outcome".into());
+                }
+                if preview.scenario != scenario {
+                    preview.scenario = scenario;
+                    preview.index = 0;
+                    preview.image_index = None;
+                    preview.playing = true;
+                    preview.changed()?;
+                }
+            }
             Action::Model => {}
             Action::Previous | Action::Next => {
                 preview.playing = false;
@@ -553,7 +595,7 @@ fn render(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), Strin
         preview_id: retained.descriptor.preview_id.clone(),
         view_id: view.clone(),
         revision,
-        frame_index: preview.index,
+        frame_index: preview.frame_index(),
         width: preview.size[0],
         height: preview.size[1],
         yaw: preview.yaw,
@@ -595,7 +637,7 @@ fn replay(preview: &mut State, handle: &NativeInterfaceHandle, now: Instant) -> 
         let delay = preview
             .retained
             .as_ref()
-            .and_then(|r| r.descriptor.durations_ms.get(preview.index))
+            .and_then(|r| r.descriptor.durations_ms.get(preview.frame_index()))
             .copied()
             .map(Duration::from_millis)
             .unwrap_or(FRAME_DELAY);

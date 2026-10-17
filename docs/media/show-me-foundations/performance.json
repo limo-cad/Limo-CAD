@@ -3,13 +3,13 @@
     "cached_frames": 5,
     "cached_rgba_bytes": 4108480,
     "closed_cached_bytes": 0,
-    "closed_poll_ns": 1083.294,
+    "closed_poll_ns": 1007.862,
     "cold_frame_ms": [
-      1835.3204,
-      226.6002,
-      273.8777,
-      246.5086,
-      240.7393
+      1397.3362,
+      254.797,
+      218.685,
+      215.3714,
+      213.4624
     ],
     "cold_gpu_jobs": 5,
     "durations_ms": [
@@ -22,24 +22,27 @@
     "idle_poll_samples": 100000,
     "idle_preview_wakes": 0,
     "lesson": "sketch",
-    "paused_poll_ns": 1026.12,
-    "prepare_ms": 686.5627,
+    "paused_poll_ns": 808.709,
+    "prepare_ms": 659.0713000000001,
+    "scenario": "through_all",
+    "scenario_cached_frames": null,
     "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
     "texture_budget_bytes": 16777216,
     "warm_gpu_jobs": 0,
-    "warm_replay_ms": 0.030206
+    "warm_replay_ms": 0.016554,
+    "warm_scenario_gpu_jobs": null
   },
   "extrude": {
     "cached_frames": 5,
     "cached_rgba_bytes": 4108480,
     "closed_cached_bytes": 0,
-    "closed_poll_ns": 1116.072,
+    "closed_poll_ns": 923.203,
     "cold_frame_ms": [
-      1752.1875,
-      787.9094,
-      245.4111,
-      246.85209999999998,
-      232.9529
+      1314.8310000000001,
+      687.1914999999999,
+      212.6978,
+      212.72830000000002,
+      212.7753
     ],
     "cold_gpu_jobs": 5,
     "durations_ms": [
@@ -52,23 +55,26 @@
     "idle_poll_samples": 100000,
     "idle_preview_wakes": 0,
     "lesson": "extrude",
-    "paused_poll_ns": 1088.832,
-    "prepare_ms": 625.0475,
+    "paused_poll_ns": 829.074,
+    "prepare_ms": 677.8261,
+    "scenario": "through_all",
+    "scenario_cached_frames": null,
     "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
     "texture_budget_bytes": 16777216,
     "warm_gpu_jobs": 0,
-    "warm_replay_ms": 0.016904000000000002
+    "warm_replay_ms": 0.016534,
+    "warm_scenario_gpu_jobs": null
   },
   "cut": {
     "cached_frames": 4,
-    "cached_rgba_bytes": 3286784,
+    "cached_rgba_bytes": 2756352,
     "closed_cached_bytes": 0,
-    "closed_poll_ns": 870.335,
+    "closed_poll_ns": 912.151,
     "cold_frame_ms": [
-      2191.5832,
-      250.3201,
-      243.931,
-      229.1025
+      1868.088,
+      199.15540000000001,
+      205.9278,
+      219.2297
     ],
     "cold_gpu_jobs": 4,
     "durations_ms": [
@@ -80,11 +86,76 @@
     "idle_poll_samples": 100000,
     "idle_preview_wakes": 0,
     "lesson": "cut",
-    "paused_poll_ns": 761.08,
-    "prepare_ms": 530.3851000000001,
+    "paused_poll_ns": 961.446,
+    "prepare_ms": 649.3715,
+    "scenario": "through_all",
+    "scenario_cached_frames": 6,
     "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
     "texture_budget_bytes": 16777216,
     "warm_gpu_jobs": 0,
-    "warm_replay_ms": 0.013688
+    "warm_replay_ms": 0.013203,
+    "warm_scenario_gpu_jobs": 0
+  },
+  "cut-measured": {
+    "cached_frames": 4,
+    "cached_rgba_bytes": 2756352,
+    "closed_cached_bytes": 0,
+    "closed_poll_ns": 916.931,
+    "cold_frame_ms": [
+      1835.9258,
+      244.8734,
+      217.2501,
+      213.2951
+    ],
+    "cold_gpu_jobs": 4,
+    "durations_ms": [
+      1400,
+      1400,
+      1400,
+      1400
+    ],
+    "idle_poll_samples": 100000,
+    "idle_preview_wakes": 0,
+    "lesson": "cut",
+    "paused_poll_ns": 814.994,
+    "prepare_ms": 704.5245,
+    "scenario": "measured_depth",
+    "scenario_cached_frames": 6,
+    "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+    "texture_budget_bytes": 16777216,
+    "warm_gpu_jobs": 0,
+    "warm_replay_ms": 0.013902000000000001,
+    "warm_scenario_gpu_jobs": 0
+  },
+  "fillet": {
+    "cached_frames": 4,
+    "cached_rgba_bytes": 3286784,
+    "closed_cached_bytes": 0,
+    "closed_poll_ns": 853.79,
+    "cold_frame_ms": [
+      1859.3166,
+      213.0025,
+      217.5021,
+      222.5393
+    ],
+    "cold_gpu_jobs": 4,
+    "durations_ms": [
+      1400,
+      1400,
+      1400,
+      1400
+    ],
+    "idle_poll_samples": 100000,
+    "idle_preview_wakes": 0,
+    "lesson": "fillet",
+    "paused_poll_ns": 813.121,
+    "prepare_ms": 628.5679,
+    "scenario": "through_all",
+    "scenario_cached_frames": null,
+    "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+    "texture_budget_bytes": 16777216,
+    "warm_gpu_jobs": 0,
+    "warm_replay_ms": 0.014082999999999998,
+    "warm_scenario_gpu_jobs": null
   }
 }

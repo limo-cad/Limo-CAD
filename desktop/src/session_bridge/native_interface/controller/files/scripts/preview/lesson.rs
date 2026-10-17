@@ -1,6 +1,6 @@
 //! Native presentation uses the shared, localized Help teaching catalog.
 use super::*;
-pub(super) use limo_cad_mcp::lessons::{Id, ALL, RECIPE};
+pub(super) use limo_cad_mcp::lessons::{CutScenario, Id, ALL, RECIPE};
 pub(super) fn language(world: &World) -> &'static str {
     crate::app_preferences::locale::code(crate::native_viewport::localization::locale(world))
 }

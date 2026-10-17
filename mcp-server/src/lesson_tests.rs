@@ -18,6 +18,58 @@ fn bracket_lessons_share_one_editable_build_and_localized_help() {
     assert_eq!(lessons["sketch"].as_array().unwrap().len(), 5);
     assert_eq!(lessons["extrude"].as_array().unwrap().len(), 5);
     assert_eq!(lessons["cut"].as_array().unwrap().len(), 4);
+    assert_eq!(lessons["cut_measured"].as_array().unwrap().len(), 4);
+    assert_eq!(lessons["fillet"].as_array().unwrap().len(), 4);
+    assert_eq!(
+        report["exports"]["preview_frames"]
+            .as_array()
+            .unwrap()
+            .len(),
+        16
+    );
+    for index in 0..2 {
+        assert_eq!(lessons["cut"][index], lessons["cut_measured"][index]);
+    }
+    let selected = lessons["fillet"][1]["edges"].as_array().unwrap();
+    assert_eq!(selected.len(), 4);
+    let fillet_stock = &lessons["fillet"][1]["scene"]["bodies"][0];
+    assert!(selected.iter().all(|id| fillet_stock["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|edge| edge["id"] == *id)));
+    assert_ne!(lessons["fillet"][1]["scene"], lessons["fillet"][3]["scene"]);
+    assert!(lessons["fillet"][3]["scene"]["bodies"][0]["faces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|face| face["cylinder"]["radius"] == 3.));
+    let blind = &lessons["cut_measured"][3]["scene"]["bodies"][0];
+    assert!(
+        blind["faces"].as_array().unwrap().iter().any(|face| {
+            face["plane"]["origin"][0]
+                .as_f64()
+                .is_some_and(|x| (x - 4.).abs() < 1e-6)
+                && face["plane"]["normal"][0]
+                    .as_f64()
+                    .is_some_and(|x| x.abs() > 0.999)
+        }),
+        "Blind cut must leave a planar floor halfway through the wall"
+    );
+    let blind_circles: Vec<_> = blind["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|edge| {
+            edge["circle"]["radius"]
+                .as_f64()
+                .is_some_and(|r| (r - 13.).abs() < 1e-6)
+        })
+        .map(|edge| edge["circle"]["center"]["x"].as_f64().unwrap())
+        .collect();
+    assert!(blind_circles.iter().any(|x| (*x - 4.).abs() < 1e-6));
+    assert!(blind_circles.iter().any(|x| (*x - 8.).abs() < 1e-6));
+    assert!(!blind_circles.iter().any(|x| x.abs() < 1e-6));
     assert_eq!(
         lessons["sketch"][4]["profile"],
         lessons["extrude"][0]["profile"]

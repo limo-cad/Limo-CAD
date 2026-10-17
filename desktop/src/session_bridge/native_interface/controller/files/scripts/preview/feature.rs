@@ -1,10 +1,17 @@
-//! Contextual hints and Help use the same three operation lessons.
+//! Contextual hints and Help use the shared operation lessons.
 use super::super::super::super::chrome::{self, rect};
 use super::*;
 use crate::native_viewport::script_preview::PreviewCue;
 use std::sync::OnceLock;
 
 const HOVER_DELAY: Duration = Duration::from_millis(700);
+fn entries(id: lesson::Id) -> &'static [lesson::Id] {
+    match id {
+        lesson::Id::Sketch => &[lesson::Id::Sketch],
+        lesson::Id::Fillet => &[lesson::Id::Fillet],
+        _ => &[lesson::Id::Extrude, lesson::Id::Cut],
+    }
+}
 #[derive(Resource, Default)]
 struct Hint {
     anchor: Option<Entity>,
@@ -103,7 +110,27 @@ pub(crate) fn paint_hint(
             .then_some(entity)
         });
     let mut selected = None;
-    for (entity, id) in [(sketch, lesson::Id::Sketch), (extrude, lesson::Id::Extrude)] {
+    let fillet = world
+        .query::<(Entity, &NativeCommandBinding)>()
+        .iter(world)
+        .find_map(|(entity, binding)| {
+            matches!(
+                binding.command,
+                NativeCommand::Feature(
+                    crate::session_bridge::native_interface::feature::FeatureCommand::Open {
+                        kind:
+                            crate::session_bridge::native_interface::feature::SolidFormKind::Fillet,
+                        feature_id: None
+                    }
+                )
+            )
+            .then_some(entity)
+        });
+    for (entity, id) in [
+        (sketch, lesson::Id::Sketch),
+        (extrude, lesson::Id::Extrude),
+        (fillet, lesson::Id::Fillet),
+    ] {
         let Some(entity) =
             entity.filter(|e| world.get::<InterfaceControl>(*e).is_some_and(|c| c.visible))
         else {
@@ -121,11 +148,7 @@ pub(crate) fn paint_hint(
         let cw = (width - 24.).clamp(260., 280.);
         let cx = x.min((width - cw - 8.).max(4.));
         let cy = y + h + 6.;
-        let entries = if id == lesson::Id::Sketch {
-            &[lesson::Id::Sketch][..]
-        } else {
-            &[lesson::Id::Extrude, lesson::Id::Cut][..]
-        };
+        let entries = entries(id);
         let keyboard = focused.is_some_and(|key| {
             key.0 == entity.to_bits()
                 || entries.iter().any(|id| {
@@ -205,11 +228,7 @@ pub(crate) fn paint_hint(
         12.,
         66,
     );
-    let entries = if id == lesson::Id::Sketch {
-        &[lesson::Id::Sketch][..]
-    } else {
-        &[lesson::Id::Extrude, lesson::Id::Cut][..]
-    };
+    let entries = entries(id);
     let mut previous = anchor;
     for (index, id) in entries.iter().enumerate() {
         let mut control = InterfaceControl::button(
@@ -490,7 +509,11 @@ pub(super) fn paint_help(
         "lesson-play",
         InterfaceControl::button("document/scripts", t("ui.showMe")),
         Some(t("ui.showMe")),
-        NativeCommand::File(FileCommand::ScriptPreview(Action::Lesson(id))),
+        NativeCommand::File(FileCommand::ScriptPreview(if retained {
+            Action::Demo
+        } else {
+            Action::Lesson(id)
+        })),
         rect(x + 8., y + h - 104., 140., 28.),
         Some(interface_shell::ribbon::Icon::Book),
         61,
@@ -530,7 +553,7 @@ pub(super) fn paint_index(
         camera,
         widgets,
         "index",
-        310.,
+        124. + lesson::ALL.len() as f32 * 62.,
         t("ui.lessons"),
         theme,
     )?;
@@ -568,7 +591,12 @@ pub(super) fn paint_index(
         InterfaceControl::button("document/scripts", t("ui.fullBuild")),
         Some(t("ui.fullBuild")),
         NativeCommand::File(FileCommand::ScriptPreview(Action::FullBuild)),
-        rect(x + 8., y + 252., w - 16., 32.),
+        rect(
+            x + 8.,
+            y + 66. + lesson::ALL.len() as f32 * 62.,
+            w - 16.,
+            32.,
+        ),
         None,
         61,
     )?;

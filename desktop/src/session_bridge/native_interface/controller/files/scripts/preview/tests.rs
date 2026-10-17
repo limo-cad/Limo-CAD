@@ -64,6 +64,144 @@ fn png() -> Vec<u8> {
 }
 
 #[test]
+fn native_script_preview_cut_choices_share_opening_frames_and_fence_stale_results() {
+    let mut world = world();
+    let handle = NativeInterfaceHandle::new(|| {});
+    retained(&mut world);
+    {
+        let state = &mut world.resource_mut::<Files>().script.preview;
+        let mut choices = frames();
+        choices.extend(frames());
+        state.retained = Some(Retained::new(state.service.clone(), choices).unwrap());
+        state.lesson = Some(lesson::Id::Cut);
+    }
+    let mut through_keys = vec![];
+    for scenario in lesson::CutScenario::ALL {
+        command(
+            &mut world,
+            &handle,
+            Action::Scenario(scenario),
+            &ControlInput::Click,
+        )
+        .unwrap();
+        assert_eq!(world.resource::<Files>().script.preview.count(), 4);
+        for index in 0..4 {
+            let (view, revision, key) = {
+                let state = &mut world.resource_mut::<Files>().script.preview;
+                state.index = index;
+                state.changed().unwrap();
+                (
+                    state.retained.as_ref().unwrap().view.clone(),
+                    state.revision,
+                    images::Key::current(state),
+                )
+            };
+            if scenario == lesson::CutScenario::ThroughAll {
+                through_keys.push(key);
+            } else {
+                assert_eq!(key == through_keys[index], index < 2);
+            }
+            publish(
+                &mut world,
+                Rendered {
+                    view,
+                    revision,
+                    png: png(),
+                },
+            )
+            .unwrap();
+        }
+    }
+    assert_eq!(
+        world
+            .resource::<Files>()
+            .script
+            .preview
+            .images
+            .footprint()
+            .0,
+        6
+    );
+    let (view, revision) = {
+        let state = &world.resource::<Files>().script.preview;
+        (
+            state.retained.as_ref().unwrap().view.clone(),
+            state.revision,
+        )
+    };
+    command(
+        &mut world,
+        &handle,
+        Action::Scenario(lesson::CutScenario::ThroughAll),
+        &ControlInput::Click,
+    )
+    .unwrap();
+    publish(
+        &mut world,
+        Rendered {
+            view,
+            revision,
+            png: vec![],
+        },
+    )
+    .unwrap();
+    assert!(world
+        .resource::<Files>()
+        .script
+        .preview
+        .image_index
+        .is_none());
+    for _ in 0..20 {
+        for scenario in lesson::CutScenario::ALL {
+            command(
+                &mut world,
+                &handle,
+                Action::Scenario(scenario),
+                &ControlInput::Click,
+            )
+            .unwrap();
+            let revision = world.resource::<Files>().script.preview.revision;
+            command(
+                &mut world,
+                &handle,
+                Action::Scenario(scenario),
+                &ControlInput::Click,
+            )
+            .unwrap();
+            assert_eq!(world.resource::<Files>().script.preview.revision, revision);
+            command(&mut world, &handle, Action::Help, &ControlInput::Click).unwrap();
+            assert!(command(
+                &mut world,
+                &handle,
+                Action::Scenario(scenario),
+                &ControlInput::Click
+            )
+            .is_err());
+            command(&mut world, &handle, Action::Demo, &ControlInput::Click).unwrap();
+            assert_eq!(world.resource::<Files>().script.preview.scenario, scenario);
+            command(&mut world, &handle, Action::Replay, &ControlInput::Click).unwrap();
+            for index in 0..4 {
+                if index > 0 {
+                    command(&mut world, &handle, Action::Next, &ControlInput::Click).unwrap();
+                }
+                render(&mut world, &handle).unwrap();
+            }
+        }
+    }
+    let state = &world.resource::<Files>().script.preview;
+    assert_eq!(state.render_jobs, 0);
+    assert!(state.build.is_none());
+    close(&mut world);
+    assert!(command(
+        &mut world,
+        &handle,
+        Action::Scenario(lesson::CutScenario::ThroughAll),
+        &ControlInput::Click
+    )
+    .is_err());
+}
+
+#[test]
 fn native_script_preview_cached_frames_skip_gpu_work_and_fence_late_errors() {
     let mut world = world();
     let (view, _, _) = retained(&mut world);
@@ -163,7 +301,14 @@ fn native_script_preview_all_connected_stages_retain_independent_profiles() {
         .source;
     for id in lesson::ALL {
         let frames = prepare_lesson(source, Some(id)).unwrap();
-        assert_eq!(frames.len(), if id == lesson::Id::Cut { 4 } else { 5 });
+        assert_eq!(
+            frames.len(),
+            match id {
+                lesson::Id::Cut => 6,
+                lesson::Id::Fillet => 4,
+                _ => 5,
+            }
+        );
         for frame in &frames {
             if let Some(profile) = &frame.profile {
                 assert!(

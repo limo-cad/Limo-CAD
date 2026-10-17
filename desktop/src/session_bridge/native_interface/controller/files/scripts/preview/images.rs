@@ -16,7 +16,7 @@ pub(super) struct Key {
 impl Key {
     pub fn current(state: &State) -> Self {
         Self {
-            index: state.index,
+            index: state.frame_index(),
             size: state.size,
             camera: [state.yaw.to_bits(), state.pitch.to_bits()],
             palette: state.palette,

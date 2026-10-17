@@ -21,7 +21,10 @@ pub(crate) fn paint(
     let card = card::Card::new(width);
     let (x, y, w) = (card.x, card.y, card.width);
     let image_width = w - 24.;
-    let image_height = (image_width * 176. / 300.).min((height - y - 204.).max(64.));
+    let choices = world.resource::<Files>().script.preview.lesson == Some(lesson::Id::Cut);
+    let choice_height = if choices { 28. } else { 0. };
+    let image_height =
+        ((image_width * 176. / 300.).min((height - y - 204.).max(64.)) - choice_height).max(64.);
     let scale = world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .iter(world)
@@ -58,13 +61,18 @@ pub(crate) fn paint(
         preview
             .retained
             .as_ref()
-            .map(|r| limo_cad_mcp::lessons::caption(language, &r.descriptor.captions[index]))
+            .map(|r| {
+                limo_cad_mcp::lessons::caption(
+                    language,
+                    &r.descriptor.captions[preview.frame_index()],
+                )
+            })
             .unwrap_or_else(|| t("ui.preparing").into())
     });
     let cue = preview
         .retained
         .as_ref()
-        .and_then(|r| r.descriptor.cues.get(index))
+        .and_then(|r| r.descriptor.cues.get(preview.frame_index()))
         .copied()
         .flatten();
     card.paint(
@@ -72,10 +80,34 @@ pub(crate) fn paint(
         camera,
         widgets,
         "demo",
-        image_height + if demo.is_some() { 188. } else { 162. },
+        image_height + choice_height + if demo.is_some() { 188. } else { 162. },
         demo.map_or(t("ui.showMe"), |d| d.title(language)),
         theme,
     )?;
+    if choices {
+        let scenario = world.resource::<Files>().script.preview.scenario;
+        for (i, option) in lesson::CutScenario::ALL.into_iter().enumerate() {
+            let mut control = InterfaceControl::button("document/scripts", option.label(language));
+            control.selected = Some(option == scenario);
+            control.disabled = !ready;
+            widgets.button(
+                world,
+                camera,
+                &format!("cut-scenario-{}", option.key()),
+                control,
+                Some(option.label(language)),
+                NativeCommand::File(FileCommand::ScriptPreview(Action::Scenario(option))),
+                rect(
+                    x + 12. + i as f32 * (image_width + 4.) / 2.,
+                    y + 40.,
+                    (image_width - 4.) / 2.,
+                    24.,
+                ),
+                None,
+                62,
+            )?;
+        }
+    }
     let mut model = InterfaceControl::button(
         "document/scripts",
         format!(
@@ -97,7 +129,7 @@ pub(crate) fn paint(
         Node {
             border: UiRect::all(px(1.)),
             border_radius: BorderRadius::all(px(4.)),
-            ..rect(x + 12., y + 44., image_width, image_height)
+            ..rect(x + 12., y + 44. + choice_height, image_width, image_height)
         },
         None,
         61,
@@ -113,7 +145,7 @@ pub(crate) fn paint(
     } else if world.get::<ImageNode>(entity).is_some() {
         world.entity_mut(entity).remove::<ImageNode>();
     }
-    let top = y + 54. + image_height;
+    let top = y + 54. + choice_height + image_height;
     let extra = if let Some(demo) = demo {
         feature::guide(
             world,

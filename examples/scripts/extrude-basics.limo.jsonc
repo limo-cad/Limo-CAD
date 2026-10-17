@@ -1,7 +1,7 @@
 {
   "$schema": "./limo-cad-script.schema.json",
   "version": 1,
-  "name": "Bracket foundations: sketch, extrude and cut",
+  "name": "Bracket foundations: sketch, extrude, fillet and cut",
   "starting_state": "empty",
   "steps": [
     {
@@ -1308,6 +1308,37 @@
       }
     },
     {
+      "id": "cut_measured",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_edit_extrude",
+        "arguments": {
+          "feature_id": {
+            "$ref": "cut_feature"
+          },
+          "extrude": {
+            "sketch_name": "Bracket / mounting hole",
+            "profile_indices": [
+              0
+            ],
+            "operation": "cut",
+            "extent": {
+              "type": "distance",
+              "distance": 4
+            },
+            "taper_angle_deg": 0,
+            "flip": true,
+            "target_body_ids": [
+              {
+                "$ref": "bracket_body",
+                "pointer": "/id"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
       "id": "cut_through",
       "call": {
         "group": "solid/build",
@@ -1505,6 +1536,97 @@
             "duration_ms": 1400,
             "finish": "satin_aluminum"
           }
+        ],
+        "fillet_frames": [
+          {
+            "caption": "fillet.body",
+            "scene": {
+              "$ref": "bend",
+              "pointer": "/scene"
+            },
+            "cue": "body",
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
+          },
+          {
+            "caption": "fillet.edges",
+            "scene": {
+              "$ref": "bend",
+              "pointer": "/scene"
+            },
+            "cue": "edges",
+            "duration_ms": 1400,
+            "finish": "satin_aluminum",
+            "edges": {
+              "$ref": "corners_edges"
+            }
+          },
+          {
+            "caption": "fillet.radius",
+            "scene": {
+              "$ref": "corners",
+              "pointer": "/scene"
+            },
+            "cue": "radius",
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
+          },
+          {
+            "caption": "fillet.apply",
+            "scene": {
+              "$ref": "corners",
+              "pointer": "/scene"
+            },
+            "cue": "apply",
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
+          }
+        ],
+        "cut_measured_frames": [
+          {
+            "caption": "cut.profile",
+            "scene": {
+              "$ref": "base_cut",
+              "pointer": "/scene"
+            },
+            "cue": "profile",
+            "duration_ms": 1400,
+            "profile": {
+              "$ref": "hole_profile",
+              "pointer": "/sketch"
+            },
+            "finish": "satin_aluminum"
+          },
+          {
+            "caption": "cut.operation",
+            "scene": {
+              "$ref": "cut_partial",
+              "pointer": "/scene"
+            },
+            "cue": "cut",
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
+          },
+          {
+            "caption": "cut.measured.depth",
+            "scene": {
+              "$ref": "cut_measured",
+              "pointer": "/scene"
+            },
+            "cue": "depth",
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
+          },
+          {
+            "caption": "cut.measured.apply",
+            "scene": {
+              "$ref": "cut_measured",
+              "pointer": "/scene"
+            },
+            "cue": "apply",
+            "duration_ms": 1400,
+            "finish": "satin_aluminum"
+          }
         ]
       }
     }
@@ -1583,6 +1705,12 @@
       },
       "cut": {
         "$ref": "cut_frames"
+      },
+      "fillet": {
+        "$ref": "fillet_frames"
+      },
+      "cut_measured": {
+        "$ref": "cut_measured_frames"
       }
     },
     "preview_frames": [
@@ -1592,10 +1720,6 @@
       },
       {
         "$ref": "sketch_frames",
-        "pointer": "/1"
-      },
-      {
-        "$ref": "sketch_frames",
         "pointer": "/2"
       },
       {
@@ -1616,15 +1740,27 @@
       },
       {
         "$ref": "extrude_frames",
-        "pointer": "/2"
-      },
-      {
-        "$ref": "extrude_frames",
         "pointer": "/3"
       },
       {
         "$ref": "extrude_frames",
         "pointer": "/4"
+      },
+      {
+        "$ref": "fillet_frames",
+        "pointer": "/0"
+      },
+      {
+        "$ref": "fillet_frames",
+        "pointer": "/1"
+      },
+      {
+        "$ref": "fillet_frames",
+        "pointer": "/2"
+      },
+      {
+        "$ref": "fillet_frames",
+        "pointer": "/3"
       },
       {
         "$ref": "cut_frames",
