@@ -5,8 +5,9 @@ use super::*;
 use bevy::{
     input::{keyboard::KeyCode, ButtonState},
     input_focus::{
-        tab_navigation::{TabGroup, TabIndex, TabNavigationPlugin},
+        tab_navigation::{NavAction, TabGroup, TabIndex, TabNavigation},
         FocusCause, InputDispatchPlugin, InputFocus, InputFocusPlugin, InputFocusSystems,
+        InputFocusVisible,
     },
     picking::{
         events::PointerState,
@@ -62,9 +63,6 @@ pub(super) fn install(app: &mut App) {
     }
     if !app.is_plugin_added::<InputDispatchPlugin>() {
         app.add_plugins(InputDispatchPlugin);
-    }
-    if !app.is_plugin_added::<TabNavigationPlugin>() {
-        app.add_plugins(TabNavigationPlugin);
     }
     if !app.is_plugin_added::<ButtonPlugin>() {
         app.add_plugins(ButtonPlugin);
@@ -134,6 +132,28 @@ fn publish_focus(focus: Res<InputFocus>, handle: Res<NativeInterfaceHandle>) {
         });
     if focused != shared.focused && set_focus(&mut shared, focused).is_ok() {
         shared.revision = shared.revision.wrapping_add(1);
+    }
+}
+
+/// Use Bevy's navigation algorithm with the host's per-event modifier snapshot.
+/// The automatic plugin reads final batch key state, which loses Shift on macOS
+/// modifier-only events and on batches containing the key release.
+fn navigate_tab(
+    In(backwards): In<bool>,
+    navigation: TabNavigation,
+    mut focus: ResMut<InputFocus>,
+    mut visible: ResMut<InputFocusVisible>,
+) {
+    if let Ok(entity) = navigation.navigate(
+        &focus,
+        if backwards {
+            NavAction::Previous
+        } else {
+            NavAction::Next
+        },
+    ) {
+        focus.set(entity, FocusCause::Navigated);
+        visible.0 = true;
     }
 }
 
@@ -340,11 +360,27 @@ pub(crate) fn owns_input(
         }
         WindowEvent::CursorMoved(_) => hit || state.widget_drag,
         WindowEvent::KeyboardInput(event) => {
-            event.key_code == KeyCode::Tab
-                || (matches!(event.key_code, KeyCode::Enter | KeyCode::Space)
+            if event.key_code == KeyCode::Tab {
+                if input.modifiers.ctrl || input.modifiers.meta || input.modifiers.alt {
+                    return false;
+                }
+                if event.state == ButtonState::Pressed && !event.repeat {
+                    if let Err(error) =
+                        world.run_system_cached_with(navigate_tab, input.modifiers.shift)
+                    {
+                        eprintln!("Widget Tab navigation failed: {error}");
+                    }
+                    if let Err(error) = world.run_system_cached(publish_focus) {
+                        eprintln!("Widget focus publication failed: {error}");
+                    }
+                }
+                true
+            } else {
+                matches!(event.key_code, KeyCode::Enter | KeyCode::Space)
                     && handle
                         .focused_key()
-                        .is_some_and(|key| is_widget(world, Entity::from_bits(key.0))))
+                        .is_some_and(|key| is_widget(world, Entity::from_bits(key.0)))
+            }
         }
         WindowEvent::WindowFocused(event) if !event.focused => {
             state.widget_drag = false;

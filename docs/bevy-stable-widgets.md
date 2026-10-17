@@ -43,12 +43,17 @@ cargo run --locked --manifest-path desktop/Cargo.toml --features experimental-ui
 The reworked experiment leaves Bevy's standard picking pipeline enabled. Its UI
 backend chooses the control, `Button`/`Checkbox` recognize primary pointer and
 keyboard activation, `Hovered`/`Pressed` drive the existing theme, and
-`InputFocus` plus `TabNavigationPlugin` own focus. A Bevy `GhostNode` holds
+`InputFocus` plus Bevy's `TabNavigation` API own focus. A Bevy `GhostNode` holds
 the Tab group while leaving the retained UI roots in their original layout. Decorative checkbox squares,
 checks and labels are not separate pick targets. The previous `WidgetInput`,
 `adapt_input`, `adapt_actions` and synthetic pointer/focused-key events are gone.
 The native host bypasses its click recognizer and activation-key path for these
 controls; it does not activate the same control a second time.
+
+Tab requests use the native host's existing per-event modifier snapshot with
+Bevy's `NavAction::Next` / `Previous`. The automatic Tab plugin reads final
+batch key state and failed reverse traversal in the macOS check. This keeps
+Bevy's traversal algorithm while preserving Shift on the original event.
 
 The application still chooses eligible controls and Tab order, blocks controls
 outside the active modal, and distinguishes primary UI input from CAD secondary

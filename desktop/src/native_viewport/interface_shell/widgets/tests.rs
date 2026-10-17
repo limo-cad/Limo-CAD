@@ -59,7 +59,6 @@ fn fixture() -> (App, NativeInterfaceHandle, Entity, Entity) {
     let window = app
         .world_mut()
         .spawn((Window::default(), PrimaryWindow))
-        .observe(bevy::input_focus::tab_navigation::handle_tab_navigation)
         .id();
     app.world_mut().spawn(PointerId::Mouse);
     app.update();
@@ -81,6 +80,16 @@ fn send_with_consumption(
     event: WindowEvent,
     point: Vec2,
 ) -> (Vec<NativeInterfaceAction>, bool) {
+    send_with_modifiers(app, handle, event, point, Modifiers::default())
+}
+
+fn send_with_modifiers(
+    app: &mut App,
+    handle: &NativeInterfaceHandle,
+    event: WindowEvent,
+    point: Vec2,
+    modifiers: Modifiers,
+) -> (Vec<NativeInterfaceAction>, bool) {
     if let WindowEvent::KeyboardInput(key) = &event {
         app.world_mut().write_message(key.clone());
     }
@@ -90,7 +99,7 @@ fn send_with_consumption(
         ui_scale: 1.,
         context: handle.presented_context(),
         cursor: Some(point),
-        modifiers: Modifiers::default(),
+        modifiers,
         event,
         consumed: false,
         actions: vec![],
@@ -466,4 +475,61 @@ fn canvas_drag_keeps_motion_and_release_when_crossing_widgets() {
         .len(),
         1
     );
+}
+
+#[test]
+fn standard_tab_navigation_uses_each_native_modifier_snapshot() {
+    let (mut app, handle, first, window) = fixture();
+    let second = app
+        .world_mut()
+        .spawn((
+            InterfaceControl::button("Viewport", "Second"),
+            ComputedNode {
+                size: Vec2::new(80., 24.),
+                inverse_scale_factor: 1.,
+                ..default()
+            },
+            UiGlobalTransform::from_translation(Vec2::new(160., 42.)),
+            ComputedStackIndex(2),
+            InheritedVisibility::VISIBLE,
+        ))
+        .id();
+    app.update();
+    let p = point(first);
+    send(&mut app, &handle, key(window, KeyCode::Tab, false), p);
+    assert_eq!(handle.focused_key(), Some(ControlKey(first.to_bits())));
+    assert!(!app
+        .world()
+        .resource::<ButtonInput<KeyCode>>()
+        .pressed(KeyCode::ShiftLeft));
+    let (_, consumed) = send_with_modifiers(
+        &mut app,
+        &handle,
+        key(window, KeyCode::Tab, false),
+        p,
+        Modifiers {
+            shift: true,
+            ..default()
+        },
+    );
+    assert!(consumed);
+    assert_eq!(handle.focused_key(), Some(ControlKey(second.to_bits())));
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(second));
+    send(&mut app, &handle, key(window, KeyCode::Tab, true), p);
+    assert_eq!(handle.focused_key(), Some(ControlKey(second.to_bits())));
+    let (_, consumed) = send_with_modifiers(
+        &mut app,
+        &handle,
+        key(window, KeyCode::Tab, false),
+        p,
+        Modifiers {
+            ctrl: true,
+            ..default()
+        },
+    );
+    assert!(
+        !consumed,
+        "modified application shortcuts must not traverse focus"
+    );
+    assert_eq!(handle.focused_key(), Some(ControlKey(second.to_bits())));
 }
