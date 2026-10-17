@@ -53,3 +53,14 @@ pub(crate) fn geometry(points: [[f64; 3]; 4]) -> Result<Geometry, String> {
     }
     Ok(Geometry { gradients, volume })
 }
+
+pub(crate) fn face_area(points: [[f64; 3]; 3]) -> Result<f64, String> {
+    let a = sub(points[1], points[0]);
+    let b = sub(points[2], points[0]);
+    let area = cross(a, b).iter().fold(0_f64, |n, x| n.hypot(*x)) / 2.;
+    if area.is_finite() && area > 0. {
+        Ok(area)
+    } else {
+        Err("Thermal boundary face has invalid area".into())
+    }
+}
