@@ -105,8 +105,10 @@ a frozen text/sign override. See Autodesk's
 [ordinate dimension semantics](https://help.autodesk.com/cloudhelp/2018/ENU/OARX-DevGuide-Managed/files/GUID-7CA392C3-307C-4794-9EE6-30246672943F.htm).
 Anonymous picture blocks
 reuse the same graphics as SVG. They do not carry model topology associations.
-Other dimension families, complex tolerance/basic/reference/dual-unit
-presentation, precision above eight decimals and CAD-markup prefixes/suffixes
+Reference parentheses and trimmed fit classes use the same native label formatter
+around the live measurement, including radial symbol and prefix/suffix ordering.
+Other dimension families, complex tolerance/basic/dual-unit
+presentation, precision above eight decimals and CAD-markup prefixes/suffixes or fit classes
 retain graphical artwork until their regeneration semantics are supported.
 R2007 graphics, including Unicode outline hatches, have unique deterministic
 handles and explicit model-space or picture-block ownership. Model and
@@ -219,7 +221,9 @@ The example preserves prior evidence and writes 42 SVG/DXF pairs plus their
 source drawing, scene, projection and unit records: length, distance, line-angle,
 point-line, three-point angle, radius and diameter, each in mm/cm/in and
 default/full presentation. Pass `--radial-only` after the destination to retain
-just the 12 radius/diameter cases when checking those changes. This is an explicit
+just the 12 radius/diameter cases when checking those changes. Pass
+`--presentation-only` to retain 63 reference-only, fit-only and combined cases
+across all seven families and three unit systems. This is an explicit
 **synthetic projection** fixture, not proof of OCC projection or physical input.
 Render the SVG and inspect DXF through an independent parser/renderer before
 claiming visual parity. The manifest deliberately leaves pixel review required.
