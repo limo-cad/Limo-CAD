@@ -15,7 +15,7 @@ use bevy::{
         DefaultPickingPlugins,
     },
     time::TimePlugin,
-    window::CursorMoved,
+    window::{CursorMoved, PrimaryWindow},
 };
 
 // Exercise the real Bevy input, picking and focus schedules. A tiny backend
@@ -289,4 +289,108 @@ fn queued_activation_cannot_cross_document_replacement() {
     app.update();
     enqueue_actions(app.world_mut(), &handle);
     assert!(handle.take_actions().unwrap().is_empty());
+}
+
+// Use actual Bevy camera propagation and layout: the input-only fixture above
+// deliberately supplies geometry and cannot detect a detached UI root.
+#[test]
+fn focus_group_preserves_real_layout_and_camera_across_frames() {
+    use bevy::{
+        app::{HierarchyPropagatePlugin, PropagateSet},
+        camera::{ComputedCameraValues, RenderTargetInfo},
+        ui::{
+            ui_layout_system, ui_surface::UiSurface, update::propagate_ui_target_cameras,
+            ComputedUiRenderTargetInfo, ComputedUiTargetCamera, UiScale,
+        },
+    };
+    let mut app = App::new();
+    let handle = NativeInterfaceHandle::new(|| {});
+    app.insert_resource(handle.clone())
+        .init_resource::<UiScale>()
+        .init_resource::<UiSurface>()
+        .init_resource::<bevy::text::FontCx>()
+        .init_resource::<bevy::text::RemSize>()
+        .add_plugins((
+            HierarchyPropagatePlugin::<ComputedUiTargetCamera>::new(PostUpdate),
+            HierarchyPropagatePlugin::<ComputedUiRenderTargetInfo>::new(PostUpdate),
+        ))
+        .add_systems(
+            PostUpdate,
+            propagate_ui_target_cameras.before(ui_layout_system),
+        )
+        .configure_sets(
+            PostUpdate,
+            (
+                PropagateSet::<ComputedUiTargetCamera>::default(),
+                PropagateSet::<ComputedUiRenderTargetInfo>::default(),
+            )
+                .after(propagate_ui_target_cameras)
+                .before(ui_layout_system),
+        )
+        .add_systems(
+            PostUpdate,
+            (ui_layout_system, publish_layout.in_set(InterfaceLayout)).chain(),
+        );
+    let camera = app
+        .world_mut()
+        .spawn((
+            InterfaceCamera,
+            Camera2d,
+            Camera {
+                computed: ComputedCameraValues {
+                    target_info: Some(RenderTargetInfo {
+                        physical_size: UVec2::new(1000, 800),
+                        scale_factor: 1.,
+                    }),
+                    ..default()
+                },
+                ..default()
+            },
+        ))
+        .id();
+    let entity = app
+        .world_mut()
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(120.),
+                top: px(120.),
+                width: px(80.),
+                height: px(24.),
+                ..default()
+            },
+            UiTargetCamera(camera),
+            InterfaceControl::button("Viewport", "Select"),
+            InheritedVisibility::VISIBLE,
+        ))
+        .id();
+    handle
+        .present(super::super::tests::frame("document-a", 1))
+        .unwrap();
+    app.update();
+    let initial = handle
+        .read_surface(|_, frame| frame.controls.clone())
+        .unwrap();
+    assert_eq!(initial.len(), 1);
+    assert!(initial[0].visible);
+    install(&mut app);
+    // Grouping happens after layout; later frames must still see the same roots.
+    for _ in 0..4 {
+        app.update();
+        assert_eq!(
+            app.world().get::<ComputedNode>(entity).unwrap().size,
+            Vec2::new(80., 24.)
+        );
+        assert_eq!(
+            app.world()
+                .get::<ComputedUiTargetCamera>(entity)
+                .unwrap()
+                .get(),
+            Some(camera)
+        );
+        let current = handle
+            .read_surface(|_, frame| frame.controls.clone())
+            .unwrap();
+        assert_eq!(current, initial);
+    }
 }

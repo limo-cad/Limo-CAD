@@ -15,11 +15,12 @@ use bevy::{
         Pickable, PickingSystems,
     },
     ui::{
+        experimental::GhostNode,
         picking_backend::{UiPickingCamera, UiPickingSettings},
         Checkable, Checked, InteractionDisabled, Pressed,
     },
     ui_widgets::{Activate, Button, ButtonPlugin, Checkbox, CheckboxPlugin},
-    window::{PrimaryWindow, WindowEvent},
+    window::WindowEvent,
 };
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,9 @@ enum WidgetKind {
 /// rebound; a queued activation must never operate on the replacement target.
 #[derive(Component, Clone, PartialEq, Eq)]
 struct WidgetAction(NativeInterfaceAction);
+
+#[derive(Component)]
+struct WidgetFocusRoot;
 
 #[derive(Resource, Default)]
 struct WidgetActions(Vec<NativeInterfaceAction>);
@@ -147,15 +151,16 @@ fn synchronize(world: &mut World) {
     let Some(context) = context else {
         return;
     };
-    let window = world
-        .query_filtered::<Entity, With<PrimaryWindow>>()
+    // A non-UI parent (including Window) removes children from Bevy's UI-root
+    // traversal. GhostNode supplies a focus group without changing their layout.
+    let focus_root = world
+        .query_filtered::<Entity, With<WidgetFocusRoot>>()
         .single(world)
-        .ok();
-    if let Some(window) = window {
-        world
-            .entity_mut(window)
-            .insert((TabGroup::default(), Visibility::Visible));
-    }
+        .unwrap_or_else(|_| {
+            world
+                .spawn((WidgetFocusRoot, GhostNode, TabGroup::default()))
+                .id()
+        });
     let cameras = world
         .query_filtered::<Entity, With<InterfaceCamera>>()
         .iter(world)
@@ -188,14 +193,12 @@ fn synchronize(world: &mut World) {
         if old_action.is_some() && old_action != action.as_ref() {
             retired = true;
         }
-        if let Some(window) = window {
-            let mut root = entity;
-            while let Some(parent) = world.get::<ChildOf>(root) {
-                root = parent.parent();
-            }
-            if root != window {
-                world.entity_mut(root).insert(ChildOf(window));
-            }
+        let mut root = entity;
+        while let Some(parent) = world.get::<ChildOf>(root) {
+            root = parent.parent();
+        }
+        if root != focus_root {
+            world.entity_mut(root).insert(ChildOf(focus_root));
         }
         let mut target = world.entity_mut(entity);
         if eligible {
