@@ -33,12 +33,14 @@ mod print_height_tools;
 mod print_intent_tools;
 mod print_modifier_tools;
 mod prompts;
+mod replay;
 mod script_export;
 mod session;
 mod stdio;
 mod summary;
 
 pub use control_admission::{NativeControlAdmission, NATIVE_CONTROL_ADMISSION_MAX_BYTES};
+pub use replay::{prepare_project_replay, PreparedProjectReplay};
 pub use session::control_owner_error;
 pub use stdio::{
     desktop_mcp_presence, prepare_desktop_stdio, run_desktop_stdio, run_stdio,
