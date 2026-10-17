@@ -26,6 +26,7 @@ fn rectangle(manager: &mut SketchManager, p1: Vec2, p2: Vec2) {
 
 fn extrusion(sketch_name: &str) -> ExtrudeRequest {
     ExtrudeRequest {
+        merge_profiles: false,
         source_face: None,
         sketch_name: sketch_name.to_string(),
         profile_indices: vec![0],

@@ -14,6 +14,7 @@ fn drawing_curve_quality_bounds_chord_error_point_growth_and_reuses_cached_proje
         transaction_id: 1,
         errors: vec![],
         jobs: vec![KernelJobDto::Extrude(KernelExtrudeJobDto {
+            require_single_solid: false,
             feature_id: FeatureId(1),
             operation: ExtrudeOperation::NewBody,
             source_face: None,

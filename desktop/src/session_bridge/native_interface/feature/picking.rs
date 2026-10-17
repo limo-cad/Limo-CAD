@@ -819,6 +819,7 @@ fn source_profile(
     let camera = bevy::math::DVec3::from_array(camera.position.map(f64::from));
     let mut nearest = hit.map(|hit| hit.distance).unwrap_or(f64::INFINITY);
     let mut profile = None;
+    let mut rank = None;
     for sketch in &editor.snapshot.viewport.document.profile_catalog {
         if presentation
             .hidden_sketch_names
@@ -838,11 +839,16 @@ fn source_profile(
         let distance = camera.distance(bevy::math::DVec3::from_array(
             sketch.basis.to_3d([local.x, local.y]),
         ));
-        if distance > nearest + 1e-5 {
+        let tolerance = if profile.is_some() {
+            1e-7_f64.max(nearest.abs() * f64::EPSILON * 64.)
+        } else {
+            1e-5
+        };
+        if distance > nearest + tolerance {
             continue;
         }
         for region in &sketch.profiles {
-            if region.nesting_depth % 2 != 0 || !inside(local, &region.points) {
+            if !inside(local, &region.points) {
                 continue;
             }
             if sketch
@@ -852,7 +858,23 @@ fn source_profile(
             {
                 continue;
             }
+            let candidate_rank = (
+                region.area.abs(),
+                std::cmp::Reverse(sketch.feature_id.0),
+                region.index,
+            );
+            // Coincident sketch planes compete by bounded area, rather than
+            // catalog order. A smaller inset remains selectable over its source.
+            if !candidate_rank.0.is_finite() || candidate_rank.0 <= 0. {
+                continue;
+            }
+            if (distance - nearest).abs() <= tolerance
+                && rank.is_some_and(|rank| candidate_rank >= rank)
+            {
+                continue;
+            }
             nearest = distance;
+            rank = Some(candidate_rank);
             profile = Some(ProfileRefDto {
                 sketch_name: sketch.sketch_name.clone(),
                 profile_index: region.index,

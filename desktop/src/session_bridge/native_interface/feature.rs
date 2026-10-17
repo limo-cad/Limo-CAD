@@ -802,7 +802,12 @@ fn apply_pick(editor: &mut Editor, pick: FeaturePick) -> Result<(), String> {
             editor.form.set_edges(body, edges, &model)
         }
         (Some(SolidField::Source), FeaturePick::Profiles(profiles)) => {
-            editor.form.set_profiles(profiles, &model)
+            editor.form.set_profiles(profiles, &model)?;
+            // Clicks resolve their own region. Retire any earlier hover so a
+            // newly selectable inner region cannot linger over the accepted tool.
+            editor.hovered_profile = None;
+            editor.hovered_face = None;
+            Ok(())
         }
         (Some(field @ (SolidField::Path | SolidField::Guide)), FeaturePick::Path(path)) => editor
             .form

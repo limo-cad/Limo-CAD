@@ -129,6 +129,7 @@ impl SolidForm {
             indices: definition.profile_indices.clone(),
         };
         form.operation = definition.operation;
+        form.merge_profiles = definition.merge_profiles;
         form.operation_manual = true;
         form.targets = definition.target_body_ids.clone();
         form.flip = definition.flip;
@@ -302,7 +303,9 @@ impl SolidForm {
             if let Err(e) = validate_targets(&self.targets, model) {
                 errors.push((F::Targets, e));
             }
-            if self.targets.is_empty() {
+            let joined_profiles =
+                self.operation == ExtrudeOperation::Join && profile_indices.len() > 1;
+            if self.targets.is_empty() && !joined_profiles {
                 errors.push((F::Targets, "Select a target body for this operation".into()));
             }
         }
@@ -318,6 +321,7 @@ impl SolidForm {
             axis_line_entity_id: line.map(|l| l.1),
             angle_deg: angle,
             flip: self.flip,
+            merge_profiles: self.operation == ExtrudeOperation::NewBody && self.merge_profiles,
             operation: self.operation,
             target_body_ids: if self.operation == ExtrudeOperation::NewBody {
                 vec![]
@@ -439,6 +443,12 @@ impl SolidForm {
                     ],
                 ),
                 true,
+            ),
+            (
+                F::MergeProfiles,
+                "Merge profiles".into(),
+                Field::Toggle(self.merge_profiles),
+                self.operation == ExtrudeOperation::NewBody,
             ),
             (
                 F::Targets,

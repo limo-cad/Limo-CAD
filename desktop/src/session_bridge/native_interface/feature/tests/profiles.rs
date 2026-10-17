@@ -260,17 +260,26 @@ fn initial_profile_hover_fills_only_the_closed_region_and_retires_on_cursor_leav
     );
     let cursor = project(&app, [10., 6., 0.]);
     hover_references(app.world_mut(), &services, &owner, Some(cursor)).unwrap();
-    assert!(
+    let inner_index = model_snapshot(&fixture.engine).document.profile_catalog[0]
+        .profiles
+        .iter()
+        .find(|p| p.nesting_depth == 1)
+        .unwrap()
+        .index;
+    assert_eq!(
         app.world()
             .resource::<NativeFeature>()
             .editor
             .as_ref()
             .unwrap()
             .hovered_profile
-            .is_none(),
-        "A hole is not a selectable filled profile"
+            .as_ref()
+            .unwrap()
+            .profile_index,
+        inner_index,
+        "The circular region inside the enclosing profile is independently selectable"
     );
-    assert!(native_viewport::interface_preview_snapshot(app.world())
+    assert!(!native_viewport::interface_preview_snapshot(app.world())
         .triangles
         .is_empty());
     let cursor = project(&app, [4., 4., 0.]);
@@ -293,4 +302,224 @@ fn initial_profile_hover_fills_only_the_closed_region_and_retires_on_cursor_leav
         ControlInput::Click,
     )
     .unwrap();
+}
+
+#[test]
+fn nested_regions_can_be_picked_toggled_and_merged_in_both_native_forms() {
+    let _lock = super::super::super::super::tests::TEST_LOCK.lock().unwrap();
+    for kind in [SolidFormKind::Extrude, SolidFormKind::Revolve] {
+        let fixture = Fixture::new();
+        let owner = fixture.owner();
+        for (op, args) in [
+            ("sketch_begin", json!({"type":"origin_plane","plane":"xy"})),
+            (
+                "sketch_add_rectangle",
+                json!({"mode":"two_point","p1":{"x":10.,"y":-20.},"p2":{"x":50.,"y":20.},"ctrl_held":true}),
+            ),
+            (
+                "sketch_add_rectangle",
+                json!({"mode":"two_point","p1":{"x":20.,"y":-10.},"p2":{"x":40.,"y":10.},"ctrl_held":true}),
+            ),
+            ("sketch_finish", json!({})),
+        ] {
+            fixture
+                .bridge
+                .apply_native_mutation(&fixture.engine, &owner, op, &args, || Ok(()))
+                .unwrap();
+        }
+        let model = model_snapshot(&fixture.engine);
+        let profiles = &model.document.profile_catalog[0].profiles;
+        let inner = profiles
+            .iter()
+            .find(|p| p.nesting_depth == 1)
+            .unwrap()
+            .index;
+        let outer = profiles
+            .iter()
+            .find(|p| p.nesting_depth == 0)
+            .unwrap()
+            .index;
+        let mut app = scene(&fixture, &owner);
+        native_viewport::apply_interface_viewport(
+            app.world_mut(),
+            limo_cad_interface::Rect {
+                x: 0.,
+                y: 0.,
+                width: 1080.,
+                height: 600.,
+            },
+            1.,
+        )
+        .unwrap();
+        native_viewport::apply_interface_view(
+            app.world_mut(),
+            &owner.document_id,
+            Some(ViewportCamera {
+                position: [30., 0., 120.],
+                target: [30., 0., 0.],
+                up: [0., 1., 0.],
+                ..Default::default()
+            }),
+            Some(ViewportPresentation::default()),
+        )
+        .unwrap();
+        let services = NativeServices {
+            engine: fixture.engine.clone(),
+            bridge: fixture.bridge.clone(),
+        };
+        let opened = reduce(
+            &fixture.engine,
+            &fixture.bridge,
+            app.world_mut(),
+            &owner,
+            &FeatureCommand::Open {
+                kind,
+                feature_id: None,
+            },
+            &ControlInput::Click,
+            || Ok(()),
+        )
+        .unwrap();
+        let id = opened["form_id"].as_u64().unwrap();
+        for (world, expected) in [
+            ([30., 0., 0.], vec![inner]),
+            ([15., 0., 0.], vec![inner, outer]),
+            ([30., 0., 0.], vec![outer]),
+            ([30., 0., 0.], vec![outer, inner]),
+        ] {
+            action(
+                &fixture,
+                app.world_mut(),
+                &owner,
+                id,
+                FeatureControl::Pick(SolidField::Source),
+                ControlInput::Click,
+            )
+            .unwrap();
+            let cursor =
+                native_viewport::interface_world_point(app.world(), &owner.document_id, world)
+                    .unwrap()
+                    .unwrap();
+            picking::handle_canvas_pick(app.world_mut(), &services, &owner, cursor)
+                .unwrap()
+                .unwrap();
+            let selected = app
+                .world()
+                .resource::<NativeFeature>()
+                .editor
+                .as_ref()
+                .unwrap()
+                .form
+                .selected_profiles();
+            assert_eq!(
+                selected.iter().map(|p| p.profile_index).collect::<Vec<_>>(),
+                expected,
+                "{kind:?}"
+            );
+        }
+        field(
+            &fixture,
+            app.world_mut(),
+            &owner,
+            id,
+            SolidField::MergeProfiles,
+            "true",
+        );
+        if kind == SolidFormKind::Revolve {
+            field(&fixture, app.world_mut(), &owner, id, SolidField::Axis, "y");
+        }
+        let applied = action(
+            &fixture,
+            app.world_mut(),
+            &owner,
+            id,
+            FeatureControl::Apply,
+            ControlInput::Click,
+        )
+        .unwrap();
+        assert!(applied["form_error"].is_null(), "{applied}");
+        assert_eq!(fixture.engine.viewport_snapshot().2.bodies.len(), 1);
+        assert!(fixture.engine.viewport_snapshot().2.errors.is_empty());
+    }
+}
+
+#[test]
+fn a_later_larger_coplanar_sketch_does_not_swallow_an_inner_profile() {
+    let _lock = super::super::super::super::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let owner = fixture.owner();
+    for (p1, p2) in [([20., -10.], [40., 10.]), ([10., -20.], [50., 20.])] {
+        for (op, args) in [
+            ("sketch_begin", json!({"type":"origin_plane","plane":"xy"})),
+            (
+                "sketch_add_rectangle",
+                json!({"mode":"two_point","p1":{"x":p1[0],"y":p1[1]},"p2":{"x":p2[0],"y":p2[1]},"ctrl_held":true}),
+            ),
+            ("sketch_finish", json!({})),
+        ] {
+            fixture
+                .bridge
+                .apply_native_mutation(&fixture.engine, &owner, op, &args, || Ok(()))
+                .unwrap();
+        }
+    }
+    let mut app = scene(&fixture, &owner);
+    native_viewport::apply_interface_viewport(
+        app.world_mut(),
+        limo_cad_interface::Rect {
+            x: 0.,
+            y: 0.,
+            width: 1080.,
+            height: 600.,
+        },
+        1.,
+    )
+    .unwrap();
+    native_viewport::apply_interface_view(
+        app.world_mut(),
+        &owner.document_id,
+        Some(ViewportCamera {
+            position: [30., 0., 120.],
+            target: [30., 0., 0.],
+            up: [0., 1., 0.],
+            ..Default::default()
+        }),
+        Some(ViewportPresentation::default()),
+    )
+    .unwrap();
+    let services = NativeServices {
+        engine: fixture.engine.clone(),
+        bridge: fixture.bridge.clone(),
+    };
+    let id = open(&fixture, app.world_mut(), &owner, None);
+    for (point, sketch) in [([30., 0., 0.], "Sketch1"), ([15., 0., 0.], "Sketch2")] {
+        action(
+            &fixture,
+            app.world_mut(),
+            &owner,
+            id,
+            FeatureControl::Pick(SolidField::Source),
+            ControlInput::Click,
+        )
+        .unwrap();
+        let point = native_viewport::interface_world_point(app.world(), &owner.document_id, point)
+            .unwrap()
+            .unwrap();
+        picking::handle_canvas_pick(app.world_mut(), &services, &owner, point)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            app.world()
+                .resource::<NativeFeature>()
+                .editor
+                .as_ref()
+                .unwrap()
+                .form
+                .selected_profiles(),
+            vec![ProfileRefDto {
+                sketch_name: sketch.into(),
+                profile_index: 0
+            }]
+        );
+    }
 }
