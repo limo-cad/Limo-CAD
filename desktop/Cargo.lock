@@ -3662,6 +3662,7 @@ dependencies = [
  "limo-cad-core",
  "limo-cad-export",
  "limo-cad-occt",
+ "limo-cad-project-file",
  "limo-cad-sketch",
  "limo-cad-solid",
  "serde",
