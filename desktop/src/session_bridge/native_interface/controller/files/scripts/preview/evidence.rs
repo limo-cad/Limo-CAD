@@ -384,10 +384,27 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             .resource_mut::<Files>()
             .script
             .preview
-            .playing = index + 1 < durations.len();
+            .playing = false;
         widgets.begin();
         panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
         widgets.finish(app.world_mut());
+        let primary = widgets.entity("scripts-preview-primary").unwrap();
+        assert_eq!(
+            app.world()
+                .get::<NativeCommandBinding>(primary)
+                .unwrap()
+                .command,
+            NativeCommand::File(FileCommand::ScriptPreview(if index + 1 < durations.len() {
+                Action::Next
+            } else {
+                Action::Replay
+            }))
+        );
+        assert_eq!(
+            widgets.entity("cut-scenario-alternative").is_some(),
+            id == lesson::Id::Cut && index + 1 == durations.len(),
+            "Alternative outcomes appear only after the first result"
+        );
         capture(&mut app, &target, &out.join(format!("frame-{index}.png")));
         app.world_mut()
             .resource_mut::<Files>()
@@ -602,6 +619,38 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             &target,
             &out.join(format!("demo-175-{language}.png")),
         );
+        // Measure every instruction, not just the short completion caption.
+        for index in 0..durations.len() {
+            app.world_mut().resource_mut::<Files>().script.preview.index = index;
+            widgets.begin();
+            panel::paint(
+                app.world_mut(),
+                camera,
+                &mut widgets,
+                1200. / 1.75,
+                760. / 1.75,
+                light,
+            )
+            .unwrap();
+            widgets.finish(app.world_mut());
+            for _ in 0..3 {
+                update(&mut app);
+            }
+            let entity = widgets.entity("scripts-preview-caption").unwrap();
+            let node = app.world().get::<ComputedNode>(entity).unwrap();
+            let text = app
+                .world()
+                .get::<bevy::text::TextLayoutInfo>(entity)
+                .unwrap();
+            assert!(!text.glyphs.is_empty());
+            assert!(
+                text.size.y <= node.size.y + 1.,
+                "Instruction clipped: {language}/{index}: {} > {}",
+                text.size.y,
+                node.size.y
+            );
+        }
+        app.world_mut().resource_mut::<Files>().script.preview.index = durations.len() - 1;
         command(app.world_mut(), &handle, Action::Help, &ControlInput::Click).unwrap();
         for _ in 0..3 {
             widgets.begin();

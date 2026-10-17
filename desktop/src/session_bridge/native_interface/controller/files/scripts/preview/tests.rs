@@ -470,7 +470,7 @@ fn native_script_preview_extrude_preserves_dirty_source_and_help_does_not_advanc
     assert_eq!(frames.len(), 5);
     let preview = &mut world.resource_mut::<Files>().script.preview;
     preview.retained = Some(Retained::new(preview.service.clone(), frames).unwrap());
-    assert!(preview.playing);
+    assert!(!preview.playing, "Contextual lessons wait for the learner");
     command(&mut world, &handle, Action::Help, &ControlInput::Click).unwrap();
     assert!(command(&mut world, &handle, Action::Next, &ControlInput::Click).is_err());
     let preview = &world.resource::<Files>().script.preview;

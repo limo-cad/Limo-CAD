@@ -35,7 +35,7 @@ impl Card {
             &key("card"),
             Node {
                 border: UiRect::all(px(1.)),
-                border_radius: BorderRadius::all(px(6.)),
+                border_radius: BorderRadius::all(px(10.)),
                 ..rect(x, y, w, height)
             },
             theme.panel.with_alpha(1.),

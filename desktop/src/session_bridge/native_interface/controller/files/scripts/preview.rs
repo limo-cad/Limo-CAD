@@ -324,7 +324,7 @@ fn open_lesson(
     files.script.library.open = false;
     files.script.chapters.open = false;
     files.script.preview.return_to = Some(previous);
-    files.script.preview.playing = !help;
+    files.script.preview.playing = false;
     files.script.preview.lesson = id;
     files.script.preview.scenario = lesson::CutScenario::default();
     files.script.preview.index_open = id.is_none();
@@ -491,7 +491,7 @@ pub(crate) fn command(
                     preview.scenario = scenario;
                     preview.index = 0;
                     preview.image_index = None;
-                    preview.playing = true;
+                    preview.playing = false;
                     preview.changed()?;
                 }
             }

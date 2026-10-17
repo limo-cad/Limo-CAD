@@ -99,22 +99,6 @@ pub(crate) enum PreviewCue {
     Edges,
     Radius,
 }
-impl PreviewCue {
-    pub(crate) const fn key(self) -> &'static str {
-        match self {
-            Self::Plane => "plane",
-            Self::Dimension => "dimension",
-            Self::Cut => "cut",
-            Self::Profile => "profile",
-            Self::Extrude => "extrude",
-            Self::Depth => "depth",
-            Self::Apply => "apply",
-            Self::Body => "body",
-            Self::Edges => "edges",
-            Self::Radius => "radius",
-        }
-    }
-}
 
 #[derive(Serialize)]
 struct RetainedFrame {

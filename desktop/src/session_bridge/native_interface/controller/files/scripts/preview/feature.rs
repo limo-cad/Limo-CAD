@@ -1,7 +1,6 @@
 //! Contextual hints and Help use the shared operation lessons.
 use super::super::super::super::chrome::{self, rect};
 use super::*;
-use crate::native_viewport::script_preview::PreviewCue;
 use std::sync::OnceLock;
 
 const HOVER_DELAY: Duration = Duration::from_millis(700);
@@ -161,7 +160,7 @@ pub(crate) fn paint_hint(
             keep_hint(
                 p,
                 anchor,
-                [cx, cy, cw, 100.],
+                [cx, cy, cw, 76.],
                 world.resource::<Hint>().anchor == Some(entity) && world.resource::<Hint>().open,
             )
         });
@@ -205,7 +204,7 @@ pub(crate) fn paint_hint(
         Node {
             border: UiRect::all(px(1.)),
             border_radius: BorderRadius::all(px(6.)),
-            ..rect(x, y, w, 100.)
+            ..rect(x, y, w, 76.)
         },
         theme.panel.with_alpha(1.),
         65,
@@ -215,17 +214,8 @@ pub(crate) fn paint_hint(
         camera,
         "extrude-help-title",
         rect(x + 12., y + 8., w - 24., 20.),
-        id.title(language),
-        13.,
-        66,
-    );
-    widgets.text(
-        world,
-        camera,
-        "extrude-help-description",
-        rect(x + 12., y + 30., w - 24., 32.),
-        id.summary(language),
-        12.,
+        t(&format!("{}.outcome", id.key())),
+        15.,
         66,
     );
     let entries = entries(id);
@@ -236,7 +226,8 @@ pub(crate) fn paint_hint(
             format!("{}: {}", t("ui.showMe"), id.title(language)),
         );
         control.disabled = available(world).is_err();
-        let caption = if entries.len() == 1 {
+        control.selected = Some(index == 0);
+        let caption = if index == 0 {
             t("ui.showMe")
         } else {
             id.title(language)
@@ -248,8 +239,8 @@ pub(crate) fn paint_hint(
             control,
             Some(caption),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Lesson(*id))),
-            rect(x + 8. + index as f32 * 132., y + 66., 128., 26.),
-            Some(interface_shell::ribbon::Icon::Book),
+            rect(x + 8. + index as f32 * 132., y + 42., 128., 26.),
+            None,
             66,
         )?;
         if let Some(handle) = world.get_resource::<NativeInterfaceHandle>() {
@@ -263,40 +254,6 @@ pub(crate) fn paint_hint(
     Ok(())
 }
 
-pub(super) fn guide(
-    world: &mut World,
-    camera: Entity,
-    widgets: &mut chrome::Widgets,
-    (x, y, w): (f32, f32, f32),
-    demo: lesson::Id,
-    cue: Option<PreviewCue>,
-    theme: ViewportUiTheme,
-) {
-    let width = (w - 12.) / 4.;
-    for (index, step) in demo.cues().iter().enumerate() {
-        let left = x + index as f32 * (width + 4.);
-        let selected = cue.is_some_and(|cue| cue.key() == *step);
-        let label = lesson::text(world, &format!("step.{step}"));
-        widgets.colored_text(
-            world,
-            camera,
-            &format!("extrude-cue-label-{index}"),
-            rect(left, y, width, 20.),
-            label,
-            10.,
-            63,
-            if selected { theme.ink } else { theme.mute },
-        );
-        widgets.panel(
-            world,
-            camera,
-            &format!("extrude-cue-{index}"),
-            rect(left, y + 19., width, 2.),
-            if selected { theme.accent } else { theme.edge },
-            62,
-        );
-    }
-}
 pub(super) fn help(id: lesson::Id, language: &'static str) -> &'static str {
     static PAGES: OnceLock<HashMap<(lesson::Id, &'static str), String>> = OnceLock::new();
     &PAGES.get_or_init(|| {
@@ -564,8 +521,8 @@ pub(super) fn paint_index(
             camera,
             &format!("help-{}", id.key()),
             InterfaceControl::button("document/scripts", id.title(language)),
-            Some(id.title(language)),
-            NativeCommand::File(FileCommand::ScriptPreview(Action::Read(id))),
+            Some(t(&format!("{}.outcome", id.key()))),
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Lesson(id))),
             rect(x + 8., top, w - 16., 28.),
             Some(interface_shell::ribbon::Icon::Book),
             61,
@@ -575,7 +532,7 @@ pub(super) fn paint_index(
             camera,
             &format!("help-summary-{}", id.key()),
             rect(x + 12., top + 28., w - 24., 28.),
-            id.summary(language),
+            id.title(language),
             11.,
             61,
             theme.mute,

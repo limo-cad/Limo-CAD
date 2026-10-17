@@ -76,7 +76,12 @@
     "cut.scenario.through_all": "Through all",
     "cut.scenario.measured_depth": "Measured depth",
     "cut.measured.depth": "Set Distance to 4 mm. Leave 4 mm of the 8 mm wall.",
-    "cut.measured.apply": "Apply. The blind cut retains its floor."
+    "cut.measured.apply": "Apply. The blind cut retains its floor.",
+    "ui.try": "Try:",
+    "sketch.outcome": "Draw an outline",
+    "extrude.outcome": "Give it depth",
+    "cut.outcome": "Make a hole",
+    "fillet.outcome": "Round the corners"
   },
   "zh-CN": {
     "ui.showMe": "演示",
@@ -155,7 +160,12 @@
     "cut.scenario.through_all": "贯穿所有",
     "cut.scenario.measured_depth": "指定深度",
     "cut.measured.depth": "将距离设为 4 毫米。8 毫米壁厚中保留 4 毫米。",
-    "cut.measured.apply": "应用。盲孔保留孔底。"
+    "cut.measured.apply": "应用。盲孔保留孔底。",
+    "ui.try": "试试：",
+    "sketch.outcome": "绘制轮廓",
+    "extrude.outcome": "拉伸成实体",
+    "cut.outcome": "切出孔洞",
+    "fillet.outcome": "圆化边角"
   },
   "es": {
     "ui.showMe": "Ver ejemplo",
@@ -234,7 +244,12 @@
     "cut.scenario.through_all": "Pasante",
     "cut.scenario.measured_depth": "Profundidad fija",
     "cut.measured.depth": "Fija Distancia en 4 mm. Conserva 4 mm de la pared de 8 mm.",
-    "cut.measured.apply": "Aplica. El corte ciego conserva su fondo."
+    "cut.measured.apply": "Aplica. El corte ciego conserva su fondo.",
+    "ui.try": "Prueba:",
+    "sketch.outcome": "Dibuja un perfil",
+    "extrude.outcome": "Dale profundidad",
+    "cut.outcome": "Crea un agujero",
+    "fillet.outcome": "Redondea las esquinas"
   },
   "de": {
     "ui.showMe": "Beispiel",
@@ -313,6 +328,11 @@
     "cut.scenario.through_all": "Durch alles",
     "cut.scenario.measured_depth": "Feste Tiefe",
     "cut.measured.depth": "Stelle den Abstand auf 4 mm. Von der 8-mm-Wand bleiben 4 mm stehen.",
-    "cut.measured.apply": "Wende den Schnitt an. Das Sackloch behält seinen Boden."
+    "cut.measured.apply": "Wende den Schnitt an. Das Sackloch behält seinen Boden.",
+    "ui.try": "Ausprobieren:",
+    "sketch.outcome": "Ein Profil zeichnen",
+    "extrude.outcome": "Tiefe hinzufügen",
+    "cut.outcome": "Ein Loch erzeugen",
+    "fillet.outcome": "Ecken abrunden"
   }
 }

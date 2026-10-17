@@ -22,9 +22,9 @@ pub(crate) fn paint(
     let (x, y, w) = (card.x, card.y, card.width);
     let image_width = w - 24.;
     let choices = world.resource::<Files>().script.preview.lesson == Some(lesson::Id::Cut);
-    let choice_height = if choices { 28. } else { 0. };
+    let choice_height = if choices { 36. } else { 0. };
     let image_height =
-        ((image_width * 176. / 300.).min((height - y - 204.).max(64.)) - choice_height).max(64.);
+        ((image_width * 0.72).min((height - y - 200.).max(64.)) - choice_height).max(64.);
     let scale = world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .iter(world)
@@ -41,7 +41,12 @@ pub(crate) fn paint(
         ((image_width * scale).round() as u32).max(64),
         ((image_height * scale).round() as u32).max(64),
     ];
-    let palette = crate::native_viewport::ui::palette(world);
+    let mut palette = crate::native_viewport::ui::palette(world);
+    // Quiet only the teaching stage; the document viewport keeps its grid.
+    if demo.is_some() {
+        palette.grid_fine = palette.background;
+        palette.grid_major = palette.background;
+    }
     let preview = &mut world.resource_mut::<Files>().script.preview;
     if preview.palette != palette {
         preview.palette = palette;
@@ -69,45 +74,15 @@ pub(crate) fn paint(
             })
             .unwrap_or_else(|| t("ui.preparing").into())
     });
-    let cue = preview
-        .retained
-        .as_ref()
-        .and_then(|r| r.descriptor.cues.get(preview.frame_index()))
-        .copied()
-        .flatten();
     card.paint(
         world,
         camera,
         widgets,
         "demo",
-        image_height + choice_height + if demo.is_some() { 188. } else { 162. },
+        image_height + choice_height + 184.,
         demo.map_or(t("ui.showMe"), |d| d.title(language)),
         theme,
     )?;
-    if choices {
-        let scenario = world.resource::<Files>().script.preview.scenario;
-        for (i, option) in lesson::CutScenario::ALL.into_iter().enumerate() {
-            let mut control = InterfaceControl::button("document/scripts", option.label(language));
-            control.selected = Some(option == scenario);
-            control.disabled = !ready;
-            widgets.button(
-                world,
-                camera,
-                &format!("cut-scenario-{}", option.key()),
-                control,
-                Some(option.label(language)),
-                NativeCommand::File(FileCommand::ScriptPreview(Action::Scenario(option))),
-                rect(
-                    x + 12. + i as f32 * (image_width + 4.) / 2.,
-                    y + 40.,
-                    (image_width - 4.) / 2.,
-                    24.,
-                ),
-                None,
-                62,
-            )?;
-        }
-    }
     let mut model = InterfaceControl::button(
         "document/scripts",
         format!(
@@ -127,9 +102,9 @@ pub(crate) fn paint(
         Some(if image.is_some() { "" } else { t("ui.loading") }),
         NativeCommand::File(FileCommand::ScriptPreview(Action::Model)),
         Node {
-            border: UiRect::all(px(1.)),
-            border_radius: BorderRadius::all(px(4.)),
-            ..rect(x + 12., y + 44. + choice_height, image_width, image_height)
+            border: UiRect::ZERO,
+            border_radius: BorderRadius::all(px(8.)),
+            ..rect(x + 12., y + 44., image_width, image_height)
         },
         None,
         61,
@@ -145,100 +120,18 @@ pub(crate) fn paint(
     } else if world.get::<ImageNode>(entity).is_some() {
         world.entity_mut(entity).remove::<ImageNode>();
     }
-    let top = y + 54. + choice_height + image_height;
-    let extra = if let Some(demo) = demo {
-        feature::guide(
-            world,
-            camera,
-            widgets,
-            (x + 12., top, w - 24.),
-            demo,
-            cue,
-            theme,
-        );
-        26.
-    } else {
-        0.
-    };
-    widgets.text(
+    let top = y + 54. + image_height;
+    // One instruction, with a quiet position indicator instead of four competing headings.
+    widgets.colored_text(
         world,
         camera,
-        "scripts-preview-caption",
-        rect(x + 12., top + extra, w - 24., 38.),
-        &caption,
-        12.,
+        "scripts-preview-position",
+        rect(x + 16., top, 64., 16.),
+        &format!("{} / {}", index + 1, count.max(1)),
+        11.,
         61,
+        theme.mute,
     );
-    let buttons = top + extra + 44.;
-    for (i, (label, caption, action, disabled, left, width)) in [
-        (
-            t("ui.previous"),
-            "‹",
-            Action::Previous,
-            !ready || index == 0,
-            x + 8.,
-            28.,
-        ),
-        (
-            if playing {
-                t("ui.pause")
-            } else {
-                t("ui.replay")
-            },
-            if playing {
-                t("ui.pause")
-            } else {
-                t("ui.replay")
-            },
-            if playing {
-                Action::Stop
-            } else {
-                Action::Replay
-            },
-            count < 2,
-            x + 36.,
-            64.,
-        ),
-        (
-            t("ui.next"),
-            "›",
-            Action::Next,
-            !ready || index + 1 >= count,
-            x + 100.,
-            28.,
-        ),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let mut control = InterfaceControl::button("document/scripts", label);
-        control.disabled = disabled;
-        widgets.button(
-            world,
-            camera,
-            &format!("scripts-preview-button-{i}"),
-            control,
-            Some(caption),
-            NativeCommand::File(FileCommand::ScriptPreview(action)),
-            Node {
-                justify_content: JustifyContent::Center,
-                ..rect(left, buttons, width, 28.)
-            },
-            None,
-            61,
-        )?;
-    }
-    widgets.button(
-        world,
-        camera,
-        "scripts-preview-fit",
-        InterfaceControl::button("document/scripts", t("ui.fit")),
-        Some(""),
-        NativeCommand::File(FileCommand::ScriptPreview(Action::Fit)),
-        rect(x + w - 116., buttons, 28., 28.),
-        Some(interface_shell::ribbon::Icon::Fit),
-        61,
-    )?;
     if demo.is_some() {
         widgets.button(
             world,
@@ -247,20 +140,77 @@ pub(crate) fn paint(
             InterfaceControl::button("document/scripts", t("ui.help")),
             Some(t("ui.help")),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Help)),
-            rect(x + w - 84., buttons, 72., 28.),
-            Some(interface_shell::ribbon::Icon::Book),
+            rect(x + w - 84., top - 4., 68., 24.),
+            None,
             61,
         )?;
     }
-    widgets.colored_text(
+    widgets.text(
         world,
         camera,
-        "scripts-preview-safety",
-        rect(x + 12., buttons + 36., w - 24., 16.),
-        t("ui.footer"),
-        10.,
+        "scripts-preview-caption",
+        rect(x + 16., top + 24., w - 32., 52.),
+        &caption,
+        14.,
         61,
-        theme.mute,
     );
+    let buttons = top + 84.;
+    let mut previous = InterfaceControl::button("document/scripts", t("ui.previous"));
+    previous.disabled = !ready || index == 0;
+    widgets.button(
+        world,
+        camera,
+        "scripts-preview-button-0",
+        previous,
+        Some("‹"),
+        NativeCommand::File(FileCommand::ScriptPreview(Action::Previous)),
+        rect(x + 12., buttons, 36., 32.),
+        None,
+        61,
+    )?;
+    let (label, action) = if playing {
+        (t("ui.pause"), Action::Stop)
+    } else if index + 1 < count {
+        (t("ui.next"), Action::Next)
+    } else {
+        (t("ui.replay"), Action::Replay)
+    };
+    let mut primary = InterfaceControl::button("document/scripts", label);
+    primary.disabled = !ready;
+    primary.selected = Some(true);
+    widgets.button(
+        world,
+        camera,
+        "scripts-preview-primary",
+        primary,
+        Some(label),
+        NativeCommand::File(FileCommand::ScriptPreview(action)),
+        Node {
+            justify_content: JustifyContent::Center,
+            ..rect(x + 56., buttons, w - 68., 32.)
+        },
+        None,
+        61,
+    )?;
+    // Offer the second outcome only after the first has been understood.
+    if choices && ready && index + 1 == count {
+        let scenario = world.resource::<Files>().script.preview.scenario;
+        let other = lesson::CutScenario::ALL
+            .into_iter()
+            .find(|s| *s != scenario)
+            .unwrap();
+        let label = format!("{} {}", t("ui.try"), other.label(language));
+        widgets.button(
+            world,
+            camera,
+            "cut-scenario-alternative",
+            InterfaceControl::button("document/scripts", &label),
+            Some(&label),
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Scenario(other))),
+            rect(x + 12., buttons + 38., w - 24., 28.),
+            None,
+            61,
+        )?;
+    }
     Ok(())
 }
