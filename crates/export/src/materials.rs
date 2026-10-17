@@ -184,6 +184,9 @@ mod tests {
             assert!(ids.insert(&preset.id));
             let material = preset.material.as_ref().unwrap();
             material.validate().unwrap();
+            let reopened: limo_cad_core::MaterialDetails =
+                serde_json::from_str(&serde_json::to_string(material).unwrap()).unwrap();
+            assert_eq!(material, &reopened);
             assert_eq!(material.catalog_id, preset.id);
         }
         let metal = find_preset("material.aluminum-6061-t6")
@@ -196,6 +199,17 @@ mod tests {
         assert!(metal.properties.iter().any(|p| p.name == "YoungsModulus"
             && p.unit == "Pa"
             && p.value == limo_cad_core::MaterialValue::Number(68_900_000_000.)));
+        let modulus = metal
+            .properties
+            .iter()
+            .find(|p| p.name == "YoungsModulus")
+            .unwrap();
+        assert_eq!(
+            modulus
+                .value_si(limo_cad_core::PhysicalDimension::Pressure)
+                .unwrap(),
+            68_900_000_000.0
+        );
         let plastic = find_preset("generic.pla.gray")
             .unwrap()
             .material

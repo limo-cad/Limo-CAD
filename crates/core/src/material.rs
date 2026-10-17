@@ -26,6 +26,18 @@ pub struct MaterialProperty {
     pub context: String,
     pub source_id: String,
 }
+
+impl MaterialProperty {
+    /// Read one explicitly selected property in SI without modifying its saved
+    /// value, unit, context or provenance. The consumer must select the correct
+    /// property/context and enforce its physical model's applicability bounds.
+    pub fn value_si(&self, expected: crate::PhysicalDimension) -> Result<f64, String> {
+        let MaterialValue::Number(value) = self.value else {
+            return Err(format!("Material property '{}' is not numeric", self.name));
+        };
+        crate::physical_value_si(value, &self.unit, expected)
+    }
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MaterialSource {
@@ -49,6 +61,9 @@ pub struct MaterialPrintProfile {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MaterialDetails {
+    /// Material family, not solver applicability or phase inference. Existing
+    /// plastic/metal keys remain unchanged; fluid and building families share
+    /// this same persisted record and provenance model.
     pub kind: String,
     pub catalog_id: String,
     #[serde(default)]
@@ -62,8 +77,20 @@ pub struct MaterialDetails {
 }
 impl MaterialDetails {
     pub fn validate(&self) -> Result<(), String> {
-        if !matches!(self.kind.as_str(), "plastic" | "metal")
-            || self.catalog_id.is_empty()
+        if !matches!(
+            self.kind.as_str(),
+            "plastic"
+                | "metal"
+                | "ceramic"
+                | "glass"
+                | "wood"
+                | "concrete"
+                | "masonry"
+                | "composite"
+                | "liquid"
+                | "gas"
+                | "other"
+        ) || self.catalog_id.is_empty()
             || self.catalog_id.len() > 256
             || self.properties.len() > 2048
             || self.sources.len() > 64
