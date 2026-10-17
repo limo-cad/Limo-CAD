@@ -840,3 +840,51 @@ fn reference_and_fit_labels_keep_live_values_and_literal_presentation() {
         }
     }
 }
+
+#[test]
+fn high_precision_dimensions_keep_labels_and_respect_dxf_semantic_limit() {
+    for digits in [7, 8, 9] {
+        let (mut document, scene, projection) = fixture::fixture("length", 40.123456789);
+        replace_annotation(&mut document, |a| a["precision"] = json!(digits));
+        document.validate().unwrap();
+        let expected = format!("{:.*}", digits as usize, 40.123456789);
+        let svg = export(
+            &document,
+            &scene,
+            &projection,
+            UnitSystem::Mm,
+            DrawingExportFormat::Svg,
+        )
+        .unwrap();
+        assert!(svg.contains(&expected), "missing {expected} in SVG");
+        let dxf = export(
+            &document,
+            &scene,
+            &projection,
+            UnitSystem::Mm,
+            DrawingExportFormat::Dxf,
+        )
+        .unwrap();
+        let dimensions = dxf_entities(&dxf, "DIMENSION");
+        if digits <= 8 {
+            assert_eq!(dimensions.len(), 1);
+            let styles = dxf_entities(&dxf, "DIMSTYLE");
+            let style = styles
+                .iter()
+                .find(|s| s.get("2") == Some(&dimensions[0]["3"]))
+                .unwrap();
+            assert_eq!(style["271"], digits.to_string());
+        } else {
+            assert!(
+                dimensions.is_empty(),
+                "DXF DIMDEC cannot represent nine decimal places"
+            );
+            assert!(
+                dxf_entities(&dxf, "TEXT")
+                    .iter()
+                    .any(|t| t.get("1").is_some_and(|v| v.contains(&expected))),
+                "graphical fallback must preserve nine-place label"
+            );
+        }
+    }
+}

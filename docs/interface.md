@@ -324,3 +324,5 @@ same document history controller as Ctrl/Cmd-Z and the native Edit menu, includi
 sketch, solid, drawing, and assembly history. Inspect returns `state.history`
 availability. Unavailable commands and commands blocked by a dialog reject;
 this action operates on document history rather than a focused text field.
+
+Drawing dimension precision accepts 0 through 9 decimal places for both primary and secondary units. This changes displayed rounding, not model accuracy. SVG preserves the selected precision. DXF semantic dimensions support at most 8 places; dimensions requesting 9 places use graphical entities with the full label, rather than an editable DIMENSION with a clamped precision. Other unsupported presentation combinations also retain their existing graphical fallback.
