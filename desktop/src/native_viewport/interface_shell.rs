@@ -2293,11 +2293,11 @@ fn publish_layout(
             .then(a.bounds.x.total_cmp(&b.bounds.x))
             .then(a.key.0.cmp(&b.key.0))
     });
-    let eligible = |key| {
+    let eligible = |key, allow_disabled| {
         published.iter().any(|control| {
             control.key == key
                 && control.visible
-                && !control.disabled
+                && (allow_disabled || !control.disabled)
                 && frame
                     .modal_stack
                     .last()
@@ -2307,12 +2307,15 @@ fn publish_layout(
     shared
         .tab_excluded
         .retain(|key| published.iter().any(|control| control.key == *key));
-    shared.focused = shared.focused.filter(|key| eligible(*key));
-    shared.hovered = shared.hovered.filter(|key| eligible(*key));
+    // A worker temporarily disables controls while their commands run. Keep
+    // the existing focus so Bevy can resume keyboard activation on completion.
+    // Hidden, removed, modal-covered and replaced-document controls still retire.
+    shared.focused = shared.focused.filter(|key| eligible(*key, true));
+    shared.hovered = shared.hovered.filter(|key| eligible(*key, false));
     if shared
         .capture
         .as_ref()
-        .is_some_and(|capture| !eligible(capture.resolved.key))
+        .is_some_and(|capture| !eligible(capture.resolved.key, false))
     {
         shared.capture = None;
     }

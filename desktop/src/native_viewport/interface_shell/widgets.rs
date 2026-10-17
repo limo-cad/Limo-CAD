@@ -260,7 +260,7 @@ fn synchronize(world: &mut World) {
         let eligible = action.is_some();
         let old_action = world.get::<WidgetAction>(entity).map(|a| &a.0);
         if old_action.is_some() && old_action != action.as_ref() {
-            retired = true;
+            retired |= owns_pointer_gesture(world, entity);
         }
         let mut root = entity;
         while let Some(parent) = world.get::<ChildOf>(root) {
@@ -520,6 +520,25 @@ pub(crate) fn enqueue_actions(world: &mut World, handle: &NativeInterfaceHandle)
 
 pub(crate) fn is_widget(world: &World, entity: Entity) -> bool {
     world.get::<WidgetKind>(entity).is_some()
+}
+
+// Changing a clipped/disabled sibling must not cancel a standard dialog drag.
+// Use Bevy's existing press ownership, including a slider's thumb descendants.
+fn owns_pointer_gesture(world: &World, entity: Entity) -> bool {
+    world.get_resource::<PointerState>().is_some_and(|state| {
+        state.pointer_buttons.values().any(|button| {
+            button
+                .pressing
+                .keys()
+                .chain(button.dragging.keys())
+                .any(|target| {
+                    std::iter::successors(Some(*target), |target| {
+                        world.get::<ChildOf>(*target).map(ChildOf::parent)
+                    })
+                    .any(|target| target == entity)
+                })
+        })
+    })
 }
 
 pub(crate) fn cancel(world: &mut World) {

@@ -249,6 +249,150 @@ fn release_outside_cancels_and_secondary_click_never_activates() {
 }
 
 #[test]
+fn checkbox_focus_survives_busy_updates_without_activating_while_disabled() {
+    let (mut app, handle, entity, window) = fixture();
+    {
+        let mut control = app.world_mut().get_mut::<InterfaceControl>(entity).unwrap();
+        control.label = "Snap".into();
+        control.role = "checkbox".into();
+        control.field = Field::Toggle(true);
+    }
+    app.update();
+    let p = point(entity);
+    move_to(&mut app, &handle, window, p);
+    send(
+        &mut app,
+        &handle,
+        mouse(window, ButtonState::Pressed, MouseButton::Left),
+        p,
+    );
+    assert_eq!(
+        send(
+            &mut app,
+            &handle,
+            mouse(window, ButtonState::Released, MouseButton::Left),
+            p
+        )
+        .len(),
+        1
+    );
+    for checked in [false, true, false] {
+        // The production worker cancels the finished gesture and disables the UI.
+        crate::native_viewport::winit_host::cancel_native_pointer(app.world_mut(), &handle);
+        app.world_mut()
+            .get_mut::<InterfaceControl>(entity)
+            .unwrap()
+            .disabled = true;
+        app.update();
+        assert_eq!(handle.focused_key(), Some(ControlKey(entity.to_bits())));
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(entity));
+        assert!(send(&mut app, &handle, key(window, KeyCode::Space, false), p).is_empty());
+        {
+            let mut control = app.world_mut().get_mut::<InterfaceControl>(entity).unwrap();
+            control.disabled = false;
+            control.field = Field::Toggle(checked);
+        }
+        app.update();
+        assert_eq!(
+            send(&mut app, &handle, key(window, KeyCode::Space, false), p).len(),
+            1
+        );
+    }
+    app.world_mut()
+        .get_mut::<InterfaceControl>(entity)
+        .unwrap()
+        .visible = false;
+    app.update();
+    assert_eq!(handle.focused_key(), None);
+    assert_eq!(app.world().resource::<InputFocus>().get(), None);
+}
+
+#[test]
+fn unrelated_control_changes_do_not_cancel_a_standard_dialog_drag() {
+    use bevy::ui::Val2;
+    use bevy::ui_widgets::DialogDragHandle;
+    fn dialog_hits(
+        pointers: Query<(&PointerId, &PointerLocation)>,
+        handles: Query<(Entity, &ChildOf), With<DialogDragHandle>>,
+        dialogs: Query<&UiTransform>,
+        mut output: MessageWriter<PointerHits>,
+    ) {
+        for (id, location) in &pointers {
+            let Some(location) = location.location() else {
+                continue;
+            };
+            let mut hits = Vec::new();
+            for (entity, parent) in &handles {
+                let transform = dialogs.get(parent.parent()).unwrap();
+                let Val2 {
+                    x: Val::Px(x),
+                    y: Val::Px(y),
+                } = transform.translation
+                else {
+                    continue;
+                };
+                let offset = location.position - Vec2::new(300. + x, 80. + y);
+                if offset.cmpge(Vec2::ZERO).all() && offset.cmple(Vec2::new(320., 40.)).all() {
+                    hits.push((entity, HitData::new(entity, 0., None, None)));
+                }
+            }
+            output.write(PointerHits::new(*id, hits, 20.));
+        }
+    }
+    let (mut app, handle, sibling, window) = fixture();
+    app.add_systems(PreUpdate, dialog_hits.in_set(PickingSystems::Backend));
+    let root = app
+        .world_mut()
+        .spawn(Node {
+            left: px(300.),
+            top: px(80.),
+            width: px(320.),
+            height: px(400.),
+            ..default()
+        })
+        .id();
+    let header = app.world_mut().spawn((Node::default(), ChildOf(root))).id();
+    super::super::dialogs::attach(app.world_mut(), root, header, Vec2::new(280., 180.));
+    app.update();
+    let start = Vec2::new(340., 100.);
+    move_to(&mut app, &handle, window, start);
+    send(
+        &mut app,
+        &handle,
+        mouse(window, ButtonState::Pressed, MouseButton::Left),
+        start,
+    );
+    move_to(&mut app, &handle, window, start + Vec2::new(50., 30.));
+    assert_eq!(
+        app.world().get::<UiTransform>(root).unwrap().translation,
+        Val2::px(50., 30.)
+    );
+    // Resizing/clipping Settings can disable its More/Previous buttons mid-drag.
+    app.world_mut()
+        .get_mut::<InterfaceControl>(sibling)
+        .unwrap()
+        .disabled = true;
+    app.update();
+    move_to(&mut app, &handle, window, start + Vec2::new(110., 65.));
+    assert_eq!(
+        app.world().get::<UiTransform>(root).unwrap().translation,
+        Val2::px(110., 65.)
+    );
+    send(
+        &mut app,
+        &handle,
+        mouse(window, ButtonState::Released, MouseButton::Left),
+        start + Vec2::new(110., 65.),
+    );
+    move_to(&mut app, &handle, window, start);
+    assert_eq!(
+        app.world().get::<UiTransform>(root).unwrap().translation,
+        Val2::px(110., 65.)
+    );
+    assert!(handle.take_actions().unwrap().is_empty());
+}
+
+#[test]
 fn disabled_modal_covered_and_rebound_widgets_do_not_activate() {
     let (mut app, handle, entity, window) = fixture();
     let p = point(entity);
