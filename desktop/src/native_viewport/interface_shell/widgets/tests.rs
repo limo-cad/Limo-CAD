@@ -331,6 +331,8 @@ fn focus_group_preserves_real_layout_and_camera_across_frames() {
             PostUpdate,
             (ui_layout_system, publish_layout.in_set(InterfaceLayout)).chain(),
         );
+    // The original regression only occurred with a real primary window.
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
     let camera = app
         .world_mut()
         .spawn((
@@ -377,6 +379,17 @@ fn focus_group_preserves_real_layout_and_camera_across_frames() {
     // Grouping happens after layout; later frames must still see the same roots.
     for _ in 0..4 {
         app.update();
+        use bevy::ecs::system::RunSystemOnce;
+        let roots = app
+            .world_mut()
+            .run_system_once(|roots: bevy::ui::experimental::UiRootNodes| {
+                roots.iter().collect::<Vec<_>>()
+            })
+            .unwrap();
+        assert!(
+            roots.contains(&entity),
+            "control must remain a Bevy layout/render root"
+        );
         assert_eq!(
             app.world().get::<ComputedNode>(entity).unwrap().size,
             Vec2::new(80., 24.)
