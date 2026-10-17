@@ -1,6 +1,8 @@
 {
   "capture": "Windowless production Bevy widgets and real isolated CAD preview renderer; not an OS screen recording. Hint uses a native anchor fixture; production ribbon traversal is separately regression tested.",
   "animation": "Three lesson clips, 5/5/4 captured frames at descriptor timings; cropped and downsampled with shared GIF palettes.",
+  "local_test_executable_sha256": "7704a213c551d5418fd5ed79f27f53c5db1e4275c58375b96bdd5da81c782f44",
+  "local_test_linker": "MSVC /DEBUG:NONE on the test executable only; Rust debug assertions and optimization unchanged",
   "native_capture_size": [
     864,
     1200
@@ -20,23 +22,23 @@
     "base_length": 32,
     "width": 40,
     "height": 44,
-    "wall": 5,
+    "wall": 8,
     "upright_hole_diameter": 26,
     "base_hole_diameter": 7,
     "base_hole_centers": [
       [
         24,
         8,
-        5
+        8
       ],
       [
         24,
         32,
-        5
+        8
       ]
     ],
     "upright_hole_center": [
-      5,
+      8,
       20,
       27
     ],
@@ -50,7 +52,7 @@
     "pitch": 32
   },
   "source_sha256_lf": {
-    "crates/help/src/lessons.json": "3571488eedcaa882c16852d64289f010819b13199fc920b13118a94079690ea7",
+    "crates/help/src/lessons.json": "a3220ea640ba3ac93438f46001f2e07fa8d620fe5b6ea6052d143b1fe83abfff",
     "crates/help/src/lessons.rs": "18f359ec95cdecc0f888c6a9f8843265f4c3065fbbd011d056944c2ca8e9b6b1",
     "crates/help/src/lib.rs": "668521ba76fcecf383584ad12ed4187b9bf09514d0dd8ae7dbca8a6b24789f30",
     "desktop/src/native_viewport/interface_shell.rs": "8a5346d4c89c594ddfe32d12ac94db40f3c2ff5d68dec093a125ac6166c600c6",
@@ -70,7 +72,7 @@
     "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/tests.rs": "94c1f867df639ed8d00e4ce11fac5436dcfddff9e2946c7348f4f4f2d7cf6ac9",
     "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs": "8cbc9c8e1b50d9b2916cc2923ce4c194eb6677d48ab39d9199e9751c0db9d1d0",
     "desktop/src/session_bridge/native_interface/controller/workbench/ribbon_menu/localization_tests.rs": "2fef28a3ba867ee015b32b61b2233d160339d291a907d36b1092ae6afbaf4d63",
-    "examples/scripts/extrude-basics.limo.jsonc": "6a1773c1402c4fc37cf3361a89a10954c6fd45f4b8c3fa7e7cbe8233ef915e1c",
-    "mcp-server/src/lesson_tests.rs": "3ca104215663f6f71a1608f9db7f9f8bed951f62957015f7cbf81574675ec394"
+    "examples/scripts/extrude-basics.limo.jsonc": "ea53ae08eea26a6b1be3eb312806b80bb54a9307c2bad1d451d322294f00b28c",
+    "mcp-server/src/lesson_tests.rs": "0b333b9c5886d777546dd2b7c233e0195bfd2834e8efd88dacb406176afd45df"
   }
 }

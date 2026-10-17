@@ -23,6 +23,19 @@ fn bracket_lessons_share_one_editable_build_and_localized_help() {
         lessons["extrude"][0]["profile"]
     );
     let stock = &lessons["extrude"][4]["scene"]["bodies"][0];
+    for axis in [0, 2] {
+        assert!(
+            stock["faces"].as_array().unwrap().iter().any(|face| {
+                face["plane"]["normal"][axis]
+                    .as_f64()
+                    .is_some_and(|n| (n - 1.).abs() < 1e-6)
+                    && face["plane"]["origin"][axis]
+                        .as_f64()
+                        .is_some_and(|p| (p - 8.).abs() < 1e-6)
+            }),
+            "The upright and base must both be 8 mm thick"
+        );
+    }
     let prepared = &lessons["cut"][0]["scene"]["bodies"][0];
     assert_eq!(stock["id"], prepared["id"]);
     assert_ne!(stock, prepared, "Cut starts after supporting setup");
@@ -75,7 +88,7 @@ fn bracket_lessons_share_one_editable_build_and_localized_help() {
         .map(|e| e["circle"]["center"]["x"].as_f64().unwrap())
         .collect();
     assert!(openings.iter().any(|x| x.abs() < 1e-6));
-    assert!(openings.iter().any(|x| (*x - 5.).abs() < 1e-6));
+    assert!(openings.iter().any(|x| (*x - 8.).abs() < 1e-6));
     let saved = report["exports"]["final_model"].clone();
     assert_eq!(
         saved["body_appearances"][0]["preset_id"],

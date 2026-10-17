@@ -13,4 +13,4 @@ related_recipes: extrude-basics
 
 2. Choose Extrude, select the circular profile and set Operation to Subtract. Choose Through All and point the cut into the wall.
 
-3. Apply and check that the new hole passes through the 5 mm wall. The sketches, extrusions and fillets remain editable.
+3. Apply and check that the new hole passes through the 8 mm wall. The sketches, extrusions and fillets remain editable.

@@ -79,7 +79,7 @@
           },
           "to_raw": {
             "x": 32,
-            "y": 5
+            "y": 8
           },
           "ctrl_held": true
         }
@@ -111,11 +111,11 @@
         "arguments": {
           "from": {
             "x": 32,
-            "y": 5
+            "y": 8
           },
           "to_raw": {
-            "x": 5,
-            "y": 5
+            "x": 8,
+            "y": 8
           },
           "ctrl_held": true
         }
@@ -146,11 +146,11 @@
         "operation": "sketch_add_line",
         "arguments": {
           "from": {
-            "x": 5,
-            "y": 5
+            "x": 8,
+            "y": 8
           },
           "to_raw": {
-            "x": 5,
+            "x": 8,
             "y": 44
           },
           "ctrl_held": true
@@ -182,7 +182,7 @@
         "operation": "sketch_add_line",
         "arguments": {
           "from": {
-            "x": 5,
+            "x": 8,
             "y": 44
           },
           "to_raw": {
@@ -562,9 +562,9 @@
           ],
           "text_pos": {
             "x": 39,
-            "y": 2.5
+            "y": 4
           },
-          "value_text": "5"
+          "value_text": "8"
         }
       }
     },
@@ -580,10 +580,10 @@
             }
           ],
           "text_pos": {
-            "x": 2.5,
+            "x": 4,
             "y": 51
           },
-          "value_text": "5"
+          "value_text": "8"
         }
       }
     },
@@ -786,8 +786,8 @@
               "$every": {
                 "path": "/points",
                 "where": {
-                  "/x": 5,
-                  "/z": 5
+                  "/x": 8,
+                  "/z": 8
                 }
               }
             },
@@ -1017,7 +1017,7 @@
             "path": "/faces",
             "where": {
               "/plane/normal/2": 1,
-              "/plane/origin/2": 5
+              "/plane/origin/2": 8
             },
             "take": "one"
           }
@@ -1054,7 +1054,7 @@
               "point": [
                 24,
                 8,
-                5
+                8
               ],
               "basis": {
                 "$ref": "base_begin",
@@ -1067,7 +1067,7 @@
               "point": [
                 27.5,
                 8,
-                5
+                8
               ],
               "basis": {
                 "$ref": "base_begin",
@@ -1092,7 +1092,7 @@
               "point": [
                 24,
                 32,
-                5
+                8
               ],
               "basis": {
                 "$ref": "base_begin",
@@ -1105,7 +1105,7 @@
               "point": [
                 27.5,
                 32,
-                5
+                8
               ],
               "basis": {
                 "$ref": "base_begin",
@@ -1196,7 +1196,7 @@
             "path": "/faces",
             "where": {
               "/plane/normal/0": 1,
-              "/plane/origin/0": 5
+              "/plane/origin/0": 8
             },
             "take": "one"
           }
@@ -1231,7 +1231,7 @@
           "anchor": {
             "$project": {
               "point": [
-                5,
+                8,
                 20,
                 27
               ],
@@ -1244,7 +1244,7 @@
           "edge_hint": {
             "$project": {
               "point": [
-                5,
+                8,
                 33,
                 27
               ],
