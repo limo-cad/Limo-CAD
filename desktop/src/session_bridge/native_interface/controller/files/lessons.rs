@@ -2,6 +2,8 @@
 //! waits for inbox receipts, so it must never occupy the modeling worker.
 use super::*;
 
+pub(super) mod replay;
+
 pub(super) struct Running {
     owner: DocumentContext,
     source_generation: u64,
@@ -95,6 +97,20 @@ pub(super) fn acknowledge_replay_baseline(
     source_generation: u64,
     handoff: &super::super::super::workspace::ReplayBaselineHandoff,
 ) -> Result<(), String> {
+    validate_replay_lesson(world, source_generation, &handoff.previous().owner)?;
+    super::super::presentation::adopt_replay_owner(world, services, handoff, |world| {
+        // No fallible work remains after playback transfer. World is exclusively
+        // borrowed, so the validated lesson cannot disappear between these updates.
+        world.resource_mut::<Files>().lesson.as_mut().unwrap().owner =
+            handoff.successor().owner.clone();
+    })
+}
+
+fn validate_replay_lesson(
+    world: &World,
+    source_generation: u64,
+    owner: &DocumentContext,
+) -> Result<(), String> {
     let files = world.resource::<Files>();
     let running = files
         .lesson
@@ -102,16 +118,11 @@ pub(super) fn acknowledge_replay_baseline(
         .ok_or("The replay lesson is no longer running")?;
     if files.script.generation != source_generation
         || running.source_generation != source_generation
-        || running.owner != handoff.previous().owner
+        || running.owner != *owner
     {
         return Err("The replay source or lesson owner changed before acknowledgement".into());
     }
-    super::super::presentation::adopt_replay_owner(world, services, handoff, |world| {
-        // No fallible work remains after playback transfer. World is exclusively
-        // borrowed, so the validated lesson cannot disappear between these updates.
-        world.resource_mut::<Files>().lesson.as_mut().unwrap().owner =
-            handoff.successor().owner.clone();
-    })
+    Ok(())
 }
 
 pub(super) fn poll(world: &mut World, services: &NativeServices) {

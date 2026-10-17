@@ -342,6 +342,24 @@ pub(super) fn gate(world: &mut World, owner: &DocumentContext) -> Gate {
     }
 }
 
+/// Check before queueing the baseline; never create or retarget playback here.
+pub(super) fn require_replay_ready(
+    world: &mut World,
+    owner: &DocumentContext,
+) -> Result<(), String> {
+    let playback = world
+        .get_resource::<Playback>()
+        .ok_or("Replay playback is not configured")?;
+    if playback.owner.as_ref() != Some(owner) || !playback.state.active || playback.state.finished {
+        return Err("Replay playback no longer belongs to the admitted document".into());
+    }
+    match gate(world, owner) {
+        Gate::Ready => Ok(()),
+        Gate::Waiting => Err("Replay is paused or waiting before its baseline".into()),
+        Gate::Stopped => Err("Replay was stopped before its baseline".into()),
+    }
+}
+
 /// UI completion must call this before ordinary replacement observation. The
 /// private handoff comes from workspace adoption; serialized owner claims cannot
 /// authorize transfer. The callback updates related UI ownership in the same fence.

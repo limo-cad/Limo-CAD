@@ -572,3 +572,53 @@ fn replay_transfer_preserves_playback_and_rejects_unrelated_owners() {
         assert!(!playback.state.active && !playback.state.stopped && playback.credits == 0);
     }
 }
+
+#[test]
+fn baseline_queue_requires_configured_matching_ready_playback() {
+    let mut world = World::new();
+    let owner = DocumentContext {
+        window_id: "main".into(),
+        document_id: "replay".into(),
+        epoch: 1,
+    };
+    assert!(require_replay_ready(&mut world, &owner).is_err());
+    observe(&mut world, &owner);
+    assert!(require_replay_ready(&mut world, &owner).is_err());
+    let now = Instant::now();
+    command(
+        &mut world.resource_mut::<Playback>(),
+        now,
+        json!({"command":"configure","mode":"fast"}),
+    )
+    .unwrap();
+    assert!(require_replay_ready(&mut world, &owner).is_ok());
+    let wrong = DocumentContext {
+        epoch: 2,
+        ..owner.clone()
+    };
+    assert!(require_replay_ready(&mut world, &wrong).is_err());
+    assert_eq!(world.resource::<Playback>().owner.as_ref(), Some(&owner));
+    command(
+        &mut world.resource_mut::<Playback>(),
+        now,
+        json!({"command":"pause"}),
+    )
+    .unwrap();
+    assert!(require_replay_ready(&mut world, &owner).is_err());
+    command(
+        &mut world.resource_mut::<Playback>(),
+        now,
+        json!({"command":"step"}),
+    )
+    .unwrap();
+    assert!(require_replay_ready(&mut world, &owner).is_ok());
+    assert_eq!(world.resource::<Playback>().credits, 1);
+    command(
+        &mut world.resource_mut::<Playback>(),
+        now,
+        json!({"command":"stop"}),
+    )
+    .unwrap();
+    assert!(require_replay_ready(&mut world, &owner).is_err());
+    assert!(world.resource::<Playback>().state.stopped);
+}
