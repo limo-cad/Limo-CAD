@@ -174,6 +174,17 @@ See [dialog evidence](qualification/bevy-dialogs-20261017.json).
 
 ![Extrude draft retained in a moved and resized dialog](qualification/bevy-dialogs-20261017/extrude-resized.png)
 
+## Rebase onto merged dependencies
+
+PR420 was rebased onto main `5303f9a1` after PR433 and PR434 merged. Its patch
+is byte-identical to the pre-rebase patch; formatting and locked manifest
+checks pass. The final dependency versions add profile and history fixes
+beyond the V8 test snapshot. V8 captures remain historical evidence; the
+Extrude apply/undo/save flow needs a targeted recheck on the new combined build.
+The existing large-drag issue and unrun boundary cases remain open. This
+checkpoint performs no new live UI or MCP qualification. See the
+[rebase record](qualification/bevy-rebase-20261017.json).
+
 ## Stable dependency and window-host patch
 
 The desktop pins `bevy`, `bevy_ecs`, `bevy_gizmos` and `bevy_reflect` to
