@@ -887,8 +887,10 @@ dependencies = [
  "limo-cad-mcp-mutate",
  "limo-cad-occt",
  "limo-cad-print",
+ "limo-cad-project-file",
  "limo-cad-recipes",
  "limo-cad-script",
+ "limo-cad-session-publication",
  "limo-cad-session-storage",
  "limo-cad-sketch",
  "limo-cad-solid",
@@ -956,6 +958,16 @@ name = "limo-cad-script"
 version = "0.3.0-rc.1"
 dependencies = [
  "serde_json",
+]
+
+[[package]]
+name = "limo-cad-session-publication"
+version = "0.3.0-rc.1"
+dependencies = [
+ "ciborium",
+ "limo-cad-project-file",
+ "limo-cad-session-storage",
+ "serde",
 ]
 
 [[package]]

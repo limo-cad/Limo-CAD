@@ -18,6 +18,8 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
+mod composite;
+pub use composite::read_composite_publication;
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
