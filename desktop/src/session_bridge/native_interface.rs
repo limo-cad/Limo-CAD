@@ -169,11 +169,7 @@ pub(super) fn prepare_edit_history(
     if presentation {
         history.advance_visibility(&before, after)?;
     } else {
-        let model = super::parse_engine_envelope(engine.engine_call("project_export_model", ""))?;
-        let model = model
-            .as_str()
-            .ok_or("Engine did not return a complete edit snapshot")?;
-        history.record_edit(&before, model.into(), after)?;
+        history.record_edit(&before, engine.project_snapshot()?, after)?;
     }
     Ok(Some(history))
 }

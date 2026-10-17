@@ -4,6 +4,10 @@ use super::*;
 mod attached_reads;
 mod presentation;
 
+fn snapshot_model(value: &Value) -> ProjectSnapshot {
+    ProjectSnapshot::new(value.to_string(), vec![]).unwrap()
+}
+
 #[test]
 fn metadata_undo_retains_reserved_occurrence_ids_without_resetting_presentation() {
     let _lock = super::super::super::tests::TEST_LOCK.lock().unwrap();
@@ -14,12 +18,12 @@ fn metadata_undo_retains_reserved_occurrence_ids_without_resetting_presentation(
     current["print_intent"]["source_document_id"] = json!("83117445-4c07-4f27-bcbb-81077efce39c");
     let (restored, presentation) = prepare_history_restore(
         &fixture.engine,
-        &current.to_string(),
-        &target.to_string(),
+        &snapshot_model(&current),
+        &snapshot_model(&target),
         false,
     )
     .unwrap();
-    let restored: Value = serde_json::from_str(&restored).unwrap();
+    let restored: Value = serde_json::from_str(restored.model_json()).unwrap();
     assert_eq!(
         restored["assembly"]["component_structure"]["next_occurrence_id"],
         json!(500)
@@ -32,12 +36,12 @@ fn metadata_undo_retains_reserved_occurrence_ids_without_resetting_presentation(
     newer["assembly"]["component_structure"]["next_occurrence_id"] = json!(700);
     let (restored, _) = prepare_history_restore(
         &fixture.engine,
-        &restored.to_string(),
-        &newer.to_string(),
+        &snapshot_model(&restored),
+        &snapshot_model(&newer),
         false,
     )
     .unwrap();
-    let restored: Value = serde_json::from_str(&restored).unwrap();
+    let restored: Value = serde_json::from_str(restored.model_json()).unwrap();
     assert_eq!(
         restored["assembly"]["component_structure"]["next_occurrence_id"],
         json!(700)
@@ -54,12 +58,12 @@ fn owned_geometry_history_keeps_namespace_and_rejects_foreign_snapshot_identity(
     target["document"]["name"] = json!("Earlier geometry history");
     let (restored, presentation) = prepare_history_restore(
         &fixture.engine,
-        &current.to_string(),
-        &target.to_string(),
+        &snapshot_model(&current),
+        &snapshot_model(&target),
         false,
     )
     .unwrap();
-    let restored: Value = serde_json::from_str(&restored).unwrap();
+    let restored: Value = serde_json::from_str(restored.model_json()).unwrap();
     assert_eq!(
         restored["print_intent"]["source_document_id"],
         current["print_intent"]["source_document_id"]
@@ -73,8 +77,8 @@ fn owned_geometry_history_keeps_namespace_and_rejects_foreign_snapshot_identity(
     let before = model(&fixture);
     assert!(prepare_history_restore(
         &fixture.engine,
-        &current.to_string(),
-        &target.to_string(),
+        &snapshot_model(&current),
+        &snapshot_model(&target),
         false
     )
     .is_err());
@@ -425,9 +429,11 @@ fn unchanged_load_failure_retains_history_and_cancel_or_branch_edits_cannot_cons
             context: owner.clone(),
             engine_revision: current.engine_revision - 1,
         };
+        let mut invalid = original.clone();
+        invalid["schema_version"] = json!(u32::MAX);
         let ticket = project
             .native_history
-            .prepare_undo(&previous, "invalid serialized model".into())
+            .prepare_undo(&previous, snapshot_model(&invalid))
             .unwrap();
         project.native_history.commit_undo(ticket, current).unwrap();
     }
@@ -495,32 +501,103 @@ fn owning_history_keeps_legacy_view_identity_through_first_rename_and_removes_ne
     current["views"][0]["name"] = json!("Renamed layout");
     let (restored, _) = prepare_history_restore(
         &fixture.engine,
-        &current.to_string(),
-        &old.to_string(),
+        &snapshot_model(&current),
+        &snapshot_model(&old),
         false,
     )
     .unwrap();
-    let restored: Value = serde_json::from_str(&restored).unwrap();
+    let restored: Value = serde_json::from_str(restored.model_json()).unwrap();
     assert_eq!(restored["views"][0]["id"], current["views"][0]["id"]);
     assert_eq!(restored["views"][0]["name"], "Legacy layout");
     let (absent, _) = prepare_history_restore(
         &fixture.engine,
-        &current.to_string(),
-        &before.to_string(),
+        &snapshot_model(&current),
+        &snapshot_model(&before),
         false,
     )
     .unwrap();
-    let absent: Value = serde_json::from_str(&absent).unwrap();
+    let absent: Value = serde_json::from_str(absent.model_json()).unwrap();
     assert!(absent["views"].as_array().unwrap().is_empty());
     let mut foreign = old;
     foreign["views"][0]["id"] = json!("01234567-89ab-4cde-8123-456789abcdee");
     foreign["views"][0]["name"] = json!("Renamed layout");
     assert!(prepare_history_restore(
         &fixture.engine,
-        &current.to_string(),
-        &foreign.to_string(),
+        &snapshot_model(&current),
+        &snapshot_model(&foreign),
         false
     )
     .is_err());
     assert_eq!(model(&fixture), before);
+}
+
+#[test]
+fn domain_only_restore_retains_target_payload_and_requires_full_replacement() {
+    let _lock = super::super::super::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let model = model(&fixture).to_string();
+    let paired = |payload| {
+        ProjectSnapshot::new(
+            model.clone(),
+            vec![limo_cad_project_file::SnapshotIntent {
+                name: "intent/history-probe.cbor".into(),
+                payload: vec![payload],
+            }],
+        )
+        .unwrap()
+    };
+    let current = paired(1);
+    let target = paired(2);
+    let (restored, presentation) =
+        prepare_history_restore(&fixture.engine, &current, &target, false).unwrap();
+    assert_eq!(restored.intents(), target.intents());
+    assert!(presentation.is_none());
+    assert_eq!(fixture.engine.project_snapshot().unwrap().intents(), &[]);
+}
+
+#[test]
+fn feature_edit_undo_redo_retains_opaque_domain_payload() {
+    let _lock = super::super::super::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let owner = part(&fixture);
+    let original = model(&fixture);
+    let snapshot = ProjectSnapshot::new(
+        original.to_string(),
+        vec![limo_cad_project_file::SnapshotIntent {
+            name: "intent/future-domain.cbor".into(),
+            payload: vec![0, 255, 7, 42],
+        }],
+    )
+    .unwrap();
+    let revision = fixture
+        .bridge
+        .engine_revision_for_window("main")
+        .unwrap()
+        .unwrap();
+    let loaded = fixture
+        .bridge
+        .apply_native_snapshot_at(&fixture.engine, &owner, revision, &snapshot, || Ok(()))
+        .unwrap();
+    edit(
+        &fixture,
+        &loaded.context,
+        "solid_edit_extrude",
+        json!({
+        "feature_id":original["extrudes"][0]["feature_id"],"extrude":{
+        "sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body",
+        "extent":{"type":"distance","distance":25.},"taper_angle_deg":0.,
+        "flip":false,"target_body_ids":[]}}),
+    );
+    let mut owner = loaded.context;
+    for (redo, distance) in [(false, 10.0), (true, 25.0)] {
+        let result = fixture
+            .bridge
+            .apply_native_history(&fixture.engine, &owner, redo, || Ok(()))
+            .unwrap();
+        owner = result.context;
+        let restored = fixture.engine.project_snapshot().unwrap();
+        assert_eq!(restored.intents(), snapshot.intents());
+        let model: Value = serde_json::from_str(restored.model_json()).unwrap();
+        assert_eq!(model["extrudes"][0]["extent"]["distance"], distance);
+    }
 }
