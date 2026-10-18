@@ -89,16 +89,19 @@ fn curve(curve: &Curve, budget: &mut Budget) -> Result<(), String> {
             weights,
             knots,
         } => {
+            // Reject before usize conversion or degree-dependent arithmetic:
+            // an untrusted u32::MAX degree overflows degree + 1 on 32-bit hosts.
+            if !(1..=32).contains(degree) {
+                return Err("Drafting NURBS degree must be between 1 and 32".into());
+            }
             budget.points(control_points)?;
             add(&mut budget.points, weights.len(), POINTS)?;
             add(&mut budget.points, knots.len(), POINTS)?;
             let degree = *degree as usize;
             let n = control_points.len();
-            let cardinality = degree > 0
-                && degree <= 32
-                && n > degree
-                && weights.len() == n
-                && knots.len() == n + degree + 1;
+            if n <= degree || weights.len() != n || knots.len() != n + degree + 1 {
+                return Err("Invalid drafting NURBS control, weight or knot count".into());
+            }
             let mut multiplicity = 1;
             let knots_valid = knots.iter().all(|x| x.is_finite())
                 && knots.windows(2).all(|pair| {
@@ -109,10 +112,7 @@ fn curve(curve: &Curve, budget: &mut Budget) -> Result<(), String> {
                     };
                     pair[0] <= pair[1] && multiplicity <= degree + 1
                 });
-            cardinality
-                && knots_valid
-                && weights.iter().all(|x| positive(*x))
-                && knots[degree] < knots[n]
+            knots_valid && weights.iter().all(|x| positive(*x)) && knots[degree] < knots[n]
         }
     };
     if valid {

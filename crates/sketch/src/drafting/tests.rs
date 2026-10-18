@@ -58,6 +58,50 @@ fn fixture() -> Document {
 }
 
 #[test]
+fn malformed_nurbs_degree_and_counts_reject_before_knot_arithmetic() {
+    for degree in [0, 33, u32::MAX] {
+        let mut document = fixture();
+        document.entities[0].content = Content::Curve {
+            curve: Curve::Nurbs {
+                degree,
+                control_points: vec![[0., 0.], [1., 1.]],
+                weights: vec![1., 1.],
+                // Two finite knots reached degree + 1 in the prior implementation,
+                // even after the degree/cardinality predicate had become false.
+                knots: vec![0., 1.],
+            },
+        };
+        assert!(document.validate(&[]).unwrap_err().contains("degree"));
+    }
+    for (points, weights, knots) in [(0, 0, 0), (2, 1, 4), (2, 2, 0), (2, 2, 3), (2, 2, 5)] {
+        let mut document = fixture();
+        document.entities[0].content = Content::Curve {
+            curve: Curve::Nurbs {
+                degree: 1,
+                control_points: vec![[0., 0.]; points],
+                weights: vec![1.; weights],
+                knots: vec![0.; knots],
+            },
+        };
+        assert!(document.validate(&[]).unwrap_err().contains("count"));
+    }
+    // Exercise both admitted degree boundaries with a clamped Bezier knot vector.
+    for degree in [1, 32] {
+        let n = degree as usize + 1;
+        let mut document = fixture();
+        document.entities[0].content = Content::Curve {
+            curve: Curve::Nurbs {
+                degree,
+                control_points: (0..n).map(|i| [i as f64, 0.]).collect(),
+                weights: vec![1.; n],
+                knots: [vec![0.; n], vec![1.; n]].concat(),
+            },
+        };
+        document.validate(&[]).unwrap();
+    }
+}
+
+#[test]
 fn projected_paper_admission_is_scoped_to_authored_sheet_content() {
     let mut drawing = crate::DrawingDocumentDto::default();
     drawing.drafting = Some(fixture());
