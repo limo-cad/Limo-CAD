@@ -277,3 +277,201 @@ mod successor_tests {
         assert_eq!(server.manager.export_project_snapshot().unwrap(), before);
     }
 }
+
+/// Run on a dedicated script thread, never on the native model worker. The
+/// callback submits the prepared archive once and waits for its original native
+/// acknowledgement. It must return the publication receipt from that committed
+/// baseline, and must not resolve a later active session on timeout or failure.
+pub fn run_prepared_project_replay<F>(
+    prepared: PreparedProjectReplay,
+    session_id: &str,
+    speed: f64,
+    commit_baseline: F,
+) -> Result<serde_json::Value, String>
+where
+    F: FnOnce(
+        ProjectArchive,
+        limo_cad_project_file::PublicationReceipt,
+        ReplayPackageIdentity,
+    ) -> Result<limo_cad_project_file::PublicationReceipt, String>,
+{
+    use serde_json::json;
+    if !speed.is_finite() || !(0.25..=16.0).contains(&speed) {
+        return Err("Replay speed must be finite and between 0.25 and 16".into());
+    }
+    let (script, archive, options, identity) = prepared.into_parts();
+    script.script().validate_options(options)?;
+    crate::interface::validate_script(script.script())?;
+    let mut server = crate::CadServer::new()?;
+    server.attach_read_only_snapshot(&json!({"session_id":session_id}))?;
+    let previous = server
+        .loaded_publication
+        .clone()
+        .ok_or("Project replay requires a composite desktop publication")?;
+    crate::session::require_current_replay_publication(&previous)?;
+    let active_sketch = server.call_tool("sketch_active", json!({}))?;
+    if !active_sketch.is_null() || !server.manager.is_blank_for_script() {
+        return Err("Project replay requires a blank native document".into());
+    }
+    let step_count = script.script().metadata()["step_count"].clone();
+    server.script_running = true;
+    let configured = server.call_tool("cad_interface", json!({"action":"presentation","command":"configure",
+        "mode":if options.presentation {"present"} else {"fast"},"speed":speed,"step_index":0,"step_count":step_count,"chapter":"","text":""}));
+    let result = match configured {
+        Ok(value) if value["status"] == "applied" => {
+            let mut host = LiveProjectHost {
+                server: &mut server,
+                previous,
+                identity,
+                archive: Some(archive),
+                commit: Some(commit_baseline),
+            };
+            script.run(&mut host, options)
+        }
+        Ok(value) => Err(format!(
+            "Replay playback configuration was not acknowledged: {value}"
+        )),
+        Err(error) => Err(error),
+    };
+    // A project-backed source must never be advertised as a self-contained v1
+    // authored script. The package exporter owns that future representation.
+    server.finish_script_run(script.script(), None, step_count, false, result)
+}
+
+struct LiveProjectHost<'a, F> {
+    server: &'a mut crate::CadServer,
+    previous: limo_cad_project_file::PublicationReceipt,
+    identity: ReplayPackageIdentity,
+    archive: Option<ProjectArchive>,
+    commit: Option<F>,
+}
+impl<F> limo_cad_script::ProjectReplayHost for LiveProjectHost<'_, F>
+where
+    F: FnOnce(
+        ProjectArchive,
+        limo_cad_project_file::PublicationReceipt,
+        ReplayPackageIdentity,
+    ) -> Result<limo_cad_project_file::PublicationReceipt, String>,
+{
+    fn validate_call(&mut self, group: &str, operation: &str) -> Result<(), String> {
+        crate::interface::validate_script_call(group, operation)
+    }
+    fn load_project_baseline(&mut self) -> Result<(), String> {
+        let commit = self
+            .commit
+            .take()
+            .ok_or("Replay baseline was already submitted")?;
+        let archive = self
+            .archive
+            .take()
+            .ok_or("Replay baseline archive was already consumed")?;
+        let successor = match commit(archive, self.previous.clone(), self.identity.clone()) {
+            Ok(receipt) => receipt,
+            Err(error) => {
+                self.server.failed_attachment = Some(crate::AttachmentFailure {
+                    session_id:self.previous.session_id.clone(),error:format!("Replay baseline was not acknowledged; inspect retained work before restarting: {error}") });
+                return Err(error);
+            }
+        };
+        self.server
+            .adopt_replay_successor(&self.previous, &successor)
+    }
+    fn call(
+        &mut self,
+        name: &str,
+        arguments: serde_json::Value,
+        progress: limo_cad_script::RunProgress,
+    ) -> Result<serde_json::Value, String> {
+        self.server.dispatch_script_call(name, arguments, progress)
+    }
+}
+
+#[cfg(test)]
+mod live_host_tests {
+    use super::*;
+    use limo_cad_project_file::{PublicationReceipt, SaveMetadata};
+    use limo_cad_script::ProjectReplayHost;
+    use serde_json::json;
+    fn prepared() -> PreparedProjectReplay {
+        PreparedProjectReplay {
+            script:ProjectScript::parse(&json!({"version":2,"name":"Host fixture","starting_state":"project","steps":[
+                {"call":{"group":"document/files","operation":"cad_set_document_name","arguments":{"name":"Must not run"}}}
+            ]}).to_string()).unwrap(),
+            archive:ProjectArchive::new(r#"{"format":"limo-cad-project","schema_version":15}"#.into(),SaveMetadata {application_version:"test",saved_at:"2026-10-17T00:00:00Z"}).unwrap(),
+            options:RunOptions {presentation:false,validate:true},
+            identity:ReplayPackageIdentity {byte_length:1,sha256:[0;32]},
+        }
+    }
+    #[test]
+    fn invalid_speed_fails_before_host_or_baseline_submission() {
+        for speed in [f64::NAN, f64::INFINITY, 0.0, 0.24, 16.01] {
+            let called = std::cell::Cell::new(false);
+            let result =
+                run_prepared_project_replay(prepared(), "unused-session", speed, |_, _, _| {
+                    called.set(true);
+                    Err("must not run".into())
+                });
+            assert!(result.unwrap_err().contains("speed"));
+            assert!(!called.get());
+        }
+    }
+    #[test]
+    fn failed_baseline_is_one_shot_and_blocks_later_steps() {
+        let mut server = crate::CadServer::new().unwrap();
+        server.script_running = true;
+        let before = server.manager.export_project_snapshot().unwrap();
+        let (script, archive, options, identity) = prepared().into_parts();
+        let retained = archive.encode().unwrap();
+        let previous = PublicationReceipt {
+            process_instance_id: "process".into(),
+            session_id: "original".into(),
+            window_id: "main".into(),
+            document_id: "document".into(),
+            epoch: 1,
+            engine_revision: 1,
+            export_sequence: 1,
+        };
+        server.attached_document_id = Some(previous.session_id.clone());
+        let calls = std::cell::Cell::new(0);
+        let commit = |archive: ProjectArchive,
+                      receipt: PublicationReceipt,
+                      received: ReplayPackageIdentity| {
+            calls.set(calls.get() + 1);
+            assert_eq!(archive.encode().unwrap(), retained);
+            assert_eq!(receipt, previous);
+            assert_eq!(received, identity);
+            Err("Original acknowledgement unavailable".into())
+        };
+        let mut host = LiveProjectHost {
+            server: &mut server,
+            previous: previous.clone(),
+            identity: identity.clone(),
+            archive: Some(archive),
+            commit: Some(commit),
+        };
+        let result = script.run(&mut host, options);
+        assert!(result
+            .as_ref()
+            .unwrap_err()
+            .contains("acknowledgement unavailable"));
+        assert!(host
+            .load_project_baseline()
+            .unwrap_err()
+            .contains("already submitted"));
+        assert_eq!(calls.get(), 1);
+        assert_eq!(
+            host.server.manager.export_project_snapshot().unwrap(),
+            before
+        );
+        assert!(host.server.failed_attachment.is_some());
+        drop(host);
+        server.live_snapshot_dirty = true;
+        assert!(server
+            .finish_script_run(script.script(), None, json!(1), false, result)
+            .is_err());
+        assert!(!server.script_running);
+        assert!(server.failed_attachment.is_some());
+        assert_eq!(server.manager.export_project_snapshot().unwrap(), before);
+        assert!(server.last_script_source.is_none());
+    }
+}

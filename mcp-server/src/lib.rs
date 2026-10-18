@@ -40,7 +40,7 @@ mod stdio;
 mod summary;
 
 pub use control_admission::{NativeControlAdmission, NATIVE_CONTROL_ADMISSION_MAX_BYTES};
-pub use replay::{prepare_project_replay, PreparedProjectReplay};
+pub use replay::{prepare_project_replay, run_prepared_project_replay, PreparedProjectReplay};
 pub use session::control_owner_error;
 pub use stdio::{
     desktop_mcp_presence, prepare_desktop_stdio, run_desktop_stdio, run_stdio,
@@ -968,30 +968,46 @@ impl CadServer {
             }
         }
         self.script_running = true;
-        let mut result = limo_cad_script::run_with_progress(
+        let result = limo_cad_script::run_with_progress(
             &script,
-            |name, arguments, progress| {
-                self.script_progress = Some(progress);
-                let is_note =
-                    arguments["action"] == "presentation" && arguments["command"] == "note";
-                let result = self.call_tool(name, arguments)?;
-                if name == "cad_interface"
-                    && result
-                        .get("status")
-                        .is_some_and(|status| status != "applied")
-                {
-                    return Err(format!("Interface operation failed: {result}"));
-                }
-                if is_note {
-                    self.wait_for_script_presentation(&result)?;
-                }
-                Ok(result)
-            },
+            |name, arguments, progress| self.dispatch_script_call(name, arguments, progress),
             options,
         );
-        self.script_running = false;
+        self.finish_script_run(&script, Some(source), step_count, detail_full, result)
+    }
+
+    fn dispatch_script_call(
+        &mut self,
+        name: &str,
+        arguments: Value,
+        progress: limo_cad_script::RunProgress,
+    ) -> Result<Value, String> {
+        self.script_progress = Some(progress);
+        let is_note = arguments["action"] == "presentation" && arguments["command"] == "note";
+        let result = self.call_tool(name, arguments)?;
+        if name == "cad_interface"
+            && result
+                .get("status")
+                .is_some_and(|status| status != "applied")
+        {
+            return Err(format!("Interface operation failed: {result}"));
+        }
+        if is_note {
+            self.wait_for_script_presentation(&result)?;
+        }
+        Ok(result)
+    }
+
+    fn finish_script_run(
+        &mut self,
+        script: &limo_cad_script::Script,
+        source: Option<String>,
+        step_count: Value,
+        detail_full: bool,
+        mut result: Result<Value, String>,
+    ) -> Result<Value, String> {
         self.script_progress = None;
-        if self.live_snapshot_dirty {
+        if self.live_snapshot_dirty && self.failed_attachment.is_none() {
             if let Err(error) = self.refresh_read_only_snapshot() {
                 if result.is_ok() {
                     result = Err(error);
@@ -1019,9 +1035,10 @@ impl CadServer {
         }
         if result.is_ok() {
             self.last_script_mutations = self.modeling_mutations;
-            self.last_script_source = Some(source);
+            self.last_script_source = source;
         }
 
+        self.script_running = false;
         result.map(|mut report| {
             let scene = self.manager.solid_scene_ref();
             let definitions = self.manager.hole_definitions();
