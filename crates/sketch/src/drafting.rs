@@ -1,10 +1,12 @@
 //! Authored drafting graph, independent of generated ink and solver state.
 //!
-//! This contract is not yet part of project persistence or host commands. Its
-//! adoption must bump the project schema and preserve existing sheet identities.
-//! Validate against the owning drawing's sheet IDs before accepting a candidate.
+//! Persisted by project schema 16 through the owning drawing document. Validate
+//! against that drawing's sheet IDs before accepting a candidate. Dedicated
+//! drafting commands, rendering and interchange adapters are separate work.
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+mod persistence_tests;
 #[cfg(test)]
 mod tests;
 mod validate;

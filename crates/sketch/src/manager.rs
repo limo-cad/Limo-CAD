@@ -1901,6 +1901,14 @@ impl SketchManager {
         &mut self,
         drawing: DrawingDocumentDto,
     ) -> Result<DrawingDocumentDto, SessionError> {
+        // Legacy drawing editors must not erase an authored graph simply by
+        // omitting the new field. An empty retained graph can be explicit;
+        // deliberate project replacement uses its separate paired-load path.
+        if self.drawings.drafting.is_some() && drawing.drafting.is_none() {
+            return Err(SessionError::Solid(
+                "Drawing replacement must retain the authored drafting graph".into(),
+            ));
+        }
         drawing.validate().map_err(SessionError::Solid)?;
         let drawing = crate::drawing_topology::capture_drawing_topology(
             drawing,
@@ -8314,6 +8322,7 @@ mod project_tests {
             next_bom_item_id: 1,
             templates: vec![],
             next_template_id: 1,
+            drafting: None,
         };
         let mut manager = SketchManager::new();
         manager.set_drawing_document(drawing.clone()).unwrap();

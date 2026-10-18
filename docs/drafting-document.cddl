@@ -1,5 +1,6 @@
 ; Authored drafting document v1. Rust: crates/sketch/src/drafting.rs.
-; This contract is not yet adopted by project persistence or native commands.
+; Project schema 16 embeds this graph in drawings.drafting when present.
+; Dedicated native drafting commands and a bounded CBOR codec remain pending.
 ; Native payload representation is CBOR; map keys match the serde field names.
 ; Semantic validation also checks IDs, references, DAGs, sheet ownership,
 ; finite geometry and admission limits. CDDL alone does not prove validity.

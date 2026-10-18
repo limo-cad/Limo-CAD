@@ -25,6 +25,10 @@ fn first_id() -> u64 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DrawingDocumentDto {
+    /// Authored model/paper drafting content. Absent in pre-schema-16 projects.
+    /// Existing technical sheet identities are also the drafting layout owners.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drafting: Option<crate::drafting::Document>,
     #[serde(default)]
     pub sheets: Vec<DrawingSheetDto>,
     #[serde(default)]
@@ -50,6 +54,7 @@ pub struct DrawingDocumentDto {
 impl Default for DrawingDocumentDto {
     fn default() -> Self {
         Self {
+            drafting: None,
             sheets: Vec::new(),
             active_sheet_id: None,
             next_sheet_id: 1,
@@ -1972,6 +1977,9 @@ impl DrawingDocumentDto {
         {
             return Err("drawing id counters must be greater than existing ids".to_string());
         }
+        if let Some(drafting) = &self.drafting {
+            drafting.validate(&sheet_ids.into_iter().collect::<Vec<_>>())?;
+        }
         Ok(())
     }
 }
@@ -2382,6 +2390,7 @@ mod tests {
             next_bom_item_id: 1,
             templates: vec![],
             next_template_id: 1,
+            drafting: None,
         };
         assert!(drawing.validate().is_err());
     }
