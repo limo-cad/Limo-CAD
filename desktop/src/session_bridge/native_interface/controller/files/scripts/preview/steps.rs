@@ -63,7 +63,7 @@ pub(super) fn paint(
         return Ok(());
     };
     let count = state.count();
-    let current = state.index;
+    let current = state.display_index();
     let (page, range) = if expanded {
         page_range(state.steps_page, current, count, height)
     } else {
@@ -75,7 +75,9 @@ pub(super) fn paint(
     let page_label = format!("{}–{} / {}", range.start + 1, range.end, count);
     let frames: Vec<_> = range
         .map(|index| {
-            let actual = if state.cut_choices() {
+            let actual = if index == current && state.image.is_some() {
+                state.display_frame_index()
+            } else if state.cut_choices() {
                 state.scenario.frame(index)
             } else {
                 index

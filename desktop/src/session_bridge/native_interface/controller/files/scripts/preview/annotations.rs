@@ -23,6 +23,7 @@ pub(super) fn paint(
     let preview = &world.resource::<Files>().script.preview;
     let Some(retained) = preview.retained.as_ref().filter(|retained| {
         current
+            && preview.animation_complete()
             && retained.descriptor.cues[preview.frame_index()]
                 == Some(crate::native_viewport::script_preview::PreviewCue::Dimension)
     }) else {

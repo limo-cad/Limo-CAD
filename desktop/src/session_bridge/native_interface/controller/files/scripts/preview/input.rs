@@ -46,7 +46,8 @@ pub(crate) fn input(
                 })
         {
             crate::native_viewport::winit_host::cancel_native_pointer(world, handle);
-            let action = escape_action(world.resource::<Files>().script.preview.steps_open);
+            let preview = &world.resource::<Files>().script.preview;
+            let action = escape_action(preview.steps_open, preview.help);
             command(world, handle, action, &ControlInput::Click)?;
             return Ok(true);
         }
@@ -171,9 +172,11 @@ pub(crate) fn input(
     Ok(false)
 }
 
-fn escape_action(steps_open: bool) -> Action {
+fn escape_action(steps_open: bool, instructions_open: bool) -> Action {
     if steps_open {
         Action::Steps
+    } else if instructions_open {
+        Action::Help
     } else {
         Action::Close
     }
@@ -182,6 +185,13 @@ fn escape_action(steps_open: bool) -> Action {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn guided_example_escape_collapses_instructions_before_closing() {
+        assert_eq!(escape_action(false, true), Action::Help);
+        assert_eq!(escape_action(true, true), Action::Steps);
+        assert_eq!(escape_action(false, false), Action::Close);
+    }
 
     #[test]
     fn native_script_preview_escape_dismisses_steps_before_closing_lesson() {

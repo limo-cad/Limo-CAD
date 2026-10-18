@@ -53,6 +53,7 @@ impl FrameImage {
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct Key {
     index: usize,
+    progress: u8,
     size: [u32; 2],
     camera: [u32; 2],
     palette: crate::native_viewport::ViewportPalette,
@@ -62,6 +63,7 @@ impl Key {
     pub fn current(state: &State) -> Self {
         Self {
             index: state.frame_index(),
+            progress: state.animation_progress,
             size: state.size,
             camera: [state.yaw.to_bits(), state.pitch.to_bits()],
             palette: state.palette,

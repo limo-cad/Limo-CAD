@@ -132,6 +132,7 @@ mod tests {
         })).unwrap();
         let (reply, _) = mpsc::sync_channel(1);
         Box::new(RenderJob {
+            progress: 1.0,
             document: Arc::new(
                 crate::native_viewport::script_preview::PreviewDocument::new(vec![frame]).unwrap(),
             ),

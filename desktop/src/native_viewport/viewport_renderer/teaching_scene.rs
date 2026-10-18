@@ -4,6 +4,8 @@ use crate::native_viewport::script_preview::{
     PreviewCue, PreviewDocument, PreviewFinish, RenderRequest,
 };
 
+#[path = "teaching_animation.rs"]
+mod animation;
 const LAYER: usize = 2;
 #[derive(Component)]
 struct TeachingOwned;
@@ -17,6 +19,10 @@ struct TeachingSelection;
 #[derive(Resource, Default)]
 struct Scene {
     active: bool,
+    animation: animation::Motion,
+    progress: f32,
+    geometry_frame: Option<usize>,
+    transform: Transform,
     key: Option<(String, usize)>,
     palette: Option<ViewportPalette>,
     geometry: Vec<Entity>,
@@ -52,6 +58,7 @@ pub(super) fn show(
     document: &PreviewDocument,
     request: &RenderRequest,
     target: Handle<Image>,
+    progress: f32,
 ) -> Result<(), String> {
     let frame = document
         .frames
@@ -65,16 +72,25 @@ pub(super) fn show(
         .palette
         .unwrap_or(world.resource::<PaletteResource>().0);
     let key = (request.preview_id.clone(), request.frame_index);
-    let rebuild = {
-        let scene = world.resource::<Scene>();
-        scene.key.as_ref() != Some(&key) || scene.palette != Some(palette)
-    };
+    let changed = world.resource::<Scene>().key.as_ref() != Some(&key);
+    if changed {
+        world.resource_mut::<Scene>().animation =
+            animation::Motion::new(document, request.frame_index);
+    }
+    let source_index = world
+        .resource::<Scene>()
+        .animation
+        .source(request.frame_index, progress);
+    let source = &document.frames[source_index];
+    let rebuild = changed
+        || world.resource::<Scene>().geometry_frame != Some(source_index)
+        || world.resource::<Scene>().palette != Some(palette);
     if rebuild {
         clear_geometry(world);
         let mut entities = Vec::new();
         let mut mesh_handles = Vec::new();
         let mut material_handles = Vec::new();
-        for body in &frame.scene.bodies {
+        for body in &source.scene.bodies {
             let Some(mesh) = body_mesh(body) else {
                 continue;
             };
@@ -110,12 +126,25 @@ pub(super) fn show(
         scene.geometry = entities;
         scene.meshes = mesh_handles;
         scene.materials = material_handles;
-        scene.solid = Some(frame.scene.clone());
+        scene.solid = Some(source.scene.clone());
+        scene.geometry_frame = Some(source_index);
         scene.profile = frame.profile.clone();
         scene.plane = (frame.cue == Some(PreviewCue::Plane)).then(|| plane_bounds(document));
-        scene.selected = frame.edges.clone();
+        scene.selected = source.edges.clone();
         scene.key = Some(key);
         scene.palette = Some(palette);
+    }
+    let transform = world.resource::<Scene>().animation.transform(progress);
+    let entities = world.resource::<Scene>().geometry.clone();
+    for entity in entities {
+        if let Some(mut value) = world.get_mut::<Transform>(entity) {
+            *value = transform;
+        }
+    }
+    {
+        let mut scene = world.resource_mut::<Scene>();
+        scene.progress = progress;
+        scene.transform = transform;
     }
     // Retain camera/light entity identities across orbit, resize and reopen.
     let mut fixtures = world.resource::<Scene>().fixtures.clone();
@@ -230,7 +259,7 @@ fn draw(
     else {
         return;
     };
-    let transform = Transform::default();
+    let transform = scene.transform;
     for body in &solid.bodies {
         let sides = edge_side_faces(body, &transform);
         for edge in &body.edges {
@@ -247,7 +276,11 @@ fn draw(
                     ceiling: MODEL_EDGE_MAX_LIFT_MM,
                 }),
             );
-            if scene.selected.contains(&edge.id.0) {
+            if scene.selected.contains(&edge.id.0)
+                && scene
+                    .animation
+                    .edge_visible(edge.id.0, &scene.selected, scene.progress)
+            {
                 draw_edge_segments(
                     &mut selected,
                     edge,
@@ -267,21 +300,40 @@ fn draw(
                 };
                 selected.line(
                     point(start),
-                    point(end),
+                    point(start).lerp(point(end), scene.progress),
                     rgba(palette.accent, if index < 4 { 0.85 } else { 0.46 }),
                 );
             }
         }
+        let mut new_index = 0;
+        let new_count = profile
+            .entities
+            .iter()
+            .filter(|entity| scene.animation.is_new_curve(entity))
+            .count();
         for entity in &profile.entities {
+            let fraction = if scene.animation.is_new_curve(entity) {
+                let fraction = (scene.progress * new_count as f32 - new_index as f32).clamp(0., 1.);
+                new_index += 1;
+                fraction
+            } else {
+                1.
+            };
+            let Some(entity) = animation::partial_curve(entity, fraction) else {
+                continue;
+            };
             draw_sketch_curve_at_offset(
                 &mut selected,
                 &profile.basis,
-                entity,
+                &entity,
                 rgb(palette.accent),
                 DIRECT_PICK_FEEDBACK_OFFSET,
             );
         }
     }
+    scene
+        .animation
+        .draw_guide(&mut selected, scene.progress, rgb(palette.accent));
 }
 
 // Match the forthcoming sketch's footprint while retaining the real local origin.
@@ -372,12 +424,17 @@ mod tests {
             pitch: 0.5,
             palette: None,
         };
-        show(&mut world, &document, &request, Handle::default()).unwrap();
+        show(&mut world, &document, &request, Handle::default(), 1.0).unwrap();
         let fixtures = world.resource::<Scene>().fixtures.clone();
         let meshes = world.resource::<Scene>().meshes.clone();
+        for progress in [0., 0.25, 0.5, 0.75, 1.] {
+            show(&mut world, &document, &request, Handle::default(), progress).unwrap();
+            assert_eq!(world.resource::<Scene>().meshes, meshes);
+            assert_eq!(world.resource::<Scene>().fixtures, fixtures);
+        }
         hide(&mut world);
         request.yaw = 0.8;
-        show(&mut world, &document, &request, Handle::default()).unwrap();
+        show(&mut world, &document, &request, Handle::default(), 1.0).unwrap();
         assert_eq!(world.resource::<Scene>().fixtures, fixtures);
         assert_eq!(world.resource::<Scene>().meshes, meshes);
         assert_eq!(world.resource::<ModelResource>().session_id, before.0);

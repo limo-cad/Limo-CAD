@@ -1,5 +1,13 @@
 {
   "en": {
+    "ui.guidedExamples": "Guided examples",
+    "ui.instructions": "Instructions",
+    "ui.hideInstructions": "Hide instructions",
+    "ui.resume": "Resume",
+    "sketch.example": "Sketch example",
+    "extrude.example": "Extrude example",
+    "cut.example": "Cut example",
+    "fillet.example": "Fillet example",
     "step.through": "Through",
     "ui.allSteps": "All steps",
     "ui.hideSteps": "Back to model",
@@ -111,6 +119,14 @@
     "action.fillet.apply": "Apply the fillet"
   },
   "zh-CN": {
+    "ui.guidedExamples": "操作示例",
+    "ui.instructions": "操作说明",
+    "ui.hideInstructions": "收起说明",
+    "ui.resume": "继续播放",
+    "sketch.example": "草图示例",
+    "extrude.example": "拉伸示例",
+    "cut.example": "切除示例",
+    "fillet.example": "圆角示例",
     "step.through": "贯穿",
     "ui.allSteps": "全部步骤",
     "ui.hideSteps": "返回模型",
@@ -222,6 +238,14 @@
     "action.fillet.apply": "应用圆角"
   },
   "es": {
+    "ui.guidedExamples": "Ejemplos guiados",
+    "ui.instructions": "Instrucciones",
+    "ui.hideInstructions": "Ocultar instrucciones",
+    "ui.resume": "Continuar",
+    "sketch.example": "Ejemplo de boceto",
+    "extrude.example": "Ejemplo de extrusión",
+    "cut.example": "Ejemplo de corte",
+    "fillet.example": "Ejemplo de redondeo",
     "step.through": "Pasante",
     "ui.allSteps": "Todos los pasos",
     "ui.hideSteps": "Volver al modelo",
@@ -333,6 +357,14 @@
     "action.fillet.apply": "Aplicar el redondeo"
   },
   "de": {
+    "ui.guidedExamples": "Geführte Beispiele",
+    "ui.instructions": "Anleitung",
+    "ui.hideInstructions": "Anleitung schließen",
+    "ui.resume": "Fortsetzen",
+    "sketch.example": "Skizzenbeispiel",
+    "extrude.example": "Extrusionsbeispiel",
+    "cut.example": "Schnittbeispiel",
+    "fillet.example": "Rundungsbeispiel",
     "step.through": "Durch",
     "ui.allSteps": "Alle Schritte",
     "ui.hideSteps": "Zum Modell",

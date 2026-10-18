@@ -160,7 +160,7 @@ pub(crate) fn paint_hint(
             keep_hint(
                 p,
                 anchor,
-                [cx, cy, cw, 76.],
+                [cx, cy, cw, 44. + entries.len() as f32 * 36.],
                 world.resource::<Hint>().anchor == Some(entity) && world.resource::<Hint>().open,
             )
         });
@@ -204,7 +204,7 @@ pub(crate) fn paint_hint(
         Node {
             border: UiRect::all(px(1.)),
             border_radius: BorderRadius::all(px(6.)),
-            ..rect(x, y, w, 76.)
+            ..rect(x, y, w, 44. + entries(id).len() as f32 * 36.)
         },
         theme.panel.with_alpha(1.),
         65,
@@ -214,24 +214,24 @@ pub(crate) fn paint_hint(
         camera,
         "extrude-help-title",
         rect(x + 12., y + 8., w - 24., 20.),
-        t(&format!("{}.outcome", id.key())),
-        15.,
+        t("ui.guidedExamples"),
+        12.,
         66,
     );
     let entries = entries(id);
+    widgets.panel(
+        world,
+        camera,
+        "guided-examples-divider",
+        rect(x + 12., y + 34., w - 24., 1.),
+        theme.edge,
+        66,
+    );
     let mut previous = anchor;
     for (index, id) in entries.iter().enumerate() {
-        let mut control = InterfaceControl::button(
-            "solid/build",
-            format!("{}: {}", t("ui.showMe"), id.title(language)),
-        );
+        let caption = t(&format!("{}.example", id.key()));
+        let mut control = InterfaceControl::button("document/scripts", caption);
         control.disabled = available(world).is_err();
-        control.selected = Some(index == 0);
-        let caption = if index == 0 {
-            t("ui.showMe")
-        } else {
-            id.title(language)
-        };
         let entry = widgets.button(
             world,
             camera,
@@ -239,8 +239,8 @@ pub(crate) fn paint_hint(
             control,
             Some(caption),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Lesson(*id))),
-            rect(x + 8. + index as f32 * 132., y + 42., 128., 26.),
-            None,
+            rect(x + 8., y + 40. + index as f32 * 36., w - 16., 32.),
+            Some(interface_shell::ribbon::Icon::Book),
             66,
         )?;
         if let Some(handle) = world.get_resource::<NativeInterfaceHandle>() {
@@ -297,6 +297,7 @@ pub(super) fn focus_control(world: &mut World, entity: Entity) {
 #[derive(Default)]
 pub(super) struct HelpView {
     pub offset: f32,
+    pub(super) return_focus: bool,
     max: f32,
     bounds: [f32; 4],
 }
@@ -363,23 +364,25 @@ pub(super) fn help_input(
     Ok(true)
 }
 
-pub(super) fn paint_help(
+pub(super) fn paint_instructions(
     world: &mut World,
     camera: Entity,
     widgets: &mut chrome::Widgets,
-    width: f32,
-    height: f32,
+    bounds: [f32; 4],
     theme: ViewportUiTheme,
 ) -> Result<(), String> {
     let id = lesson::current(world).unwrap_or(lesson::Id::Sketch);
     let language = lesson::language(world);
     let t = |key: &str| limo_cad_mcp::lessons::text(language, key);
-    let card = card::Card::new(width);
-    let (x, y, w) = (card.x, card.y, card.width);
-    let h = 364_f32.min((height - y - 16.).max(180.));
-    card.paint(world, camera, widgets, "help", h, id.title(language), theme)?;
     let body = help(id, language);
-    let bounds = [x + 12., y + 44., w - 28., h - 156.];
+    let footer = if id.prerequisite().is_some() { 40. } else { 0. };
+    let outer = bounds;
+    let bounds = [
+        bounds[0],
+        bounds[1],
+        bounds[2] - 8.,
+        (bounds[3] - footer).max(32.),
+    ];
     let content_height = widgets
         .entity("extrude-help-text")
         .and_then(|entity| world.get::<ComputedNode>(entity))
@@ -391,7 +394,7 @@ pub(super) fn paint_help(
     let (offset, max) = (view.offset, view.max);
     let mut control = InterfaceControl::button(
         "document/scripts",
-        format!("{}: {}", id.title(language), t("ui.help")),
+        format!("{}: {}", id.title(language), t("ui.instructions")),
     );
     control.role = "region".into();
     control.owned_keys = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"]
@@ -429,7 +432,7 @@ pub(super) fn paint_help(
             camera,
             "extrude-help-scrollbar",
             rect(
-                x + w - 10.,
+                bounds[0] + bounds[2] + 4.,
                 bounds[1] + (bounds[3] - thumb_height) * offset / max,
                 2.,
                 thumb_height,
@@ -438,43 +441,6 @@ pub(super) fn paint_help(
             62,
         );
     }
-    let retained = world.resource::<Files>().script.preview.retained.is_some();
-    let back_label = if retained {
-        t("ui.back")
-    } else {
-        t("ui.lessons")
-    };
-    let back_action = if retained {
-        Action::Demo
-    } else {
-        Action::Index
-    };
-    widgets.button(
-        world,
-        camera,
-        "extrude-help-back",
-        InterfaceControl::button("document/scripts", back_label),
-        Some(back_label),
-        NativeCommand::File(FileCommand::ScriptPreview(back_action)),
-        rect(x + 8., y + h - 40., w - 16., 28.),
-        None,
-        61,
-    )?;
-    widgets.button(
-        world,
-        camera,
-        "lesson-play",
-        InterfaceControl::button("document/scripts", t("ui.showMe")),
-        Some(t("ui.showMe")),
-        NativeCommand::File(FileCommand::ScriptPreview(if retained {
-            Action::Demo
-        } else {
-            Action::Lesson(id)
-        })),
-        rect(x + 8., y + h - 104., 140., 28.),
-        Some(interface_shell::ribbon::Icon::Book),
-        61,
-    )?;
     if let Some(previous) = id.prerequisite() {
         let label = format!("{} {}", t("ui.prerequisite"), previous.title(language));
         widgets.button(
@@ -484,12 +450,14 @@ pub(super) fn paint_help(
             InterfaceControl::button("document/scripts", &label),
             Some(&label),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Read(previous))),
-            rect(x + 8., y + h - 72., w - 16., 28.),
-            None,
+            rect(outer[0], outer[1] + outer[3] - 32., outer[2], 32.),
+            Some(interface_shell::ribbon::Icon::Book),
             61,
         )?;
     }
-    focus_control(world, clip);
+    if !world.resource::<Files>().script.preview.steps_open {
+        focus_control(world, clip);
+    }
     Ok(())
 }
 
@@ -511,7 +479,7 @@ pub(super) fn paint_index(
         widgets,
         "index",
         124. + lesson::ALL.len() as f32 * 62.,
-        t("ui.lessons"),
+        t("ui.guidedExamples"),
         theme,
     )?;
     for (index, id) in lesson::ALL.into_iter().enumerate() {
@@ -520,8 +488,8 @@ pub(super) fn paint_index(
             world,
             camera,
             &format!("help-{}", id.key()),
-            InterfaceControl::button("document/scripts", id.title(language)),
-            Some(t(&format!("{}.outcome", id.key()))),
+            InterfaceControl::button("document/scripts", t(&format!("{}.example", id.key()))),
+            Some(t(&format!("{}.example", id.key()))),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Lesson(id))),
             rect(x + 8., top, w - 16., 28.),
             Some(interface_shell::ribbon::Icon::Book),
@@ -532,7 +500,7 @@ pub(super) fn paint_index(
             camera,
             &format!("help-summary-{}", id.key()),
             rect(x + 12., top + 28., w - 24., 28.),
-            id.title(language),
+            t(&format!("{}.outcome", id.key())),
             11.,
             61,
             theme.mute,

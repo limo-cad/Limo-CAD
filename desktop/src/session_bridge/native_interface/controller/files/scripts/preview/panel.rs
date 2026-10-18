@@ -12,9 +12,6 @@ pub(crate) fn paint(
     if world.resource::<Files>().script.preview.index_open {
         return feature::paint_index(world, camera, widgets, width, height, theme);
     }
-    if world.resource::<Files>().script.preview.help {
-        return feature::paint_help(world, camera, widgets, width, height, theme);
-    }
     let demo = lesson::current(world);
     let language = lesson::language(world);
     let t = |key: &str| limo_cad_mcp::lessons::text(language, key);
@@ -22,9 +19,17 @@ pub(crate) fn paint(
     let (x, y, w) = (card.x, card.y, card.width);
     let image_width = w - 24.;
     let choices = world.resource::<Files>().script.preview.lesson == Some(lesson::Id::Cut);
+    let instructions = world.resource::<Files>().script.preview.help;
+    let side_instructions = instructions && width >= 680.;
     let choice_height = if choices { 36. } else { 0. };
     let trail_height = if demo.is_some() { 32. } else { 0. };
-    let image_height = ((image_width * 0.72).min((height - y - 200. - trail_height).max(64.))
+    let instructions_height = if instructions && !side_instructions {
+        (height - y - 16. - (64. + choice_height + trail_height + 192.)).clamp(0., 148.)
+    } else {
+        0.
+    };
+    let image_height = ((image_width * 0.72)
+        .min((height - y - 200. - trail_height - instructions_height).max(64.))
         - choice_height)
         .max(64.);
     let scale = world
@@ -58,11 +63,11 @@ pub(crate) fn paint(
         preview.size = size;
         preview.changed()?;
     }
-    let (index, count, playing) = (preview.index, preview.count(), preview.playing);
-    let image = (preview.image_index == Some(index))
-        .then(|| preview.image.clone())
-        .flatten();
-    let current = image.is_some() && preview.rendered == preview.revision;
+    let index = preview.display_index();
+    let (count, playing) = (preview.count(), preview.playing);
+    let terminal = index + 1 == count && preview.animation_complete();
+    let image = preview.image.clone();
+    let current = preview.image_ready();
     let ready = preview.retained.is_some();
     let caption = preview.error.clone().unwrap_or_else(|| {
         preview
@@ -71,20 +76,62 @@ pub(crate) fn paint(
             .map(|r| {
                 limo_cad_mcp::lessons::caption(
                     language,
-                    &r.descriptor.captions[preview.frame_index()],
+                    &r.descriptor.captions[preview.display_frame_index()],
                 )
             })
             .unwrap_or_else(|| t("ui.preparing").into())
     });
-    card.paint(
+    let card_height = image_height + choice_height + trail_height + 192. + instructions_height;
+    let shell = if side_instructions {
+        card::Card {
+            x: x - 288.,
+            y,
+            width: w + 288.,
+        }
+    } else {
+        card
+    };
+    shell.paint(
         world,
         camera,
         widgets,
         "demo",
-        image_height + choice_height + trail_height + 192.,
-        demo.map_or(t("ui.showMe"), |d| d.title(language)),
+        card_height,
+        demo.map_or(t("ui.guidedExamples"), |d| {
+            t(&format!("{}.example", d.key()))
+        }),
         theme,
     )?;
+    if instructions {
+        let bounds = if side_instructions {
+            widgets.panel(
+                world,
+                camera,
+                "guide-instructions-divider",
+                rect(x - 8., y + 44., 1., card_height - 56.),
+                theme.edge,
+                61,
+            );
+            [shell.x + 12., y + 44., 264., card_height - 56.]
+        } else {
+            let top = y + card_height - instructions_height;
+            widgets.panel(
+                world,
+                camera,
+                "guide-instructions-divider",
+                rect(x + 12., top, w - 24., 1.),
+                theme.edge,
+                61,
+            );
+            [
+                x + 12.,
+                top + 8.,
+                w - 24.,
+                (instructions_height - 16.).max(32.),
+            ]
+        };
+        feature::paint_instructions(world, camera, widgets, bounds, theme)?;
+    }
     let expanded = world.resource::<Files>().script.preview.steps_open;
     if expanded {
         let label = format!("‹  {}", t("ui.hideSteps"));
@@ -99,20 +146,29 @@ pub(crate) fn paint(
             NativeCommand::File(FileCommand::ScriptPreview(Action::Steps)),
             Node {
                 border: UiRect::all(px(1.)),
-                ..rect(x + 12., y + 44., w - 104., 32.)
+                ..rect(x + 12., y + 44., w - 164., 32.)
             },
             None,
             61,
         )?;
+        let mut instructions_control = InterfaceControl::button(
+            "document/scripts",
+            t(if instructions {
+                "ui.hideInstructions"
+            } else {
+                "ui.instructions"
+            }),
+        );
+        instructions_control.expanded = Some(instructions);
         widgets.button(
             world,
             camera,
             "extrude-open-help",
-            InterfaceControl::button("document/scripts", t("ui.help")),
-            Some(t("ui.help")),
+            instructions_control,
+            Some(t("ui.instructions")),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Help)),
-            rect(x + w - 84., y + 44., 68., 32.),
-            None,
+            rect(x + w - 140., y + 44., 128., 32.),
+            Some(interface_shell::ribbon::Icon::Book),
             61,
         )?;
         widgets.text(
@@ -163,7 +219,14 @@ pub(crate) fn paint(
             None,
             61,
         )?;
-        if !world.resource::<Files>().script.preview.steps_return_focus {
+        if !world.resource::<Files>().script.preview.steps_return_focus
+            && !world
+                .resource::<Files>()
+                .script
+                .preview
+                .help_view
+                .return_focus
+        {
             feature::focus_control(world, entity);
         }
         if let Some(image) = image {
@@ -223,7 +286,7 @@ pub(crate) fn paint(
             NativeCommand::File(FileCommand::ScriptPreview(Action::Steps)),
             Node {
                 border: UiRect::all(px(1.)),
-                ..rect(x + 64., top - 4., w - 156., 32.)
+                ..rect(x + 60., top - 4., w - 208., 32.)
             },
             None,
             61,
@@ -246,17 +309,54 @@ pub(crate) fn paint(
         }
     }
     if demo.is_some() {
-        widgets.button(
+        let mut control = InterfaceControl::button(
+            "document/scripts",
+            t(if instructions {
+                "ui.hideInstructions"
+            } else {
+                "ui.instructions"
+            }),
+        );
+        control.expanded = Some(instructions);
+        let instructions_label = format!(
+            "{} {}",
+            t("ui.instructions"),
+            if instructions { "▴" } else { "▾" }
+        );
+        let instructions_button = widgets.button(
             world,
             camera,
             "extrude-open-help",
-            InterfaceControl::button("document/scripts", t("ui.help")),
-            Some(t("ui.help")),
+            control,
+            Some(&instructions_label),
             NativeCommand::File(FileCommand::ScriptPreview(Action::Help)),
-            rect(x + w - 84., top - 4., 68., 24.),
-            None,
+            rect(x + w - 140., top - 4., 128., 32.),
+            Some(interface_shell::ribbon::Icon::Book),
             61,
         )?;
+        if world
+            .resource::<Files>()
+            .script
+            .preview
+            .help_view
+            .return_focus
+        {
+            feature::focus_control(world, instructions_button);
+            if world
+                .resource::<Files>()
+                .script
+                .preview
+                .focus_owner
+                .is_none()
+            {
+                world
+                    .resource_mut::<Files>()
+                    .script
+                    .preview
+                    .help_view
+                    .return_focus = false;
+            }
+        }
     }
     widgets.text(
         world,
@@ -283,10 +383,10 @@ pub(crate) fn paint(
     )?;
     let (label, action) = if playing {
         (t("ui.pause"), Action::Stop)
-    } else if index + 1 < count {
-        (t("ui.next"), Action::Next)
-    } else {
+    } else if terminal {
         (t("ui.replay"), Action::Replay)
+    } else {
+        (t("ui.resume"), Action::Resume)
     };
     let mut primary = InterfaceControl::button("document/scripts", label);
     primary.disabled = !ready;
@@ -300,13 +400,26 @@ pub(crate) fn paint(
         NativeCommand::File(FileCommand::ScriptPreview(action)),
         Node {
             justify_content: JustifyContent::Center,
-            ..rect(x + 56., buttons, w - 68., 32.)
+            ..rect(x + 56., buttons, w - 156., 32.)
         },
         None,
         61,
     )?;
+    let mut next = InterfaceControl::button("document/scripts", t("ui.next"));
+    next.disabled = !ready || index + 1 >= count;
+    widgets.button(
+        world,
+        camera,
+        "scripts-preview-next",
+        next,
+        Some(t("ui.next")),
+        NativeCommand::File(FileCommand::ScriptPreview(Action::Next)),
+        rect(x + w - 92., buttons, 80., 32.),
+        None,
+        61,
+    )?;
     // Offer the second outcome only after the first has been understood.
-    if choices && ready && index + 1 == count {
+    if choices && ready && terminal {
         let scenario = world.resource::<Files>().script.preview.scenario;
         let other = lesson::CutScenario::ALL
             .into_iter()

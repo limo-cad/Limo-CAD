@@ -9,7 +9,7 @@ pub(super) struct Card {
 }
 impl Card {
     pub fn new(width: f32) -> Self {
-        let w = (width - 32.).clamp(280., 320.);
+        let w = (width - 32.).clamp(280., 360.);
         Self {
             x: (width - w - 16.).max(4.),
             y: 44.,
@@ -46,19 +46,7 @@ impl Card {
         if world.get::<BoxShadow>(entity) != Some(&shadow) {
             world.entity_mut(entity).insert(shadow);
         }
-        let suffix = lesson::text(
-            world,
-            if view == "help" {
-                "ui.help"
-            } else {
-                "ui.showMe"
-            },
-        );
-        let heading = if view == "index" {
-            title.to_owned()
-        } else {
-            format!("{title} · {suffix}")
-        };
+        let heading = title.to_owned();
         let close = lesson::text(world, "ui.close");
         widgets.text(
             world,

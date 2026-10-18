@@ -62,6 +62,13 @@ impl Timer {
             .0
             .lock()
             .map_err(|_| "Operation hint timer stopped")?;
+        if state
+            .job
+            .as_ref()
+            .is_some_and(|(previous, token)| *previous == due && Arc::ptr_eq(token, &cancelled))
+        {
+            return Ok(());
+        }
         if let Some((_, old)) = state.job.replace((due, cancelled)) {
             old.store(true, Ordering::Release);
         }
@@ -113,6 +120,11 @@ mod tests {
             timer.arm(deadline, token.clone()).unwrap();
             tokens.push(token);
         }
+        timer.arm(deadline, tokens.last().unwrap().clone()).unwrap();
+        assert!(
+            !tokens.last().unwrap().load(Ordering::Acquire),
+            "Repainting the same deadline must not cancel its wake"
+        );
         assert_eq!(timer.worker.as_ref().unwrap().thread().id(), worker);
         assert!(tokens[..tokens.len() - 1]
             .iter()

@@ -971,6 +971,7 @@ fn render_teaching(
         &job.document,
         &job.request,
         target_handle.clone(),
+        job.progress,
     )?;
     let cameras: Vec<_> = {
         let world = app.world_mut();

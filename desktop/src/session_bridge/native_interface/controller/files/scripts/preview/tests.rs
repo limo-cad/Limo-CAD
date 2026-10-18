@@ -63,6 +63,105 @@ fn image() -> images::FrameImage {
 }
 
 #[test]
+fn native_script_preview_animation_retains_displayed_frame_and_pause_resumes_progress() {
+    let mut world = world();
+    let (view, _, _) = retained(&mut world);
+    let handle = NativeInterfaceHandle::new(|| {});
+    {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.animation_progress = 7;
+        preview.playing = true;
+    }
+    let revision = world.resource::<Files>().script.preview.revision;
+    publish(
+        &mut world,
+        Rendered {
+            view: view.clone(),
+            revision,
+            image: image(),
+        },
+    )
+    .unwrap();
+    let displayed = world
+        .resource::<Files>()
+        .script
+        .preview
+        .image
+        .clone()
+        .unwrap();
+    let now = Instant::now();
+    {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.wake = Some(Wake {
+            due: now,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        });
+        replay(preview, &handle, now).unwrap();
+        assert_eq!(preview.animation_progress, 8);
+        assert_eq!(preview.image.as_ref(), Some(&displayed));
+        assert!(
+            preview.images.get(images::Key::current(preview)).is_none(),
+            "A different animation sample must not reuse old pixels"
+        );
+        assert_ne!(preview.rendered, preview.revision);
+    }
+    command(&mut world, &handle, Action::Stop, &ControlInput::Click).unwrap();
+    command(&mut world, &handle, Action::Resume, &ControlInput::Click).unwrap();
+    assert_eq!(
+        world.resource::<Files>().script.preview.animation_progress,
+        8
+    );
+    assert!(world.resource::<Assets<Image>>().contains(displayed.id()));
+    command(&mut world, &handle, Action::Step(2), &ControlInput::Click).unwrap();
+    let preview = &world.resource::<Files>().script.preview;
+    assert_eq!(
+        preview.display_index(),
+        0,
+        "Delayed replacement keeps the old image's stage identity"
+    );
+    assert_eq!(preview.display_frame_index(), 0);
+    assert_eq!(preview.image.as_ref(), Some(&displayed));
+    assert!(
+        preview.animation_complete(),
+        "Direct step selection shows its completed result"
+    );
+    let revision = preview.revision;
+    publish(
+        &mut world,
+        Rendered {
+            view,
+            revision,
+            image: image(),
+        },
+    )
+    .unwrap();
+    assert_eq!(world.resource::<Files>().script.preview.display_index(), 2);
+}
+
+#[test]
+fn native_script_preview_deadline_arming_never_advances_after_render() {
+    let mut world = world();
+    retained(&mut world);
+    let preview = &mut world.resource_mut::<Files>().script.preview;
+    preview.playing = true;
+    preview.animation_progress = 8;
+    preview.rendered = preview.revision;
+    let revision = preview.revision;
+    let now = Instant::now();
+    preview.render_started = Some(now - Duration::from_secs(1));
+    arm_replay(preview, now);
+    let due = preview.wake.as_ref().unwrap().due;
+    arm_replay(preview, due + Duration::from_secs(1));
+    assert_eq!(preview.revision, revision);
+    assert_eq!(preview.animation_progress, 8);
+    assert_eq!(
+        preview.wake.as_ref().unwrap().due,
+        due,
+        "An overdue wake must survive post-render arming so the event loop runs another update"
+    );
+}
+
+#[test]
 fn native_script_preview_step_navigation_pauses_and_rejects_invalid_targets() {
     let mut world = world();
     let handle = NativeInterfaceHandle::new(|| {});
@@ -112,8 +211,8 @@ fn native_script_preview_step_navigation_pauses_and_rejects_invalid_targets() {
     assert!(!state.steps_open && !state.playing);
     assert!(state.revision > revision);
     command(&mut world, &handle, Action::Help, &ControlInput::Click).unwrap();
-    assert!(command(&mut world, &handle, Action::Step(0), &ControlInput::Click).is_err());
-    assert!(command(&mut world, &handle, Action::Steps, &ControlInput::Click).is_err());
+    assert!(command(&mut world, &handle, Action::Step(0), &ControlInput::Click).is_ok());
+    assert!(command(&mut world, &handle, Action::Steps, &ControlInput::Click).is_ok());
     close(&mut world);
     assert!(command(&mut world, &handle, Action::Step(0), &ControlInput::Click).is_err());
 }
@@ -200,12 +299,19 @@ fn native_script_preview_cut_choices_share_opening_frames_and_fence_stale_result
         },
     )
     .unwrap();
-    assert!(world
-        .resource::<Files>()
-        .script
-        .preview
-        .image_index
-        .is_none());
+    assert_eq!(
+        world.resource::<Files>().script.preview.image_index,
+        Some(3)
+    );
+    assert_eq!(
+        world
+            .resource::<Files>()
+            .script
+            .preview
+            .display_frame_index(),
+        5,
+        "The previous measured-cut result remains identified until its replacement arrives"
+    );
     for _ in 0..20 {
         for scenario in lesson::CutScenario::ALL {
             command(
@@ -231,7 +337,7 @@ fn native_script_preview_cut_choices_share_opening_frames_and_fence_stale_result
                 Action::Scenario(scenario),
                 &ControlInput::Click
             )
-            .is_err());
+            .is_ok());
             command(&mut world, &handle, Action::Demo, &ControlInput::Click).unwrap();
             assert_eq!(world.resource::<Files>().script.preview.scenario, scenario);
             command(&mut world, &handle, Action::Replay, &ControlInput::Click).unwrap();
@@ -397,6 +503,21 @@ fn native_script_preview_help_entry_is_localized_dormant_and_restores_the_draft(
         }
         for id in lesson::ALL {
             command(&mut world, &handle, Action::Read(id), &ControlInput::Click).unwrap();
+            let channel = world
+                .resource_mut::<Files>()
+                .script
+                .preview
+                .build
+                .take()
+                .unwrap();
+            let frames = channel
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap()
+                .unwrap();
+            let preview = &mut world.resource_mut::<Files>().script.preview;
+            preview.retained = Some(Retained::new(preview.service.clone(), frames).unwrap());
             widgets.begin();
             panel::paint(&mut world, camera, &mut widgets, 700., 440., theme).unwrap();
             widgets.finish(&mut world);
@@ -407,7 +528,7 @@ fn native_script_preview_help_entry_is_localized_dormant_and_restores_the_draft(
             );
             let preview = &world.resource::<Files>().script.preview;
             assert!(
-                preview.build.is_none() && preview.render.is_none() && preview.retained.is_none()
+                preview.build.is_none() && preview.render.is_none() && preview.retained.is_some()
             );
             assert_eq!(preview.render_jobs, 0);
         }
@@ -419,7 +540,7 @@ fn native_script_preview_help_entry_is_localized_dormant_and_restores_the_draft(
 }
 
 #[test]
-fn native_script_preview_cached_replay_arms_every_frame_without_gpu_completion_wakes() {
+fn native_script_preview_resume_uses_cached_current_progress_without_reset() {
     let mut world = world();
     let (view, _, _) = retained(&mut world);
     world
@@ -449,20 +570,27 @@ fn native_script_preview_cached_replay_arms_every_frame_without_gpu_completion_w
         )
         .unwrap();
     }
-    command(&mut world, &handle, Action::Replay, &ControlInput::Click).unwrap();
-    poll(&mut world);
-    for index in 0..1 {
+    {
         let preview = &mut world.resource_mut::<Files>().script.preview;
-        assert_eq!(preview.index, index);
-        preview
-            .wake
-            .as_mut()
-            .expect("Cached frame needs its own next wake")
-            .due = Instant::now();
-        poll(&mut world);
+        preview.index = 0;
+        preview.animation_progress = ANIMATION_STEPS;
+        preview.changed().unwrap();
     }
+    command(&mut world, &handle, Action::Resume, &ControlInput::Click).unwrap();
+    poll(&mut world);
+    {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        assert_eq!(preview.index, 0);
+        assert_eq!(preview.animation_progress, ANIMATION_STEPS);
+        assert!(
+            preview.wake.is_some(),
+            "Cached completion must arm the readable hold"
+        );
+        assert_eq!(preview.render_jobs, 0);
+    }
+    command(&mut world, &handle, Action::Stop, &ControlInput::Click).unwrap();
     let preview = &world.resource::<Files>().script.preview;
-    assert_eq!(preview.index, 1);
+    assert_eq!(preview.index, 0);
     assert_eq!(preview.render_jobs, 0);
     assert!(!preview.playing);
     assert!(preview.wake.is_none());
@@ -535,9 +663,8 @@ fn native_script_preview_extrude_preserves_dirty_source_and_help_does_not_advanc
     assert_eq!(frames.len(), 5);
     let preview = &mut world.resource_mut::<Files>().script.preview;
     preview.retained = Some(Retained::new(preview.service.clone(), frames).unwrap());
-    assert!(!preview.playing, "Contextual lessons wait for the learner");
+    assert!(preview.playing, "Guided examples start automatic playback");
     command(&mut world, &handle, Action::Help, &ControlInput::Click).unwrap();
-    assert!(command(&mut world, &handle, Action::Next, &ControlInput::Click).is_err());
     let preview = &world.resource::<Files>().script.preview;
     assert_eq!(preview.index, 0);
     assert!(!preview.playing);
@@ -719,6 +846,7 @@ fn native_script_preview_keys_and_replay_wait_for_current_frame_and_stop_at_last
     );
     assert!(preview.wake.is_none());
     for target in 1..3 {
+        preview.animation_progress = ANIMATION_STEPS;
         preview.rendered = preview.revision;
         let cancelled = Arc::new(AtomicBool::new(false));
         preview.wake = Some(Wake {
@@ -729,6 +857,13 @@ fn native_script_preview_keys_and_replay_wait_for_current_frame_and_stop_at_last
         assert_eq!(preview.index, target);
         assert!(cancelled.load(Ordering::Acquire));
     }
+    preview.animation_progress = ANIMATION_STEPS;
+    preview.rendered = preview.revision;
+    preview.wake = Some(Wake {
+        due: now,
+        cancelled: Arc::new(AtomicBool::new(false)),
+    });
+    replay(preview, &handle, now).unwrap();
     assert!(!preview.playing);
     preview.turn(100000., 999.).unwrap();
     assert_eq!(preview.pitch, 1.3);

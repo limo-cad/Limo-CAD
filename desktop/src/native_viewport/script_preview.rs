@@ -390,6 +390,7 @@ pub(crate) struct RenderedTexture {
 pub(super) struct RenderJob {
     pub document: Arc<PreviewDocument>,
     pub request: RenderRequest,
+    pub progress: f32,
     pub cancelled: Arc<AtomicBool>,
     pub reply: mpsc::SyncSender<Result<RenderedTexture, String>>,
     pub deadline: Instant,
@@ -557,6 +558,17 @@ impl PreviewService {
     }
 
     pub fn render(&self, request: RenderRequest) -> Result<PendingRender, String> {
+        self.render_animated(request, 1.0)
+    }
+
+    pub fn render_animated(
+        &self,
+        request: RenderRequest,
+        progress: f32,
+    ) -> Result<PendingRender, String> {
+        if !progress.is_finite() || !(0.0..=1.0).contains(&progress) {
+            return Err("Invalid feature preview animation progress".into());
+        }
         request.validate()?;
         let mut state = self.0.lock().map_err(|_| "Preview cache lock poisoned")?;
         let document = state
@@ -583,6 +595,7 @@ impl PreviewService {
         let command = Box::new(RenderJob {
             document,
             request,
+            progress,
             cancelled: cancelled.clone(),
             reply,
             deadline,
@@ -949,6 +962,17 @@ mod tests {
             .render(request(descriptor.preview_id, view, 1))
             .unwrap_err()
             .contains("not ready"));
+    }
+
+    #[test]
+    fn native_preview_animation_rejects_invalid_progress_before_submitting() {
+        let service = PreviewService::default();
+        for progress in [f32::NAN, f32::INFINITY, -0.01, 1.01] {
+            assert!(service
+                .render_animated(request(String::new(), String::new(), 1), progress)
+                .unwrap_err()
+                .contains("animation progress"));
+        }
     }
 
     #[test]

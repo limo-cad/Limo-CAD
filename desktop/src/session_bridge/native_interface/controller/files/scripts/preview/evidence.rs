@@ -267,8 +267,9 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
                     .query::<(&Text, &ComputedNode, &bevy::ui::UiGlobalTransform)>()
                     .iter(app.world())
                     .find_map(|(text, node, transform)| {
-                        (text.0.contains(" · ")
-                            || text.0 == lesson::text(app.world(), "ui.lessons"))
+                        (lesson::ALL.into_iter().any(|id| {
+                            text.0 == lesson::text(app.world(), &format!("{}.example", id.key()))
+                        }) || text.0 == lesson::text(app.world(), "ui.guidedExamples"))
                         .then_some((*node, *transform))
                     })
                     .expect("Native title is laid out");
@@ -568,9 +569,9 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         {
             let preview = &mut app.world_mut().resource_mut::<Files>().script.preview;
             preview.index = index;
-            if index != 0 {
-                preview.changed().unwrap();
-            }
+            preview.playing = false;
+            preview.animation_progress = ANIMATION_STEPS;
+            preview.changed().unwrap();
         }
         widgets.begin();
         panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
@@ -619,7 +620,7 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
                 .unwrap()
                 .command,
             NativeCommand::File(FileCommand::ScriptPreview(if index + 1 < durations.len() {
-                Action::Next
+                Action::Resume
             } else {
                 Action::Replay
             }))
@@ -833,6 +834,88 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     widgets.finish(app.world_mut());
     capture(&mut app, &target, &out.join("help.png"));
     command(app.world_mut(), &handle, Action::Demo, &ControlInput::Click).unwrap();
+    // Sample real intermediate presentation states, using the same bounded GPU path.
+    let motion_step = if id == lesson::Id::Sketch { 1 } else { 2 };
+    let mut previous_pixels = None;
+    let mut distinct_samples = 0;
+    for progress in [0, 4, 8, 12, 16, 20] {
+        command(
+            app.world_mut(),
+            &handle,
+            Action::Step(motion_step),
+            &ControlInput::Click,
+        )
+        .unwrap();
+        {
+            let preview = &mut app.world_mut().resource_mut::<Files>().script.preview;
+            preview.animation_progress = progress;
+            preview.changed().unwrap();
+        }
+        settle(&mut app);
+        widgets.begin();
+        panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
+        widgets.finish(app.world_mut());
+        let path = out.join(format!("motion-{progress:02}.png"));
+        capture(&mut app, &target, &path);
+        let pixels = std::fs::read(path).unwrap();
+        if previous_pixels.as_ref() != Some(&pixels) {
+            distinct_samples += 1;
+        }
+        previous_pixels = Some(pixels);
+    }
+    assert!(
+        distinct_samples >= 3,
+        "{id:?} must show visible progress, not repeated endpoint images"
+    );
+    if id == lesson::Id::Sketch {
+        command(
+            app.world_mut(),
+            &handle,
+            Action::Replay,
+            &ControlInput::Click,
+        )
+        .unwrap();
+        let begin = Instant::now();
+        let jobs = app.world().resource::<Files>().script.preview.render_jobs;
+        loop {
+            update(&mut app);
+            poll(app.world_mut());
+            widgets.begin();
+            panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
+            widgets.finish(app.world_mut());
+            let preview = &app.world().resource::<Files>().script.preview;
+            assert!(preview.error.is_none(), "{:?}", preview.error);
+            let model = widgets.entity("scripts-preview-model").unwrap();
+            assert!(
+                app.world().get::<ImageNode>(model).is_some(),
+                "Autoplay must retain its visible model while a replacement is pending"
+            );
+            assert!(preview.images.footprint().1 <= 2 * 1024 * 1024);
+            if !preview.playing {
+                break;
+            }
+            assert!(
+                begin.elapsed() < Duration::from_secs(45),
+                "Automatic guide did not complete"
+            );
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let preview = &app.world().resource::<Files>().script.preview;
+        assert_eq!(preview.index + 1, preview.count());
+        assert!(preview.animation_complete());
+        assert!(
+            preview.render_jobs - jobs <= 3 * (usize::from(ANIMATION_STEPS) + 1) + 2,
+            "Static cues must not generate animation samples"
+        );
+    }
+    command(
+        app.world_mut(),
+        &handle,
+        Action::Step(durations.len() - 1),
+        &ControlInput::Click,
+    )
+    .unwrap();
+    settle(&mut app);
     // Use the same appearance transition as the application, including the 3D thumbnail.
     let palette = *crate::app_preferences::palette::viewport_palette(
         crate::app_preferences::ResolvedTheme::Light,
@@ -1010,7 +1093,16 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             &out.join(format!("help-175-{language}-top.png")),
         );
         let clip = widgets.entity("extrude-help-body").unwrap();
-        let back = widgets.entity("lesson-play").unwrap();
+        assert!(
+            widgets.entity("lesson-play").is_none()
+                && widgets.entity("extrude-help-back").is_none(),
+            "Instructions must not expose duplicate guide destinations"
+        );
+        assert!(
+            widgets.entity("scripts-preview-model").is_some(),
+            "Instructions retain the model"
+        );
+        let back = widgets.entity("scripts-preview-primary").unwrap();
         let clip_node = app.world().get::<ComputedNode>(clip).unwrap();
         let clip_center = app
             .world()
@@ -1024,8 +1116,11 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             .unwrap()
             .translation;
         assert!(
-            clip_center.y + clip_node.size.y / 2. + 8. <= back_center.y - back_node.size.y / 2.,
-            "{language}: Help stays above fixed navigation"
+            clip_center.x + clip_node.size.x / 2. <= back_center.x - back_node.size.x / 2.
+                || clip_center.x - clip_node.size.x / 2. >= back_center.x + back_node.size.x / 2.
+                || clip_center.y + clip_node.size.y / 2. <= back_center.y - back_node.size.y / 2.
+                || clip_center.y - clip_node.size.y / 2. >= back_center.y + back_node.size.y / 2.,
+            "{language}: Instructions and playback controls must not overlap"
         );
         let text = widgets.entity("extrude-help-text").unwrap();
         let actual_clip = app
@@ -1042,7 +1137,7 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
                     .y
             })
             .fold(f32::INFINITY, f32::min);
-        assert!(actual_clip <= back_center.y - back_node.size.y / 2. - 8.);
+        assert!(actual_clip <= clip_center.y + clip_node.size.y / 2. + 1.);
         command(
             app.world_mut(),
             &handle,

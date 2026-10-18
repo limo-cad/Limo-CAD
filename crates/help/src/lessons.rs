@@ -156,6 +156,35 @@ mod tests {
     }
 
     #[test]
+    fn guided_examples_have_explicit_localized_identity_and_playback_labels() {
+        for locale in LOCALES {
+            for key in [
+                "ui.guidedExamples",
+                "ui.instructions",
+                "ui.hideInstructions",
+                "ui.resume",
+                "sketch.example",
+                "extrude.example",
+                "cut.example",
+                "fillet.example",
+            ] {
+                let translated = catalog()[locale][key]
+                    .as_str()
+                    .expect("Explicit locale required");
+                assert!(
+                    !translated.is_empty()
+                        && !translated.contains('?')
+                        && !translated.contains('\u{fffd}'),
+                    "{locale}: {key}"
+                );
+            }
+            assert_ne!(text(locale, "extrude.example"), text(locale, "cut.example"));
+            assert_ne!(text(locale, "extrude.example"), Id::Extrude.title(locale));
+            assert_ne!(text(locale, "cut.example"), Id::Cut.title(locale));
+        }
+    }
+
+    #[test]
     fn lessons_have_complete_locales_and_one_connected_build() {
         let english = catalog()["en"].as_object().unwrap();
         for locale in LOCALES {
