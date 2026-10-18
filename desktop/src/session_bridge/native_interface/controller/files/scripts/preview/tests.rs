@@ -356,3 +356,26 @@ fn native_preview_close_cancels_preparation_without_releasing_its_worker_slot() 
     .unwrap_err()
     .contains("timed out"));
 }
+
+#[test]
+fn native_preview_notice_count_follows_frame_without_collapsing_reserved_space() {
+    let mut world = world();
+    retained(&mut world);
+    let preview = &mut world.resource_mut::<Files>().script.preview;
+    preview
+        .retained
+        .as_mut()
+        .unwrap()
+        .descriptor
+        .assembly_notice_counts = vec![0, 2, 0];
+    assert_eq!(preview.assembly_notices(), (0, true));
+    preview.index = 1;
+    assert_eq!(preview.assembly_notices(), (2, true));
+    preview.index = 2;
+    assert_eq!(preview.assembly_notices(), (0, true));
+    close(&mut world);
+    assert_eq!(
+        world.resource::<Files>().script.preview.assembly_notices(),
+        (0, false)
+    );
+}

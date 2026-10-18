@@ -1,5 +1,6 @@
 {
   "projectReplay": {
+    "previewAssemblyNotices": "Baugruppenhinweise: {count}. Details nach Ausführung in einem neuen Entwurf.",
     "previewOpen": "Projektvorschau",
     "previewTitle": "Projektvorschau",
     "previewBaseline": "Ausgangsprojekt",

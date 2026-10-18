@@ -1,5 +1,6 @@
 {
   "projectReplay": {
+    "previewAssemblyNotices": "Assembly notices: {count}. Run in new design for details.",
     "previewOpen": "Preview project",
     "previewTitle": "Project preview",
     "previewBaseline": "Starting project",

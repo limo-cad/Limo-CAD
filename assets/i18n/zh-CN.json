@@ -1,5 +1,6 @@
 {
   "projectReplay": {
+    "previewAssemblyNotices": "装配提示：{count}。请在新设计中运行以查看详情。",
     "previewOpen": "预览项目",
     "previewTitle": "项目预览",
     "previewBaseline": "初始项目",

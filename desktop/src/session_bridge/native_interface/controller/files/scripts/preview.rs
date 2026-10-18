@@ -138,6 +138,15 @@ impl State {
     pub fn building(&self) -> bool {
         self.build.is_some()
     }
+    fn assembly_notices(&self) -> (usize, bool) {
+        self.retained.as_ref().map_or((0, false), |retained| {
+            let counts = &retained.descriptor.assembly_notice_counts;
+            (
+                counts.get(self.index).copied().unwrap_or(0),
+                counts.iter().any(|count| *count > 0),
+            )
+        })
+    }
     fn count(&self) -> usize {
         self.retained
             .as_ref()

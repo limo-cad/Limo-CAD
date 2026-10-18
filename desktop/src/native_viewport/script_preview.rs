@@ -253,6 +253,7 @@ impl PreviewDocument {
 pub(crate) struct PreviewDescriptor {
     pub preview_id: String,
     pub captions: Vec<String>,
+    pub assembly_notice_counts: Vec<usize>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -352,6 +353,16 @@ impl PreviewService {
     pub fn retain(&self, frames: Vec<Frame>) -> Result<PreviewDescriptor, String> {
         let document = Arc::new(PreviewDocument::new(frames)?);
         let descriptor = PreviewDescriptor {
+            assembly_notice_counts: document
+                .frames
+                .iter()
+                .map(|frame| {
+                    frame
+                        .assembly
+                        .as_ref()
+                        .map_or(0, |assembly| assembly.diagnostics.len())
+                })
+                .collect(),
             preview_id: uuid::Uuid::new_v4().to_string(),
             captions: document
                 .frames
@@ -739,6 +750,22 @@ mod tests {
                 "translation":[100.0 + index as f64 * 200.0,0,0],"rotation":[0,0,0,1],"visible":true})).collect::<Vec<_>>()
         })).unwrap());
         frame
+    }
+
+    #[test]
+    fn preview_descriptor_preserves_per_frame_assembly_notice_counts() {
+        let first = instanced_frame(1);
+        let mut second = first.clone();
+        second.assembly.as_mut().unwrap().diagnostics.push(serde_json::from_value(serde_json::json!({
+            "kind":"free_component","message":"Unconstrained occurrence","joint_id":null,"body_id":null
+        })).unwrap());
+        let service = PreviewService::default();
+        let descriptor = service.retain(vec![first, second, frame(0.0)]).unwrap();
+        assert_eq!(descriptor.assembly_notice_counts, vec![0, 1, 0]);
+        assert_eq!(
+            descriptor.captions.len(),
+            descriptor.assembly_notice_counts.len()
+        );
     }
 
     #[test]

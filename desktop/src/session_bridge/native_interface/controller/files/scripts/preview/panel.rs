@@ -33,7 +33,9 @@ pub(crate) fn paint(
     let tr = |key: &'static str| crate::app_preferences::locale::translate(locale, key);
     let preview = &mut world.resource_mut::<Files>().script.preview;
     let project = preview.project;
-    let extra = if project { 46. } else { 0. };
+    let (notices, has_notices) = preview.assembly_notices();
+    let scope_height = if project { 46. } else { 0. };
+    let extra = scope_height + if has_notices { 46. } else { 0. };
     if preview.size != size {
         preview.size = size;
         preview.changed()?;
@@ -156,6 +158,22 @@ pub(crate) fn paint(
             "scripts-preview-scope",
             rect(x + 12., y + image_height + 118., w - 24., 44.),
             tr("projectReplay.previewScope"),
+            11.,
+            61,
+        );
+    }
+    if notices > 0 {
+        widgets.text(
+            world,
+            camera,
+            "scripts-preview-assembly-notices",
+            rect(
+                x + 12.,
+                y + image_height + 118. + scope_height,
+                w - 24.,
+                44.,
+            ),
+            &tr("projectReplay.previewAssemblyNotices").replace("{count}", &notices.to_string()),
             11.,
             61,
         );

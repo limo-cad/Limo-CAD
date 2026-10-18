@@ -1,5 +1,6 @@
 {
   "projectReplay": {
+    "previewAssemblyNotices": "Avisos de ensamblaje: {count}. Ejecute en un nuevo diseño para ver los detalles.",
     "previewOpen": "Vista del proyecto",
     "previewTitle": "Vista previa del proyecto",
     "previewBaseline": "Proyecto inicial",
