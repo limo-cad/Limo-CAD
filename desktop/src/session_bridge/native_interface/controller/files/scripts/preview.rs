@@ -268,6 +268,9 @@ impl State {
             .revision
             .checked_add(1)
             .ok_or("Preview view sequence exhausted")?;
+        // Retiring the receipt cancels obsolete work at the worker's next safe
+        // boundary; navigation must not wait for that request's deadline.
+        self.render = None;
         self.error = None;
         self.wake = None;
         Ok(())

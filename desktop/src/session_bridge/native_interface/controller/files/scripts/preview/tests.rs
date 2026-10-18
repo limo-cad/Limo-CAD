@@ -278,10 +278,11 @@ fn native_script_preview_cached_frames_skip_gpu_work_and_fence_late_errors() {
         preview.render_revision = revision;
         preview.changed().unwrap();
     }
+    assert!(world.resource::<Files>().script.preview.render.is_none());
     render(&mut world, &handle).unwrap();
     assert_eq!(world.resource::<Files>().script.preview.image, original);
     assert_eq!(world.resource::<Files>().script.preview.render_jobs, 0);
-    send.send(Err("retired render failure".into())).unwrap();
+    assert!(send.send(Err("retired render failure".into())).is_err());
     poll(&mut world);
     let preview = &mut world.resource_mut::<Files>().script.preview;
     assert!(preview.error.is_none());

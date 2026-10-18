@@ -39,7 +39,11 @@ impl JobQueue {
         if pending.closed {
             return Err("CAD renderer stopped".into());
         }
-        if pending.teaching.is_some() {
+        // A changed view drops its receipt immediately. Reclaim that canceled
+        // slot even when continuous main work prevents the worker draining it.
+        if pending.teaching.as_ref().is_some_and(|queued| {
+            !queued.cancelled.load(Ordering::Acquire) && std::time::Instant::now() < queued.deadline
+        }) {
             return Err("Feature preview renderer is busy; try again".into());
         }
         pending.teaching = Some(job);
@@ -202,6 +206,31 @@ mod tests {
             Err(mpsc::TrySendError::Disconnected(_))
         ));
     }
+    #[test]
+    fn native_teaching_queue_replaces_cancelled_work_while_main_is_pending() {
+        let queue = JobQueue::default();
+        let (reply, response) = mpsc::sync_channel(1);
+        let mut obsolete = teaching();
+        obsolete.reply = reply;
+        let cancelled = obsolete.cancelled.clone();
+        queue.teaching(obsolete).unwrap();
+        assert!(queue.try_send(snapshot()).is_ok());
+        cancelled.store(true, Ordering::Release);
+        let mut current = teaching();
+        current.request.revision = 2;
+        queue.teaching(current).unwrap();
+        assert!(matches!(
+            response.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected)
+        ));
+        assert!(matches!(queue.next(), Some(Job::Main(_))));
+        let Some(Job::Teaching(current)) = queue.next() else {
+            panic!("missing current job")
+        };
+        assert_eq!(current.request.revision, 2);
+        assert!(!current.cancelled.load(Ordering::Acquire));
+    }
+
     #[test]
     fn native_teaching_queue_close_wakes_parked_worker() {
         let queue = Arc::new(JobQueue::default());
