@@ -5,6 +5,8 @@
 //! drafting commands, rendering and interchange adapters are separate work.
 use serde::{Deserialize, Serialize};
 
+pub mod commands;
+
 #[cfg(test)]
 mod persistence_tests;
 #[cfg(test)]

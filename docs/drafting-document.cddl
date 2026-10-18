@@ -42,3 +42,32 @@ viewport = {
   rotation_rad: number, paper_mm_per_model_mm: number,
   clip_mm: [number, number, number, number], hidden_layers: [* id]
 }
+
+; Typed command contract, revision 1. Host registration and bounded CBOR codec
+; are separate integration work. Create operations never accept caller-owned IDs.
+drafting-command =
+    {type: "create_layer", arguments: {name: tstr, visible: bool, locked: bool, plottable: bool, style: style}}
+  / {type: "update_layer", arguments: layer}
+  / {type: "delete_layer", arguments: {id: id}}
+  / {type: "create_line_type", arguments: {name: tstr, pattern: [* number], space: "model" / "paper"}}
+  / {type: "update_line_type", arguments: line-type}
+  / {type: "delete_line_type", arguments: {id: id}}
+  / {type: "create_block", arguments: {name: tstr, base_point: point, attributes: [* new-attribute]}}
+  / {type: "update_block", arguments: {id: id, name: tstr, base_point: point}}
+  / {type: "delete_block", arguments: {id: id}}
+  / {type: "add_attribute", arguments: {block: id, attribute: new-attribute}}
+  / {type: "update_attribute", arguments: {block: id, attribute: attribute}}
+  / {type: "delete_attribute", arguments: {block: id, id: id}}
+  / {type: "create_entity", arguments: {space: space, layer: id, style: style / null, content: content}}
+  / {type: "update_entity", arguments: entity}
+  / {type: "delete_entity", arguments: {id: id}}
+  / {type: "create_viewport", arguments: {
+      sheet_id: id, model_center_mm: point, paper_center_mm: point,
+      rotation_rad: number, paper_mm_per_model_mm: number,
+      clip_mm: [number, number, number, number], hidden_layers: [* id]}}
+  / {type: "update_viewport", arguments: viewport}
+  / {type: "delete_viewport", arguments: {id: id}}
+  / {type: "attach_reference", arguments: {locator: tstr, mode: "attach" / "overlay", source_mm_per_unit: number}}
+  / {type: "set_reference_mode", arguments: {id: id, mode: "attach" / "overlay"}}
+  / {type: "detach_reference", arguments: {id: id}}
+new-attribute = {tag: tstr, default_value: tstr}
