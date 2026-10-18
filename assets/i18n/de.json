@@ -1,5 +1,13 @@
 {
   "projectReplay": {
+    "previewOpen": "Projektvorschau",
+    "previewTitle": "Projektvorschau",
+    "previewBaseline": "Ausgangsprojekt",
+    "previewFinal": "Nach dem Skript",
+    "previewScope": "Nur Geometrie und Baugruppe. Weitere Projektinhalte werden nicht angezeigt.",
+    "previewPreparing": "Isolierte Projektvorschau wird vorbereitet...",
+    "previewCancelled": "Vorbereitung der Vorschau abgebrochen",
+    "previewTimedOut": "Zeitlimit bei der Vorbereitung der Vorschau erreicht",
     "needsRepair": "Quelltext korrigieren; vor dem Start validieren.",
     "filter": "Limo CAD Projektwiedergabe (.limo.replay.cbor)",
     "savePath": "Projektwiedergabe unter einem absoluten .limo.replay.cbor-Pfad speichern",

@@ -29,7 +29,11 @@ pub(crate) fn paint(
         (image_width * scale).round() as u32,
         (image_height * scale).round() as u32,
     ];
+    let locale = crate::native_viewport::localization::locale(world);
+    let tr = |key: &'static str| crate::app_preferences::locale::translate(locale, key);
     let preview = &mut world.resource_mut::<Files>().script.preview;
+    let project = preview.project;
+    let extra = if project { 46. } else { 0. };
     if preview.size != size {
         preview.size = size;
         preview.changed()?;
@@ -53,14 +57,20 @@ pub(crate) fn paint(
                     retained.descriptor.captions[index]
                 )
             })
-            .unwrap_or_else(|| "Preparing the isolated lesson preview...".into())
+            .unwrap_or_else(|| {
+                if project {
+                    tr("projectReplay.previewPreparing").to_owned()
+                } else {
+                    "Preparing the isolated lesson preview...".into()
+                }
+            })
     });
     let ready = preview.retained.is_some();
     widgets.panel(
         world,
         camera,
         "scripts-card",
-        rect(x, y, w, image_height + 200.),
+        rect(x, y, w, image_height + 200. + extra),
         theme.panel.with_alpha(1.),
         60,
     );
@@ -69,7 +79,11 @@ pub(crate) fn paint(
         camera,
         "scripts-preview-heading",
         rect(x + 12., y + 8., w - 24., 22.),
-        "Lesson preview",
+        if project {
+            tr("projectReplay.previewTitle")
+        } else {
+            "Lesson preview"
+        },
         15.,
         61,
     );
@@ -85,7 +99,12 @@ pub(crate) fn paint(
     let mut control = InterfaceControl::button(
         "document/scripts",
         format!(
-            "Lesson preview model: {}{caption}",
+            "{}: {}{caption}",
+            if project {
+                tr("projectReplay.previewTitle")
+            } else {
+                "Lesson preview model"
+            },
             if current_image {
                 ""
             } else {
@@ -130,7 +149,18 @@ pub(crate) fn paint(
         11.,
         61,
     );
-    let top = y + image_height + 124.;
+    if project {
+        widgets.text(
+            world,
+            camera,
+            "scripts-preview-scope",
+            rect(x + 12., y + image_height + 118., w - 24., 44.),
+            tr("projectReplay.previewScope"),
+            11.,
+            61,
+        );
+    }
+    let top = y + image_height + 124. + extra;
     let fourth = (w - 42.) / 4.;
     for (i, (label, action, disabled)) in [
         (

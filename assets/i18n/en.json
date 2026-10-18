@@ -1,5 +1,13 @@
 {
   "projectReplay": {
+    "previewOpen": "Preview project",
+    "previewTitle": "Project preview",
+    "previewBaseline": "Starting project",
+    "previewFinal": "After script",
+    "previewScope": "Geometry and assembly only. Other project content is not shown.",
+    "previewPreparing": "Preparing the isolated project preview...",
+    "previewCancelled": "Preview preparation cancelled",
+    "previewTimedOut": "Preview preparation timed out",
     "needsRepair": "Source needs repair; validate before Run.",
     "filter": "Limo CAD project replay (.limo.replay.cbor)",
     "savePath": "Save a project replay to an absolute .limo.replay.cbor path",

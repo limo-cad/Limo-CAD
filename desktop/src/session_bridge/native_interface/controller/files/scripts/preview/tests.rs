@@ -273,3 +273,86 @@ fn native_script_preview_keys_and_replay_wait_for_current_frame_and_stop_at_last
     assert!(preview.yaw < std::f32::consts::TAU);
     assert!(preview.turn(f32::NAN, 0.).is_err());
 }
+
+#[test]
+fn native_package_preview_requires_current_source_and_keeps_the_retained_baseline() {
+    use limo_cad_project_file::{ProjectArchive, ReplayPackage, SaveMetadata};
+    let source =
+        json!({"version":2,"name":"Package preview","starting_state":"project","steps":[]})
+            .to_string();
+    let archive = ProjectArchive::new(
+        limo_cad_sketch::SketchManager::new()
+            .export_project_model()
+            .unwrap(),
+        SaveMetadata {
+            application_version: "test",
+            saved_at: "2026-10-17T00:00:00Z",
+        },
+    )
+    .unwrap()
+    .encode()
+    .unwrap();
+    let package = Arc::new(ReplayPackage::new(source.clone(), archive.clone()).unwrap());
+    let identity = package.source_identity(&source).unwrap();
+    let artifact = Artifact::Project {
+        package: Arc::clone(&package),
+        opened: identity.clone(),
+        saved: identity,
+    };
+    let mut world = world();
+    world
+        .resource_mut::<Files>()
+        .script
+        .accept(artifact.inspect(None, &source).unwrap())
+        .unwrap();
+    assert!(offered(&world.resource::<Files>().script));
+    assert!(can_open(&world.resource::<Files>().script));
+    let selected = job::source(&world.resource::<Files>().script).unwrap();
+    world
+        .resource_mut::<Files>()
+        .script
+        .source
+        .push_str("\n// newer draft");
+    assert!(!can_open(&world.resource::<Files>().script));
+    let frames = selected
+        .prepare(crate::app_preferences::Locale::En, || Ok(()))
+        .unwrap();
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].caption, "Starting project");
+    assert!(frames[0].assembly.is_some());
+    assert_eq!(package.project_bytes(), archive);
+    assert!(world
+        .resource::<Files>()
+        .script
+        .source
+        .ends_with("// newer draft"));
+    assert!(world.resource::<Files>().lesson.is_none());
+}
+
+#[test]
+fn native_preview_close_cancels_preparation_without_releasing_its_worker_slot() {
+    let mut world = world();
+    let preparation = job::Preparation::new();
+    let cancelled = Arc::clone(&preparation.cancelled);
+    let deadline = preparation.deadline;
+    let (send, receive) = mpsc::channel();
+    let preview = &mut world.resource_mut::<Files>().script.preview;
+    preview.open = true;
+    preview.build = Some(Mutex::new(receive));
+    preview.preparation = Some(preparation);
+    close(&mut world);
+    assert!(job::check(&cancelled, deadline)
+        .unwrap_err()
+        .contains("cancelled"));
+    assert!(world.resource::<Files>().script.preview.building());
+    send.send(Ok(frames())).unwrap();
+    poll(&mut world);
+    assert!(!world.resource::<Files>().script.preview.building());
+    assert!(world.resource::<Files>().script.preview.retained.is_none());
+    assert!(job::check(
+        &AtomicBool::new(false),
+        Instant::now() - Duration::from_secs(1)
+    )
+    .unwrap_err()
+    .contains("timed out"));
+}

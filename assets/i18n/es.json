@@ -1,5 +1,13 @@
 {
   "projectReplay": {
+    "previewOpen": "Vista del proyecto",
+    "previewTitle": "Vista previa del proyecto",
+    "previewBaseline": "Proyecto inicial",
+    "previewFinal": "Tras el script",
+    "previewScope": "Solo geometría y ensamblaje. No se muestra el resto del proyecto.",
+    "previewPreparing": "Preparando la vista previa aislada del proyecto...",
+    "previewCancelled": "Preparación de la vista previa cancelada",
+    "previewTimedOut": "Se agotó el tiempo de preparación de la vista previa",
     "needsRepair": "Corrija el código y valídelo antes de ejecutar.",
     "filter": "Reproducción de proyecto Limo CAD (.limo.replay.cbor)",
     "savePath": "Guarde la reproducción del proyecto en una ruta absoluta .limo.replay.cbor",

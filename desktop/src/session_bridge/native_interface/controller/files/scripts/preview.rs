@@ -11,6 +11,7 @@ use bevy::{
 use std::time::{Duration, Instant};
 
 mod input;
+mod job;
 mod panel;
 pub(crate) use input::input;
 pub(crate) use panel::paint;
@@ -81,6 +82,8 @@ pub(crate) struct State {
     pub open: bool,
     generation: u64,
     build: Option<ResultChannel<Vec<Frame>>>,
+    preparation: Option<job::Preparation>,
+    project: bool,
     render: Option<ResultChannel<Rendered>>,
     service: Arc<PreviewService>,
     retained: Option<Retained>,
@@ -110,6 +113,8 @@ impl Default for State {
             open: false,
             generation: 0,
             build: None,
+            preparation: None,
+            project: false,
             render: None,
             service: Arc::new(PreviewService::default()),
             retained: None,
@@ -166,6 +171,17 @@ impl State {
     }
 }
 
+pub(super) fn offered(state: &super::State) -> bool {
+    state
+        .loaded
+        .as_ref()
+        .is_some_and(|loaded| loaded.artifact.is_project())
+        || state.example.is_some_and(|example| example.preview)
+}
+pub(super) fn can_open(state: &super::State) -> bool {
+    job::source(state).is_ok()
+}
+
 fn eligible(state: &super::State) -> Result<&'static catalog::Example, String> {
     let example = state
         .example
@@ -187,7 +203,9 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
     available(world)?;
     editor::source_ready(world)?;
     let state = &world.resource::<Files>().script;
-    let example = eligible(state)?;
+    let source = job::source(state)?;
+    let project = source.is_project();
+    let locale = crate::native_viewport::localization::locale(world);
     let generation = state.generation;
     let revision = state
         .preview
@@ -197,14 +215,17 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
     close(world);
     let (send, receive) = mpsc::channel();
     let wake = handle.clone();
+    let preparation = job::Preparation::new();
+    let cancelled = Arc::clone(&preparation.cancelled);
+    let deadline = preparation.deadline;
     std::thread::Builder::new()
         .name("cad-preview-prepare".into())
         .spawn(move || {
-            let result =
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| prepare(&example.source)))
-                    .unwrap_or_else(|_| {
-                        Err("Lesson preview preparation stopped unexpectedly".into())
-                    });
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                source.prepare(locale, || job::check(&cancelled, deadline))
+            }))
+            .unwrap_or_else(|_| Err("Lesson preview preparation stopped unexpectedly".into()));
+            let result = result.map_err(|error| artifact::message(locale, &error));
             let _ = send.send(result);
             wake.request_redraw();
         })
@@ -221,6 +242,8 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
     preview.revision = revision;
     preview.error = None;
     preview.build = Some(Mutex::new(receive));
+    preview.preparation = Some(preparation);
+    preview.project = project;
     Ok(())
 }
 
@@ -228,6 +251,7 @@ fn close(world: &mut World) {
     let image = {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.open = false;
+        preview.preparation = None;
         preview.retained = None;
         preview.playing = false;
         preview.wake = None;
@@ -429,6 +453,7 @@ pub(super) fn poll(world: &mut World) {
     if let Some(result) = receive(&world.resource::<Files>().script.preview.build) {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.build = None;
+        preview.preparation = None;
         if preview.open {
             match result.and_then(|frames| Retained::new(preview.service.clone(), frames)) {
                 Ok(retained) => preview.retained = Some(retained),
