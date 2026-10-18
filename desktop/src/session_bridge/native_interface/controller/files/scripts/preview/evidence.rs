@@ -199,6 +199,30 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
                     .to_srgba();
                 let expected = [ink.red, ink.green, ink.blue].map(|v| (v * 255.).round() as i16);
                 let pixels = decoded.data.as_ref().unwrap();
+                for (text, node, transform) in app.world_mut()
+                    .query_filtered::<(&Text, &ComputedNode, &bevy::ui::UiGlobalTransform), With<annotations::DimensionLabel>>()
+                    .iter(app.world())
+                {
+                    let size = decoded.texture_descriptor.size;
+                    let half = node.size / 2.;
+                    let corners = [-half, Vec2::new(half.x, -half.y), half, Vec2::new(-half.x, half.y)]
+                        .map(|point| transform.transform_point2(point));
+                    let min = corners.into_iter().fold(Vec2::splat(f32::INFINITY), Vec2::min).max(Vec2::ZERO);
+                    let max = corners.into_iter().fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max)
+                        .min(Vec2::new(size.width as f32, size.height as f32));
+                    let inverse = transform.try_inverse().unwrap();
+                    let color = crate::native_viewport::ui::palette(app.world()).dimension.map(|value| (value * 255.).round() as i16);
+                    let mut ink = 0;
+                    for y in min.y as usize..max.y as usize {
+                        for x in min.x as usize..max.x as usize {
+                            let local = inverse.transform_point2(Vec2::new(x as f32 + 0.5, y as f32 + 0.5));
+                            if local.x.abs() >= half.x - 2. || local.y.abs() >= half.y - 2. { continue; }
+                            let offset = (y * size.width as usize + x) * 4;
+                            if (0..3).all(|axis| (pixels[offset + axis] as i16 - color[axis]).abs() < 45) { ink += 1; }
+                        }
+                    }
+                    assert!(ink > 8, "Dimension {} must rasterize inside its own label box", text.0);
+                }
                 if app.world().resource::<Files>().script.preview.lesson == Some(lesson::Id::Sketch)
                     && path.file_name().unwrap() == "frame-0.png"
                 {
@@ -606,6 +630,58 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             "Alternative outcomes appear only after the first result"
         );
         capture(&mut app, &target, &out.join(format!("frame-{index}.png")));
+        if id == lesson::Id::Sketch {
+            let dimension_step = app
+                .world()
+                .resource::<Files>()
+                .script
+                .preview
+                .retained
+                .as_ref()
+                .unwrap()
+                .descriptor
+                .cues[index]
+                == Some(crate::native_viewport::script_preview::PreviewCue::Dimension);
+            assert_eq!(
+                widgets.entity("lesson-dimension-label-0").is_some(),
+                dimension_step,
+                "Dimension labels appear only on their authored step"
+            );
+            if dimension_step {
+                let mut labels = Vec::new();
+                for label in 0..32 {
+                    let Some(entity) = widgets.entity(&format!("lesson-dimension-label-{label}"))
+                    else {
+                        break;
+                    };
+                    labels.push(app.world().get::<Text>(entity).unwrap().0.clone());
+                    assert!(
+                        app.world().get::<InterfaceControl>(entity).is_none(),
+                        "Teaching labels cannot edit the live sketch"
+                    );
+                    let block = app
+                        .world()
+                        .get::<bevy::text::ComputedTextBlock>(entity)
+                        .unwrap();
+                    assert!(
+                        block
+                            .buffer()
+                            .lines()
+                            .flat_map(|line| line.runs())
+                            .any(|run| run
+                                .clusters()
+                                .any(|cluster| cluster.glyphs().next().is_some())),
+                        "Dimension text must shape into visible glyphs"
+                    );
+                }
+                for expected in ["32", "44", "8"] {
+                    assert!(
+                        labels.iter().any(|label| label.starts_with(expected)),
+                        "Missing authored {expected} mm dimension: {labels:?}"
+                    );
+                }
+            }
+        }
         app.world_mut()
             .resource_mut::<Files>()
             .script

@@ -22,6 +22,16 @@ fn receive(
 #[test]
 #[ignore = "requires native GPU; exercises shared worker and retained GPU leases"]
 fn native_shared_teaching_preserves_main_and_exhausted_targets_do_not_block_main() {
+    shared_worker_regression(false);
+}
+
+#[test]
+#[ignore = "requires native GPU; injects real shader failures into the shared worker"]
+fn native_shared_teaching_shader_failure_recovers_main_and_main_failure_is_fatal() {
+    shared_worker_regression(true);
+}
+
+fn shared_worker_regression(shader_failure: bool) {
     let mut app = App::new();
     app.add_plugins(
         interface_plugins()
@@ -167,6 +177,53 @@ fn native_shared_teaching_preserves_main_and_exhausted_targets_do_not_block_main
         0,
         "main state failed to restore after teaching"
     );
+    if shader_failure {
+        // Keep four old-device texture leases across App reconstruction.
+        held.pop();
+        let queue = app
+            .world()
+            .resource::<Worker>()
+            .requests
+            .as_ref()
+            .unwrap()
+            .clone();
+        queue.inject_shader_failure.store(1, Ordering::Release);
+        let pending = service.render(request(7)).unwrap();
+        let failure = receive(&mut app, pending).err().unwrap();
+        assert!(
+            failure.contains("Teaching viewport shader failed"),
+            "{failure}"
+        );
+        app.world_mut().resource_mut::<CameraResource>().revision += 1;
+        app.update();
+        tests::ready(&mut app);
+        let recovered = tests::capture(&mut app, &target, "shared-main-shader-recovery");
+        assert_eq!(
+            tests::changed(&restored, &recovered),
+            0,
+            "recovery lost unchanged live state"
+        );
+        let disabled = service.render(request(8)).unwrap();
+        assert!(receive(&mut app, disabled)
+            .err()
+            .unwrap()
+            .contains("disabled"));
+        // Real main compile errors still terminate; recovery is not an ignore list.
+        queue.inject_shader_failure.store(2, Ordering::Release);
+        app.world_mut().resource_mut::<CameraResource>().revision += 1;
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            app.update();
+            if app.should_exit().is_some() {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "main shader failure was not fatal"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
     service.close_view(&view);
     let started = Instant::now();
     drop(app);
@@ -176,8 +233,74 @@ fn native_shared_teaching_preserves_main_and_exhausted_targets_do_not_block_main
     );
     assert_eq!(
         held.len(),
-        5,
+        if shader_failure { 4 } else { 5 },
         "leases deliberately outlive the renderer host"
     );
     drop(held);
+}
+
+// Fault injection uses the real compiler/cache, not a manufactured error return.
+// 1 targets teaching and 2 targets main; the trigger belongs to one worker only.
+pub(super) fn inject_invalid_shader(app: &mut App) {
+    let shader = app
+        .world_mut()
+        .resource_mut::<Assets<bevy::shader::Shader>>()
+        .add(bevy::shader::Shader::from_wgsl(
+            "this is deliberately invalid WGSL",
+            "teaching-failure-test.wgsl",
+        ));
+    app.sub_app(RenderApp)
+        .world()
+        .resource::<PipelineCache>()
+        .queue_compute_pipeline(bevy::render::render_resource::ComputePipelineDescriptor {
+            shader,
+            entry_point: Some("main".into()),
+            ..default()
+        });
+}
+
+#[test]
+fn native_shared_recovery_merges_deltas_without_resurrecting_cleared_state() {
+    let mut world = World::new();
+    world.init_resource::<ModelResource>();
+    world.init_resource::<CameraResource>();
+    world.init_resource::<PreviewResource>();
+    world.init_resource::<CamStockResource>();
+    world.init_resource::<PaletteResource>();
+    world.init_resource::<PresentationResource>();
+    world.init_resource::<section_view::State>();
+    world.init_resource::<ViewportSizeResource>();
+    world.init_resource::<DocumentGeometryIndex>();
+    world.resource_mut::<ModelResource>().session_id = "before".into();
+    world
+        .resource_mut::<PresentationResource>()
+        .0
+        .selected_edge_ids = vec![17];
+    let stamp = Stamp {
+        changed: [0; 8],
+        size: UVec2::new(320, 200),
+        scale: 1.,
+    };
+    let previous = Snapshot::capture(&world, stamp.clone(), None);
+    let mut delta = Snapshot::capture(&world, stamp.clone(), Some(&stamp));
+    // A new empty model/presentation/session list means deletion, not omission.
+    delta.model = Some(ModelResource {
+        session_id: "after".into(),
+        ..default()
+    });
+    delta.presentation = Some(PresentationResource::default());
+    delta.retained_sessions = Some(Vec::new());
+    let mut camera = *world.resource::<CameraResource>();
+    camera.revision += 1;
+    delta.camera = Some(camera);
+    delta.restore_unchanged(previous);
+    assert_eq!(delta.model.unwrap().session_id, "after");
+    assert!(delta.edge_cache.is_none());
+    assert!(delta.presentation.unwrap().0.selected_edge_ids.is_empty());
+    assert!(delta.retained_sessions.unwrap().is_empty());
+    assert_eq!(delta.camera.unwrap().revision, camera.revision);
+    assert!(delta.preview.is_some());
+    assert!(delta.stock.is_some());
+    assert!(delta.palette.is_some());
+    assert!(delta.section.is_some());
 }

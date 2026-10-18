@@ -150,11 +150,14 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             &["native_show_me_ui_evidence_and_performance"],
         )),
         "show-me-lifecycle" => Ok((
-            "native_shared_teaching_preserves_main_and_exhausted_targets_do_not_block_main",
-            &["native_shared_teaching_preserves_main_and_exhausted_targets_do_not_block_main"],
+            "native_shared_teaching_",
+            &[
+                "native_shared_teaching_preserves_main_and_exhausted_targets_do_not_block_main",
+                "native_shared_teaching_shader_failure_recovers_main_and_main_failure_is_fatal",
+            ],
         )),
         _ => bail!(
-            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit, extrude-preview or show-me-ui"
+            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit, extrude-preview, show-me-ui or show-me-lifecycle"
         ),
     }
 }

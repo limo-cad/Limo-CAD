@@ -157,6 +157,7 @@ pub(crate) fn paint(
             Node {
                 border: UiRect::ZERO,
                 border_radius: BorderRadius::all(px(8.)),
+                overflow: Overflow::clip(),
                 ..rect(x + 12., y + 44., image_width, image_height)
             },
             None,
@@ -175,6 +176,14 @@ pub(crate) fn paint(
         } else if world.get::<ImageNode>(entity).is_some() {
             world.entity_mut(entity).remove::<ImageNode>();
         }
+        annotations::paint(
+            world,
+            camera,
+            widgets,
+            entity,
+            [image_width, image_height],
+            current,
+        )?;
     }
     let trail_top = y + 50. + image_height;
     if demo.is_some() && !expanded {

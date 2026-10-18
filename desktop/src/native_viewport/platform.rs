@@ -5240,12 +5240,24 @@ pub(crate) fn interface_world_point(
     if world.resource::<ModelResource>().session_id != session_id {
         return Err("Native viewport has not bound the requested document".into());
     }
+    let size = world.resource::<ViewportSizeResource>();
+    project_world_point(
+        world.resource::<CameraResource>().camera,
+        [size.logical_width, size.logical_height],
+        point,
+    )
+}
+
+/// Read-only camera projection shared by live and isolated teaching annotations.
+pub(crate) fn project_world_point(
+    camera: ViewportCamera,
+    size: [f32; 2],
+    point: [f64; 3],
+) -> Result<Option<[f32; 2]>, String> {
     if point.iter().any(|value| !value.is_finite()) {
         return Err("World point must be finite".into());
     }
-    let size = world.resource::<ViewportSizeResource>();
-    let viewport = (size.logical_width, size.logical_height);
-    let camera = world.resource::<CameraResource>().camera;
+    let viewport = (size[0], size[1]);
     let Some(basis) = camera_projection(camera, viewport) else {
         return Ok(None);
     };

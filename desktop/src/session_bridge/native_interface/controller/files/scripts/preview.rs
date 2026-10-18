@@ -12,6 +12,7 @@ use bevy::{
 };
 use std::time::{Duration, Instant};
 
+mod annotations;
 mod card;
 mod feature;
 mod hover;

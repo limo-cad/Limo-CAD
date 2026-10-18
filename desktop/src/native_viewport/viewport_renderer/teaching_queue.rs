@@ -13,6 +13,8 @@ struct Pending {
 pub(super) struct JobQueue {
     pending: Mutex<Pending>,
     changed: Condvar,
+    #[cfg(test)]
+    pub(super) inject_shader_failure: std::sync::atomic::AtomicU8,
 }
 pub(super) enum Job {
     Main(Box<Snapshot>),

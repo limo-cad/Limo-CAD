@@ -514,6 +514,40 @@ impl PreviewService {
         }
     }
 
+    /// Projection only: no GPU work or mutation of the live document/renderer.
+    pub(crate) fn dimension_annotations(
+        &self,
+        request: &RenderRequest,
+        size: [f32; 2],
+    ) -> Result<crate::native_editor::annotations::teaching::Annotations, String> {
+        let document = self
+            .0
+            .lock()
+            .map_err(|_| "Preview cache lock poisoned")?
+            .documents
+            .iter()
+            .find(|(id, _)| id == &request.preview_id)
+            .map(|(_, document)| Arc::clone(document))
+            .ok_or("Teaching document has been released")?;
+        let frame = document
+            .frames
+            .get(request.frame_index)
+            .ok_or("Unknown teaching frame")?;
+        let Some(profile) = frame
+            .profile
+            .as_ref()
+            .filter(|_| frame.cue == Some(PreviewCue::Dimension))
+        else {
+            return Ok(Default::default());
+        };
+        crate::native_editor::annotations::teaching::project(
+            profile,
+            document.camera(request),
+            size,
+            [request.width as f32, request.height as f32],
+        )
+    }
+
     pub fn close_view(&self, view_id: &str) {
         if let Ok(mut state) = self.0.lock() {
             if let Some((_, cancelled)) = state.views.remove(view_id) {

@@ -145,6 +145,22 @@ struct Snapshot {
 }
 
 impl Snapshot {
+    // Option means "unchanged", including resources whose contents are empty.
+    // An updated model with no edge cache must not inherit its predecessor's cache.
+    fn restore_unchanged(&mut self, previous: Self) {
+        if self.model.is_none() {
+            self.model = previous.model;
+            self.edge_cache = previous.edge_cache;
+        }
+        self.camera = self.camera.take().or(previous.camera);
+        self.preview = self.preview.take().or(previous.preview);
+        self.stock = self.stock.take().or(previous.stock);
+        self.palette = self.palette.take().or(previous.palette);
+        self.presentation = self.presentation.take().or(previous.presentation);
+        self.section = self.section.take().or(previous.section);
+        self.retained_sessions = self.retained_sessions.take().or(previous.retained_sessions);
+    }
+
     fn capture(world: &World, stamp: Stamp, previous: Option<&Stamp>) -> Self {
         // One request can be outstanding. Its completion precedes the next
         // snapshot, so unchanged state remains resident in the worker. Orbit
@@ -571,18 +587,12 @@ fn target_image(size: UVec2) -> Image {
     image
 }
 
-fn render_worker(
+fn worker_app(
     resources: RenderResources,
-    jobs: Arc<JobQueue>,
-    replies: &mpsc::SyncSender<Result<Frame, String>>,
-    handle: &NativeInterfaceHandle,
     stopped: &Arc<AtomicBool>,
     submission: &surface_submission::SharedSubmission,
     #[cfg(test)] gate: Option<tests::CompilationGate>,
-) -> Result<(), String> {
-    if stopped.load(Ordering::Acquire) {
-        return Ok(());
-    }
+) -> (App, [Target; 3], [Target; 5]) {
     let mut app = App::new();
     let plugins = DefaultPlugins
         .build()
@@ -619,7 +629,7 @@ fn render_worker(
     // Keep a bounded pool. The main world, render world and deferred extraction
     // can briefly retain all three textures; wait for a lease to end in that
     // case. Never overwrite a leased texture; there is no readback.
-    let mut targets: [Target; 3] = std::array::from_fn(|_| Target {
+    let targets: [Target; 3] = std::array::from_fn(|_| Target {
         image: app
             .world_mut()
             .resource_mut::<Assets<Image>>()
@@ -628,21 +638,81 @@ fn render_worker(
     });
     app.insert_resource(SceneImageTarget(targets[0].image.clone()));
     app.main_mut().update();
-    let mut last: Option<Stamp> = None;
-    let mut teaching_targets: [Target; 5] = std::array::from_fn(|_| Target {
+    let teaching_targets: [Target; 5] = std::array::from_fn(|_| Target {
         image: app
             .world_mut()
             .resource_mut::<Assets<Image>>()
             .add(target_image(UVec2::ONE)),
         lease: default(),
     });
+    (app, targets, teaching_targets)
+}
+
+fn terminal_shader_error(pipelines: &PipelineCache) -> Option<String> {
+    pipelines
+        .pipelines()
+        .find_map(|pipeline| match &pipeline.state {
+            bevy::render::render_resource::CachedPipelineState::Err(error)
+                if !matches!(
+                    error,
+                    bevy::shader::ShaderCacheError::ShaderNotLoaded(_)
+                        | bevy::shader::ShaderCacheError::ShaderImportNotYetAvailable
+                ) =>
+            {
+                Some(format!("{error:?}"))
+            }
+            _ => None,
+        })
+}
+
+fn render_worker(
+    resources: RenderResources,
+    jobs: Arc<JobQueue>,
+    replies: &mpsc::SyncSender<Result<Frame, String>>,
+    handle: &NativeInterfaceHandle,
+    stopped: &Arc<AtomicBool>,
+    submission: &surface_submission::SharedSubmission,
+    #[cfg(test)] gate: Option<tests::CompilationGate>,
+) -> Result<(), String> {
+    if stopped.load(Ordering::Acquire) {
+        return Ok(());
+    }
+    let (mut app, mut targets, mut teaching_targets) = worker_app(
+        resources.clone(),
+        stopped,
+        submission,
+        #[cfg(test)]
+        gate,
+    );
+    let mut last: Option<Stamp> = None;
+    let mut recovered: Option<Snapshot> = None;
+    let mut teaching_disabled = false;
     while let Some(job) = jobs.next() {
         if stopped.load(Ordering::Acquire) {
             return Ok(());
         }
         let snapshot = match job {
-            Job::Main(snapshot) => *snapshot,
+            Job::Main(snapshot) => {
+                let mut snapshot = *snapshot;
+                if let Some(previous) = recovered.take() {
+                    snapshot.restore_unchanged(previous);
+                }
+                snapshot
+            }
             Job::Teaching(job) => {
+                if teaching_disabled {
+                    let _ = job
+                        .reply
+                        .send(Err("Teaching renderer disabled after shader failure".into()));
+                    handle.request_redraw();
+                    continue;
+                }
+                // A pre-existing main failure is never attributed to teaching.
+                if let Some(error) = terminal_shader_error(
+                    app.sub_app(RenderApp).world().resource::<PipelineCache>(),
+                ) {
+                    return Err(format!("CAD viewport shader failed: {error}"));
+                }
                 let outcome = render_teaching(
                     &mut app,
                     &job,
@@ -651,6 +721,35 @@ fn render_worker(
                     stopped,
                     submission,
                 );
+                if app.should_exit().is_some() {
+                    return Err("CAD viewport reported a rendering error".into());
+                }
+                if let Some(error) = terminal_shader_error(
+                    app.sub_app(RenderApp).world().resource::<PipelineCache>(),
+                ) {
+                    // Pipeline IDs cannot be ignored safely: main may later use
+                    // the same specialization. Rebuild every renderer cache on
+                    // the existing device, once, and stop accepting teaching.
+                    // Preserve CPU state locally so queued deltas remain valid.
+                    recovered = last
+                        .as_ref()
+                        .map(|stamp| Snapshot::capture(app.world(), stamp.clone(), None));
+                    drop(app);
+                    (app, targets, teaching_targets) = worker_app(
+                        resources.clone(),
+                        stopped,
+                        submission,
+                        #[cfg(test)]
+                        None,
+                    );
+                    last = None;
+                    teaching_disabled = true;
+                    let _ = job
+                        .reply
+                        .send(Err(format!("Teaching viewport shader failed: {error}")));
+                    handle.request_redraw();
+                    continue;
+                }
                 match outcome {
                     Ok(Some(texture)) => {
                         let _ = job.reply.send(Ok(texture));
@@ -676,6 +775,14 @@ fn render_worker(
                 continue;
             }
         };
+        #[cfg(test)]
+        if jobs
+            .inject_shader_failure
+            .compare_exchange(2, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            teaching_tests::inject_invalid_shader(&mut app);
+        }
         let owner = snapshot.owner;
         let stamp = snapshot.stamp.clone();
         let Some(target) = wait_for_target(&mut targets, stopped) else {
@@ -780,18 +887,8 @@ fn render_worker(
                 return Err("CAD viewport reported a rendering error".into());
             }
             let pipelines = app.sub_app(RenderApp).world().resource::<PipelineCache>();
-            for pipeline in pipelines.pipelines() {
-                if let bevy::render::render_resource::CachedPipelineState::Err(error) =
-                    &pipeline.state
-                {
-                    if !matches!(
-                        error,
-                        bevy::shader::ShaderCacheError::ShaderNotLoaded(_)
-                            | bevy::shader::ShaderCacheError::ShaderImportNotYetAvailable
-                    ) {
-                        return Err(format!("CAD viewport shader failed: {error:?}"));
-                    }
-                }
+            if let Some(error) = terminal_shader_error(pipelines) {
+                return Err(format!("CAD viewport shader failed: {error}"));
             }
             let compiled_after_draw =
                 surface_submission::compiled_after_draw(app.sub_app(RenderApp).world());
@@ -887,6 +984,14 @@ fn render_teaching(
             })
             .collect()
     };
+    #[cfg(test)]
+    if jobs
+        .inject_shader_failure
+        .compare_exchange(1, 0, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        teaching_tests::inject_invalid_shader(app);
+    }
     let rendered = (|| {
         loop {
             check_request(&job.cancelled, job.deadline)?;
@@ -904,18 +1009,8 @@ fn render_teaching(
                 return Err("CAD viewport reported a rendering error".into());
             }
             let pipelines = app.sub_app(RenderApp).world().resource::<PipelineCache>();
-            for pipeline in pipelines.pipelines() {
-                if let bevy::render::render_resource::CachedPipelineState::Err(error) =
-                    &pipeline.state
-                {
-                    if !matches!(
-                        error,
-                        bevy::shader::ShaderCacheError::ShaderNotLoaded(_)
-                            | bevy::shader::ShaderCacheError::ShaderImportNotYetAvailable
-                    ) {
-                        return Err(format!("Teaching viewport shader failed: {error:?}"));
-                    }
-                }
+            if let Some(error) = terminal_shader_error(pipelines) {
+                return Err(format!("Teaching viewport shader failed: {error}"));
             }
             if !surface_submission::compiled_after_draw(app.sub_app(RenderApp).world())
                 && pipelines.waiting_pipelines().next().is_none()
