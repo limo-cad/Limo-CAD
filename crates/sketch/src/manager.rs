@@ -1911,7 +1911,7 @@ impl SketchManager {
         }
         drawing.validate().map_err(SessionError::Solid)?;
         if let (Some(before), Some(after)) = (&self.drawings.drafting, &drawing.drafting) {
-            crate::drafting::transition::validate_layer_edit(before, after)
+            crate::drafting::transition::validate_edit(before, after)
                 .map_err(SessionError::Solid)?;
         }
         let drawing = crate::drawing_topology::capture_drawing_topology(

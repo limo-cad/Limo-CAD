@@ -3,6 +3,84 @@
 use super::{validate::Node, *};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum IdentityKind {
+    Entity,
+    Layer,
+    LineType,
+    Block,
+    Reference,
+    Viewport,
+    Attribute(BlockId),
+}
+fn identities(document: &Document) -> BTreeMap<u64, IdentityKind> {
+    let mut ids = BTreeMap::new();
+    ids.extend(
+        document
+            .entities
+            .iter()
+            .map(|x| (x.id.0, IdentityKind::Entity)),
+    );
+    ids.extend(
+        document
+            .layers
+            .iter()
+            .map(|x| (x.id.0, IdentityKind::Layer)),
+    );
+    ids.extend(
+        document
+            .line_types
+            .iter()
+            .map(|x| (x.id.0, IdentityKind::LineType)),
+    );
+    ids.extend(
+        document
+            .references
+            .iter()
+            .map(|x| (x.id.0, IdentityKind::Reference)),
+    );
+    ids.extend(
+        document
+            .viewports
+            .iter()
+            .map(|x| (x.id.0, IdentityKind::Viewport)),
+    );
+    for block in &document.blocks {
+        ids.insert(block.id.0, IdentityKind::Block);
+        ids.extend(
+            block
+                .attributes
+                .iter()
+                .map(|a| (a.id.0, IdentityKind::Attribute(block.id))),
+        );
+    }
+    ids
+}
+
+/// Ordinary edits preserve the allocator high-water mark and object identity.
+/// Both graphs must already pass semantic validation. Deliberate project/history
+/// replacement restores an entire document incarnation through its separate path.
+pub(crate) fn validate_edit(before: &Document, after: &Document) -> Result<(), String> {
+    if after.next_id < before.next_id {
+        return Err("Drafting edits cannot move the ID allocator backward".into());
+    }
+    let previous = identities(before);
+    for (id, kind) in identities(after) {
+        match previous.get(&id) {
+            Some(old) if *old != kind => {
+                return Err("Drafting IDs cannot change object kind or attribute owner".into())
+            }
+            None if id < before.next_id => {
+                return Err(
+                    "New drafting objects require fresh IDs; retired IDs cannot be reused".into(),
+                )
+            }
+            _ => {}
+        }
+    }
+    validate_layer_edit(before, after)
+}
+
 struct Index<'a> {
     entities: BTreeMap<EntityId, &'a Entity>,
     blocks: BTreeMap<BlockId, &'a Block>,

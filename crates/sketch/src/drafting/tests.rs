@@ -57,6 +57,76 @@ fn fixture() -> Document {
     }
 }
 
+#[test]
+fn ordinary_edits_cannot_reuse_retired_ids_or_reset_the_allocator() {
+    let before = fixture();
+    let mut after = before.clone();
+    after.next_id = 99;
+    after.validate(&[]).unwrap();
+    assert!(super::transition::validate_edit(&before, &after).is_err());
+    after = before.clone();
+    let removed = after.entities.remove(0);
+    after.validate(&[]).unwrap();
+    super::transition::validate_edit(&before, &after).unwrap();
+    let mut reused = after.clone();
+    reused.entities.push(removed.clone());
+    reused.validate(&[]).unwrap();
+    assert!(super::transition::validate_edit(&after, &reused)
+        .unwrap_err()
+        .contains("fresh IDs"));
+    let mut fresh = removed;
+    fresh.id = EntityId(after.next_id);
+    reused = after.clone();
+    reused.entities.push(fresh);
+    reused.next_id += 1;
+    reused.validate(&[]).unwrap();
+    super::transition::validate_edit(&after, &reused).unwrap();
+}
+
+#[test]
+fn existing_ids_cannot_change_kind_or_attribute_definition_owner() {
+    let before = fixture();
+    let mut after = before.clone();
+    after.entities.remove(0);
+    let mut layer = after.layers[0].clone();
+    layer.id = LayerId(4);
+    layer.name = "Reused entity ID".into();
+    after.layers.push(layer);
+    after.validate(&[]).unwrap();
+    assert!(super::transition::validate_edit(&before, &after)
+        .unwrap_err()
+        .contains("object kind"));
+    let mut before = fixture();
+    if let Content::Block { attributes, .. } = &mut before.entities[1].content {
+        attributes.clear();
+    }
+    let mut after = before.clone();
+    let attributes = std::mem::take(&mut after.blocks[0].attributes);
+    after.blocks.push(Block {
+        id: BlockId(100),
+        name: "New owner".into(),
+        base_point: [0., 0.],
+        attributes,
+    });
+    after.next_id = 101;
+    after.validate(&[]).unwrap();
+    assert!(super::transition::validate_edit(&before, &after)
+        .unwrap_err()
+        .contains("attribute owner"));
+}
+
+#[test]
+fn rejected_identity_replacement_does_not_change_the_shared_manager() {
+    let mut manager = crate::SketchManager::new();
+    let mut drawing = crate::DrawingDocumentDto::default();
+    drawing.drafting = Some(fixture());
+    manager.set_drawing_document(drawing.clone()).unwrap();
+    let before = manager.export_project_model().unwrap();
+    drawing.drafting.as_mut().unwrap().next_id = 6;
+    assert!(manager.set_drawing_document(drawing).is_err());
+    assert_eq!(manager.export_project_model().unwrap(), before);
+}
+
 fn locked_instance() -> Document {
     let mut graph = fixture();
     let mut definition_layer = graph.layers[0].clone();
