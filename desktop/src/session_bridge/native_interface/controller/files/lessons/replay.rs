@@ -2,9 +2,9 @@
 //! waits on a separate acknowledgement channel and must never occupy that worker.
 use super::super::super::presentation;
 use super::*;
-use limo_cad_project_file::ProjectArchive;
+use limo_cad_project_file::{ProjectArchive, PublicationReceipt};
 
-type Acknowledgement = mpsc::Receiver<Result<DocumentReceipt, String>>;
+type Acknowledgement = mpsc::Receiver<Result<PublicationReceipt, String>>;
 
 /// The caller retains its prepared script/package identity and registers Running
 /// before enqueueing. This consumes the already-prepared archive exactly once.
@@ -57,7 +57,7 @@ pub(in super::super) fn enqueue_baseline(
                 // normal observe pass can reset state for the replacement epoch.
                 acknowledge_replay_baseline(world, services, source_generation, &handoff)?;
                 let output = finish_document_transition(world, services, "replay_baseline", result);
-                validate_presented_baseline(&output, &successor)?;
+                let publication = validate_presented_baseline(&output, &successor)?;
                 services.bridge.with_native_document_receipt(&services.engine, &successor.owner, |revision| {
                     if revision != successor.revision {
                         return Err("Replay baseline changed before runner acknowledgement".into());
@@ -67,7 +67,7 @@ pub(in super::super) fn enqueue_baseline(
                     }
                     Ok(())
                 })?;
-                Ok((output, successor))
+                Ok((output, publication))
             })();
             let answer = completion
                 .as_ref()
@@ -82,7 +82,10 @@ pub(in super::super) fn enqueue_baseline(
     Ok((queued, receipt))
 }
 
-fn validate_presented_baseline(output: &Value, expected: &DocumentReceipt) -> Result<(), String> {
+fn validate_presented_baseline(
+    output: &Value,
+    expected: &DocumentReceipt,
+) -> Result<PublicationReceipt, String> {
     if output["document_id"] != expected.owner.document_id
         || output["document_epoch"].as_u64() != Some(expected.owner.epoch)
         || output["engine_revision"].as_u64() != Some(expected.revision)
@@ -96,7 +99,28 @@ fn validate_presented_baseline(output: &Value, expected: &DocumentReceipt) -> Re
     {
         return Err(format!("Replay baseline committed but presentation/publication was not acknowledged; preserve the loaded design: {output}"));
     }
-    Ok(())
+    let publication = &output["publication"];
+    let receipt: PublicationReceipt =
+        serde_json::from_value(publication["publication_receipt"].clone()).map_err(|error| {
+            format!("Replay baseline has no valid publication receipt: {error}")
+        })?;
+    if publication["skipped"] != false
+        || publication["publication_version"] != 1
+        || receipt.window_id != expected.owner.window_id
+        || receipt.document_id != expected.owner.document_id
+        || receipt.epoch != expected.owner.epoch
+        || receipt.engine_revision != expected.revision
+        || receipt.session_id.is_empty()
+        || receipt.process_instance_id.is_empty()
+        || receipt.export_sequence == 0
+        || publication["session_id"] != receipt.session_id
+        || publication["window_id"] != receipt.window_id
+        || publication["document_id"] != receipt.document_id
+        || publication["model_generation"].as_u64() != Some(receipt.engine_revision)
+    {
+        return Err("Replay publication receipt does not match its committed baseline".into());
+    }
+    Ok(receipt)
 }
 
 #[cfg(test)]
@@ -112,9 +136,55 @@ mod tests {
             },
             revision: 1,
         };
+        let published = PublicationReceipt {
+            process_instance_id: "process".into(),
+            session_id: "successor".into(),
+            window_id: "main".into(),
+            document_id: "replay".into(),
+            epoch: 7,
+            engine_revision: 1,
+            export_sequence: 3,
+        };
         let good = json!({"document_id":"replay","document_epoch":7,"engine_revision":1,
-            "result":{"replay_baseline_loaded":true},"publication_pending":false,"publication":{}});
-        validate_presented_baseline(&good, &receipt).unwrap();
+            "result":{"replay_baseline_loaded":true},"publication_pending":false,
+            "publication":{"skipped":false,"publication_version":1,"publication_receipt":published,
+                "session_id":"successor","window_id":"main","document_id":"replay","model_generation":1}});
+        assert_eq!(
+            validate_presented_baseline(&good, &receipt).unwrap(),
+            published
+        );
+        for (key, value) in [
+            ("skipped", json!(true)),
+            ("publication_version", json!(2)),
+            ("session_id", json!("other")),
+            ("window_id", json!("other")),
+            ("document_id", json!("other")),
+            ("model_generation", json!(2)),
+            ("publication_receipt", Value::Null),
+        ] {
+            let mut failed = good.clone();
+            failed["publication"][key] = value;
+            assert!(
+                validate_presented_baseline(&failed, &receipt).is_err(),
+                "{key}"
+            );
+        }
+        for (key, value) in [
+            ("process_instance_id", json!("")),
+            ("session_id", json!("")),
+            ("window_id", json!("other")),
+            ("document_id", json!("other")),
+            ("epoch", json!(8)),
+            ("engine_revision", json!(2)),
+            ("export_sequence", json!(0)),
+        ] {
+            let mut failed = good.clone();
+            failed["publication"]["publication_receipt"][key] = value;
+            assert!(
+                validate_presented_baseline(&failed, &receipt).is_err(),
+                "{key}"
+            );
+        }
         assert!(validate_presented_baseline(&Value::Null, &receipt).is_err());
         for (key, value) in [
             ("document_id", json!("other")),

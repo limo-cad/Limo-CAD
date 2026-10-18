@@ -607,21 +607,24 @@ impl SessionBridgeState {
         project.last_model_generation = model_generation;
         project.active_sketch_generation = active_sketch_generation;
 
-        Ok(json!({
-            "skipped": false,
-            "session_id": project.session_id,
-            "window_id": window_label,
-            "session_dir": dir.display().to_string(),
-            "generation": published_generation,
-            "published_generation": published_generation,
-            "model_generation": model_generation,
-            "active_sketch_generation": active_sketch_generation,
-            "engine_revision": project.engine_revision,
-            "project_session_id": project_session_id,
-            "document_id": project_session_id,
-            "session_mode": "read_only_snapshot",
-            "writeback": false,
-        }))
+        Ok(with_composite_receipt(
+            json!({
+                "skipped": false,
+                "session_id": project.session_id,
+                "window_id": window_label,
+                "session_dir": dir.display().to_string(),
+                "generation": published_generation,
+                "published_generation": published_generation,
+                "model_generation": model_generation,
+                "active_sketch_generation": active_sketch_generation,
+                "engine_revision": project.engine_revision,
+                "project_session_id": project_session_id,
+                "document_id": project_session_id,
+                "session_mode": "read_only_snapshot",
+                "writeback": false,
+            }),
+            project.last_composite_published.as_ref(),
+        ))
     }
 
     fn heartbeat_for_window(&self, window_label: &str) -> Result<serde_json::Value, String> {
