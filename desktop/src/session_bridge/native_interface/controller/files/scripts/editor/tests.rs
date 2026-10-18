@@ -605,3 +605,52 @@ fn unsupported_version_and_catalog_calls_open_only_as_unvalidated_package_source
         assert_eq!(limo_cad_project_file::ReplayPackage::read_file(&saved).unwrap().project_bytes(), original);
     }
 }
+
+#[test]
+fn jsonc_repair_preserves_authorship_and_missing_include_remains_non_runnable() {
+    let directory = Directory::new();
+    let path = directory.0.join("unfinished.limo.jsonc");
+    let unfinished = "// preserve this unfinished source\n{";
+    std::fs::write(&path, unfinished).unwrap();
+    let loaded = inspect(path.clone()).unwrap();
+    assert!(loaded.counts.is_none());
+    assert_eq!(loaded.authored(), unfinished);
+    let mut world = World::new();
+    initialize(
+        &mut world,
+        Arc::new(Mutex::new(DocumentWorkspace::default())),
+    );
+    world.resource_mut::<Files>().script.accept(loaded).unwrap();
+    {
+        let state = &world.resource::<Files>().script;
+        assert!(state.editor_open && !state.validated);
+        assert!(state.selected(state.generation).is_err());
+        let backup = directory.0.join("backup.limo.jsonc");
+        state
+            .loaded
+            .as_ref()
+            .unwrap()
+            .artifact
+            .save(&backup, &state.source, limo_cad_mcp::MAX_SCRIPT_BYTES)
+            .unwrap();
+        assert_eq!(std::fs::read_to_string(backup).unwrap(), unfinished);
+    }
+    edit_source(&mut world, &ControlInput::SetValue(authored().into())).unwrap();
+    assert!(
+        validate_now(&mut world).is_err(),
+        "Missing include is not bypassed by recovery"
+    );
+    assert_eq!(world.resource::<Files>().script.source, authored());
+    std::fs::write(
+        directory.0.join("part.collection.jsonc"),
+        r#"{"steps":[{"note":"Recovered include"}]}"#,
+    )
+    .unwrap();
+    validate_now(&mut world).unwrap();
+    let state = &world.resource::<Files>().script;
+    let repaired = state.selected(state.generation).unwrap();
+    assert!(repaired.source().contains("Recovered include"));
+    assert_eq!(repaired.authored(), authored());
+    assert!(state.dirty());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), unfinished);
+}

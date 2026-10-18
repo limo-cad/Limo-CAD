@@ -155,9 +155,8 @@ fn inspect(path: PathBuf) -> Result<Loaded, String> {
     {
         return artifact::inspect_package(path);
     }
-    let text_path = path.to_str().ok_or("Script path must be valid Unicode")?;
-    let inspection = limo_cad_mcp::inspect_script(json!({"path":text_path}))?;
-    inspected(Some(path), inspection)
+    let source = limo_cad_mcp::read_authored_script(&path)?;
+    Artifact::Text.inspect_or_repair(path, &source)
 }
 
 fn inspected(path: Option<PathBuf>, inspection: Value) -> Result<Loaded, String> {

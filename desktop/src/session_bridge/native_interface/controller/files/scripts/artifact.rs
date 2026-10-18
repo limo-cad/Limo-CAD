@@ -122,32 +122,36 @@ pub(super) fn inspect_package(path: PathBuf) -> Result<Loaded, String> {
         opened: identity.clone(),
         saved: identity,
     };
-    match artifact.inspect(Some(path.clone()), package.script()) {
-        Ok(loaded) => Ok(loaded),
-        Err(diagnostic) => {
-            // Valid envelope, invalid source: preserve exact authored text and
-            // archive for repair. Do not invent parsed metadata or enable Run.
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .ok_or("Replay package path has no file name")?;
-            let Artifact::Project { opened, saved, .. } = &artifact else {
-                unreachable!()
-            };
-            let inspection = json!({
-                "source": package.script(), "authored_source": package.script(),
-                "source_validation_error": diagnostic,
-                "opened_package_identity": opened, "saved_package_identity": saved,
-            });
-            Ok(Loaded {
-                artifact,
-                path: Some(path),
-                example: None,
-                name,
-                counts: None,
-                maximum: limo_cad_project_file::MAX_REPLAY_SCRIPT_BYTES,
-                inspection,
-            })
+    artifact.inspect_or_repair(path, package.script())
+}
+
+impl Artifact {
+    /// All source formats share the same unvalidated recovery state. Byte and
+    /// file admission must succeed before this is called; execution never uses it.
+    pub fn inspect_or_repair(&self, path: PathBuf, source: &str) -> Result<Loaded, String> {
+        match self.inspect(Some(path.clone()), source) {
+            Ok(loaded) => Ok(loaded),
+            Err(diagnostic) => {
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .ok_or("Script path has no file name")?;
+                let mut inspection = json!({"source": source, "authored_source": source,
+                    "source_validation_error": diagnostic});
+                if let Self::Project { opened, saved, .. } = self {
+                    inspection["opened_package_identity"] = json!(opened);
+                    inspection["saved_package_identity"] = json!(saved);
+                }
+                Ok(Loaded {
+                    artifact: self.clone(),
+                    path: Some(path),
+                    example: None,
+                    name,
+                    counts: None,
+                    maximum: limo_cad_mcp::MAX_SCRIPT_BYTES,
+                    inspection,
+                })
+            }
         }
     }
 }

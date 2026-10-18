@@ -27,7 +27,9 @@ fn inspected_file_retains_authored_provenance_and_freezes_expanded_includes() {
     std::fs::write(&path, "changed after inspection").unwrap();
     assert_eq!(loaded.source(), snapshot);
     assert!(limo_cad_mcp::inspect_script(json!({"source":loaded.source()})).is_ok());
-    assert!(inspect(path).is_err());
+    let repair = inspect(path).unwrap();
+    assert!(repair.counts.is_none());
+    assert!(repair.source_diagnostic().is_some());
     assert_eq!(
         fixture.engine.engine_call("project_export_model", ""),
         before
@@ -51,8 +53,15 @@ fn inspection_uses_shared_path_size_include_and_operation_preflight() {
         r#"{"version":1,"name":"Wrong group","steps":[{"call":{"group":"solid/inspect","operation":"solid_scene","arguments":{}}}]}"#.into(),
         " ".repeat(16 * 1024 * 1024 + 1),
     ] {
-        std::fs::write(&path, source).unwrap();
-        assert!(inspect(path.clone()).is_err());
+        std::fs::write(&path, &source).unwrap();
+        if source.len() > limo_cad_mcp::MAX_SCRIPT_BYTES {
+            assert!(inspect(path.clone()).is_err());
+        } else {
+            let loaded = inspect(path.clone()).unwrap();
+            assert!(loaded.counts.is_none());
+            assert!(loaded.source_diagnostic().is_some());
+            assert_eq!(loaded.authored(), source);
+        }
     }
     assert_eq!(
         fixture.engine.engine_call("project_export_model", ""),
