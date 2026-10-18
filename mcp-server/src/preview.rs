@@ -5,6 +5,9 @@
 use limo_cad_project_file::{ProjectArchive, ReplayPackage};
 use limo_cad_script::{ProjectScript, RunOptions, Script};
 
+mod host;
+pub use host::run_prepared_project_preview;
+
 const MAX_SOURCE_BYTES: usize = 2 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_EXPANDED_BYTES: u64 = 32 * 1024 * 1024;

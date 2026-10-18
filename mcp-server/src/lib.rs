@@ -43,7 +43,9 @@ mod summary;
 pub use control_admission::{NativeControlAdmission, NATIVE_CONTROL_ADMISSION_MAX_BYTES};
 pub use interface::read_authored_script;
 pub use limo_cad_script::MAX_SCRIPT_BYTES;
-pub use preview::{prepare_project_preview_source, PreparedProjectPreview};
+pub use preview::{
+    prepare_project_preview_source, run_prepared_project_preview, PreparedProjectPreview,
+};
 pub use replay::{
     inspect_project_replay_source, prepare_project_replay, prepare_project_replay_source,
     run_prepared_project_replay, PreparedProjectReplay,
