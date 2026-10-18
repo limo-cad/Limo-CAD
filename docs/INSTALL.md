@@ -1,100 +1,77 @@
-# Install Limo CAD's Bevy preview
+# Install Limo CAD 0.3.0-rc.1
 
-The current Bevy source builds the **Limo CAD** application and registers the
-MCP as **`limo-cad`**. The published October 4 preview below predates that rename
-and retains its original package filenames. Do not rename downloaded files to
-match source-build instructions.
+Use the packages on the **[0.3.0-rc.1 pre-release page](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.3.0-rc.1)**
+once publication has completed. That page lists the source revision, checksums,
+build evidence and qualification limits. Choose an application package, not
+GitHub's **Source code** archives. This candidate does not replace the stable
+release marked Latest.
 
-New source builds use `Limo-CAD.exe` on Windows, `limo-cad` on Linux/macOS,
-`.limo` projects and `limo-cad://` recipe links. The instructions below match
-the published preview's executable, `.nbcad` files and `nbcad://` links.
+This is pre-alpha software. Keep an original copy of important CAD projects.
+The `.limo` container remains version 1; the current model schema is 15. The app
+also reads legacy `.nbcad` projects; older builds may reject newer saved models.
 
-Download the **[Bevy rc.2 preview](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)**
-for **Windows x64 or Ubuntu 26.04 x64**. It includes the native desktop, Scripts
-library and MCP server; no compiler or agent is needed to use it. Choose an
-application package, not GitHub's **Source code** archives.
+| Platform | Package |
+| --- | --- |
+| Windows 11 x64 | `Limo-CAD-0.3.0-rc.1-windows-x64.zip` |
+| Windows 11 ARM64 | `Limo-CAD-0.3.0-rc.1-windows-arm64.zip` |
+| macOS Apple silicon | `Limo.CAD_0.3.0-rc.1_aarch64.dmg` |
+| Ubuntu 26.04 x64 | `Limo.CAD_0.3.0-rc.1_amd64.deb` |
+| Linux x64, glibc 2.35+ | `Limo.CAD_0.3.0-rc.1_amd64.AppImage` |
 
-This published preview uses application version **0.2.2**, source **`9b082687`**
-and channel **`bevy-preview-0.2.2-20261004.1`**. It is separate from the older
-stable `v0.2.2` release. Package and executable names still use **noBS CAD**,
-the former product name. See
-[transition status](native-transition-status.md) for newer source and package
-qualification. The Bevy browser application is still unfinished.
-
-This is pre-alpha software. Keep the original copy of an important CAD
-project when trying a new build. The release notes record the source revision
-and package checks.
+The release workflow publishes only after all five packages and their checks
+succeed. A listed target is not a claim that the unfinished manual UI/MCP
+qualification ledger is complete. See the release notes for known gaps.
 
 Find the installed version, source revision and build channel under
-**File → Settings → About Limo CAD**. Include that build text in a bug report.
+**File → Settings → About Limo CAD**. The executable should report
+**0.3.0-rc.1** and channel **v0.3.0-rc.1**; include that build text in bug reports.
+Apple bundle metadata uses `0.3.0`, and Debian package metadata uses
+`0.3.0~rc.1`, while the executable retains the complete candidate version.
 
 ## Windows
 
-1. Download `noBS-CAD-0.2.2-windows-x64.zip` for an Intel/AMD PC.
-2. Install the [Microsoft Visual C++ v14 x64 Redistributable](https://aka.ms/vc14/vc_redist.x64.exe)
-   if needed.
-3. Extract **all** files into a folder you can keep, then open `noBS-CAD.exe`.
-   Keep its DLLs and notices in that folder. The executable is not yet
-   code-signed, so if SmartScreen shows **Windows protected your PC**, choose
-   **More info → Run anyway**.
+1. Download the ZIP for your PC's architecture: x64 for Intel/AMD, ARM64 for ARM.
+2. Install the matching Microsoft Visual C++ v14 Redistributable if needed:
+   [x64](https://aka.ms/vc14/vc_redist.x64.exe) or
+   [ARM64](https://aka.ms/vc14/vc_redist.arm64.exe).
+3. Extract **all** files into a folder you can keep, then open `Limo-CAD.exe`.
+   Keep its DLLs and notices in that folder. The Windows executable is not
+   code-signed; verify its checksum and source before accepting a SmartScreen prompt.
 
-Use **Windows 11**. The native Bevy application needs
-a graphics adapter and driver that support **Direct3D 12 or Vulkan**;
-see [wgpu's platform support](https://github.com/gfx-rs/wgpu#supported-platforms).
-To update CAD, close it and extract the new ZIP to a separate folder;
-your saved projects can stay where they are.
+Use **Windows 11** and a graphics adapter/driver with **Direct3D 12 or Vulkan**.
+To update, close CAD and extract the new ZIP into a separate folder. Your saved
+projects can stay where they are. There is no setup installer or automatic updater.
+See [Windows packaging and troubleshooting](WINDOWS_PACKAGING.md).
 
-<details>
-<summary>Windows startup help</summary>
+## macOS
 
-Check the package architecture and Visual C++ runtime if a DLL error appears.
-For a blank viewport or graphics-adapter error, [update the display driver](https://support.microsoft.com/en-us/windows/update-drivers-through-device-manager-in-windows-ec62f46c-ff14-c91d-eead-d7126dc1f7b6)
-through Windows Update or the GPU manufacturer's support site, then restart CAD.
-The published Windows x64 package passed SDK-free headless and desktop MCP
-checks on Thunder, including Save and guarded shutdown. An independent hosted
-build of the same clean source also passed native-input checks in the
-[tagged package run](https://github.com/limo-cad/Limo-CAD/actions/runs/37232261112).
-This preview has no verified Windows 10 minimum.
-This preview has no setup installer or automatic updater.
-
-See [Windows packaging and troubleshooting](WINDOWS_PACKAGING.md) for details.
-
-</details>
+On an **Apple silicon Mac**, open the signed and notarized DMG, copy **Limo CAD**
+to **Applications**, then launch it from there. Close CAD before replacing an
+older application. This release does not provide an Intel Mac package.
 
 ## Ubuntu
 
-On **Ubuntu 26.04 LTS, x86_64**, download the `.deb` and run this from its folder:
+On **Ubuntu 26.04 LTS, x86_64**, download the DEB and run this from its folder:
 
 ```sh
-sudo apt install ./noBS.CAD_0.2.2_amd64.deb
+sudo apt install ./Limo.CAD_0.3.0-rc.1_amd64.deb
 ```
 
 Open **Limo CAD** from the application launcher. Vulkan support is required.
-The package is checked on X11 and Ubuntu's Wayland desktop through XWayland.
+The package is checked on X11 and Wayland through XWayland. The `limo-cad`
+package replaces the older `nbcad` package; your saved projects stay separate.
 
-To update CAD, close it, download the new `.deb`, then run this from the new
-download's folder:
+## Portable Linux
+
+On an **x86_64 glibc 2.35+** system with a working Vulkan driver, download the
+AppImage, verify its checksum, then run:
 
 ```sh
-sudo apt install --reinstall ./noBS.CAD_0.2.2_amd64.deb
+chmod +x Limo.CAD_0.3.0-rc.1_amd64.AppImage
+./Limo.CAD_0.3.0-rc.1_amd64.AppImage
 ```
 
-[`--reinstall`](https://manpages.ubuntu.com/manpages/resolute/man8/apt-get.8.html)
-asks APT to replace the installed package even when the downloaded file and the
-installed one share the same version number.
-Reopen CAD and check **File → Settings → About Limo CAD** against the release's
-source revision. Your saved project files can stay where they are.
-
 See [Linux dependencies and troubleshooting](LINUX_PACKAGING.md).
-
-## Targets still withheld
-
-This preview has no macOS, Windows ARM64 or AppImage download. macOS
-notarization needs the Apple account owner to resolve a team-agreement error;
-ARM64 native-input checks and AppImage package qualification remain open.
-An older package with the same **0.2.2** application version is not an equivalent
-Bevy preview. Developers can [build from source](DEVELOPMENT.md); those local
-builds do not establish published platform qualification.
 
 ## Make your first part
 
@@ -109,7 +86,7 @@ on the README are accelerated.
 3. In the feature history, double-click the **Extrude** feature. Change
    **Distance** from **12** to **18 mm** and confirm the edit. The block becomes
    taller while retaining its sketch and rounded top edges.
-4. Use **File → Save As** to save `first-part.nbcad` in a folder you can find.
+4. Use **File → Save As** to save `first-part.limo` in a folder you can find.
    Close that design tab, then use **File → Open** to reopen the saved file.
    Double-click the extrusion again and confirm that its distance is **18 mm**.
 
@@ -121,8 +98,8 @@ To inspect a flagship without waiting for construction, download its `.limo`
 from the [showcase media release](https://github.com/limo-cad/Limo-CAD/releases/tag/showcase-v0.2.0)
 and use **File → Open**. Browser **Open recipe** links load source into Scripts;
 review it before choosing **Run in new design**. Launch the installed app once
-before using those browser links, so it can register its recipe handler. New
-source builds register `limo-cad`; this published preview registers `nbcad`.
+before using those browser links, so it can register its recipe handler. This
+release registers the `limo-cad://` recipe handler and retains legacy `nbcad://` links.
 
 ![The completed 12 mm lesson and its editable feature history](assets/showcase/first-part.png)
 
@@ -154,7 +131,7 @@ any existing servers. This Windows example uses the extracted application:
 {
   "mcpServers": {
     "limo-cad": {
-      "command": "C:/YOUR/EXTRACTED/FOLDER/noBS-CAD.exe",
+      "command": "C:/YOUR/EXTRACTED/FOLDER/Limo-CAD.exe",
       "args": ["--headless"]
     }
   }
@@ -176,7 +153,7 @@ VS Code uses **`servers`**, with a `stdio` entry:
   "servers": {
     "limo-cad": {
       "type": "stdio",
-      "command": "C:/YOUR/EXTRACTED/FOLDER/noBS-CAD.exe",
+      "command": "C:/YOUR/EXTRACTED/FOLDER/Limo-CAD.exe",
       "args": ["--headless"]
     }
   }
@@ -192,7 +169,9 @@ for custom profiles and configuration options.
 Use the absolute path to your installed executable. On other platforms, keep
 `"args": ["--headless"]` and change `command`:
 
-- **Ubuntu DEB:** `/usr/bin/nbcad`
+- **Ubuntu DEB:** `/usr/bin/limo-cad`
+- **macOS:** `/Applications/Limo CAD.app/Contents/MacOS/limo-cad`
+- **Linux AppImage:** the absolute path to your executable AppImage
 
 Reload the client's MCP servers and confirm that **limo-cad** is available. Open
 CAD normally, then ask your agent:
@@ -233,8 +212,8 @@ Download the package's adjacent `.sha256` asset into the same folder.
 On Windows, compare the following values (hash letter case does not matter):
 
 ```powershell
-Get-FileHash .\noBS-CAD-0.2.2-windows-x64.zip -Algorithm SHA256
-Get-Content .\noBS-CAD-0.2.2-windows-x64.zip.sha256
+Get-FileHash .\Limo-CAD-0.3.0-rc.1-windows-x64.zip -Algorithm SHA256
+Get-Content .\Limo-CAD-0.3.0-rc.1-windows-x64.zip.sha256
 ```
 
 On Ubuntu use `sha256sum -c PACKAGE.sha256`, substituting the downloaded
