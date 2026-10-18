@@ -8,6 +8,7 @@ pub(super) struct Running {
     owner: DocumentContext,
     source_generation: u64,
     result: Mutex<mpsc::Receiver<Result<Value, String>>>,
+    replay: Option<Mutex<replay::launch::Launch>>,
 }
 
 pub(super) fn start_source_with_options(
@@ -18,6 +19,51 @@ pub(super) fn start_source_with_options(
     source: String,
     (mode, speed): (&'static str, f64),
 ) -> Result<(), String> {
+    let (receipt, session) = prepare_start(world, services, owner)?;
+    let (send, receive) = mpsc::channel();
+    let services = services.clone();
+    let wake = handle.clone();
+    std::thread::Builder::new()
+        .name("cad-native-script".into())
+        .spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if services
+                    .bridge
+                    .native_document_receipt(&services.engine, &receipt.owner)?
+                    != receipt
+                {
+                    return Err("The document changed before the script started".into());
+                }
+                limo_cad_mcp::run_script(&source, None, Some(&session), mode, speed)
+            }))
+            .unwrap_or_else(|_| {
+                Err(
+                    "The script worker stopped unexpectedly; any completed work is preserved"
+                        .into(),
+                )
+            });
+            let _ = send.send(result);
+            wake.request_redraw();
+        })
+        .map_err(|error| format!("Cannot start script: {error}"))?;
+    let mut files = world.resource_mut::<Files>();
+    let source_generation = files.script.generation;
+    files.lesson = Some(Running {
+        owner: owner.clone(),
+        source_generation,
+        result: Mutex::new(receive),
+        replay: None,
+    });
+    files.script.status = Some(format!("Running {name}"));
+    files.scripts = false;
+    Ok(())
+}
+
+fn prepare_start(
+    world: &World,
+    services: &NativeServices,
+    owner: &DocumentContext,
+) -> Result<(DocumentReceipt, String), String> {
     if world.resource::<Files>().script.preview.building() {
         return Err("Wait for the isolated lesson preview to finish preparing".into());
     }
@@ -51,42 +97,7 @@ pub(super) fn start_source_with_options(
         &owner.document_id,
         &session,
     )?;
-    let (send, receive) = mpsc::channel();
-    let services = services.clone();
-    let wake = handle.clone();
-    std::thread::Builder::new()
-        .name("cad-native-script".into())
-        .spawn(move || {
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                if services
-                    .bridge
-                    .native_document_receipt(&services.engine, &receipt.owner)?
-                    != receipt
-                {
-                    return Err("The document changed before the script started".into());
-                }
-                limo_cad_mcp::run_script(&source, None, Some(&session), mode, speed)
-            }))
-            .unwrap_or_else(|_| {
-                Err(
-                    "The script worker stopped unexpectedly; any completed work is preserved"
-                        .into(),
-                )
-            });
-            let _ = send.send(result);
-            wake.request_redraw();
-        })
-        .map_err(|error| format!("Cannot start script: {error}"))?;
-    let mut files = world.resource_mut::<Files>();
-    let source_generation = files.script.generation;
-    files.lesson = Some(Running {
-        owner: owner.clone(),
-        source_generation,
-        result: Mutex::new(receive),
-    });
-    files.script.status = Some(format!("Running {name}"));
-    files.scripts = false;
-    Ok(())
+    Ok((receipt, session))
 }
 
 /// Adopt only this running lesson's committed baseline, before presentation
@@ -126,6 +137,7 @@ fn validate_replay_lesson(
 }
 
 pub(super) fn poll(world: &mut World, services: &NativeServices) {
+    replay::launch::poll(world, services);
     let result = world
         .resource::<Files>()
         .lesson
@@ -230,6 +242,7 @@ mod tests {
                 owner: initial.owner.clone(),
                 source_generation: generation,
                 result: Mutex::new(receive),
+                replay: None,
             });
             let handle = NativeInterfaceHandle::new(|| {});
             super::super::super::presentation::request(

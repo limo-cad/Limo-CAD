@@ -343,17 +343,21 @@ pub(super) fn gate(world: &mut World, owner: &DocumentContext) -> Gate {
 }
 
 /// Check before queueing the baseline; never create or retarget playback here.
-pub(super) fn require_replay_ready(
-    world: &mut World,
-    owner: &DocumentContext,
-) -> Result<(), String> {
+pub(super) fn replay_readiness(world: &mut World, owner: &DocumentContext) -> Result<Gate, String> {
     let playback = world
         .get_resource::<Playback>()
         .ok_or("Replay playback is not configured")?;
     if playback.owner.as_ref() != Some(owner) || !playback.state.active || playback.state.finished {
         return Err("Replay playback no longer belongs to the admitted document".into());
     }
-    match gate(world, owner) {
+    Ok(gate(world, owner))
+}
+
+pub(super) fn require_replay_ready(
+    world: &mut World,
+    owner: &DocumentContext,
+) -> Result<(), String> {
+    match replay_readiness(world, owner)? {
         Gate::Ready => Ok(()),
         Gate::Waiting => Err("Replay is paused or waiting before its baseline".into()),
         Gate::Stopped => Err("Replay was stopped before its baseline".into()),

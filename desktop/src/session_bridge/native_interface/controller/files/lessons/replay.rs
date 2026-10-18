@@ -4,6 +4,8 @@ use super::super::super::presentation;
 use super::*;
 use limo_cad_project_file::{ProjectArchive, PublicationReceipt};
 
+pub(in super::super) mod launch;
+
 type Acknowledgement = mpsc::Receiver<Result<PublicationReceipt, String>>;
 
 /// The caller retains its prepared script/package identity and registers Running
