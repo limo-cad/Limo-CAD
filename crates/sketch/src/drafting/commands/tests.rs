@@ -238,3 +238,82 @@ fn allocator_exhaustion_is_an_unchanged_failure() {
     assert!(manager.drafting_command(layer()).is_err());
     assert_eq!(manager.export_project_model().unwrap(), before);
 }
+
+fn issued_sheets(manager: &mut SketchManager) {
+    let mut drawing = manager.drawing_document();
+    for sheet in &mut drawing.sheets {
+        sheet.release.status = crate::drawing::DrawingReleaseStatus::Released;
+        sheet.release.released_revision = "A".into();
+        sheet.release.released_at = "2026-10-18".into();
+    }
+    manager.set_drawing_document(drawing).unwrap();
+}
+fn two_sheets() -> SketchManager {
+    let mut manager = SketchManager::new();
+    for name in ["Authored", "Technical"] {
+        manager.drawing_command(serde_json::from_value(serde_json::json!({
+            "type":"create_sheet","arguments":{"name":name,"format":"a4","orientation":"landscape"}
+        })).unwrap()).unwrap();
+    }
+    manager.drafting_command(layer()).unwrap();
+    manager
+}
+#[test]
+fn paper_creation_and_last_item_removal_revoke_release_only_on_authored_sheets() {
+    use crate::drawing::DrawingReleaseStatus::{Draft, Released};
+    let mut manager = two_sheets();
+    issued_sheets(&mut manager);
+    manager
+        .drafting_command(line(LayerId(1), Space::Paper(1)))
+        .unwrap();
+    let drawing = manager.drawing_document();
+    assert_eq!(drawing.sheets[0].release.status, Draft);
+    assert_eq!(drawing.sheets[1].release.status, Released);
+    assert_eq!(drawing.sheets[0].release.released_revision, "A");
+    issued_sheets(&mut manager);
+    manager
+        .drafting_command(Command::DeleteEntity { id: EntityId(2) })
+        .unwrap();
+    let drawing = manager.drawing_document();
+    assert_eq!(drawing.sheets[0].release.status, Draft);
+    assert_eq!(drawing.sheets[1].release.status, Released);
+}
+#[test]
+fn model_edits_invalidate_viewport_release_but_noops_and_failures_do_not() {
+    use crate::drawing::DrawingReleaseStatus::{Draft, Released};
+    let mut manager = two_sheets();
+    manager
+        .drafting_command(Command::CreateViewport {
+            sheet_id: 1,
+            model_center_mm: [0., 0.],
+            paper_center_mm: [100., 100.],
+            rotation_rad: 0.,
+            paper_mm_per_model_mm: 0.02,
+            clip_mm: [10., 10., 180., 120.],
+            hidden_layers: vec![],
+        })
+        .unwrap();
+    issued_sheets(&mut manager);
+    let unchanged = manager.drawing_document();
+    manager.set_drawing_document(unchanged.clone()).unwrap();
+    assert_eq!(manager.drawing_document(), unchanged);
+    let before = manager.export_project_model().unwrap();
+    assert!(manager
+        .drafting_command(line(LayerId(999), Space::Model))
+        .is_err());
+    assert_eq!(manager.export_project_model().unwrap(), before);
+    manager
+        .drafting_command(line(LayerId(1), Space::Model))
+        .unwrap();
+    let drawing = manager.drawing_document();
+    assert_eq!(drawing.sheets[0].release.status, Draft);
+    assert_eq!(drawing.sheets[1].release.status, Released);
+    issued_sheets(&mut manager);
+    // Raw native document edits use the same invalidation gate as typed commands.
+    let mut edited = manager.drawing_document();
+    edited.drafting.as_mut().unwrap().layers[0].style.width_mm = 0.5;
+    manager.set_drawing_document(edited).unwrap();
+    let drawing = manager.drawing_document();
+    assert_eq!(drawing.sheets[0].release.status, Draft);
+    assert_eq!(drawing.sheets[1].release.status, Released);
+}

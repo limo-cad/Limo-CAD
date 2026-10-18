@@ -1914,12 +1914,13 @@ impl SketchManager {
             crate::drafting::transition::validate_edit(before, after)
                 .map_err(SessionError::Solid)?;
         }
-        let drawing = crate::drawing_topology::capture_drawing_topology(
+        let mut drawing = crate::drawing_topology::capture_drawing_topology(
             drawing,
             self.solid_scene_ref(),
             Some(self.drawings.as_ref()),
         )
         .map_err(SessionError::Solid)?;
+        crate::drafting::transition::invalidate_sheet_releases(&self.drawings, &mut drawing);
         if drawing != *self.drawings {
             self.drawings = std::sync::Arc::new(drawing);
         }

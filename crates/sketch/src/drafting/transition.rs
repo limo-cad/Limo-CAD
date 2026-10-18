@@ -211,3 +211,32 @@ pub(crate) fn validate_layer_edit(before: &Document, after: &Document) -> Result
     }
     Ok(())
 }
+
+/// A changed authored graph may change any sheet that contains a paper entity or
+/// model viewport. Include the old graph so removing the last item also revokes
+/// release. This is deliberately conservative across shared definitions/layers;
+/// sheets with no authored content and unchanged graphs keep their release state.
+/// Invoke only for admitted ordinary edits, never project/history replacement.
+pub(crate) fn invalidate_sheet_releases(
+    before: &crate::DrawingDocumentDto,
+    after: &mut crate::DrawingDocumentDto,
+) {
+    if before.drafting == after.drafting {
+        return;
+    }
+    let mut affected = BTreeSet::new();
+    for graph in before.drafting.iter().chain(after.drafting.iter()) {
+        affected.extend(graph.viewports.iter().map(|v| v.sheet_id));
+        affected.extend(graph.entities.iter().filter_map(|e| match e.space {
+            Space::Paper(id) => Some(id),
+            _ => None,
+        }));
+    }
+    for sheet in &mut after.sheets {
+        if affected.contains(&sheet.id)
+            && sheet.release.status == crate::drawing::DrawingReleaseStatus::Released
+        {
+            sheet.release.status = crate::drawing::DrawingReleaseStatus::Draft;
+        }
+    }
+}
