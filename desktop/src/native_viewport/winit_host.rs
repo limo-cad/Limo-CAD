@@ -284,6 +284,8 @@ pub(crate) fn build(configure: impl FnOnce(&mut App, NativeInterfaceHandle)) -> 
         focused_mode: UpdateMode::reactive_low_power(Duration::MAX),
         unfocused_mode: UpdateMode::reactive_low_power(Duration::MAX),
     });
+    #[cfg(feature = "experimental-ui-widgets")]
+    app.insert_resource(bevy::winit::WinitPointerButtonUpdates);
     platform::viewport_renderer::install(&mut app);
     app.init_resource::<HostInputState>()
         .init_resource::<HostCaptureState>()
