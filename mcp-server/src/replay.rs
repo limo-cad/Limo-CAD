@@ -78,11 +78,14 @@ pub fn inspect_project_replay_source(
 }
 
 /// Prepare an immutable editor snapshot with its retained package, without any
-/// file read. Consumes the package so archive decoding does not require cloning
-/// its potentially large buffer. Identity describes the edited canonical
-/// envelope, not the original selection and not proof of a successful save.
+/// file read. Borrows the editor package so both failed and successful preparation
+/// leave its baseline available for subsequent edits and saves. After source
+/// preflight, one bounded archive copy is decoded for the owned run. Callers must
+/// serialize preparation jobs; do not prepare on every keystroke or validation.
+/// Identity describes the edited canonical envelope, not the original selection
+/// and not proof of a successful save.
 pub fn prepare_project_replay_source(
-    package: ReplayPackage,
+    package: &ReplayPackage,
     source: &str,
     presentation: bool,
     validate: bool,
@@ -93,7 +96,9 @@ pub fn prepare_project_replay_source(
     };
     let script = validated_source(source, options)?;
     let identity = package.source_identity(source).map_err(|e| e.to_string())?;
-    finish_preparation(package, script, identity, options)
+    let archive =
+        ProjectArchive::decode(package.project_bytes().to_vec()).map_err(|e| e.to_string())?;
+    finish_archive(archive, script, identity, options)
 }
 
 fn validated_source(source: &str, options: RunOptions) -> Result<ProjectScript, String> {
@@ -120,6 +125,15 @@ fn finish_preparation(
     options: RunOptions,
 ) -> Result<PreparedProjectReplay, String> {
     let (_, archive) = package.into_project().map_err(|e| e.to_string())?;
+    finish_archive(archive, script, identity, options)
+}
+
+fn finish_archive(
+    archive: ProjectArchive,
+    script: ProjectScript,
+    identity: ReplayPackageIdentity,
+    options: RunOptions,
+) -> Result<PreparedProjectReplay, String> {
     // Validate snapshot framing/limits while retaining the full archive. Typed
     // domain semantics and kernel staging remain the guarded host's responsibility.
     archive.snapshot().map_err(|e| e.to_string())?;
@@ -166,7 +180,7 @@ mod tests {
         assert_eq!(inspected["name"], "Edited project");
         assert_eq!(inspected["authored_source"], edited);
         assert_eq!(inspected["project_baseline_required"], true);
-        let prepared = prepare_project_replay_source(package, &edited, false, true).unwrap();
+        let prepared = prepare_project_replay_source(&package, &edited, false, true).unwrap();
         assert_eq!(prepared.identity(), &expected);
         assert_eq!(
             prepared.script().script().metadata()["name"],
@@ -189,7 +203,7 @@ mod tests {
         ] {
             let inspection = inspect_project_replay_source(&bad, false, true).unwrap_err();
             let package = ReplayPackage::new("original".into(), vec![255]).unwrap();
-            let preparation = prepare_project_replay_source(package, &bad, false, true)
+            let preparation = prepare_project_replay_source(&package, &bad, false, true)
                 .err()
                 .unwrap();
             assert_eq!(inspection, preparation);
@@ -197,8 +211,39 @@ mod tests {
         let valid = source(2, "document/files");
         assert!(inspect_project_replay_source(&valid, false, true).is_ok());
         let package = ReplayPackage::new("original".into(), vec![255]).unwrap();
-        assert!(prepare_project_replay_source(package, &valid, false, true).is_err());
+        assert!(prepare_project_replay_source(&package, &valid, false, true).is_err());
     }
+    #[test]
+    fn editor_retains_baseline_after_failed_and_successful_preparation() {
+        use std::sync::Arc;
+        let original = archive();
+        let package =
+            Arc::new(ReplayPackage::new(source(2, "document/files"), original.clone()).unwrap());
+        let editor = Arc::clone(&package);
+        let before = editor.encode_cbor().unwrap();
+        let address = editor.project_bytes().as_ptr();
+        assert!(prepare_project_replay_source(&package, "invalid draft", false, true).is_err());
+        assert_eq!(editor.project_bytes().as_ptr(), address);
+        assert_eq!(editor.encode_cbor().unwrap(), before);
+        let edited = source(2, "document/files").replace("Retained project", "First run");
+        let prepared = prepare_project_replay_source(&package, &edited, false, true).unwrap();
+        // The editor can continue to encode another draft while this owned run
+        // retains the old generation. Neither source nor archive is taken away.
+        let later = edited.replace("First run", "Later draft");
+        let later_package =
+            ReplayPackage::decode_cbor(&editor.encode_source_cbor(&later).unwrap()).unwrap();
+        assert_eq!(later_package.script(), later);
+        assert_eq!(later_package.project_bytes(), original);
+        assert_eq!(prepared.script().script().metadata()["name"], "First run");
+        drop(prepared);
+        assert_eq!(editor.project_bytes().as_ptr(), address);
+        assert_eq!(editor.encode_cbor().unwrap(), before);
+        let malformed = ReplayPackage::new("retained original".into(), vec![255]).unwrap();
+        assert!(prepare_project_replay_source(&malformed, &edited, false, true).is_err());
+        assert_eq!(malformed.script(), "retained original");
+        assert_eq!(malformed.project_bytes(), [255]);
+    }
+
     #[test]
     fn edited_chapter_ranges_and_required_options_are_preserved() {
         let source = r#"// authored comment
