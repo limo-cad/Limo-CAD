@@ -16,5 +16,20 @@ alwaysApply: true
   validation and material limitations. Identify pending checks honestly.
 - Separate durable guidance changes from product implementation in independent PRs
   when requested. Avoid making a documentation PR depend on unrelated feature code.
-- Do not merge into main without Jack's approval. Check that approval still covers
-  the current changes; request another review when the scope materially changes.
+- For our own PRs, obtain Jack's approval before merging into main unless the user
+  explicitly authorizes a different independent reviewer. Never self-approve.
+- When reviewing Jack's PRs, the user's standing direction is to fix actionable
+  findings, approve when ready, and merge once all repository requirements pass.
+  Do not stop at an approval when the PR is eligible to merge.
+- Check that approval covers the current scope and head. Material changes require
+  another review; do not dismiss change requests merely to clear merge status.
+- Use squash merge by default, with a concise title and body describing the final
+  change. Use a merge commit or rebase only when explicitly requested or when an
+  agreed stack/history plan requires it; explain that choice in the PR.
+- Merge the reviewed head explicitly (for example, `gh pr merge N --squash
+  --match-head-commit SHA`). Never bypass required checks or review protections.
+  If checks are pending, use auto-merge when available; otherwise report the exact
+  blocker and resume the merge when it clears. Do not change repository settings
+  merely to make a blocked merge pass.
+- Approval and merging do not authorize release publication, tagging, deployment
+  or deletion of another contributor's branch. Follow the task's explicit scope.
