@@ -334,5 +334,12 @@
         "workflowName": "Native sketch visual regressions"
       }
     ]
+  },
+  "settings_drag_resolution_followup": {
+    "record": "docs/qualification/bevy-settings-drag-20261018.json",
+    "source_revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+    "status": "large_settings_drag_fixed_and_affected_native_checks_passed",
+    "historical_statuses_preserved": true,
+    "scope": "Resolves the large Settings blocker and rechecks affected workflows; does not retroactively qualify this older source or broaden other passes."
   }
 }

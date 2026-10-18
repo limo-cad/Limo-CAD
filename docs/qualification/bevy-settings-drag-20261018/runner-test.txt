@@ -1,0 +1,9 @@
+   Compiling bevy_winit v0.20.0 (/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD/desktop/vendor/bevy_winit)
+    Finished `release` profile [optimized] target(s) in 5.97s
+     Running unittests src/lib.rs (/private/tmp/pr420-controls-target/release/deps/bevy_winit-31d4a944380d183a)
+
+running 1 test
+test state::tests::pointer_button_updates_separate_motion_and_transitions_without_idle_polling ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.00s
+

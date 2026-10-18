@@ -1,0 +1,55 @@
+--- bevy_ui_widgets-0.20.0/src/dialog.rs
++++ patched/src/dialog.rs
+@@ -18,7 +18,7 @@
+ use bevy_log::warn;
+ use bevy_math::Vec2;
+ use bevy_picking::{
+-    events::{PointerDrag, PointerDragStart, PointerPress},
++    events::{PointerDrag, PointerPress},
+     pointer::PointerButton,
+ };
+ use bevy_reflect::Reflect;
+@@ -139,20 +139,20 @@
+     stack.push_top(dialog);
+ }
+ 
+-/// Record the dialog's translation when a drag begins on its [`DialogDragHandle`].
+-fn dialog_drag_start(
+-    drag_start: On<PointerDragStart>,
++/// Record the press origin before the first movement on a [`DialogDragHandle`].
++fn dialog_press(
++    press: On<PointerPress>,
+     q_dialog: Query<(), With<Dialog>>,
+     q_parent: Query<&ChildOf>,
+     q_transform: Query<&UiTransform>,
+     mut q_state: Query<&mut DialogDragState>,
+     ui_scale: Res<UiScale>,
+ ) {
+-    if drag_start.button != PointerButton::Primary {
++    if press.button != PointerButton::Primary {
+         return;
+     }
+     // Only the handle entity itself drives the move.
+-    let handle = drag_start.event_target();
++    let handle = press.event_target();
+     let Ok(mut state) = q_state.get_mut(handle) else {
+         return;
+     };
+@@ -169,7 +169,7 @@
+         warn!("Cannot get translation from dialog for dragging");
+         state.start_dialog_translation = Val2::ZERO;
+     }
+-    state.start_pointer_location = drag_start.pointer.position / ui_scale.0;
++    state.start_pointer_location = press.pointer.position / ui_scale.0;
+ }
+ 
+ /// Move a dialog by dragging its [`DialogDragHandle`], positioning it at the
+@@ -224,7 +224,7 @@
+         app.init_resource::<DialogStack>()
+             .add_observer(register_dialog)
+             .add_observer(deregister_dialog)
+-            .add_observer(dialog_drag_start)
++            .add_observer(dialog_press)
+             .add_observer(dialog_drag)
+             .add_observer(bring_to_front)
+             .add_systems(

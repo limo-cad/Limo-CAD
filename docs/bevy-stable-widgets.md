@@ -12,8 +12,11 @@ workflow. Minor differences are acceptable when they do not obscure state,
 change command meaning, clip required content, or prevent an existing action.
 Pixel identity is useful evidence, but is not an adoption requirement.
 
-Latest focused follow-up: [Snap focus is fixed and verified; large Settings
-drags remain blocked](#settings-dragging-and-snap-focus-follow-up).
+Latest focused follow-up: [large Settings dragging and affected workflows
+pass on clean `93541949`](#large-settings-drag-resolution-2026-10-18). Bevy still
+owns picking and dialog gestures, with two small documented dependency
+corrections. The existing appearance is preserved; this is not an unmodified
+Bevy dependency claim.
 
 ## Why headless widgets
 
@@ -30,7 +33,7 @@ appearance would require an additional design/parity pass.
 | Sliders/ranges | Standard `Slider`, `SliderThumb`, `SliderStep`, `SliderPrecision` and controlled `SliderValue` | Step-index conversion retains CAD `f64` values; oversized/invalid ranges retain the native adapter. Current source/live checks recorded below. |
 | Shared feature dropdowns | Standard `MenuButton`, `MenuPopup` and `MenuItem` over the existing inline choice layout | Existing form reducer owns open/selected state. Other cycling choice fields remain native; no separate popup framework was added. |
 | Radio groups and tabs | Standard `RadioGroup`/`RadioButton` and `TabList`/`Tab` | Settings, feature and sketch-origin radios; Assembly tabs. Document tabs keep native navigation after the standard-tab trial failed focus continuity. |
-| Dialogs and scrolling | Standard dialog title dragging plus a small resize adapter; existing scrolling/modal policy | See the movable/resizable dialog scope and retained limitations below. |
+| Dialogs and scrolling | Standard dialog title dragging, two small dependency corrections, and the existing shared resize adapter | Large Settings and shared Extrude move/resize workflows pass; host-window resizing and other forms retain their separate qualification limits. |
 | Orientation dial and CAD annotations | Existing custom visual/geometry controls | Product-specific controls need their current geometry and hit behavior |
 
 ## Input and state ownership
@@ -65,7 +68,11 @@ clicks and camera gestures. Published document/binding stamps accompany Bevy's
 document change cancels pending pointer state; rebinding or disabling an
 unrelated control no longer cancels a dialog-owned gesture. Native text edits are
 flushed before queued widget commands are reduced. These are CAD ownership and
-transaction responsibilities, not a second widget event implementation.
+transaction responsibilities, not a second widget event implementation. With the
+experiment enabled, the Bevy window runner processes pending motion and each
+primary-button transition before accepting later motion. This preserves Bevy
+picking targets when native events arrive in one batch; see the
+[small runner extension](../desktop/vendor/bevy_winit/LIMO-PATCH.md).
 
 Checkbox state remains controlled by accepted application commands. Some
 checkboxes perform commands such as Fix/Unfix, so a value proposal preserves the
@@ -166,12 +173,12 @@ width and validation; apply/undo/save; and operation after disk cleanup. Applyin
 14 mm from a moved Extrude dialog worked. Undo and Save restored the original
 12 mm model byte-for-byte.
 
-One functional item remains open: some large automated Settings drags dismiss
-the dialog or focus a different control instead of dragging. Ordinary move and
-resize gestures passed, but input delivery versus a product defect is not yet
-isolated. Exact minimum-height and host-window-resize live cases remain unrun.
-This remains a draft, opt-in prototype; the large-drag issue is not accepted as
-a minor visual difference. Native host CI was still running when recorded.
+At this historical V8 checkpoint, some large Settings drags dismissed the
+dialog or focused a different control. Ordinary moves and resizes passed, but
+exact minimum height and host-window resizing were unrun. The
+[2026-10-18 follow-up](#large-settings-drag-resolution-2026-10-18) resolves the
+large-drag issue and verifies Settings minimum dimensions. Host-window resizing
+remains outside that focused run. Native host CI was still running at V8.
 See [dialog evidence](qualification/bevy-dialogs-20261017.json).
 
 ![Settings moved and resized using Bevy dialog handling](qualification/bevy-dialogs-20261017/settings-dragged.png)
@@ -185,8 +192,9 @@ is byte-identical to the pre-rebase patch; formatting and locked manifest
 checks pass. The final dependency versions add profile and history fixes
 beyond the V8 test snapshot. V8 captures remain historical evidence; the
 Extrude apply/undo/save flow needs a targeted recheck on the new combined build.
-The existing large-drag issue and unrun boundary cases remain open. This
-checkpoint performs no new live UI or MCP qualification. See the
+The large-drag issue and unrun boundary cases remained open at that checkpoint.
+The later resolution is recorded below; this rebase checkpoint itself performs
+no new live UI or MCP qualification. See the
 [rebase record](qualification/bevy-rebase-20261017.json).
 
 ## Stable dependency and window-host patch
@@ -197,10 +205,13 @@ Stable also advances Bevy's WESL dependencies to 0.6.0, requiring native render
 verification in addition to compilation.
 
 The published stable `bevy_winit` source files are identical to rc.2. Refresh
-the normalized stable manifest and archive provenance, preserving the only
-local source patch: explicit service wakes advance schedules without an OS
-redraw. Its regression must pass on the upgraded dependency graph. See
-[the patch record](../desktop/vendor/bevy_winit/LIMO-PATCH.md).
+the normalized stable manifest and archive provenance, preserving the existing
+service-wake patch: explicit wakes advance schedules without an OS redraw.
+The later Settings repair adds an opt-in primary-button update boundary to this
+runner and a press-origin correction to the standard dialog widget. Both
+regressions must pass when refreshing dependencies. See the
+[runner patch](../desktop/vendor/bevy_winit/LIMO-PATCH.md) and
+[dialog patch](../desktop/vendor/bevy_ui_widgets/LIMO-PATCH.md).
 
 ## Source checks
 
@@ -355,7 +366,9 @@ The shared feature forms retain their inline dropdown appearance and use
 focus return. Application code connects menu events to the existing form
 reducer and prevents a completed selection from toggling the list open again.
 Choice fields elsewhere that currently cycle values retain their existing
-behavior. No Bevy fork or alternate pointer recognizer was added.
+behavior. That control-migration checkpoint added no widget dependency patch
+or alternate pointer recognizer. The later Settings repair makes the two small
+dependency corrections documented below.
 
 The focused native-interface, Settings, document and host checks passed: 215
 distinct checks, including the standard-widget input schedules and native
@@ -398,13 +411,17 @@ and theme remain comparable, with a slightly larger slider thumb. All live input
 used the native app, with matched clean read-only MCP inspection/capture. No MCP
 mutations or broad ledger changes were made. Other platforms, every feature form,
 long dropdown lists and full screen-reader behavior remain unqualified. The prior
-large Settings drag issue remains open; Snap focus is resolved in the follow-up below.
+large Settings drag issue was still open at this checkpoint; both it and Snap
+focus have later focused resolution records below.
 See the [focused evidence record](qualification/bevy-controls-20261017.json),
 [input model](qualification/bevy-controls-20261017/standard-controls-input.limo)
 and [applied model](qualification/bevy-controls-20261017/standard-controls-applied.limo).
 
 
 ## Settings dragging and Snap focus follow-up
+
+This 2026-10-17 record is historical. Its Snap passes remain tied to `46ecca2a`;
+the large Settings blocker is resolved in the next section.
 
 Clean native macOS build `46ecca2a` fixes Snap focus through the temporary disabled
 state used while a command runs. It keeps the existing Bevy `InputFocus` and
@@ -430,22 +447,23 @@ These GIFs are labeled native step captures, not real-time recordings.
 The small dialog repair uses Bevy's existing press/drag ownership, including
 child targets such as slider thumbs. A clipped or disabled sibling no longer
 clears a dialog-owned pointer gesture. The regression exercises the actual
-Bevy event schedules and dialog plugin, but **large native Settings drags still
-fail**. On clean trial `a76749a7`, dragging the title from screenshot (1150,270)
+Bevy event schedules and dialog plugin, but **large native Settings drags
+still failed at this checkpoint**. On clean trial `a76749a7`, dragging the title from screenshot (1150,270)
 to (550,270), with and without a prior title click, left the dialog unchanged
 and focused its backdrop. The standard 60 Hz reactive-update trial did not help
 and was removed in `46ecca2a`.
 
-![Unresolved large Settings drag](qualification/bevy-settings-snap-20261017/settings-drag-blocker.png)
+![Historical large Settings drag blocker](qualification/bevy-settings-snap-20261017/settings-drag-blocker.png)
 
-The repository's qualification rule limits one initial repair investigation to
-two repair/rebuild cycles or 30 minutes. That limit was reached. A future bounded
-investigation should compare native event delivery with Bevy's final-position
-hit selection; this is a hypothesis, not a proven event trace. No extra pointer
-recognizer, replay queue or Bevy fork was added. Prior small-dialog passes keep
-their original revision identities; no full Settings drag/resize pass is claimed.
+The initial investigation stopped at the repository's two-cycle/30-minute
+limit. Its next hypothesis was native event batching versus final-position
+hit selection; that was not yet proven. The user explicitly authorized
+extending this investigation on 2026-10-18. The new traces and resolution below
+supersede the blocker without changing these historical test results. No extra
+pointer recognizer or replay queue was added; the later repair does include two
+small dependency corrections.
 
-All 129 focused checks pass on final source: 109 native-interface, 13 native-host
+All 129 focused checks passed on `46ecca2a`: 109 native-interface, 13 native-host
 and seven Settings tests, plus strict release Clippy and formatting. The new
 regressions cover disabled-focus retention/activation gating and unrelated-control
 changes during standard dialog dragging. The clean packaged GUI and read-only
@@ -454,3 +472,71 @@ PR420 remains draft and the widget feature remains opt-in.
 
 See the [focused evidence record](qualification/bevy-settings-snap-20261017.json)
 and [saved fixture](qualification/bevy-settings-snap-20261017/snap-focus-saved.limo).
+
+
+## Large Settings drag resolution, 2026-10-18
+
+Clean native macOS build `93541949` passes large and repeated Settings title
+drags, all four client-window edges, the previously failing large corner resize,
+400×260 minimum size, enlargement, scrolling, 125% scale, keyboard focus and
+close/reopen. No accidental language changes or dialog dismissal occurred in
+the final run. The user explicitly authorized extending the initial repair cap.
+
+![Large Settings dragging, edge bounds, resizing and reopening](qualification/bevy-settings-drag-20261018/settings-drag-resize.gif)
+
+These are native step captures, not real-time recordings. The centered Settings
+crop is pixel-identical to the preceding clean `a9dc5ee6` build outside its About
+build-identity line; the displayed comparison is unmasked. This compares the
+runner correction, not a fresh full default-versus-experiment qualification.
+
+![Settings appearance before and after the runner correction](qualification/bevy-settings-drag-20261018/settings-comparison.png)
+
+Two native traces isolated independent causes:
+
+- Bevy's dialog stored the first movement position as the drag origin, while
+  drag distance was measured from the press. Large first movements were clamped
+  incorrectly. `a9dc5ee6` initializes the same standard `DialogDragState` on
+  `PointerPress`. All other widget source files remain identical to published
+  Bevy 0.20.0; picking, capture, translation and clamping remain Bevy's.
+- A press and later movement could arrive in one batch. Bevy's documented
+  final-hover behavior then targeted the backdrop or a radio at the later
+  location. `93541949` adds an opt-in boundary in the existing window runner:
+  process pending movement, then the primary-button transition, before later
+  motion. This uses ordinary app schedules and keeps the existing Bevy picking
+  and widgets. There is no custom hit test, gesture recognizer, event queue or
+  idle timer. It adds bounded schedule work on button transitions; no zero-cost
+  or broad performance claim is made.
+
+The earlier origin-only V14 build still had intermittent corner misses and a
+language change. V15 tracing reproduced backdrop targeting. Those failed trials
+remain investigation evidence; the final product has no diagnostic tracing.
+See the [dialog patch](../desktop/vendor/bevy_ui_widgets/LIMO-PATCH.md),
+[runner patch](../desktop/vendor/bevy_winit/LIMO-PATCH.md), and
+[focused evidence record](qualification/bevy-settings-drag-20261018.json).
+
+![Shared feature draft retained through movement, resize, scroll and Cancel](qualification/bevy-settings-drag-20261018/feature-draft.gif)
+
+Ten affected native cases pass. Slider drag, Reset and release outside remain
+correct. The resized Extrude form retains its 14 mm draft; dropdown Escape
+returns focus, and Cancel/reopen restores 12 mm. Apply from the moved form,
+Undo/Redo and save/reopen preserve the expected model. Snap click/Space retains
+focus; production Tab moves to Constraint 2: horizontal and Shift+Tab returns
+to Snap. The final saved model is byte-identical to the starting fixture with
+12 mm extrusion and Snap enabled. A separate settled Save was used after Undo;
+the initial combined Undo/Save arrived before asynchronous Undo finished.
+
+![Apply, Undo, Redo and saved model reopening](qualification/bevy-settings-drag-20261018/feature-save-reopen.gif)
+
+The shared feature form retains its translucent body: ribbon text can show
+behind it when dragged over the ribbon. Required fields remained readable and
+usable; this change does not alter its painter. Other platforms, host-window
+resize, every tool/form, full tab order, screen readers and IME remain outside
+this focused run. No product copy changed; current native scope is English,
+light theme and 100%/125% interface scale.
+
+All 132 focused source checks pass: 110 interface, 13 native-host, seven Settings
+and two runner tests. Strict release Clippy passes for the app and patched
+runner, along with formatting. All 36 native receipts have clean matched
+GUI/MCP identities and presented/submitted frames. Broad UI/MCP qualification
+stays paused; MCP was read-only. The PR remains draft and the feature opt-in
+while broader human/platform verification and CI remain separate gates.

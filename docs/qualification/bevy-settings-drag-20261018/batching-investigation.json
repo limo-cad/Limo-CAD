@@ -1,0 +1,12 @@
+{
+  "recorded_utc": "2026-10-18T14:33:46.656112+00:00",
+  "source_before_ordering_fix": "a9dc5ee649dcf853957e70c6951155e37104945c",
+  "diagnostic_revision": "d81e79c6585b0c84714dc2e0216f4de0a1d1bdcc",
+  "findings": [
+    "The dialog-origin correction passes ordinary large title and four-edge checks, including 125% scale.",
+    "A second independent batching limitation remains: press and later motion in one input update share the final hover target.",
+    "Trace frame 145 hovered title at (140,103), then frame 148 delivered Press(140,103) and Move(720,435.5); the backdrop received the press. Settings subsequently closed.",
+    "Large corner attempts on V14 sometimes missed or selected a language; isolated and centered resize checks passed. These attempts are retained and are not acceptance passes."
+  ],
+  "repair": "Small opt-in window-runner input flush at primary button boundaries. Existing Bevy picking, pointer capture and widgets remain responsible for recognition; no new hit testing or pointer event queue."
+}

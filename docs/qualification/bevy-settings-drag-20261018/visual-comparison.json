@@ -1,0 +1,15 @@
+{
+  "reference_revision": "a9dc5ee649dcf853957e70c6951155e37104945c",
+  "current_revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+  "reference": "v14/widgets/settings-centered.png",
+  "current": "v16/widgets/settings-centered.png",
+  "native_crop": [
+    880,
+    160,
+    1840,
+    1560
+  ],
+  "excluded_from_metric": "About build-identity line only; displayed crops are unmasked",
+  "different_pixels_outside_identity": 0,
+  "acceptance": "Comparable theme, spacing, text, controls, footer and resize affordance; no new visual theme or painter."
+}
