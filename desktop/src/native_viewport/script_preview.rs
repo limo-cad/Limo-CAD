@@ -25,6 +25,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod assembly;
+
 const MAX_CACHE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_DOCUMENTS: usize = 8;
@@ -45,6 +47,8 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 pub(crate) struct Frame {
     pub caption: String,
     pub scene: SolidSceneDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assembly: Option<limo_cad_sketch::AssemblySolutionDto>,
 }
 
 #[derive(Serialize)]
@@ -52,6 +56,8 @@ struct RetainedFrame {
     caption: String,
     #[serde(serialize_with = "serialize_scene")]
     scene: Arc<SolidSceneDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    assembly: Option<limo_cad_sketch::AssemblySolutionDto>,
 }
 
 fn serialize_scene<S: serde::Serializer>(
@@ -80,7 +86,13 @@ impl PreviewDocument {
         let mut bodies = 0;
         let mut faces = 0;
         let mut edges = 0;
+        let mut drawn_bodies = 0;
+        let mut drawn_triangles = 0;
+        let mut drawn_points = 0;
+        let mut drawn_faces = 0;
+        let mut drawn_edges = 0;
         for frame in &frames {
+            assembly::validate(frame)?;
             if frame.caption.len() > 4000 || !frame.scene.errors.is_empty() {
                 return Err("A preview frame has an invalid caption or failed geometry".into());
             }
@@ -151,10 +163,44 @@ impl PreviewDocument {
                 {
                     return Err("Invalid preview edge points".into());
                 }
-                for point in mesh.positions.as_chunks::<3>().0 {
-                    let point = Vec3::new(point[0], point[1], point[2]);
-                    low = low.min(point);
-                    high = high.max(point);
+                for transform in assembly::transforms(frame, body.id.0) {
+                    drawn_bodies += 1;
+                    drawn_triangles += mesh.indices.len() / 3;
+                    drawn_faces += body.faces.len();
+                    drawn_edges += body.edges.len();
+                    drawn_points += mesh.positions.len() / 3
+                        + body
+                            .edges
+                            .iter()
+                            .map(|edge| edge.points.len())
+                            .sum::<usize>();
+                    if drawn_bodies > 256
+                        || drawn_triangles > 100_000
+                        || drawn_points > 300_000
+                        || drawn_faces > 10_000
+                        || drawn_edges > 10_000
+                    {
+                        return Err("Assembly instances exceed the bounded feature preview".into());
+                    }
+                    let mesh_points = mesh
+                        .positions
+                        .as_chunks::<3>()
+                        .0
+                        .iter()
+                        .map(|point| Vec3::new(point[0], point[1], point[2]));
+                    let edge_points = body
+                        .edges
+                        .iter()
+                        .flat_map(|edge| &edge.points)
+                        .map(|point| Vec3::new(point.x as f32, point.y as f32, point.z as f32));
+                    for point in mesh_points.chain(edge_points) {
+                        let point = transform.transform_point(point);
+                        if !point.is_finite() || point.abs().max_element() > 10_000.0 {
+                            return Err("Invalid transformed preview geometry".into());
+                        }
+                        low = low.min(point);
+                        high = high.max(point);
+                    }
                 }
             }
         }
@@ -175,6 +221,7 @@ impl PreviewDocument {
                 .map(|frame| RetainedFrame {
                     caption: frame.caption,
                     scene: Arc::new(frame.scene),
+                    assembly: frame.assembly,
                 })
                 .collect(),
             center,
@@ -604,6 +651,19 @@ impl PreviewRenderer {
                 session_id: "immutable-script-preview".into(),
                 geometry_revision: self.geometry_revision,
                 revision: self.geometry_revision,
+                instance_revision: self.geometry_revision,
+                body_poses: Arc::new(
+                    document.frames[request.frame_index]
+                        .assembly
+                        .as_ref()
+                        .map_or_else(Vec::new, |solution| solution.body_poses.clone()),
+                ),
+                instance_body_poses: Arc::new(
+                    document.frames[request.frame_index]
+                        .assembly
+                        .as_ref()
+                        .map_or_else(Vec::new, |solution| solution.instance_body_poses.clone()),
+                ),
                 document: std::sync::Arc::new(limo_cad_native_engine::NativeViewportDocument {
                     scene: Arc::clone(&document.frames[request.frame_index].scene),
                     ..Default::default()
@@ -669,6 +729,86 @@ mod tests {
             "bodies":[{"id":1,"name":"Stock","feature_id":2,"faces":[],"edges":[],"mesh":{
                 "positions":[offset,0,0, offset+60.0,0,0, offset,30,0, offset,0,12],
                 "normals":[0,0,1,0,0,1,0,0,1,0,0,1],"indices":[0,2,1,0,1,3,0,3,2,1,2,3]}}],"errors":[]}})).unwrap()
+    }
+
+    fn instanced_frame(count: usize) -> Frame {
+        let mut frame = frame(0.0);
+        frame.assembly = Some(serde_json::from_value(serde_json::json!({
+            "solved":true,"diagnostics":[],"body_poses":[],"instance_body_poses":
+            (0..count).map(|index| serde_json::json!({"occurrence_id":index+1,"component_id":1,"body_id":1,
+                "translation":[100.0 + index as f64 * 200.0,0,0],"rotation":[0,0,0,1],"visible":true})).collect::<Vec<_>>()
+        })).unwrap());
+        frame
+    }
+
+    #[test]
+    fn assembly_preview_fits_visible_transformed_occurrences() {
+        let mut frame = instanced_frame(2);
+        frame.assembly.as_mut().unwrap().instance_body_poses[1].visible = false;
+        let serialized = serde_json::to_value(&frame).unwrap();
+        let document = PreviewDocument::new(vec![frame.clone()]).unwrap();
+        assert_eq!(document.center, Vec3::new(130.0, 15.0, 6.0));
+        assert_eq!(
+            serde_json::to_value(&document.frames[0]).unwrap(),
+            serialized
+        );
+        let pose = &mut frame.assembly.as_mut().unwrap().instance_body_poses[0];
+        pose.rotation = [
+            0.0,
+            0.0,
+            std::f64::consts::FRAC_1_SQRT_2,
+            std::f64::consts::FRAC_1_SQRT_2,
+        ];
+        let document = PreviewDocument::new(vec![frame.clone()]).unwrap();
+        assert!(document.center.distance(Vec3::new(85.0, 30.0, 6.0)) < 0.001);
+        frame.assembly.as_mut().unwrap().instance_body_poses[0].visible = false;
+        let document = PreviewDocument::new(vec![frame]).unwrap();
+        assert_eq!((document.center, document.radius), (Vec3::ZERO, 1.0));
+    }
+
+    #[test]
+    fn assembly_preview_uses_native_legacy_and_occurrence_pose_precedence() {
+        let mut frame = instanced_frame(1);
+        frame.assembly.as_mut().unwrap().body_poses =
+            vec![serde_json::from_value(serde_json::json!({
+                "body_id":1,"translation":[500,0,0],"rotation":[0,0,0,1]
+            }))
+            .unwrap()];
+        assert_eq!(
+            PreviewDocument::new(vec![frame.clone()]).unwrap().center.x,
+            130.0
+        );
+        frame.assembly.as_mut().unwrap().instance_body_poses.clear();
+        assert_eq!(PreviewDocument::new(vec![frame]).unwrap().center.x, 530.0);
+        assert!(super::tests::frame(0.0).assembly.is_none());
+    }
+
+    #[test]
+    fn assembly_preview_rejects_invalid_identity_and_transform() {
+        for case in 0..6 {
+            let mut frame = instanced_frame(1);
+            let solution = frame.assembly.as_mut().unwrap();
+            match case {
+                0 => solution.solved = false,
+                1 => solution.instance_body_poses[0].rotation = [0.0; 4],
+                2 => solution.instance_body_poses[0].translation[0] = f64::NAN,
+                3 => solution.instance_body_poses[0].body_id.0 = 999,
+                4 => solution
+                    .instance_body_poses
+                    .push(solution.instance_body_poses[0]),
+                _ => solution.instance_body_poses[0].translation[0] = 10_001.0,
+            }
+            assert!(PreviewDocument::new(vec![frame]).is_err(), "case {case}");
+        }
+        assert!(PreviewDocument::new(vec![instanced_frame(257)]).is_err());
+    }
+
+    #[test]
+    fn assembly_preview_counts_repeated_geometry_against_render_budget() {
+        let mut frame = instanced_frame(26);
+        frame.scene.bodies[0].mesh.indices = frame.scene.bodies[0].mesh.indices.repeat(1000);
+        let error = PreviewDocument::new(vec![frame]).err().unwrap();
+        assert!(error.contains("instances"), "{error}");
     }
 
     fn request(preview_id: String, view_id: String, revision: u64) -> RenderRequest {
@@ -1141,10 +1281,12 @@ mod tests {
             without_edges.bodies[0].edges.clear();
             let document = PreviewDocument::new(vec![
                 Frame {
+                    assembly: None,
                     caption: format!("{label} with edges"),
                     scene,
                 },
                 Frame {
+                    assembly: None,
                     caption: format!("{label} without edges"),
                     scene: without_edges,
                 },
@@ -1865,6 +2007,7 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             let mut document = PreviewDocument::new(vec![Frame {
+                assembly: None,
                 caption: "Thin partial circular plate".into(),
                 scene: scene.clone(),
             }])
@@ -1976,14 +2119,17 @@ mod tests {
         }
         let mut document = PreviewDocument::new(vec![
             Frame {
+                assembly: None,
                 caption: "Hidden edges present".into(),
                 scene,
             },
             Frame {
+                assembly: None,
                 caption: "Hidden edges removed".into(),
                 scene: without_hidden_edges,
             },
             Frame {
+                assembly: None,
                 caption: "All edges removed (negative control)".into(),
                 scene: without_any_edges,
             },

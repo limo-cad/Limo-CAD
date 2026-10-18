@@ -27,6 +27,7 @@ fn select(world: &mut World, id: &str) {
 fn frames() -> Vec<Frame> {
     (0..3)
         .map(|index| Frame {
+            assembly: None,
             caption: format!("Frame {index}"),
             scene: serde_json::from_value(json!({"bodies":[],"errors":[]})).unwrap(),
         })
