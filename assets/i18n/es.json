@@ -1,5 +1,6 @@
 {
   "projectReplay": {
+    "needsRepair": "Corrija el código y valídelo antes de ejecutar.",
     "filter": "Reproducción de proyecto Limo CAD (.limo.replay.cbor)",
     "savePath": "Guarde la reproducción del proyecto en una ruta absoluta .limo.replay.cbor",
     "openPath": "Abra la reproducción del proyecto desde una ruta absoluta",

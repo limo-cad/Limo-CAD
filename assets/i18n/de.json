@@ -1,5 +1,6 @@
 {
   "projectReplay": {
+    "needsRepair": "Quelltext korrigieren; vor dem Start validieren.",
     "filter": "Limo CAD Projektwiedergabe (.limo.replay.cbor)",
     "savePath": "Projektwiedergabe unter einem absoluten .limo.replay.cbor-Pfad speichern",
     "openPath": "Projektwiedergabe von einem absoluten Pfad öffnen",

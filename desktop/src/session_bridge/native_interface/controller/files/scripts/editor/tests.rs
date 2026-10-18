@@ -467,3 +467,141 @@ fn native_package_wrong_baseline_and_stale_saves_cannot_change_editor_state() {
         .artifact
         .same_baseline(&original.artifact));
 }
+
+#[test]
+fn invalid_package_draft_reopens_for_repair_without_enabling_run_or_losing_baseline() {
+    use limo_cad_project_file::ReplayPackage;
+    let directory = Directory::new();
+    let (world, original) = project_fixture(&directory);
+    let loaded = world
+        .resource::<Files>()
+        .script
+        .loaded
+        .as_ref()
+        .unwrap()
+        .clone();
+    let path = directory.0.join("unfinished.limo.replay.cbor");
+    let unfinished = "// unfinished authored draft\n{";
+    loaded
+        .artifact
+        .save(&path, unfinished, loaded.maximum)
+        .unwrap();
+    let reopened = inspect(path.clone()).unwrap();
+    assert_eq!(reopened.authored(), unfinished);
+    assert!(reopened.source_diagnostic().is_some());
+    assert!(reopened.counts.is_none());
+    let mut recovery = World::new();
+    initialize(
+        &mut recovery,
+        Arc::new(Mutex::new(DocumentWorkspace::default())),
+    );
+    recovery
+        .resource_mut::<Files>()
+        .script
+        .accept(reopened)
+        .unwrap();
+    {
+        let state = &recovery.resource::<Files>().script;
+        assert!(state.editor_open);
+        assert!(!state.dirty());
+        assert!(!state.validated);
+        assert!(state.selected(state.generation).is_err());
+        assert!(state.status.is_some());
+    }
+    // Saving another unfinished snapshot keeps the baseline without validating.
+    let artifact = recovery
+        .resource::<Files>()
+        .script
+        .loaded
+        .as_ref()
+        .unwrap()
+        .artifact
+        .clone();
+    let backup = directory.0.join("backup.limo.replay.cbor");
+    artifact.save(&backup, unfinished, loaded.maximum).unwrap();
+    assert_eq!(
+        ReplayPackage::read_file(&backup).unwrap().project_bytes(),
+        original
+    );
+    assert!(validate_now(&mut recovery).is_err());
+    assert_eq!(recovery.resource::<Files>().script.source, unfinished);
+    edit_source(
+        &mut recovery,
+        &ControlInput::SetValue(loaded.authored().to_owned()),
+    )
+    .unwrap();
+    validate_now(&mut recovery).unwrap();
+    let state = &recovery.resource::<Files>().script;
+    let repaired = state.selected(state.generation).unwrap();
+    assert!(repaired.source_diagnostic().is_none());
+    assert_eq!(repaired.counts, Some((1, 0)));
+    assert!(
+        state.dirty(),
+        "Validation does not mark the repaired draft saved"
+    );
+    let prepared = repaired
+        .artifact
+        .prepare(repaired.source(), false)
+        .unwrap()
+        .unwrap();
+    let (_, retained, _, _) = prepared.into_parts();
+    assert_eq!(retained.encode().unwrap(), original);
+    assert_eq!(
+        ReplayPackage::read_file(&path).unwrap().script(),
+        unfinished
+    );
+}
+
+#[test]
+fn malformed_package_envelope_is_not_admitted_as_a_repairable_script() {
+    let directory = Directory::new();
+    let (mut world, _) = project_fixture(&directory);
+    let original = world
+        .resource::<Files>()
+        .script
+        .loaded
+        .as_ref()
+        .unwrap()
+        .clone();
+    let path = directory.0.join("corrupt.limo.replay.cbor");
+    std::fs::write(&path, [255]).unwrap();
+    assert!(inspect(path).is_err());
+    let state = &mut world.resource_mut::<Files>().script;
+    assert!(Arc::ptr_eq(state.loaded.as_ref().unwrap(), &original));
+    // Even an accidentally set state flag cannot bypass an invalid Loaded object.
+    let draft_path = directory.0.join("draft.limo.replay.cbor");
+    original
+        .artifact
+        .save(&draft_path, "invalid", original.maximum)
+        .unwrap();
+    state.accept(inspect(draft_path).unwrap()).unwrap();
+    state.validated = true;
+    assert!(state.selected(state.generation).is_err());
+}
+
+#[test]
+fn unsupported_version_and_catalog_calls_open_only_as_unvalidated_package_source() {
+    let directory = Directory::new();
+    let (world, original) = project_fixture(&directory);
+    let loaded = world
+        .resource::<Files>()
+        .script
+        .loaded
+        .as_ref()
+        .unwrap()
+        .clone();
+    for (index, source) in [
+        r#"{"version":99,"name":"Future","starting_state":"project","steps":[]}"#,
+        r#"{"version":2,"name":"Wrong group","starting_state":"project","steps":[{"call":{"group":"wrong/group","operation":"cad_set_document_name","arguments":{"name":"No"}}}]}"#,
+    ].iter().enumerate() {
+        let path = directory.0.join(format!("repair-{index}.limo.replay.cbor"));
+        loaded.artifact.save(&path, source, loaded.maximum).unwrap();
+        let reopened = inspect(path).unwrap();
+        assert_eq!(reopened.authored(), *source);
+        assert!(reopened.counts.is_none());
+        assert!(reopened.artifact.prepare(source, false).is_err());
+        let saved = directory.0.join(format!("retained-{index}.limo.replay.cbor"));
+        reopened.artifact.save(&saved, source, reopened.maximum).unwrap();
+        assert_eq!(limo_cad_project_file::ReplayPackage::read_file(&saved).unwrap().project_bytes(), original);
+    }
+}

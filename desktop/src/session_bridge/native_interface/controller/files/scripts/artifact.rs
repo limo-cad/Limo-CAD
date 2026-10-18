@@ -122,7 +122,34 @@ pub(super) fn inspect_package(path: PathBuf) -> Result<Loaded, String> {
         opened: identity.clone(),
         saved: identity,
     };
-    artifact.inspect(Some(path), package.script())
+    match artifact.inspect(Some(path.clone()), package.script()) {
+        Ok(loaded) => Ok(loaded),
+        Err(diagnostic) => {
+            // Valid envelope, invalid source: preserve exact authored text and
+            // archive for repair. Do not invent parsed metadata or enable Run.
+            let name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .ok_or("Replay package path has no file name")?;
+            let Artifact::Project { opened, saved, .. } = &artifact else {
+                unreachable!()
+            };
+            let inspection = json!({
+                "source": package.script(), "authored_source": package.script(),
+                "source_validation_error": diagnostic,
+                "opened_package_identity": opened, "saved_package_identity": saved,
+            });
+            Ok(Loaded {
+                artifact,
+                path: Some(path),
+                example: None,
+                name,
+                counts: None,
+                maximum: limo_cad_project_file::MAX_REPLAY_SCRIPT_BYTES,
+                inspection,
+            })
+        }
+    }
 }
 
 pub(super) fn message(locale: crate::app_preferences::Locale, text: &str) -> String {

@@ -18,7 +18,7 @@ fn inspected_file_retains_authored_provenance_and_freezes_expanded_includes() {
     let before = fixture.engine.engine_call("project_export_model", "");
     let loaded = inspect(path.clone()).unwrap();
     assert_eq!(loaded.path, Some(path.clone()));
-    assert_eq!((loaded.steps, loaded.checks), (2, 0));
+    assert_eq!(loaded.counts, Some((2, 0)));
     assert_eq!(loaded.inspection["authored_source"], authored);
     let snapshot = loaded.source().to_owned();
     assert!(snapshot.contains("Frozen chapter"));

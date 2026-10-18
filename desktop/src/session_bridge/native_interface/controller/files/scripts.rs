@@ -30,8 +30,8 @@ pub(super) struct Loaded {
     pub path: Option<PathBuf>,
     example: Option<&'static catalog::Example>,
     pub name: String,
-    pub steps: u64,
-    pub checks: u64,
+    /// None means the authored draft has never passed shared validation.
+    pub counts: Option<(u64, u64)>,
     pub maximum: usize,
     inspection: Value,
 }
@@ -41,6 +41,9 @@ impl Loaded {
     }
     fn authored(&self) -> &str {
         self.inspection["authored_source"].as_str().unwrap()
+    }
+    fn source_diagnostic(&self) -> Option<&str> {
+        self.inspection["source_validation_error"].as_str()
     }
 }
 
@@ -118,10 +121,10 @@ impl State {
         self.library.open = false;
         self.source = loaded.authored().to_owned();
         self.baseline = self.source.clone();
+        self.validated = loaded.counts.is_some() && loaded.source_diagnostic().is_none();
+        self.status = loaded.source_diagnostic().map(str::to_owned);
         self.loaded = Some(Arc::new(loaded));
-        self.validated = true;
         self.source_error = None;
-        self.status = None;
         Ok(())
     }
     pub(super) fn selected(&self, generation: u64) -> Result<Arc<Loaded>, String> {
@@ -135,6 +138,9 @@ impl State {
             .loaded
             .clone()
             .ok_or("Open a script before running it")?;
+        if loaded.counts.is_none() || loaded.source_diagnostic().is_some() {
+            return Err("Validate the current script source before running it".into());
+        }
         if loaded.authored() != self.source || self.source_path != loaded.path {
             return Err("Script source or include directory changed; Validate again".into());
         }
@@ -180,8 +186,7 @@ fn inspected(path: Option<PathBuf>, inspection: Value) -> Result<Loaded, String>
         path,
         example: None,
         name,
-        steps,
-        checks,
+        counts: Some((steps, checks)),
         maximum,
         inspection,
     })

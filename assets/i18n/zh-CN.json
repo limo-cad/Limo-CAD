@@ -1,5 +1,6 @@
 {
   "projectReplay": {
+    "needsRepair": "源码需要修复；运行前请验证。",
     "filter": "Limo CAD 项目回放 (.limo.replay.cbor)",
     "savePath": "请将项目回放保存到绝对 .limo.replay.cbor 路径",
     "openPath": "请从绝对路径打开项目回放",
