@@ -402,7 +402,9 @@ pub(crate) struct PendingRender {
 }
 impl std::fmt::Debug for PendingRender {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PendingRender").field("deadline", &self.deadline).finish()
+        f.debug_struct("PendingRender")
+            .field("deadline", &self.deadline)
+            .finish()
     }
 }
 impl PendingRender {
@@ -417,7 +419,8 @@ impl PendingRender {
     #[cfg(test)]
     pub fn wait(self) -> Result<RenderedTexture, String> {
         check_request(&self.cancelled, self.deadline)?;
-        self.response.recv_timeout(self.deadline.saturating_duration_since(Instant::now()))
+        self.response
+            .recv_timeout(self.deadline.saturating_duration_since(Instant::now()))
             .map_err(|error| format!("Feature preview request ended: {error}"))?
     }
 }
@@ -908,8 +911,10 @@ mod tests {
         let service = PreviewService::default();
         let descriptor = service.retain(vec![frame(0.)]).unwrap();
         let view = service.open_view().unwrap();
-        assert!(service.render(request(descriptor.preview_id, view, 1))
-            .unwrap_err().contains("not ready"));
+        assert!(service
+            .render(request(descriptor.preview_id, view, 1))
+            .unwrap_err()
+            .contains("not ready"));
     }
 
     #[test]
@@ -1129,7 +1134,9 @@ mod tests {
         let descriptor = service.retain(vec![frame(0.0)]).unwrap();
 
         let (worker, jobs) = mpsc::sync_channel(2);
-        service.connect(Arc::new(move |job| worker.try_send(job).map_err(|_| "busy".into())));
+        service.connect(Arc::new(move |job| {
+            worker.try_send(job).map_err(|_| "busy".into())
+        }));
         let view = service.open_view().unwrap();
         let first = request(descriptor.preview_id.clone(), view.clone(), 1);
         let _first_reply = service.render(first.clone()).unwrap();
