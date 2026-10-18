@@ -40,7 +40,10 @@ mod stdio;
 mod summary;
 
 pub use control_admission::{NativeControlAdmission, NATIVE_CONTROL_ADMISSION_MAX_BYTES};
-pub use replay::{prepare_project_replay, run_prepared_project_replay, PreparedProjectReplay};
+pub use replay::{
+    inspect_project_replay_source, prepare_project_replay, prepare_project_replay_source,
+    run_prepared_project_replay, PreparedProjectReplay,
+};
 pub use session::control_owner_error;
 pub use stdio::{
     desktop_mcp_presence, prepare_desktop_stdio, run_desktop_stdio, run_stdio,

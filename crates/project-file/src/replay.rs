@@ -140,6 +140,13 @@ impl ReplayPackage {
     pub fn encode_cbor(&self) -> Result<Vec<u8>, ProjectFileError> {
         self.encode_source_cbor(self.script())
     }
+    /// Identity of the canonical envelope for this editor snapshot. This is not
+    /// the original file identity and does not mean the draft has been saved.
+    pub fn source_identity(&self, source: &str) -> Result<ReplayPackageIdentity, ProjectFileError> {
+        Ok(ReplayPackageIdentity::from_bytes(
+            &self.encode_source_cbor(source)?,
+        ))
+    }
     /// Encode an editor snapshot using the retained archive without cloning or
     /// decoding that archive. Source limits are checked before output allocation.
     /// The caller may share this immutable package across editor generations;
@@ -491,6 +498,7 @@ mod source_tests {
         let path = directory.join("edited.cbor");
         let package = ReplayPackage::new("original".into(), vec![0, 255, 7]).unwrap();
         let identity = package.write_source_new(&path, "first edit").unwrap();
+        assert_eq!(identity, package.source_identity("first edit").unwrap());
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(identity, ReplayPackageIdentity::from_bytes(&bytes));
         assert!(package.write_source_new(&path, "must not replace").is_err());

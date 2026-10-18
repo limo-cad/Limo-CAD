@@ -51,15 +51,74 @@ pub fn prepare_project_replay(
     )
 }
 
+/// Inspect only edited v2 source, catalog calls, options and chapter ranges.
+/// Archive/domain validity and document authority are deliberately not implied.
+/// Package source is self-contained; unresolved includes are rejected.
+pub fn inspect_project_replay_source(
+    source: &str,
+    presentation: bool,
+    validate: bool,
+) -> Result<serde_json::Value, String> {
+    let script = validated_source(
+        source,
+        RunOptions {
+            presentation,
+            validate,
+        },
+    )?;
+    let mut result = script.script().metadata();
+    result["authored_chapters"] = limo_cad_script::authored_chapters(
+        source,
+        result["step_count"].as_u64().unwrap_or(0) as usize,
+    )?;
+    result["source"] = source.into();
+    result["authored_source"] = source.into();
+    result["project_baseline_required"] = true.into();
+    Ok(result)
+}
+
+/// Prepare an immutable editor snapshot with its retained package, without any
+/// file read. Consumes the package so archive decoding does not require cloning
+/// its potentially large buffer. Identity describes the edited canonical
+/// envelope, not the original selection and not proof of a successful save.
+pub fn prepare_project_replay_source(
+    package: ReplayPackage,
+    source: &str,
+    presentation: bool,
+    validate: bool,
+) -> Result<PreparedProjectReplay, String> {
+    let options = RunOptions {
+        presentation,
+        validate,
+    };
+    let script = validated_source(source, options)?;
+    let identity = package.source_identity(source).map_err(|e| e.to_string())?;
+    finish_preparation(package, script, identity, options)
+}
+
+fn validated_source(source: &str, options: RunOptions) -> Result<ProjectScript, String> {
+    let script = ProjectScript::parse(source)?;
+    script.script().validate_options(options)?;
+    crate::interface::validate_script(script.script())?;
+    Ok(script)
+}
+
 fn prepare(
     package: ReplayPackage,
     identity: ReplayPackageIdentity,
     options: RunOptions,
 ) -> Result<PreparedProjectReplay, String> {
     // Validate every declared call/check before archive decoding or live work.
-    let script = ProjectScript::parse(package.script())?;
-    script.script().validate_options(options)?;
-    crate::interface::validate_script(script.script())?;
+    let script = validated_source(package.script(), options)?;
+    finish_preparation(package, script, identity, options)
+}
+
+fn finish_preparation(
+    package: ReplayPackage,
+    script: ProjectScript,
+    identity: ReplayPackageIdentity,
+    options: RunOptions,
+) -> Result<PreparedProjectReplay, String> {
     let (_, archive) = package.into_project().map_err(|e| e.to_string())?;
     // Validate snapshot framing/limits while retaining the full archive. Typed
     // domain semantics and kernel staging remain the guarded host's responsibility.
@@ -94,6 +153,72 @@ mod tests {
             .set_intent("intent/future.cbor", Some(vec![0, 255, 7]))
             .unwrap();
         archive.encode().unwrap()
+    }
+    #[test]
+    fn edited_preparation_uses_current_source_and_retains_original_archive() {
+        let original = archive();
+        let package = ReplayPackage::new(source(2, "document/files"), original.clone()).unwrap();
+        let old_identity = package.source_identity(package.script()).unwrap();
+        let edited = source(2, "document/files").replace("Retained project", "Edited project");
+        let expected = package.source_identity(&edited).unwrap();
+        assert_ne!(old_identity, expected);
+        let inspected = inspect_project_replay_source(&edited, false, true).unwrap();
+        assert_eq!(inspected["name"], "Edited project");
+        assert_eq!(inspected["authored_source"], edited);
+        assert_eq!(inspected["project_baseline_required"], true);
+        let prepared = prepare_project_replay_source(package, &edited, false, true).unwrap();
+        assert_eq!(prepared.identity(), &expected);
+        assert_eq!(
+            prepared.script().script().metadata()["name"],
+            "Edited project"
+        );
+        let (_, retained, _, _) = prepared.into_parts();
+        assert_eq!(retained.encode().unwrap(), original);
+        assert_eq!(
+            retained.snapshot().unwrap().intents()[0].payload,
+            [0, 255, 7]
+        );
+    }
+
+    #[test]
+    fn editor_source_validation_matches_preparation_and_does_not_validate_archive() {
+        for bad in [
+            source(1, "document/files"),
+            source(2, "wrong/group"),
+            String::new(),
+        ] {
+            let inspection = inspect_project_replay_source(&bad, false, true).unwrap_err();
+            let package = ReplayPackage::new("original".into(), vec![255]).unwrap();
+            let preparation = prepare_project_replay_source(package, &bad, false, true)
+                .err()
+                .unwrap();
+            assert_eq!(inspection, preparation);
+        }
+        let valid = source(2, "document/files");
+        assert!(inspect_project_replay_source(&valid, false, true).is_ok());
+        let package = ReplayPackage::new("original".into(), vec![255]).unwrap();
+        assert!(prepare_project_replay_source(package, &valid, false, true).is_err());
+    }
+    #[test]
+    fn edited_chapter_ranges_and_required_options_are_preserved() {
+        let source = r#"// authored comment
+{"version":2,"name":"Chapter","starting_state":"project","steps":[{"note":"Inspect baseline"}]}"#;
+        let inspected = inspect_project_replay_source(source, false, true).unwrap();
+        let range = &inspected["authored_chapters"][0];
+        let start = range["start"].as_u64().unwrap() as usize;
+        let end = range["end"].as_u64().unwrap() as usize;
+        assert_eq!(&source[start..end], r#""Inspect baseline""#);
+        let mut gated: serde_json::Value =
+            serde_json::from_str(source.lines().nth(1).unwrap()).unwrap();
+        gated["verification"] = json!("garden-bench");
+        assert!(
+            inspect_project_replay_source(&gated.to_string(), false, false)
+                .unwrap_err()
+                .contains("requires its final verification gate")
+        );
+        gated.as_object_mut().unwrap().remove("verification");
+        gated["includes"] = json!(["external.limo.jsonc"]);
+        assert!(inspect_project_replay_source(&gated.to_string(), false, true).is_err());
     }
     #[test]
     fn preparation_retains_original_archive_and_does_not_reopen_source() {
