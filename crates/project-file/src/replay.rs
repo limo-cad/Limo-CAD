@@ -84,21 +84,42 @@ impl ReplayPackage {
     /// Encode fully before touching the destination, then publish atomically.
     /// Callers own destination selection and replacement authorization.
     pub fn write_file_atomic(&self, path: &std::path::Path) -> Result<(), ProjectFileError> {
-        crate::files::write_bounded_mode(
-            path,
-            &self.encode_cbor()?,
-            MAX_REPLAY_PACKAGE_BYTES as u64,
-            true,
-        )
+        self.write_source_atomic(path, self.script()).map(|_| ())
     }
     /// Create a completed package without overwriting any existing destination.
     pub fn write_file_new(&self, path: &std::path::Path) -> Result<(), ProjectFileError> {
-        crate::files::write_bounded_mode(
-            path,
-            &self.encode_cbor()?,
-            MAX_REPLAY_PACKAGE_BYTES as u64,
-            false,
-        )
+        self.write_source_new(path, self.script()).map(|_| ())
+    }
+    /// Save edited source together with the exact retained archive. The returned
+    /// identity describes the bytes published by this operation, not the original
+    /// selection or a later read of a concurrently replaced destination. This
+    /// does not mutate this package or establish script/domain validity.
+    pub fn write_source_atomic(
+        &self,
+        path: &std::path::Path,
+        source: &str,
+    ) -> Result<ReplayPackageIdentity, ProjectFileError> {
+        self.write_source_mode(path, source, true)
+    }
+    /// Save edited source without replacing an existing destination. Failure
+    /// returns no saved identity; the caller must retain its dirty editor state.
+    pub fn write_source_new(
+        &self,
+        path: &std::path::Path,
+        source: &str,
+    ) -> Result<ReplayPackageIdentity, ProjectFileError> {
+        self.write_source_mode(path, source, false)
+    }
+    fn write_source_mode(
+        &self,
+        path: &std::path::Path,
+        source: &str,
+        replace: bool,
+    ) -> Result<ReplayPackageIdentity, ProjectFileError> {
+        let bytes = self.encode_source_cbor(source)?;
+        let identity = ReplayPackageIdentity::from_bytes(&bytes);
+        crate::files::write_bounded_mode(path, &bytes, MAX_REPLAY_PACKAGE_BYTES as u64, replace)?;
+        Ok(identity)
     }
     pub fn new(script: String, project: Vec<u8>) -> Result<Self, ProjectFileError> {
         check_lengths(script.len(), project.len())?;
@@ -117,18 +138,26 @@ impl ReplayPackage {
         Ok((self.script, ProjectArchive::decode(self.project)?))
     }
     pub fn encode_cbor(&self) -> Result<Vec<u8>, ProjectFileError> {
+        self.encode_source_cbor(self.script())
+    }
+    /// Encode an editor snapshot using the retained archive without cloning or
+    /// decoding that archive. Source limits are checked before output allocation.
+    /// The caller may share this immutable package across editor generations;
+    /// this method allocates only the bounded output envelope.
+    pub fn encode_source_cbor(&self, source: &str) -> Result<Vec<u8>, ProjectFileError> {
+        check_lengths(source.len(), self.project.len())?;
         let mut output = Vec::new();
         ciborium::into_writer(
             &Wire {
                 format: FORMAT,
                 version: 1,
-                script: &self.script,
+                script: source,
                 project: &self.project,
             },
             &mut output,
         )
         .map_err(|e| error(format!("could not encode replay package: {e}")))?;
-        // All fields are immutable and bounded; fixed framing fits in 64 KiB.
+        // All fields are bounded; fixed framing fits in 64 KiB.
         if output.len() > MAX_REPLAY_PACKAGE_BYTES {
             return Err(error("replay package exceeds size limit"));
         }
@@ -305,10 +334,13 @@ mod tests {
         }
         let original = zip.finish().unwrap().into_inner();
         let package = ReplayPackage::new(SCRIPT.into(), original.clone()).unwrap();
-        let decoded = ReplayPackage::decode_cbor(&package.encode_cbor().unwrap()).unwrap();
+        let edited = format!("// edited without rebuilding archive\n{SCRIPT}");
+        let decoded =
+            ReplayPackage::decode_cbor(&package.encode_source_cbor(&edited).unwrap()).unwrap();
         assert_eq!(decoded.project_bytes(), original);
         let (source, project) = decoded.into_project().unwrap();
-        assert_eq!(source, SCRIPT);
+        assert_eq!(source, edited);
+        assert_eq!(package.script(), SCRIPT);
         assert_eq!(
             project.snapshot().unwrap().intents()[0].payload,
             [255, 0, 42]
@@ -419,5 +451,62 @@ mod identity_tests {
         .is_err());
         assert!(ReplayPackage::read_file_with_identity(&path).is_err());
         std::fs::remove_file(path).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+
+    #[test]
+    fn edited_source_preserves_opaque_archive_and_original_package() {
+        let package = ReplayPackage::new("original".into(), vec![0, 255, 128, 7]).unwrap();
+        let archive_address = package.project_bytes().as_ptr();
+        let original = package.encode_cbor().unwrap();
+        let edited = "// retained comment\n{\"version\":2,\"name\":\"Edited \u{2713}\"}";
+        let bytes = package.encode_source_cbor(edited).unwrap();
+        let reopened = ReplayPackage::decode_cbor(&bytes).unwrap();
+        assert_eq!(reopened.script(), edited);
+        assert_eq!(reopened.project_bytes(), package.project_bytes());
+        assert_eq!(package.project_bytes().as_ptr(), archive_address);
+        assert_eq!(package.encode_cbor().unwrap(), original);
+        assert!(package.encode_source_cbor("").is_err());
+        assert!(package
+            .encode_source_cbor(&"x".repeat(MAX_REPLAY_SCRIPT_BYTES + 1))
+            .is_err());
+        assert_eq!(package.encode_cbor().unwrap(), original);
+    }
+
+    #[test]
+    fn saved_identity_matches_published_bytes_and_failed_save_preserves_destination() {
+        let directory = std::env::temp_dir().join(format!(
+            "limo-replay-source-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("edited.cbor");
+        let package = ReplayPackage::new("original".into(), vec![0, 255, 7]).unwrap();
+        let identity = package.write_source_new(&path, "first edit").unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(identity, ReplayPackageIdentity::from_bytes(&bytes));
+        assert!(package.write_source_new(&path, "must not replace").is_err());
+        assert!(package.write_source_atomic(&path, "").is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        let saved = package.write_source_atomic(&path, "second edit").unwrap();
+        assert_ne!(identity, saved);
+        let reopened = ReplayPackage::read_file_verified(&path, &saved).unwrap();
+        assert_eq!(reopened.script(), "second edit");
+        assert_eq!(reopened.project_bytes(), package.project_bytes());
+        assert_eq!(package.script(), "original");
+        assert!(package
+            .write_source_atomic(&directory.join("missing/file.cbor"), "edit")
+            .is_err());
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(directory).unwrap();
     }
 }
