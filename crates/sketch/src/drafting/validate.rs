@@ -122,7 +122,7 @@ fn curve(curve: &Curve, budget: &mut Budget) -> Result<(), String> {
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Node {
+pub(super) enum Node {
     Block(BlockId),
     Reference(ReferenceId),
 }

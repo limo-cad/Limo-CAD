@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 mod persistence_tests;
 #[cfg(test)]
 mod tests;
+pub(crate) mod transition;
 mod validate;
 
 macro_rules! ids {

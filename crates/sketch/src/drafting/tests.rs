@@ -57,6 +57,127 @@ fn fixture() -> Document {
     }
 }
 
+fn locked_instance() -> Document {
+    let mut graph = fixture();
+    let mut definition_layer = graph.layers[0].clone();
+    definition_layer.id = LayerId(7);
+    definition_layer.name = "Definition".into();
+    graph.layers.push(definition_layer);
+    graph.layers[0].locked = true;
+    graph.entities[0].layer = LayerId(7);
+    graph
+}
+
+#[test]
+fn locked_instance_rejects_definition_edits_atomically_in_shared_manager() {
+    let mut manager = crate::SketchManager::new();
+    let mut drawing = crate::DrawingDocumentDto::default();
+    drawing.drafting = Some(locked_instance());
+    manager.set_drawing_document(drawing.clone()).unwrap();
+    let before = manager.export_project_model().unwrap();
+    let graph = drawing.drafting.as_mut().unwrap();
+    if let Content::Curve {
+        curve: Curve::Line { end, .. },
+    } = &mut graph.entities[0].content
+    {
+        end[0] = 1200.;
+    }
+    // Unlocking and changing content in one candidate must not bypass the lock.
+    graph.layers[0].locked = false;
+    assert!(manager.set_drawing_document(drawing.clone()).is_err());
+    assert_eq!(manager.export_project_model().unwrap(), before);
+    let mut unlock = manager.drawing_document();
+    unlock.drafting.as_mut().unwrap().layers[0].locked = false;
+    manager.set_drawing_document(unlock).unwrap();
+    manager.set_drawing_document(drawing).unwrap();
+    assert_ne!(manager.export_project_model().unwrap(), before);
+}
+
+#[test]
+fn locks_follow_nested_blocks_and_resolved_reference_definitions() {
+    let mut before = locked_instance();
+    before.blocks.push(Block {
+        id: BlockId(8),
+        name: "Container".into(),
+        base_point: [0., 0.],
+        attributes: vec![],
+    });
+    let mut nested = before.entities[1].clone();
+    nested.id = EntityId(9);
+    nested.space = Space::Block(BlockId(8));
+    nested.layer = LayerId(7);
+    before.entities.push(nested);
+    before.references.push(Reference {
+        id: ReferenceId(10),
+        locator: "reference.limo".into(),
+        mode: ReferenceMode::Attach,
+        source_mm_per_unit: 1.,
+        resolution: Resolution::Resolved {
+            block: BlockId(8),
+            sha256: "a".repeat(64),
+        },
+    });
+    before.entities[1].content = Content::Reference {
+        reference: ReferenceId(10),
+        transform: Affine::default(),
+    };
+    before.validate(&[]).unwrap();
+    let mut after = before.clone();
+    after.blocks[0].base_point = [10., 0.];
+    after.validate(&[]).unwrap();
+    assert!(super::transition::validate_layer_edit(&before, &after)
+        .unwrap_err()
+        .contains("referenced definition"));
+    // Visibility is a layer presentation choice, not an entity edit.
+    after = before.clone();
+    after.layers[0].visible = false;
+    super::transition::validate_layer_edit(&before, &after).unwrap();
+}
+
+#[test]
+fn inherited_style_changes_and_new_locked_layer_entities_reject() {
+    let before = locked_instance();
+    let mut after = before.clone();
+    after.layers[1].style.width_mm = 0.5;
+    assert!(super::transition::validate_layer_edit(&before, &after).is_err());
+    after = before.clone();
+    let mut added = before.entities[1].clone();
+    added.id = EntityId(11);
+    after.entities.push(added);
+    after.validate(&[]).unwrap();
+    assert!(super::transition::validate_layer_edit(&before, &after).is_err());
+    after = before.clone();
+    after.entities.remove(1);
+    after.validate(&[]).unwrap();
+    assert!(super::transition::validate_layer_edit(&before, &after).is_err());
+}
+
+#[test]
+fn line_type_edits_reach_locked_instances_but_unrelated_definitions_remain_editable() {
+    let mut before = locked_instance();
+    before.line_types.push(LineType {
+        id: LineTypeId(11),
+        name: "Dashed".into(),
+        pattern: vec![2., -1.],
+        space: PatternSpace::Paper,
+    });
+    before.layers[1].style.line_type = Some(LineTypeId(11));
+    before.validate(&[]).unwrap();
+    let mut after = before.clone();
+    after.line_types[0].pattern[0] = 3.;
+    after.validate(&[]).unwrap();
+    assert!(super::transition::validate_layer_edit(&before, &after).is_err());
+    after = before.clone();
+    after.blocks.push(Block {
+        id: BlockId(12),
+        name: "Unused".into(),
+        base_point: [0., 0.],
+        attributes: vec![],
+    });
+    after.validate(&[]).unwrap();
+    super::transition::validate_layer_edit(&before, &after).unwrap();
+}
+
 #[test]
 fn malformed_nurbs_degree_and_counts_reject_before_knot_arithmetic() {
     for degree in [0, 33, u32::MAX] {
