@@ -446,6 +446,9 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
             manager.set_construction_visibility(request)
         }),
         "drawing_apply" => with_payload(payload, |command| manager.drawing_command(command)),
+        "drawing_drafting_apply" => {
+            with_payload(payload, |command| manager.drafting_command(command))
+        }
         "drawing_create_sheet" => with_payload(payload, |r| {
             manager.drawing_command(crate::drawing_commands::DrawingCommand::CreateSheet(r))
         }),
@@ -878,3 +881,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod drafting_tests;
