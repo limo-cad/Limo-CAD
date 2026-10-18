@@ -46,7 +46,12 @@ fn validate_now(world: &mut World) -> Result<(), String> {
     let state = &mut world.resource_mut::<Files>().script;
     state.advance()?;
     state.validated = false;
-    let loaded = inspect_source(state.source_path.clone(), &state.source)?;
+    let loaded = state
+        .loaded
+        .as_ref()
+        .unwrap()
+        .artifact
+        .inspect(state.source_path.clone(), &state.source)?;
     let generation = state.generation;
     apply(state, Change::Validated { generation, loaded })
 }
@@ -150,6 +155,7 @@ fn native_script_editor_save_preserves_invalid_authored_source_and_rebases_inclu
                 generation,
                 path: path.clone(),
                 source: draft,
+                artifact: Artifact::Text,
             },
         )
         .unwrap();
@@ -201,6 +207,7 @@ fn native_script_editor_stale_completions_and_rejected_native_buffers_cannot_ena
         generation,
         path: directory.0.join("old.limo.jsonc"),
         source: authored().into(),
+        artifact: Artifact::Text,
     };
     assert!(apply(&mut world.resource_mut::<Files>().script, stale_save).is_err());
     assert!(world.resource::<Files>().script.dirty());
@@ -303,4 +310,160 @@ fn native_script_editor_preserves_rejected_native_draft_and_rebinds_on_explicit_
         "Rebind tells the existing native field adapter to discard its stale local buffer and history");
     assert!(matches!(&control.field, Field::Text { value, .. } if value == authored()));
     assert!(source_ready(&world).is_ok());
+}
+
+fn project_fixture(directory: &Directory) -> (World, Vec<u8>) {
+    use limo_cad_project_file::{ProjectArchive, ReplayPackage, SaveMetadata};
+    let mut archive = ProjectArchive::new(
+        r#"{"format":"limo-cad-project","schema_version":15}"#.into(),
+        SaveMetadata {
+            application_version: "test",
+            saved_at: "2026-10-17T00:00:00Z",
+        },
+    )
+    .unwrap();
+    archive
+        .set_intent("intent/future.cbor", Some(vec![0, 255, 7]))
+        .unwrap();
+    let bytes = archive.encode().unwrap();
+    let source = r#"{"version":2,"name":"Retained","starting_state":"project","steps":[{"note":"Original"}]}"#;
+    let path = directory.0.join("source.limo.replay.cbor");
+    ReplayPackage::new(source.into(), bytes.clone())
+        .unwrap()
+        .write_file_new(&path)
+        .unwrap();
+    let mut world = World::new();
+    initialize(
+        &mut world,
+        Arc::new(Mutex::new(DocumentWorkspace::default())),
+    );
+    world
+        .resource_mut::<Files>()
+        .script
+        .accept(inspect(path).unwrap())
+        .unwrap();
+    (world, bytes)
+}
+
+#[test]
+fn native_package_edit_validate_save_retains_baseline_and_uses_memory_snapshot() {
+    use limo_cad_project_file::ReplayPackage;
+    let directory = Directory::new();
+    let (mut world, original) = project_fixture(&directory);
+    let loaded = world
+        .resource::<Files>()
+        .script
+        .loaded
+        .as_ref()
+        .unwrap()
+        .clone();
+    let draft = loaded.authored().replace("Original", "Edited");
+    edit_source(&mut world, &ControlInput::SetValue(draft.clone())).unwrap();
+    // External replacement must not mix a new baseline with the editor's draft.
+    std::fs::write(
+        directory.0.join("source.limo.replay.cbor"),
+        b"external replacement",
+    )
+    .unwrap();
+    validate_now(&mut world).unwrap();
+    let path = directory.0.join("saved.limo.replay.cbor");
+    {
+        let state = &mut world.resource_mut::<Files>().script;
+        let selected = state.selected(state.generation).unwrap();
+        assert!(loaded.artifact.same_baseline(&selected.artifact));
+        assert!(state.dirty());
+        let prepared = selected
+            .artifact
+            .prepare(selected.source(), false)
+            .unwrap()
+            .unwrap();
+        let (_, archive, _, _) = prepared.into_parts();
+        assert_eq!(archive.encode().unwrap(), original);
+        let artifact = selected
+            .artifact
+            .save(&path, &draft, selected.maximum)
+            .unwrap();
+        let reopened = ReplayPackage::read_file(&path).unwrap();
+        assert_eq!(reopened.script(), draft);
+        assert_eq!(reopened.project_bytes(), original);
+        let generation = state.generation;
+        apply(
+            state,
+            Change::Saved {
+                generation,
+                path: path.clone(),
+                source: draft,
+                artifact,
+            },
+        )
+        .unwrap();
+        assert!(!state.dirty());
+        assert!(!state.validated);
+    }
+    validate_now(&mut world).unwrap();
+    let state = &world.resource::<Files>().script;
+    let selected = state.selected(state.generation).unwrap();
+    let (_, saved) = ReplayPackage::read_file_with_identity(&path).unwrap();
+    assert_eq!(selected.inspection["saved_package_identity"], json!(saved));
+    assert_ne!(selected.inspection["opened_package_identity"], json!(saved));
+}
+
+#[test]
+fn native_package_wrong_baseline_and_stale_saves_cannot_change_editor_state() {
+    let directory = Directory::new();
+    let (mut world, _) = project_fixture(&directory);
+    let state = &mut world.resource_mut::<Files>().script;
+    let original = state.loaded.as_ref().unwrap().clone();
+    // Identical file bytes reopened separately are a different selected baseline.
+    let replacement = inspect(state.source_path.clone().unwrap()).unwrap();
+    assert!(!original.artifact.same_baseline(&replacement.artifact));
+    let generation = state.generation;
+    assert!(apply(
+        state,
+        Change::Validated {
+            generation,
+            loaded: replacement.clone()
+        }
+    )
+    .is_err());
+    let source = state.source.clone();
+    assert!(apply(
+        state,
+        Change::Saved {
+            generation,
+            path: directory.0.join("wrong.limo.replay.cbor"),
+            source,
+            artifact: replacement.artifact
+        }
+    )
+    .is_err());
+    assert!(original
+        .artifact
+        .save(
+            &directory.0.join("lossy.limo.jsonc"),
+            &state.source,
+            original.maximum
+        )
+        .is_err());
+    assert!(!directory.0.join("lossy.limo.jsonc").exists());
+    let snapshot = state.source.clone();
+    state.source.push_str("\n// later edit");
+    state.advance().unwrap();
+    assert!(apply(
+        state,
+        Change::Saved {
+            generation,
+            path: directory.0.join("old.limo.replay.cbor"),
+            source: snapshot,
+            artifact: original.artifact.clone()
+        }
+    )
+    .is_err());
+    assert!(state.dirty());
+    assert!(state
+        .loaded
+        .as_ref()
+        .unwrap()
+        .artifact
+        .same_baseline(&original.artifact));
 }

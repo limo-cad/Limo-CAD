@@ -1,4 +1,14 @@
 {
+  "projectReplay": {
+    "filter": "Limo CAD project replay (.limo.replay.cbor)",
+    "savePath": "Save a project replay to an absolute .limo.replay.cbor path",
+    "openPath": "Open a project replay from an absolute path",
+    "saved": "Project replay saved with its retained baseline. Validate before Run.",
+    "changed": "Script changed before its prepared run started",
+    "handoff": "Prepared script handoff is unavailable",
+    "retired": "Script preparation handoff retired",
+    "validSource": "Replay source is valid. Run uses this source and the retained project baseline; validation does not save edits."
+  },
   "runtimeActivity": {
     "title": "Activity",
     "current": "In progress",

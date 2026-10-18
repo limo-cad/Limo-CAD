@@ -1,4 +1,14 @@
 {
+  "projectReplay": {
+    "filter": "Reproducción de proyecto Limo CAD (.limo.replay.cbor)",
+    "savePath": "Guarde la reproducción del proyecto en una ruta absoluta .limo.replay.cbor",
+    "openPath": "Abra la reproducción del proyecto desde una ruta absoluta",
+    "saved": "Reproducción guardada con su proyecto inicial. Valide antes de ejecutar.",
+    "changed": "El script cambió antes de iniciar la ejecución preparada",
+    "handoff": "La transferencia del script preparado no está disponible",
+    "retired": "Se canceló la transferencia de preparación del script",
+    "validSource": "El código es válido. La ejecución usa este código y el proyecto inicial conservado; validar no guarda los cambios."
+  },
   "runtimeActivity": {
     "title": "Actividad",
     "current": "En curso",
