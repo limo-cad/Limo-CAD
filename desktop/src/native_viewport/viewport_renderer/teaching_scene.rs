@@ -1,6 +1,8 @@
 //! Isolated teaching geometry in the existing CAD renderer. No live-scene resources are changed.
 use super::*;
-use crate::native_viewport::script_preview::{PreviewDocument, PreviewFinish, RenderRequest};
+use crate::native_viewport::script_preview::{
+    PreviewCue, PreviewDocument, PreviewFinish, RenderRequest,
+};
 
 const LAYER: usize = 2;
 #[derive(Component)]
@@ -23,6 +25,7 @@ struct Scene {
     materials: Vec<Handle<StandardMaterial>>,
     solid: Option<Arc<SolidSceneDto>>,
     profile: Option<limo_cad_sketch::SketchDto>,
+    plane: Option<([f64; 2], [f64; 2])>,
     selected: Vec<u64>,
     camera: Option<ViewportCamera>,
     viewport: Option<ViewportSizeResource>,
@@ -109,6 +112,7 @@ pub(super) fn show(
         scene.materials = material_handles;
         scene.solid = Some(frame.scene.clone());
         scene.profile = frame.profile.clone();
+        scene.plane = (frame.cue == Some(PreviewCue::Plane)).then(|| plane_bounds(document));
         scene.selected = frame.edges.clone();
         scene.key = Some(key);
         scene.palette = Some(palette);
@@ -255,6 +259,19 @@ fn draw(
         }
     }
     if let Some(profile) = &scene.profile {
+        if let Some((low, high)) = scene.plane {
+            for (index, (start, end)) in plane_segments(low, high).into_iter().enumerate() {
+                let point = |p| {
+                    let p = profile.basis.to_3d(p);
+                    Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32)
+                };
+                selected.line(
+                    point(start),
+                    point(end),
+                    rgba(palette.accent, if index < 4 { 0.85 } else { 0.46 }),
+                );
+            }
+        }
         for entity in &profile.entities {
             draw_sketch_curve_at_offset(
                 &mut selected,
@@ -267,9 +284,60 @@ fn draw(
     }
 }
 
+// Match the forthcoming sketch's footprint while retaining the real local origin.
+// The cue uses six bounded lines, not the main viewport's adaptive grid.
+fn plane_bounds(document: &PreviewDocument) -> ([f64; 2], [f64; 2]) {
+    let mut low = [0_f64; 2];
+    let mut high = [0_f64; 2];
+    for profile in document
+        .frames
+        .iter()
+        .filter_map(|frame| frame.profile.as_ref())
+    {
+        for entity in &profile.entities {
+            if let limo_cad_sketch::EntityDto::Line { start, end, .. } = entity {
+                for point in [start, end] {
+                    for (axis, value) in [point.x, point.y].into_iter().enumerate() {
+                        low[axis] = low[axis].min(value);
+                        high[axis] = high[axis].max(value);
+                    }
+                }
+            }
+        }
+    }
+    for axis in 0..2 {
+        let margin = ((high[axis] - low[axis]) * 0.05).max(1.);
+        low[axis] -= margin;
+        high[axis] += margin;
+    }
+    (low, high)
+}
+
+fn plane_segments(low: [f64; 2], high: [f64; 2]) -> [([f64; 2], [f64; 2]); 6] {
+    let corners = [low, [high[0], low[1]], high, [low[0], high[1]]];
+    [
+        (corners[0], corners[1]),
+        (corners[1], corners[2]),
+        (corners[2], corners[3]),
+        (corners[3], corners[0]),
+        ([low[0], 0.], [high[0], 0.]),
+        ([0., low[1]], [0., high[1]]),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn teaching_plane_cue_has_closed_boundary_and_true_origin_axes() {
+        let lines = plane_segments([-2., -3.], [34., 47.]);
+        for index in 0..4 {
+            assert_eq!(lines[index].1, lines[(index + 1) % 4].0);
+            assert_ne!(lines[index].0, lines[index].1);
+        }
+        assert_eq!(lines[4], ([-2., 0.], [34., 0.]));
+        assert_eq!(lines[5], ([0., -3.], [0., 47.]));
+    }
     #[test]
     fn teaching_scene_show_keeps_live_resources_and_reuses_camera_and_meshes() {
         let frame = serde_json::from_value(serde_json::json!({

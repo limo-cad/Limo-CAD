@@ -199,6 +199,45 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
                     .to_srgba();
                 let expected = [ink.red, ink.green, ink.blue].map(|v| (v * 255.).round() as i16);
                 let pixels = decoded.data.as_ref().unwrap();
+                if app.world().resource::<Files>().script.preview.lesson == Some(lesson::Id::Sketch)
+                    && path.file_name().unwrap() == "frame-0.png"
+                {
+                    let (node, transform) = app
+                        .world_mut()
+                        .query::<(
+                            &NativeCommandBinding,
+                            &ComputedNode,
+                            &bevy::ui::UiGlobalTransform,
+                        )>()
+                        .iter(app.world())
+                        .find_map(|(binding, node, transform)| {
+                            (binding.command
+                                == NativeCommand::File(FileCommand::ScriptPreview(Action::Model)))
+                            .then_some((*node, *transform))
+                        })
+                        .expect("Sketch model stage is laid out");
+                    let size = decoded.texture_descriptor.size;
+                    let start = transform.translation - node.size / 2.;
+                    // Exclude focus/border pixels: only actual plane ink counts.
+                    let left = (start.x + 12.).max(0.) as usize;
+                    let top = (start.y + 12.).max(0.) as usize;
+                    let right = (start.x + node.size.x - 12.).min(size.width as f32) as usize;
+                    let bottom = (start.y + node.size.y - 12.).min(size.height as f32) as usize;
+                    let reference = (top * size.width as usize + left) * 4;
+                    let visible = (top..bottom)
+                        .flat_map(|y| (left..right).map(move |x| (y * size.width as usize + x) * 4))
+                        .filter(|offset| {
+                            (0..3).any(|i| {
+                                (pixels[*offset + i] as i16 - pixels[reference + i] as i16).abs()
+                                    > 20
+                            })
+                        })
+                        .count();
+                    assert!(
+                        visible > 100,
+                        "Initial Sketch must show its plane, not a blank stage"
+                    );
+                }
                 let (node, transform) = app
                     .world_mut()
                     .query::<(&Text, &ComputedNode, &bevy::ui::UiGlobalTransform)>()
@@ -231,6 +270,18 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
         }
         assert!(Instant::now() < deadline, "Native UI capture timed out");
     }
+}
+
+#[test]
+#[ignore = "requires a native graphics adapter; captures the affected Sketch lesson"]
+fn native_show_me_sketch_plane_evidence() {
+    let root = std::env::var("LIMO_CAD_SHOW_ME_PROOF_DIR")
+        .expect("Choose a fresh LIMO_CAD_SHOW_ME_PROOF_DIR");
+    capture_lesson(
+        lesson::Id::Sketch,
+        lesson::CutScenario::ThroughAll,
+        &Path::new(&root).join("sketch"),
+    );
 }
 
 #[test]
