@@ -1,0 +1,348 @@
+{
+  "source_revision": "7ab30924bf77cf7acc7eb6909fd0e062d49d3829",
+  "scope": "Native component captures: all four guided lessons and both Cut outcomes; six intermediate motion samples per lesson; Sketch automatic playback completes without blank ImageNode; read-only integrated instructions and four locales at 175 percent.",
+  "capture_roots": {
+    "sketch": ".codex\\show-me-guided-v4\\sketch",
+    "extrude": ".codex\\show-me-guided-v3\\extrude",
+    "fillet": ".codex\\show-me-guided-v3\\fillet",
+    "cut": ".codex\\show-me-guided-v3\\cut",
+    "cut-measured": ".codex\\show-me-guided-v3\\cut-measured"
+  },
+  "source_sha256_lf": {
+    "crates/help/src/lessons.json": "25dbd3e0545de026b1c41f8254feb42d83177ca1ede31549d3913a2723faf32f",
+    "crates/help/src/lessons.rs": "34479387cd2ca2231905e91a9a634cf73c2d069a2330953df21efec14ef8d858",
+    "desktop/src/native_viewport/script_preview.rs": "a1fb52149dbca9a4bc71012980e60258e79069d9a430956292d4bf469a4389ad",
+    "desktop/src/native_viewport/viewport_renderer.rs": "798669785a9378c715e70f27fdf3895c471543cc9b7bd39588a72d020641a0e5",
+    "desktop/src/native_viewport/viewport_renderer/teaching_animation.rs": "8dc3d03efec619d40c798a50487c0500df11c4ad2585cba599a415656ad6d052",
+    "desktop/src/native_viewport/viewport_renderer/teaching_queue.rs": "a24fc624fe5ff33063f0ac786b2a3d15fbe9feb5a32851d4f55ca5d81cc11f49",
+    "desktop/src/native_viewport/viewport_renderer/teaching_scene.rs": "ecb3ba76471875cb478fc2cb79e9b8dde7fe42d749fcaffe8bda9f7e0c6cb54c",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs": "2936fd738e0d58f48f0325357e0ec16d2384c475211c891c325a71f4d265689a",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/annotations.rs": "f8262e505b4d66594fdf154f9cc4db69d62db383e53a20cab42d16e36679f78d",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/card.rs": "fa6dd90bc835af3090da096c57d5b2abb5bafc478b7910a2f26c381cd1f530b9",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/evidence.rs": "b3aa6b3e8c190818389df6cd2f83e90deeb323d1fe35c3e54c8fce13844d9bc6",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/feature.rs": "94cda0be0068d63f91017d91aa5db9feca73b9a5591874823b49b154ec36ae9d",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/hover.rs": "9d242ad70cf353672cc9a412ae0571afba558516ee0db33f53e1e08299eaaba7",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/images.rs": "7318e8a36499fffda5ebef8c965f834ab0c7ab5c64a0e37f4905cc73c17cd9f2",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/input.rs": "5b7fa33a396d91594f9eb93f82f1b2affad5ef78c25cc99512d7dca0ad56934b",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/panel.rs": "c30537ab6f2bfaee0e48186c7094328604d82fc39701b9c547e3faac5aa31d79",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/steps.rs": "4a32b1e07b88539ff70425fac4c794a81de2b1a3d973ace6012e7f8699821708",
+    "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/tests.rs": "dbfc89da6598cf18ee38ad74c1c940fcb9e83d055612b994d0e84158f042d9da"
+  },
+  "reports": {
+    "sketch": {
+      "cached_adjacent_gpu_jobs": 0,
+      "cached_frames": 2,
+      "cached_gpu_texture_bytes": 1779200,
+      "closed_cached_bytes": 0,
+      "closed_poll_ns": 1313.461,
+      "cold_frame_ms": [
+        35.1065,
+        28.660999999999998,
+        38.247,
+        35.8704,
+        39.5952
+      ],
+      "cold_gpu_jobs": 6,
+      "controller_first_open_ms": 84.3267,
+      "durations_ms": [
+        1400,
+        1400,
+        1400,
+        1400,
+        1400
+      ],
+      "idle_poll_samples": 100000,
+      "idle_preview_wakes": 0,
+      "lesson": "sketch",
+      "lifecycle": {
+        "authored_cache_entries": 2,
+        "authored_cache_hits": 2,
+        "authored_cache_misses": 2,
+        "authored_cache_serialized_bytes": 141523,
+        "closed_memory_after_reopen": {
+          "resident_bytes": 411222016,
+          "scope": "whole test process; GPU dedicated memory excluded",
+          "virtual_memory_bytes": 832593920,
+          "virtual_memory_semantics": "Windows private bytes"
+        },
+        "closed_memory_before_reopen": {
+          "resident_bytes": 410685440,
+          "scope": "whole test process; GPU dedicated memory excluded",
+          "virtual_memory_bytes": 832593920,
+          "virtual_memory_semantics": "Windows private bytes"
+        },
+        "open_other_lesson_ms": 62.2937,
+        "renderer": "existing shared CAD worker and device",
+        "reopen_same_lesson_ms": 46.9758,
+        "return_to_first_lesson_ms": 38.7956,
+        "scope": "actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"
+      },
+      "memory_before_controller_open": {
+        "resident_bytes": 390438912,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 818008064,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "paused_poll_ns": 1301.514,
+      "prepare_ms": 48.3562,
+      "scenario": "through_all",
+      "scenario_cached_frames": null,
+      "scenario_gpu_jobs": null,
+      "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+      "texture_budget_bytes": 2097152,
+      "warm_gpu_jobs": 15,
+      "warm_replay_ms": 157.89566666666667
+    },
+    "extrude": {
+      "cached_adjacent_gpu_jobs": 0,
+      "cached_frames": 2,
+      "cached_gpu_texture_bytes": 1779200,
+      "closed_cached_bytes": 0,
+      "closed_poll_ns": 1343.696,
+      "cold_frame_ms": [
+        167.3504,
+        753.8892000000001,
+        38.1593,
+        50.1846,
+        46.308
+      ],
+      "cold_gpu_jobs": 6,
+      "controller_first_open_ms": 235.8269,
+      "durations_ms": [
+        1400,
+        500,
+        500,
+        1400,
+        1400
+      ],
+      "idle_poll_samples": 100000,
+      "idle_preview_wakes": 0,
+      "lesson": "extrude",
+      "lifecycle": {
+        "authored_cache_entries": 2,
+        "authored_cache_hits": 2,
+        "authored_cache_misses": 2,
+        "authored_cache_serialized_bytes": 141523,
+        "closed_memory_after_reopen": {
+          "resident_bytes": 423464960,
+          "scope": "whole test process; GPU dedicated memory excluded",
+          "virtual_memory_bytes": 852889600,
+          "virtual_memory_semantics": "Windows private bytes"
+        },
+        "closed_memory_before_reopen": {
+          "resident_bytes": 427106304,
+          "scope": "whole test process; GPU dedicated memory excluded",
+          "virtual_memory_bytes": 856522752,
+          "virtual_memory_semantics": "Windows private bytes"
+        },
+        "open_other_lesson_ms": 38.0319,
+        "renderer": "existing shared CAD worker and device",
+        "reopen_same_lesson_ms": 46.7667,
+        "return_to_first_lesson_ms": 40.5692,
+        "scope": "actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"
+      },
+      "memory_before_controller_open": {
+        "resident_bytes": 403881984,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 830406656,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "paused_poll_ns": 1170.093,
+      "prepare_ms": 67.6243,
+      "scenario": "through_all",
+      "scenario_cached_frames": null,
+      "scenario_gpu_jobs": null,
+      "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+      "texture_budget_bytes": 2097152,
+      "warm_gpu_jobs": 15,
+      "warm_replay_ms": 180.27913333333333
+    },
+    "fillet": {
+      "cached_adjacent_gpu_jobs": 0,
+      "cached_frames": 2,
+      "cached_gpu_texture_bytes": 1779200,
+      "closed_cached_bytes": 0,
+      "closed_poll_ns": 767.081,
+      "cold_frame_ms": [
+        706.9223,
+        48.106,
+        47.2397,
+        51.698800000000006
+      ],
+      "cold_gpu_jobs": 5,
+      "controller_first_open_ms": 762.77,
+      "durations_ms": [
+        1400,
+        1400,
+        1400,
+        1400
+      ],
+      "idle_poll_samples": 100000,
+      "idle_preview_wakes": 0,
+      "lesson": "fillet",
+      "lifecycle": {
+        "authored_cache_entries": 2,
+        "authored_cache_hits": 2,
+        "authored_cache_misses": 2,
+        "authored_cache_serialized_bytes": 256305,
+        "closed_memory_after_reopen": {
+          "resident_bytes": 436592640,
+          "scope": "whole test process; GPU dedicated memory excluded",
+          "virtual_memory_bytes": 880939008,
+          "virtual_memory_semantics": "Windows private bytes"
+        },
+        "closed_memory_before_reopen": {
+          "resident_bytes": 436563968,
+          "scope": "whole test process; GPU dedicated memory excluded",
+          "virtual_memory_bytes": 880889856,
+          "virtual_memory_semantics": "Windows private bytes"
+        },
+        "open_other_lesson_ms": 35.3187,
+        "renderer": "existing shared CAD worker and device",
+        "reopen_same_lesson_ms": 46.1962,
+        "return_to_first_lesson_ms": 42.617000000000004,
+        "scope": "actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"
+      },
+      "memory_before_controller_open": {
+        "resident_bytes": 406953984,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 838606848,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "paused_poll_ns": 800.575,
+      "prepare_ms": 54.7118,
+      "scenario": "through_all",
+      "scenario_cached_frames": null,
+      "scenario_gpu_jobs": null,
+      "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+      "texture_budget_bytes": 2097152,
+      "warm_gpu_jobs": 12,
+      "warm_replay_ms": 136.083
+    },
+    "cut": {
+      "cached_adjacent_gpu_jobs": 0,
+      "cached_frames": 2,
+      "cached_gpu_texture_bytes": 2007040,
+      "closed_cached_bytes": 0,
+      "closed_poll_ns": 1037.626,
+      "cold_frame_ms": [
+        782.9774,
+        53.569199999999995,
+        49.522499999999994,
+        51.4443
+      ],
+      "cold_gpu_jobs": 5,
+      "controller_first_open_ms": 1200.338,
+      "durations_ms": [
+        1400,
+        1400,
+        1400,
+        1400
+      ],
+      "idle_poll_samples": 100000,
+      "idle_preview_wakes": 0,
+      "lesson": "cut",
+      "lifecycle": {
+        "authored_cache_entries": 2,
+        "authored_cache_hits": 2,
+        "authored_cache_misses": 2,
+        "authored_cache_serialized_bytes": 3104657,
+        "closed_memory_after_reopen": {
+          "resident_bytes": 439590912,
+          "scope": "whole test process; GPU dedicated memory excluded",
+          "virtual_memory_bytes": 875745280,
+          "virtual_memory_semantics": "Windows private bytes"
+        },
+        "closed_memory_before_reopen": {
+          "resident_bytes": 439558144,
+          "scope": "whole test process; GPU dedicated memory excluded",
+          "virtual_memory_bytes": 875700224,
+          "virtual_memory_semantics": "Windows private bytes"
+        },
+        "open_other_lesson_ms": 39.735800000000005,
+        "renderer": "existing shared CAD worker and device",
+        "reopen_same_lesson_ms": 182.88750000000002,
+        "return_to_first_lesson_ms": 162.18949999999998,
+        "scope": "actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"
+      },
+      "memory_before_controller_open": {
+        "resident_bytes": 394113024,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 819871744,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "paused_poll_ns": 809.178,
+      "prepare_ms": 416.03610000000003,
+      "scenario": "through_all",
+      "scenario_cached_frames": 2,
+      "scenario_gpu_jobs": 8,
+      "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+      "texture_budget_bytes": 2097152,
+      "warm_gpu_jobs": 12,
+      "warm_replay_ms": 175.26346666666666
+    },
+    "cut-measured": {
+      "cached_adjacent_gpu_jobs": 0,
+      "cached_frames": 2,
+      "cached_gpu_texture_bytes": 2007040,
+      "closed_cached_bytes": 0,
+      "closed_poll_ns": 791.258,
+      "cold_frame_ms": [
+        734.248,
+        55.0126,
+        49.2143,
+        50.3608
+      ],
+      "cold_gpu_jobs": 5,
+      "controller_first_open_ms": 1120.1314,
+      "durations_ms": [
+        1400,
+        1400,
+        1400,
+        1400
+      ],
+      "idle_poll_samples": 100000,
+      "idle_preview_wakes": 0,
+      "lesson": "cut",
+      "lifecycle": {
+        "authored_cache_entries": 2,
+        "authored_cache_hits": 2,
+        "authored_cache_misses": 2,
+        "authored_cache_serialized_bytes": 3104657,
+        "closed_memory_after_reopen": {
+          "resident_bytes": 448032768,
+          "scope": "whole test process; GPU dedicated memory excluded",
+          "virtual_memory_bytes": 890388480,
+          "virtual_memory_semantics": "Windows private bytes"
+        },
+        "closed_memory_before_reopen": {
+          "resident_bytes": 447967232,
+          "scope": "whole test process; GPU dedicated memory excluded",
+          "virtual_memory_bytes": 890347520,
+          "virtual_memory_semantics": "Windows private bytes"
+        },
+        "open_other_lesson_ms": 42.026399999999995,
+        "renderer": "existing shared CAD worker and device",
+        "reopen_same_lesson_ms": 165.7311,
+        "return_to_first_lesson_ms": 161.612,
+        "scope": "actual controller open/close, fresh pixel cache each open, retained current viewport size and palette"
+      },
+      "memory_before_controller_open": {
+        "resident_bytes": 415633408,
+        "scope": "whole test process; GPU dedicated memory excluded",
+        "virtual_memory_bytes": 845148160,
+        "virtual_memory_semantics": "Windows private bytes"
+      },
+      "paused_poll_ns": 876.029,
+      "prepare_ms": 384.64540000000005,
+      "scenario": "measured_depth",
+      "scenario_cached_frames": 2,
+      "scenario_gpu_jobs": 8,
+      "scope": "windowless production native UI; debug test profile; controller timings, not whole-app CPU/GPU utilization",
+      "texture_budget_bytes": 2097152,
+      "warm_gpu_jobs": 12,
+      "warm_replay_ms": 168.85153333333332
+    }
+  },
+  "limitations": "GIFs sample native presentation motion; they are not OS pointer recordings. Other v3 captures precede the cadence-only correction and Instructions chevron; the affected Sketch flow was recaptured at v4. Broad live UI/MCP qualification remains paused. Four concurrent foreign patches remained in checkout and are excluded from PR432."
+}
