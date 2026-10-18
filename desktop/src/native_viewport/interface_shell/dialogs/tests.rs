@@ -176,3 +176,40 @@ fn installs_with_bevys_dialog_plugin_already_present() {
     install(&mut app);
     app.update();
 }
+
+#[test]
+fn large_first_title_motion_retains_press_origin_and_repeated_edges() {
+    for scale in [1., 1.25] {
+        let (mut app, window, root) = fixture();
+        app.world_mut().resource_mut::<UiScale>().0 = scale;
+        app.world_mut().get_mut::<Node>(root).unwrap().left = px(280.);
+        app.update();
+        let position = |app: &App| {
+            Vec2::new(280., 80.) + translation(app.world().get::<UiTransform>(root).unwrap())
+        };
+        // One large first movement: DragStart carries the destination, but
+        // Bevy's distance and window clamp must both use the press origin.
+        move_to(&mut app, window, Vec2::new(320., 100.) * scale);
+        button(&mut app, window, ButtonState::Pressed);
+        move_to(&mut app, window, Vec2::new(80., 100.) * scale);
+        button(&mut app, window, ButtonState::Released);
+        assert_eq!(position(&app), Vec2::new(40., 80.));
+
+        // A repeated move toward the left edge must not reverse direction.
+        move_to(&mut app, window, Vec2::new(80., 100.) * scale);
+        button(&mut app, window, ButtonState::Pressed);
+        move_to(&mut app, window, Vec2::new(1., 100.) * scale);
+        button(&mut app, window, ButtonState::Released);
+        assert_eq!(position(&app), Vec2::new(8., 80.));
+
+        // Continue across both axes, including release beyond the window.
+        move_to(&mut app, window, Vec2::new(48., 100.) * scale);
+        button(&mut app, window, ButtonState::Pressed);
+        move_to(&mut app, window, Vec2::new(2000., 1600.));
+        button(&mut app, window, ButtonState::Released);
+        let maximum = Vec2::new(1000., 800.) / scale - Vec2::new(328., 408.);
+        assert_eq!(position(&app), maximum);
+        move_to(&mut app, window, Vec2::new(10., 10.));
+        assert_eq!(position(&app), maximum, "release ends the standard drag");
+    }
+}

@@ -12,6 +12,8 @@ repository = "https://github.com/limo-cad/Limo-CAD"
 [patch.crates-io]
 # Explicit service wakes must advance the app even when the OS suppresses redraws.
 bevy_winit = { path = "vendor/bevy_winit" }
+# Preserve the original press position when standard dialog dragging starts.
+bevy_ui_widgets = { path = "vendor/bevy_ui_widgets" }
 
 [profile.release]
 strip = "symbols"
