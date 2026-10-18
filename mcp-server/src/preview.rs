@@ -5,7 +5,11 @@
 use limo_cad_project_file::{ProjectArchive, ReplayPackage};
 use limo_cad_script::{ProjectScript, RunOptions, Script};
 
+mod frames;
 mod host;
+pub use frames::{
+    ProjectPreviewCoverage, ProjectPreviewFrame, ProjectPreviewResult, ProjectPreviewStage,
+};
 pub use host::run_prepared_project_preview;
 
 const MAX_SOURCE_BYTES: usize = 2 * 1024 * 1024;

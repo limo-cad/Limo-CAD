@@ -1,5 +1,8 @@
 //! Detached project replay through the existing interpreter and snapshot command.
-use super::PreparedProjectPreview;
+use super::{
+    frames::Frames, PreparedProjectPreview, ProjectPreviewCoverage, ProjectPreviewResult,
+    ProjectPreviewStage,
+};
 use limo_cad_project_file::ProjectArchive;
 use limo_cad_script::{ProjectReplayHost, RunProgress};
 use serde_json::{json, Value};
@@ -8,12 +11,14 @@ use serde_json::{json, Value};
 /// cancellation/deadline in `check`; it is called before engine creation, around
 /// baseline loading, around each operation, and before returning the report.
 /// Synchronous kernel calls cannot be interrupted by these cooperative checks.
-/// The report contains authored exports; frame synthesis/visualization belongs
-/// to the preview adapter and is not implied by successful script execution.
+/// Generated baseline/final frames carry solid geometry and assembly placement.
+/// Authored exports remain in the separate report; domain visualization is not
+/// implied by successful script execution. The native adapter owns localization
+/// of stage labels and validates renderer-specific geometry/instance budgets.
 pub fn run_prepared_project_preview(
     prepared: PreparedProjectPreview,
     mut check: impl FnMut() -> Result<(), String>,
-) -> Result<Value, String> {
+) -> Result<ProjectPreviewResult, String> {
     check()?;
     let (script, archive, options) = prepared.into_parts();
     super::validate(script.script())?;
@@ -26,14 +31,23 @@ pub fn run_prepared_project_preview(
         archive: Some(archive),
         baseline_attempted: false,
         baseline_loaded: false,
+        frames: Frames::default(),
+        unrendered_domain_intents: std::collections::BTreeSet::new(),
         check: &mut check,
     };
     let report = script.run(&mut host, options)?;
     host.ensure_detached()?;
     (host.check)()?;
+    host.capture(ProjectPreviewStage::Final)?;
+    (host.check)()?;
     // This server is private to this request. No native finish/presentation
     // acknowledgement, session refresh, file write or publication is required.
-    Ok(report)
+    Ok(ProjectPreviewResult {
+        report,
+        frames: host.frames.values,
+        coverage: ProjectPreviewCoverage::SolidGeometryAndAssembly,
+        unrendered_domain_intents: host.unrendered_domain_intents.into_iter().collect(),
+    })
 }
 
 struct DetachedHost<'a, F> {
@@ -41,6 +55,8 @@ struct DetachedHost<'a, F> {
     archive: Option<ProjectArchive>,
     baseline_attempted: bool,
     baseline_loaded: bool,
+    frames: Frames,
+    unrendered_domain_intents: std::collections::BTreeSet<String>,
     check: &'a mut F,
 }
 impl<F> DetachedHost<'_, F> {
@@ -52,6 +68,25 @@ impl<F> DetachedHost<'_, F> {
         {
             return Err("Preview host must remain detached from desktop documents".into());
         }
+        Ok(())
+    }
+}
+impl<F: FnMut() -> Result<(), String>> DetachedHost<'_, F> {
+    fn capture(&mut self, stage: ProjectPreviewStage) -> Result<(), String> {
+        self.ensure_detached()?;
+        (self.check)()?;
+        let assembly = self.server.manager.assembly_solution();
+        (self.check)()?;
+        self.frames
+            .capture(self.server.manager.solid_scene_ref(), assembly, stage)?;
+        self.unrendered_domain_intents.extend(
+            self.server
+                .manager
+                .project_intents()
+                .iter()
+                .map(|intent| intent.name.clone()),
+        );
+        (self.check)()?;
         Ok(())
     }
 }
@@ -98,6 +133,7 @@ impl<F: FnMut() -> Result<(), String>> ProjectReplayHost for DetachedHost<'_, F>
         if !self.server.manager.solid_scene_ref().errors.is_empty() {
             return Err("Preview baseline contains failed geometry".into());
         }
+        self.capture(ProjectPreviewStage::Baseline)?;
         self.baseline_loaded = true;
         Ok(())
     }
@@ -163,8 +199,14 @@ mod tests {
             "cancelled"
         );
         let report = run_prepared_project_preview(prepared(), || Ok(())).unwrap();
-        assert_eq!(report["project_baseline_loaded"], true);
-        assert_eq!(report["steps_completed"], 0);
+        assert_eq!(report.report["project_baseline_loaded"], true);
+        assert_eq!(report.report["steps_completed"], 0);
+        assert_eq!(report.frames.len(), 1);
+        assert_eq!(report.frames[0].stage, ProjectPreviewStage::Baseline);
+        assert_eq!(
+            report.coverage,
+            ProjectPreviewCoverage::SolidGeometryAndAssembly
+        );
     }
     #[test]
     fn detached_baseline_preserves_unknown_intent_and_rejects_resubmission() {
@@ -179,6 +221,8 @@ mod tests {
             archive: Some(archive),
             baseline_attempted: false,
             baseline_loaded: false,
+            frames: Frames::default(),
+            unrendered_domain_intents: std::collections::BTreeSet::new(),
             check: &mut check,
         };
         host.load_project_baseline().unwrap();
@@ -217,6 +261,8 @@ mod tests {
             archive: Some(archive),
             baseline_attempted: false,
             baseline_loaded: false,
+            frames: Frames::default(),
+            unrendered_domain_intents: std::collections::BTreeSet::new(),
             check: &mut check,
         };
         assert!(host.load_project_baseline().is_err());
@@ -246,6 +292,8 @@ mod tests {
             archive: Some(archive()),
             baseline_attempted: false,
             baseline_loaded: false,
+            frames: Frames::default(),
+            unrendered_domain_intents: std::collections::BTreeSet::new(),
             check: &mut check,
         };
         host.load_project_baseline().unwrap();
@@ -258,5 +306,30 @@ mod tests {
             before
         );
         host.ensure_detached().unwrap();
+    }
+    #[test]
+    fn generated_frames_do_not_overwrite_authored_exports_or_hide_domain_scope() {
+        let source = json!({"version":2,"name":"Separate exports","starting_state":"project",
+            "steps":[],"exports":{"preview_frames":"authored marker"}})
+        .to_string();
+        let mut archive = archive();
+        archive
+            .set_intent("intent/future.cbor", Some(vec![0, 255, 7]))
+            .unwrap();
+        let bytes = archive.encode().unwrap();
+        let package = ReplayPackage::new(source.clone(), bytes.clone()).unwrap();
+        let prepared = super::super::prepare_project_preview_source(&package, &source).unwrap();
+        let result = run_prepared_project_preview(prepared, || Ok(())).unwrap();
+        assert_eq!(
+            result.report["exports"]["preview_frames"],
+            "authored marker"
+        );
+        assert_eq!(result.frames.len(), 1);
+        assert_eq!(result.unrendered_domain_intents, vec!["intent/future.cbor"]);
+        assert_eq!(
+            result.coverage,
+            ProjectPreviewCoverage::SolidGeometryAndAssembly
+        );
+        assert_eq!(package.project_bytes(), bytes);
     }
 }
