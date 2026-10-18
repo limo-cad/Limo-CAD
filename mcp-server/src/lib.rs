@@ -29,6 +29,7 @@ mod knowledge;
 mod lesson_tests;
 mod local_slicer_tools;
 mod manufacturing_tools;
+mod preview;
 mod print_height_tools;
 mod print_intent_tools;
 mod print_modifier_tools;
@@ -122,15 +123,8 @@ pub fn preview_script(source: &str) -> Result<Value, String> {
     if source.len() > 2 * 1024 * 1024 {
         return Err("Preview scripts must be no larger than 2 MiB".into());
     }
-    let metadata = limo_cad_script::Script::parse(source)?.metadata();
-    let steps = metadata["step_count"].as_u64().unwrap_or(0)
-        + metadata["check_count"].as_u64().unwrap_or(0);
-    if steps > 80 {
-        return Err(
-            "Preview supports at most 80 steps and checks; run this script in a new design instead"
-                .into(),
-        );
-    }
+    let script = limo_cad_script::Script::parse(source)?;
+    preview::validate(&script)?;
     run_script(source, None, None, "fast", 1.0)
 }
 
