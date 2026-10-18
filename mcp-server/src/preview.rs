@@ -2,7 +2,64 @@
 //! contains session, process and file operations; catalog validity alone does
 //! not establish preview isolation. New operations are unavailable here until
 //! their detached execution and resource costs have been reviewed.
-use limo_cad_script::Script;
+use limo_cad_project_file::{ProjectArchive, ReplayPackage};
+use limo_cad_script::{ProjectScript, RunOptions, Script};
+
+const MAX_SOURCE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_ARCHIVE_BYTES: usize = 16 * 1024 * 1024;
+const MAX_EXPANDED_BYTES: u64 = 32 * 1024 * 1024;
+
+/// Admitted preview input, distinct from a live replay/publication request.
+/// No kernel has been created and domain semantics have not been staged.
+/// The detached host must retain cancellation and validate the paired snapshot
+/// transaction before running steps. Admission does not bound kernel runtime.
+pub struct PreparedProjectPreview {
+    script: ProjectScript,
+    archive: ProjectArchive,
+}
+impl PreparedProjectPreview {
+    pub fn into_parts(self) -> (ProjectScript, ProjectArchive, RunOptions) {
+        (
+            self.script,
+            self.archive,
+            RunOptions {
+                presentation: false,
+                validate: true,
+            },
+        )
+    }
+}
+
+/// Prepare retained package source without file reads or live document access.
+/// Callers serialize jobs and retain their editor package across success/failure.
+/// Source/operation/archive admission precedes the archive copy. The shared ZIP
+/// decoder checks expanded entry sizes before reading model/manifest content.
+/// No canonical envelope or publication identity is needed for a private preview.
+pub fn prepare_project_preview_source(
+    package: &ReplayPackage,
+    source: &str,
+) -> Result<PreparedProjectPreview, String> {
+    if source.len() > MAX_SOURCE_BYTES {
+        return Err("Preview scripts must be no larger than 2 MiB".into());
+    }
+    if package.project_bytes().len() > MAX_ARCHIVE_BYTES {
+        return Err("Preview project archives must be no larger than 16 MiB".into());
+    }
+    let script = ProjectScript::parse(source)?;
+    script.script().validate_options(RunOptions {
+        presentation: false,
+        validate: true,
+    })?;
+    validate(script.script())?;
+    let archive = ProjectArchive::decode_with_limits(
+        package.project_bytes().to_vec(),
+        MAX_ARCHIVE_BYTES as u64,
+        MAX_EXPANDED_BYTES,
+    )
+    .map_err(|error| error.to_string())?;
+    archive.snapshot().map_err(|error| error.to_string())?;
+    Ok(PreparedProjectPreview { script, archive })
+}
 
 pub(super) fn validate(script: &Script) -> Result<(), String> {
     let metadata = script.metadata();
@@ -56,6 +113,66 @@ fn supported(operation: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn project_source(operation: Option<&str>) -> String {
+        let steps = operation.map_or_else(Vec::new, |operation| vec![json!({
+            "call":{"group":crate::interface::group_for(operation).unwrap(),"operation":operation,"arguments":{}}
+        })]);
+        json!({"version":2,"name":"Preview baseline","starting_state":"project","steps":steps})
+            .to_string()
+    }
+
+    #[test]
+    fn package_preview_admission_precedes_archive_decode() {
+        let package = ReplayPackage::new("original".into(), vec![255]).unwrap();
+        let error = prepare_project_preview_source(&package, &project_source(Some("cad_attach")))
+            .err()
+            .unwrap();
+        assert!(error.contains("isolated preview"), "{error}");
+        assert!(
+            prepare_project_preview_source(&package, &" ".repeat(MAX_SOURCE_BYTES + 1))
+                .err()
+                .unwrap()
+                .contains("2 MiB")
+        );
+        let large = ReplayPackage::new("original".into(), vec![0; MAX_ARCHIVE_BYTES + 1]).unwrap();
+        assert!(
+            prepare_project_preview_source(&large, &project_source(None))
+                .err()
+                .unwrap()
+                .contains("16 MiB")
+        );
+        assert_eq!(package.project_bytes(), &[255]);
+    }
+
+    #[test]
+    fn prepared_preview_preserves_baseline_and_uses_fast_checked_steps() {
+        let mut archive = ProjectArchive::new(
+            r#"{"format":"limo-cad-project","schema_version":15}"#.into(),
+            limo_cad_project_file::SaveMetadata {
+                application_version: "test",
+                saved_at: "2026-10-17T00:00:00Z",
+            },
+        )
+        .unwrap();
+        archive
+            .set_intent("intent/future.cbor", Some(vec![0, 255, 7]))
+            .unwrap();
+        let bytes = archive.encode().unwrap();
+        let package = ReplayPackage::new("retained authorship".into(), bytes.clone()).unwrap();
+        let prepared = prepare_project_preview_source(&package, &project_source(None)).unwrap();
+        let (script, retained, options) = prepared.into_parts();
+        assert_eq!(script.script().metadata()["step_count"], 0);
+        assert!(!options.presentation);
+        assert!(options.validate);
+        assert_eq!(retained.encode().unwrap(), bytes);
+        assert_eq!(
+            retained.snapshot().unwrap().intents()[0].payload,
+            [0, 255, 7]
+        );
+        assert_eq!(package.script(), "retained authorship");
+        assert_eq!(package.project_bytes(), bytes);
+    }
 
     #[test]
     fn existing_preview_recipes_pass_the_explicit_operation_policy() {
