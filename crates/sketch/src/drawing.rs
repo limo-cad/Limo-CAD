@@ -1167,6 +1167,22 @@ fn default_dimension_precision() -> u8 {
 }
 
 impl DrawingDocumentDto {
+    /// Current paper adapters implement projected technical views. Until authored
+    /// drafting presentation is integrated, never silently omit its sheet content.
+    /// Definitions and model entities without a viewport do not affect a sheet.
+    pub fn ensure_projected_sheet_supported(&self, sheet_id: u64) -> Result<(), String> {
+        if self.drafting.as_ref().is_some_and(|drafting| {
+            drafting.viewports.iter().any(|v| v.sheet_id == sheet_id)
+                || drafting
+                    .entities
+                    .iter()
+                    .any(|e| e.space == crate::drafting::Space::Paper(sheet_id))
+        }) {
+            return Err("This sheet contains authored drafting content that this build cannot display or export. The saved content is retained.".into());
+        }
+        Ok(())
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if self.sheets.len() > MAX_SHEETS {
             return Err(format!(

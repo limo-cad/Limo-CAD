@@ -58,6 +58,38 @@ fn fixture() -> Document {
 }
 
 #[test]
+fn projected_paper_admission_is_scoped_to_authored_sheet_content() {
+    let mut drawing = crate::DrawingDocumentDto::default();
+    drawing.drafting = Some(fixture());
+    // Uninstanced definitions and model entities have no paper representation.
+    drawing.ensure_projected_sheet_supported(10).unwrap();
+    let mut paper_entity = drawing.drafting.as_ref().unwrap().entities[1].clone();
+    paper_entity.id = EntityId(6);
+    paper_entity.space = Space::Paper(10);
+    drawing
+        .drafting
+        .as_mut()
+        .unwrap()
+        .entities
+        .push(paper_entity);
+    assert!(drawing.ensure_projected_sheet_supported(10).is_err());
+    drawing.ensure_projected_sheet_supported(11).unwrap();
+    drawing.drafting.as_mut().unwrap().entities.pop();
+    drawing.drafting.as_mut().unwrap().viewports.push(Viewport {
+        id: ViewportId(7),
+        sheet_id: 10,
+        model_center_mm: [0., 0.],
+        paper_center_mm: [100., 100.],
+        rotation_rad: 0.,
+        paper_mm_per_model_mm: 0.02,
+        clip_mm: [10., 10., 180., 120.],
+        hidden_layers: vec![],
+    });
+    assert!(drawing.ensure_projected_sheet_supported(10).is_err());
+    drawing.ensure_projected_sheet_supported(11).unwrap();
+}
+
+#[test]
 fn repeated_instances_preserve_definition_and_independent_attributes() {
     let mut document = fixture();
     let mut second = document.entities[1].clone();
