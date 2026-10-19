@@ -17,7 +17,7 @@ impl Source {
     ) -> Result<Vec<Frame>, String> {
         check()?;
         let frames = match self {
-            Self::Example(example) => super::prepare(example.source)?,
+            Self::Example(example) => super::prepare(&example.source)?,
             Self::Project(loaded) => {
                 let Artifact::Project { package, .. } = &loaded.artifact else {
                     return Err("Project preview baseline is unavailable".into());

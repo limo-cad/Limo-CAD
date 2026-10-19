@@ -25,6 +25,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "script_preview/assembly.rs"]
 mod assembly;
 
 const MAX_CACHE_BYTES: usize = 32 * 1024 * 1024;
