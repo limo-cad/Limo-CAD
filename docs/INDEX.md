@@ -78,4 +78,4 @@
 </details>
 
 Shared agent guidance belongs in `docs/agentic/`. Editor-specific `AGENTS.md`
-and `.cursor/` files remain gitignored under the repository's existing policy.
+and `.cursor/` files stay untracked under the repository's existing policy.

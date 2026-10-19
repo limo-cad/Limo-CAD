@@ -7,7 +7,8 @@
 - Shared reference geometry (followers / named parents): Help id `concepts.shared-reference-geometry`.
 
 Committed operating docs for humans and coding agents working on Limo CAD.
-Prefer leaving root `AGENTS.md` / `.cursor/rules` out of git (project policy).
+Root `AGENTS.md` and `.cursor/rules` stay out of git (project policy); shared
+guidance lives here.
 
 | Doc | Purpose |
 |-----|---------|
