@@ -57,16 +57,14 @@ fn native_retention_preserves_known_and_unknown_intent_across_repeated_thaws() {
             expected
         );
         value(state.activate_project_session("b")).unwrap();
-        assert!(
-            state
-                .inner
-                .lock()
-                .unwrap()
-                .active()
-                .manager
-                .project_intents()
-                .is_empty()
-        );
+        assert!(state
+            .inner
+            .lock()
+            .unwrap()
+            .active()
+            .manager
+            .project_intents()
+            .is_empty());
     }
 }
 

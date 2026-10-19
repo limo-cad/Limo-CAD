@@ -170,10 +170,10 @@ pub use measurement_snapshot::{FinishedMeasurementReview, PreparedMeasurementRev
 #[path = "section_snapshot.rs"]
 mod section_snapshot;
 pub use section_snapshot::{FinishedSectionReview, PreparedSectionReview};
-#[path = "retention.rs"]
-mod retention;
 #[path = "project_snapshot.rs"]
 mod project_snapshot;
+#[path = "retention.rs"]
+mod retention;
 use retention::NativeProject;
 
 #[cfg(test)]

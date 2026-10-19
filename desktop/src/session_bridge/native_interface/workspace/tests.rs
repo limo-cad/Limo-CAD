@@ -1,5 +1,6 @@
 use super::super::tests::Fixture;
 use super::*;
+use crate::session_bridge::engine_text;
 use std::fs;
 
 fn metadata() -> SaveMetadata<'static> {

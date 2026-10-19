@@ -3508,6 +3508,7 @@ dependencies = [
  "bevy_ecs",
  "bevy_gizmos",
  "bevy_reflect",
+ "ciborium",
  "dirs",
  "earcutr",
  "hidapi",

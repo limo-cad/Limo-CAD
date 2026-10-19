@@ -3,7 +3,7 @@
 
 use super::{check_owner, context, NativeMutationResult};
 use crate::{
-    session_bridge::{engine_text, parse_engine_envelope, SessionBridgeState},
+    session_bridge::{parse_engine_envelope, SessionBridgeState},
     state::AppState,
 };
 use limo_cad_interface::DocumentContext;

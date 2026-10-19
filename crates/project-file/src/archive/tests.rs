@@ -238,7 +238,10 @@ fn unsupported_opaque_zip_metadata_is_rejected_instead_of_silently_discarded() {
             .unwrap()
             .to_string()
             .contains("cannot preserve opaque ZIP metadata"));
-        assert_eq!(decoded.original.as_ref().unwrap().as_ref(), bytes.as_slice());
+        assert_eq!(
+            decoded.original.as_ref().unwrap().as_ref(),
+            bytes.as_slice()
+        );
     }
 }
 
