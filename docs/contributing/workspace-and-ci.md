@@ -45,8 +45,9 @@ local files. Repository visibility is a separate maintainer decision.
   custody, merge settlement and active consumers. Preserve unrelated work, models,
   recovery data and current runtimes; remove only identified disposable output.
 
-The offline CI workspace check rejects private configuration paths and host
-context in shared guidance. Existing workflow contract tests check immutable
+The [offline workspace check](../../scripts/ci/check-workspace-policy.rs) rejects
+private configuration paths and host context in shared guidance.
+[Workflow contract tests](../../xtask/src/workflow_contracts.rs) check immutable
 actions, checkout credentials and publication gates. GitHub access controls and
 secret scanning remain separate administrator-managed controls.
 

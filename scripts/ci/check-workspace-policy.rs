@@ -2,10 +2,10 @@
 use std::{fs, path::Path, process::Command};
 
 fn private_path(path: &str) -> bool {
-    let normalized = path.replace('\\', "/").to_ascii_lowercase();
-    if normalized == "agents.md" || normalized == ".vscode/extensions.json" {
+    if path == "AGENTS.md" || path == ".vscode/extensions.json" {
         return false;
     }
+    let normalized = path.replace('\\', "/").to_ascii_lowercase();
     let parts: Vec<_> = normalized.split('/').collect();
     let name = parts.last().copied().unwrap_or("");
     parts.iter().any(|part| {
@@ -37,7 +37,7 @@ fn private_path(path: &str) -> bool {
 }
 
 fn shared_guidance(path: &str) -> bool {
-    matches!(path, "AGENTS.md" | "CONTRIBUTING.md")
+    matches!(path, "AGENTS.md" | "CONTRIBUTING.md" | ".gitignore")
         || path.starts_with("docs/contributing/")
         || path.starts_with("docs/agentic/")
         || path.starts_with(".github/")
@@ -57,14 +57,16 @@ fn private_context(line: &str) -> bool {
     {
         return true;
     }
-    normalized.match_indices("/users/").any(|(index, _)| {
-        let user = normalized[index + "/users/".len()..]
-            .split(['/', ' ', '`', '"', '\''])
-            .next()
-            .unwrap_or("");
-        !user.is_empty()
-            && !user.starts_with(['<', '$', '{'])
-            && !matches!(user, "user" | "username" | "your-user" | "runner")
+    ["/users/", "/home/"].iter().any(|prefix| {
+        normalized.match_indices(prefix).any(|(index, _)| {
+            let user = normalized[index + prefix.len()..]
+                .split(['/', ' ', '`', '"', '\''])
+                .next()
+                .unwrap_or("");
+            !user.is_empty()
+                && !user.starts_with(['<', '$', '{'])
+                && !matches!(user, "user" | "username" | "your-user" | "runner")
+        })
     })
 }
 
@@ -130,6 +132,7 @@ mod tests {
             ".vscode/settings.json",
             "project.code-workspace",
             "AGENTS.override.md",
+            "agents.md",
             "nested/AGENTS.md",
             "CLAUDE.local.md",
             ".env.production",
@@ -162,6 +165,7 @@ mod tests {
             "C:/Users/private-person/AppData/Local/tool.exe",
             r"C:\Users\private-person\tool.exe",
             "/Users/private-person/project",
+            "/home/private-person/project",
             "<!-- agent-board startup begin -->",
             "CODEX_THREAD_ID=session",
             r#"{"mailbox": "internal-id"}"#,
@@ -175,6 +179,7 @@ mod tests {
         for line in [
             "%LOCALAPPDATA%/limo-cad/bevy/Limo-CAD.exe",
             "C:/Users/<user>/tool.exe",
+            "/home/<user>/project",
             "$CODEX_HOME/config.toml",
             "~/.codex/config.toml",
             "${{ runner.temp }}/diagnostics",
