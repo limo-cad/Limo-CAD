@@ -194,6 +194,30 @@ fn invalid_presentation_is_rejected_before_editing_the_typed_draft() {
 }
 
 #[test]
+fn primary_and_dual_precision_accept_the_shared_limit_and_reject_one_beyond() {
+    let before = document();
+    for id in [Id::Precision, Id::DualPrecision] {
+        let mut draft = linear(&before);
+        let mut fields = from_annotation(draft.annotation());
+        set(
+            &mut fields,
+            id,
+            &MAX_DRAWING_DIMENSION_PRECISION.to_string(),
+        );
+        apply(&mut draft, &fields).unwrap();
+        draft.apply(&before).unwrap().validate().unwrap();
+        let accepted = draft.annotation().clone();
+        set(
+            &mut fields,
+            id,
+            &(MAX_DRAWING_DIMENSION_PRECISION + 1).to_string(),
+        );
+        assert!(apply(&mut draft, &fields).is_err());
+        assert_eq!(draft.annotation(), &accepted);
+    }
+}
+
+#[test]
 fn shared_drawing_validation_remains_authoritative_for_presentation_limits() {
     for variant in 0..4 {
         let mut invalid = document();

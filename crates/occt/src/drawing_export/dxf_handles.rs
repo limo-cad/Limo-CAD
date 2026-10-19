@@ -7,6 +7,42 @@ pub(super) struct Handles {
     next: usize,
 }
 
+impl Handles {
+    pub(super) fn new(next: usize) -> Self {
+        Self { next }
+    }
+
+    pub(super) fn next(&mut self) -> usize {
+        let handle = self.next;
+        self.next += 1;
+        handle
+    }
+
+    pub(super) fn seed(&self) -> usize {
+        self.next
+    }
+
+    pub(super) fn entity(&mut self, out: &mut String, kind: &str, owner: usize, layer: &str) {
+        let handle = self.next();
+        writeln!(
+            out,
+            "0\n{kind}\n5\n{handle:X}\n330\n{owner:X}\n100\nAcDbEntity\n8\n{layer}"
+        )
+        .unwrap();
+    }
+
+    pub(super) fn empty_space(&mut self, out: &mut String, name: &str, owner: usize) {
+        self.entity(out, "BLOCK", owner, "0");
+        writeln!(
+            out,
+            "100\nAcDbBlockBegin\n2\n{name}\n70\n0\n10\n0\n20\n0\n30\n0\n3\n{name}\n1\n"
+        )
+        .unwrap();
+        self.entity(out, "ENDBLK", owner, "0");
+        out.push_str("100\nAcDbBlockEnd\n");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::*;
@@ -45,7 +81,7 @@ mod tests {
         let lines: Vec<_> = output.lines().collect();
         assert_eq!(lines.len() % 2, 0);
         let mut records: Vec<Vec<(&str, &str)>> = vec![];
-        for pair in lines.chunks_exact(2) {
+        for pair in lines.as_chunks::<2>().0 {
             if pair[0] == "0" {
                 records.push(vec![]);
             }
@@ -128,41 +164,5 @@ mod tests {
             .iter()
             .all(|h| usize::from_str_radix(h, 16).unwrap() < seed));
         assert_eq!(output, dxf(&paper, "Arial").unwrap());
-    }
-}
-
-impl Handles {
-    pub(super) fn new(next: usize) -> Self {
-        Self { next }
-    }
-
-    pub(super) fn next(&mut self) -> usize {
-        let handle = self.next;
-        self.next += 1;
-        handle
-    }
-
-    pub(super) fn seed(&self) -> usize {
-        self.next
-    }
-
-    pub(super) fn entity(&mut self, out: &mut String, kind: &str, owner: usize, layer: &str) {
-        let handle = self.next();
-        writeln!(
-            out,
-            "0\n{kind}\n5\n{handle:X}\n330\n{owner:X}\n100\nAcDbEntity\n8\n{layer}"
-        )
-        .unwrap();
-    }
-
-    pub(super) fn empty_space(&mut self, out: &mut String, name: &str, owner: usize) {
-        self.entity(out, "BLOCK", owner, "0");
-        writeln!(
-            out,
-            "100\nAcDbBlockBegin\n2\n{name}\n70\n0\n10\n0\n20\n0\n30\n0\n3\n{name}\n1\n"
-        )
-        .unwrap();
-        self.entity(out, "ENDBLK", owner, "0");
-        out.push_str("100\nAcDbBlockEnd\n");
     }
 }
