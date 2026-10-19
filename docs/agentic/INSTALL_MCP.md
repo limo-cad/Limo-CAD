@@ -16,8 +16,9 @@ Use the canonical installed executable, with its adjacent runtime libraries:
 cargo xtask install-mcp --clients codex,cursor,vscode,claude,opencode --no-build --binary ABSOLUTE_CAD_PATH --in-place --server-arg --headless --desktop ABSOLUTE_CAD_PATH
 ```
 
-Replace `ABSOLUTE_CAD_PATH` with the installed executable on your OS. On this
-Windows machine it is `C:/Users/jeffg/AppData/Local/limo-cad/bevy/Limo-CAD.exe`.
+Replace `ABSOLUTE_CAD_PATH` with the installed executable on your OS. The default
+Windows location is `%LOCALAPPDATA%/limo-cad/bevy/Limo-CAD.exe`; expand that
+environment variable to an absolute path for the command above.
 `--in-place` leaves the executable and runtime libraries together and adds no
 SDK paths. `--server-arg` accepts a literal argument, including `--headless`,
 and can be repeated. `--desktop` sets `LIMO_CAD_DESKTOP_BIN` for an explicit

@@ -19,6 +19,7 @@ __pycache__/
 *.pem
 *.p12
 *.pfx
+*.p8
 id_rsa
 id_rsa.pub
 id_ed25519
@@ -34,10 +35,17 @@ credentials.json
 **/AGENTS.md
 !/AGENTS.md
 **/CODEX.md
+**/AGENTS.override.md
+**/AGENTS.local.md
+**/CLAUDE.local.md
 .claude/
 .agents/
 .codex/
 .cursor/
+.t3/
+.mcp.json
+.mcp.local.json
+*.code-workspace
 
 .vscode/*
 !.vscode/extensions.json

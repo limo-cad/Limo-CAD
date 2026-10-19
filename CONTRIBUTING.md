@@ -62,6 +62,7 @@ documents. AGENTS.md only provides an entry point to this shared guidance.
 - [Localization and native text validation](docs/contributing/localized-ui.md)
 - [Reference comparison, operational GIFs and measured performance](docs/contributing/visual-evidence.md)
 - [UI-first and MCP-second qualification](docs/contributing/surface-qualification.md)
+- [Private workspace state, CI trust and cleanup](docs/contributing/workspace-and-ci.md)
 
 ## 3. While you work
 
