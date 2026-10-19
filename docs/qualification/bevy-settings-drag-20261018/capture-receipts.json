@@ -1,0 +1,8010 @@
+[
+  {
+    "capture": "extrude-applied14",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "2a9a3664-35a7-4c93-818d-1a13d3859683",
+    "request_id": "00000001792335514366-0000040687-00000000000000000000",
+    "receipt_published_ms": 1792335514495,
+    "presented": true,
+    "layout_revision": 77,
+    "submitted_revision": 77,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "3ba1ecef899406beb3b9ae7a99c7f55de1bc0fa1cee7399974e180ea29f8710a",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-78-59",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-78-60",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "extrude-before-apply",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "2a9a3664-35a7-4c93-818d-1a13d3859683",
+    "request_id": "00000001792335505341-0000040659-00000000000000000000",
+    "receipt_published_ms": 1792335505494,
+    "presented": true,
+    "layout_revision": 74,
+    "submitted_revision": 74,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "0b907164f19f1d326eaf602601e7ccb22fa6e67e0b6d8284a770eddf3c7d2a54",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 26.0,
+          "x": 708.0,
+          "y": 61.0
+        },
+        "disabled": false,
+        "id": "control-1-75-31",
+        "label": "Close Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 80.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 126.0
+        },
+        "disabled": false,
+        "id": "control-1-75-41",
+        "label": "Sketch1 · 2 profile(s)",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 434.0,
+          "y": 266.0
+        },
+        "disabled": false,
+        "id": "control-1-75-57",
+        "label": "Create Body",
+        "role": "radio",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 585.0,
+          "y": 266.0
+        },
+        "disabled": false,
+        "id": "control-1-75-58",
+        "label": "Add",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 434.0,
+          "y": 302.0
+        },
+        "disabled": false,
+        "id": "control-1-75-63",
+        "label": "Subtract",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 585.0,
+          "y": 302.0
+        },
+        "disabled": false,
+        "id": "control-1-75-64",
+        "label": "Common",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 362.0
+        },
+        "disabled": false,
+        "id": "control-1-75-66",
+        "label": "Merge profiles",
+        "role": "checkbox",
+        "selected": true,
+        "surface": "solid/build",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 422.0
+        },
+        "disabled": false,
+        "expanded": false,
+        "id": "control-1-75-67",
+        "label": "Extent: Distance",
+        "options": [
+          {
+            "disabled": false,
+            "label": "Distance",
+            "value": "distance"
+          },
+          {
+            "disabled": false,
+            "label": "Two sides",
+            "value": "two_sides"
+          },
+          {
+            "disabled": false,
+            "label": "Symmetric",
+            "value": "symmetric"
+          },
+          {
+            "disabled": false,
+            "label": "Through all",
+            "value": "through_all"
+          },
+          {
+            "disabled": false,
+            "label": "To face",
+            "value": "to_face"
+          }
+        ],
+        "role": "combobox",
+        "surface": "solid/build",
+        "value": "distance"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 322.0,
+          "y": 443.0
+        },
+        "disabled": false,
+        "id": "control-1-75-68",
+        "label": "Extrude canvas distance",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "14"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 482.0
+        },
+        "disabled": false,
+        "id": "control-1-75-71",
+        "label": "Distance (mm)",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 2,
+          "start": 2
+        },
+        "surface": "solid/build",
+        "value": "14"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 542.0
+        },
+        "disabled": false,
+        "id": "control-1-75-74",
+        "label": "Taper angle (deg)",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "0"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 582.0
+        },
+        "disabled": false,
+        "id": "control-1-75-77",
+        "label": "Flip direction",
+        "role": "checkbox",
+        "selected": false,
+        "surface": "solid/build",
+        "value": false
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 588.0,
+          "y": 642.0
+        },
+        "disabled": false,
+        "id": "control-1-75-78",
+        "label": "Cancel Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 64.0,
+          "x": 662.0,
+          "y": 642.0
+        },
+        "disabled": false,
+        "id": "control-1-75-79",
+        "label": "Apply Extrude",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-75-80",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-75-81",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "extrude-cancelled",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "2a9a3664-35a7-4c93-818d-1a13d3859683",
+    "request_id": "00000001792335468126-0000040609-00000000000000000000",
+    "receipt_published_ms": 1792335468245,
+    "presented": true,
+    "layout_revision": 64,
+    "submitted_revision": 64,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "61482ef3e045bf9bbc15232557cf6735a48b0844b2b44752851dfa3fcdbdf951",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-69-59",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-69-60",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "extrude-draft14",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "2a9a3664-35a7-4c93-818d-1a13d3859683",
+    "request_id": "00000001792335409975-0000040522-00000000000000000000",
+    "receipt_published_ms": 1792335410111,
+    "presented": true,
+    "layout_revision": 52,
+    "submitted_revision": 52,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "5c334cf5c9d1b7b23e26e2f2a174ecab59753482a46dda3a1fa1affab67ddcd1",
+    "focused_control": {
+      "bounds": {
+        "height": 28.0,
+        "width": 296.0,
+        "x": 1034.0,
+        "y": 622.0
+      },
+      "disabled": false,
+      "id": "control-1-57-74",
+      "label": "Taper angle (deg)",
+      "read_only": false,
+      "role": "textbox",
+      "selection": {
+        "end": 0,
+        "start": 0
+      },
+      "surface": "solid/build",
+      "value": "0"
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 2,
+        "window_id": "main"
+      },
+      "control_key": 8589933716
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 26.0,
+          "x": 1308.0,
+          "y": 141.0
+        },
+        "disabled": false,
+        "id": "control-1-57-40",
+        "label": "Close Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 80.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 206.0
+        },
+        "disabled": false,
+        "id": "control-1-57-47",
+        "label": "Sketch1 · 2 profile(s)",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 1034.0,
+          "y": 346.0
+        },
+        "disabled": false,
+        "id": "control-1-57-62",
+        "label": "Create Body",
+        "role": "radio",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 1185.0,
+          "y": 346.0
+        },
+        "disabled": false,
+        "id": "control-1-57-63",
+        "label": "Add",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 1034.0,
+          "y": 382.0
+        },
+        "disabled": false,
+        "id": "control-1-57-64",
+        "label": "Subtract",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 1185.0,
+          "y": 382.0
+        },
+        "disabled": false,
+        "id": "control-1-57-65",
+        "label": "Common",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 442.0
+        },
+        "disabled": false,
+        "id": "control-1-57-66",
+        "label": "Merge profiles",
+        "role": "checkbox",
+        "selected": true,
+        "surface": "solid/build",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 881.0,
+          "y": 443.0
+        },
+        "disabled": false,
+        "id": "control-1-57-67",
+        "label": "Extrude canvas distance",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "14"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 502.0
+        },
+        "disabled": false,
+        "expanded": false,
+        "id": "control-1-57-70",
+        "label": "Extent: Distance",
+        "options": [
+          {
+            "disabled": false,
+            "label": "Distance",
+            "value": "distance"
+          },
+          {
+            "disabled": false,
+            "label": "Two sides",
+            "value": "two_sides"
+          },
+          {
+            "disabled": false,
+            "label": "Symmetric",
+            "value": "symmetric"
+          },
+          {
+            "disabled": false,
+            "label": "Through all",
+            "value": "through_all"
+          },
+          {
+            "disabled": false,
+            "label": "To face",
+            "value": "to_face"
+          }
+        ],
+        "role": "combobox",
+        "surface": "solid/build",
+        "value": "distance"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 562.0
+        },
+        "disabled": false,
+        "id": "control-1-57-71",
+        "label": "Distance (mm)",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 2,
+          "start": 2
+        },
+        "surface": "solid/build",
+        "value": "14"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 622.0
+        },
+        "disabled": false,
+        "id": "control-1-57-74",
+        "label": "Taper angle (deg)",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "0"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 662.0
+        },
+        "disabled": false,
+        "id": "control-1-57-77",
+        "label": "Flip direction",
+        "role": "checkbox",
+        "selected": false,
+        "surface": "solid/build",
+        "value": false
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 1188.0,
+          "y": 722.0
+        },
+        "disabled": false,
+        "id": "control-1-57-78",
+        "label": "Cancel Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 64.0,
+          "x": 1262.0,
+          "y": 722.0
+        },
+        "disabled": false,
+        "id": "control-1-57-79",
+        "label": "Apply Extrude",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-57-80",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-57-81",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "extrude-moved",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "2a9a3664-35a7-4c93-818d-1a13d3859683",
+    "request_id": "00000001792335420799-0000040542-00000000000000000000",
+    "receipt_published_ms": 1792335420927,
+    "presented": true,
+    "layout_revision": 53,
+    "submitted_revision": 53,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "0b907164f19f1d326eaf602601e7ccb22fa6e67e0b6d8284a770eddf3c7d2a54",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 26.0,
+          "x": 708.0,
+          "y": 61.0
+        },
+        "disabled": false,
+        "id": "control-1-60-31",
+        "label": "Close Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 80.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 126.0
+        },
+        "disabled": false,
+        "id": "control-1-60-41",
+        "label": "Sketch1 · 2 profile(s)",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 434.0,
+          "y": 266.0
+        },
+        "disabled": false,
+        "id": "control-1-60-57",
+        "label": "Create Body",
+        "role": "radio",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 585.0,
+          "y": 266.0
+        },
+        "disabled": false,
+        "id": "control-1-60-58",
+        "label": "Add",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 434.0,
+          "y": 302.0
+        },
+        "disabled": false,
+        "id": "control-1-60-63",
+        "label": "Subtract",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 585.0,
+          "y": 302.0
+        },
+        "disabled": false,
+        "id": "control-1-60-64",
+        "label": "Common",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 362.0
+        },
+        "disabled": false,
+        "id": "control-1-60-66",
+        "label": "Merge profiles",
+        "role": "checkbox",
+        "selected": true,
+        "surface": "solid/build",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 422.0
+        },
+        "disabled": false,
+        "expanded": false,
+        "id": "control-1-60-67",
+        "label": "Extent: Distance",
+        "options": [
+          {
+            "disabled": false,
+            "label": "Distance",
+            "value": "distance"
+          },
+          {
+            "disabled": false,
+            "label": "Two sides",
+            "value": "two_sides"
+          },
+          {
+            "disabled": false,
+            "label": "Symmetric",
+            "value": "symmetric"
+          },
+          {
+            "disabled": false,
+            "label": "Through all",
+            "value": "through_all"
+          },
+          {
+            "disabled": false,
+            "label": "To face",
+            "value": "to_face"
+          }
+        ],
+        "role": "combobox",
+        "surface": "solid/build",
+        "value": "distance"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 322.0,
+          "y": 443.0
+        },
+        "disabled": false,
+        "id": "control-1-60-68",
+        "label": "Extrude canvas distance",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "14"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 482.0
+        },
+        "disabled": false,
+        "id": "control-1-60-71",
+        "label": "Distance (mm)",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 2,
+          "start": 2
+        },
+        "surface": "solid/build",
+        "value": "14"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 542.0
+        },
+        "disabled": false,
+        "id": "control-1-60-74",
+        "label": "Taper angle (deg)",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "0"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 434.0,
+          "y": 582.0
+        },
+        "disabled": false,
+        "id": "control-1-60-77",
+        "label": "Flip direction",
+        "role": "checkbox",
+        "selected": false,
+        "surface": "solid/build",
+        "value": false
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 588.0,
+          "y": 642.0
+        },
+        "disabled": false,
+        "id": "control-1-60-78",
+        "label": "Cancel Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 64.0,
+          "x": 662.0,
+          "y": 642.0
+        },
+        "disabled": false,
+        "id": "control-1-60-79",
+        "label": "Apply Extrude",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-60-80",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-60-81",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "extrude-redo14",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "82ba164c-75d6-426f-9052-ab64fa9254f3",
+    "request_id": "00000001792335570590-0000040773-00000000000000000000",
+    "receipt_published_ms": 1792335570745,
+    "presented": true,
+    "layout_revision": 87,
+    "submitted_revision": 87,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "2d4e2cd0486f8e8ec335cdcf8bc9cf5961b28518394b7cb04ebd5f9c036df97d",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-84-59",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-84-60",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "extrude-reopened12",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "2a9a3664-35a7-4c93-818d-1a13d3859683",
+    "request_id": "00000001792335484487-0000040631-00000000000000000000",
+    "receipt_published_ms": 1792335484646,
+    "presented": true,
+    "layout_revision": 70,
+    "submitted_revision": 70,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "796c823ae194ce1b19d32b41b4032e438a8d59e40907573d100ba881b16e55b7",
+    "focused_control": {
+      "bounds": {
+        "height": 28.0,
+        "width": 296.0,
+        "x": 1034.0,
+        "y": 562.0
+      },
+      "disabled": false,
+      "id": "control-1-72-71",
+      "label": "Distance (mm)",
+      "read_only": false,
+      "role": "textbox",
+      "selection": {
+        "end": 2,
+        "start": 0
+      },
+      "surface": "solid/build",
+      "value": "12"
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 2,
+        "window_id": "main"
+      },
+      "control_key": 12884900916
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 26.0,
+          "x": 1308.0,
+          "y": 141.0
+        },
+        "disabled": false,
+        "id": "control-1-72-40",
+        "label": "Close Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 80.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 206.0
+        },
+        "disabled": false,
+        "id": "control-1-72-47",
+        "label": "Sketch1 · 2 profile(s)",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 1034.0,
+          "y": 346.0
+        },
+        "disabled": false,
+        "id": "control-1-72-62",
+        "label": "Create Body",
+        "role": "radio",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 1185.0,
+          "y": 346.0
+        },
+        "disabled": false,
+        "id": "control-1-72-63",
+        "label": "Add",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 1034.0,
+          "y": 382.0
+        },
+        "disabled": false,
+        "id": "control-1-72-64",
+        "label": "Subtract",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 145.0,
+          "x": 1185.0,
+          "y": 382.0
+        },
+        "disabled": false,
+        "id": "control-1-72-65",
+        "label": "Common",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 442.0
+        },
+        "disabled": false,
+        "id": "control-1-72-66",
+        "label": "Merge profiles",
+        "role": "checkbox",
+        "selected": true,
+        "surface": "solid/build",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 881.0,
+          "y": 458.0
+        },
+        "disabled": false,
+        "id": "control-1-72-67",
+        "label": "Extrude canvas distance",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "12"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 502.0
+        },
+        "disabled": false,
+        "expanded": false,
+        "id": "control-1-72-70",
+        "label": "Extent: Distance",
+        "options": [
+          {
+            "disabled": false,
+            "label": "Distance",
+            "value": "distance"
+          },
+          {
+            "disabled": false,
+            "label": "Two sides",
+            "value": "two_sides"
+          },
+          {
+            "disabled": false,
+            "label": "Symmetric",
+            "value": "symmetric"
+          },
+          {
+            "disabled": false,
+            "label": "Through all",
+            "value": "through_all"
+          },
+          {
+            "disabled": false,
+            "label": "To face",
+            "value": "to_face"
+          }
+        ],
+        "role": "combobox",
+        "surface": "solid/build",
+        "value": "distance"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 562.0
+        },
+        "disabled": false,
+        "id": "control-1-72-71",
+        "label": "Distance (mm)",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 2,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "12"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 622.0
+        },
+        "disabled": false,
+        "id": "control-1-72-74",
+        "label": "Taper angle (deg)",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "0"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 296.0,
+          "x": 1034.0,
+          "y": 662.0
+        },
+        "disabled": false,
+        "id": "control-1-72-77",
+        "label": "Flip direction",
+        "role": "checkbox",
+        "selected": false,
+        "surface": "solid/build",
+        "value": false
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 1188.0,
+          "y": 722.0
+        },
+        "disabled": false,
+        "id": "control-1-72-78",
+        "label": "Cancel Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 64.0,
+          "x": 1262.0,
+          "y": 722.0
+        },
+        "disabled": false,
+        "id": "control-1-72-79",
+        "label": "Apply Extrude",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-72-80",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-72-81",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "extrude-resized",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "2a9a3664-35a7-4c93-818d-1a13d3859683",
+    "request_id": "00000001792335429325-0000040562-00000000000000000000",
+    "receipt_published_ms": 1792335429462,
+    "presented": true,
+    "layout_revision": 55,
+    "submitted_revision": 55,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "fb5f15d8c96f5d56af3e9debe4ea61143242b7ae9c82b506ca50f23596c1405e",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 26.0,
+          "x": 808.0,
+          "y": 61.0
+        },
+        "disabled": false,
+        "id": "control-1-63-31",
+        "label": "Close Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 22.0,
+          "width": 20.0,
+          "x": 812.0,
+          "y": 96.0
+        },
+        "disabled": true,
+        "id": "control-1-63-41",
+        "label": "Scroll feature up",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 64.0,
+          "width": 372.0,
+          "x": 434.0,
+          "y": 126.0
+        },
+        "disabled": false,
+        "id": "control-1-63-42",
+        "label": "Sketch1 · 2 profile(s)",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 183.0,
+          "x": 434.0,
+          "y": 250.0
+        },
+        "disabled": false,
+        "id": "control-1-63-53",
+        "label": "Create Body",
+        "role": "radio",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 183.0,
+          "x": 623.0,
+          "y": 250.0
+        },
+        "disabled": false,
+        "id": "control-1-63-54",
+        "label": "Add",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 183.0,
+          "x": 434.0,
+          "y": 286.0
+        },
+        "disabled": false,
+        "id": "control-1-63-62",
+        "label": "Subtract",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 183.0,
+          "x": 623.0,
+          "y": 286.0
+        },
+        "disabled": false,
+        "id": "control-1-63-63",
+        "label": "Common",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 372.0,
+          "x": 434.0,
+          "y": 346.0
+        },
+        "disabled": false,
+        "id": "control-1-63-67",
+        "label": "Merge profiles",
+        "role": "checkbox",
+        "selected": true,
+        "surface": "solid/build",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 22.0,
+          "width": 20.0,
+          "x": 812.0,
+          "y": 402.0
+        },
+        "disabled": false,
+        "id": "control-1-63-68",
+        "label": "Scroll feature down",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 372.0,
+          "x": 434.0,
+          "y": 406.0
+        },
+        "disabled": false,
+        "expanded": false,
+        "id": "control-1-63-69",
+        "label": "Extent: Distance",
+        "options": [
+          {
+            "disabled": false,
+            "label": "Distance",
+            "value": "distance"
+          },
+          {
+            "disabled": false,
+            "label": "Two sides",
+            "value": "two_sides"
+          },
+          {
+            "disabled": false,
+            "label": "Symmetric",
+            "value": "symmetric"
+          },
+          {
+            "disabled": false,
+            "label": "Through all",
+            "value": "through_all"
+          },
+          {
+            "disabled": false,
+            "label": "To face",
+            "value": "to_face"
+          }
+        ],
+        "role": "combobox",
+        "surface": "solid/build",
+        "value": "distance"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 688.0,
+          "y": 442.0
+        },
+        "disabled": false,
+        "id": "control-1-63-70",
+        "label": "Cancel Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 64.0,
+          "x": 762.0,
+          "y": 442.0
+        },
+        "disabled": false,
+        "id": "control-1-63-71",
+        "label": "Apply Extrude",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 322.0,
+          "y": 443.0
+        },
+        "disabled": false,
+        "id": "control-1-63-72",
+        "label": "Extrude canvas distance",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "14"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-63-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-63-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "extrude-restored12",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "1e358bfd-cd46-4d0c-b9ac-c3e7f88f98a5",
+    "request_id": "00000001792335588963-0000040806-00000000000000000000",
+    "receipt_published_ms": 1792335589095,
+    "presented": true,
+    "layout_revision": 92,
+    "submitted_revision": 92,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "84ec431a24a054a6f77257dece74f66c3aaf4b412401880191165883105c8641",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-87-59",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-87-60",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": true,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "extrude-scrolled",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "2a9a3664-35a7-4c93-818d-1a13d3859683",
+    "request_id": "00000001792335439183-0000040579-00000000000000000000",
+    "receipt_published_ms": 1792335439313,
+    "presented": true,
+    "layout_revision": 57,
+    "submitted_revision": 57,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "ad00368be8004f38ac08ad799ad01dbde6e6456a998bcd4cf0efdcdb91603b5d",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 26.0,
+          "x": 808.0,
+          "y": 61.0
+        },
+        "disabled": false,
+        "id": "control-1-66-31",
+        "label": "Close Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 16.0,
+          "width": 183.0,
+          "x": 434.0,
+          "y": 94.0
+        },
+        "disabled": false,
+        "id": "control-1-66-41",
+        "label": "Create Body",
+        "role": "radio",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 16.0,
+          "width": 183.0,
+          "x": 623.0,
+          "y": 94.0
+        },
+        "disabled": false,
+        "id": "control-1-66-42",
+        "label": "Add",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 22.0,
+          "width": 20.0,
+          "x": 812.0,
+          "y": 96.0
+        },
+        "disabled": false,
+        "id": "control-1-66-43",
+        "label": "Scroll feature up",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 183.0,
+          "x": 434.0,
+          "y": 114.0
+        },
+        "disabled": false,
+        "id": "control-1-66-44",
+        "label": "Subtract",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 183.0,
+          "x": 623.0,
+          "y": 114.0
+        },
+        "disabled": false,
+        "id": "control-1-66-45",
+        "label": "Common",
+        "role": "radio",
+        "selected": false,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 372.0,
+          "x": 434.0,
+          "y": 174.0
+        },
+        "disabled": false,
+        "id": "control-1-66-48",
+        "label": "Merge profiles",
+        "role": "checkbox",
+        "selected": true,
+        "surface": "solid/build",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 372.0,
+          "x": 434.0,
+          "y": 234.0
+        },
+        "disabled": false,
+        "expanded": false,
+        "id": "control-1-66-55",
+        "label": "Extent: Distance",
+        "options": [
+          {
+            "disabled": false,
+            "label": "Distance",
+            "value": "distance"
+          },
+          {
+            "disabled": false,
+            "label": "Two sides",
+            "value": "two_sides"
+          },
+          {
+            "disabled": false,
+            "label": "Symmetric",
+            "value": "symmetric"
+          },
+          {
+            "disabled": false,
+            "label": "Through all",
+            "value": "through_all"
+          },
+          {
+            "disabled": false,
+            "label": "To face",
+            "value": "to_face"
+          }
+        ],
+        "role": "combobox",
+        "surface": "solid/build",
+        "value": "distance"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 372.0,
+          "x": 434.0,
+          "y": 294.0
+        },
+        "disabled": false,
+        "id": "control-1-66-64",
+        "label": "Distance (mm)",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 2,
+          "start": 2
+        },
+        "surface": "solid/build",
+        "value": "14"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 372.0,
+          "x": 434.0,
+          "y": 354.0
+        },
+        "disabled": false,
+        "id": "control-1-66-70",
+        "label": "Taper angle (deg)",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "0"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 372.0,
+          "x": 434.0,
+          "y": 394.0
+        },
+        "disabled": false,
+        "id": "control-1-66-73",
+        "label": "Flip direction",
+        "role": "checkbox",
+        "selected": false,
+        "surface": "solid/build",
+        "value": false
+      },
+      {
+        "bounds": {
+          "height": 22.0,
+          "width": 20.0,
+          "x": 812.0,
+          "y": 402.0
+        },
+        "disabled": true,
+        "id": "control-1-66-74",
+        "label": "Scroll feature down",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 688.0,
+          "y": 442.0
+        },
+        "disabled": false,
+        "id": "control-1-66-75",
+        "label": "Cancel Extrude",
+        "role": "button",
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 64.0,
+          "x": 762.0,
+          "y": 442.0
+        },
+        "disabled": false,
+        "id": "control-1-66-76",
+        "label": "Apply Extrude",
+        "role": "button",
+        "selected": true,
+        "surface": "solid/build"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 66.0,
+          "x": 322.0,
+          "y": 443.0
+        },
+        "disabled": false,
+        "id": "control-1-66-77",
+        "label": "Extrude canvas distance",
+        "read_only": false,
+        "role": "textbox",
+        "selection": {
+          "end": 0,
+          "start": 0
+        },
+        "surface": "solid/build",
+        "value": "14"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-66-80",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-66-81",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "extrude-undo12",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "78d151a4-c6ad-49a8-bbff-291454e1cd40",
+    "request_id": "00000001792335546974-0000040735-00000000000000000000",
+    "receipt_published_ms": 1792335547111,
+    "presented": true,
+    "layout_revision": 82,
+    "submitted_revision": 82,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "9cd1e7a75c0c971a91d2d6d10ceb5930805ec172b9e043c21666e35b632d77d5",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-81-59",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-81-60",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": true,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "feature-baseline",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "2a9a3664-35a7-4c93-818d-1a13d3859683",
+    "request_id": "00000001792335384386-0000040458-00000000000000000000",
+    "receipt_published_ms": 1792335384527,
+    "presented": true,
+    "layout_revision": 42,
+    "submitted_revision": 42,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "755202eada061a7bf2fbf49052197021c02b6c6def1ae47ea588cac21d8b90ad",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-54-59",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-54-60",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "settings-125-left-edge",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335257676-0000040170-00000000000000000000",
+    "receipt_published_ms": 1792335257864,
+    "presented": true,
+    "layout_revision": 23,
+    "submitted_revision": 23,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "7e570ffddc1332653ecff11294c32fbea5a321092c6086caf557c4ab4a25147d",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.25
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.000000417232513,
+          "width": 28.000000417232513,
+          "x": 568.8000084757805,
+          "y": 16.800000250339508
+        },
+        "disabled": false,
+        "id": "control-1-33-8",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.00000047683716,
+          "width": 136.80000203847885,
+          "x": 26.00000038743019,
+          "y": 108.00000160932541
+        },
+        "disabled": false,
+        "id": "control-1-33-37",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.00000047683716,
+          "width": 137.20000204443932,
+          "x": 169.20000252127647,
+          "y": 108.00000160932541
+        },
+        "disabled": false,
+        "id": "control-1-33-38",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.00000047683716,
+          "width": 136.80000203847885,
+          "x": 312.0000046491623,
+          "y": 108.00000160932541
+        },
+        "disabled": false,
+        "id": "control-1-33-39",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.00000047683716,
+          "width": 137.20000204443932,
+          "x": 455.2000067830086,
+          "y": 108.00000160932541
+        },
+        "disabled": false,
+        "id": "control-1-33-40",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.00000047683716,
+          "width": 89.20000132918358,
+          "x": 121.20000180602074,
+          "y": 214.0000031888485
+        },
+        "disabled": false,
+        "id": "control-1-33-48",
+        "label": "100%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.00000047683716,
+          "width": 89.20000132918358,
+          "x": 312.0000046491623,
+          "y": 214.0000031888485
+        },
+        "disabled": false,
+        "id": "control-1-33-50",
+        "label": "125%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.000000447034836,
+          "width": 30.000000447034836,
+          "x": 530.8000079095364,
+          "y": 432.80000644922256
+        },
+        "disabled": false,
+        "id": "control-1-33-63",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.000000447034836,
+          "width": 30.000000447034836,
+          "x": 566.8000084459782,
+          "y": 432.80000644922256
+        },
+        "disabled": true,
+        "id": "control-1-33-64",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.00000035762787,
+          "width": 24.00000035762787,
+          "x": 502.0000074803829,
+          "y": 599.2000089287758
+        },
+        "disabled": true,
+        "id": "control-1-33-65",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.00000035762787,
+          "width": 24.00000035762787,
+          "x": 528.0000078678131,
+          "y": 599.2000089287758
+        },
+        "disabled": true,
+        "id": "control-1-33-66",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-centered",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335151933-0000039911-00000000000000000000",
+    "receipt_published_ms": 1792335152177,
+    "presented": true,
+    "layout_revision": 10,
+    "submitted_revision": 10,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "d1310b2921f91159d59ec88c4405234f89a6756dc135fb6f0bdbae787b1136de",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 881.0,
+          "y": 89.0
+        },
+        "disabled": false,
+        "id": "control-1-3-32",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 458.0,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-3-51",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.0,
+          "x": 609.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-3-52",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 760.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-3-53",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 446.0,
+          "x": 458.0,
+          "y": 417.0
+        },
+        "disabled": false,
+        "id": "control-1-3-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 824.0,
+          "y": 451.0
+        },
+        "disabled": false,
+        "id": "control-1-3-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 458.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-3-62",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 571.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-3-63",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 684.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-3-64",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 797.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-3-65",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.0,
+          "x": 533.5,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-3-67",
+        "label": "100%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.5,
+          "x": 684.0,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-3-69",
+        "label": "125%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 843.0,
+          "y": 745.0
+        },
+        "disabled": true,
+        "id": "control-1-3-73",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 879.0,
+          "y": 745.0
+        },
+        "disabled": false,
+        "id": "control-1-3-74",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-3-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-3-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-grown",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335208300-0000040062-00000000000000000000",
+    "receipt_published_ms": 1792335208460,
+    "presented": true,
+    "layout_revision": 16,
+    "submitted_revision": 16,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "9ec07123ff2c2911b16efcfb4442e741bb8d835f275480abb92721f1854031fb",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 733.0,
+          "y": 17.0
+        },
+        "disabled": false,
+        "id": "control-1-21-8",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.5,
+          "x": 190.0,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-21-44",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.0,
+          "x": 381.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-21-45",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.5,
+          "x": 572.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-21-46",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 566.0,
+          "x": 190.0,
+          "y": 345.0
+        },
+        "disabled": false,
+        "id": "control-1-21-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 676.0,
+          "y": 379.0
+        },
+        "disabled": false,
+        "id": "control-1-21-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 695.0,
+          "y": 433.0
+        },
+        "disabled": true,
+        "id": "control-1-21-62",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 731.0,
+          "y": 433.0
+        },
+        "disabled": false,
+        "id": "control-1-21-63",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-21-64",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-21-65",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-keyboard-forward",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335281553-0000040208-00000000000000000000",
+    "receipt_published_ms": 1792335281753,
+    "presented": true,
+    "layout_revision": 27,
+    "submitted_revision": 27,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "33a4e7562d78be3259bb7a2c2943c7d56bfd982a8a83731688bf46851f162a5a",
+    "focused_control": {
+      "bounds": {
+        "height": 82.0,
+        "width": 183.5,
+        "x": 26.0,
+        "y": 171.0
+      },
+      "disabled": false,
+      "id": "control-1-36-44",
+      "label": "System",
+      "role": "radio",
+      "selected": true,
+      "surface": "document/appearance"
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 1,
+        "window_id": "main"
+      },
+      "control_key": 4294966429
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 569.0,
+          "y": 17.0
+        },
+        "disabled": false,
+        "id": "control-1-36-8",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.5,
+          "x": 26.0,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-36-44",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.0,
+          "x": 217.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-36-45",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.5,
+          "x": 408.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-36-46",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 566.0,
+          "x": 26.0,
+          "y": 345.0
+        },
+        "disabled": false,
+        "id": "control-1-36-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 512.0,
+          "y": 379.0
+        },
+        "disabled": false,
+        "id": "control-1-36-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 531.0,
+          "y": 433.0
+        },
+        "disabled": true,
+        "id": "control-1-36-62",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 567.0,
+          "y": 433.0
+        },
+        "disabled": false,
+        "id": "control-1-36-63",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-36-64",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-36-65",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-keyboard-reverse",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335293693-0000040238-00000000000000000000",
+    "receipt_published_ms": 1792335293827,
+    "presented": true,
+    "layout_revision": 27,
+    "submitted_revision": 27,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "eb7dd191afe37e9806d92e68c3452d235f7fea9e7c9fe818e37b54e89532cfdb",
+    "focused_control": {
+      "bounds": {
+        "height": 28.0,
+        "width": 28.0,
+        "x": 569.0,
+        "y": 17.0
+      },
+      "disabled": false,
+      "id": "control-1-39-8",
+      "label": "Close settings",
+      "role": "button",
+      "surface": "document/appearance"
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 1,
+        "window_id": "main"
+      },
+      "control_key": 4294966439
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 569.0,
+          "y": 17.0
+        },
+        "disabled": false,
+        "id": "control-1-39-8",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.5,
+          "x": 26.0,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-39-44",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.0,
+          "x": 217.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-39-45",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.5,
+          "x": 408.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-39-46",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 566.0,
+          "x": 26.0,
+          "y": 345.0
+        },
+        "disabled": false,
+        "id": "control-1-39-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 512.0,
+          "y": 379.0
+        },
+        "disabled": false,
+        "id": "control-1-39-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 531.0,
+          "y": 433.0
+        },
+        "disabled": true,
+        "id": "control-1-39-62",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 567.0,
+          "y": 433.0
+        },
+        "disabled": false,
+        "id": "control-1-39-63",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-39-64",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-39-65",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-left-edge",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335167196-0000039957-00000000000000000000",
+    "receipt_published_ms": 1792335167343,
+    "presented": true,
+    "layout_revision": 12,
+    "submitted_revision": 12,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "b0ffb3757d7d53669c63d9b94e71abef7854390a9e9f36cabf1ff4c99fb5870d",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 449.0,
+          "y": 89.0
+        },
+        "disabled": false,
+        "id": "control-1-9-32",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 26.0,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-9-51",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.0,
+          "x": 177.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-9-52",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 328.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-9-53",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 446.0,
+          "x": 26.0,
+          "y": 417.0
+        },
+        "disabled": false,
+        "id": "control-1-9-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 392.0,
+          "y": 451.0
+        },
+        "disabled": false,
+        "id": "control-1-9-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 26.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-9-62",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 139.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-9-63",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 252.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-9-64",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 365.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-9-65",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.0,
+          "x": 101.5,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-9-67",
+        "label": "100%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.5,
+          "x": 252.0,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-9-69",
+        "label": "125%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 411.0,
+          "y": 745.0
+        },
+        "disabled": true,
+        "id": "control-1-9-73",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 447.0,
+          "y": 745.0
+        },
+        "disabled": false,
+        "id": "control-1-9-74",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-9-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-9-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-long-left",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335160869-0000039937-00000000000000000000",
+    "receipt_published_ms": 1792335161010,
+    "presented": true,
+    "layout_revision": 11,
+    "submitted_revision": 11,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "377d832c01655b1692746cd2c6eef446ac21df31bd30c529d4dd1531e335b0bf",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 581.0,
+          "y": 89.0
+        },
+        "disabled": false,
+        "id": "control-1-6-32",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 158.0,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-6-51",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.0,
+          "x": 309.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-6-52",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 460.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-6-53",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 446.0,
+          "x": 158.0,
+          "y": 417.0
+        },
+        "disabled": false,
+        "id": "control-1-6-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 524.0,
+          "y": 451.0
+        },
+        "disabled": false,
+        "id": "control-1-6-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 158.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-6-62",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 271.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-6-63",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 384.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-6-64",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 497.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-6-65",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.0,
+          "x": 233.5,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-6-67",
+        "label": "100%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.5,
+          "x": 384.0,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-6-69",
+        "label": "125%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 543.0,
+          "y": 745.0
+        },
+        "disabled": true,
+        "id": "control-1-6-73",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 579.0,
+          "y": 745.0
+        },
+        "disabled": false,
+        "id": "control-1-6-74",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-6-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-6-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-minimum",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335193660-0000040031-00000000000000000000",
+    "receipt_published_ms": 1792335193794,
+    "presented": true,
+    "layout_revision": 15,
+    "submitted_revision": 15,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "a0ee2eef12dfa7200250b5cb475fb97dfadf93ccea885d685fecc21a80087e9d",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 533.0,
+          "y": 17.0
+        },
+        "disabled": false,
+        "id": "control-1-18-8",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 57.0,
+          "width": 116.5,
+          "x": 190.0,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-18-44",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 57.0,
+          "width": 117.0,
+          "x": 314.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-18-45",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 57.0,
+          "width": 116.5,
+          "x": 439.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-18-46",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 495.0,
+          "y": 233.0
+        },
+        "disabled": true,
+        "id": "control-1-18-53",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 531.0,
+          "y": 233.0
+        },
+        "disabled": false,
+        "id": "control-1-18-54",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-18-62",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-18-63",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-reopened",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335318487-0000040281-00000000000000000000",
+    "receipt_published_ms": 1792335318646,
+    "presented": true,
+    "layout_revision": 32,
+    "submitted_revision": 32,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "d1310b2921f91159d59ec88c4405234f89a6756dc135fb6f0bdbae787b1136de",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 881.0,
+          "y": 89.0
+        },
+        "disabled": false,
+        "id": "control-1-42-32",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 458.0,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-42-51",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.0,
+          "x": 609.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-42-52",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 760.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-42-53",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 446.0,
+          "x": 458.0,
+          "y": 417.0
+        },
+        "disabled": false,
+        "id": "control-1-42-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 824.0,
+          "y": 451.0
+        },
+        "disabled": false,
+        "id": "control-1-42-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 458.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-42-62",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 571.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-42-63",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 684.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-42-64",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 797.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-42-65",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.0,
+          "x": 533.5,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-42-67",
+        "label": "100%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.5,
+          "x": 684.0,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-42-69",
+        "label": "125%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 843.0,
+          "y": 745.0
+        },
+        "disabled": true,
+        "id": "control-1-42-73",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 879.0,
+          "y": 745.0
+        },
+        "disabled": false,
+        "id": "control-1-42-74",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-42-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-42-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-repeat-diagonal",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335353594-0000040418-00000000000000000000",
+    "receipt_published_ms": 1792335353745,
+    "presented": true,
+    "layout_revision": 35,
+    "submitted_revision": 35,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "eb2a7e044130cb18d96f5bf718fb5c32f349b5081bd40255eb7caa180fb32ad8",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 1313.0,
+          "y": 161.0
+        },
+        "disabled": false,
+        "id": "control-1-51-42",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 890.0,
+          "y": 315.0
+        },
+        "disabled": false,
+        "id": "control-1-51-57",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.0,
+          "x": 1041.5,
+          "y": 315.0
+        },
+        "disabled": false,
+        "id": "control-1-51-58",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 1192.5,
+          "y": 315.0
+        },
+        "disabled": false,
+        "id": "control-1-51-59",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 446.0,
+          "x": 890.0,
+          "y": 489.0
+        },
+        "disabled": false,
+        "id": "control-1-51-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 1256.0,
+          "y": 523.0
+        },
+        "disabled": false,
+        "id": "control-1-51-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 890.0,
+          "y": 605.0
+        },
+        "disabled": false,
+        "id": "control-1-51-62",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 1003.0,
+          "y": 605.0
+        },
+        "disabled": false,
+        "id": "control-1-51-63",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 1116.0,
+          "y": 605.0
+        },
+        "disabled": false,
+        "id": "control-1-51-64",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 1229.0,
+          "y": 605.0
+        },
+        "disabled": false,
+        "id": "control-1-51-65",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.0,
+          "x": 965.5,
+          "y": 711.0
+        },
+        "disabled": false,
+        "id": "control-1-51-67",
+        "label": "100%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.5,
+          "x": 1116.0,
+          "y": 711.0
+        },
+        "disabled": false,
+        "id": "control-1-51-69",
+        "label": "125%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 1275.0,
+          "y": 817.0
+        },
+        "disabled": true,
+        "id": "control-1-51-84",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 1311.0,
+          "y": 817.0
+        },
+        "disabled": false,
+        "id": "control-1-51-85",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-51-72",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-51-73",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-repeat-edge",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335343272-0000040397-00000000000000000000",
+    "receipt_published_ms": 1792335343428,
+    "presented": true,
+    "layout_revision": 34,
+    "submitted_revision": 34,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "b0ffb3757d7d53669c63d9b94e71abef7854390a9e9f36cabf1ff4c99fb5870d",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 449.0,
+          "y": 89.0
+        },
+        "disabled": false,
+        "id": "control-1-48-32",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 26.0,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-48-51",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.0,
+          "x": 177.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-48-52",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 328.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-48-53",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 446.0,
+          "x": 26.0,
+          "y": 417.0
+        },
+        "disabled": false,
+        "id": "control-1-48-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 392.0,
+          "y": 451.0
+        },
+        "disabled": false,
+        "id": "control-1-48-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 26.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-48-62",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 139.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-48-63",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 252.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-48-64",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 365.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-48-65",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.0,
+          "x": 101.5,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-48-67",
+        "label": "100%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.5,
+          "x": 252.0,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-48-69",
+        "label": "125%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 411.0,
+          "y": 745.0
+        },
+        "disabled": true,
+        "id": "control-1-48-73",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 447.0,
+          "y": 745.0
+        },
+        "disabled": false,
+        "id": "control-1-48-74",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-48-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-48-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-repeat-left",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335335039-0000040370-00000000000000000000",
+    "receipt_published_ms": 1792335335144,
+    "presented": true,
+    "layout_revision": 33,
+    "submitted_revision": 33,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "377d832c01655b1692746cd2c6eef446ac21df31bd30c529d4dd1531e335b0bf",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 581.0,
+          "y": 89.0
+        },
+        "disabled": false,
+        "id": "control-1-45-32",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 158.0,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-45-51",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.0,
+          "x": 309.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-45-52",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 460.5,
+          "y": 243.0
+        },
+        "disabled": false,
+        "id": "control-1-45-53",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 446.0,
+          "x": 158.0,
+          "y": 417.0
+        },
+        "disabled": false,
+        "id": "control-1-45-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 524.0,
+          "y": 451.0
+        },
+        "disabled": false,
+        "id": "control-1-45-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 158.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-45-62",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 271.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-45-63",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 384.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-45-64",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 497.0,
+          "y": 533.0
+        },
+        "disabled": false,
+        "id": "control-1-45-65",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.0,
+          "x": 233.5,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-45-67",
+        "label": "100%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.5,
+          "x": 384.0,
+          "y": 639.0
+        },
+        "disabled": false,
+        "id": "control-1-45-69",
+        "label": "125%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 543.0,
+          "y": 745.0
+        },
+        "disabled": true,
+        "id": "control-1-45-73",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 579.0,
+          "y": 745.0
+        },
+        "disabled": false,
+        "id": "control-1-45-74",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-45-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-45-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-reset-release-outside",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335225071-0000040104-00000000000000000000",
+    "receipt_published_ms": 1792335225209,
+    "presented": true,
+    "layout_revision": 17,
+    "submitted_revision": 17,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "bda45ed3d837d2d39c8e26ac23c8cdfafcb443458a9c65898a3b4546f93592ed",
+    "focused_control": {
+      "bounds": {
+        "height": 26.0,
+        "width": 64.0,
+        "x": 676.0,
+        "y": 379.0
+      },
+      "disabled": false,
+      "id": "control-1-27-61",
+      "label": "Reset",
+      "role": "button",
+      "surface": "document/appearance"
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 1,
+        "window_id": "main"
+      },
+      "control_key": 4294966411
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 2.4,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 733.0,
+          "y": 17.0
+        },
+        "disabled": false,
+        "id": "control-1-27-8",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.5,
+          "x": 190.0,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-27-44",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.0,
+          "x": 381.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-27-45",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.5,
+          "x": 572.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-27-46",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 566.0,
+          "x": 190.0,
+          "y": 345.0
+        },
+        "disabled": false,
+        "id": "control-1-27-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 2.4
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 676.0,
+          "y": 379.0
+        },
+        "disabled": false,
+        "id": "control-1-27-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 695.0,
+          "y": 433.0
+        },
+        "disabled": true,
+        "id": "control-1-27-62",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 731.0,
+          "y": 433.0
+        },
+        "disabled": false,
+        "id": "control-1-27-63",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-27-64",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-27-65",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-right-bottom-edge",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335175470-0000039979-00000000000000000000",
+    "receipt_published_ms": 1792335175593,
+    "presented": true,
+    "layout_revision": 13,
+    "submitted_revision": 13,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "eb2a7e044130cb18d96f5bf718fb5c32f349b5081bd40255eb7caa180fb32ad8",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 1313.0,
+          "y": 161.0
+        },
+        "disabled": false,
+        "id": "control-1-12-42",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 890.0,
+          "y": 315.0
+        },
+        "disabled": false,
+        "id": "control-1-12-57",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.0,
+          "x": 1041.5,
+          "y": 315.0
+        },
+        "disabled": false,
+        "id": "control-1-12-58",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 1192.5,
+          "y": 315.0
+        },
+        "disabled": false,
+        "id": "control-1-12-59",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 446.0,
+          "x": 890.0,
+          "y": 489.0
+        },
+        "disabled": false,
+        "id": "control-1-12-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 1256.0,
+          "y": 523.0
+        },
+        "disabled": false,
+        "id": "control-1-12-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 890.0,
+          "y": 605.0
+        },
+        "disabled": false,
+        "id": "control-1-12-62",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 1003.0,
+          "y": 605.0
+        },
+        "disabled": false,
+        "id": "control-1-12-63",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 1116.0,
+          "y": 605.0
+        },
+        "disabled": false,
+        "id": "control-1-12-64",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 1229.0,
+          "y": 605.0
+        },
+        "disabled": false,
+        "id": "control-1-12-65",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.0,
+          "x": 965.5,
+          "y": 711.0
+        },
+        "disabled": false,
+        "id": "control-1-12-67",
+        "label": "100%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.5,
+          "x": 1116.0,
+          "y": 711.0
+        },
+        "disabled": false,
+        "id": "control-1-12-69",
+        "label": "125%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 1275.0,
+          "y": 817.0
+        },
+        "disabled": true,
+        "id": "control-1-12-84",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 1311.0,
+          "y": 817.0
+        },
+        "disabled": false,
+        "id": "control-1-12-85",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-12-72",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-12-73",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-scrolled",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335238783-0000040136-00000000000000000000",
+    "receipt_published_ms": 1792335238963,
+    "presented": true,
+    "layout_revision": 20,
+    "submitted_revision": 20,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "5ecf03018b4e7b6a1a10d10c014f59c250b507a515f9464cde679490f166c42f",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 733.0,
+          "y": 17.0
+        },
+        "disabled": false,
+        "id": "control-1-30-8",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 137.0,
+          "x": 190.0,
+          "y": 108.0
+        },
+        "disabled": false,
+        "id": "control-1-30-42",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 137.0,
+          "x": 333.0,
+          "y": 108.0
+        },
+        "disabled": false,
+        "id": "control-1-30-43",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 137.0,
+          "x": 476.0,
+          "y": 108.0
+        },
+        "disabled": false,
+        "id": "control-1-30-44",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 137.0,
+          "x": 619.0,
+          "y": 108.0
+        },
+        "disabled": false,
+        "id": "control-1-30-45",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 89.0,
+          "x": 285.5,
+          "y": 214.0
+        },
+        "disabled": false,
+        "id": "control-1-30-53",
+        "label": "100%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 89.5,
+          "x": 476.0,
+          "y": 214.0
+        },
+        "disabled": false,
+        "id": "control-1-30-55",
+        "label": "125%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 695.0,
+          "y": 433.0
+        },
+        "disabled": false,
+        "id": "control-1-30-68",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 731.0,
+          "y": 433.0
+        },
+        "disabled": true,
+        "id": "control-1-30-69",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-30-70",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-30-71",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-slider",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335216375-0000040083-00000000000000000000",
+    "receipt_published_ms": 1792335216510,
+    "presented": true,
+    "layout_revision": 17,
+    "submitted_revision": 17,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "b311f834c008f72a0c053e7256c720c71081b583bf5ae015ec6f5bdd72c7e152",
+    "focused_control": {
+      "bounds": {
+        "height": 26.0,
+        "width": 566.0,
+        "x": 190.0,
+        "y": 345.0
+      },
+      "disabled": false,
+      "id": "control-1-24-60",
+      "label": "3D mouse speed",
+      "max": 3.0,
+      "min": 0.25,
+      "role": "slider",
+      "step": 0.05,
+      "surface": "document/appearance",
+      "value": 2.4
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 1,
+        "window_id": "main"
+      },
+      "control_key": 4294966417
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 2.4,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 733.0,
+          "y": 17.0
+        },
+        "disabled": false,
+        "id": "control-1-24-8",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.5,
+          "x": 190.0,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-24-44",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.0,
+          "x": 381.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-24-45",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 183.5,
+          "x": 572.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-24-46",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 566.0,
+          "x": 190.0,
+          "y": 345.0
+        },
+        "disabled": false,
+        "id": "control-1-24-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 2.4
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 676.0,
+          "y": 379.0
+        },
+        "disabled": false,
+        "id": "control-1-24-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 695.0,
+          "y": 433.0
+        },
+        "disabled": true,
+        "id": "control-1-24-62",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 731.0,
+          "y": 433.0
+        },
+        "disabled": false,
+        "id": "control-1-24-63",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-24-64",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-24-65",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "settings-top-edge",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "3ea84352-b3f9-4eef-b0bf-aecd45feba88",
+    "request_id": "00000001792335182656-0000040002-00000000000000000000",
+    "receipt_published_ms": 1792335182823,
+    "presented": true,
+    "layout_revision": 14,
+    "submitted_revision": 14,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "3594078362ad52de9846e1f520c31665dcc567666e78b5bac5dae3e310db6733",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 613.0,
+          "y": 17.0
+        },
+        "disabled": false,
+        "id": "control-1-15-8",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 190.0,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-15-44",
+        "label": "System",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.0,
+          "x": 341.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-15-45",
+        "label": "Light",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 82.0,
+          "width": 143.5,
+          "x": 492.5,
+          "y": 171.0
+        },
+        "disabled": false,
+        "id": "control-1-15-46",
+        "label": "Dark",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 446.0,
+          "x": 190.0,
+          "y": 345.0
+        },
+        "disabled": false,
+        "id": "control-1-15-60",
+        "label": "3D mouse speed",
+        "max": 3.0,
+        "min": 0.25,
+        "role": "slider",
+        "step": 0.05,
+        "surface": "document/appearance",
+        "value": 1.5
+      },
+      {
+        "bounds": {
+          "height": 26.0,
+          "width": 64.0,
+          "x": 556.0,
+          "y": 379.0
+        },
+        "disabled": false,
+        "id": "control-1-15-61",
+        "label": "Reset",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 190.0,
+          "y": 461.0
+        },
+        "disabled": false,
+        "id": "control-1-15-62",
+        "label": "English",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 303.0,
+          "y": 461.0
+        },
+        "disabled": false,
+        "id": "control-1-15-63",
+        "label": "简体中文",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 416.0,
+          "y": 461.0
+        },
+        "disabled": false,
+        "id": "control-1-15-64",
+        "label": "Español",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 107.0,
+          "x": 529.0,
+          "y": 461.0
+        },
+        "disabled": false,
+        "id": "control-1-15-65",
+        "label": "Deutsch",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.0,
+          "x": 265.5,
+          "y": 567.0
+        },
+        "disabled": false,
+        "id": "control-1-15-67",
+        "label": "100%",
+        "role": "radio",
+        "selected": true,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 32.0,
+          "width": 69.5,
+          "x": 416.0,
+          "y": 567.0
+        },
+        "disabled": false,
+        "id": "control-1-15-69",
+        "label": "125%",
+        "role": "radio",
+        "selected": false,
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 575.0,
+          "y": 673.0
+        },
+        "disabled": true,
+        "id": "control-1-15-73",
+        "label": "Previous settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 30.0,
+          "width": 30.0,
+          "x": 611.0,
+          "y": 673.0
+        },
+        "disabled": false,
+        "id": "control-1-15-74",
+        "label": "More settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-15-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-15-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          170.0,
+          -170.0,
+          130.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "snap-before",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "1e358bfd-cd46-4d0c-b9ac-c3e7f88f98a5",
+    "request_id": "00000001792335620003-0000040838-00000000000000000000",
+    "receipt_published_ms": 1792335620112,
+    "presented": true,
+    "layout_revision": 98,
+    "submitted_revision": 98,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "72338995fa4243ce0075a41add9e899441903a7483cde52292f0e12d7e64df01",
+    "focused_control": {
+      "bounds": {
+        "height": 28.0,
+        "width": 69.0,
+        "x": 338.0,
+        "y": 822.0
+      },
+      "disabled": false,
+      "id": "control-1-90-85",
+      "label": "Sketch1",
+      "role": "button",
+      "selected": true,
+      "surface": "document/history"
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 5,
+        "window_id": "main"
+      },
+      "control_key": 12884901000
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 22.0,
+          "width": 22.0,
+          "x": 669.0,
+          "y": 275.0
+        },
+        "disabled": false,
+        "id": "control-1-90-46",
+        "label": "Constraint 2: horizontal",
+        "role": "button",
+        "selected": false,
+        "surface": "sketch/constrain"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-90-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-90-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-90-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 69.0,
+          "x": 338.0,
+          "y": 822.0
+        },
+        "disabled": false,
+        "id": "control-1-90-85",
+        "label": "Sketch1",
+        "role": "button",
+        "selected": true,
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          16.18145751953125,
+          10.0,
+          133.5786895751953
+        ],
+        "target": [
+          16.18145751953125,
+          10.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "mode": "sketch",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "snap-click-off",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "1e358bfd-cd46-4d0c-b9ac-c3e7f88f98a5",
+    "request_id": "00000001792335638961-0000040865-00000000000000000000",
+    "receipt_published_ms": 1792335639062,
+    "presented": true,
+    "layout_revision": 101,
+    "submitted_revision": 101,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "20bf678fa310728095d1030df65890bc2e0b77c1be6a88debb835caa2620c65e",
+    "focused_control": {
+      "bounds": {
+        "height": 24.0,
+        "width": 232.0,
+        "x": 1124.0,
+        "y": 263.0
+      },
+      "disabled": false,
+      "id": "control-1-93-45",
+      "label": "Snap",
+      "role": "checkbox",
+      "surface": "sketch/selection",
+      "value": false
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 5,
+        "window_id": "main"
+      },
+      "control_key": 4294966256
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 22.0,
+          "width": 22.0,
+          "x": 669.0,
+          "y": 275.0
+        },
+        "disabled": false,
+        "id": "control-1-93-46",
+        "label": "Constraint 2: horizontal",
+        "role": "button",
+        "selected": false,
+        "surface": "sketch/constrain"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-93-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": false
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-93-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-93-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          16.18145751953125,
+          10.0,
+          133.5786895751953
+        ],
+        "target": [
+          16.18145751953125,
+          10.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "mode": "sketch",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "snap-space-on",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "1e358bfd-cd46-4d0c-b9ac-c3e7f88f98a5",
+    "request_id": "00000001792335654084-0000040896-00000000000000000000",
+    "receipt_published_ms": 1792335654212,
+    "presented": true,
+    "layout_revision": 104,
+    "submitted_revision": 104,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "64d5d383e384fcd3e13fb333912c700d0c1293df5314100fd75a8421b128b0ff",
+    "focused_control": {
+      "bounds": {
+        "height": 24.0,
+        "width": 232.0,
+        "x": 1124.0,
+        "y": 263.0
+      },
+      "disabled": false,
+      "id": "control-1-96-45",
+      "label": "Snap",
+      "role": "checkbox",
+      "surface": "sketch/selection",
+      "value": true
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 5,
+        "window_id": "main"
+      },
+      "control_key": 4294966256
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 22.0,
+          "width": 22.0,
+          "x": 669.0,
+          "y": 275.0
+        },
+        "disabled": false,
+        "id": "control-1-96-46",
+        "label": "Constraint 2: horizontal",
+        "role": "button",
+        "selected": false,
+        "surface": "sketch/constrain"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-96-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-96-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-96-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          16.18145751953125,
+          10.0,
+          133.5786895751953
+        ],
+        "target": [
+          16.18145751953125,
+          10.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "mode": "sketch",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "snap-tab-forward",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "1e358bfd-cd46-4d0c-b9ac-c3e7f88f98a5",
+    "request_id": "00000001792335671045-0000040924-00000000000000000000",
+    "receipt_published_ms": 1792335671162,
+    "presented": true,
+    "layout_revision": 104,
+    "submitted_revision": 104,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "cc9c0ce0af8e1e06fc5fc5aa75bc9c6136df364398a9c0eed18bdd0995a411da",
+    "focused_control": {
+      "bounds": {
+        "height": 22.0,
+        "width": 22.0,
+        "x": 669.0,
+        "y": 275.0
+      },
+      "disabled": false,
+      "id": "control-1-99-46",
+      "label": "Constraint 2: horizontal",
+      "role": "button",
+      "selected": false,
+      "surface": "sketch/constrain"
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 5,
+        "window_id": "main"
+      },
+      "control_key": 4294966217
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 22.0,
+          "width": 22.0,
+          "x": 669.0,
+          "y": 275.0
+        },
+        "disabled": false,
+        "id": "control-1-99-46",
+        "label": "Constraint 2: horizontal",
+        "role": "button",
+        "selected": false,
+        "surface": "sketch/constrain"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-99-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-99-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-99-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          16.18145751953125,
+          10.0,
+          133.5786895751953
+        ],
+        "target": [
+          16.18145751953125,
+          10.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "mode": "sketch",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "snap-tab-reverse",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "1e358bfd-cd46-4d0c-b9ac-c3e7f88f98a5",
+    "request_id": "00000001792335684607-0000040945-00000000000000000000",
+    "receipt_published_ms": 1792335684729,
+    "presented": true,
+    "layout_revision": 104,
+    "submitted_revision": 104,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "64d5d383e384fcd3e13fb333912c700d0c1293df5314100fd75a8421b128b0ff",
+    "focused_control": {
+      "bounds": {
+        "height": 24.0,
+        "width": 232.0,
+        "x": 1124.0,
+        "y": 263.0
+      },
+      "disabled": false,
+      "id": "control-1-102-45",
+      "label": "Snap",
+      "role": "checkbox",
+      "surface": "sketch/selection",
+      "value": true
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "a1f12889-9d4f-446a-b551-71332ed372cb",
+        "epoch": 5,
+        "window_id": "main"
+      },
+      "control_key": 4294966256
+    },
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 22.0,
+          "width": 22.0,
+          "x": 669.0,
+          "y": 275.0
+        },
+        "disabled": false,
+        "id": "control-1-102-46",
+        "label": "Constraint 2: horizontal",
+        "role": "button",
+        "selected": false,
+        "surface": "sketch/constrain"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-102-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-102-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-102-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": false
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          16.18145751953125,
+          10.0,
+          133.5786895751953
+        ],
+        "target": [
+          16.18145751953125,
+          10.0,
+          0.0
+        ],
+        "up": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "mode": "sketch",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": []
+    }
+  },
+  {
+    "capture": "workflow-reopened",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "d1785636-751a-4b50-b739-69dff46ea774",
+    "request_id": "00000001792335733301-0000041010-00000000000000000000",
+    "receipt_published_ms": 1792335733445,
+    "presented": true,
+    "layout_revision": 137,
+    "submitted_revision": 137,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "4fdda68a7727e63ac924c0ad1bd406f5ab20b7233ab4fe683dbf378612b8a595",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-108-59",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-108-60",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  },
+  {
+    "capture": "workflow-restored",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "session_id": "1e358bfd-cd46-4d0c-b9ac-c3e7f88f98a5",
+    "request_id": "00000001792335696824-0000040968-00000000000000000000",
+    "receipt_published_ms": 1792335696945,
+    "presented": true,
+    "layout_revision": 127,
+    "submitted_revision": 127,
+    "capture_source": "bevy_window",
+    "pixels": [
+      2720,
+      1720
+    ],
+    "raw_png_sha256": "9da05639210e808cfdb70b453e914d632bc70fd78318c780c071f6a5075662a5",
+    "focused_control": null,
+    "focused_binding": null,
+    "settings_effective": {
+      "gpu_stock_removal": true,
+      "locale": "en",
+      "six_dof_speed": 1.5,
+      "theme": "system",
+      "ui_scale": 1.0
+    },
+    "controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-105-62",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-105-63",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "controls_scope": "Affected controls and focused target; full inspection remains in the local artifact root.",
+    "history": {
+      "history": {
+        "can_redo": false,
+        "can_undo": true
+      }
+    },
+    "view_state": {
+      "active_named_view": null,
+      "camera": {
+        "position": [
+          87.12168884277344,
+          -67.12168884277344,
+          83.12168884277344
+        ],
+        "target": [
+          10.0,
+          10.0,
+          6.0
+        ],
+        "up": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mode": "solid",
+      "occurrence_offsets": [],
+      "part_offsets": [],
+      "visible_body_ids": [
+        1
+      ]
+    }
+  }
+]

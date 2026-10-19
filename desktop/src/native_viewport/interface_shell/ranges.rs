@@ -72,15 +72,20 @@ pub(crate) fn spawn(
             ChildOf(track),
         ))
         .id();
+    let diameter = if cfg!(feature = "experimental-ui-widgets") {
+        16.
+    } else {
+        14.
+    };
     let thumb = commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
                 left: percent(0.),
-                top: px(-5.),
-                width: px(14.),
-                height: px(14.),
-                margin: UiRect::left(px(-7.)),
+                top: px(2. - diameter * 0.5),
+                width: px(diameter),
+                height: px(diameter),
+                margin: UiRect::left(px(-diameter * 0.5)),
                 border_radius: BorderRadius::MAX,
                 border: UiRect::all(px(1.)),
                 ..default()
@@ -90,6 +95,19 @@ pub(crate) fn spawn(
             ChildOf(track),
         ))
         .id();
+    #[cfg(feature = "experimental-ui-widgets")]
+    {
+        commands.entity(thumb).insert((
+            bevy::ui_widgets::SliderThumb,
+            bevy::picking::Pickable::default(),
+        ));
+        commands
+            .entity(track)
+            .insert(bevy::picking::Pickable::IGNORE);
+        commands
+            .entity(fill)
+            .insert(bevy::picking::Pickable::IGNORE);
+    }
     commands.entity(entity).insert(NativeRange {
         track,
         fill,

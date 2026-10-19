@@ -1,0 +1,345 @@
+{
+  "recorded_utc": "2026-10-17T23:42:06.657092+00:00",
+  "scope": "Requested Settings dragging and Snap focus only. The broad UI/MCP ledger stays paused and unchanged.",
+  "status": "snap_fixed_and_qualified_settings_large_drag_blocked",
+  "source_revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+  "source_baseline": "ac7e293bf0c59e64dc4f57b3805cd51f3b4fc05e",
+  "baseline_live_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+  "base_main": "5303f9a12b2bd6b4f01945223faf2b9aafe9e359",
+  "dependency_prs_merged": [
+    433,
+    434
+  ],
+  "changes": [
+    "Keep the existing focused control through the worker temporary disabled state. Bevy InputFocus and InteractionDisabled retain keyboard ownership and block activation while disabled. Hidden, removed, modal-covered and replaced-document controls still retire.",
+    "Cancel Bevy pointer state only when the retired control owns a current press/drag, walking existing ChildOf ancestry for slider thumbs. Changes to unrelated disabled/clipped controls no longer cancel a dialog gesture.",
+    "No Snap-specific focus restoration, custom pointer recognizer, replay queue or Bevy fork. The unsuccessful periodic dialog-update trial was removed."
+  ],
+  "fix_commit": "a76749a7020dc9e0568aaa8e7a5a064615292e37",
+  "removed_trial_commit": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+  "build": {
+    "recorded_utc": "2026-10-17T23:27:39.178760+00:00",
+    "build": {
+      "channel": "development",
+      "modified": false,
+      "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+      "version": "0.3.0-rc.1"
+    },
+    "features": [
+      "experimental-ui-widgets"
+    ],
+    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app",
+    "engine_sha256": "890cece594e782a1e1b8361f63b76be06ebc603f000c2af37b447ce1d25ff2f3",
+    "signature": "ad-hoc; deep strict verification passed",
+    "bundled_occt_loaded": true,
+    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "baseline": "ac7e293bf0c59e64dc4f57b3805cd51f3b4fc05e",
+    "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "input_method": "Native macOS CUA with observation before every input; read-only MCP inspection/capture and saved-file comparison only.",
+  "appearance": {
+    "logical_client": [
+      1360,
+      860
+    ],
+    "display_scale": 2,
+    "interface_scale": 1,
+    "theme": "light",
+    "language": "en"
+  },
+  "ui_counts": {
+    "passed": 5,
+    "blocked": 1,
+    "not_run_in_scoped_cases": 0
+  },
+  "ui_cases": [
+    {
+      "id": "snap-click-space",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "passed",
+      "expected": "Click the displayed Snap square and toggle it with Space without reacquiring focus.",
+      "actual": "Click changed true to false and retained Snap focus; Space changed false to true with the same binding. The ordinary palette appearance is preserved, now with a useful focus ring.",
+      "captures": [
+        "snap-click-off",
+        "snap-space-on"
+      ]
+    },
+    {
+      "id": "snap-production-keyboard-focus",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "passed",
+      "expected": "Leave and return to Snap using production Tab/Shift+Tab, then activate it.",
+      "actual": "Tab moved to Constraint 2: horizontal in the existing spatial order. Shift+Tab returned to Snap; Space toggled it off. This proves that local production sequence, not the full application tab order.",
+      "captures": [
+        "snap-tab-next",
+        "snap-reverse-space-off"
+      ]
+    },
+    {
+      "id": "snap-finish-sketch",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "passed",
+      "expected": "Restore Snap on and finish editing without altering the existing part.",
+      "actual": "Space restored Snap on; Finish Sketch restored the existing body and Sketch1/Extrude1 history. Undo/Redo remain disabled during sketch editing as before.",
+      "captures": [
+        "snap-finished"
+      ]
+    },
+    {
+      "id": "snap-dependent-undo-redo",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "passed",
+      "expected": "Undo/Redo after finishing preserve the existing history behavior.",
+      "actual": "The unchanged sketch edit added no extra modeling operation. Undo removed the original extrusion, leaving Sketch1; Redo restored Extrude1 and Body1. Read-only inspection followed the replacement session.",
+      "captures": [
+        "snap-undo",
+        "snap-redo"
+      ]
+    },
+    {
+      "id": "snap-save-close-reopen",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "passed",
+      "expected": "Save, close and reopen the scratch model with Snap enabled and unchanged geometry.",
+      "actual": "Saved model.json is byte-identical to the original fixture. The native file chooser reopened a fresh session with the expected body/history; editing Sketch1 showed Snap on. Finished afterward, leaving the part visible.",
+      "captures": [
+        "snap-reopened",
+        "snap-reopened-palette"
+      ]
+    },
+    {
+      "id": "settings-large-drag",
+      "status": "blocked",
+      "functional": "failed",
+      "polish": "not_accepted",
+      "source_revision": "a76749a7020dc9e0568aaa8e7a5a064615292e37",
+      "expected": "Long title drags move Settings within the window without closing it or focusing its backdrop.",
+      "actual": "On clean V11, both an unprimed and a primed drag from screenshot (1150,270) to (550,270) left Settings unchanged. Close settings stayed at (881,89) UI pixels; focus moved to Close dialog. Baseline V9 also dismissed Settings after a repeated drag toward the left edge.",
+      "captures": [
+        "v11/widgets/settings-default",
+        "v11/widgets/settings-long-drag",
+        "v11/widgets/settings-primed-drag"
+      ],
+      "disposition": "The standard 60 Hz reactive-update trial failed and was removed. The unrelated-control gesture cancellation fix remains source-tested; it is not a full native Settings drag pass. No final V12 large-drag pass is claimed."
+    }
+  ],
+  "source_checks": {
+    "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+    "interface": 109,
+    "native_host": 13,
+    "settings": 7,
+    "total": 129,
+    "clippy": "release --lib --tests -- -D warnings passed",
+    "formatting": "passed",
+    "meaningful_regressions": [
+      "checkbox_focus_survives_busy_updates_without_activating_while_disabled",
+      "unrelated_control_changes_do_not_cancel_a_standard_dialog_drag"
+    ],
+    "regression_scope": "Real Bevy schedules/window events. The first covers three temporary-disable cycles, disabled Space suppression, reenabled Space and hidden-focus retirement. The second covers a sibling becoming disabled during standard dialog dragging and release.",
+    "logs": [
+      "docs/qualification/bevy-settings-snap-20261017/interface-tests.txt",
+      "docs/qualification/bevy-settings-snap-20261017/host-tests.txt",
+      "docs/qualification/bevy-settings-snap-20261017/settings-tests.txt",
+      "docs/qualification/bevy-settings-snap-20261017/clippy.txt",
+      "docs/qualification/bevy-settings-snap-20261017/package.txt"
+    ]
+  },
+  "saved_model": {
+    "input": "docs/qualification/bevy-controls-20261017/standard-controls-input.limo",
+    "output": "docs/qualification/bevy-settings-snap-20261017/snap-focus-saved.limo",
+    "model_json_exactly_equal": true,
+    "model_json_bytes": 11479,
+    "model_json_sha256": "718af2d51860cc86ff02a136edf7e982241546266badbaaef20007d353f4761b",
+    "verified_in_native_ui": [
+      "Body1",
+      "Sketch1",
+      "Extrude1",
+      "Snap enabled after close/reopen and Edit sketch"
+    ]
+  },
+  "settings_blocker": {
+    "reason_stopped": ".cursor/rules/surface-qualification.mdc limits one initial repair investigation to two repair/rebuild cycles or 30 minutes. The cap was reached; no heavy workaround was added.",
+    "next_hypothesis": "Bevy picking documents a hover map based on the final pointer position of a frame. Batched native press/move delivery may therefore target a different surface. This is a source-informed hypothesis, not a proven native event trace. A future bounded investigation should compare event delivery with hit selection.",
+    "standard_update_trial": "Bevy reactive 60 Hz updates while a floating dialog was open did not fix the long drag; removed completely from final source.",
+    "retained_source_fix": "An unrelated sibling changing availability no longer clears the dialog-owned Bevy press state.",
+    "no_final_live_pass": true
+  },
+  "review_assets": [
+    "docs/qualification/bevy-settings-snap-20261017/snap-focus-workflow.gif",
+    "docs/qualification/bevy-settings-snap-20261017/snap-model-workflow.gif",
+    "docs/qualification/bevy-settings-snap-20261017/settings-drag-blocker.png",
+    "docs/qualification/bevy-settings-snap-20261017/model-reopened.png",
+    "docs/qualification/bevy-settings-snap-20261017/snap-click-off.png",
+    "docs/qualification/bevy-settings-snap-20261017/snap-focus-comparison.png"
+  ],
+  "capture_receipts": "docs/qualification/bevy-settings-snap-20261017/capture-receipts.json",
+  "capture_assertions": "All retained inspection pairs match clean builds. Every capture is presented/applied and its submitted/layout revisions agree.",
+  "gif_format": "Labeled native step captures, not real-time recordings; review crops/resizes only.",
+  "artifact_root": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
+  "limits": [
+    "Large Settings dragging is still a functional blocker, not an accepted cosmetic difference.",
+    "Prior small dialog move/resize passes are retained at their original revisions; no new blanket drag/resize acceptance is claimed.",
+    "Other platforms, full keyboard traversal, screen readers, input-method edge cases and all dialog/tool combinations remain outside this focused run.",
+    "MCP mutations tested: zero. Broad surface qualification remains paused.",
+    "PR remains draft and experimental-ui-widgets remains opt-in."
+  ],
+  "ci_snapshot": {
+    "headRefOid": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+    "isDraft": true,
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827728/job/117531439528",
+        "name": "RustSec and four-workspace source SBOMs",
+        "startedAt": "2026-10-17T23:23:19Z",
+        "status": "QUEUED",
+        "workflowName": "Dependency security and source inventories"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827606/job/117531438928",
+        "name": "Ubuntu host-neutral crates",
+        "startedAt": "2026-10-17T23:23:19Z",
+        "status": "QUEUED",
+        "workflowName": "Linux engine tests"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827652/job/117531439249",
+        "name": "frontend_regressions / Frontend regression tests",
+        "startedAt": "2026-10-17T23:23:19Z",
+        "status": "QUEUED",
+        "workflowName": "Required native interface contracts"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827571/job/117531438954",
+        "name": "Rust WASM engine facade",
+        "startedAt": "2026-10-17T23:23:19Z",
+        "status": "QUEUED",
+        "workflowName": "Rust web engine and repository tooling"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827680/job/117531439614",
+        "name": "VERSION matches every carrier",
+        "startedAt": "2026-10-17T23:23:19Z",
+        "status": "QUEUED",
+        "workflowName": "Version guard"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827628/job/117531437943",
+        "name": "CodeQL (rust)",
+        "startedAt": "2026-10-17T23:23:18Z",
+        "status": "PENDING",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-17T23:23:19Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827583/job/117531439440",
+        "name": "native-platform-input",
+        "startedAt": "2026-10-17T23:23:19Z",
+        "status": "COMPLETED",
+        "workflowName": "Native sketch visual regressions"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827628/job/117531437667",
+        "name": "CodeQL (c-cpp)",
+        "startedAt": "2026-10-17T23:23:18Z",
+        "status": "QUEUED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827628/job/117531437959",
+        "name": "CodeQL (actions)",
+        "startedAt": "2026-10-17T23:23:18Z",
+        "status": "QUEUED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827571/job/117531439156",
+        "name": "Repository Rust contracts",
+        "startedAt": "2026-10-17T23:23:19Z",
+        "status": "QUEUED",
+        "workflowName": "Rust web engine and repository tooling"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-17T23:23:19Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827728/job/117531440197",
+        "name": "Rescan the latest release with current advisories",
+        "startedAt": "2026-10-17T23:23:19Z",
+        "status": "COMPLETED",
+        "workflowName": "Dependency security and source inventories"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827628/job/117531437914",
+        "name": "CodeQL (python)",
+        "startedAt": "2026-10-17T23:23:18Z",
+        "status": "QUEUED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827628/job/117531437996",
+        "name": "CodeQL (javascript-typescript)",
+        "startedAt": "2026-10-17T23:23:19Z",
+        "status": "QUEUED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39078827583/job/117531438755",
+        "name": "native-visual",
+        "startedAt": "2026-10-17T23:23:19Z",
+        "status": "QUEUED",
+        "workflowName": "Native sketch visual regressions"
+      }
+    ]
+  },
+  "settings_drag_resolution_followup": {
+    "record": "docs/qualification/bevy-settings-drag-20261018.json",
+    "source_revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+    "status": "large_settings_drag_fixed_and_affected_native_checks_passed",
+    "historical_statuses_preserved": true,
+    "scope": "Resolves the large Settings blocker and rechecks affected workflows; does not retroactively qualify this older source or broaden other passes."
+  }
+}

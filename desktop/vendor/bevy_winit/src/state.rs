@@ -45,7 +45,7 @@ use crate::{
     create_windows,
     system::{create_monitors, CachedWindow, WinitWindowPressedKeys},
     AppSendEvent, CreateMonitorParams, CreateWindowParams, RawWinitWindowEvent, UpdateMode,
-    WinitSettings, WinitUserEvent, WINIT_WINDOWS,
+    WinitPointerButtonUpdates, WinitSettings, WinitUserEvent, WINIT_WINDOWS,
 };
 
 /// Persistent state that is used to run the [`App`] according to the current
@@ -210,6 +210,18 @@ impl ApplicationHandler<WinitUserEvent> for WinitAppRunnerState {
         window_id: WindowId,
         event: WindowEvent,
     ) {
+        // Picking resolves one hover location per update. Keep a primary button
+        // transition between movement batches, using the ordinary app schedules.
+        let pointer_button = matches!(
+            event,
+            WindowEvent::MouseInput {
+                button: event::MouseButton::Left,
+                ..
+            }
+        );
+        if pointer_button {
+            self.flush_pointer_button_input();
+        }
         self.window_event_received = true;
 
         #[cfg_attr(
@@ -455,6 +467,9 @@ impl ApplicationHandler<WinitUserEvent> for WinitAppRunnerState {
             });
         });
 
+        if pointer_button {
+            self.flush_pointer_button_input();
+        }
         if manual_run_redraw_requested {
             self.redraw_requested(_event_loop);
         }
@@ -798,6 +813,19 @@ impl WinitAppRunnerState {
         }
     }
 
+    fn flush_pointer_button_input(&mut self) {
+        if self
+            .world()
+            .contains_resource::<WinitPointerButtonUpdates>()
+            && self.lifecycle.is_active()
+            && self.app.plugins_state() == PluginsState::Cleaned
+            && (!self.bevy_window_events.is_empty() || !self.raw_winit_events.is_empty())
+        {
+            self.run_app_update();
+            self.redraw_requested = true;
+        }
+    }
+
     fn run_app_update(&mut self) {
         self.reset_on_update();
 
@@ -1124,6 +1152,75 @@ mod tests {
     use bevy_app::Update;
 
     use super::*;
+
+    #[test]
+    fn pointer_button_updates_separate_motion_and_transitions_without_idle_polling() {
+        #[derive(Resource, Default)]
+        struct Batches(Vec<Vec<BevyWindowEvent>>);
+        let mut app = App::new();
+        app.add_message::<BevyWindowEvent>()
+            .add_message::<CursorMoved>()
+            .add_message::<MouseButtonInput>()
+            .init_resource::<Batches>()
+            .add_systems(
+                Update,
+                |mut events: MessageReader<BevyWindowEvent>, mut batches: ResMut<Batches>| {
+                    batches.0.push(events.read().cloned().collect());
+                },
+            );
+        let window = app.world_mut().spawn(Window::default()).id();
+        app.finish();
+        app.cleanup();
+        let mut runner = WinitAppRunnerState::new(app);
+        runner.lifecycle = AppLifecycle::Running;
+        let movement = |x| {
+            BevyWindowEvent::CursorMoved(CursorMoved {
+                window,
+                position: Vec2::new(x, 100.),
+                delta: None,
+            })
+        };
+        let button = |state| {
+            BevyWindowEvent::MouseButtonInput(MouseButtonInput {
+                window,
+                button: bevy_input::mouse::MouseButton::Left,
+                state,
+            })
+        };
+        let press = button(bevy_input::ButtonState::Pressed);
+        let release = button(bevy_input::ButtonState::Released);
+        runner.bevy_window_events.push(movement(575.));
+        // Default runners keep their existing event batching.
+        runner.flush_pointer_button_input();
+        assert!(runner.world().resource::<Batches>().0.is_empty());
+        runner
+            .world_mut()
+            .insert_resource(WinitPointerButtonUpdates);
+        // Same sequence used around each native primary-button callback.
+        runner.flush_pointer_button_input();
+        runner.bevy_window_events.push(press.clone());
+        runner.flush_pointer_button_input();
+        runner.bevy_window_events.push(movement(275.));
+        runner.flush_pointer_button_input();
+        runner.bevy_window_events.push(release.clone());
+        runner.flush_pointer_button_input();
+        assert_eq!(
+            runner.world().resource::<Batches>().0,
+            vec![
+                vec![movement(575.)],
+                vec![press],
+                vec![movement(275.)],
+                vec![release]
+            ]
+        );
+        assert!(runner.redraw_requested);
+        runner.flush_pointer_button_input();
+        assert_eq!(
+            runner.world().resource::<Batches>().0.len(),
+            4,
+            "idle adds no update"
+        );
+    }
 
     #[test]
     fn explicit_service_wakes_advance_app_without_os_redraw_and_return_to_idle() {

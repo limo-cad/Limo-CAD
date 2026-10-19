@@ -1,0 +1,611 @@
+{
+  "source_revision": "881ef366a8aaf4909c0cb612515797288c2a3707",
+  "base_main": "5303f9a12b2bd6b4f01945223faf2b9aafe9e359",
+  "recorded_utc": "2026-10-17T22:34:54.903331+00:00",
+  "scope": "Opt-in standard Bevy sliders, shared feature dropdown menus, radio groups and Assembly tabs. Document tabs retain their original native implementation after the standard-tab trial failed.",
+  "source_checks": {
+    "distinct_passed": 215,
+    "native_interface": 107,
+    "settings": 7,
+    "files": 88,
+    "native_host": 13,
+    "widget_subset": 14,
+    "strict_clippy": "passed",
+    "formatting": "passed",
+    "first_menu_failure": "Fixed initial menu focus timing; final 14-widget schedule suite passed. No repeated full suite after the focused fix.",
+    "logs": [
+      "v9/interface-tests.log",
+      "v9/widgets-final.log",
+      "v9/settings-tests.log",
+      "v9/files-tests.log",
+      "v9/host-tests.log",
+      "v9/clippy.log",
+      "v9/tab-focus-tests.log",
+      "v9/tab-focus-clippy.log",
+      "v10/final-widget-tests.log",
+      "v10/final-files-tests.log",
+      "v10/final-clippy.log"
+    ],
+    "final_fallback": "14 final widget checks and 88 Files checks passed, including native document-tab input ownership. Strict release library/test Clippy passed. All other unchanged checks retained.",
+    "passed_current_test_names": [
+      "native_viewport::interface_shell::dialogs::tests::corner_resize_preserves_origin_and_has_readable_minimums",
+      "native_viewport::interface_shell::dialogs::tests::installs_with_bevys_dialog_plugin_already_present",
+      "native_viewport::interface_shell::dialogs::tests::standard_title_drag_respects_ui_scale_window_bounds_and_native_layers",
+      "native_viewport::interface_shell::fields::ime_diagnostic_tests::opt_in_configuration_distinguishes_missing_layout_without_fabricating_ime",
+      "native_viewport::interface_shell::fields::ime_diagnostic_tests::opt_in_ime_observer_follows_accepted_editor_events_and_rejects_retired_owner",
+      "native_viewport::interface_shell::fields::ime_popup::tests::candidate_popup_position_comes_from_the_caret_rect_and_scale_factor",
+      "native_viewport::interface_shell::fields::ime_popup::tests::popup_follows_scroll_field_movement_and_monitor_scale",
+      "native_viewport::interface_shell::fields::limits::tests::byte_bound_rejects_before_layout_and_counts_utf8_and_selected_replacement",
+      "native_viewport::interface_shell::fields::limits::tests::preedit_is_bounded_before_mutation_and_replaces_selection_or_previous_preedit_once",
+      "native_viewport::interface_shell::fields::limits::tests::provisional_cleanup_and_no_op_edits_cannot_clear_a_rejected_source",
+      "native_viewport::interface_shell::fields::limits::tests::rejected_insertion_cannot_blur_an_older_dirty_buffer_into_a_successful_run",
+      "native_viewport::interface_shell::fields::limits::tests::undo_redo_clear_rejection_only_when_the_committed_text_changes",
+      "native_viewport::interface_shell::fields::multiline::tests::multiline_caret_and_wheel_scroll_in_both_axes_without_modifying_source",
+      "native_viewport::interface_shell::fields::multiline::tests::multiline_control_enter_does_not_submit_and_modified_enter_keeps_existing_behavior",
+      "native_viewport::interface_shell::fields::multiline::tests::multiline_ime_candidate_confirmation_does_not_insert_a_newline_or_commit_a_draft",
+      "native_viewport::interface_shell::fields::multiline::tests::multiline_is_opt_in_and_enter_and_shift_enter_keep_literal_source_in_the_existing_editor",
+      "native_viewport::interface_shell::fields::multiline::tests::multiline_read_only_source_can_navigate_but_cannot_insert_newlines",
+      "native_viewport::interface_shell::fields::tests::a_direct_mcp_value_updates_the_visible_editor_and_is_not_reverted_on_blur",
+      "native_viewport::interface_shell::fields::tests::accepted_number_caption_fits_narrow_field_without_changing_owned_edit_text",
+      "native_viewport::interface_shell::fields::tests::accepted_signed_zero_caption_preserves_owned_text_and_nonzero_literals",
+      "native_viewport::interface_shell::fields::tests::bevy_text_viewport_keeps_pointer_selection_and_ime_on_the_visible_text",
+      "native_viewport::interface_shell::fields::tests::cancelling_a_form_discards_its_buffer_without_blocking_the_next_action",
+      "native_viewport::interface_shell::fields::tests::clearing_second_composition_preserves_committed_text_and_draft_history",
+      "native_viewport::interface_shell::fields::tests::command_select_all_never_inserts_its_letter_on_either_platform",
+      "native_viewport::interface_shell::fields::tests::dpi_change_recomputes_the_candidate_popup_without_dropping_composition",
+      "native_viewport::interface_shell::fields::tests::drawing_autofocus_rejects_rebound_fields_and_replaced_documents",
+      "native_viewport::interface_shell::fields::tests::drawing_autofocus_replaces_the_latest_preview_with_the_first_typed_number",
+      "native_viewport::interface_shell::fields::tests::drawing_autofocus_waits_for_the_original_binding_to_be_published",
+      "native_viewport::interface_shell::fields::tests::drawing_enter_queues_the_visible_value_before_confirming_the_shape",
+      "native_viewport::interface_shell::fields::tests::drawing_number_keeps_local_undo_and_redo_until_the_edit_is_committed",
+      "native_viewport::interface_shell::fields::tests::drawing_preview_releases_undo_and_redo_to_document_history",
+      "native_viewport::interface_shell::fields::tests::drawing_tab_commits_then_cycles_dimensions_without_visiting_toolbar_controls",
+      "native_viewport::interface_shell::fields::tests::edit_shortcuts_follow_latin_layouts_and_fall_back_for_non_latin_layouts",
+      "native_viewport::interface_shell::fields::tests::external_field_updates_reveal_leading_digits_without_changing_precision",
+      "native_viewport::interface_shell::fields::tests::field_undo_redo_changes_only_its_draft_and_new_input_discards_redo",
+      "native_viewport::interface_shell::fields::tests::focusing_a_text_field_does_not_submit_a_missing_value_to_its_form",
+      "native_viewport::interface_shell::fields::tests::ime_checkpoint_cannot_restore_text_across_a_rebound_field",
+      "native_viewport::interface_shell::fields::tests::ime_focus_loss_cancels_preedit_but_preserves_a_delivered_commit",
+      "native_viewport::interface_shell::fields::tests::ime_selected_text_cancellation_restores_text_selection_and_history",
+      "native_viewport::interface_shell::fields::tests::ime_selected_text_replacement_undo_restores_original_text",
+      "native_viewport::interface_shell::fields::tests::live_feature_numbers_publish_each_keyboard_edit_and_wait_for_ime_commit",
+      "native_viewport::interface_shell::fields::tests::mcp_backspace_edits_the_same_visible_buffer_and_enter_does_not_revert_it",
+      "native_viewport::interface_shell::fields::tests::modifier_and_shortcut_keys_do_not_submit_missing_values_to_text_forms",
+      "native_viewport::interface_shell::fields::tests::preedit_is_provisional_and_committing_records_one_draft_undo",
+      "native_viewport::interface_shell::fields::tests::read_only_fields_keep_selection_but_reject_typing_and_ime",
+      "native_viewport::interface_shell::fields::tests::rejected_commit_stays_dirty_and_duplicate_queued_blur_is_not_accepted_early",
+      "native_viewport::interface_shell::fields::tests::replacing_a_suggestion_with_identical_text_records_intent_without_changing_the_buffer",
+      "native_viewport::interface_shell::fields::tests::requested_editor_focus_waits_for_presented_modal_scope_without_changing_text",
+      "native_viewport::interface_shell::fields::tests::requested_measurement_focus_selects_the_value_once_without_replacing_typed_edits",
+      "native_viewport::interface_shell::fields::tests::submit_fields_commit_the_visible_buffer_before_forwarding_enter",
+      "native_viewport::interface_shell::fields::tests::unicode_editing_and_ime_commit_precede_enter_without_synthetic_keys",
+      "native_viewport::interface_shell::fields::tests::window_focus::window_reactivation_cancels_ime_preedit_and_keeps_the_committed_selection",
+      "native_viewport::interface_shell::fields::tests::window_focus::window_reactivation_discards_retired_disabled_and_explicitly_blurred_targets",
+      "native_viewport::interface_shell::fields::tests::window_focus::window_reactivation_keeps_new_focus_and_never_resumes_pointer_capture",
+      "native_viewport::interface_shell::fields::tests::window_focus::window_reactivation_resumes_unicode_and_numeric_editing_at_the_same_caret",
+      "native_viewport::interface_shell::geometry::tests::fully_clipped_controls_lose_focus_and_do_not_block_the_viewport",
+      "native_viewport::interface_shell::geometry::tests::nested_translated_clips_preserve_dpi_and_unbounded_overflow_axes",
+      "native_viewport::interface_shell::geometry::tests::rotated_clips_use_the_visible_polygon_for_controls_and_panel_occlusion",
+      "native_viewport::interface_shell::ime_diagnostics::tests::diagnostics_require_the_owned_repository_and_explicit_hosted_platform",
+      "native_viewport::interface_shell::ime_diagnostics::tests::received_ime_trace_is_bounded_and_keeps_order_without_truncating_text",
+      "native_viewport::interface_shell::ribbon::tests::finish_caption_keeps_the_primary_action_on_one_line",
+      "native_viewport::interface_shell::ribbon::tests::group_titles_shape_inside_their_computed_cells_with_room_for_chevrons",
+      "native_viewport::interface_shell::ribbon::tests::keyed_caption_follows_locale_without_changing_control_identity",
+      "native_viewport::interface_shell::ribbon::tests::retained_glyphs_follow_theme_without_replacing_fixed_colors_or_bindings",
+      "native_viewport::interface_shell::ribbon::tests::shared_vectors_remain_open_and_transparent_when_tinted_or_disabled",
+      "native_viewport::interface_shell::ribbon::tests::translated_caption_reuses_control_and_stays_inside_two_line_cell",
+      "native_viewport::interface_shell::shortcut_diagnostics::tests::file_shortcut_trace_counts_unmatched_keyboard_ingress_without_retaining_keys",
+      "native_viewport::interface_shell::shortcut_diagnostics::tests::file_shortcut_trace_is_bounded_and_never_retains_text",
+      "native_viewport::interface_shell::shortcut_diagnostics::tests::file_shortcut_trace_keeps_only_allowed_logical_candidates",
+      "native_viewport::interface_shell::shortcut_diagnostics::tests::file_shortcut_trace_keeps_repeats_and_releases_without_double_counting",
+      "native_viewport::interface_shell::shortcut_diagnostics::tests::raw_file_shortcut_trace_is_bounded_and_retains_only_whitelisted_keys",
+      "native_viewport::interface_shell::shortcut_diagnostics::tests::raw_file_shortcut_trace_keeps_synthetic_state_without_counting_converted_ingress",
+      "native_viewport::interface_shell::tests::canvas_input_respects_topmost_panels_controls_and_owner_changes",
+      "native_viewport::interface_shell::tests::closing_a_modal_restores_previous_focus_only_if_the_control_survives",
+      "native_viewport::interface_shell::tests::drag_release_outside_and_capture_cancel_do_not_activate",
+      "native_viewport::interface_shell::tests::focus_identity_tracks_retained_rebinding_and_loss_without_freezing_inspection_ids",
+      "native_viewport::interface_shell::tests::interface_camera_cannot_render_world_grid_or_transient_geometry",
+      "native_viewport::interface_shell::tests::leaving_the_last_control_redraws_hover_without_consuming_model_input",
+      "native_viewport::interface_shell::tests::menu_keys_skip_disabled_entries_and_backdrops_for_human_and_mcp",
+      "native_viewport::interface_shell::tests::native_pointer_and_mcp_resolve_the_same_retained_control",
+      "native_viewport::interface_shell::tests::numeric_step_buttons_remain_clickable_without_interrupting_tab_traversal",
+      "native_viewport::interface_shell::tests::painted_panel_blocks_geometry_and_underlying_controls_but_not_its_children",
+      "native_viewport::interface_shell::tests::pending_same_document_modal_fences_old_input_without_waiting_for_gpu",
+      "native_viewport::interface_shell::tests::physical_coordinates_clipping_and_inherited_visibility_match_hit_bounds",
+      "native_viewport::interface_shell::tests::pointer_projection_uses_one_presented_owner_modal_and_canvas_without_retaining_surface_text",
+      "native_viewport::interface_shell::tests::range_drag_uses_real_bounds_coalesces_and_rejects_rebound_controls",
+      "native_viewport::interface_shell::tests::rebinding_between_press_and_release_cannot_activate_the_replacement",
+      "native_viewport::interface_shell::tests::removal_of_focused_controls_keeps_publication_live",
+      "native_viewport::interface_shell::tests::replaced_document_revokes_queued_actions_and_native_hit_fallback",
+      "native_viewport::interface_shell::tests::scene_only_changes_require_a_new_submission_without_rebinding_controls",
+      "native_viewport::interface_shell::tests::shared_controls_show_keyboard_focus_and_disabled_controls_ignore_hover",
+      "native_viewport::interface_shell::tests::submitted_receipt_cannot_claim_a_newer_unrendered_layout",
+      "native_viewport::interface_shell::tests::window_fallback_size_uses_paired_presented_metrics_without_retaining_surface_text",
+      "native_viewport::interface_shell::widgets::tests::canvas_drag_keeps_motion_and_release_when_crossing_widgets",
+      "native_viewport::interface_shell::widgets::tests::disabled_modal_covered_and_rebound_widgets_do_not_activate",
+      "native_viewport::interface_shell::widgets::tests::document_tabs_keep_native_pointer_and_arrow_ownership",
+      "native_viewport::interface_shell::widgets::tests::focus_group_preserves_real_layout_and_camera_across_frames",
+      "native_viewport::interface_shell::widgets::tests::queued_activation_cannot_cross_document_replacement",
+      "native_viewport::interface_shell::widgets::tests::real_picking_activates_once_and_owns_pressed_focus_and_hover",
+      "native_viewport::interface_shell::widgets::tests::release_outside_cancels_and_secondary_click_never_activates",
+      "native_viewport::interface_shell::widgets::tests::standard_checkbox_space_and_tab_preserve_controlled_state_and_ignore_repeat",
+      "native_viewport::interface_shell::widgets::tests::standard_menu_open_choose_and_escape_do_not_duplicate_or_reopen_the_list",
+      "native_viewport::interface_shell::widgets::tests::standard_radio_group_skips_disabled_choices_and_reduces_only_the_new_option",
+      "native_viewport::interface_shell::widgets::tests::standard_slider_captures_outside_drag_and_releases_without_native_range_capture",
+      "native_viewport::interface_shell::widgets::tests::standard_slider_keeps_decimal_steps_large_origins_and_exact_endpoints",
+      "native_viewport::interface_shell::widgets::tests::standard_tab_navigation_uses_each_native_modifier_snapshot",
+      "native_viewport::interface_shell::widgets::tests::standard_tabs_roving_focus_selects_once_and_survives_tab_removal",
+      "native_viewport::winit_host::accessibility::tests::assistive_actions_use_live_controls_and_old_proxy_ids_retire_on_rebind",
+      "native_viewport::winit_host::accessibility::tests::assistive_input_wakes_an_idle_host_without_consuming_or_polling_frames",
+      "native_viewport::winit_host::accessibility::tests::native_field_states_are_exposed_to_assistive_technology",
+      "native_viewport::winit_host::accessibility::widget_focus_tests::native_editor_focus_is_real_during_layout_and_render_and_guarded_during_accesskit",
+      "native_viewport::winit_host::accessibility::widget_focus_tests::publishing_guarded_accessibility_nodes_preserves_standard_widget_text_focus",
+      "native_viewport::winit_host::macos_quit::tests::appkit_quit_cancels_immediate_exit_and_delivers_one_owned_window_close",
+      "native_viewport::winit_host::tests::crossing_chrome_during_a_model_drag_preserves_model_input_and_leave_clears_hover",
+      "native_viewport::winit_host::tests::held_modifiers_apply_to_first_click_cursor_and_wheel_before_synthetic_keys",
+      "native_viewport::winit_host::tests::ime_and_close_are_delivered_to_the_controller_without_synthetic_keys",
+      "native_viewport::winit_host::tests::modifier_state_is_ordered_and_focus_loss_cancels_it",
+      "native_viewport::winit_host::tests::original_modifier_snapshots_precede_late_synthetic_super_and_remain_per_key",
+      "native_viewport::winit_host::tests::physical_double_click_routes_once_and_cannot_cross_document_incarnations",
+      "native_viewport::winit_host::window_theme::tests::system_theme_changes_without_a_world_winit_resource_and_ignores_other_windows",
+      "session_bridge::native_interface::controller::app_settings::tests::a_watcher_notification_bypasses_the_recent_ui_read_without_an_extra_input_frame",
+      "session_bridge::native_interface::controller::app_settings::tests::absent_preferences_keep_os_language_and_do_not_persist_detected_defaults",
+      "session_bridge::native_interface::controller::app_settings::tests::failed_save_keeps_live_choice_and_error_until_retry_merges_fresh_other_fields",
+      "session_bridge::native_interface::controller::app_settings::tests::interface_size_shortcuts_persist_and_respect_document_editor_and_modal_ownership",
+      "session_bridge::native_interface::controller::app_settings::tests::retry_is_reachable_by_the_shell_pointer_above_the_retained_error_footer",
+      "session_bridge::native_interface::controller::app_settings::tests::settings_build_identity_wraps_without_overlapping_description_or_controls",
+      "session_bridge::native_interface::controller::app_settings::tests::shared_theme_and_locale_repaint_retained_edits_without_document_history",
+      "session_bridge::native_interface::controller::files::bambu::tests::accepted_preview_from_reordered_manual_bindings_keeps_exact_write_review",
+      "session_bridge::native_interface::controller::files::bambu::tests::actual_template_z_issues_require_deliberate_confirmation_and_invalidate_with_preview",
+      "session_bridge::native_interface::controller::files::bambu::tests::closing_options_does_not_suppress_committed_profile_publication_or_undo",
+      "session_bridge::native_interface::controller::files::bambu::tests::explicit_native_targets_preserve_repeated_instances_without_name_matching",
+      "session_bridge::native_interface::controller::files::bambu::tests::multipart_preflight_sources_remain_visible_and_distinct_across_repaint",
+      "session_bridge::native_interface::controller::files::bambu::tests::native_bambu_preview_runs_detached_and_rejects_changed_or_replaced_receipts",
+      "session_bridge::native_interface::controller::files::bambu::tests::native_bambu_write_detaches_build_and_requires_current_dialog_operation",
+      "session_bridge::native_interface::controller::files::bambu::tests::portable_mode_and_template_placement_have_distinct_preflight_policies",
+      "session_bridge::native_interface::controller::files::bambu::tests::read_only_review_preserves_exact_model_and_key_shape_without_owned_model_input",
+      "session_bridge::native_interface::controller::files::bambu::tests::review_identity_includes_model_bindings_and_deliberate_confirmations",
+      "session_bridge::native_interface::controller::files::bambu::tests::reviewed_baseline_requires_complete_ui_bindings_and_explicit_preview_intent",
+      "session_bridge::native_interface::controller::files::bambu::tests::saved_native_identity_does_not_resubmit_obsolete_object_numbers",
+      "session_bridge::native_interface::controller::files::bambu::tests::scrolling_export_options_edits_the_owned_state_without_copying_the_model",
+      "session_bridge::native_interface::controller::files::bambu::tests::template_inspection_runs_outside_publisher_and_rejects_changed_source_receipts",
+      "session_bridge::native_interface::controller::files::bambu::verification::tests::evidence_survives_closed_controls_and_stays_stale_after_document_replacement",
+      "session_bridge::native_interface::controller::files::bambu::verification::tests::native_readback_exposes_actual_global_overrides_and_capability_without_qualifying_failed_slice",
+      "session_bridge::native_interface::controller::files::bambu::verification::tests::previous_source_evidence_is_hidden_and_another_tab_cannot_retrieve_it",
+      "session_bridge::native_interface::controller::files::bambu::verification::tests::slicer_options_require_explicit_local_path_and_bounded_timeout",
+      "session_bridge::native_interface::controller::files::bambu::verification::tests::unreviewed_export_edits_stay_stale_after_restoring_the_captured_choices",
+      "session_bridge::native_interface::controller::files::drawing_output::tests::drawing_files_match_engine_output_without_changing_history_or_project_destination",
+      "session_bridge::native_interface::controller::files::drawing_output::tests::drawing_pdf_export_preserves_page_intent_and_rejects_stale_or_replaced_owners",
+      "session_bridge::native_interface::controller::files::drawing_output::tests::drawing_picker_cancellation_and_stale_receipts_preserve_files",
+      "session_bridge::native_interface::controller::files::drawing_output::tests::partially_clipped_cloud_caption_fails_before_replacing_drawing_output",
+      "session_bridge::native_interface::controller::files::drawing_output::tests::stale_annotation_references_fail_before_replacing_drawing_output",
+      "session_bridge::native_interface::controller::files::io::tests::exact_step_write_detaches_shapes_and_preserves_metadata_and_job_fences",
+      "session_bridge::native_interface::controller::files::io::tests::exchange_exports_and_embedded_step_import_preserve_project_destination_and_undo",
+      "session_bridge::native_interface::controller::files::io::tests::exchange_receipts_reject_changes_and_picker_cancellation_never_writes",
+      "session_bridge::native_interface::controller::files::io::tests::layout_warning_requires_deliberate_export_and_does_not_leak_into_definition_scope",
+      "session_bridge::native_interface::controller::files::io::tests::portable_mesh_write_detaches_build_and_requires_current_export_job",
+      "session_bridge::native_interface::controller::files::io::tests::selected_step_retains_occurrence_and_mesh_scope_retains_repeats",
+      "session_bridge::native_interface::controller::files::lessons::tests::lesson_refuses_work_before_starting_any_worker",
+      "session_bridge::native_interface::controller::files::panel::localization_tests::file_chrome_translates_by_key_without_rebinding_actions_or_translating_document_names",
+      "session_bridge::native_interface::controller::files::panel::localization_tests::language_repaint_updates_dialog_text_and_preserves_uncommitted_native_rename_buffer",
+      "session_bridge::native_interface::controller::files::panel::tests::export_decoration_ignores_large_reports_and_settings_that_do_not_change_layout",
+      "session_bridge::native_interface::controller::files::profile_output::tests::profile_cancel_stale_revision_and_replaced_owner_preserve_output",
+      "session_bridge::native_interface::controller::files::profile_output::tests::profile_choice_keyboard_and_invalid_values_never_change_identity_or_model",
+      "session_bridge::native_interface::controller::files::profile_output::tests::profile_file_uses_actual_catalog_and_preserves_document_history_and_destination",
+      "session_bridge::native_interface::controller::files::scripts::catalog::tests::native_script_catalog_bounded_queue_and_received_catalog_validation",
+      "session_bridge::native_interface::controller::files::scripts::catalog::tests::native_script_catalog_cold_start_enters_the_same_source_queue",
+      "session_bridge::native_interface::controller::files::scripts::catalog::tests::native_script_catalog_is_shared_and_source_only_including_flagship_recipes",
+      "session_bridge::native_interface::controller::files::scripts::catalog::tests::native_script_catalog_queue_preserves_dirty_drafts_until_discard_or_cancel",
+      "session_bridge::native_interface::controller::files::scripts::catalog::tests::native_script_catalog_waits_for_source_work_and_retains_user_document",
+      "session_bridge::native_interface::controller::files::scripts::catalog::tests::os_recipe_url_double_enters_the_same_source_queue",
+      "session_bridge::native_interface::controller::files::scripts::editor::tests::native_script_editor_invalid_and_unsafe_drafts_cannot_use_a_previous_validation",
+      "session_bridge::native_interface::controller::files::scripts::editor::tests::native_script_editor_preserves_rejected_native_draft_and_rebinds_on_explicit_discard",
+      "session_bridge::native_interface::controller::files::scripts::editor::tests::native_script_editor_save_preserves_invalid_authored_source_and_rebases_includes_explicitly",
+      "session_bridge::native_interface::controller::files::scripts::editor::tests::native_script_editor_stale_completions_and_rejected_native_buffers_cannot_enable_run",
+      "session_bridge::native_interface::controller::files::scripts::editor::tests::native_script_editor_validation_uses_exact_authored_draft_without_marking_it_saved",
+      "session_bridge::native_interface::controller::files::scripts::exit::tests::native_script_exit_both_commands_preserve_dirty_source_before_cad_close_confirmation",
+      "session_bridge::native_interface::controller::files::scripts::exit::tests::native_script_exit_picker_and_recipe_delivery_are_fenced_until_resolved",
+      "session_bridge::native_interface::controller::files::scripts::exit::tests::native_script_exit_title_bar_checks_uncommitted_text_and_rejected_edits_without_resetting_them",
+      "session_bridge::native_interface::controller::files::scripts::exit::tests::native_script_exit_waits_for_actual_source_save_and_allows_a_saved_invalid_draft",
+      "session_bridge::native_interface::controller::files::scripts::preview::input::tests::native_script_preview_drag_obeys_presented_not_pending_modal_without_turning_after_cancel",
+      "session_bridge::native_interface::controller::files::scripts::preview::input::tests::native_script_preview_pointer_release_focus_loss_and_owner_change_end_the_drag",
+      "session_bridge::native_interface::controller::files::scripts::preview::tests::native_script_preview_keys_and_replay_wait_for_current_frame_and_stop_at_last_frame",
+      "session_bridge::native_interface::controller::files::scripts::preview::tests::native_script_preview_real_preparation_is_isolated_and_close_cannot_spawn_parallel_work",
+      "session_bridge::native_interface::controller::files::scripts::preview::tests::native_script_preview_rejects_stale_pixels_and_releases_images_documents_and_views",
+      "session_bridge::native_interface::controller::files::scripts::preview::tests::native_script_preview_uses_catalog_policy_and_never_substitutes_edited_source",
+      "session_bridge::native_interface::controller::files::scripts::tests::failed_load_preserves_previous_source_and_replacement_retires_old_run_control",
+      "session_bridge::native_interface::controller::files::scripts::tests::inspected_file_retains_authored_provenance_and_freezes_expanded_includes",
+      "session_bridge::native_interface::controller::files::scripts::tests::inspection_uses_shared_path_size_include_and_operation_preflight",
+      "session_bridge::native_interface::controller::files::scripts::tests::os_script_chooser_cancel_open_and_save_use_the_prepared_choice",
+      "session_bridge::native_interface::controller::files::scripts::tests::script_new_design_retains_current_work_and_rejects_stale_or_rejected_handoffs",
+      "session_bridge::native_interface::controller::files::tests::bootstrap_rebinding_republishes_snapshot_ownership_before_input",
+      "session_bridge::native_interface::controller::files::tests::cancelled_or_disconnected_picker_releases_the_interface_without_mutation",
+      "session_bridge::native_interface::controller::files::tests::closing_an_inactive_dirty_tab_prompts_for_that_document_and_keeps_the_others",
+      "session_bridge::native_interface::controller::files::tests::drawing_part_and_second_instance_document_switches_record_non_negative_durations",
+      "session_bridge::native_interface::controller::files::tests::explicit_save_refuses_overwrite_and_invalid_paths_without_marking_clean",
+      "session_bridge::native_interface::controller::files::tests::failed_bootstrap_publication_is_retried_without_replacing_the_new_design",
+      "session_bridge::native_interface::controller::files::tests::geometry_retention::closing_real_solid_tabs_releases_only_closed_geometry_and_keeps_open_sessions",
+      "session_bridge::native_interface::controller::files::tests::lifecycle::cancelled_or_disconnected_save_picker_keeps_the_dirty_close_confirmation",
+      "session_bridge::native_interface::controller::files::tests::lifecycle::delayed_save_picker_rejects_a_byte_identical_same_tab_replacement",
+      "session_bridge::native_interface::controller::files::tests::lifecycle::failed_save_as_preserves_the_previous_target_and_explicit_document_name",
+      "session_bridge::native_interface::controller::files::tests::lifecycle::file_open_receipt_is_compact_and_preserves_native_geometry_and_owner_guards",
+      "session_bridge::native_interface::controller::files::tests::lifecycle::queued_save_and_close_cannot_write_or_close_a_byte_identical_replacement",
+      "session_bridge::native_interface::controller::files::tests::lifecycle::save_all_failure_preserves_remaining_edits_and_only_successful_retry_allows_exit",
+      "session_bridge::native_interface::controller::files::tests::new_documents_reset_the_camera_and_tabs_restore_their_own_views",
+      "session_bridge::native_interface::controller::files::tests::real_bootstrap_first_new_retains_both_models_and_distinct_mcp_sessions",
+      "session_bridge::native_interface::controller::files::tests::save_all_before_exit_writes_every_dirty_tab_before_requesting_close",
+      "session_bridge::native_interface::controller::files::tests::save_and_continue_closes_only_after_success_and_failed_save_preserves_dialog",
+      "session_bridge::native_interface::controller::files::tests::save_open_tabs_and_exit_protect_inactive_edits_and_recognize_saved_checkpoints",
+      "session_bridge::native_interface::controller::files::tests::sketch_close::a_failed_sketch_save_keeps_the_tab_and_an_owned_close_prompt_for_retry",
+      "session_bridge::native_interface::controller::files::tests::sketch_close::cancelling_the_save_destination_keeps_the_sketch_and_close_prompt",
+      "session_bridge::native_interface::controller::files::tests::sketch_close::close_during_a_sketch_prompts_and_cancel_preserves_the_exact_sketch_and_preview",
+      "session_bridge::native_interface::controller::files::tests::sketch_close::discarding_an_active_sketch_closes_only_its_owned_tab",
+      "session_bridge::native_interface::controller::files::tests::sketch_close::save_and_close_finishes_the_sketch_then_saves_before_retiring_the_tab",
+      "session_bridge::native_interface::controller::files::tests::stale_confirmation_and_chooser_cannot_overwrite_newer_work",
+      "session_bridge::native_interface::controller::files::tests::workspace::file_tabs_restore_drawing_and_active_sheet_after_switch_and_successful_close"
+    ],
+    "retired_test_names_not_counted": [
+      "native_viewport::interface_shell::widgets::tests::overflowing_document_strip_keeps_native_navigation_and_restores_standard_tabs_when_it_fits"
+    ],
+    "passed_current_test_names_count": 215
+  },
+  "live_cases": [
+    {
+      "id": "settings-slider",
+      "status": "pass",
+      "expected": "Preserve existing workflow and comparable visual state using standard Bevy handling",
+      "actual": "Track click changed 150% to 270%; thumb drag released below track at 80%. Home=25%, Right=30%, End=300%, Reset=150%.",
+      "evidence": [
+        "v9/widgets/settings-initial.png",
+        "v9/widgets/settings-click.png",
+        "v9/widgets/settings-drag-outside.png",
+        "v9/widgets/settings-keyboard-max.png",
+        "v9/widgets/settings-restored.png"
+      ],
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+      "functional_status": "pass",
+      "visual_status": "comparable"
+    },
+    {
+      "id": "settings-radio-appearance",
+      "status": "pass",
+      "expected": "Preserve existing workflow and comparable visual state using standard Bevy handling",
+      "actual": "Pointer Light then Right selected Dark. Chinese and 125% radios changed state, text remained readable; scrolling revealed the final setting. Restored English/Light/100%.",
+      "evidence": [
+        "v9/widgets/settings-radio-dark.png",
+        "v9/widgets/settings-dark-zh-125.png",
+        "v9/widgets/settings-scroll.png",
+        "v9/widgets/settings-restored.png"
+      ],
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+      "functional_status": "pass",
+      "visual_status": "comparable"
+    },
+    {
+      "id": "settings-focus",
+      "status": "pass",
+      "expected": "Preserve existing workflow and comparable visual state using standard Bevy handling",
+      "actual": "In the actual Settings hierarchy, Tab moved Light to Dark to slider, and Shift+Tab returned to Dark without selecting it.",
+      "evidence": [
+        "v9/widgets/settings-restored.png"
+      ],
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+      "functional_status": "pass",
+      "visual_status": "comparable"
+    },
+    {
+      "id": "feature-dropdown",
+      "status": "pass",
+      "expected": "Preserve existing workflow and comparable visual state using standard Bevy handling",
+      "actual": "Opened Extent with pointer, Down focused Two sides, Enter selected it once and revealed second distance. Reopen/Escape kept form and value, Down reopened from owner, pointer selected Distance.",
+      "evidence": [
+        "v9/widgets/dropdown-open.png",
+        "v9/widgets/dropdown-arrow.png",
+        "v9/widgets/dropdown-selected.png",
+        "v9/widgets/dropdown-escape.png"
+      ],
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+      "functional_status": "pass",
+      "visual_status": "comparable"
+    },
+    {
+      "id": "feature-radio",
+      "status": "pass",
+      "expected": "Preserve existing workflow and comparable visual state using standard Bevy handling",
+      "actual": "Add selected by pointer; Left selected Create Body; Right selected Add. Selected styling, preview and applicable fields updated.",
+      "evidence": [
+        "v9/widgets/extrude-radio-add.png",
+        "v9/widgets/extrude-before-apply.png"
+      ],
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+      "functional_status": "pass",
+      "visual_status": "comparable"
+    },
+    {
+      "id": "extrude-apply-undo-redo",
+      "status": "pass",
+      "expected": "Preserve existing workflow and comparable visual state using standard Bevy handling",
+      "actual": "Applied Add/join with both profiles and 16 mm. Saved exactly one extrusion with OK history. Undo saved model exactly equaled input fixture (Create Body/Merge/12 mm); Redo exactly equaled applied model.",
+      "evidence": [
+        "v9/widgets/extrude-applied.png",
+        "v9/widgets/extrude-undo.png",
+        "v9/widgets/extrude-redo.png"
+      ],
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+      "functional_status": "pass",
+      "visual_status": "comparable"
+    },
+    {
+      "id": "reopen-cancel",
+      "status": "pass",
+      "expected": "Preserve existing workflow and comparable visual state using standard Bevy handling",
+      "actual": "Closed saved model, reopened it through native chooser, verified Add and 16 mm. Changed draft to Create Body, then Escape cancelled. Saved model exactly equaled the applied model.",
+      "evidence": [
+        "v9/widgets/extrude-reopened.png",
+        "v9/widgets/extrude-cancelled.png"
+      ],
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+      "functional_status": "pass",
+      "visual_status": "comparable"
+    },
+    {
+      "id": "document-tab-click-rename-close",
+      "status": "historical_trial_pass",
+      "expected": "Preserve existing workflow and comparable visual state using standard Bevy handling",
+      "actual": "Created second scratch document, clicked between tabs, double-clicked selected tab, renamed it Widget tabs, closed saved model tab and reopened model. Renamed empty fixture was saved before replacement.",
+      "evidence": [
+        "v9/widgets/tabs-click-model.png",
+        "v9/widgets/tabs-renamed.png",
+        "v9/widgets/extrude-reopened.png"
+      ],
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+      "functional_status": "historical_trial_pass",
+      "visual_status": "comparable",
+      "disposition": "All document tab interactions restored to the existing native path in final source; this trial pass is not counted as a live final-fallback pass."
+    },
+    {
+      "id": "document-tab-consecutive-arrows",
+      "status": "blocked_trial_not_adopted",
+      "expected": "Preserve existing workflow and comparable visual state using standard Bevy handling",
+      "actual": "V9 and clean V10 b9f1a556 both clear focus after switching. In V10, click active first tab, Right selects second, then Left does nothing; inspection confirms null focused_control. A source fixture passed but did not reproduce the production lifetime. The standard document-tab migration, custom focus publication and double-click adapter were removed; the original native document-tab painter is byte-identical to b4e93a7a.",
+      "evidence": [
+        "v10/widgets/tabs-initial.png",
+        "v10/widgets/tabs-after-first-arrow.png",
+        "v10/widgets/tabs-focus-blocked.png",
+        "v10/widgets/tabs-focus-blocked-inspect.json"
+      ],
+      "source_revision": "b9f1a55694fbfc0d1aee9e33f9f848e236368a32",
+      "functional_status": "blocked_trial_not_adopted",
+      "visual_status": "not_qualified",
+      "fallback_commit": "881ef366a8aaf4909c0cb612515797288c2a3707",
+      "next_hypothesis": "Only if a later migration is requested: inspect the production document-switch lifecycle before replacing the native strip. No additional custom focus machinery retained."
+    },
+    {
+      "id": "assembly-tabs",
+      "status": "pass",
+      "expected": "Preserve existing workflow and comparable visual state using standard Bevy handling",
+      "actual": "Pointer and consecutive Right arrows moved Structure to Motion to Inspect. Correct panels and disabled actions rendered. During feature editing all three tabs became disabled; clicking Motion did not switch.",
+      "evidence": [
+        "v9/widgets/assembly-structure.png",
+        "v9/widgets/assembly-motion.png",
+        "v9/widgets/assembly-inspect.png",
+        "v9/widgets/extrude-reopened.png"
+      ],
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+      "functional_status": "pass",
+      "visual_status": "comparable"
+    }
+  ],
+  "boundaries": [
+    "All document tabs, including overflow, retain the existing native navigation and rename behavior",
+    "Cycling choice fields outside shared feature forms keep existing behavior",
+    "Invalid or more than 1048576-step ranges keep existing adapter"
+  ],
+  "broad_ui_mcp_run": "paused",
+  "manual_mcp_mutations": 0,
+  "live_build": {
+    "recorded_utc": "2026-10-17T20:28:34.876592+00:00",
+    "build": {
+      "channel": "development",
+      "modified": false,
+      "revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+      "version": "0.3.0-rc.1"
+    },
+    "features": [
+      "experimental-ui-widgets"
+    ],
+    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v9/widgets/Limo CAD PR420 Widgets V9.app",
+    "engine_sha256": "9504f0b57e7d49d3339056a455a1ae6932d407109da63a3c0862b64fe597f776",
+    "signature": "ad-hoc; deep strict verification passed",
+    "bundled_occt_loaded": true,
+    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "baseline": "b4e93a7af1e228bc3209e466bcfac50fe4e4cef9",
+    "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "matched_pair": "All retained live inspection/capture receipts report matching clean GUI/MCP revision 54c6a644.",
+  "visual_scope": "Native macOS 1360x860 logical client, 2x backing scale; Settings 100%/125%, light/dark, English/Chinese. Historical V8 Settings reference used only for appearance comparison.",
+  "input_method": "One CUA native operator, observed before each input. Read-only MCP inspect/capture and saved-file reads verify effects. No MCP mutations or input replay.",
+  "known_limits": [
+    "Final native document fallback has source/routing tests, not a new live package pass; the failed standard document-tab trial is explicitly not adopted.",
+    "Other locales/scales/platforms and full screen-reader behavior not qualified",
+    "Full long-list dropdown scrolling and every feature form not qualified",
+    "Prior large Settings drag dismissal and Snap focus issue remain outside this control migration",
+    "Exact minimum dialog height and host-window resize remain unrun",
+    "V10 native getApp launch unexpectedly blocked for 4620 seconds despite a 60000 ms tool timeout; subsequent input/observation calls completed normally. No further repair loop was pursued."
+  ],
+  "operational_evidence": "GIFs are labeled native step-capture sequences, not real-time screen recordings. Native pixels are cropped/resized for legibility; captions sit outside the captured region.",
+  "status": "complete_scoped_migration_with_native_document_tabs",
+  "retained_passes": "Final source removes document-tab grouping and document-only observers; Assembly creates the same TabList as before. Other V9 live cases and unchanged source-suite passes remain valid and were not repeated. Document-tab trial results are historical, not final implementation passes.",
+  "artifact_root": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
+  "fixtures": [
+    {
+      "path": "v8/fixtures/widgets-profile.limo",
+      "sha256": "a5197df29ca500806ace00d1b02d957074d5118f0ec2558b41a02d3fca666322",
+      "repository_copy": "bevy-controls-20261017/standard-controls-input.limo"
+    },
+    {
+      "path": "v9/fixtures/standard-controls.limo",
+      "sha256": "034b861896a890b755bb40c24849e6cca82773f4825c965d1f1f00142b979805",
+      "repository_copy": "bevy-controls-20261017/standard-controls-applied.limo"
+    },
+    {
+      "path": "v9/fixtures/Widget tabs.limo",
+      "sha256": "edd4baa5626ef780e3c057a5b39c9b1a67f0ca7b9221a64310697aea6f048988"
+    }
+  ],
+  "review_assets": [
+    {
+      "path": "bevy-controls-20261017/slider-workflow.gif",
+      "sha256": "3b6c600a943b96cc228dfa1b01b0e4ae626f1b3af51ee7bc9a456ee766edcfb6",
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535"
+    },
+    {
+      "path": "bevy-controls-20261017/dropdown-workflow.gif",
+      "sha256": "598ee3d5053dbb483cef9640f1ef6693107cd5f10d0d24294cd9568e78dc20a6",
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535"
+    },
+    {
+      "path": "bevy-controls-20261017/assembly-tabs.gif",
+      "sha256": "6d48b0dd70dadf529bf28197ae4e5d9a251295d26a99a193e71dddd128d8fdfa",
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535"
+    },
+    {
+      "path": "bevy-controls-20261017/settings-comparison.png",
+      "sha256": "f0be2ab5b98217167c85baf87853b743449c90115db021eb54d6f326c10127e5",
+      "source_revision": "54c6a64432c0439c9bfcf1afab2597e213df4535"
+    }
+  ],
+  "saved_model_verification": {
+    "exact_model_json_equality": {
+      "undo": true,
+      "cancel": true,
+      "current": true
+    },
+    "canonical_model_json_sha256": {
+      "baseline": "77d63d0a9b90840cb3cca60419104a5c5fc0ebafe108627b836c945bfd43632a",
+      "applied": "00972100d94004074ea15097c1c135a0e90a55975ffaa67bb5925526705e1387",
+      "undo": "77d63d0a9b90840cb3cca60419104a5c5fc0ebafe108627b836c945bfd43632a",
+      "cancel": "00972100d94004074ea15097c1c135a0e90a55975ffaa67bb5925526705e1387",
+      "current": "00972100d94004074ea15097c1c135a0e90a55975ffaa67bb5925526705e1387"
+    }
+  },
+  "counts": {
+    "retained_live_cases_passed": 8,
+    "document_trial_click_case_historical": 1,
+    "document_trial_blocked_migration_not_adopted": 1,
+    "manual_mcp_mutations": 0
+  },
+  "trial_build": {
+    "recorded_utc": "2026-10-17T21:05:24.734145+00:00",
+    "build": {
+      "channel": "development",
+      "modified": false,
+      "revision": "b9f1a55694fbfc0d1aee9e33f9f848e236368a32",
+      "version": "0.3.0-rc.1"
+    },
+    "features": [
+      "experimental-ui-widgets"
+    ],
+    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v10/widgets/Limo CAD PR420 Widgets V10.app",
+    "engine_sha256": "7e63d660b496270ccbf33a7b83de4ac2a18f514fd8f8747f47a3dc6ffe870316",
+    "signature": "ad-hoc; deep strict verification passed",
+    "bundled_occt_loaded": true,
+    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "baseline": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+    "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "capture_verification": {
+    "matched_clean_receipts": 27,
+    "all_expected_revisions_match": true
+  },
+  "ci_snapshot": {
+    "source_head": "881ef366a8aaf4909c0cb612515797288c2a3707",
+    "recorded_utc": "2026-10-17T22:32:47.381698+00:00",
+    "checks": [
+      {
+        "bucket": "pending",
+        "name": "RustSec and four-workspace source SBOMs"
+      },
+      {
+        "bucket": "pending",
+        "name": "Ubuntu host-neutral crates"
+      },
+      {
+        "bucket": "pending",
+        "name": "frontend_regressions / Frontend regression tests"
+      },
+      {
+        "bucket": "pending",
+        "name": "Rust WASM engine facade"
+      },
+      {
+        "bucket": "pending",
+        "name": "VERSION matches every carrier"
+      },
+      {
+        "bucket": "pending",
+        "name": "CodeQL (rust)"
+      },
+      {
+        "bucket": "skipping",
+        "name": "native-platform-input"
+      },
+      {
+        "bucket": "pending",
+        "name": "CodeQL (c-cpp)"
+      },
+      {
+        "bucket": "pending",
+        "name": "CodeQL (actions)"
+      },
+      {
+        "bucket": "pending",
+        "name": "Repository Rust contracts"
+      },
+      {
+        "bucket": "skipping",
+        "name": "Rescan the latest release with current advisories"
+      },
+      {
+        "bucket": "pending",
+        "name": "CodeQL (python)"
+      },
+      {
+        "bucket": "pending",
+        "name": "CodeQL (javascript-typescript)"
+      },
+      {
+        "bucket": "pending",
+        "name": "native-visual"
+      }
+    ],
+    "status": "pending"
+  },
+  "document_fallback_review": {
+    "painter_matches_pre_migration": true,
+    "pre_migration_revision": "b4e93a7af1e228bc3209e466bcfac50fe4e4cef9",
+    "file": "desktop/src/session_bridge/native_interface/controller/files/panel.rs",
+    "removed_runtime_adapters": [
+      "document-tab focus restoration",
+      "document-tab double-click observer",
+      "document strip group and overflow toggle"
+    ],
+    "live_fallback_claimed": false
+  },
+  "settings_snap_followup": {
+    "source_revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+    "evidence": "docs/qualification/bevy-settings-snap-20261017.json",
+    "snap_focus": "fixed; native click/Space/Tab/Shift+Tab and saved-model checks passed",
+    "settings_large_drag": "still blocked; ineffective timed-update trial removed; unrelated-control cancellation fix source-tested",
+    "historical_case_statuses_preserved": true
+  },
+  "settings_drag_resolution_followup": {
+    "record": "docs/qualification/bevy-settings-drag-20261018.json",
+    "source_revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+    "status": "large_settings_drag_fixed_and_affected_native_checks_passed",
+    "historical_statuses_preserved": true,
+    "scope": "Resolves the large Settings blocker and rechecks affected workflows; does not retroactively qualify this older source or broaden other passes."
+  }
+}

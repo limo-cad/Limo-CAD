@@ -1,0 +1,390 @@
+{
+  "recorded_utc": "2026-10-18T15:10:14.991439+00:00",
+  "scope": "Requested large Settings drag repair and affected shared control/feature/Snap checks only. Broad qualification remains paused.",
+  "investigation_limit_override": "User explicitly permitted exceeding the two-cycle/30-minute limit on 2026-10-18.",
+  "status": "settings_large_drag_fixed_and_focused_workflows_passed",
+  "source_revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+  "source_baseline": "87fe5220f6707c694274d5b55c8e048fb24d99bb",
+  "base_main": "5303f9a12b2bd6b4f01945223faf2b9aafe9e359",
+  "dependency_prs_merged": [
+    433,
+    434
+  ],
+  "fix_commits": [
+    "a9dc5ee649dcf853957e70c6951155e37104945c",
+    "93541949f4f026b74981f3238f51a038fbcafd8c"
+  ],
+  "build": {
+    "recorded_utc": "2026-10-18T14:42:37.755309+00:00",
+    "build": {
+      "channel": "development",
+      "modified": false,
+      "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+      "version": "0.3.0-rc.1"
+    },
+    "features": [
+      "experimental-ui-widgets"
+    ],
+    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v16/widgets/Limo CAD PR420 Widgets V16.app",
+    "engine_sha256": "bb5fa94e4c4bc1e590ce6526da18c58eea1a87f0b8af333ca58cc97cc33eebb1",
+    "signature": "ad-hoc; deep strict verification passed",
+    "bundled_occt_loaded": true,
+    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "baseline": "a9dc5ee649dcf853957e70c6951155e37104945c",
+    "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
+    "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
+  },
+  "input_method": "Native macOS CUA; read-only matched MCP inspection/capture and saved-file comparison. No MCP mutations, input replay or modeling scripts.",
+  "appearance": {
+    "client_logical": [
+      1360,
+      860
+    ],
+    "capture_pixels": [
+      2720,
+      1720
+    ],
+    "display_scale": 2,
+    "interface_scales": [
+      1,
+      1.25
+    ],
+    "theme": "light",
+    "language": "en"
+  },
+  "ui_counts": {
+    "passed": 10,
+    "blocked": 0,
+    "not_run_in_scoped_cases": 0
+  },
+  "ui_cases": [
+    {
+      "id": "settings-large-title-and-edges",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "acceptable",
+      "expected": "Large and repeated title movements track the press origin without losing ownership.",
+      "actual": "Full 300-pixel left move; repeated left clamp; large diagonal to right/bottom; return to top. After reopening, repeat left/edge/diagonal also passes. No dismissal, reverse movement or unintended setting change.",
+      "captures": [
+        "settings-centered",
+        "settings-long-left",
+        "settings-left-edge",
+        "settings-right-bottom-edge",
+        "settings-top-edge",
+        "settings-repeat-left",
+        "settings-repeat-edge",
+        "settings-repeat-diagonal"
+      ]
+    },
+    {
+      "id": "settings-moved-large-resize",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "acceptable",
+      "expected": "Resize a translated Settings dialog to its minimum and enlarge it again.",
+      "actual": "Formerly failing corner gesture now reaches 400×260 at (172,8); subsequent enlargement reaches 600×460. Title, footer and resize handle stay accessible.",
+      "captures": [
+        "settings-minimum",
+        "settings-grown"
+      ]
+    },
+    {
+      "id": "settings-controls-after-geometry",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "acceptable",
+      "expected": "Slider and button release semantics survive dialog movement and resizing.",
+      "actual": "Slider changes 1.5 to 2.4. Dragging Reset outside before release leaves 2.4; a separate Reset click restores 1.5.",
+      "captures": [
+        "settings-slider",
+        "settings-reset-release-outside",
+        "settings-reopened"
+      ]
+    },
+    {
+      "id": "settings-scroll-footer",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "acceptable",
+      "expected": "Reach final settings above the fixed footer after resizing.",
+      "actual": "Wheel reveals language/scale, GPU stock removal and document units; previous enabled and more disabled at the bottom.",
+      "captures": [
+        "settings-scrolled"
+      ]
+    },
+    {
+      "id": "settings-scale-drag",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "acceptable",
+      "expected": "Standard scale radio and large title drag work at 125%.",
+      "actual": "125% radio selects and retains focus; large left title drag clamps near (8,8). Restoring 100% preserves controls and slider default.",
+      "captures": [
+        "settings-125-left-edge",
+        "settings-keyboard-forward"
+      ]
+    },
+    {
+      "id": "settings-focus-close-reopen",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "acceptable",
+      "expected": "Production Tab/Shift+Tab and keyboard close work after geometry changes.",
+      "actual": "Tab enters Close settings, then System; Shift+Tab returns to Close settings. Enter closes; File/Settings restores centered 480×700 geometry.",
+      "captures": [
+        "settings-keyboard-forward",
+        "settings-keyboard-reverse",
+        "settings-reopened"
+      ]
+    },
+    {
+      "id": "feature-draft-geometry-cancel",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "acceptable",
+      "expected": "Shared feature form keeps draft, dropdown and cancellation after a large move and resize.",
+      "actual": "14 mm draft survives a 600-pixel title translation and corner resize. Scrolling reveals lower fields. Extent opens and Escape restores trigger focus without changing Distance. Cancel and reopen confirms 12 mm.",
+      "captures": [
+        "extrude-draft14",
+        "extrude-moved",
+        "extrude-resized",
+        "extrude-scrolled",
+        "extrude-cancelled",
+        "extrude-reopened12"
+      ]
+    },
+    {
+      "id": "feature-apply-undo-redo",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "acceptable",
+      "expected": "Apply once from the moved form and preserve undo/redo model semantics.",
+      "actual": "Saved applied model differs only in distance 12→14. Undo saved model is byte-identical to input; Redo saved model matches applied model. Restored 12 afterward.",
+      "captures": [
+        "extrude-before-apply",
+        "extrude-applied14",
+        "extrude-undo12",
+        "extrude-redo14",
+        "extrude-restored12"
+      ]
+    },
+    {
+      "id": "snap-production-focus",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "acceptable",
+      "expected": "Snap click/Space and production forward/reverse traversal retain focus.",
+      "actual": "Click changes true→false and retains Snap binding; Space restores true. Tab goes to Constraint 2: horizontal in existing spatial order; Shift+Tab returns to Snap. Finish Sketch preserves the body/history.",
+      "captures": [
+        "snap-before",
+        "snap-click-off",
+        "snap-space-on",
+        "snap-tab-forward",
+        "snap-tab-reverse",
+        "workflow-restored"
+      ]
+    },
+    {
+      "id": "save-close-reopen",
+      "status": "passed",
+      "functional": "passed",
+      "polish": "acceptable",
+      "expected": "Save and reopen the restored test document without model changes.",
+      "actual": "Saved model.json is byte-identical to input, including Snap=true. Native file picker reopens a fresh session with Body1, Sketch1 and Extrude1.",
+      "captures": [
+        "workflow-restored",
+        "workflow-reopened"
+      ]
+    }
+  ],
+  "source_checks": {
+    "revision": "93541949f4f026b74981f3238f51a038fbcafd8c",
+    "interface": 110,
+    "native_host": 13,
+    "settings": 7,
+    "runner": 2,
+    "total": 132,
+    "clippy": "strict release app and bevy_winit --lib --tests -- -D warnings passed",
+    "formatting": "passed",
+    "regressions": [
+      "large_first_title_motion_retains_press_origin_and_repeated_edges",
+      "pointer_button_updates_separate_motion_and_transitions_without_idle_polling",
+      "explicit_service_wakes_advance_app_without_os_redraw_and_return_to_idle"
+    ]
+  },
+  "repairs": [
+    "Vendored Bevy dialog records the press origin on PointerPress, retaining its existing drag state, picking, capture, translation and clamp. Other 14 upstream widget source files are byte-identical.",
+    "Opt-in primary-button boundary updates in the existing vendored Bevy window runner process pending motion, then the button transition, before later motion. Existing schedules and picking remain responsible; no custom hit test, input queue, gesture recognizer or timer."
+  ],
+  "investigation": {
+    "origin_trace": "docs/qualification/bevy-settings-drag-20261018/press-origin-investigation.json",
+    "batch_trace": "docs/qualification/bevy-settings-drag-20261018/coalesced-pointer-trace.txt",
+    "intermediate_result": "Origin-only V14 passes large title/edge movement but still has intermittent corner misses/language changes. V15 trace proves batched title press targeting the backdrop. These are retained failures, not final passes.",
+    "temporary_diagnostics": "Both diagnostic commits are retained locally on diagnostic branches; no tracing is in final product source."
+  },
+  "geometry": "docs/qualification/bevy-settings-drag-20261018/settings-geometry.json",
+  "saved_model_verification": "docs/qualification/bevy-settings-drag-20261018/model-verification.json",
+  "saved_model": "docs/qualification/bevy-settings-drag-20261018/workflow-saved.limo",
+  "capture_receipts": "docs/qualification/bevy-settings-drag-20261018/capture-receipts.json",
+  "native_capture_count": 36,
+  "gif_format": "Labeled native step captures, not real-time recordings. Review assets are crops/resizes with captions; raw PNG hashes are retained in receipts.",
+  "visual_comparison": "docs/qualification/bevy-settings-drag-20261018/visual-comparison.json",
+  "observations": [
+    "The feature form retains its existing translucent body: ribbon text can show behind it when moved across the ribbon. Required controls remained readable and usable; this change does not alter its painter.",
+    "Immediate CUA screenshots sometimes preceded the settled frame. Acceptance and next coordinates use matched submitted native captures.",
+    "First V16 launch selection timed out after about 460 seconds; inventory showed it running and selecting by bundle ID succeeded immediately. No locked-Mac claim is made."
+  ],
+  "limits": [
+    "Adds bounded App schedule work at primary-button transitions. Runner tests verify no idle polling; no zero-cost or broad performance claim.",
+    "Other platforms, host-window resize, every tool/form, full tab order, screen readers and IME edge cases remain outside this focused run.",
+    "No product copy changes; English/light and 100%/125% are the current native scope. Prior locale/theme results retain their original revision identities.",
+    "MCP mutations tested: zero. Broad UI/MCP ledger stays paused and unchanged. PR remains draft and experimental-ui-widgets opt-in."
+  ],
+  "ci_snapshot": {
+    "headRefOid": "93541949f4f026b74981f3238f51a038fbcafd8c",
+    "isDraft": true,
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137018982/job/117703490098",
+        "name": "RustSec and four-workspace source SBOMs",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "QUEUED",
+        "workflowName": "Dependency security and source inventories"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137019000/job/117703490211",
+        "name": "Ubuntu host-neutral crates",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "QUEUED",
+        "workflowName": "Linux engine tests"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137019096/job/117703493183",
+        "name": "frontend_regressions / Frontend regression tests",
+        "startedAt": "2026-10-18T14:40:06Z",
+        "status": "QUEUED",
+        "workflowName": "Required native interface contracts"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137018978/job/117703492007",
+        "name": "Rust WASM engine facade",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "QUEUED",
+        "workflowName": "Rust web engine and repository tooling"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137019021/job/117703492691",
+        "name": "VERSION matches every carrier",
+        "startedAt": "2026-10-18T14:40:06Z",
+        "status": "QUEUED",
+        "workflowName": "Version guard"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137018973/job/117703490034",
+        "name": "CodeQL (rust)",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "PENDING",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-18T14:40:05Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137019088/job/117703491464",
+        "name": "native-platform-input",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "COMPLETED",
+        "workflowName": "Native sketch visual regressions"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137018973/job/117703490195",
+        "name": "CodeQL (c-cpp)",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "PENDING",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137018973/job/117703490058",
+        "name": "CodeQL (actions)",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "QUEUED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137018978/job/117703492047",
+        "name": "Repository Rust contracts",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "QUEUED",
+        "workflowName": "Rust web engine and repository tooling"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-18T14:40:05Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137018982/job/117703491156",
+        "name": "Rescan the latest release with current advisories",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "COMPLETED",
+        "workflowName": "Dependency security and source inventories"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137018973/job/117703490089",
+        "name": "CodeQL (python)",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "QUEUED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137018973/job/117703490165",
+        "name": "CodeQL (javascript-typescript)",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "QUEUED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "0001-01-01T00:00:00Z",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/limo-cad/Limo-CAD/actions/runs/39137019088/job/117703490325",
+        "name": "native-visual",
+        "startedAt": "2026-10-18T14:40:05Z",
+        "status": "QUEUED",
+        "workflowName": "Native sketch visual regressions"
+      }
+    ]
+  },
+  "artifact_root": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v16"
+}

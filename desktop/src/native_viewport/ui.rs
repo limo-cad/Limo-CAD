@@ -1,10 +1,9 @@
 //! Production viewport UI for the native Bevy surface.
 //!
-//! This module deliberately uses Bevy's stable core UI primitives instead of
-//! `bevy_ui_widgets`: the latter is still documented as experimental and
-//! unstyled. Keeping the visual tokens and small component
-//! builders here gives the production host and the dev capture lab one
-//! canonical implementation.
+//! Core UI primitives and these visual tokens keep the production host and
+//! capture lab on one canonical style. The opt-in `experimental-ui-widgets`
+//! feature explores Bevy's headless control behavior without replacing that
+//! style with Feathers defaults. Manual UI/UX parity verification is required.
 
 use std::fs;
 

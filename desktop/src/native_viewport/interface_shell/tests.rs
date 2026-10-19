@@ -97,7 +97,7 @@ fn scene_only_changes_require_a_new_submission_without_rebinding_controls() {
     assert_eq!(wakes.load(Ordering::Relaxed), armed + 1);
 }
 
-fn frame(document: &str, epoch: u64) -> InterfaceFrame {
+pub(super) fn frame(document: &str, epoch: u64) -> InterfaceFrame {
     let client = InterfaceRect {
         x: 0.0,
         y: 0.0,
