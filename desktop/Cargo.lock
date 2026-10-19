@@ -1714,8 +1714,6 @@ dependencies = [
 [[package]]
 name = "bevy_ui_widgets"
 version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6442cd402df6a54f0e51ed8c1bd004c8f9c6715d0f8045e33c68ea9aebb1ce16"
 dependencies = [
  "accesskit",
  "bevy_a11y",

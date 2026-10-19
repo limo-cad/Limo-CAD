@@ -1,0 +1,84 @@
+{
+  "units": "UI pixels; rounded within 0.5 pixel at 125% scale",
+  "bounds_format": [
+    "left",
+    "top",
+    "width",
+    "height"
+  ],
+  "measured": {
+    "settings-centered": [
+      440,
+      80,
+      480,
+      700
+    ],
+    "settings-long-left": [
+      140,
+      80,
+      480,
+      700
+    ],
+    "settings-left-edge": [
+      8,
+      80,
+      480,
+      700
+    ],
+    "settings-right-bottom-edge": [
+      872,
+      152,
+      480,
+      700
+    ],
+    "settings-top-edge": [
+      172,
+      8,
+      480,
+      700
+    ],
+    "settings-minimum": [
+      172,
+      8,
+      400,
+      260
+    ],
+    "settings-grown": [
+      172,
+      8,
+      600,
+      460
+    ],
+    "settings-125-left-edge": [
+      8,
+      8,
+      600,
+      460
+    ],
+    "settings-reopened": [
+      440,
+      80,
+      480,
+      700
+    ],
+    "settings-repeat-left": [
+      140,
+      80,
+      480,
+      700
+    ],
+    "settings-repeat-edge": [
+      8,
+      80,
+      480,
+      700
+    ],
+    "settings-repeat-diagonal": [
+      872,
+      152,
+      480,
+      700
+    ]
+  },
+  "source": "Close/settings-footer bounds from matched native receipts"
+}

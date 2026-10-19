@@ -520,42 +520,19 @@ fn failed_save_keeps_live_choice_and_error_until_retry_merges_fresh_other_fields
 
 #[test]
 fn retry_is_reachable_by_the_shell_pointer_above_the_retained_error_footer() {
-    use crate::native_viewport::interface_shell::{InterfaceOccluder, PointerButton, PointerPhase};
-    use bevy::ui::{ComputedStackIndex, UiGlobalTransform};
+    use crate::native_viewport::interface_shell::{PointerButton, PointerPhase};
+    use bevy::camera::{ComputedCameraValues, RenderTargetInfo};
+    use bevy::ui::UiGlobalTransform;
     use limo_cad_interface::ControlKey;
 
     fn publish(world: &mut World, handle: &NativeInterfaceHandle) {
-        let px_value = |value: Val| match value {
-            Val::Px(value) => value,
-            other => panic!("Expected Settings pixel bounds, got {other:?}"),
-        };
-        let layout: Vec<_> = world
-            .query_filtered::<(Entity, &Node, &ZIndex), (
-                Without<ChildOf>,
-                Or<(With<InterfaceControl>, With<InterfaceOccluder>)>,
-            )>()
-            .iter(world)
-            .map(|(entity, node, z)| {
-                let size = Vec2::new(px_value(node.width), px_value(node.height));
-                (
-                    entity,
-                    size,
-                    Vec2::new(px_value(node.left), px_value(node.top)) + size / 2.,
-                    z.0,
-                )
-            })
-            .collect();
-        for (entity, size, center, z) in layout {
-            world.entity_mut(entity).insert((
-                ComputedNode {
-                    size,
-                    inverse_scale_factor: 1.,
-                    ..default()
-                },
-                UiGlobalTransform::from_translation(center),
-                ComputedStackIndex(z as u32),
-                InheritedVisibility::VISIBLE,
-            ));
+        // Use Bevy's hierarchy/layout/stack, including the movable dialog root.
+        world.run_schedule(PostUpdate);
+        for mut visibility in world
+            .query_filtered::<&mut InheritedVisibility, With<Node>>()
+            .iter_mut(world)
+        {
+            *visibility = InheritedVisibility::VISIBLE;
         }
         interface_shell::tests::publish_layout_once(world, handle.clone());
     }
@@ -592,14 +569,38 @@ fn retry_is_reachable_by_the_shell_pointer_above_the_retained_error_footer() {
     };
     let handle = NativeInterfaceHandle::new(|| {});
     let mut app = native_viewport::interface_scene_fixture();
-    app.init_resource::<ViewportUiAssets>()
-        .insert_resource(services.clone())
-        .insert_resource(settings);
+    app.add_plugins((
+        bevy::time::TimePlugin,
+        bevy::text::TextPlugin,
+        bevy::ui::UiPlugin,
+    ))
+    .init_resource::<Assets<Image>>()
+    .init_resource::<Assets<bevy::image::TextureAtlasLayout>>()
+    .init_resource::<bevy::input_focus::InputFocus>()
+    .init_resource::<ViewportUiAssets>()
+    .insert_resource(services.clone())
+    .insert_resource(settings);
     files::initialize(
         app.world_mut(),
         Arc::new(Mutex::new(workspace::DocumentWorkspace::default())),
     );
-    let camera = app.world_mut().spawn(InterfaceCamera).id();
+    let camera = app
+        .world_mut()
+        .spawn((
+            InterfaceCamera,
+            Camera2d,
+            Camera {
+                computed: ComputedCameraValues {
+                    target_info: Some(RenderTargetInfo {
+                        physical_size: UVec2::new(1360, 860),
+                        scale_factor: 1.,
+                    }),
+                    ..default()
+                },
+                ..default()
+            },
+        ))
+        .id();
     let mut opener_widgets = Widgets::default();
     let opener = opener_widgets
         .button(

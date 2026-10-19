@@ -168,7 +168,7 @@
   "run_state_reason": "Broad exploratory UI and manual MCP mutations remain paused. Root owns finite known-defect acceptance only. Canonical EB GUI is saved and closed after complete unchanged model/archive preservation; private Vita paths and all saved/recovery/session data are preserved. Reviewed9e export ownership checks passed once and Print-to-File source pass9cdf is retained. Fresh deployment/matched pair and direct PDF/cold-paper acceptance remain pending; physical Print and positive singleplate Bambu CAD placement are unqualified. This checkpoint does not authorize broad coverage, another GUI operator, stale-session reuse or manual model mutations.",
   "current_phase": "ui",
   "inventory_source_revision": "7aa51f05e3362da65c289469055aac8082671fa5",
-  "policy": ".cursor/rules/surface-qualification.mdc",
+  "policy": "docs/contributing/surface-qualification.md",
   "status_values": ["not_run","in_progress","passed","failed","blocked","needs_recheck","restricted"],
   "prior_evidence": ["docs/qualification/fillet-repair-20261010.json","docs/qualification/manual-ui-stop-20261009.json","docs/qualification/medix-kw22-native-human-ui-20261008.json"],
   "prior_evidence_policy": "Reuse only the exact covered cases with verified provenance and unchanged behavior; never infer full workspace or tool coverage. No prior evidence is silently marked as current full-surface qualification.",

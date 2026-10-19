@@ -1,0 +1,20 @@
+{
+  "started_utc": "2026-10-18T07:26:22.220868+00:00",
+  "scope": "Large Settings dragging; use standard Bevy handling and avoid heavy workarounds. Other broad UI/MCP work remains paused.",
+  "investigation_limit_override": "User explicitly authorized going beyond the two-cycle/30-minute limit on 2026-10-18.",
+  "baseline_revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+  "baseline_reproduction": "Initial immediate native observation looked stationary. Settled matched capture shows Settings moved from x=440 to x=181 (259 pixels for the requested 300). The immediate observation was stale and is not treated as a no-movement result.",
+  "baseline_capture": "v12/widgets/drag-resume-baseline.png",
+  "diagnostic_purpose": "Read pointer input batches and Bevy target selection without changing input behavior. Temporary logging will be removed before the final product change.",
+  "trace_findings": [
+    "Press and drag targeted the title handle throughout both gestures.",
+    "Press (575,103), first movement (275,103), drag distance (-300,0); upstream stores movement as origin and clamps x to -259.",
+    "Second press (275,103), first movement (15,103), distance (-260,0); upstream clamps x to +1, moving right."
+  ],
+  "upstream": "Published Bevy 0.20.0 dialog.rs and GitHub main blob 5e9ccf8d782be45ea04e7d9bf9aff03b3004afa5 were byte-identical when checked.",
+  "diagnostic_revision": "dc910e6673196a7592312f91d897386acc6402d1",
+  "settled_close_bounds_x": {
+    "first": 622,
+    "repeated": 623
+  }
+}

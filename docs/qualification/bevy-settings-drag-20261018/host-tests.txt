@@ -1,0 +1,18 @@
+
+running 13 tests
+test native_viewport::winit_host::accessibility::tests::assistive_actions_use_live_controls_and_old_proxy_ids_retire_on_rebind ... ok
+test native_viewport::winit_host::accessibility::tests::assistive_input_wakes_an_idle_host_without_consuming_or_polling_frames ... ok
+test native_viewport::winit_host::accessibility::tests::native_field_states_are_exposed_to_assistive_technology ... ok
+test native_viewport::winit_host::accessibility::widget_focus_tests::native_editor_focus_is_real_during_layout_and_render_and_guarded_during_accesskit ... ok
+test native_viewport::winit_host::accessibility::widget_focus_tests::publishing_guarded_accessibility_nodes_preserves_standard_widget_text_focus ... ok
+test native_viewport::winit_host::macos_quit::tests::appkit_quit_cancels_immediate_exit_and_delivers_one_owned_window_close ... ok
+test native_viewport::winit_host::tests::crossing_chrome_during_a_model_drag_preserves_model_input_and_leave_clears_hover ... ok
+test native_viewport::winit_host::tests::held_modifiers_apply_to_first_click_cursor_and_wheel_before_synthetic_keys ... ok
+test native_viewport::winit_host::tests::ime_and_close_are_delivered_to_the_controller_without_synthetic_keys ... ok
+test native_viewport::winit_host::tests::modifier_state_is_ordered_and_focus_loss_cancels_it ... ok
+test native_viewport::winit_host::tests::original_modifier_snapshots_precede_late_synthetic_super_and_remain_per_key ... ok
+test native_viewport::winit_host::tests::physical_double_click_routes_once_and_cannot_cross_document_incarnations ... ok
+test native_viewport::winit_host::window_theme::tests::system_theme_changes_without_a_world_winit_resource_and_ignores_other_windows ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 1115 filtered out; finished in 0.21s
+

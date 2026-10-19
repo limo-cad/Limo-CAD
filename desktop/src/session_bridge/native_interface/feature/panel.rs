@@ -194,10 +194,29 @@ fn synchronize_owned(
         .cloned()
         .unwrap_or_default();
     let theme = crate::native_viewport::ui::theme(world);
+    #[cfg(feature = "experimental-ui-widgets")]
+    let area = {
+        let size = interface_shell::dialogs::size(
+            world,
+            state.root,
+            Vec2::new(area.width as f32, area.height as f32),
+        );
+        Area {
+            width: f64::from(size.x),
+            height: f64::from(size.y),
+            ..area
+        }
+    };
     let width = area.width as f32;
     let scrolling = content_height(&panel, width - 24.) > area.height as f32 - 84.;
     let inner = width - 24. - if scrolling { 24. } else { 0. };
     let height = (area.height as f32).min(content_height(&panel, inner) + 84.);
+    #[cfg(feature = "experimental-ui-widgets")]
+    let height = if interface_shell::dialogs::resized(world, state.root) {
+        area.height as f32
+    } else {
+        height
+    };
     let body_height = height - 84.;
     state.max_scroll = (content_height(&panel, inner) - body_height).max(0.);
     state.scroll = state.scroll.min(state.max_scroll);
@@ -245,6 +264,8 @@ fn synchronize_owned(
         world.entity_mut(root).add_child(header);
         header
     });
+    #[cfg(feature = "experimental-ui-widgets")]
+    interface_shell::dialogs::attach(world, root, header, Vec2::new(280., 180.));
     let header_node = Node {
         position_type: PositionType::Absolute,
         left: px(0.),
@@ -306,6 +327,10 @@ fn synchronize_owned(
         height: f64::from(height),
         ..area
     };
+    #[cfg(feature = "experimental-ui-widgets")]
+    {
+        state.area = interface_shell::dialogs::area(world, root, state.area);
+    }
     let mut live_controls = HashSet::new();
     let mut live_labels = HashSet::new();
     label(
@@ -538,6 +563,19 @@ fn synchronize_owned(
                         theme,
                         &assets,
                     )?;
+                }
+                #[cfg(feature = "experimental-ui-widgets")]
+                {
+                    let members = options
+                        .iter()
+                        .filter_map(|option| {
+                            state
+                                .controls
+                                .get(&format!("{key}-{}", option.value))
+                                .map(|c| c.0)
+                        })
+                        .collect::<Vec<_>>();
+                    interface_shell::widgets::radio_group(world, &members);
                 }
                 y += options.len().div_ceil(2) as f32 * 36. + 4.;
                 if row.field == super::SolidField::Operation {
@@ -882,7 +920,7 @@ fn synchronize_owned(
         root,
         camera,
         &panel,
-        area,
+        state.area,
         theme,
         &assets,
     )?;
@@ -893,7 +931,7 @@ fn synchronize_owned(
         root,
         camera,
         &panel,
-        area,
+        state.area,
         theme,
         &assets,
     );
@@ -1684,6 +1722,20 @@ fn choice_options(
                     assets,
                 )?;
                 *y += 30.;
+            }
+            #[cfg(feature = "experimental-ui-widgets")]
+            if let Some((owner, _)) = state.controls.get(&key) {
+                let owner = *owner;
+                let members = options
+                    .iter()
+                    .filter_map(|option| {
+                        state
+                            .controls
+                            .get(&format!("{key}-option-{}", option.value))
+                            .map(|c| c.0)
+                    })
+                    .collect::<Vec<_>>();
+                interface_shell::widgets::choice_group(world, owner, &members);
             }
         }
     }

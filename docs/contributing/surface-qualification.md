@@ -1,8 +1,3 @@
----
-description: Cover the complete native UI before MCP, with finite repair cycles and evidence-based completion.
-alwaysApply: true
----
-
 # Surface qualification
 
 - The user directs UI-first, MCP-second coverage. Do not substitute flagship modeling or one difficult export for a surface survey.
@@ -20,6 +15,6 @@ alwaysApply: true
 - For MCP, refresh `cad_list_all_tools`, expand schema/action variants and compare against the complete ledger before testing. Use isolated scratch documents and individual supported requests; verify return values and actual state/artifacts, including ownership and asynchronous completion.
 - Preserve the current session's no-replay/no-modeling-script/no-raw-model-session-inbox-write restrictions. During UI qualification, all CAD input uses guarded Rust computer control with observation before every input; read-only MCP verifies effects. Never test MCP mutations against the user's GUI documents. Restricted operations remain visibly untested unless the user changes their scope.
 - Keep one GUI operator, preserve documents/recovery and follow the fresh active session after Undo/Redo or document replacement. Require a matched clean GUI/MCP build before live qualification; respect native foreground guards and verify complete text visibly before submitting dialogs.
-- Batch fixes by affected area into reviewable commits/PRs. Follow `.cursor/rules/pr-lifecycle.mdc` for approval and merge requirements. Commit/push completed fixes and checkpoints promptly, and let existing CI cover regressions.
+- Batch fixes by feature area into commits in the corresponding grouped PR. Follow [the PR lifecycle](pr-lifecycle.md) before requesting review. Do not merge main without Jack's approval. Commit/push completed fixes and checkpoints promptly, and let existing CI cover regressions.
 - Report UI and MCP separately: passed/not-run/blocked/recheck counts, newly discovered issues, repaired issues, current CI and the next item. Do not describe the program as fully tested while inventory, blockers or phase gates remain incomplete.
 - The final gate is zero unresolved in-scope functional or polish issues, complete evidence for UI then MCP, and relevant CI passing. Report exact limits and exclusions; never promise coverage of every possible input combination or physical qualification.

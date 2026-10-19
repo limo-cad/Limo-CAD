@@ -306,6 +306,8 @@ pub(super) fn paint(
             Field::None,
         )?;
     }
+    #[cfg(feature = "experimental-ui-widgets")]
+    p.widgets.tab_group(p.world, &["tab-0", "tab-1", "tab-2"]);
     p.top += 64.;
     p.bottom -= 24.;
     p.scroll = state.scroll;

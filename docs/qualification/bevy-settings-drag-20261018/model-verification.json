@@ -1,0 +1,13 @@
+{
+  "initial_and_final_model_sha256": "718af2d51860cc86ff02a136edf7e982241546266badbaaef20007d353f4761b",
+  "initial_and_final_model_bytes": 11479,
+  "exactly_equal": true,
+  "applied_and_redo_model_sha256": "2ea443cd17699ead7ac6e031a0bbbfa59b415476ce93d122d9394b8767cde83d",
+  "only_applied_difference": {
+    "path": "/extrudes/0/extent/distance",
+    "before": 12,
+    "after": 14
+  },
+  "final_snap": true,
+  "save_observation": "The first combined Undo/Save input saved before asynchronous Undo settled. A separate Save after the matched Undo receipt verified 12 mm. Later dependent saves followed settled receipts."
+}

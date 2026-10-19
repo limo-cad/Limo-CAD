@@ -1,0 +1,900 @@
+{
+  "baseline_revision": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
+  "widgets_revision": "62e3572f30fb2c9518e000b03c81e8221cb24108",
+  "pairs": [
+    {
+      "case": "extrude-applied",
+      "captures": {
+        "default": {
+          "path": "v2/default/extrude-applied.png",
+          "sha256": "1deb3815f92b800cb11b878be809000d80a7d3e2a58ae1c1fde3a20e9471a7ee"
+        },
+        "widgets": {
+          "path": "v4/widgets/extrude-applied.png",
+          "sha256": "a7e2c9577d39f8b3e99101760d9d0ec2f61dcadb29ebf3128a32b9a9b76f9842"
+        }
+      },
+      "raw": {
+        "changed_pixels": 1659857,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          21,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          11.382792193912449,
+          10.68314466484268,
+          10.103996665526676
+        ]
+      },
+      "filename_mask_boxes_inclusive": [
+        [
+          220,
+          16,
+          450,
+          54
+        ],
+        [
+          48,
+          313,
+          300,
+          348
+        ]
+      ],
+      "filename_normalized": {
+        "changed_pixels": 1655933,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 184,
+        "mean_channel_difference": [
+          11.306912192202462,
+          10.608041851915186,
+          10.030019664842682
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": true
+    },
+    {
+      "case": "extrude-cancel-result",
+      "captures": {
+        "default": {
+          "path": "v2/default/extrude-cancel-result.png",
+          "sha256": "a5e530803f156194e13118858a1e365e9a01ed0d7ff94f054f13f347c7341424"
+        },
+        "widgets": {
+          "path": "v4/widgets/extrude-cancel-result.png",
+          "sha256": "dc0d44e38b8568a6add56d0a5a503676c455fe8b00898b43fdd8fd1bf62997f5"
+        }
+      },
+      "raw": {
+        "changed_pixels": 8268,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          21,
+          465,
+          736
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          0.15249465629274966,
+          0.15041638166894664,
+          0.14909263850889193
+        ]
+      },
+      "filename_mask_boxes_inclusive": [
+        [
+          220,
+          16,
+          450,
+          54
+        ],
+        [
+          48,
+          313,
+          300,
+          348
+        ]
+      ],
+      "filename_normalized": {
+        "changed_pixels": 4344,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          24,
+          465,
+          736
+        ],
+        "max_channel_difference": 206,
+        "mean_channel_difference": [
+          0.07661465458276334,
+          0.07531356874145007,
+          0.0751156378248974
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": false
+    },
+    {
+      "case": "extrude-edit-reopened",
+      "captures": {
+        "default": {
+          "path": "v2/default/extrude-edit-reopened.png",
+          "sha256": "b94f001c3fedfeae385130a559c8d10d39f0501385c497cc4e948bc7721f4d8a"
+        },
+        "widgets": {
+          "path": "v4/widgets/extrude-edit-reopened.png",
+          "sha256": "07c22bef63eb8e19a1b1590cadc74f6f9d87dbdbf02bd57e453c38205350b780"
+        }
+      },
+      "raw": {
+        "changed_pixels": 8330,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          21,
+          2113,
+          1163
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          0.15523790184678524,
+          0.15310661764705882,
+          0.15171661251709986
+        ]
+      },
+      "filename_mask_boxes_inclusive": [
+        [
+          220,
+          16,
+          450,
+          54
+        ],
+        [
+          48,
+          313,
+          300,
+          348
+        ]
+      ],
+      "filename_normalized": {
+        "changed_pixels": 4406,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          24,
+          2113,
+          1163
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          0.0793579001367989,
+          0.07800380471956224,
+          0.07773961183310533
+        ]
+      },
+      "dialog_region": {
+        "box_exclusive": [
+          2040,
+          264,
+          2680,
+          1516
+        ],
+        "changed_pixels": 62,
+        "total_pixels": 801280,
+        "difference_bbox": [
+          71,
+          868,
+          73,
+          899
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          0.01601687300319489,
+          0.01570736821086262,
+          0.015320487220447284
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": false
+    },
+    {
+      "case": "extrude-merge-preview",
+      "captures": {
+        "default": {
+          "path": "v2/default/extrude-merge-preview.png",
+          "sha256": "ed7aef3a0ce03ddc1846034cc22b00b7d12cc2d7078120ce628aabd479ae94cc"
+        },
+        "widgets": {
+          "path": "v4/widgets/extrude-merge-preview.png",
+          "sha256": "cefc4fed3a2dd25c7d5d6c38f5b950b7bc1c437bb1152135591799da21c1f0f6"
+        }
+      },
+      "raw": {
+        "changed_pixels": 190084,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          21,
+          2660,
+          1258
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          1.2446321391928865,
+          1.1413803864569083,
+          0.5597616706566347
+        ]
+      },
+      "filename_mask_boxes_inclusive": [
+        [
+          220,
+          16,
+          450,
+          54
+        ],
+        [
+          48,
+          313,
+          300,
+          348
+        ]
+      ],
+      "filename_normalized": {
+        "changed_pixels": 186160,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          240,
+          2660,
+          1258
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          1.1687521374829002,
+          1.0662775735294117,
+          0.4857846699726402
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": false
+    },
+    {
+      "case": "file-menu",
+      "captures": {
+        "default": {
+          "path": "v2/default/file-menu.png",
+          "sha256": "4bab0f29cd10591ece00969cd7e29d1f8cdd6fd92701cd255dc88d5036d342af"
+        },
+        "widgets": {
+          "path": "v4/widgets/file-menu.png",
+          "sha256": "ddf20bba2cbaad254cdadf8b05424a67e4e69a2b3cdd52e00a381c52f2673f98"
+        }
+      },
+      "raw": {
+        "changed_pixels": 1682460,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          480,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 35,
+        "mean_channel_difference": [
+          1.1022875341997265,
+          1.0082547452120383,
+          0.9340725461696306
+        ]
+      },
+      "filename_normalized": {
+        "changed_pixels": 1682460,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          480,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 35,
+        "mean_channel_difference": [
+          1.1022875341997265,
+          1.0082547452120383,
+          0.9340725461696306
+        ]
+      },
+      "dialog_region": {
+        "box_exclusive": [
+          12,
+          56,
+          522,
+          1450
+        ],
+        "changed_pixels": 1,
+        "total_pixels": 710940,
+        "difference_bbox": [
+          509,
+          1391,
+          510,
+          1392
+        ],
+        "max_channel_difference": 1,
+        "mean_channel_difference": [
+          0.0,
+          0.0,
+          1.4065884603482712e-06
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": true
+    },
+    {
+      "case": "history-sketch-edit",
+      "captures": {
+        "default": {
+          "path": "v2/default/history-sketch-edit.png",
+          "sha256": "65de55ead9dcad4774bbe9ab42d9352740079a3eeceba08224209133f0d4e392"
+        },
+        "widgets": {
+          "path": "v4/widgets/history-sketch-edit.png",
+          "sha256": "714f3f0f5cb0fa7165a827b1bf178a0c83bce1009214e5a02192e9259fef8ca3"
+        }
+      },
+      "raw": {
+        "changed_pixels": 1096608,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          21,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          1.451937841997264,
+          1.3137452975376196,
+          1.235639107387141
+        ]
+      },
+      "filename_mask_boxes_inclusive": [
+        [
+          220,
+          16,
+          450,
+          54
+        ],
+        [
+          48,
+          313,
+          300,
+          348
+        ]
+      ],
+      "filename_normalized": {
+        "changed_pixels": 1092684,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 184,
+        "mean_channel_difference": [
+          1.3760578402872776,
+          1.2386424846101232,
+          1.1616621067031463
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": false
+    },
+    {
+      "case": "redo-saved",
+      "captures": {
+        "default": {
+          "path": "v2/default/redo-saved.png",
+          "sha256": "c1fcfa617a82542d27752ca71beb8812c095ea9d71f94b9216aa4f916257f75b"
+        },
+        "widgets": {
+          "path": "v4/widgets/redo-saved.png",
+          "sha256": "6663231efda119080fa6a1fc7d31c6822fb5560f492d3cde658eb61eddb33f4c"
+        }
+      },
+      "raw": {
+        "changed_pixels": 4284,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          21,
+          376,
+          343
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          0.07847276846785226,
+          0.07749679377564979,
+          0.07617732558139535
+        ]
+      },
+      "filename_mask_boxes_inclusive": [
+        [
+          220,
+          16,
+          450,
+          54
+        ],
+        [
+          48,
+          313,
+          300,
+          348
+        ]
+      ],
+      "filename_normalized": {
+        "changed_pixels": 360,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          319,
+          41,
+          343
+        ],
+        "max_channel_difference": 49,
+        "mean_channel_difference": [
+          0.002592766757865937,
+          0.0023939808481532147,
+          0.002200324897400821
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": true
+    },
+    {
+      "case": "settings-dark-zh-125",
+      "captures": {
+        "default": {
+          "path": "v2/default/settings-dark-zh-125.png",
+          "sha256": "c7f407f4ac1b41f8e643fc2d87a86702acf12a9c2f6f9f778243863ed6a7c9d1"
+        },
+        "widgets": {
+          "path": "v4/widgets/settings-dark-zh-125.png",
+          "sha256": "7bcf83f1a8b3ab04f39183a65e33680b75ab99032b5a6bb90a51b6313c412e51"
+        }
+      },
+      "raw": {
+        "changed_pixels": 572365,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          21,
+          254,
+          2720,
+          1600
+        ],
+        "max_channel_difference": 183,
+        "mean_channel_difference": [
+          0.43431536422708616,
+          0.4253828231874145,
+          0.49073529411764705
+        ]
+      },
+      "filename_normalized": {
+        "changed_pixels": 572365,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          21,
+          254,
+          2720,
+          1600
+        ],
+        "max_channel_difference": 183,
+        "mean_channel_difference": [
+          0.43431536422708616,
+          0.4253828231874145,
+          0.49073529411764705
+        ]
+      },
+      "dialog_region": {
+        "box_exclusive": [
+          760,
+          60,
+          1960,
+          1660
+        ],
+        "changed_pixels": 9205,
+        "total_pixels": 1920000,
+        "difference_bbox": [
+          347,
+          194,
+          975,
+          213
+        ],
+        "max_channel_difference": 183,
+        "mean_channel_difference": [
+          0.49686458333333333,
+          0.5019072916666667,
+          0.5037828125
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": true
+    },
+    {
+      "case": "settings-light",
+      "captures": {
+        "default": {
+          "path": "v2/default/settings-light.png",
+          "sha256": "91e028946bf0743f9e6df7df4166c409587af3d41788511c2b9156b41050e1e8"
+        },
+        "widgets": {
+          "path": "v4/widgets/settings-light.png",
+          "sha256": "e2c923f5a3ceb7713f56369870eeb46b706b9a7b399e67604d9c76b95887c212"
+        }
+      },
+      "raw": {
+        "changed_pixels": 1077461,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          1.368936816005472,
+          1.4146028556771546,
+          0.8544487431600547
+        ]
+      },
+      "filename_normalized": {
+        "changed_pixels": 1077461,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          1.368936816005472,
+          1.4146028556771546,
+          0.8544487431600547
+        ]
+      },
+      "dialog_region": {
+        "box_exclusive": [
+          880,
+          160,
+          1840,
+          1560
+        ],
+        "changed_pixels": 103800,
+        "total_pixels": 1344000,
+        "difference_bbox": [
+          0,
+          154,
+          960,
+          1400
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          2.689806547619048,
+          3.013299107142857,
+          1.1990438988095238
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": false
+    },
+    {
+      "case": "settings-toggle-off",
+      "captures": {
+        "default": {
+          "path": "v2/default/settings-toggle-off.png",
+          "sha256": "7ddb409c6ef73cb3ca12bd94de773e3715ac05be9b781a901ba1c2ecef35880a"
+        },
+        "widgets": {
+          "path": "v4/widgets/settings-toggle-off.png",
+          "sha256": "3b4310c0a278f1cd488f362692e09dbcaa4b6a95a10af79bdfcdc61da86dfd74"
+        }
+      },
+      "raw": {
+        "changed_pixels": 973687,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 42,
+        "mean_channel_difference": [
+          0.5962279839261286,
+          0.5489613970588235,
+          0.5100017099863201
+        ]
+      },
+      "filename_normalized": {
+        "changed_pixels": 973687,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 42,
+        "mean_channel_difference": [
+          0.5962279839261286,
+          0.5489613970588235,
+          0.5100017099863201
+        ]
+      },
+      "dialog_region": {
+        "box_exclusive": [
+          880,
+          160,
+          1840,
+          1560
+        ],
+        "changed_pixels": 26,
+        "total_pixels": 1344000,
+        "difference_bbox": [
+          0,
+          591,
+          960,
+          1400
+        ],
+        "max_channel_difference": 5,
+        "mean_channel_difference": [
+          4.3898809523809523e-05,
+          4.2410714285714285e-05,
+          4.0178571428571427e-05
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": true
+    },
+    {
+      "case": "settings-toggle-on-keyboard",
+      "captures": {
+        "default": {
+          "path": "v2/default/settings-toggle-on-keyboard.png",
+          "sha256": "f2b568d6e3329c5207797fbbef8687ce489d3c21a80311b81cfe7c211442cd17"
+        },
+        "widgets": {
+          "path": "v4/widgets/settings-toggle-on-keyboard.png",
+          "sha256": "6cec4028659336b54143465064df2ae53daa4361a2a607f581d6918e191ab09b"
+        }
+      },
+      "raw": {
+        "changed_pixels": 973687,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 42,
+        "mean_channel_difference": [
+          0.5962279839261286,
+          0.5489613970588235,
+          0.5100017099863201
+        ]
+      },
+      "filename_normalized": {
+        "changed_pixels": 973687,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 42,
+        "mean_channel_difference": [
+          0.5962279839261286,
+          0.5489613970588235,
+          0.5100017099863201
+        ]
+      },
+      "dialog_region": {
+        "box_exclusive": [
+          880,
+          160,
+          1840,
+          1560
+        ],
+        "changed_pixels": 26,
+        "total_pixels": 1344000,
+        "difference_bbox": [
+          0,
+          591,
+          960,
+          1400
+        ],
+        "max_channel_difference": 5,
+        "mean_channel_difference": [
+          4.3898809523809523e-05,
+          4.2410714285714285e-05,
+          4.0178571428571427e-05
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": true
+    },
+    {
+      "case": "sketch-snap-hit-target",
+      "captures": {
+        "default": {
+          "path": "v2/default/sketch-snap-hit-target.png",
+          "sha256": "f47011db4fc98292a076c4d3be6e395503e311e6ed77187b943aad94f25200e6"
+        },
+        "widgets": {
+          "path": "v4/widgets/sketch-snap-hit-target.png",
+          "sha256": "c761f170446673c74e838c86c232d8d903cdf440be556d525b18219603a054d5"
+        }
+      },
+      "raw": {
+        "changed_pixels": 1118795,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          21,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          1.494128120725034,
+          1.3512630386456908,
+          1.2684513936388508
+        ]
+      },
+      "filename_mask_boxes_inclusive": [
+        [
+          220,
+          16,
+          450,
+          54
+        ],
+        [
+          48,
+          313,
+          300,
+          348
+        ]
+      ],
+      "filename_normalized": {
+        "changed_pixels": 1114871,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          240,
+          2720,
+          1624
+        ],
+        "max_channel_difference": 184,
+        "mean_channel_difference": [
+          1.4182481190150478,
+          1.2761602257181943,
+          1.1944743929548565
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": false
+    },
+    {
+      "case": "undo-extrude",
+      "captures": {
+        "default": {
+          "path": "v2/default/undo-extrude.png",
+          "sha256": "1f7058d777df63059b022fb7090b10867a510fd0b7b2f88e0208c7080d883452"
+        },
+        "widgets": {
+          "path": "v4/widgets/undo-extrude.png",
+          "sha256": "16e07607cacd4667815296c2b70ccad092b13f97786fafb607cbf10f3adb0fea"
+        }
+      },
+      "raw": {
+        "changed_pixels": 4284,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          21,
+          376,
+          343
+        ],
+        "max_channel_difference": 207,
+        "mean_channel_difference": [
+          0.07847276846785226,
+          0.07749679377564979,
+          0.07617732558139535
+        ]
+      },
+      "filename_mask_boxes_inclusive": [
+        [
+          220,
+          16,
+          450,
+          54
+        ],
+        [
+          48,
+          313,
+          300,
+          348
+        ]
+      ],
+      "filename_normalized": {
+        "changed_pixels": 360,
+        "total_pixels": 4678400,
+        "difference_bbox": [
+          17,
+          319,
+          41,
+          343
+        ],
+        "max_channel_difference": 49,
+        "mean_channel_difference": [
+          0.002592766757865937,
+          0.0023939808481532147,
+          0.002200324897400821
+        ]
+      },
+      "ui_controls_equal_except_ids_and_fixture_name": true
+    }
+  ],
+  "saved_model_json_equal": true,
+  "saved_feature_parameters_equal": true,
+  "saved_extrusion": {
+    "feature_id": 2,
+    "name": "Extrude1",
+    "source_face": null,
+    "source_face_key": null,
+    "source_face_signature": null,
+    "source_face_basis": null,
+    "sketch_name": "Sketch1",
+    "profile_indices": [
+      1,
+      0
+    ],
+    "merge_profiles": true,
+    "operation": "new_body",
+    "extent": {
+      "type": "distance",
+      "distance": 12.0
+    },
+    "taper_angle_deg": 0.0,
+    "flip": false,
+    "target_body_ids": [],
+    "to_face_basis": null,
+    "new_body_ids": [
+      1,
+      2
+    ]
+  },
+  "saved_history": {
+    "features": [
+      {
+        "id": 1,
+        "name": "Sketch1",
+        "kind": "sketch",
+        "suppressed": false,
+        "status": {
+          "state": "ok"
+        }
+      },
+      {
+        "id": 2,
+        "name": "Extrude1",
+        "kind": "extrude",
+        "suppressed": false,
+        "status": {
+          "state": "ok"
+        }
+      }
+    ],
+    "rollback_index": 2
+  }
+}
