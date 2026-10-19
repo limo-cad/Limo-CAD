@@ -818,3 +818,78 @@ fn composite_command_retires_owner_only_after_valid_snapshot_load() {
         snapshot.intents()
     );
 }
+
+#[test]
+fn drafting_dispatch_shares_native_history_and_rejects_stale_owners() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let export = || ok(fixture.engine.engine_call("project_export_model", ""));
+    let before = export();
+    let owner = fixture.owner();
+    let command = json!({"type":"create_layer","arguments":{
+        "name":"Geometry","visible":true,"locked":false,"plottable":true,
+        "style":{"line_type":null,"color_rgb":[0,0,0],"width_mm":0.25}
+    }});
+    let created = fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &owner,
+            "drawing_drafting_apply",
+            &command,
+            || Ok(()),
+        )
+        .unwrap();
+    assert_eq!(created.value["drafting"]["layers"][0]["id"], 1);
+    let after = export();
+    assert_ne!(after, before);
+    let receipt = fixture
+        .bridge
+        .native_document_receipt(&fixture.engine, &owner)
+        .unwrap();
+    assert!(fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &owner,
+            "drawing_drafting_apply",
+            &json!({"type":"delete_entity","arguments":{"id":99}}),
+            || Ok(())
+        )
+        .is_err());
+    assert_eq!(export(), after);
+    assert_eq!(
+        fixture
+            .bridge
+            .native_document_receipt(&fixture.engine, &owner)
+            .unwrap()
+            .revision,
+        receipt.revision
+    );
+    fixture
+        .bridge
+        .apply_native_history(&fixture.engine, &owner, false, || Ok(()))
+        .unwrap();
+    assert_eq!(
+        export(),
+        before,
+        "Failed edit must not insert an extra undo entry"
+    );
+    assert_ne!(fixture.owner(), owner);
+    assert!(fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &owner,
+            "drawing_drafting_apply",
+            &command,
+            || Ok(())
+        )
+        .is_err());
+    assert_eq!(export(), before);
+    fixture
+        .bridge
+        .apply_native_history(&fixture.engine, &fixture.owner(), true, || Ok(()))
+        .unwrap();
+    assert_eq!(export(), after);
+}

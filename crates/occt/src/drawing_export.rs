@@ -410,6 +410,7 @@ pub fn export_sheet_with_units(
     mut project: impl FnMut(&DrawingProjectionRequest) -> Result<DrawingProjectionDto, String>,
 ) -> Result<String, String> {
     document.validate()?;
+    document.ensure_projected_sheet_supported(request.sheet_id)?;
     if !scene.errors.is_empty() {
         return Err("Resolve timeline errors before exporting drawings.".into());
     }

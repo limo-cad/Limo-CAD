@@ -1,0 +1,73 @@
+; Authored drafting document v1. Rust: crates/sketch/src/drafting.rs.
+; Project schema 16 embeds this graph in drawings.drafting when present.
+; Dedicated native drafting commands and a bounded CBOR codec remain pending.
+; Native payload representation is CBOR; map keys match the serde field names.
+; Semantic validation also checks IDs, references, DAGs, sheet ownership,
+; finite geometry and admission limits. CDDL alone does not prove validity.
+drafting-document = {
+  version: 1, next_id: id,
+  layers: [* layer], line_types: [* line-type], blocks: [* block],
+  references: [* reference], entities: [* entity], viewports: [* viewport]
+}
+id = 1..18446744073709551615
+number = float
+point = [number, number]
+affine = [number, number, number, number, number, number]
+style = {line_type: id / null, color_rgb: [uint .le 255, uint .le 255, uint .le 255], width_mm: number}
+layer = {id: id, name: tstr, visible: bool, locked: bool, plottable: bool, style: style}
+line-type = {id: id, name: tstr, pattern: [* number], space: "model" / "paper"}
+space = {kind: "model"} / {kind: "paper", id: id} / {kind: "block", id: id}
+block = {id: id, name: tstr, base_point: point, attributes: [* attribute]}
+attribute = {id: id, tag: tstr, default_value: tstr}
+attribute-value = {attribute: id, value: tstr}
+reference = {
+  id: id, locator: tstr, mode: "attach" / "overlay",
+  source_mm_per_unit: number, resolution: resolution
+}
+resolution = {kind: "unresolved", diagnostic: tstr}
+  / {kind: "resolved", block: id, sha256: tstr}
+  / {kind: "stale", block: id, sha256: tstr, diagnostic: tstr}
+entity = {id: id, space: space, layer: id, style: style / null, content: content}
+content = {kind: "curve", curve: curve}
+  / {kind: "text", position: point, height_mm: number, rotation_rad: number, text: tstr}
+  / {kind: "block", block: id, transform: affine, attributes: [* attribute-value]}
+  / {kind: "reference", reference: id, transform: affine}
+curve = {kind: "line", start: point, end: point}
+  / {kind: "arc", center: point, radius: number, start_rad: number, sweep_rad: number}
+  / {kind: "ellipse", center: point, axis_u: point, axis_v: point, start_rad: number, sweep_rad: number}
+  / {kind: "polyline", points: [* point], closed: bool}
+  / {kind: "nurbs", degree: uint .le 4294967295, control_points: [* point], weights: [* number], knots: [* number]}
+viewport = {
+  id: id, sheet_id: id, model_center_mm: point, paper_center_mm: point,
+  rotation_rad: number, paper_mm_per_model_mm: number,
+  clip_mm: [number, number, number, number], hidden_layers: [* id]
+}
+
+; Typed command contract, revision 1. Host registration and bounded CBOR codec
+; are separate integration work. Create operations never accept caller-owned IDs.
+drafting-command =
+    {type: "create_layer", arguments: {name: tstr, visible: bool, locked: bool, plottable: bool, style: style}}
+  / {type: "update_layer", arguments: layer}
+  / {type: "delete_layer", arguments: {id: id}}
+  / {type: "create_line_type", arguments: {name: tstr, pattern: [* number], space: "model" / "paper"}}
+  / {type: "update_line_type", arguments: line-type}
+  / {type: "delete_line_type", arguments: {id: id}}
+  / {type: "create_block", arguments: {name: tstr, base_point: point, attributes: [* new-attribute]}}
+  / {type: "update_block", arguments: {id: id, name: tstr, base_point: point}}
+  / {type: "delete_block", arguments: {id: id}}
+  / {type: "add_attribute", arguments: {block: id, attribute: new-attribute}}
+  / {type: "update_attribute", arguments: {block: id, attribute: attribute}}
+  / {type: "delete_attribute", arguments: {block: id, id: id}}
+  / {type: "create_entity", arguments: {space: space, layer: id, style: style / null, content: content}}
+  / {type: "update_entity", arguments: entity}
+  / {type: "delete_entity", arguments: {id: id}}
+  / {type: "create_viewport", arguments: {
+      sheet_id: id, model_center_mm: point, paper_center_mm: point,
+      rotation_rad: number, paper_mm_per_model_mm: number,
+      clip_mm: [number, number, number, number], hidden_layers: [* id]}}
+  / {type: "update_viewport", arguments: viewport}
+  / {type: "delete_viewport", arguments: {id: id}}
+  / {type: "attach_reference", arguments: {locator: tstr, mode: "attach" / "overlay", source_mm_per_unit: number}}
+  / {type: "set_reference_mode", arguments: {id: id, mode: "attach" / "overlay"}}
+  / {type: "detach_reference", arguments: {id: id}}
+new-attribute = {tag: tstr, default_value: tstr}
