@@ -44,6 +44,8 @@ local files. Repository visibility is a separate maintainer decision.
 - Reuse compatible build lanes. Before cleanup, verify ownership, remote source
   custody, merge settlement and active consumers. Preserve unrelated work, models,
   recovery data and current runtimes; remove only identified disposable output.
+- Before cancelling superseded CI, inspect its jobs. A queued parent run can
+  contain active reusable jobs; preserve running SDK and cache owners.
 
 The [offline workspace check](../../scripts/ci/check-workspace-policy.rs) rejects
 private configuration paths and host context in shared guidance.
