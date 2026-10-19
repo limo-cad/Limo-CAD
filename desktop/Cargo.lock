@@ -1978,6 +1978,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half",
+]
+
+[[package]]
 name = "clap"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3494,6 +3521,7 @@ dependencies = [
  "limo-cad-native-engine",
  "limo-cad-occt",
  "limo-cad-project-file",
+ "limo-cad-session-publication",
  "limo-cad-session-storage",
  "limo-cad-sketch",
  "limo-cad-solid",
@@ -3565,6 +3593,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "limo-cad-fem"
+version = "0.3.0-rc.1"
+dependencies = [
+ "ciborium",
+ "limo-cad-core",
+ "limo-cad-project-file",
+ "serde",
+]
+
+[[package]]
 name = "limo-cad-help"
 version = "0.3.0-rc.1"
 dependencies = [
@@ -3595,8 +3633,10 @@ dependencies = [
  "limo-cad-mcp-mutate",
  "limo-cad-occt",
  "limo-cad-print",
+ "limo-cad-project-file",
  "limo-cad-recipes",
  "limo-cad-script",
+ "limo-cad-session-publication",
  "limo-cad-session-storage",
  "limo-cad-sketch",
  "limo-cad-solid",
@@ -3623,6 +3663,7 @@ dependencies = [
  "limo-cad-core",
  "limo-cad-export",
  "limo-cad-occt",
+ "limo-cad-project-file",
  "limo-cad-sketch",
  "limo-cad-solid",
  "serde",
@@ -3659,6 +3700,8 @@ dependencies = [
 name = "limo-cad-project-file"
 version = "0.3.0-rc.1"
 dependencies = [
+ "base64 0.23.1",
+ "ciborium",
  "serde",
  "serde_json",
  "zip",
@@ -3680,6 +3723,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "limo-cad-session-publication"
+version = "0.3.0-rc.1"
+dependencies = [
+ "ciborium",
+ "limo-cad-project-file",
+ "limo-cad-session-storage",
+ "serde",
+]
+
+[[package]]
 name = "limo-cad-session-storage"
 version = "0.3.0-rc.1"
 dependencies = [
@@ -3693,6 +3746,8 @@ dependencies = [
  "limo-cad-assembly",
  "limo-cad-cam",
  "limo-cad-core",
+ "limo-cad-fem",
+ "limo-cad-project-file",
  "limo-cad-solid",
  "serde",
  "serde_json",

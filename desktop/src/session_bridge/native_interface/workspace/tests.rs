@@ -607,4 +607,5 @@ fn rejected_open_keeps_current_model_path_and_incarnation_then_valid_open_replac
     );
 }
 
+mod composite;
 mod retention;

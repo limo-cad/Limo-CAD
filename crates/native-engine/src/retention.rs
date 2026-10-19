@@ -1,10 +1,11 @@
-//! Cold tabs retain the complete parametric model, never an incomplete kernel.
+//! Cold tabs retain paired model/domain intent, never an incomplete kernel.
 use super::*;
+use limo_cad_project_file::ProjectSnapshot;
 
 pub(super) enum NativeProject {
     Warm(Box<NativeEngine>),
     Cold {
-        model: String,
+        snapshot: ProjectSnapshot,
         geometry_revision: u64,
         viewport_revision: u64,
         body_ids: Vec<limo_cad_core::BodyId>,
@@ -28,7 +29,7 @@ impl NativeProject {
     }
     pub(super) fn thaw(&mut self, session_id: &str) -> Result<(), String> {
         let Self::Cold {
-            model,
+            snapshot,
             geometry_revision,
             viewport_revision,
             body_ids,
@@ -45,7 +46,7 @@ impl NativeProject {
         let mut next = NativeEngine::new()?;
         let plan = next
             .manager
-            .prepare_load_project_ref(model)
+            .prepare_load_project_snapshot(snapshot)
             .map_err(|e| e.to_string())?;
         let transaction_id = plan.transaction_id;
         let queries = next.manager.history_support_queries();
@@ -100,9 +101,9 @@ impl NativeEngineHost {
         if engine.manager.has_active_sketch() {
             return Ok(false);
         }
-        let model = engine
+        let snapshot = engine
             .manager
-            .export_project_model()
+            .export_project_snapshot()
             .map_err(|e| e.to_string())?;
         let active_named_view = engine.manager.named_views().active;
         let geometry_revision = engine.geometry_revision;
@@ -116,7 +117,7 @@ impl NativeEngineHost {
             .take_sketch_session_retention()
             .map_err(|error| error.to_string())?;
         *project = NativeProject::Cold {
-            model,
+            snapshot,
             geometry_revision,
             viewport_revision,
             body_ids,

@@ -1,5 +1,112 @@
 use super::*;
+use limo_cad_project_file::SnapshotIntent;
 use serde_json::json;
+
+#[test]
+fn native_retention_preserves_known_and_unknown_intent_across_repeated_thaws() {
+    let state = NativeEngineHost::new();
+    value(state.bind_project_session("a")).unwrap();
+    let intent = SnapshotIntent {
+        name: "intent/future-study.cbor".into(),
+        payload: vec![0, 1, 255, 42],
+    };
+    let thermal = limo_cad_fem::ThermalStudyDocument {
+        studies: vec![limo_cad_fem::SavedThermalStudy {
+            id: 7,
+            name: "Unmeshed thermal study".into(),
+            input: limo_cad_fem::ThermalStudyInput {
+                mesh: limo_cad_fem::ThermalMesh {
+                    points_m: vec![],
+                    elements: vec![],
+                },
+                materials: vec![],
+                prescribed_k: vec![],
+                nodal_load_w: vec![],
+                surfaces: vec![],
+                options: limo_cad_fem::SolveOptions::default(),
+            },
+        }],
+    };
+    let expected = {
+        let mut workspace = state.inner.lock().unwrap();
+        let manager = &mut workspace.active_mut().manager;
+        manager
+            .replace_project_intents(vec![
+                intent,
+                SnapshotIntent {
+                    name: limo_cad_fem::THERMAL_STUDY_ENTRY.into(),
+                    payload: thermal.encode_cbor().unwrap(),
+                },
+            ])
+            .unwrap();
+        manager.export_project_snapshot().unwrap()
+    };
+    value(state.create_project_session("b")).unwrap();
+    for _ in 0..3 {
+        assert!(state.evict_inactive_project_session("a").unwrap());
+        value(state.activate_project_session("a")).unwrap();
+        assert_eq!(
+            state
+                .inner
+                .lock()
+                .unwrap()
+                .active()
+                .manager
+                .export_project_snapshot()
+                .unwrap(),
+            expected
+        );
+        value(state.activate_project_session("b")).unwrap();
+        assert!(
+            state
+                .inner
+                .lock()
+                .unwrap()
+                .active()
+                .manager
+                .project_intents()
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn native_retention_invalid_known_domain_keeps_cold_snapshot_and_active_tab() {
+    let state = NativeEngineHost::new();
+    value(state.bind_project_session("a")).unwrap();
+    value(state.create_project_session("b")).unwrap();
+    assert!(state.evict_inactive_project_session("a").unwrap());
+    let original = {
+        let mut workspace = state.inner.lock().unwrap();
+        let NativeProject::Cold { snapshot, .. } = workspace.sessions.get_mut("a").unwrap() else {
+            panic!()
+        };
+        let invalid = ProjectSnapshot::new(
+            snapshot.model_json().to_owned(),
+            vec![SnapshotIntent {
+                name: limo_cad_fem::THERMAL_STUDY_ENTRY.into(),
+                payload: vec![0xff],
+            }],
+        )
+        .unwrap();
+        std::mem::replace(snapshot, invalid)
+    };
+    let before = state.document_snapshot();
+    let revision = state.geometry_revision();
+    assert!(value(state.activate_project_session("a")).is_err());
+    assert_eq!(state.active_project_session_id(), "b");
+    assert_eq!(state.document_snapshot(), before);
+    assert_eq!(state.geometry_revision(), revision);
+    {
+        let mut workspace = state.inner.lock().unwrap();
+        let NativeProject::Cold { snapshot, .. } = workspace.sessions.get_mut("a").unwrap() else {
+            panic!()
+        };
+        assert_eq!(snapshot.intents()[0].payload, [0xff]);
+        *snapshot = original;
+    }
+    value(state.activate_project_session("a")).unwrap();
+}
 
 fn value(raw: String) -> Result<serde_json::Value, String> {
     let envelope: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
@@ -166,10 +273,14 @@ fn native_retention_failed_reconstruction_keeps_snapshot_and_active_document() {
     let active_revision = state.geometry_revision();
     let original = {
         let mut workspace = state.inner.lock().unwrap();
-        let NativeProject::Cold { model, .. } = workspace.sessions.get_mut("a").unwrap() else {
+        let NativeProject::Cold { snapshot, .. } = workspace.sessions.get_mut("a").unwrap() else {
             panic!();
         };
-        std::mem::replace(model, "{damaged".into())
+        let mut invalid: serde_json::Value = serde_json::from_str(snapshot.model_json()).unwrap();
+        invalid["schema_version"] = json!(u32::MAX);
+        let invalid =
+            ProjectSnapshot::new(invalid.to_string(), snapshot.intents().to_vec()).unwrap();
+        std::mem::replace(snapshot, invalid)
     };
     assert!(value(state.activate_project_session("a")).is_err());
     assert_eq!(state.active_project_session_id(), "b");
@@ -177,11 +288,11 @@ fn native_retention_failed_reconstruction_keeps_snapshot_and_active_document() {
     assert_eq!(state.geometry_revision(), active_revision);
     {
         let mut workspace = state.inner.lock().unwrap();
-        let NativeProject::Cold { model, .. } = workspace.sessions.get_mut("a").unwrap() else {
+        let NativeProject::Cold { snapshot, .. } = workspace.sessions.get_mut("a").unwrap() else {
             panic!();
         };
-        assert_eq!(model, "{damaged");
-        *model = original;
+        assert!(snapshot.model_json().contains(&u32::MAX.to_string()));
+        *snapshot = original;
     }
     value(state.activate_project_session("a")).unwrap();
     assert_eq!(state.active_project_session_id(), "a");
@@ -222,11 +333,15 @@ fn native_retention_rejects_mismatched_sketch_state_without_consuming_history() 
     assert!(state.evict_inactive_project_session("a").unwrap());
     let original = {
         let mut workspace = state.inner.lock().unwrap();
-        let NativeProject::Cold { model, .. } = workspace.sessions.get_mut("a").unwrap() else {
+        let NativeProject::Cold { snapshot, .. } = workspace.sessions.get_mut("a").unwrap() else {
             panic!("Inactive document was not evicted");
         };
-        let original = model.clone();
-        *model = model.replace("Sketch1", "ChangedSketch");
+        let original = snapshot.clone();
+        *snapshot = ProjectSnapshot::new(
+            snapshot.model_json().replace("Sketch1", "ChangedSketch"),
+            snapshot.intents().to_vec(),
+        )
+        .unwrap();
         original
     };
     let error = value(state.activate_project_session("a")).unwrap_err();
@@ -234,10 +349,10 @@ fn native_retention_rejects_mismatched_sketch_state_without_consuming_history() 
     assert_eq!(state.active_project_session_id(), "b");
     {
         let mut workspace = state.inner.lock().unwrap();
-        let NativeProject::Cold { model, .. } = workspace.sessions.get_mut("a").unwrap() else {
+        let NativeProject::Cold { snapshot, .. } = workspace.sessions.get_mut("a").unwrap() else {
             panic!("Rejected restoration consumed the retained document");
         };
-        *model = original;
+        *snapshot = original;
     }
     value(state.activate_project_session("a")).unwrap();
     assert_eq!(

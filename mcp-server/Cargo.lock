@@ -158,6 +158,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half",
+]
+
+[[package]]
 name = "clap"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -282,6 +309,12 @@ name = "crossbeam-utils"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
+
+[[package]]
+name = "crunchy"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-common"
@@ -613,6 +646,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "half"
+version = "2.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
+dependencies = [
+ "cfg-if",
+ "crunchy",
+ "zerocopy",
+]
+
+[[package]]
 name = "harfrust"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -802,6 +846,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "limo-cad-fem"
+version = "0.3.0-rc.1"
+dependencies = [
+ "ciborium",
+ "limo-cad-core",
+ "limo-cad-project-file",
+ "serde",
+]
+
+[[package]]
 name = "limo-cad-help"
 version = "0.3.0-rc.1"
 dependencies = [
@@ -833,8 +887,10 @@ dependencies = [
  "limo-cad-mcp-mutate",
  "limo-cad-occt",
  "limo-cad-print",
+ "limo-cad-project-file",
  "limo-cad-recipes",
  "limo-cad-script",
+ "limo-cad-session-publication",
  "limo-cad-session-storage",
  "limo-cad-sketch",
  "limo-cad-solid",
@@ -880,6 +936,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "limo-cad-project-file"
+version = "0.3.0-rc.1"
+dependencies = [
+ "base64",
+ "ciborium",
+ "serde",
+ "serde_json",
+ "zip",
+]
+
+[[package]]
 name = "limo-cad-recipes"
 version = "0.3.0-rc.1"
 dependencies = [
@@ -892,6 +959,16 @@ name = "limo-cad-script"
 version = "0.3.0-rc.1"
 dependencies = [
  "serde_json",
+]
+
+[[package]]
+name = "limo-cad-session-publication"
+version = "0.3.0-rc.1"
+dependencies = [
+ "ciborium",
+ "limo-cad-project-file",
+ "limo-cad-session-storage",
+ "serde",
 ]
 
 [[package]]
@@ -908,6 +985,8 @@ dependencies = [
  "limo-cad-assembly",
  "limo-cad-cam",
  "limo-cad-core",
+ "limo-cad-fem",
+ "limo-cad-project-file",
  "limo-cad-solid",
  "serde",
  "serde_json",
