@@ -48,12 +48,7 @@ pub(crate) fn paint(
         ((image_width * scale).round() as u32).max(64),
         ((image_height * scale).round() as u32).max(64),
     ];
-    let mut palette = crate::native_viewport::ui::palette(world);
-    // Quiet only the teaching stage; the document viewport keeps its grid.
-    if demo.is_some() {
-        palette.grid_fine = palette.background;
-        palette.grid_major = palette.background;
-    }
+    let palette = crate::native_viewport::ui::palette(world);
     let preview = &mut world.resource_mut::<Files>().script.preview;
     if preview.palette != palette {
         preview.palette = palette;

@@ -10,6 +10,8 @@ Opening a guide starts automatic playback. Sketch curves draw progressively, ext
 
 The guide uses the existing CAD worker, device and queue, on an isolated render layer. Built-in CBOR geometry is prepared offline; playback performs no CAD operations. Animation reuses meshes and updates curves/transforms/guides; Cut and Fillet switch to exact endpoint geometry once. Main CAD jobs have priority at queue boundaries. Cold synchronous shader compilation cannot be preempted.
 
+Sketch-bearing steps reuse the document viewport's continuous adaptive grid on the authored sketch plane. It remains visible while drawing and dimensioning, with the same depth fading and bounded line count. This adds line drawing during active renders without creating another grid implementation, GPU device or CAD operation.
+
 There is one pending teaching request, one parked deadline scheduler, and at most two imported textures / 2 MiB in the UI cache. Motion is capped at 20 samples per second; static cues render once and hold. The worker color pool remains bounded at five targets, at most 4.89 MiB at the maximum size, excluding depth/MSAA, driver allocations and shared resources. Paused/closed guides schedule no continuing animation work. This is a bounded design, not a constrained-device performance guarantee.
 
 Shader-error recovery rebuilds contaminated renderer caches once on the existing device, restores live state and queued deltas, and disables teaching for that worker. Genuine main/device failures retain their fatal handling.

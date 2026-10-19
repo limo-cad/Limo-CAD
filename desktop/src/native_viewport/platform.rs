@@ -3931,8 +3931,8 @@ fn grid_layout(
     }
 }
 
-fn draw_grid_on_basis(
-    gizmos: &mut Gizmos,
+fn draw_grid_on_basis<Config: GizmoConfigGroup>(
+    gizmos: &mut Gizmos<Config>,
     basis: &PlaneBasis,
     layout: GridLayout,
     camera: ViewportCamera,

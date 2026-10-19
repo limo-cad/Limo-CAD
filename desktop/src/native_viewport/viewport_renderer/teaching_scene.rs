@@ -292,6 +292,17 @@ fn draw(
         }
     }
     if let Some(profile) = &scene.profile {
+        // Keep the same continuous, depth-faded sketch grid as the document
+        // viewport throughout drawing and dimensioning, not just Plane.
+        draw_grid_on_basis(
+            &mut edges,
+            &profile.basis,
+            grid_layout(camera, viewport, &profile.basis),
+            camera,
+            viewport,
+            rgba(palette.grid_fine, 0.28),
+            rgba(palette.grid_major, 0.48),
+        );
         if let Some((low, high)) = scene.plane {
             for (index, (start, end)) in plane_segments(low, high).into_iter().enumerate() {
                 let point = |p| {
