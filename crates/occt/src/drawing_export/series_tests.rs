@@ -47,6 +47,94 @@ fn chain_baseline_and_continued_export_every_exact_span_without_mutating_intent(
 }
 
 #[test]
+fn multiple_series_batches_keep_independent_dimension_blocks_and_scaled_measurements() {
+    use super::straight_tests::dxf_entities;
+    for layout in ["chain", "baseline", "continued"] {
+        for scale in [0.5, 2.] {
+            for (units, unit_mm) in [
+                (UnitSystem::Mm, 1.),
+                (UnitSystem::Cm, 10.),
+                (UnitSystem::In, 25.4),
+            ] {
+                let (mut d, s, p) = fixture::fixture(layout);
+                d.sheets[0].views[0].scale = scale;
+                let mut extra = serde_json::to_value(&d.sheets[0].annotations[0]).unwrap();
+                extra["id"] = json!(3);
+                extra["offset"] = json!(22.);
+                d.sheets[0]
+                    .annotations
+                    .push(serde_json::from_value(extra).unwrap());
+                d.next_annotation_id = 4;
+                let output = export(&d, &s, &p, DrawingExportFormat::Dxf, units).unwrap();
+                let dimensions = dxf_entities(&output, "DIMENSION");
+                let styles = dxf_entities(&output, "DIMSTYLE");
+                assert_eq!(dimensions.len(), 4);
+                let blocks: std::collections::BTreeSet<_> =
+                    dimensions.iter().map(|v| &v["2"]).collect();
+                assert_eq!(blocks.len(), 4);
+                for (i, dim) in dimensions.iter().enumerate() {
+                    let num = |k: &str| dim[k].parse::<f64>().unwrap();
+                    let angle = num("50").to_radians();
+                    let paper = ((num("14") - num("13")) * angle.cos()
+                        + (num("24") - num("23")) * angle.sin())
+                    .abs();
+                    let style = styles
+                        .iter()
+                        .find(|s| s.get("2") == Some(&dim["3"]))
+                        .unwrap();
+                    let expected = if i % 2 == 0 {
+                        40.
+                    } else if layout == "baseline" {
+                        50.
+                    } else {
+                        30.
+                    };
+                    assert!(
+                        (paper * style["144"].parse::<f64>().unwrap() - expected / unit_mm).abs()
+                            < 1e-8
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn series_semantic_metadata_is_charged_to_the_retained_budget() {
+    let (d, _, p) = fixture::fixture("chain");
+    let sheet = &d.sheets[0];
+    let projections = BTreeMap::from([(1, p)]);
+    let mut budget = PaperGraphicsBudget::default();
+    let batch = series::draw(
+        sheet,
+        &projections,
+        &sheet.annotations[0],
+        UnitSystem::Mm,
+        &mut budget,
+    )
+    .unwrap();
+    assert_eq!(batch.dimensions.len(), 2);
+    let metadata = batch
+        .dimensions
+        .iter()
+        .map(|v| v.retained_bytes().unwrap() * 8)
+        .sum::<usize>();
+    let limit = budget.usage().retained_bytes - metadata;
+    let mut bounded = PaperGraphicsBudget::new(graphics::PaperGraphicsLimits {
+        retained_bytes: limit,
+        ..Default::default()
+    });
+    assert!(series::draw(
+        sheet,
+        &projections,
+        &sheet.annotations[0],
+        UnitSystem::Mm,
+        &mut bounded
+    )
+    .is_err());
+}
+
+#[test]
 fn series_uses_existing_units_tolerances_and_atomic_stale_reference_rejection() {
     let (mut d, s, mut p) = fixture::fixture("baseline");
     fixture::full_presentation(&mut d);
@@ -114,6 +202,84 @@ fn ordinate_exports_signed_axes_origin_ring_complete_leader_and_shared_presentat
         assert!(svg.contains("185.00000,85.00000 185.00000,73.00000 185.00000,71.00000"));
         assert_eq!(svg.matches("<polygon data-layer=\"DIMENSION\"").count(), 1);
         assert!(svg.contains("data-layer=\"TEXT_MASK\""));
+        assert_eq!(d, before);
+    }
+}
+
+#[test]
+fn signed_ordinates_follow_datum_crossings_and_current_geometry_without_frozen_overrides() {
+    for axis in ["x", "y", "both"] {
+        for scale in [0.5, 2.] {
+            for units in [UnitSystem::Mm, UnitSystem::Cm, UnitSystem::In] {
+                let (mut d, s, p) = fixture::fixture("chain");
+                d.sheets[0].views[0].scale = scale;
+                let anchors =
+                    serde_json::to_value(&d.sheets[0].annotations[0]).unwrap()["anchors"].clone();
+                let (_, edited_scene, edited_projection) = rectangle::fixture("length", 55.);
+                for reverse in [false, true] {
+                    let (origin, target) = if reverse { (2, 0) } else { (0, 2) };
+                    d.sheets[0].annotations = vec![serde_json::from_value(json!({
+                        "id":1,"kind":"ordinate_dimension","view_id":1,
+                        "origin":anchors[origin],"target":anchors[target],
+                        "axis":axis,"offset":-12.,"precision":2
+                    }))
+                    .unwrap()];
+                    let saved = serde_json::to_value(&d).unwrap();
+                    for (scene, projection, width) in
+                        [(&s, &p, 40.), (&edited_scene, &edited_projection, 55.)]
+                    {
+                        let (divisor, suffix) = match units {
+                            UnitSystem::Mm => (1., "mm"),
+                            UnitSystem::Cm => (10., "cm"),
+                            UnitSystem::In => (25.4, "in"),
+                        };
+                        let sign = if reverse { -1. } else { 1. };
+                        let x = format!("X{:.2} {suffix}", sign * width / divisor);
+                        let y = format!("Y{:.2} {suffix}", sign * 30. / divisor);
+                        let expected = match axis {
+                            "x" => x,
+                            "y" => y,
+                            _ => format!("{x}  {y}"),
+                        };
+                        let svg =
+                            export(&d, scene, projection, DrawingExportFormat::Svg, units).unwrap();
+                        let dxf =
+                            export(&d, scene, projection, DrawingExportFormat::Dxf, units).unwrap();
+                        assert!(svg.contains(&format!(">{expected}</text>")), "{expected}");
+                        assert!(super::straight_tests::dxf_entities(&dxf, "TEXT")
+                            .iter()
+                            .any(|e| e["1"] == dxf_text(&expected)));
+                        // AutoCAD's ordinate type uses absolute distances. A frozen
+                        // sign or number override cannot preserve a crossing edit.
+                        assert!(super::straight_tests::dxf_entities(&dxf, "DIMENSION").is_empty());
+                    }
+                    assert_eq!(saved, serde_json::to_value(&d).unwrap());
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn series_reference_fit_labels_share_the_live_span_formatter() {
+    for layout in ["chain", "baseline", "continued"] {
+        let (mut d, s, p) = fixture::fixture(layout);
+        let mut value = serde_json::to_value(&d.sheets[0].annotations[0]).unwrap();
+        value["presentation"] = json!({"reference":true, "fit_class":" H7 "});
+        d.sheets[0].annotations[0] = serde_json::from_value(value).unwrap();
+        let before = d.clone();
+        let output = export(&d, &s, &p, DrawingExportFormat::Dxf, UnitSystem::Mm).unwrap();
+        let dims = super::straight_tests::dxf_entities(&output, "DIMENSION");
+        let styles = super::straight_tests::dxf_entities(&output, "DIMSTYLE");
+        assert_eq!(dims.len(), 2);
+        for dim in dims {
+            assert_eq!(dim["1"], "<>");
+            let style = styles
+                .iter()
+                .find(|v| v.get("2") == Some(&dim["3"]))
+                .unwrap();
+            assert_eq!(style["3"], "(<> mm H7)");
+        }
         assert_eq!(d, before);
     }
 }
