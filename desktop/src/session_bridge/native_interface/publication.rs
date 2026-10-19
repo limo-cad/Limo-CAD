@@ -203,4 +203,44 @@ mod tests {
         );
         assert!(recovered.receipt().export_sequence > committed.receipt().export_sequence);
     }
+    #[test]
+    fn publication_response_keeps_its_exact_receipt_after_later_exports() {
+        let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+        let fixture = Fixture::new();
+        let owner = fixture.owner();
+        let first = fixture
+            .bridge
+            .publish_native_document(&fixture.engine, &owner, "solid")
+            .unwrap();
+        let first_receipt = first["publication_receipt"].clone();
+        assert_eq!(first["publication_version"], 1);
+        assert_eq!(
+            first_receipt,
+            json!(
+                limo_cad_session_publication::read_committed(&directory(&fixture))
+                    .unwrap()
+                    .receipt()
+            )
+        );
+        let second = fixture
+            .bridge
+            .publish_native_document(&fixture.engine, &owner, "solid")
+            .unwrap();
+        assert_eq!(second["publication_version"], 1);
+        assert_eq!(first["publication_receipt"], first_receipt);
+        assert!(
+            second["publication_receipt"]["export_sequence"]
+                .as_u64()
+                .unwrap()
+                > first_receipt["export_sequence"].as_u64().unwrap()
+        );
+        assert_eq!(
+            second["publication_receipt"],
+            heartbeat(&fixture)["publication_receipt"]
+        );
+        assert_eq!(
+            second["publication_receipt"]["engine_revision"],
+            first_receipt["engine_revision"]
+        );
+    }
 }

@@ -20,6 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::{json, Value};
 mod composite;
 pub use composite::read_composite_publication;
+pub(super) use composite::{read_replay_publication, require_current_replay_publication};
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
