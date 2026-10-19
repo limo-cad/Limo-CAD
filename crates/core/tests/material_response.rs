@@ -50,7 +50,7 @@ fn uniaxial_hydrostatic_and_shear_responses_have_independent_physical_oracles() 
     close(law.youngs_modulus_pa(), 210e9);
     close(law.poisson_ratio(), 0.3);
     close(law.bulk_modulus_pa(), 175e9);
-    close(law.shear_modulus_pa(), 80_769_230_769.23077);
+    close(law.shear_modulus_pa(), 80_769_230_769.230_77);
     // Free lateral contraction under a 0.1% axial extension.
     let stress = law
         .stress_pa([0.001, -0.0003, -0.0003, 0., 0., 0.])
@@ -68,7 +68,7 @@ fn uniaxial_hydrostatic_and_shear_responses_have_independent_physical_oracles() 
         strain[i] = 0.002;
         let s = law.stress_pa(strain).unwrap();
         for (j, v) in s.iter().enumerate() {
-            close(*v, if i == j { 161_538_461.53846154 } else { 0. });
+            close(*v, if i == j { 161_538_461.538_461_54 } else { 0. });
         }
     }
 }
