@@ -696,8 +696,12 @@ fn upsert_opencode_json(
         "environment": Value::Object(launch.env.clone()),
     });
 
-    mcp.remove(server_name);
-    remove_retired_servers(mcp, server_name);
+    remove_opencode_legacy_server(mcp, server_name);
+    if server_name == DEFAULT_SERVER_NAME {
+        for retired in RETIRED_SERVER_NAMES {
+            remove_opencode_legacy_server(mcp, retired);
+        }
+    }
     let servers = mcp
         .entry("servers")
         .or_insert_with(|| json!({}))
@@ -706,6 +710,27 @@ fn upsert_opencode_json(
     remove_retired_servers(servers, server_name);
     servers.insert(server_name.to_string(), entry);
     Ok(serde_json::to_string_pretty(&root)?)
+}
+
+fn remove_opencode_legacy_server(mcp: &mut Map<String, Value>, name: &str) {
+    // These are v2 settings, even when a nested server uses the same name.
+    if matches!(name, "servers" | "timeout") {
+        return;
+    }
+    let legacy_server = mcp
+        .get(name)
+        .and_then(Value::as_object)
+        .is_some_and(|entry| match entry.get("type").and_then(Value::as_str) {
+            Some("local") => entry
+                .get("command")
+                .and_then(Value::as_array)
+                .is_some_and(|command| command.iter().all(Value::is_string)),
+            Some("remote") => entry.get("url").is_some_and(Value::is_string),
+            _ => entry.len() == 1 && entry.get("enabled").is_some_and(Value::is_boolean),
+        });
+    if legacy_server {
+        mcp.remove(name);
+    }
 }
 
 fn remove_retired_servers(servers: &mut Map<String, Value>, server_name: &str) {
@@ -913,7 +938,7 @@ mod tests {
         );
         assert!(document["mcp_servers"].get(DEFAULT_SERVER_NAME).is_some());
 
-        let original = json!({"mcp": {"nobs-cad": {}, "servers": {"noBS-CAD": {}, "other": {"command": ["other-tool"]}}}}).to_string();
+        let original = json!({"mcp": {"nobs-cad": {"type":"local","command":["old-cad"]}, "servers": {"noBS-CAD": {}, "other": {"command": ["other-tool"]}}}}).to_string();
         let next: Value = serde_json::from_str(
             &upsert_opencode_json(&original, DEFAULT_SERVER_NAME, &launch).unwrap(),
         )
@@ -1236,6 +1261,126 @@ mod tests {
             "/repo/mcp-server/target/release/limo-cad-mcp"
         );
         assert!(value["mcp"]["servers"]["nobs-cad"].get("enabled").is_none());
+    }
+
+    #[test]
+    fn upsert_opencode_custom_names_preserve_global_settings() {
+        let original = json!({"mcp": {
+            "timeout":{"startup":1000,"catalog":2000,"execution":3000},
+            "enabled":false,
+            "disabled":true,
+            "protocol":"legacy",
+            "servers":{"keep":{"type":"local","command":["other-tool"]}}
+        }});
+        for name in ["servers", "timeout", "enabled", "disabled", "protocol"] {
+            let next: Value = serde_json::from_str(
+                &upsert_opencode_json(&original.to_string(), name, &launch_fixture()).unwrap(),
+            )
+            .unwrap();
+            for key in ["timeout", "enabled", "disabled", "protocol"] {
+                assert_eq!(next["mcp"][key], original["mcp"][key], "{name}: {key}");
+            }
+            assert_eq!(
+                next["mcp"]["servers"]["keep"],
+                original["mcp"]["servers"]["keep"]
+            );
+            assert_eq!(next["mcp"]["servers"][name]["type"], "local");
+            assert_eq!(
+                next["mcp"]["servers"][name]["command"][0],
+                path_string(&launch_fixture().command)
+            );
+        }
+    }
+
+    #[test]
+    fn upsert_opencode_migrates_only_recognized_flat_server_entries() {
+        for legacy in [
+            json!({"type":"local","command":["old-cad"],"enabled":false}),
+            json!({"type":"remote","url":"https://example.com/mcp"}),
+            json!({"enabled":false}),
+        ] {
+            for name in [DEFAULT_SERVER_NAME, "custom-cad", "enabled"] {
+                let original = json!({"mcp": {
+                    name:legacy,
+                    "servers":{"keep":{"type":"local","command":["other-tool"]}}
+                }});
+                let next: Value = serde_json::from_str(
+                    &upsert_opencode_json(&original.to_string(), name, &launch_fixture()).unwrap(),
+                )
+                .unwrap();
+                assert!(next["mcp"].get(name).is_none(), "{name}: {legacy}");
+                assert_eq!(next["mcp"]["servers"][name]["type"], "local");
+                assert_eq!(
+                    next["mcp"]["servers"]["keep"],
+                    original["mcp"]["servers"]["keep"]
+                );
+            }
+        }
+        for setting in [
+            json!({}),
+            json!({"enabled":false,"other":"setting"}),
+            json!({"type":"local","command":"not-an-argument-array"}),
+            json!({"type":"remote","url":false}),
+        ] {
+            let original = json!({"mcp":{DEFAULT_SERVER_NAME:setting}});
+            let next: Value = serde_json::from_str(
+                &upsert_opencode_json(
+                    &original.to_string(),
+                    DEFAULT_SERVER_NAME,
+                    &launch_fixture(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(next["mcp"][DEFAULT_SERVER_NAME], setting);
+            assert_eq!(next["mcp"]["servers"][DEFAULT_SERVER_NAME]["type"], "local");
+        }
+    }
+
+    #[test]
+    fn upsert_opencode_default_migrates_retired_servers_without_removing_settings() {
+        let original = json!({"mcp": {
+            "nobs-cad":{"type":"local","command":["old-cad"]},
+            "noBS-CAD":{"type":"remote","url":"https://example.com/mcp"},
+            "nbcad":{"enabled":false},
+            "servers":{"nobs-cad":{},"noBS-CAD":{},"nbcad":{},"keep":{}},
+            "timeout":{"execution":3000}
+        }});
+        for name in [DEFAULT_SERVER_NAME, "custom-cad"] {
+            let next: Value = serde_json::from_str(
+                &upsert_opencode_json(&original.to_string(), name, &launch_fixture()).unwrap(),
+            )
+            .unwrap();
+            for retired in RETIRED_SERVER_NAMES {
+                if name == DEFAULT_SERVER_NAME {
+                    assert!(next["mcp"].get(*retired).is_none());
+                    assert!(next["mcp"]["servers"].get(*retired).is_none());
+                } else {
+                    assert_eq!(next["mcp"][*retired], original["mcp"][*retired]);
+                    assert_eq!(
+                        next["mcp"]["servers"][*retired],
+                        original["mcp"]["servers"][*retired]
+                    );
+                }
+            }
+            assert_eq!(next["mcp"]["timeout"], original["mcp"]["timeout"]);
+            assert_eq!(
+                next["mcp"]["servers"]["keep"],
+                original["mcp"]["servers"]["keep"]
+            );
+        }
+
+        let original = json!({"mcp":{"nobs-cad":{"other":"setting"}}});
+        let next: Value = serde_json::from_str(
+            &upsert_opencode_json(
+                &original.to_string(),
+                DEFAULT_SERVER_NAME,
+                &launch_fixture(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(next["mcp"]["nobs-cad"], original["mcp"]["nobs-cad"]);
     }
 
     #[test]

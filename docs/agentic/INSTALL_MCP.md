@@ -16,8 +16,9 @@ Use the canonical installed executable, with its adjacent runtime libraries:
 cargo xtask install-mcp --clients codex,cursor,vscode,claude,opencode --no-build --binary ABSOLUTE_CAD_PATH --in-place --server-arg --headless --desktop ABSOLUTE_CAD_PATH
 ```
 
-Replace `ABSOLUTE_CAD_PATH` with the installed executable on your OS. On this
-Windows machine it is `C:/Users/jeffg/AppData/Local/limo-cad/bevy/Limo-CAD.exe`.
+Replace `ABSOLUTE_CAD_PATH` with the installed executable on your OS. The default
+Windows location is `%LOCALAPPDATA%/limo-cad/bevy/Limo-CAD.exe`; expand that
+environment variable to an absolute path for the command above.
 `--in-place` leaves the executable and runtime libraries together and adds no
 SDK paths. `--server-arg` accepts a literal argument, including `--headless`,
 and can be repeated. `--desktop` sets `LIMO_CAD_DESKTOP_BIN` for an explicit
@@ -106,6 +107,23 @@ isolated artifact selection.
 The default installer removes retired `nobs-cad`, `noBS-CAD` and `nbcad` server entries and writes one `limo-cad` entry. Unrelated servers are preserved. A custom `--server-name` leaves the retired names untouched. It backs up an existing
 file to `*.bak.<pid>`, writes through a temporary file and preserves portable
 permissions. Repeated client names are processed once.
+
+Custom OpenCode server names live under `mcp.servers`; names such as `servers`
+or `timeout` preserve the containing server map and global settings. Only
+recognized legacy server entries are removed during migration.
+
+## Transport and diagnostic limits
+
+Stdio requests are newline-delimited UTF-8 JSON. Each input line, including its
+line ending, is limited to 16 MiB. Oversized lines or invalid UTF-8 end that
+connection with a diagnostic; reconnect after correcting the request. The
+reader queues one request ahead of dispatch and applies pipe backpressure.
+
+Package-check host stdout/stderr copies retain at most 2 MiB per stream,
+including a truncation marker. Collection continues draining stderr after its
+retention cap or a diagnostic write failure so it cannot stall the child.
+These diagnostic caps do not truncate protocol replies. Retained session and
+recovery evidence keeps its existing ownership and release requirements.
 
 Empty files, Codex TOML and plain JSON are accepted. JSONC comments are rejected so a
 pretty-print rewrite cannot silently discard them. If a client uses commented

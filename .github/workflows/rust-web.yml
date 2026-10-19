@@ -50,6 +50,10 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: repository-tools
+      - name: Check MCP transport and process boundaries without the CAD kernel
+        run: |
+          rustc --edition=2021 --test scripts/ci/test-mcp-boundaries.rs -o "$RUNNER_TEMP/mcp-boundaries"
+          "$RUNNER_TEMP/mcp-boundaries"
       - name: Check formatting in every Rust workspace
         run: |
           cargo fmt --all -- --check
