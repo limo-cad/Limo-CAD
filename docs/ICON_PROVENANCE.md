@@ -1,28 +1,25 @@
 # Limo CAD Icon Provenance
 
-Last reviewed: 2026-10-06
+Last reviewed: 2026-10-19
 
-This file records the source and design rationale for the NB product mark and
+This file records the source and design rationale for the Limo product mark and
 the Bevy vectors in `assets/ribbon-icons`. It is an engineering
 provenance record, not a legal opinion.
 
-## NB product mark
+## Limo product mark
 
-`public/app-icon.svg` is the canonical editable source. It was authored directly
-for the 2026-07-26 Limo CAD rename as a geometric N/B monogram on the
-application's dark rounded tile:
+`public/app-icon.svg` is the canonical editable source. The 2026-10-19 design
+replaces the obsolete NB monogram with a geometric **Limo** wordmark:
 
-- N: sketch/entity blue (`#5da9ff`);
-- B: iris/action purple (`#8b7ce8`);
-- tile and border: existing Limo CAD panel/edge colors;
-- construction: SVG paths and rectangles only, with no embedded font, bitmap,
-  external reference, or third-party asset.
+- rounded, open letterforms drawn as paths, a rounded rectangle and a dot;
+- sketch blue (`#5da9ff`) flowing into iris purple (`#a394ff`);
+- the existing dark tile (`#23262b`) and edge (`#4a4f59`);
+- no embedded fonts, bitmaps, external references or third-party artwork.
 
-The compact header renders the letters `NB` with the same blue/iris design
-language. The generated derivatives under `desktop/icons/` are the
-256-pixel PNG used by Linux packaging, the macOS ICNS, and the Windows ICO.
-Unused mobile and Windows Store outputs are removed. Keep those three desktop
-formats in sync with the canonical SVG when changing the product mark.
+The generated derivatives under `desktop/icons/` are the 256-pixel PNG used by
+native windows and Linux packaging, the macOS ICNS and the Windows ICO. Keep
+all three formats synchronized with the SVG. The ICNS includes 16 through
+1024-pixel representations for Finder and Retina Dock rendering.
 
 The browser favicon loads the canonical SVG directly. This provenance record
 documents authorship; it does not make a trademark-availability claim.
