@@ -107,21 +107,17 @@ Rust model + kernel adapters.
 
 ---
 
-## 6. Shared agent / editor guidance files — Policy (open to revisit)
+## 6. Shared contribution policy
 
-**Current project policy:** editor- and agent-specific steering files stay
-**internal**. Root and nested `AGENTS.md`, plus `.cursor/` content, remain
-gitignored. Public documentation of MCP tools and architecture is welcome in
-`docs/` and `mcp-server/README.md`.
+Project and organization agreements belong in
+[CONTRIBUTING.md](../CONTRIBUTING.md) and the shared contribution documents it
+links. They apply to humans and development tools alike. Root AGENTS.md is a
+short entry point to the same policy, including grouped PRs, proportional
+validation, independent review and squash merge.
 
-**Later option:** maintainers may revisit a short shared cross-tool guidance
-file (commonly named `AGENTS.md`) for build/test commands and contribution
-norms. Relevant references if that discussion reopens:
-
-- [AGENTS.md open format](https://github.com/agentsmd/agents.md)
-- [Cursor Docs — Rules / AGENTS.md](https://cursor.com/docs/rules)
-- [GitHub Copilot — repository / agent instructions](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions)
-- [Microsoft ISE — AGENTS.md and skills](https://devblogs.microsoft.com/ise/ai-assisted-development-agents-skills-copilot-cli/)
+Personal editor settings and tool-specific steering files remain local and
+ignored. Public MCP and architecture documentation stays in `docs/` and
+`mcp-server/README.md`.
 
 ---
 

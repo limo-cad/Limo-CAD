@@ -29,7 +29,7 @@ without weakening STEP or inventing cloud lock-in.
 ## Objective 4 — Agent-maintainable subsystem
 
 **KR4.1** Folder indexes + OKR pointers at `docs/`, `docs/manufacturing/`, `crates/`, `crates/export/`, `crates/export/presets/`, `src/`, `src/materials/`.
-**KR4.2** `MAINTENANCE.md` + Cursor rule describe edit order and sync obligations.
+**KR4.2** `MAINTENANCE.md` and the [shared project policy](../contributing/pr-lifecycle.md) describe edit order and sync obligations.
 **KR4.3** MCP exposes `material_catalog` + export tools with `slicer_target`.
 
 ## Out of scope this OKR cycle
