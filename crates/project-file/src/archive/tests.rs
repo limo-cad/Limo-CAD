@@ -482,3 +482,22 @@ fn staged_intents_obey_count_and_expanded_archive_limits() {
     assert!(archive.encode_bounded(MAX_FILE_BYTES, 1000).is_err());
     assert!(archive.encode().is_ok());
 }
+
+#[test]
+fn caller_decode_limits_reject_stored_and_expanded_content() {
+    let archive = ProjectArchive::new(model(14), metadata()).unwrap();
+    let bytes = archive.encode().unwrap();
+    let size = bytes.len() as u64;
+    assert!(
+        ProjectArchive::decode_with_limits(bytes.clone(), size - 1, MAX_EXPANDED_BYTES).is_err()
+    );
+    let error = ProjectArchive::decode_with_limits(bytes.clone(), size, 1)
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("expanded project"), "{error}");
+    let retained =
+        ProjectArchive::decode_with_limits(bytes.clone(), size, MAX_EXPANDED_BYTES).unwrap();
+    assert_eq!(retained.encode().unwrap(), bytes);
+    assert!(ProjectArchive::decode_with_limits(bytes, u64::MAX, u64::MAX).is_ok());
+}
