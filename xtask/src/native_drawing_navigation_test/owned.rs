@@ -22,6 +22,11 @@ pub(super) fn verify_display() -> Result<()> {
     crate::linux_fixture::verify_private_display().map(|_| ())
 }
 impl PrivateEnvironment {
+    fn bind_owned_pid(&mut self, pid: u32) {
+        let key = "LIMO_CAD_NATIVE_OWNED_PID";
+        self.0.push((key, std::env::var_os(key)));
+        std::env::set_var(key, pid.to_string());
+    }
     fn set(root: &Path, fixture: Fixture) -> Self {
         let values = [
             ("LIMO_CAD_SESSION_DIR", root.join("sessions")),
@@ -33,7 +38,8 @@ impl PrivateEnvironment {
             std::env::set_var(key, value);
         }
         let flags: &[&str] = match fixture {
-            Fixture::Drawing | Fixture::DrawingOutput | Fixture::Scripts => &[],
+            Fixture::Drawing | Fixture::DrawingOutput => &[],
+            Fixture::Scripts => &["LIMO_CAD_NATIVE_SCRIPT_INPUT"],
             Fixture::Hole => &["LIMO_CAD_NATIVE_HOLE_INPUT"],
             Fixture::Cam => &[
                 "LIMO_CAD_NATIVE_CAM_ROW_INPUT",
@@ -60,7 +66,7 @@ impl PrivateEnvironment {
 }
 impl Drop for PrivateEnvironment {
     fn drop(&mut self) {
-        for (key, prior) in self.0.drain(..) {
+        for (key, prior) in self.0.drain(..).rev() {
             if let Some(value) = prior {
                 std::env::set_var(key, value)
             } else {
@@ -145,7 +151,7 @@ fn run_fixture(mut args: impl Iterator<Item = String>, fixture: Fixture) -> Resu
     );
     fs::create_dir_all(&out)?;
     let out = out.canonicalize()?;
-    let _environment = PrivateEnvironment::set(&out, fixture);
+    let mut environment = PrivateEnvironment::set(&out, fixture);
     let sessions = out.join("sessions");
     limo_cad_session_storage::create_registry(&sessions)?;
     let result = (|| {
@@ -161,6 +167,9 @@ fn run_fixture(mut args: impl Iterator<Item = String>, fixture: Fixture) -> Resu
             serde_json::to_vec_pretty(&json!({"pid":host.process_id(),"exe":server}))?,
         )?;
         let session = crate::native_platform_test::wait_for_owned_window(&mut host, &sessions)?;
+        if fixture == Fixture::Scripts {
+            environment.bind_owned_pid(host.process_id());
+        }
         host.call("cad_attach", json!({"session_id":session}))?;
         crate::native_platform_test::wait_for_interface(&mut host, &session)?;
         fs::write(out.join("session.txt"), &session)?;
@@ -246,7 +255,9 @@ fn run_fixture(mut args: impl Iterator<Item = String>, fixture: Fixture) -> Resu
             "center_authoring":fixture == Fixture::Centers,"center_os_input":fixture == Fixture::Centers,
             "hole_authoring":fixture == Fixture::Hole,
             "hole_os_input":fixture == Fixture::Hole && std::env::var("LIMO_CAD_NATIVE_HOLE_INPUT").as_deref() == Ok("1"),
-            "scripts_workflow":fixture == Fixture::Scripts,"scripts_os_input":false,
+            "scripts_workflow":fixture == Fixture::Scripts,
+            "scripts_os_input":fixture == Fixture::Scripts,
+            "scripts_os_input_scope":"Only script Open/Save choosers; native controls drive editor actions",
             "mechanism_os_input":fixture == Fixture::Mechanism,
             "drawing_save_dialog_os_input":false,
             "cam_geometry_os_input":fixture == Fixture::CamGeometry,

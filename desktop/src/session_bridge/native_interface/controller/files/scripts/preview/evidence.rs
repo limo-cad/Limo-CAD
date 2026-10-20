@@ -185,7 +185,9 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
                 bytes.len() > 10_000,
                 "Native UI capture must contain actual pixels"
             );
-            if path.file_name().unwrap() != "entry.png" {
+            // Entry and Close show the real source editor without a preview card.
+            if path.file_name().unwrap() != "entry.png" && path.file_name().unwrap() != "closed.png"
+            {
                 let decoded = Image::from_buffer(
                     &bytes,
                     ImageType::Extension("png"),

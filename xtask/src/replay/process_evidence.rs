@@ -9,6 +9,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(any(target_os = "macos", test))]
+mod macos_sample;
+
 pub(super) const DISCONNECTED_EXIT_GRACE: Duration = Duration::from_millis(250);
 const MAX_RECORDS: usize = 16;
 const MAX_RECORD_BYTES: usize = 4096;
@@ -71,7 +74,7 @@ pub(super) fn observe(child: &mut Child, timeout: Duration) -> Observation {
 pub(super) struct Evidence {
     file: File,
     records: usize,
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     directory: std::path::PathBuf,
 }
 impl Evidence {
@@ -82,20 +85,24 @@ impl Evidence {
                 .create_new(true)
                 .open(directory.join("host-process.jsonl"))?,
             records: 0,
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             directory: directory.to_owned(),
         })
     }
 
-    /// Read only this still-owned child's bounded kernel wait-state fields.
-    pub(super) fn capture_threads(&self, pid: u32) -> io::Result<()> {
+    /// Capture bounded thread evidence only for this still-owned fixture child.
+    pub(super) fn capture_threads(&self, child: &mut Child) -> io::Result<()> {
+        #[cfg(target_os = "linux")]
+        let pid = child.id();
         #[cfg(target_os = "linux")]
         fs::write(
             self.directory.join("host-threads-before-cleanup.json"),
             serde_json::to_vec_pretty(&thread_waits(Path::new("/proc"), pid))?,
         )?;
-        #[cfg(not(target_os = "linux"))]
-        let _ = pid;
+        #[cfg(target_os = "macos")]
+        macos_sample::capture(&self.directory, child);
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        let _ = child;
         Ok(())
     }
     pub(super) fn record(
