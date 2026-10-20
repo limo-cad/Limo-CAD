@@ -89,7 +89,13 @@ fn native_font_fallback_shapes_cjk_and_emoji_without_missing_glyphs() {
     let mut app = font_app();
     let assets = app.world().resource::<ViewportUiAssets>().clone();
     let font = ViewportUiTheme::from_palette(&default()).text(&assets, 13., FontWeight::NORMAL);
-    for sample in ["Café", "零件", "Ω", "🦀"] {
+    for sample in [
+        "Café",
+        "零件",
+        "Ω",
+        "🦀",
+        include_str!("../../../../crates/help/src/lessons.json"),
+    ] {
         let glyphs = shape(&mut app, sample, font.clone());
         assert!(!glyphs.is_empty(), "No glyphs were shaped for {sample}");
         assert!(

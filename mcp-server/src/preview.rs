@@ -90,8 +90,8 @@ pub(super) fn validate(script: &Script) -> Result<(), String> {
 }
 
 fn supported(operation: &str) -> bool {
-    // These commands operate on the detached manager/kernel used by the two
-    // existing preview lessons. None can attach a session, route a request,
+    // These commands operate on the detached manager/kernel used by the
+    // current bundled previews. None can attach a session, route a request,
     // start a process or select a file destination.
     matches!(
         operation,
@@ -100,7 +100,12 @@ fn supported(operation: &str) -> bool {
             | "assembly_set_occurrence_grounded"
             | "assembly_solution"
             | "cad_project_model"
+            | "set_body_appearance"
+            | "sketch_add_circle_locked"
             | "sketch_add_constraint"
+            | "sketch_add_constraints"
+            | "sketch_add_dimension"
+            | "sketch_add_line"
             | "sketch_add_rectangle_locked"
             | "sketch_begin"
             | "sketch_edit"
@@ -226,9 +231,9 @@ mod tests {
                 let source = document.to_string();
                 // Catalog membership is checked above. The parser owns session
                 // rejection; preview admission rejects the other external effects.
-                let error = crate::preview_script(&source)
-                    .err()
-                    .expect("Forbidden operation unexpectedly passed preview admission");
+                let Err(error) = crate::preview_script(&source) else {
+                    panic!("Forbidden operation unexpectedly passed preview admission");
+                };
                 assert!(
                     error.contains(operation) && error.contains(rejection),
                     "{operation} must be rejected before preview execution (late={late})"

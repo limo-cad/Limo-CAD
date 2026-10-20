@@ -78,8 +78,11 @@ fn validate_pose(translation: [f64; 3], rotation: [f64; 4]) -> Result<(), String
     Ok(())
 }
 
-pub(super) fn transforms(frame: &Frame, body_id: u64) -> Vec<Transform> {
-    let Some(solution) = &frame.assembly else {
+pub(super) fn transforms(
+    solution: Option<&limo_cad_sketch::AssemblySolutionDto>,
+    body_id: u64,
+) -> Vec<Transform> {
+    let Some(solution) = solution else {
         return vec![Transform::IDENTITY];
     };
     if solution.instance_body_poses.is_empty() {

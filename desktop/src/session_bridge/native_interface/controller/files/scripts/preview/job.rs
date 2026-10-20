@@ -4,6 +4,10 @@ use crate::app_preferences::{locale::translate, Locale};
 
 pub(super) enum Source {
     Example(&'static catalog::Example),
+    Lesson {
+        source: String,
+        lesson: Option<lesson::Id>,
+    },
     Project(Arc<Loaded>),
 }
 impl Source {
@@ -13,11 +17,13 @@ impl Source {
     pub fn prepare(
         self,
         locale: Locale,
+        cache: &Mutex<prepared::Cache>,
         mut check: impl FnMut() -> Result<(), String>,
     ) -> Result<Vec<Frame>, String> {
         check()?;
         let frames = match self {
-            Self::Example(example) => super::prepare(&example.source)?,
+            Self::Example(example) => prepared::prepare(cache, &example.source, None)?,
+            Self::Lesson { source, lesson } => prepared::prepare(cache, &source, lesson)?,
             Self::Project(loaded) => {
                 let Artifact::Project { package, .. } = &loaded.artifact else {
                     return Err("Project preview baseline is unavailable".into());
@@ -47,6 +53,7 @@ impl Source {
                         .to_owned(),
                         scene: frame.scene,
                         assembly: Some(frame.assembly),
+                        ..Default::default()
                     })
                     .collect()
             }

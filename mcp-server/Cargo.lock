@@ -876,6 +876,7 @@ name = "limo-cad-mcp"
 version = "0.3.0-rc.1"
 dependencies = [
  "base64",
+ "ciborium",
  "enigo",
  "jsonschema",
  "libc",
@@ -896,6 +897,7 @@ dependencies = [
  "limo-cad-solid",
  "serde",
  "serde_json",
+ "sha2",
  "windows-capture",
  "windows-sys",
  "zip",

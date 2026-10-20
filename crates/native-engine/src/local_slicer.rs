@@ -39,7 +39,7 @@ impl NativeEngineHost {
             let inner = workspace.active();
             let model = inner
                 .manager
-                .export_project_model()
+                .project_model_projection()
                 .map_err(|e| e.to_string())?;
             // Reject intervening edits between writing the reviewed copy and starting the worker.
             request
@@ -107,7 +107,9 @@ impl NativeEngineHost {
                 .print_intent()
                 .source_document_id
                 .ok_or("Current CAD document has no persistent print identity")?;
-            let model = manager.export_project_model().map_err(|e| e.to_string())?;
+            let model = manager
+                .project_model_projection()
+                .map_err(|e| e.to_string())?;
             let mut report = local_slicer_service().poll_owned(
                 request.job_id,
                 &source,

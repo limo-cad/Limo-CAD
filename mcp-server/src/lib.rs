@@ -63,6 +63,7 @@ use disclosure::{
 };
 
 const LATEST_PROTOCOL: &str = "2025-06-18";
+pub use limo_cad_help::lessons;
 
 /// The same recipe catalog powers native discovery and MCP.
 pub fn script_examples() -> Value {
@@ -348,7 +349,7 @@ impl CadServer {
             let _ = limo_cad_export::slicer_verification::local_slicer_service()
                 .observe_owned_model(&self.verification_owner_id, || {
                     self.manager
-                        .export_project_model()
+                        .project_model_projection()
                         .map_err(|error| error.to_string())
                 });
         }
@@ -598,7 +599,7 @@ impl CadServer {
                         request.expected_model_json.as_deref(),
                         &self
                             .manager
-                            .export_project_model()
+                            .project_model_projection()
                             .map_err(|e| e.to_string())?,
                     )?;
                 }
@@ -1947,7 +1948,7 @@ impl CadServer {
                 .check_model_snapshot(
                     &self
                         .manager
-                        .export_project_model()
+                        .project_model_projection()
                         .map_err(|e| e.to_string())?,
                 )
                 .map_err(|e| e.to_string())?;
@@ -2087,7 +2088,7 @@ impl CadServer {
             .check_model_snapshot(
                 &self
                     .manager
-                    .export_project_model()
+                    .project_model_projection()
                     .map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?;
@@ -5043,6 +5044,11 @@ fn build_tool_specs() -> Vec<ToolSpec> {
                         "type": "integer",
                         "minimum": 0,
                         "description": "topics listing offset"
+                    },
+                    "language": {
+                        "type": "string",
+                        "enum": ["en", "zh-CN", "es", "de"],
+                        "description": "Language for operation instructions with action=get (default en)"
                     }
                 }),
                 &["action"],
@@ -5608,6 +5614,15 @@ fn help_store() -> &'static limo_cad_help::HelpStore {
     STORE.get_or_init(limo_cad_help::HelpStore::bundled)
 }
 
+/// Read the same bundled page used by MCP without attaching to a CAD session.
+pub fn help_page(id: &str) -> Result<Value, String> {
+    cad_help_call(&json!({"action":"get", "id":id}))
+}
+
+pub fn help_page_localized(id: &str, language: &str) -> Result<Value, String> {
+    cad_help_call(&json!({"action":"get", "id":id, "language":language}))
+}
+
 fn cad_help_call(arguments: &Value) -> Result<Value, String> {
     let action = arguments
         .get("action")
@@ -5645,7 +5660,11 @@ fn cad_help_call(arguments: &Value) -> Result<Value, String> {
                 .get("id")
                 .and_then(Value::as_str)
                 .ok_or_else(|| "get requires 'id'".to_string())?;
-            let page = store.get(id)?;
+            let language = arguments
+                .get("language")
+                .and_then(Value::as_str)
+                .unwrap_or("en");
+            let page = store.get_localized(id, language)?;
             Ok(json!({
                 "action": "get",
                 "id": page.id,
@@ -5657,6 +5676,8 @@ fn cad_help_call(arguments: &Value) -> Result<Value, String> {
                 "related_recipes": page.related_recipes,
                 "status": page.status,
                 "truncated": page.truncated,
+                "demonstrations": page.demonstrations,
+                "language": language,
             }))
         }
         "topics" => {

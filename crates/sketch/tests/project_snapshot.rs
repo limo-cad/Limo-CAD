@@ -65,6 +65,7 @@ fn complete_snapshot_keeps_known_and_unknown_intent_and_blocks_lossy_export() {
         .contains("complete project snapshot"));
     let s = m.export_project_snapshot().unwrap();
     assert_eq!(s.intents(), m.project_intents());
+    assert_eq!(m.project_model_projection().unwrap(), s.model_json());
     assert_eq!(
         ProjectSnapshot::decode_cbor(&s.encode_cbor().unwrap()).unwrap(),
         s
@@ -85,6 +86,10 @@ fn staged_load_adopts_model_and_domains_only_at_matching_commit() {
     assert!(plan.jobs.is_empty());
     assert_eq!(target.export_project_snapshot().unwrap(), before);
     assert!(target.replace_project_intents(vec![]).is_err());
+    assert_eq!(
+        target.project_model_projection().unwrap(),
+        before.model_json()
+    );
     assert!(commit(&mut target, plan.transaction_id + 1).is_err());
     assert_eq!(target.export_project_snapshot().unwrap(), before);
     commit(&mut target, plan.transaction_id).unwrap();
@@ -140,6 +145,7 @@ fn active_sketch_rejects_domain_edits_and_explicit_new_clears_old_intent_on_comm
         })
         .unwrap();
     assert!(target.replace_project_intents(vec![]).is_err());
+    assert!(target.project_model_projection().is_err());
     assert_eq!(target.project_intents(), intents);
     target.end_sketch().unwrap();
     let plan = target.prepare_new_project().unwrap();
@@ -155,7 +161,41 @@ fn pending_geometry_recompute_blocks_intent_edits_and_complete_snapshot_capture(
     let before = target.export_project_snapshot().unwrap();
     let plan = target.prepare_recompute().unwrap();
     assert!(target.replace_project_intents(vec![]).is_err());
+    assert!(target.project_model_projection().is_err());
     assert!(target.export_project_snapshot().is_err());
     target.cancel_solid_recompute(plan.transaction_id);
     assert_eq!(target.export_project_snapshot().unwrap(), before);
+}
+
+#[test]
+fn guarded_model_metadata_edits_preserve_domains_and_reject_stale_models() {
+    let mut m = manager("Domain-bearing model");
+    let intents = m.project_intents().to_vec();
+    for method in ["set_named_views", "print_intent_set_document"] {
+        let before = m.export_project_snapshot().unwrap();
+        let arguments = if method == "set_named_views" {
+            serde_json::json!({"views":[],"expected_model_json":before.model_json()})
+        } else {
+            serde_json::json!({"document":m.print_intent(),"expected_model_json":before.model_json()})
+        };
+        let result: serde_json::Value = serde_json::from_str(&limo_cad_sketch::host::handle(
+            &mut m,
+            method,
+            &arguments.to_string(),
+        ))
+        .unwrap();
+        assert_eq!(result["ok"], true, "Guarded metadata edit was rejected");
+        assert_eq!(m.project_intents(), intents);
+        m.set_document_name(format!("After {method}")).unwrap();
+        let changed = m.export_project_snapshot().unwrap();
+        let result: serde_json::Value = serde_json::from_str(&limo_cad_sketch::host::handle(
+            &mut m,
+            method,
+            &arguments.to_string(),
+        ))
+        .unwrap();
+        assert_eq!(result["ok"], false, "Stale model guard was bypassed");
+        assert_eq!(m.export_project_snapshot().unwrap(), changed);
+    }
+    assert!(m.export_project_model().is_err());
 }

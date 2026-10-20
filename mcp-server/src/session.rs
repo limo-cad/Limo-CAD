@@ -789,6 +789,10 @@ fn parse_process_lease(parsed: &Value, accepts_unlisted_windows: bool) -> Option
 }
 
 fn read_process_lease(path: &Path, accepts_unlisted_windows: bool) -> Option<ProcessLease> {
+    // Atomic-write staging files are not committed process publications.
+    if path.extension().is_none_or(|extension| extension != "json") {
+        return None;
+    }
     let body = limo_cad_session_storage::read_to_string(path).ok()?;
     let parsed: Value = serde_json::from_str(&body).ok()?;
     parse_process_lease(&parsed, accepts_unlisted_windows)
@@ -809,6 +813,7 @@ pub(super) fn desktop_default_session(process_id: u32) -> Result<String, String>
         || identity.window_id.as_deref() != Some(window.as_str())
         || identity.document_id.as_deref() != Some(active.active_document_id.as_str())
         || !session_path(&active.active_session_id, "model.json")?.is_file()
+        || read_composite_publication(&active.active_session_id).is_err()
     {
         return Err(desktop_not_ready());
     }
@@ -872,6 +877,9 @@ fn desktop_default_from_registry(
         return Err(desktop_not_ready());
     }
     let (window, active) = lease.windows.iter().next().unwrap();
+    if active.active_document_id == "__bootstrap__" {
+        return Err(desktop_not_ready());
+    }
     Ok((
         lease.process_instance_id.clone(),
         window.clone(),
@@ -2251,6 +2259,9 @@ mod tests {
         assert_eq!(selected.0, "own");
         assert_eq!(selected.2.active_session_id, "session-a");
         assert!(select(&[foreign]).is_err());
+        let mut bootstrap = own.clone();
+        bootstrap["windows"][0]["active_document_id"] = json!("__bootstrap__");
+        assert!(select(&[bootstrap]).is_err());
         assert_eq!(
             select(&[own.clone(), own.clone()]).unwrap(),
             selected,
@@ -2622,6 +2633,57 @@ mod tests {
                 result.unwrap(),
                 json!({"method":method,"content":"finished"})
             );
+        }
+    }
+
+    #[test]
+    fn process_lease_reader_ignores_atomic_staging_until_rename() {
+        let _guard = env_lock();
+        let directory =
+            std::env::temp_dir().join(format!("limo-cad-lease-staging-{}", test_session_uuid()));
+        limo_cad_session_storage::create_registry(&directory).unwrap();
+        let previous = std::env::var_os("LIMO_CAD_SESSION_DIR");
+        std::env::set_var("LIMO_CAD_SESSION_DIR", &directory);
+        let processes = directory.join("_ui/processes");
+        limo_cad_session_storage::create_dir_all(&processes).unwrap();
+        let final_path = processes.join("owner.json");
+        let temporary = processes.join(".owner.json.42-7.tmp");
+        let published = json!({"pid":42,"process_instance_id":"owner","updated_ms":now_ms(),
+            "windows":[{"window_id":"main","active_document_id":"old","active_session_id":"old-session"}]});
+        let mut incoming = published.clone();
+        incoming["updated_ms"] = json!(now_ms() + 1);
+        incoming["windows"][0]["active_document_id"] = json!("new");
+        incoming["windows"][0]["active_session_id"] = json!("new-session");
+        fs::write(&final_path, published.to_string()).unwrap();
+        fs::write(&temporary, incoming.to_string()).unwrap();
+        assert!(read_process_lease(&temporary, false).is_none());
+        assert_eq!(
+            read_process_lease(&final_path, false).unwrap().windows["main"].active_session_id,
+            "old-session"
+        );
+        let registry = process_registry();
+        assert!(registry.present);
+        assert_eq!(
+            registry.leases["owner"].windows["main"].active_session_id,
+            "old-session"
+        );
+        fs::rename(&temporary, &final_path).unwrap();
+        assert_eq!(
+            read_process_lease(&final_path, false).unwrap().windows["main"].active_session_id,
+            "new-session"
+        );
+        assert_eq!(
+            process_registry().leases["owner"].windows["main"].active_session_id,
+            "new-session"
+        );
+        fs::remove_file(final_path).unwrap();
+        fs::remove_dir(processes).unwrap();
+        fs::remove_dir(directory.join("_ui")).unwrap();
+        fs::remove_dir(directory).unwrap();
+        if let Some(previous) = previous {
+            std::env::set_var("LIMO_CAD_SESSION_DIR", previous);
+        } else {
+            std::env::remove_var("LIMO_CAD_SESSION_DIR");
         }
     }
 

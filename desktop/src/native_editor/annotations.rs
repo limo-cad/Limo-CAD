@@ -17,6 +17,7 @@ use crate::session_bridge::native_interface::controller::chrome::{rect, Widgets}
 use limo_cad_sketch::{ConstraintKind, DimensionDto, EntityDto, Vec2 as Point};
 
 mod layout;
+pub(crate) mod teaching;
 
 #[cfg(test)]
 #[path = "annotations/context_tests.rs"]

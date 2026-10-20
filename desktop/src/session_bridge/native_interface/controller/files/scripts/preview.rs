@@ -2,31 +2,61 @@
 //! Neither preparing nor rendering a preview receives the live CAD document.
 use super::*;
 use crate::native_viewport::script_preview::{
-    Frame, PreviewDescriptor, PreviewService, RenderRequest,
+    Frame, PendingRender, PreviewDescriptor, PreviewService, RenderRequest, RenderedTexture,
+    MAX_RENDER_SIZE,
 };
+#[cfg(test)]
 use bevy::{
     asset::RenderAssetUsages,
     image::{CompressedImageFormats, ImageSampler, ImageType},
 };
 use std::time::{Duration, Instant};
 
+mod annotations;
+mod card;
+mod feature;
+mod hover;
+mod images;
 mod input;
 mod job;
+mod lesson;
 mod panel;
+mod prepared;
+mod steps;
+pub(crate) use feature::paint_hint;
 pub(crate) use input::input;
 pub(crate) use panel::paint;
 
-const HOME: (f32, f32) = (std::f32::consts::FRAC_PI_4, std::f32::consts::FRAC_PI_6);
+// Match the README concept: broad upright, with the base toward the lower left.
+const HOME: (f32, f32) = (
+    320. * std::f32::consts::PI / 180.,
+    32. * std::f32::consts::PI / 180.,
+);
 const FRAME_DELAY: Duration = Duration::from_millis(1800);
+const ANIMATION_STEPS: u8 = 20;
+const ANIMATION_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     Open,
+    Extrude,
+    Lesson(limo_cad_mcp::lessons::Id),
+    Scenario(limo_cad_mcp::lessons::CutScenario),
+    Read(limo_cad_mcp::lessons::Id),
+    Index,
+    FullBuild,
+    Help,
+    HelpBody,
+    Demo,
     Close,
     Model,
     Previous,
     Next,
+    Step(usize),
+    Steps,
+    StepsPage(bool),
     Replay,
+    Resume,
     Stop,
     Fit,
     Left,
@@ -65,7 +95,52 @@ impl Drop for Retained {
 struct Rendered {
     view: String,
     revision: u64,
-    png: Vec<u8>,
+    image: images::FrameImage,
+}
+enum InFlight {
+    Gpu {
+        view: String,
+        revision: u64,
+        pending: Mutex<PendingRender>,
+    },
+    #[cfg(test)]
+    Fixture(ResultChannel<Rendered>),
+}
+impl InFlight {
+    fn receive(&self) -> Option<Result<Rendered, String>> {
+        match self {
+            Self::Gpu {
+                view,
+                revision,
+                pending,
+            } => {
+                let result = pending
+                    .lock()
+                    .map_err(|_| "Preview response lock poisoned".to_owned())
+                    .and_then(|pending| pending.try_recv());
+                match result {
+                    Ok(Some(texture)) => Some(Ok(Rendered {
+                        view: view.clone(),
+                        revision: *revision,
+                        image: images::FrameImage::Gpu(texture),
+                    })),
+                    Ok(None) => None,
+                    Err(error) => Some(Err(error)),
+                }
+            }
+            #[cfg(test)]
+            Self::Fixture(channel) => Some(match channel.lock() {
+                Ok(channel) => match channel.try_recv() {
+                    Ok(value) => value,
+                    Err(mpsc::TryRecvError::Empty) => return None,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        Err("Preview fixture disconnected".into())
+                    }
+                },
+                Err(_) => Err("Preview fixture lock poisoned".into()),
+            }),
+        }
+    }
 }
 type ResultChannel<T> = Mutex<mpsc::Receiver<Result<T, String>>>;
 struct Wake {
@@ -84,10 +159,18 @@ pub(crate) struct State {
     build: Option<ResultChannel<Vec<Frame>>>,
     preparation: Option<job::Preparation>,
     project: bool,
-    render: Option<ResultChannel<Rendered>>,
+    render: Option<InFlight>,
+    render_revision: u64,
+    render_started: Option<Instant>,
+    #[cfg(test)]
+    render_jobs: usize,
     service: Arc<PreviewService>,
     retained: Option<Retained>,
+    prepared: Arc<Mutex<prepared::Cache>>,
     index: usize,
+    steps_open: bool,
+    steps_page: Option<usize>,
+    steps_return_focus: bool,
     yaw: f32,
     pitch: f32,
     revision: u64,
@@ -95,11 +178,23 @@ pub(crate) struct State {
     attempted: u64,
     size: [u32; 2],
     image: Option<Handle<Image>>,
+    images: images::Cache,
+    palette: crate::native_viewport::ViewportPalette,
     image_index: Option<usize>,
+    image_frame: Option<usize>,
+    animation_progress: u8,
     error: Option<String>,
     playing: bool,
     wake: Option<Wake>,
     drag: Option<input::Drag>,
+    return_to: Option<(bool, bool, bool, bool)>,
+    help: bool,
+    help_view: feature::HelpView,
+    lesson: Option<lesson::Id>,
+    scenario: lesson::CutScenario,
+    index_open: bool,
+    transition: Option<Retained>,
+    focus_owner: Option<DocumentContext>,
 }
 pub(in super::super) fn cancel_pointer(world: &mut World) {
     if let Some(mut files) = world.get_resource_mut::<Files>() {
@@ -116,9 +211,17 @@ impl Default for State {
             preparation: None,
             project: false,
             render: None,
+            render_revision: 0,
+            render_started: None,
+            #[cfg(test)]
+            render_jobs: 0,
             service: Arc::new(PreviewService::default()),
             retained: None,
+            prepared: Arc::new(Mutex::new(prepared::Cache::default())),
             index: 0,
+            steps_open: false,
+            steps_page: None,
+            steps_return_focus: false,
             yaw: HOME.0,
             pitch: HOME.1,
             revision: 1,
@@ -126,15 +229,70 @@ impl Default for State {
             attempted: 0,
             size: [300, 176],
             image: None,
+            images: images::Cache::default(),
+            palette: crate::native_viewport::ViewportPalette::default(),
             image_index: None,
+            image_frame: None,
+            animation_progress: ANIMATION_STEPS,
             error: None,
             playing: false,
             wake: None,
             drag: None,
+            return_to: None,
+            help: false,
+            help_view: feature::HelpView::default(),
+            lesson: None,
+            scenario: lesson::CutScenario::default(),
+            index_open: false,
+            transition: None,
+            focus_owner: None,
         }
     }
 }
 impl State {
+    fn image_ready(&self) -> bool {
+        self.image.is_some()
+            && self.image_index == Some(self.index)
+            && self.rendered == self.revision
+    }
+    fn display_index(&self) -> usize {
+        self.image_index
+            .filter(|_| self.image.is_some())
+            .unwrap_or(self.index)
+    }
+    fn display_frame_index(&self) -> usize {
+        self.image_frame
+            .filter(|_| self.image.is_some())
+            .unwrap_or_else(|| self.frame_index())
+    }
+    fn animation_complete(&self) -> bool {
+        self.animation_progress == ANIMATION_STEPS
+    }
+    fn begin_animation(&mut self) {
+        use crate::native_viewport::script_preview::PreviewCue;
+        let moving = self
+            .retained
+            .as_ref()
+            .and_then(|r| r.descriptor.cues.get(self.frame_index()))
+            .is_some_and(|cue| {
+                matches!(
+                    cue,
+                    Some(
+                        PreviewCue::Plane
+                            | PreviewCue::Profile
+                            | PreviewCue::Extrude
+                            | PreviewCue::Depth
+                            | PreviewCue::Cut
+                            | PreviewCue::Edges
+                            | PreviewCue::Radius
+                    )
+                )
+            });
+        self.animation_progress = if moving { 0 } else { ANIMATION_STEPS };
+    }
+    pub fn contextual(&self) -> bool {
+        self.return_to.is_some()
+    }
     pub fn building(&self) -> bool {
         self.build.is_some()
     }
@@ -142,21 +300,41 @@ impl State {
         self.retained.as_ref().map_or((0, false), |retained| {
             let counts = &retained.descriptor.assembly_notice_counts;
             (
-                counts.get(self.index).copied().unwrap_or(0),
+                counts.get(self.display_frame_index()).copied().unwrap_or(0),
                 counts.iter().any(|count| *count > 0),
             )
         })
     }
     fn count(&self) -> usize {
+        if self.cut_choices() {
+            return 4;
+        }
         self.retained
             .as_ref()
             .map_or(0, |r| r.descriptor.captions.len())
+    }
+    fn cut_choices(&self) -> bool {
+        self.lesson == Some(lesson::Id::Cut)
+            && self
+                .retained
+                .as_ref()
+                .is_some_and(|r| r.descriptor.captions.len() == 6)
+    }
+    fn frame_index(&self) -> usize {
+        if self.cut_choices() {
+            self.scenario.frame(self.index)
+        } else {
+            self.index
+        }
     }
     fn changed(&mut self) -> Result<(), String> {
         self.revision = self
             .revision
             .checked_add(1)
             .ok_or("Preview view sequence exhausted")?;
+        // Retiring the receipt cancels obsolete work at the worker's next safe
+        // boundary; navigation must not wait for that request's deadline.
+        self.render = None;
         self.error = None;
         self.wake = None;
         Ok(())
@@ -202,10 +380,36 @@ fn eligible(state: &super::State) -> Result<&'static catalog::Example, String> {
     Ok(example)
 }
 
+#[cfg(test)]
 fn prepare(source: &str) -> Result<Vec<Frame>, String> {
+    prepare_lesson(source, None)
+}
+fn prepare_lesson(source: &str, lesson: Option<lesson::Id>) -> Result<Vec<Frame>, String> {
     let mut report = limo_cad_mcp::preview_script(source)?;
-    serde_json::from_value(report["exports"]["preview_frames"].take())
-        .map_err(|error| format!("Preview frames are unavailable: {error}"))
+    let frames = match lesson {
+        Some(lesson) => report["exports"]["lessons"][lesson.key()].take(),
+        None => report["exports"]["preview_frames"].take(),
+    };
+    let mut frames: Vec<Frame> = serde_json::from_value(frames)
+        .map_err(|error| format!("Preview frames are unavailable: {error}"))?;
+    if lesson == Some(lesson::Id::Cut) {
+        let measured: Vec<Frame> =
+            serde_json::from_value(report["exports"]["lessons"]["cut_measured"].take())
+                .map_err(|error| format!("Measured cut frames are unavailable: {error}"))?;
+        if frames.len() != 4 || measured.len() != 4 {
+            return Err("Cut needs two four-frame scenarios".into());
+        }
+        frames.extend(measured.into_iter().skip(2));
+    }
+    for frame in &mut frames {
+        if let Some(profile) = &mut frame.profile {
+            // Face sketches carry passive snapping aids. The isolated viewer
+            // draws authored entities against the owned solid, without snapping.
+            profile.projected_edges.clear();
+            profile.reference_midpoints.clear();
+        }
+    }
+    Ok(frames)
 }
 
 fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String> {
@@ -213,17 +417,99 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
     editor::source_ready(world)?;
     let state = &world.resource::<Files>().script;
     let source = job::source(state)?;
-    let project = source.is_project();
-    let locale = crate::native_viewport::localization::locale(world);
     let generation = state.generation;
-    let revision = state
+    start_job(world, handle, source, generation)
+}
+
+fn open_extrude(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String> {
+    open_lesson(world, handle, Some(lesson::Id::Extrude), false)
+}
+fn open_lesson(
+    world: &mut World,
+    handle: &NativeInterfaceHandle,
+    id: Option<lesson::Id>,
+    help: bool,
+) -> Result<(), String> {
+    available(world)?;
+    editor::retain_source_error(world);
+    if world.resource::<Files>().script.preview.building() {
+        return Err("Wait for the current example to finish preparing".into());
+    }
+    let example = catalog::examples()
+        .iter()
+        .find(|example| example.id == lesson::RECIPE)
+        .ok_or("The Extrude example is unavailable")?;
+    let files = world.resource::<Files>();
+    let previous = files.script.preview.return_to.unwrap_or((
+        files.scripts,
+        files.script.editor_open,
+        files.script.library.open,
+        files.script.chapters.open,
+    ));
+    let generation = files.script.generation;
+    let transition = world.resource_mut::<Files>().script.preview.retained.take();
+    if id.is_none() {
+        close(world);
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.open = true;
+        preview.help = true;
+        preview.generation = generation;
+    } else {
+        start_lesson(world, handle, example.source.clone(), generation, id)?;
+    }
+    let files = &mut world.resource_mut::<Files>();
+    files.script.editor_open = false;
+    files.script.library.open = false;
+    files.script.chapters.open = false;
+    files.script.preview.return_to = Some(previous);
+    files.script.preview.help = help;
+    files.script.preview.playing = id.is_some() && !help;
+    files.script.preview.animation_progress = if help { ANIMATION_STEPS } else { 0 };
+    files.script.preview.steps_open = false;
+    files.script.preview.steps_return_focus = false;
+    files.script.preview.lesson = id;
+    files.script.preview.scenario = lesson::CutScenario::default();
+    files.script.preview.index_open = id.is_none();
+    files.script.preview.transition = if id.is_none() { None } else { transition };
+    files.script.preview.help_view = feature::HelpView::default();
+    files.script.preview.focus_owner = handle.presented_context();
+    Ok(())
+}
+
+fn start_lesson(
+    world: &mut World,
+    handle: &NativeInterfaceHandle,
+    source: String,
+    generation: u64,
+    lesson: Option<lesson::Id>,
+) -> Result<(), String> {
+    start_job(
+        world,
+        handle,
+        job::Source::Lesson { source, lesson },
+        generation,
+    )
+}
+
+fn start_job(
+    world: &mut World,
+    handle: &NativeInterfaceHandle,
+    source: job::Source,
+    generation: u64,
+) -> Result<(), String> {
+    let revision = world
+        .resource::<Files>()
+        .script
         .preview
         .revision
         .checked_add(1)
         .ok_or("Preview view sequence exhausted")?;
+    let project = source.is_project();
+    let locale = crate::native_viewport::localization::locale(world);
     close(world);
     let (send, receive) = mpsc::channel();
     let wake = handle.clone();
+    let prepared = world.resource::<Files>().script.preview.prepared.clone();
     let preparation = job::Preparation::new();
     let cancelled = Arc::clone(&preparation.cancelled);
     let deadline = preparation.deadline;
@@ -231,7 +517,7 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
         .name("cad-preview-prepare".into())
         .spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                source.prepare(locale, || job::check(&cancelled, deadline))
+                source.prepare(locale, &prepared, || job::check(&cancelled, deadline))
             }))
             .unwrap_or_else(|_| Err("Lesson preview preparation stopped unexpectedly".into()));
             let result = result.map_err(|error| artifact::message(locale, &error));
@@ -250,6 +536,7 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
     preview.pitch = HOME.1;
     preview.revision = revision;
     preview.error = None;
+    preview.help = false;
     preview.build = Some(Mutex::new(receive));
     preview.preparation = Some(preparation);
     preview.project = project;
@@ -257,21 +544,33 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
 }
 
 fn close(world: &mut World) {
-    let image = {
+    world.resource_mut::<Files>().script.preview.return_to = None;
+    let images = {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.open = false;
         preview.preparation = None;
+        preview.project = false;
+        preview.render = None;
+        preview.render_started = None;
+        preview.steps_open = false;
+        preview.steps_return_focus = false;
+        preview.help = false;
+        preview.focus_owner = None;
         preview.retained = None;
+        preview.transition = None;
+        preview.lesson = None;
+        preview.index_open = false;
         preview.playing = false;
+        preview.animation_progress = ANIMATION_STEPS;
         preview.wake = None;
         preview.drag = None;
         preview.image_index = None;
-        preview.image.take()
+        preview.image_frame = None;
+        preview.image = None;
+        preview.images.drain()
     };
-    if let Some(image) = image {
-        if let Some(mut images) = world.get_resource_mut::<Assets<Image>>() {
-            images.remove(image.id());
-        }
+    for image in images {
+        crate::native_viewport::script_preview::textures::remove(world, image.id());
     }
 }
 
@@ -281,6 +580,13 @@ pub(crate) fn command(
     mut action: Action,
     input: &ControlInput,
 ) -> Result<Value, String> {
+    if let (Action::HelpBody, ControlInput::Key(key)) = (action, input) {
+        feature::scroll_help_key(world, key)?;
+        handle.request_redraw();
+        return Ok(
+            json!({"help_scroll":world.resource::<Files>().script.preview.help_view.offset}),
+        );
+    }
     if let (Action::Model, ControlInput::Key(key)) = (action, input) {
         if key.alt || key.ctrl || key.meta || key.shift {
             return Err("Use unmodified arrow keys or Home to turn the preview".into());
@@ -296,31 +602,132 @@ pub(crate) fn command(
     } else if !super::super::super::super::is_activation(input) {
         return Err("Preview command requires activation".into());
     }
+    if action != Action::Model && world.resource::<Files>().script.preview.drag.is_some() {
+        crate::native_viewport::winit_host::cancel_native_pointer(world, handle);
+        cancel_pointer(world);
+    }
     if action == Action::Open {
         open(world, handle)?;
+    } else if action == Action::Demo && world.resource::<Files>().script.preview.retained.is_none()
+    {
+        let id = world.resource::<Files>().script.preview.lesson;
+        open_lesson(world, handle, id, false)?;
+    } else if let Action::Lesson(id) | Action::Read(id) = action {
+        open_lesson(world, handle, Some(id), matches!(action, Action::Read(_)))?;
+    } else if action == Action::Index {
+        open_lesson(world, handle, None, true)?;
+    } else if action == Action::FullBuild {
+        let _ = command(world, handle, Action::Close, &ControlInput::Click)?;
+        super::catalog::open_recipe(world, lesson::RECIPE)?;
+    } else if action == Action::Extrude {
+        open_extrude(world, handle)?;
     } else if action == Action::Close {
+        let previous = world.resource::<Files>().script.preview.return_to;
         close(world);
-        world.resource_mut::<Files>().script.editor_open = true;
+        if let Some((scripts, editor, library, chapters)) = previous {
+            let files = &mut world.resource_mut::<Files>();
+            files.scripts = scripts;
+            files.script.editor_open = editor;
+            files.script.library.open = library;
+            files.script.chapters.open = chapters;
+        } else {
+            world.resource_mut::<Files>().script.editor_open = true;
+        }
     } else {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         if !preview.open {
             return Err("Open the lesson preview first".into());
         }
         match action {
+            Action::Help | Action::Demo => {
+                preview.steps_open = false;
+                preview.steps_return_focus = false;
+                preview.help = action == Action::Help && !preview.help;
+                preview.focus_owner = handle.presented_context();
+                preview.playing = false;
+                preview.wake = None;
+                preview.help_view = feature::HelpView::default();
+                preview.help_view.return_focus = !preview.help;
+            }
+            Action::HelpBody => {}
+            Action::Steps => {
+                if preview.lesson.is_none() || preview.count() == 0 {
+                    return Err("Open a prepared lesson before viewing its steps".into());
+                }
+                preview.steps_open = !preview.steps_open;
+                preview.steps_page = None;
+                preview.steps_return_focus = !preview.steps_open;
+                preview.playing = false;
+                preview.wake = None;
+                preview.focus_owner = handle.presented_context();
+            }
+            Action::StepsPage(next) => {
+                if !preview.steps_open {
+                    return Err("Open the step list before changing its page".into());
+                }
+                let page = preview.steps_page.unwrap_or(0);
+                preview.steps_page = Some(if next {
+                    page.saturating_add(1)
+                } else {
+                    page.saturating_sub(1)
+                });
+            }
+            Action::Step(index) => {
+                if index >= preview.count() {
+                    return Err("Choose a step in the current lesson".into());
+                }
+                preview.index = index;
+                preview.steps_open = false;
+                preview.steps_return_focus = false;
+                preview.playing = false;
+                preview.animation_progress = ANIMATION_STEPS;
+                preview.focus_owner = handle.presented_context();
+                preview.changed()?;
+            }
+            Action::Scenario(scenario) => {
+                if !preview.cut_choices() {
+                    return Err("Open the Cut example before choosing its outcome".into());
+                }
+                if preview.scenario != scenario {
+                    preview.steps_open = false;
+                    preview.scenario = scenario;
+                    preview.index = 0;
+                    preview.playing = !preview.help;
+                    preview.begin_animation();
+                    if preview.help {
+                        preview.animation_progress = ANIMATION_STEPS;
+                    }
+                    preview.changed()?;
+                }
+            }
             Action::Model => {}
             Action::Previous | Action::Next => {
+                preview.steps_open = false;
                 preview.playing = false;
                 preview.index = if action == Action::Previous {
                     preview.index.saturating_sub(1)
                 } else {
                     (preview.index + 1).min(preview.count().saturating_sub(1))
                 };
+                preview.animation_progress = ANIMATION_STEPS;
                 preview.changed()?;
             }
             Action::Replay => {
+                preview.steps_open = false;
                 preview.index = 0;
                 preview.playing = preview.count() > 1;
+                preview.help = false;
+                preview.begin_animation();
                 preview.changed()?;
+            }
+            Action::Resume => {
+                if preview.retained.is_none() || preview.count() == 0 {
+                    return Err("Wait for the guide to finish preparing".into());
+                }
+                preview.help = false;
+                preview.steps_open = false;
+                preview.playing = true;
+                preview.wake = None;
             }
             Action::Stop => {
                 preview.playing = false;
@@ -354,110 +761,166 @@ fn publish(world: &mut World, rendered: Rendered) -> Result<(), String> {
     if !world.resource::<Files>().script.preview.accepts(&rendered) {
         return Ok(());
     }
-    let image = Image::from_buffer(
-        &rendered.png,
-        ImageType::Extension("png"),
-        CompressedImageFormats::NONE,
-        true,
-        ImageSampler::Default,
-        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-    )
-    .map_err(|error| format!("Cannot display lesson preview: {error}"))?;
-    let old = world.resource_mut::<Files>().script.preview.image.take();
-    let handle = {
-        let mut images = world.resource_mut::<Assets<Image>>();
-        if let Some(old) = old {
-            images.remove(old.id());
-        }
-        images.add(image)
-    };
-    let preview = &mut world.resource_mut::<Files>().script.preview;
-    preview.image = Some(handle);
-    preview.image_index = Some(preview.index);
-    preview.rendered = rendered.revision;
-    preview.error = None;
-    Ok(())
+    world.resource_scope(|world, mut files: Mut<Files>| {
+        let preview = &mut files.script.preview;
+        let key = images::Key::current(preview);
+        let handle = preview.images.store(world, key, rendered.image)?;
+        preview.image = Some(handle);
+        preview.image_index = Some(preview.index);
+        preview.image_frame = Some(preview.frame_index());
+        preview.rendered = rendered.revision;
+        preview.error = None;
+        Ok(())
+    })
 }
 
-fn render(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String> {
+fn render(world: &mut World, _handle: &NativeInterfaceHandle) -> Result<(), String> {
+    let service = world.resource::<Files>().script.preview.service.clone();
+    // Host supplies its existing device/queue and completion wake callback.
+    // Connecting is cheap and idempotent; no secondary adapter/device is created.
+    // Cached frames and test fixtures need no connection at all.
+    let needs_connection = {
+        let preview = &world.resource::<Files>().script.preview;
+        preview.open
+            && preview.attempted != preview.revision
+            && preview.render.is_none()
+            && preview.retained.is_some()
+            && preview.images.get(images::Key::current(preview)).is_none()
+    };
+    if needs_connection {
+        crate::native_viewport::script_preview::connect(world, &service)?;
+    }
     let preview = &mut world.resource_mut::<Files>().script.preview;
-    if !preview.open || preview.render.is_some() || preview.attempted == preview.revision {
+    if !preview.open || preview.attempted == preview.revision {
+        return Ok(());
+    }
+    if let Some(image) = preview.images.get(images::Key::current(preview)) {
+        preview.render_started = None;
+        preview.image = Some(image);
+        preview.image_index = Some(preview.index);
+        preview.image_frame = Some(preview.frame_index());
+        preview.rendered = preview.revision;
+        preview.attempted = preview.revision;
+        return Ok(());
+    }
+    if preview.render.is_some() {
         return Ok(());
     }
     let Some(retained) = &preview.retained else {
         return Ok(());
     };
     let revision = preview.revision;
-    preview.attempted = revision;
+    preview.render_started = Some(Instant::now());
     let view = retained.view.clone();
     let request = RenderRequest {
+        palette: Some(preview.palette),
         preview_id: retained.descriptor.preview_id.clone(),
         view_id: view.clone(),
         revision,
-        frame_index: preview.index,
+        frame_index: preview.frame_index(),
         width: preview.size[0],
         height: preview.size[1],
         yaw: preview.yaw,
         pitch: preview.pitch,
     };
-    let pending = retained.service.render(request)?;
-    let (send, receive) = mpsc::channel();
-    let wake = handle.clone();
-    std::thread::Builder::new()
-        .name("cad-preview-pixels".into())
-        .spawn(move || {
-            let result = pending.wait().map(|png| Rendered {
-                view,
-                revision,
-                png,
-            });
-            let _ = send.send(result);
-            wake.request_redraw();
-        })
-        .map_err(|error| format!("Cannot wait for preview pixels: {error}"))?;
-    preview.render = Some(Mutex::new(receive));
+    let pending = if preview.animation_complete() {
+        retained.service.render(request)?
+    } else {
+        retained.service.render_animated(
+            request,
+            f32::from(preview.animation_progress) / f32::from(ANIMATION_STEPS),
+        )?
+    };
+    preview.attempted = revision;
+    #[cfg(test)]
+    {
+        preview.render_jobs += 1;
+    }
+    preview.render = Some(InFlight::Gpu {
+        view,
+        revision,
+        pending: Mutex::new(pending),
+    });
+    preview.render_revision = revision;
     Ok(())
 }
 
-fn replay(preview: &mut State, handle: &NativeInterfaceHandle, now: Instant) -> Result<(), String> {
+fn replay(
+    preview: &mut State,
+    _handle: &NativeInterfaceHandle,
+    now: Instant,
+) -> Result<(), String> {
     if !preview.open || !preview.playing || preview.rendered != preview.revision {
         return Ok(());
     }
     if preview.wake.as_ref().is_some_and(|wake| now >= wake.due) {
-        preview.index = (preview.index + 1).min(preview.count().saturating_sub(1));
-        preview.playing = preview.index + 1 < preview.count();
-        preview.changed()?;
-    } else if preview.wake.is_none() {
+        if !preview.animation_complete() {
+            preview.animation_progress += 1;
+            preview.changed()?;
+        } else if preview.index + 1 < preview.count() {
+            preview.index += 1;
+            preview.begin_animation();
+            preview.changed()?;
+        } else {
+            preview.playing = false;
+            preview.wake = None;
+        }
+    } else {
+        arm_replay(preview, now);
+    }
+    Ok(())
+}
+
+// Rendering may synchronously publish a cached sample. This second phase only
+// arms a deadline; it must never advance after the update's render opportunity.
+fn arm_replay(preview: &mut State, now: Instant) {
+    if preview.open
+        && preview.playing
+        && preview.rendered == preview.revision
+        && preview.wake.is_none()
+    {
+        let delay = if preview.animation_complete() {
+            preview
+                .retained
+                .as_ref()
+                .and_then(|r| r.descriptor.durations_ms.get(preview.frame_index()))
+                .copied()
+                .map(Duration::from_millis)
+                .unwrap_or(FRAME_DELAY)
+        } else {
+            preview
+                .render_started
+                .map_or(ANIMATION_INTERVAL, |started| {
+                    (started + ANIMATION_INTERVAL)
+                        .saturating_duration_since(now)
+                        .max(Duration::from_millis(1))
+                })
+        };
         let cancelled = Arc::new(AtomicBool::new(false));
-        let token = cancelled.clone();
-        let handle = handle.clone();
-        std::thread::Builder::new()
-            .name("cad-preview-replay".into())
-            .spawn(move || {
-                std::thread::sleep(FRAME_DELAY);
-                if !token.load(Ordering::Acquire) {
-                    handle.request_redraw();
-                }
-            })
-            .map_err(|error| format!("Cannot schedule preview replay: {error}"))?;
         preview.wake = Some(Wake {
-            due: now + FRAME_DELAY,
+            due: now + delay,
             cancelled,
         });
     }
-    Ok(())
 }
 
 pub(super) fn poll(world: &mut World) {
     let files = world.resource::<Files>();
     let preview = &files.script.preview;
     if preview.open
-        && (!files.scripts
+        && ((!files.scripts && !preview.contextual())
             || files.script.library.open
             || files.script.editor_open
             || files.script.generation != preview.generation)
     {
         close(world);
+    }
+    let preview = &world.resource::<Files>().script.preview;
+    if preview.build.is_none()
+        && preview.render.is_none()
+        && (!preview.open || (!preview.playing && preview.rendered == preview.revision))
+    {
+        return;
     }
     if let Some(result) = receive(&world.resource::<Files>().script.preview.build) {
         let preview = &mut world.resource_mut::<Files>().script.preview;
@@ -465,17 +928,32 @@ pub(super) fn poll(world: &mut World) {
         preview.preparation = None;
         if preview.open {
             match result.and_then(|frames| Retained::new(preview.service.clone(), frames)) {
-                Ok(retained) => preview.retained = Some(retained),
+                Ok(retained) => {
+                    preview.retained = Some(retained);
+                    if preview.playing {
+                        preview.begin_animation();
+                    }
+                }
                 Err(error) => preview.error = Some(error),
             }
+            preview.transition = None;
         }
     }
-    if let Some(result) = receive(&world.resource::<Files>().script.preview.render) {
+    let completed = world
+        .resource::<Files>()
+        .script
+        .preview
+        .render
+        .as_ref()
+        .and_then(InFlight::receive);
+    if let Some(result) = completed {
         world.resource_mut::<Files>().script.preview.render = None;
         if let Err(error) = result.and_then(|result| publish(world, result)) {
             let preview = &mut world.resource_mut::<Files>().script.preview;
-            if preview.open && preview.attempted == preview.revision {
+            if preview.open && preview.render_revision == preview.revision {
                 preview.error = Some(error);
+                preview.playing = false;
+                preview.wake = None;
             }
         }
     }
@@ -487,11 +965,40 @@ pub(super) fn poll(world: &mut World) {
         &handle,
         Instant::now(),
     )
-    .and_then(|_| render(world, &handle));
+    .and_then(|_| render(world, &handle))
+    // Cached pixels arrive synchronously: arm their dwell timer in this update.
+    .map(|_| {
+        arm_replay(
+            &mut world.resource_mut::<Files>().script.preview,
+            Instant::now(),
+        );
+    });
     if let Err(error) = outcome {
-        world.resource_mut::<Files>().script.preview.error = Some(error);
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.error = Some(error);
+        preview.playing = false;
+        preview.wake = None;
+    } else {
+        let next = world
+            .resource::<Files>()
+            .script
+            .preview
+            .wake
+            .as_ref()
+            .map(|wake| (wake.due, wake.cancelled.clone()));
+        if let Some((due, token)) = next {
+            if let Err(error) = hover::arm(world, handle, due, token) {
+                let preview = &mut world.resource_mut::<Files>().script.preview;
+                preview.error = Some(error);
+                preview.playing = false;
+                preview.wake = None;
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod evidence;

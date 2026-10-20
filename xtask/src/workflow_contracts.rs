@@ -1602,6 +1602,29 @@ fn native_font_and_visual_commands_require_nonempty_compiled_inventory() {
         .unwrap();
     upload["with"]["if-no-files-found"] = Value::String("warn".into());
     assert!(check_visual_acceptance(&missing_evidence).is_err());
+    let mut missing_lesson = visual.clone();
+    missing_lesson["jobs"]["native-visual"]["steps"]
+        .as_sequence_mut()
+        .unwrap()
+        .retain(|step| {
+            step["name"].as_str() != Some("Verify the Extrude lesson profile and solid on the GPU")
+        });
+    assert!(check_visual_acceptance(&missing_lesson).is_err());
+    for field in ["if", "continue-on-error"] {
+        let mut bypass = visual.clone();
+        let steps = bypass["jobs"]["native-visual"]["steps"]
+            .as_sequence_mut()
+            .unwrap();
+        let lesson = steps
+            .iter_mut()
+            .find(|step| {
+                step["name"].as_str()
+                    == Some("Verify the Extrude lesson profile and solid on the GPU")
+            })
+            .unwrap();
+        lesson[field] = Value::Bool(field == "continue-on-error");
+        assert!(check_visual_acceptance(&bypass).is_err());
+    }
 }
 
 fn check_visual_acceptance(visual: &Value) -> Result<()> {
@@ -1615,6 +1638,30 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
         "Verify projected boundaries and thin-wall occlusion on the GPU",
     )?;
     requires_command(check, "cargo xtask ci native-ignored-test sketch-visual")?;
+    let (_, lesson) = named_step(
+        job,
+        "Verify the Extrude lesson profile and solid on the GPU",
+    )?;
+    requires_command(lesson, "cargo xtask ci native-ignored-test extrude-preview")?;
+    requires_command(lesson, "cargo xtask ci native-ignored-test show-me-ui")?;
+    requires_command(
+        lesson,
+        "cargo xtask ci native-ignored-test show-me-lifecycle",
+    )?;
+    ensure!(
+        lesson["if"].is_null() && lesson["continue-on-error"].is_null(),
+        "Extrude GPU acceptance must execute and propagate failures"
+    );
+    ensure!(
+        lesson["env"]["LIMO_CAD_PREVIEW_PROOF_DIR"].as_str()
+            == Some("${{ github.workspace }}/docs/qa/native-boundary"),
+        "Extrude GPU captures must be included in the retained visual evidence"
+    );
+    ensure!(
+        lesson["env"]["LIMO_CAD_SHOW_ME_PROOF_DIR"].as_str()
+            == Some("${{ github.workspace }}/docs/qa/native-boundary/show-me"),
+        "Show me UI captures must be included in the retained visual evidence"
+    );
     let (_, evidence) = named_step(job, "Retain native visual evidence")?;
     ensure!(
         evidence["with"]["if-no-files-found"].as_str() == Some("error"),
@@ -1634,9 +1681,23 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
         .context("renderer PR paths")?;
     for path in [
         "desktop/src/native_viewport/**",
+        "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/**",
+        "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs",
+        "desktop/src/session_bridge/native_interface/controller/chrome.rs",
+        "desktop/src/session_bridge/native_interface/controller/files.rs",
+        "desktop/src/session_bridge/native_interface/controller/files/panel.rs",
         "crates/occt/**",
         "crates/sketch/**",
+        "crates/recipes/**",
+        "crates/help/**",
+        "knowledge/concepts/bracket-sketch.md",
+        "knowledge/concepts/bracket-cut.md",
+        "crates/script/**",
+        "mcp-server/src/**",
+        "mcp-server/Cargo.toml",
+        "examples/scripts/extrude-basics.limo.jsonc",
         "xtask/src/repository_ci.rs",
+        "xtask/src/workflow_contracts.rs",
         ".github/workflows/native-visual.yml",
     ] {
         ensure!(
