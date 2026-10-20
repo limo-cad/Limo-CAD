@@ -1,6 +1,6 @@
 //! Native File controls use the existing exchange DTOs, kernel and file writer.
 use super::*;
-use crate::session_bridge::{engine_text, parse_engine_envelope};
+use crate::session_bridge::parse_engine_envelope;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use limo_cad_core::BodyId;
 use limo_cad_export::MeshExportScope;
@@ -657,10 +657,7 @@ pub(super) fn step_write_snapshot(
                 super::bambu::target_layout_has_issues(intent),
                 intent.allow_layout_issues,
             )?;
-            let model = engine_text(
-                parse_engine_envelope(services.engine.engine_call("project_export_model", ""))?,
-                "Project export was not text",
-            )?;
+            let model = services.engine.project_model_projection()?;
             services
                 .engine
                 .prepare_step_export(step_request(&services.engine, intent, model)?)
@@ -702,10 +699,7 @@ pub(super) fn portable_write_snapshot(
             check_revision(receipt, revision)?;
             validate_dispatch()?;
             check_path(path, intent.format)?;
-            let model = engine_text(
-                parse_engine_envelope(services.engine.engine_call("project_export_model", ""))?,
-                "Project export was not text",
-            )?;
+            let model = services.engine.project_model_projection()?;
             let format = match intent.format {
                 Format::Stl => limo_cad_native_engine::PortableMeshFormat::Stl,
                 Format::ThreeMf if !intent.bambu.enabled => {

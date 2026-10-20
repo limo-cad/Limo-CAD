@@ -434,7 +434,7 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         "set_named_views" => with_payload(payload, |request: SetNamedViewsPayload| {
             limo_cad_solid::check_export_model_snapshot(
                 request.expected_model_json.as_deref(),
-                &manager.export_project_model()?,
+                &manager.project_model_projection()?,
             )
             .map_err(|e| crate::SessionError::Solid(e.into()))?;
             manager.set_named_views(request.views)

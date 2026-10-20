@@ -11,14 +11,26 @@ fn validate_domains(snapshot: &ProjectSnapshot) -> Result<(), SessionError> {
     Ok(())
 }
 impl SketchManager {
-    /// Complete authoritative intent, suitable for paired history/publication.
-    /// Kernel geometry and computed analysis results remain derived.
-    pub fn export_project_snapshot(&self) -> Result<ProjectSnapshot, SessionError> {
+    /// Read the model component for transient geometry/metadata inspection and
+    /// model-scoped preconditions, without cloning unrelated domain payloads.
+    /// This is not a persistence, replacement or replay representation: those
+    /// callers must use the complete project snapshot to retain domain intent.
+    /// Active sketch editing and pending geometry transactions remain blocked.
+    pub fn project_model_projection(&self) -> Result<String, SessionError> {
         self.solids
             .ensure_metadata_editable()
             .map_err(|e| SessionError::Solid(e.to_string()))?;
-        ProjectSnapshot::new(self.export_model_content()?, self.project_intents.clone())
-            .map_err(|e| SessionError::Solid(e.to_string()))
+        self.export_model_content()
+    }
+
+    /// Complete authoritative intent, suitable for paired history/publication.
+    /// Kernel geometry and computed analysis results remain derived.
+    pub fn export_project_snapshot(&self) -> Result<ProjectSnapshot, SessionError> {
+        ProjectSnapshot::new(
+            self.project_model_projection()?,
+            self.project_intents.clone(),
+        )
+        .map_err(|e| SessionError::Solid(e.to_string()))
     }
     pub fn project_intents(&self) -> &[SnapshotIntent] {
         &self.project_intents

@@ -9,7 +9,6 @@ use serde_json::{json, Value};
 #[cfg(any(not(windows), feature = "native-control-harness"))]
 use std::io::{Read, Seek, SeekFrom};
 use std::{
-    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -425,32 +424,9 @@ pub(super) fn wait_for_owned_window(client: &mut Client, sessions: &Path) -> Res
             client.is_running()?,
             "Owned native host exited before publishing its window"
         );
-        let mut found = BTreeSet::new();
-        if let Ok(entries) = fs::read_dir(sessions.join("_ui/processes")) {
-            for entry in entries.flatten() {
-                let Ok(body) = fs::read(entry.path()) else {
-                    continue;
-                };
-                let Ok(lease) = serde_json::from_slice::<Value>(&body) else {
-                    continue;
-                };
-                if lease["pid"].as_u64() != Some(u64::from(client.process_id())) {
-                    continue;
-                }
-                for window in lease["windows"].as_array().into_iter().flatten() {
-                    if let Some(session) = window["active_session_id"].as_str() {
-                        found.insert(session.to_owned());
-                    }
-                }
-            }
-        }
-        ensure!(
-            found.len() <= 1,
-            "Owned native host published multiple sessions"
-        );
-        if let Some(session) = found.into_iter().next() {
-            if sessions.join(&session).join("model.json").is_file() {
-                return Ok(session);
+        if let Some(window) = crate::package_mcp::owned_window_at(sessions, client.process_id())? {
+            if crate::package_mcp::owned_window_ready(sessions, &window) {
+                return Ok(window["active_session_id"].as_str().unwrap().to_owned());
             }
         }
         ensure!(
