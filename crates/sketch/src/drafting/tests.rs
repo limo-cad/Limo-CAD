@@ -118,8 +118,10 @@ fn existing_ids_cannot_change_kind_or_attribute_definition_owner() {
 #[test]
 fn rejected_identity_replacement_does_not_change_the_shared_manager() {
     let mut manager = crate::SketchManager::new();
-    let mut drawing = crate::DrawingDocumentDto::default();
-    drawing.drafting = Some(fixture());
+    let mut drawing = crate::DrawingDocumentDto {
+        drafting: Some(fixture()),
+        ..Default::default()
+    };
     manager.set_drawing_document(drawing.clone()).unwrap();
     let before = manager.export_project_model().unwrap();
     drawing.drafting.as_mut().unwrap().next_id = 6;
@@ -141,8 +143,10 @@ fn locked_instance() -> Document {
 #[test]
 fn locked_instance_rejects_definition_edits_atomically_in_shared_manager() {
     let mut manager = crate::SketchManager::new();
-    let mut drawing = crate::DrawingDocumentDto::default();
-    drawing.drafting = Some(locked_instance());
+    let mut drawing = crate::DrawingDocumentDto {
+        drafting: Some(locked_instance()),
+        ..Default::default()
+    };
     manager.set_drawing_document(drawing.clone()).unwrap();
     let before = manager.export_project_model().unwrap();
     let graph = drawing.drafting.as_mut().unwrap();
@@ -294,8 +298,10 @@ fn malformed_nurbs_degree_and_counts_reject_before_knot_arithmetic() {
 
 #[test]
 fn projected_paper_admission_is_scoped_to_authored_sheet_content() {
-    let mut drawing = crate::DrawingDocumentDto::default();
-    drawing.drafting = Some(fixture());
+    let mut drawing = crate::DrawingDocumentDto {
+        drafting: Some(fixture()),
+        ..Default::default()
+    };
     // Uninstanced definitions and model entities have no paper representation.
     drawing.ensure_projected_sheet_supported(10).unwrap();
     let mut paper_entity = drawing.drafting.as_ref().unwrap().entities[1].clone();
