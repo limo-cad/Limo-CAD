@@ -377,16 +377,29 @@ jobs:
               "$RUNNER_TEMP/native-input-linux-ime-$scale"
           done
 
-      - name: Validate native lessons and imported scripts in retained documents
+      - name: Validate native lessons, source editing and portable replay recovery
         if: inputs.desktop-input && matrix.family == 'scripts'
         shell: bash
         run: |
           set -euo pipefail
           for scale in 1 2; do
-            WINIT_X11_SCALE_FACTOR="$scale" xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
-              cargo xtask test-mcp native-scripts-platform --desktop-input \
+            WINIT_X11_SCALE_FACTOR="$scale" XDG_CURRENT_DESKTOP=GNOME \
+              xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
+              dbus-run-session -- cargo xtask test-mcp native-scripts-platform --desktop-input \
               --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
               --out "$RUNNER_TEMP/native-input-linux-scripts-$scale"
+          done
+
+      - name: Retain the actual portable source editor sequence as an operational GIF
+        if: ${{ !cancelled() && inputs.desktop-input && matrix.family == 'scripts' && steps.native-build.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for scale in 1 2; do
+            evidence="$RUNNER_TEMP/native-input-linux-scripts-$scale/evidence/replay-source"
+            if [[ -f "$evidence/frames.json" ]]; then
+              python3 xtask/platform/native-scripts-gif.py "$evidence"
+            fi
           done
 
       - name: Validate native drawing files and File menu captures at 100% and 200%
