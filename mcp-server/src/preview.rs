@@ -132,10 +132,14 @@ mod tests {
     #[test]
     fn package_preview_admission_precedes_archive_decode() {
         let package = ReplayPackage::new("original".into(), vec![255]).unwrap();
-        let error = prepare_project_preview_source(&package, &project_source(Some("cad_attach")))
+        let operation = "solid_export_step";
+        let error = prepare_project_preview_source(&package, &project_source(Some(operation)))
             .err()
             .unwrap();
-        assert!(error.contains("isolated preview"), "{error}");
+        assert!(
+            error.contains(operation) && error.contains("isolated preview"),
+            "{operation} must be rejected before archive decoding"
+        );
         assert!(
             prepare_project_preview_source(&package, &" ".repeat(MAX_SOURCE_BYTES + 1))
                 .err()
@@ -205,6 +209,12 @@ mod tests {
             "solid_export_step",
         ] {
             let group = crate::interface::group_for(operation).unwrap();
+            crate::interface::validate_script_call(group, operation).unwrap();
+            let rejection = if operation == "cad_attach" {
+                "session ownership and transport belong to the host"
+            } else {
+                "isolated preview"
+            };
             for late in [false, true] {
                 let call = json!({"id":"forbidden","call":{"group":group,"operation":operation,"arguments":{}}});
                 let mut document = json!({"version":1,"name":"Isolated preview policy","steps":[{"note":"No commands should execute"}]});
@@ -214,13 +224,14 @@ mod tests {
                     document["steps"].as_array_mut().unwrap().push(call);
                 }
                 let source = document.to_string();
-                // These are actual product catalog operations, not unknown names
-                // accidentally rejected by the ordinary script validator.
-                crate::interface::validate_script(&Script::parse(&source).unwrap()).unwrap();
-                let error = crate::preview_script(&source).unwrap_err();
+                // Catalog membership is checked above. The parser owns session
+                // rejection; preview admission rejects the other external effects.
+                let error = crate::preview_script(&source)
+                    .err()
+                    .expect("Forbidden operation unexpectedly passed preview admission");
                 assert!(
-                    error.contains(operation) && error.contains("isolated preview"),
-                    "{error}"
+                    error.contains(operation) && error.contains(rejection),
+                    "{operation} must be rejected before preview execution (late={late})"
                 );
             }
         }
