@@ -806,6 +806,18 @@ jobs:
       - name: Fetch and verify embedded printer profiles
         run: cargo xtask printer-profiles --fetch --check
 
+      - name: Verify bounded macOS shutdown sampler
+        shell: bash
+        env:
+          LIMO_CAD_MACOS_SAMPLER_PROOF_DIR: ${{ runner.temp }}/limo-cad-macos-sampler
+        run: |
+          set -euo pipefail
+          sampler_test='replay::process_evidence::macos_sample::tests::owned_sampler_adapter_smoke'
+          # Fail if the macOS-only test disappears; zero matching tests is not a pass.
+          cargo test --locked -p xtask "$sampler_test" -- --list |
+            grep -Fx "$sampler_test: test"
+          cargo test --locked -p xtask "$sampler_test" -- --exact --test-threads=1
+
       - name: Build ad-hoc signed DMG
         if: env.MACOS_DISTRIBUTION_BUILD != 'true'
         shell: bash
@@ -941,6 +953,7 @@ jobs:
             ${{ runner.temp }}/limo-cad-mcp-macos.json
             ${{ runner.temp }}/limo-cad-mcp-macos.json.lifecycle
             ${{ runner.temp }}/limo-cad-macos-uri.json
+            ${{ runner.temp }}/limo-cad-macos-sampler
           if-no-files-found: warn
           retention-days: 7
 

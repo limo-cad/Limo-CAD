@@ -319,14 +319,17 @@ impl Client {
             return Ok(());
         }
         let before = process_evidence::observe(&mut self.child, Duration::ZERO);
-        let kill_attempted = !matches!(before, process_evidence::Observation::Exited(_));
         let thread_evidence_error = if matches!(before, process_evidence::Observation::Running) {
             self.process_evidence
                 .as_ref()
-                .and_then(|evidence| evidence.capture_threads(self.process_id()).err())
+                .and_then(|evidence| evidence.capture_threads(&mut self.child).err())
         } else {
             None
         };
+        // Sampling may observe/reap a natural exit. Use the current owned child
+        // status so that exit is not recorded as a forced cleanup.
+        let before = process_evidence::observe(&mut self.child, Duration::ZERO);
+        let kill_attempted = !matches!(before, process_evidence::Observation::Exited(_));
         let kill_error = if kill_attempted {
             self.child.kill().err().map(|error| error.to_string())
         } else {
