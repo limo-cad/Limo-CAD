@@ -100,6 +100,7 @@ fn field_key(kind: K, field: F, label: &str) -> Option<&'static str> {
             }
         }
         F::Taper => "extrude.taper",
+        F::MergeProfiles => "extrude.mergeProfiles",
         F::Flip => match kind {
             K::Hole => "hole.flip",
             K::Rib => "rib.flip",

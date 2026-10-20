@@ -22,6 +22,7 @@ fn v(x: f64, y: f64) -> Vec2 {
 }
 fn extrusion(name: &str, index: u32, target: Option<BodyId>, distance: f64) -> ExtrudeRequest {
     ExtrudeRequest {
+        merge_profiles: false,
         source_face: None,
         sketch_name: name.into(),
         profile_indices: vec![index],
@@ -175,6 +176,7 @@ fn all_face_sketch_consumers_survive_reopen_rollback_and_upstream_edits() {
         let plan = match consumer {
             "revolve" => m
                 .prepare_revolve(RevolveRequest {
+                    merge_profiles: false,
                     sketch_name: "Sketch2".into(),
                     profile_indices: vec![index],
                     axis_origin: Point2Dto::new(x - 10., 0.),

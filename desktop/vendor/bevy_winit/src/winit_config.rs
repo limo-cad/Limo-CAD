@@ -1,6 +1,15 @@
 use bevy_ecs::resource::Resource;
 use core::time::Duration;
 
+/// Opt in to processing primary mouse-button transitions between movement batches.
+///
+/// This keeps Bevy picking's frame-wide hover target at the button's position.
+/// Pending input is processed before each transition, then the transition is
+/// processed before later motion. No updates are added while idle.
+/// This local extension is documented in `LIMO-PATCH.md`.
+#[derive(Debug, Clone, Copy, Resource)]
+pub struct WinitPointerButtonUpdates;
+
 /// Settings for the [`WinitPlugin`](super::WinitPlugin).
 #[derive(Debug, Resource, Clone)]
 pub struct WinitSettings {

@@ -1,5 +1,6 @@
 use super::*;
 use limo_cad_core::{Document, EdgeId, FaceId, Feature, UnitSystem};
+use limo_cad_solid::Point2Dto;
 
 #[test]
 fn chamfer_forms_default_to_45_validate_exclusive_bounds_and_restore_saved_angles() {
@@ -720,4 +721,124 @@ fn editing_preserves_the_existing_feature_id_and_explicit_operation() {
         request.extrude.extent,
         ExtrudeExtent::Distance { distance: 12. }
     );
+}
+
+#[test]
+fn extrude_and_revolve_offer_a_persisted_merge_option_for_inner_regions() {
+    for kind in [SolidFormKind::Extrude, SolidFormKind::Revolve] {
+        let mut fixture = Fixture::new();
+        fixture.profiles[0].profiles[1].points = vec![
+            limo_cad_solid::Point2Dto::new(2., 2.),
+            limo_cad_solid::Point2Dto::new(4., 2.),
+            limo_cad_solid::Point2Dto::new(4., 4.),
+            limo_cad_solid::Point2Dto::new(2., 4.),
+        ];
+        fixture.profiles[0].profiles[1].area = 4.;
+        let model = fixture.model();
+        let mut form = SolidForm::new_kind(kind, &model);
+        form.set_source(
+            ProfileSource::Profiles {
+                sketch_name: "Sketch1".into(),
+                indices: vec![1],
+            },
+            &model,
+        )
+        .unwrap();
+        if kind == SolidFormKind::Revolve {
+            form.set_value(SolidField::Axis, "y", &model).unwrap();
+        }
+        assert!(
+            form.can_apply(&model),
+            "the inner region is a valid source for {kind:?}"
+        );
+        form.set_source(
+            ProfileSource::Profiles {
+                sketch_name: "Sketch1".into(),
+                indices: vec![0, 1],
+            },
+            &model,
+        )
+        .unwrap();
+        form.set_value(SolidField::MergeProfiles, "true", &model)
+            .unwrap();
+        let row = form
+            .fields(&model)
+            .into_iter()
+            .find(|r| r.field == SolidField::MergeProfiles)
+            .unwrap();
+        assert!(row.visible && row.enabled);
+        assert!(matches!(row.value, Field::Toggle(true)));
+        form.set_value(SolidField::Operation, "cut", &model)
+            .unwrap();
+        form.set_targets(vec![BodyId(1)], &model).unwrap();
+        assert!(
+            !form
+                .fields(&model)
+                .iter()
+                .find(|r| r.field == SolidField::MergeProfiles)
+                .unwrap()
+                .visible
+        );
+        assert_eq!(form.payload(&model).unwrap().1["merge_profiles"], false);
+        form.set_value(SolidField::Operation, "new_body", &model)
+            .unwrap();
+        let ticket = form.prepare_apply(&model).unwrap();
+        assert_eq!(ticket.arguments()["merge_profiles"], true);
+        assert_eq!(ticket.arguments()["profile_indices"], json!([0, 1]));
+        assert_eq!(ticket.arguments()["operation"], "new_body");
+    }
+}
+
+#[test]
+fn editing_legacy_targetless_join_keeps_its_operation_and_merge_intent() {
+    for kind in [SolidFormKind::Extrude, SolidFormKind::Revolve] {
+        let mut fixture = Fixture::new();
+        fixture.document.features.push(Feature::new(
+            FeatureId(9),
+            "Legacy Join",
+            if kind == SolidFormKind::Extrude {
+                FeatureKind::Extrude
+            } else {
+                FeatureKind::Revolve
+            },
+        ));
+        let second = &mut fixture.profiles[0].profiles[1];
+        second.points = vec![
+            Point2Dto::new(20., 0.),
+            Point2Dto::new(30., 0.),
+            Point2Dto::new(30., 10.),
+            Point2Dto::new(20., 10.),
+        ];
+        second.area = 100.;
+        second.nesting_depth = 0;
+        second.parent_index = None;
+        let model = fixture.model();
+        // Omitted merge_profiles is how the old project schema serialized it.
+        let definition = json!({
+            "feature_id":9,"name":"Legacy Join","sketch_name":"Sketch1",
+            "profile_indices":[0,1],"operation":"join","target_body_ids":[],
+            "new_body_ids":[1,2],"source_face":null,
+            "extent":{"type":"distance","distance":10.},
+            "taper_angle_deg":0.,"flip":false,
+            "axis_origin":{"x":0.,"y":0.},
+            "axis_direction":{"x":0.,"y":1.},"angle_deg":360.
+        });
+        let mut form = if kind == SolidFormKind::Extrude {
+            SolidForm::edit(&serde_json::from_value(definition).unwrap(), &model).unwrap()
+        } else {
+            SolidForm::edit_revolve(&serde_json::from_value(definition).unwrap(), &model).unwrap()
+        };
+        let ticket = form.prepare_apply(&model).unwrap();
+        let key = if kind == SolidFormKind::Extrude {
+            "extrude"
+        } else {
+            "revolve"
+        };
+        assert_eq!(ticket.arguments()["feature_id"], 9);
+        let request = &ticket.arguments()[key];
+        assert_eq!(request["operation"], "join", "{kind:?}");
+        assert_eq!(request["merge_profiles"], false, "{kind:?}");
+        assert_eq!(request["profile_indices"], json!([0, 1]));
+        assert_eq!(request["target_body_ids"], json!([]));
+    }
 }

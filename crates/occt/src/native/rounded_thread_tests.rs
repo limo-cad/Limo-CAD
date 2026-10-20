@@ -29,6 +29,7 @@ fn rounded_spec() -> HoleThreadDto {
 
 fn cylinder(feature: u64, body: u64, radius: f64) -> KernelJobDto {
     KernelJobDto::Extrude(KernelExtrudeJobDto {
+        require_single_solid: false,
         feature_id: FeatureId(feature),
         operation: ExtrudeOperation::NewBody,
         source_face: None,
@@ -110,6 +111,7 @@ fn rounded_partial_long_shaft_and_flat_export_closed_meshes() {
     for flattened in [false, true] {
         if flattened {
             plan.jobs.push(KernelJobDto::Extrude(KernelExtrudeJobDto {
+                require_single_solid: false,
                 feature_id: FeatureId(3),
                 operation: ExtrudeOperation::Cut,
                 source_face: None,

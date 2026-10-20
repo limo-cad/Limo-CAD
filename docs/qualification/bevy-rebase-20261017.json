@@ -1,0 +1,48 @@
+{
+  "recorded_utc": "2026-10-17T16:11:02.963311+00:00",
+  "scope": "Rebase PR420 onto latest main; no new runtime or GUI qualification in this checkpoint.",
+  "previous_publication": "3f04effee3ea88c97d75e66d3dbb0878e2e129dd",
+  "backup_ref": "codex/pr420-before-main-rebase-20261017",
+  "base": "5303f9a12b2bd6b4f01945223faf2b9aafe9e359",
+  "rebased_code_revision": "72db91669dc984dfe2564e5b8165f6ef94281fc9",
+  "merged_dependencies": {
+    "433": "fc273f41994985f8668827c0a17bb657d4eb9599",
+    "434": "4bedcd23579b8e04577e96a163ce57e18c980140"
+  },
+  "resolution": "Kept current main Cargo.lock and the already-reviewed PR420 ADRs when replaying its original pre-main-integration commit. The final PR patch was then verified byte-identical.",
+  "checks": {
+    "pr_patch_byte_identical": true,
+    "pr_patch_sha256": "f16ba6ca88cb0b29c2db9496bffd3607f42527e65be536e49fc76f6342dae7fa",
+    "following_14_commits_range_diff": "all unchanged",
+    "widget_and_dialog_implementation_identical_to_v8": true,
+    "cargo_metadata_locked_offline": "passed",
+    "cargo_fmt_all": "passed",
+    "git_diff_check": "passed",
+    "main_is_ancestor": true
+  },
+  "previous_gui_build": "3a6889632775c58c5010bd95c8a8b7919918a86d",
+  "upstream_changes_since_gui_build": [
+    "Legacy targetless Join preserves its original operation and merge intent.",
+    "Explicit Merge profiles requires a single solid in the native kernel job.",
+    "Sketch-history geometry retains its upstream stage while visibility and assembly placement follow live choices."
+  ],
+  "live_ui": {
+    "status": "not_rerun_on_rebased_build",
+    "retained_evidence": "bevy-dialogs-20261017.json",
+    "needs_recheck": [
+      {
+        "case": "extrude_apply_undo_save",
+        "reason": "The merged native profile job now enforces explicit single-solid merge intent; prior V8 Apply evidence is historical."
+      }
+    ],
+    "additional_targeted_followup": [
+      "Legacy targetless Join edit/apply for Extrude and Revolve",
+      "Visibility and assembly placement during sketch-history editing"
+    ],
+    "unchanged_cases": "Retain earlier component/Settings interaction and layout passes; no blanket reset. Large automated Settings drag remains unresolved, with minimum-height and host-window-resize cases still unrun."
+  },
+  "mcp": "No new MCP qualification or mutations.",
+  "ci": "The updated PR will run its existing CI; local runtime tests were not repeated for the unchanged PR patch.",
+  "broad_qualification": "paused; broad ledger unchanged",
+  "pr_state": "draft; opt-in widget feature unchanged"
+}

@@ -151,6 +151,7 @@ pub(crate) struct FormModel<'a> {
 pub(crate) enum SolidField {
     Source,
     Operation,
+    MergeProfiles,
     Extent,
     Distance,
     SecondDistance,
@@ -330,6 +331,7 @@ pub(crate) struct SolidForm {
     source: ProfileSource,
     operation: ExtrudeOperation,
     operation_manual: bool,
+    merge_profiles: bool,
     extent: ExtrudeExtent,
     distance: MeasurementInput,
     second_distance: MeasurementInput,
@@ -367,6 +369,7 @@ impl SolidForm {
             source: ProfileSource::None,
             operation: ExtrudeOperation::NewBody,
             operation_manual: false,
+            merge_profiles: false,
             extent: ExtrudeExtent::default(),
             distance: MeasurementInput::new(DimensionKind::Length, 10., units),
             second_distance: MeasurementInput::new(DimensionKind::Length, 10., units),
@@ -480,6 +483,7 @@ impl SolidForm {
                 indices: definition.profile_indices.clone(),
             });
         form.operation = definition.operation;
+        form.merge_profiles = definition.merge_profiles;
         form.operation_manual = true;
         form.extent = definition.extent;
         form.flip = definition.flip;
@@ -706,6 +710,11 @@ impl SolidForm {
                 )
                 .map_err(|error| error.to_string())?;
             }
+            SolidField::MergeProfiles => {
+                self.merge_profiles = value
+                    .parse()
+                    .map_err(|_| "Merge profiles expects true or false")?;
+            }
             SolidField::Flip => {
                 self.flip = match value {
                     "true" => true,
@@ -894,6 +903,7 @@ impl SolidForm {
             source_face,
             sketch_name,
             profile_indices,
+            merge_profiles: self.operation == ExtrudeOperation::NewBody && self.merge_profiles,
             operation: self.operation,
             extent,
             taper_angle_deg: taper.unwrap(),
@@ -1077,6 +1087,13 @@ impl SolidForm {
                     ],
                 ),
                 true,
+            ),
+            (
+                F::MergeProfiles,
+                "Merge profiles".into(),
+                Field::Toggle(self.merge_profiles),
+                self.operation == ExtrudeOperation::NewBody
+                    && !matches!(self.source, ProfileSource::Face(_)),
             ),
             (
                 F::Extent,
@@ -1328,11 +1345,12 @@ fn validate_source(source: &ProfileSource, model: &FormModel<'_>) -> Result<(), 
                 if indices[..position].contains(index) {
                     return Err("A profile was selected more than once".into());
                 }
-                if !catalog
-                    .profiles
-                    .iter()
-                    .any(|profile| profile.index == *index && profile.nesting_depth % 2 == 0)
-                {
+                if !catalog.profiles.iter().any(|profile| {
+                    profile.index == *index
+                        && profile.points.len() >= 3
+                        && profile.area.is_finite()
+                        && profile.area.abs() > 1e-9
+                }) {
                     return Err(format!(
                         "Profile {index} is not an available material region"
                     ));

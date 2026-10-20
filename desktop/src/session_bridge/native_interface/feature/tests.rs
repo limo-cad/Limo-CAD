@@ -56,6 +56,50 @@ fn exported(fixture: &Fixture) -> Value {
     serde_json::from_str(exported.as_str().unwrap()).unwrap()
 }
 
+fn assert_historical_profile_edit(world: &World, fixture: &Fixture) {
+    let editor = world.resource::<NativeFeature>().editor.as_ref().unwrap();
+    assert!(
+        editor.stage.is_some(),
+        "Profile edits must use their creation-time inputs"
+    );
+    assert!(editor.snapshot.viewport.document.scene.bodies.is_empty());
+    assert!(
+        native_viewport::interface_geometry(world)
+            .scene
+            .bodies
+            .is_empty(),
+        "The renderer and picker must receive the historical scene"
+    );
+    assert_eq!(
+        editor.pick_target,
+        Some(if editor.form.kind() == SolidFormKind::Rib {
+            SolidField::Path
+        } else {
+            SolidField::Source
+        })
+    );
+    assert_eq!(
+        editor.snapshot.document.rollback_index + 1,
+        fixture.engine.document_snapshot().rollback_index
+    );
+    assert_eq!(
+        editor
+            .original_view
+            .as_ref()
+            .unwrap()
+            .document
+            .scene
+            .bodies
+            .len(),
+        1
+    );
+    assert_eq!(
+        fixture.engine.viewport_snapshot().2.bodies.len(),
+        1,
+        "Opening an edit must preserve the complete live model"
+    );
+}
+
 fn open(
     fixture: &Fixture,
     world: &mut World,
@@ -470,6 +514,7 @@ fn rib_native_form_applies_edits_and_cancels_with_real_geometry() {
     let original = defs();
     let feature = original[0]["feature_id"].as_u64().unwrap();
     let id = open_rib(app.world_mut(), Some(feature));
+    assert_historical_profile_edit(app.world(), &fixture);
     field(
         &fixture,
         app.world_mut(),
@@ -686,6 +731,7 @@ fn sweep_and_loft_native_forms_create_edit_cancel_and_undo_exact_solids() {
             "ruled"
         };
         let id = open_kind(app.world_mut(), Some(feature));
+        assert_historical_profile_edit(app.world(), &fixture);
         field(&fixture, app.world_mut(), &owner, id, edited_field, "true");
         action(
             &fixture,
@@ -790,6 +836,7 @@ fn revolve_controls_commit_edit_cancel_and_undo_a_real_parametric_solid() {
         .id;
     let initial = exported(&fixture);
     let id = open_revolve(app.world_mut(), Some(feature.0));
+    assert_historical_profile_edit(app.world(), &fixture);
     field(
         &fixture,
         app.world_mut(),

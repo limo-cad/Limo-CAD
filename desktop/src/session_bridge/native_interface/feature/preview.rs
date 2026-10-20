@@ -16,6 +16,7 @@ pub(super) fn profile_hover(
 ) -> Result<ViewportPreview, String> {
     let points = extrude::source_triangles(
         &ExtrudeRequest {
+            merge_profiles: false,
             sketch_name: profile.sketch_name.clone(),
             profile_indices: vec![profile.profile_index],
             source_face: None,
@@ -355,6 +356,7 @@ pub(super) fn references(
     for (sketch_name, profile_indices) in selected_by_sketch {
         let positions = extrude::source_triangles(
             &ExtrudeRequest {
+                merge_profiles: false,
                 sketch_name,
                 profile_indices,
                 source_face: None,
@@ -612,11 +614,20 @@ fn source(request: &ExtrudeRequest, model: &ViewportModel) -> ProfileSource {
         let mut boundaries = Vec::new();
         for profile in &catalog.profiles {
             let selected = request.profile_indices.contains(&profile.index)
-                || (profile.nesting_depth % 2 == 1
-                    && profile
-                        .parent_index
-                        .is_some_and(|parent| request.profile_indices.contains(&parent)));
+                || profile
+                    .parent_index
+                    .is_some_and(|parent| request.profile_indices.contains(&parent));
             if !selected {
+                continue;
+            }
+            // A selected child fills this boundary's other side. Its edge
+            // becomes internal to a fused selection, including at odd depths.
+            if (request.merge_profiles || request.operation != ExtrudeOperation::NewBody)
+                && request.profile_indices.contains(&profile.index)
+                && profile
+                    .parent_index
+                    .is_some_and(|parent| request.profile_indices.contains(&parent))
+            {
                 continue;
             }
             let mut points: Vec<_> = profile

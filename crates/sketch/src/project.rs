@@ -28,9 +28,11 @@ pub const PROJECT_FORMAT: &str = "limo-cad-project";
 pub const LEGACY_PROJECT_FORMAT: &str = "tfcad-project";
 pub const PREVIOUS_PROJECT_FORMAT: &str = "nbcad-project";
 
-/// Schema 14 preserves height intent and stable saved-layout identities. Readers reject
-/// newer schemas so saving cannot silently discard model intent.
-pub const PROJECT_SCHEMA_VERSION: u32 = 14;
+/// Schema 15 preserves independently selected nested regions. Readers reject
+/// newer schemas so replay cannot silently reinterpret profile selections.
+pub const PROJECT_SCHEMA_VERSION: u32 = 15;
+
+mod profile_selection;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ProjectModelV9 {
@@ -164,7 +166,7 @@ pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV9, String> {
             migrate_v2_to_v3(&mut header);
         }
         2 => migrate_v2_to_v3(&mut header),
-        3..=13 => {}
+        3..=14 => {}
         version if version == u64::from(PROJECT_SCHEMA_VERSION) => {}
         _ => {
             return Err(format!(
@@ -246,12 +248,28 @@ pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV9, String> {
             intent["version"] = 4.into();
         }
     }
+    // The initial region-selection build wrote schema 14 with an explicit
+    // merge_profiles field, including false. Those features already use the
+    // new meaning; ordinary older definitions do not have that field.
+    let direct_regions = if schema_version == 14 {
+        ["extrudes", "revolves"]
+            .into_iter()
+            .flat_map(|key| header[key].as_array().into_iter().flatten())
+            .filter(|definition| definition.get("merge_profiles").is_some())
+            .filter_map(|definition| definition["feature_id"].as_u64().map(FeatureId))
+            .collect()
+    } else {
+        BTreeSet::new()
+    };
     header["schema_version"] = serde_json::Value::from(PROJECT_SCHEMA_VERSION);
     let mut model: ProjectModelV9 = serde_json::from_value(header)
         .map_err(|error| format!("invalid project model: {error}"))?;
 
     model.cam.soften_for_load();
     validate_project(&model)?;
+    if schema_version < 15 {
+        profile_selection::migrate(&mut model, &direct_regions)?;
+    }
     Ok(model)
 }
 

@@ -1,0 +1,1316 @@
+[
+  {
+    "artifact": "v12/widgets/snap-before",
+    "session_id": "49af1963-8585-42e1-96f2-8e279ae2cb35",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": false
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "823154fe-b294-40cb-9c3d-59b9f8fc3223",
+        "epoch": 2,
+        "window_id": "main"
+      },
+      "control_key": 4294966502
+    },
+    "focused_control": {
+      "bounds": {
+        "height": 28.0,
+        "width": 69.0,
+        "x": 338.0,
+        "y": 822.0
+      },
+      "disabled": false,
+      "id": "control-1-3-85",
+      "label": "Sketch1",
+      "role": "button",
+      "selected": true,
+      "surface": "document/history"
+    },
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-3-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-3-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-3-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 16,
+      "native_submitted_revision": 16,
+      "receipt_published_ms": 1792280018908,
+      "request_id": "00000001792280018668-0000088454-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "684c5c554283182a55f88cec1b6b683a847e3183792dfc2df7e0f5d206b4361a",
+      "-inspect.json": "67bb01c5dfdf219a0cbf11ccb65681086f6585e16872e5ba8c39cc8c2e2c9825",
+      "-capture.json": "5dcbcec75e33b6fa9b4b1bf1142399899538489d19e3886dd6fa7ac7d9c34a99",
+      "-sessions.json": "22af027d1192efd4cda62026ee2ed779ff6baa0c39b2236670d86eb996235320"
+    }
+  },
+  {
+    "artifact": "v12/widgets/snap-click-off",
+    "session_id": "49af1963-8585-42e1-96f2-8e279ae2cb35",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": false
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "823154fe-b294-40cb-9c3d-59b9f8fc3223",
+        "epoch": 2,
+        "window_id": "main"
+      },
+      "control_key": 4294966356
+    },
+    "focused_control": {
+      "bounds": {
+        "height": 24.0,
+        "width": 232.0,
+        "x": 1124.0,
+        "y": 263.0
+      },
+      "disabled": false,
+      "id": "control-1-6-45",
+      "label": "Snap",
+      "role": "checkbox",
+      "surface": "sketch/selection",
+      "value": false
+    },
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-6-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": false
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-6-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-6-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 19,
+      "native_submitted_revision": 19,
+      "receipt_published_ms": 1792280037691,
+      "request_id": "00000001792280037552-0000088488-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "11160ddd11990b41175fc4c68f23ad113dcf6070d6c70d8a4170b39d7aebbf85",
+      "-inspect.json": "37b7c3176ed9584013e93f8b321c0dc0e5581ffa306feb972c3139ceff148e4e",
+      "-capture.json": "f681a7d9440f2d1887cecce7ce9c447998e2b523933a7f776c1f19ae92714128",
+      "-sessions.json": "086a0cdb62096991bebb151d07273f5dda17cf8e4c34d97277525bc9318d1e70"
+    }
+  },
+  {
+    "artifact": "v12/widgets/snap-finished",
+    "session_id": "49af1963-8585-42e1-96f2-8e279ae2cb35",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": true
+    },
+    "focused_binding": null,
+    "focused_control": null,
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-18-62",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-18-63",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 56,
+      "native_submitted_revision": 56,
+      "receipt_published_ms": 1792280255558,
+      "request_id": "00000001792280255410-0000089033-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "2eafabb45db26efedb9c015e0c879ae30d127c02d509e5fbad2946dd6cf7b159",
+      "-inspect.json": "bea306d7c0ec7c1cdd6ea2b433de97e2245939b3801d7705e255464ea1d125b7",
+      "-capture.json": "039fb1ad8d456383ab6cb7b728898a995a7e218fe84f6f88755deef7dd1bb3d8",
+      "-sessions.json": "a4e2982bf6a8acbb2d6a65923c0d977e527392294331c453a18ba844719ba87d"
+    }
+  },
+  {
+    "artifact": "v12/widgets/snap-redo",
+    "session_id": "e4e3345d-5241-4163-95a1-d00d51b416f6",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": true
+    },
+    "focused_binding": null,
+    "focused_control": null,
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-24-59",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-24-60",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 62,
+      "native_submitted_revision": 62,
+      "receipt_published_ms": 1792280284075,
+      "request_id": "00000001792280283935-0000089103-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "6119567507d2c78107e0a6f20a896528f461fab47e0fe9184df4909c3e57b2eb",
+      "-inspect.json": "2364bd27d5897de00d92d26c970b8b8c0b9f5f7a9b152cad7f69dcefd43b1f33",
+      "-capture.json": "aa1aff14b41b7799aecf9a857a27ed09764485668c866456d5488bd1796b17c8",
+      "-sessions.json": "8455ab25a8b0a2946af8d18cfc57a1a4d170c3af00b4b0c8f5fb57a4f40332e1"
+    }
+  },
+  {
+    "artifact": "v12/widgets/snap-reopened",
+    "session_id": "ed38fec6-9a8c-44f5-a937-17dea5c02890",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": true
+    },
+    "focused_binding": null,
+    "focused_control": null,
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-27-59",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-27-60",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 72,
+      "native_submitted_revision": 72,
+      "receipt_published_ms": 1792280340609,
+      "request_id": "00000001792280340457-0000089206-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "b8cd8e0a1e370ed4736a05d0dcd43ae96837cbc57cf3e74c59ef9fc85bb25f81",
+      "-inspect.json": "bdce8a4b30649a96b10a7b5512bdbd71cc911c2128066d41e52e9612263d13b2",
+      "-capture.json": "8f22af82b8a93e0d19a2ca295cb60ba910382d7bb2149491800692df343e7756",
+      "-sessions.json": "8fdc402ea0f7fa35e600ab6c94633fc840ed0c6dab4b5063ecb6d16bfcca1762"
+    }
+  },
+  {
+    "artifact": "v12/widgets/snap-reopened-palette",
+    "session_id": "ed38fec6-9a8c-44f5-a937-17dea5c02890",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": false
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "1e54207d-3d51-4988-a91d-e733e72ed191",
+        "epoch": 5,
+        "window_id": "main"
+      },
+      "control_key": 17179868378
+    },
+    "focused_control": {
+      "bounds": {
+        "height": 28.0,
+        "width": 69.0,
+        "x": 338.0,
+        "y": 822.0
+      },
+      "disabled": false,
+      "id": "control-1-30-85",
+      "label": "Sketch1",
+      "role": "button",
+      "selected": true,
+      "surface": "document/history"
+    },
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-30-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-30-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-30-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 77,
+      "native_submitted_revision": 77,
+      "receipt_published_ms": 1792280358309,
+      "request_id": "00000001792280358184-0000089237-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "684c5c554283182a55f88cec1b6b683a847e3183792dfc2df7e0f5d206b4361a",
+      "-inspect.json": "b5ad206910754b5768e833ae2c5e69e730fb3fe369178559317acd4389ad2551",
+      "-capture.json": "589c24eedbdc6438923a898f58ccc939b53ad99dc7f6d80b7b68a22d5654647f",
+      "-sessions.json": "fd155c1bea775a3b497646dca5c065d2ee93e1c4d7f6b90ed6a4c11b7d0bc55d"
+    }
+  },
+  {
+    "artifact": "v12/widgets/snap-reverse-space-off",
+    "session_id": "49af1963-8585-42e1-96f2-8e279ae2cb35",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": false
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "823154fe-b294-40cb-9c3d-59b9f8fc3223",
+        "epoch": 2,
+        "window_id": "main"
+      },
+      "control_key": 4294966356
+    },
+    "focused_control": {
+      "bounds": {
+        "height": 24.0,
+        "width": 232.0,
+        "x": 1124.0,
+        "y": 263.0
+      },
+      "disabled": false,
+      "id": "control-1-15-45",
+      "label": "Snap",
+      "role": "checkbox",
+      "surface": "sketch/selection",
+      "value": false
+    },
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-15-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": false
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-15-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-15-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 25,
+      "native_submitted_revision": 25,
+      "receipt_published_ms": 1792280096258,
+      "request_id": "00000001792280096136-0000088571-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "11160ddd11990b41175fc4c68f23ad113dcf6070d6c70d8a4170b39d7aebbf85",
+      "-inspect.json": "c9fb0ed73bff7c4741faf4333c63b8bb18a10b7e59849a07e3a66cb0009056dd",
+      "-capture.json": "e80501245b142ad5a538302e4f3afbc3b9f7d062ae487a2cc4348f9cac343848",
+      "-sessions.json": "0630f02fbcacb3ea7e48fdde7516c73679869aadfc7177c00cd45ff88caee51a"
+    }
+  },
+  {
+    "artifact": "v12/widgets/snap-space-on",
+    "session_id": "49af1963-8585-42e1-96f2-8e279ae2cb35",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": false
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "823154fe-b294-40cb-9c3d-59b9f8fc3223",
+        "epoch": 2,
+        "window_id": "main"
+      },
+      "control_key": 4294966356
+    },
+    "focused_control": {
+      "bounds": {
+        "height": 24.0,
+        "width": 232.0,
+        "x": 1124.0,
+        "y": 263.0
+      },
+      "disabled": false,
+      "id": "control-1-9-45",
+      "label": "Snap",
+      "role": "checkbox",
+      "surface": "sketch/selection",
+      "value": true
+    },
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-9-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-9-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-9-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 22,
+      "native_submitted_revision": 22,
+      "receipt_published_ms": 1792280052025,
+      "request_id": "00000001792280051890-0000088511-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "86f1bbaeaa2acc17d2f85209dc505e376c56f600639bcf7e914336bb4b484dbe",
+      "-inspect.json": "51c91cf86131dce1df26a23b1defcf158075210cd3e71ab36444ef1e3cdf6551",
+      "-capture.json": "c408eed199b1e2b5e721ebbce96b553cce7ba29b139aed420cc2d3dfca97faaf",
+      "-sessions.json": "856d11e6adeb99597a5af33db3c80951cca6ae08fa728ffbbf4f1c29239f1ac3"
+    }
+  },
+  {
+    "artifact": "v12/widgets/snap-tab-next",
+    "session_id": "49af1963-8585-42e1-96f2-8e279ae2cb35",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": false
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "823154fe-b294-40cb-9c3d-59b9f8fc3223",
+        "epoch": 2,
+        "window_id": "main"
+      },
+      "control_key": 4294966317
+    },
+    "focused_control": {
+      "bounds": {
+        "height": 22.0,
+        "width": 22.0,
+        "x": 669.0,
+        "y": 275.0
+      },
+      "disabled": false,
+      "id": "control-1-12-46",
+      "label": "Constraint 2: horizontal",
+      "role": "button",
+      "selected": false,
+      "surface": "sketch/constrain"
+    },
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-12-45",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": true
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-12-73",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-12-74",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 22,
+      "native_submitted_revision": 22,
+      "receipt_published_ms": 1792280071408,
+      "request_id": "00000001792280071297-0000088536-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "18456a966b30a5ecf183e7c30254f5c056eaf1f19e052eea49f78364eace3ef5",
+      "-inspect.json": "22a8bd556c17d89d16d58d53826becbddc7a40bc674b8b1ad92960360c21a742",
+      "-capture.json": "3d8911b3e14bafc22f9ab05408f187b8bf2832fb7e96ad2ba4dfba1c4f007883",
+      "-sessions.json": "b2a7b8c178edc3ce42b7ceb62aef0e33bd9b6cda6c1b3b767ce63186cbbdf821"
+    }
+  },
+  {
+    "artifact": "v12/widgets/snap-undo",
+    "session_id": "49af1963-8585-42e1-96f2-8e279ae2cb35",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "46ecca2aafbbd46187a7ba2acd38c1ffe8aefb29",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": true,
+      "can_undo": true
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "823154fe-b294-40cb-9c3d-59b9f8fc3223",
+        "epoch": 2,
+        "window_id": "main"
+      },
+      "control_key": 4294966860
+    },
+    "focused_control": {
+      "bounds": {
+        "height": 24.0,
+        "width": 24.0,
+        "x": 638.0,
+        "y": 771.0
+      },
+      "disabled": false,
+      "id": "control-1-21-59",
+      "label": "Undo",
+      "role": "button",
+      "surface": "document/history"
+    },
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-21-59",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": false,
+        "id": "control-1-21-60",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 59,
+      "native_submitted_revision": 59,
+      "receipt_published_ms": 1792280273642,
+      "request_id": "00000001792280273514-0000089077-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "33aff7620225f9ec6d7682f5a4fb570d5cba33625f334fba349c270bfad1ab98",
+      "-inspect.json": "4e796adf79dab2700a7690737d4834d9522627229986c954ab553d3c1ca434b5",
+      "-capture.json": "c0d3cc7dab5c3ba3b45b4cceec97d552f36cf7b30464ddfbcf78fc0ac32833d6",
+      "-sessions.json": "a92a2f177f5f355a7dd4df93faad7413a0966c06799af268189415f8cd72babc"
+    }
+  },
+  {
+    "artifact": "v11/widgets/settings-default",
+    "session_id": "0bf1457a-aba2-4ef9-a703-ab96ddd0791c",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "a76749a7020dc9e0568aaa8e7a5a064615292e37",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "a76749a7020dc9e0568aaa8e7a5a064615292e37",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": false
+    },
+    "focused_binding": null,
+    "focused_control": null,
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 860.0,
+          "width": 1360.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "disabled": false,
+        "id": "control-1-3-1",
+        "label": "Close dialog",
+        "role": "button",
+        "surface": "app-settings"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 881.0,
+          "y": 89.0
+        },
+        "disabled": false,
+        "id": "control-1-3-32",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-3-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-3-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 7,
+      "native_submitted_revision": 7,
+      "receipt_published_ms": 1792279058519,
+      "request_id": "00000001792279058270-0000086837-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "80107ba631b73142832414ad7dd7f02b9b709fbc0286fa37b70d1c19c570ffea",
+      "-inspect.json": "acfafa26f6a244f16d5880559586dfa818f3c571f7012307afb711a683cb184d",
+      "-capture.json": "6f0ae06553d619c5bd741ade1870ba61ea8b906e001242f216e5a23259a1dba7",
+      "-sessions.json": "9b7641d8021498b16b3452036ced41975388bd533b59460c9a34bc39d213b07d"
+    }
+  },
+  {
+    "artifact": "v11/widgets/settings-long-drag",
+    "session_id": "0bf1457a-aba2-4ef9-a703-ab96ddd0791c",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "a76749a7020dc9e0568aaa8e7a5a064615292e37",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "a76749a7020dc9e0568aaa8e7a5a064615292e37",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": false
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "8b35fc02-ea5f-4185-b032-e077252cafce",
+        "epoch": 1,
+        "window_id": "main"
+      },
+      "control_key": 4294966446
+    },
+    "focused_control": {
+      "bounds": {
+        "height": 860.0,
+        "width": 1360.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "disabled": false,
+      "id": "control-1-6-1",
+      "label": "Close dialog",
+      "role": "button",
+      "surface": "app-settings"
+    },
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 860.0,
+          "width": 1360.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "disabled": false,
+        "id": "control-1-6-1",
+        "label": "Close dialog",
+        "role": "button",
+        "surface": "app-settings"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 881.0,
+          "y": 89.0
+        },
+        "disabled": false,
+        "id": "control-1-6-32",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-6-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-6-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 7,
+      "native_submitted_revision": 7,
+      "receipt_published_ms": 1792279103035,
+      "request_id": "00000001792279102922-0000086878-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "80107ba631b73142832414ad7dd7f02b9b709fbc0286fa37b70d1c19c570ffea",
+      "-inspect.json": "716083b056b05c566369d77fde9069b66769c0f5fb900c633f66856423376e73",
+      "-capture.json": "e56bd3742e28ffcb581fae3b806476f12ac3c2ccd5a17edc9f02d3661a93839d",
+      "-sessions.json": "e5992049ea29352c18d180d8146325f73969b86a5a357bbcc1d77b4a8999ac57"
+    }
+  },
+  {
+    "artifact": "v11/widgets/settings-primed-drag",
+    "session_id": "0bf1457a-aba2-4ef9-a703-ab96ddd0791c",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "a76749a7020dc9e0568aaa8e7a5a064615292e37",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "a76749a7020dc9e0568aaa8e7a5a064615292e37",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": false
+    },
+    "focused_binding": {
+      "binding": 2,
+      "context": {
+        "document_id": "8b35fc02-ea5f-4185-b032-e077252cafce",
+        "epoch": 1,
+        "window_id": "main"
+      },
+      "control_key": 4294966446
+    },
+    "focused_control": {
+      "bounds": {
+        "height": 860.0,
+        "width": 1360.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "disabled": false,
+      "id": "control-1-9-1",
+      "label": "Close dialog",
+      "role": "button",
+      "surface": "app-settings"
+    },
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 860.0,
+          "width": 1360.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "disabled": false,
+        "id": "control-1-9-1",
+        "label": "Close dialog",
+        "role": "button",
+        "surface": "app-settings"
+      },
+      {
+        "bounds": {
+          "height": 28.0,
+          "width": 28.0,
+          "x": 881.0,
+          "y": 89.0
+        },
+        "disabled": false,
+        "id": "control-1-9-32",
+        "label": "Close settings",
+        "role": "button",
+        "surface": "document/appearance"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-9-75",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-9-76",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 7,
+      "native_submitted_revision": 7,
+      "receipt_published_ms": 1792279162368,
+      "request_id": "00000001792279162255-0000086932-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "80107ba631b73142832414ad7dd7f02b9b709fbc0286fa37b70d1c19c570ffea",
+      "-inspect.json": "3da5428714e40557fa4f3428705151d42a005e2ae04fdddaf8b35d382e71a8a3",
+      "-capture.json": "f17b028794eda8c60d5717680ec9251c550468e09cd69d3be753827bd4bf1035",
+      "-sessions.json": "1870923929d28d69ef63c354a8089091ffe3431941a27edb8b2a9a16a6e99588"
+    }
+  },
+  {
+    "artifact": "v9/widgets/fixes-snap-baseline",
+    "session_id": "762183be-e9aa-42b4-be95-50da57580a38",
+    "build_pair": {
+      "desktop": {
+        "channel": "development",
+        "modified": false,
+        "revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+        "version": "0.3.0-rc.1"
+      },
+      "mcp": {
+        "channel": "development",
+        "modified": false,
+        "revision": "54c6a64432c0439c9bfcf1afab2597e213df4535",
+        "version": "0.3.0-rc.1"
+      },
+      "status": "matched"
+    },
+    "history": {
+      "can_redo": false,
+      "can_undo": false
+    },
+    "focused_binding": null,
+    "focused_control": null,
+    "affected_controls": [
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 232.0,
+          "x": 1124.0,
+          "y": 263.0
+        },
+        "disabled": false,
+        "id": "control-1-20-44",
+        "label": "Snap",
+        "role": "checkbox",
+        "surface": "sketch/selection",
+        "value": false
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 638.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-20-65",
+        "label": "Undo",
+        "role": "button",
+        "surface": "document/history"
+      },
+      {
+        "bounds": {
+          "height": 24.0,
+          "width": 24.0,
+          "x": 664.0,
+          "y": 771.0
+        },
+        "disabled": true,
+        "id": "control-1-20-66",
+        "label": "Redo",
+        "role": "button",
+        "surface": "document/history"
+      }
+    ],
+    "render_receipt": {
+      "status": "applied",
+      "render_status": "submitted",
+      "presented": true,
+      "native_layout_revision": 40,
+      "native_submitted_revision": 40,
+      "receipt_published_ms": 1792278693745,
+      "request_id": "00000001792278693633-0000086233-00000000000000000000"
+    },
+    "sha256": {
+      ".png": "93d50f3e7e8b68850b930e8f9ee61c98df3cd38373499c3b9fed90b6f5971329",
+      "-inspect.json": "79d9a4e5ca80dc36a742f8007c4f0e156def196fea24f762e0943867d43b42ee",
+      "-capture.json": "24d90b8ce381d232d679fbff988fe9bf278d689605d53899f16a76fc08ce8102",
+      "-sessions.json": "e2cfa3852bb2ef774fe93b11f157638929e14bfd19495234127ad0cb8bd8b517"
+    }
+  }
+]

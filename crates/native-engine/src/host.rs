@@ -190,6 +190,8 @@ pub struct ResolvedDrawingProjection {
 }
 
 mod drawing_snapshot;
+#[path = "sketch_history.rs"]
+mod sketch_history;
 pub use drawing_snapshot::{
     DetachedDrawingSnapshot, FinishedDrawingProjections, PreparedDrawingExport,
     SharedDrawingProjection,
@@ -202,6 +204,7 @@ struct NativeEngine {
     geometry_revision: u64,
     viewport_revision: u64,
     viewport_cache: RefCell<Option<CachedViewport>>,
+    sketch_history_view: Option<sketch_history::SketchHistoryView>,
 }
 
 struct CachedViewport {
@@ -224,6 +227,7 @@ impl NativeEngine {
             geometry_revision: 1,
             viewport_revision: 1,
             viewport_cache: RefCell::new(None),
+            sketch_history_view: None,
         })
     }
 
@@ -732,12 +736,27 @@ impl NativeEngineHost {
             return response;
         }
         let verification_owner = workspace.verification_owner_key();
+        let sketch_history = if method == "edit_sketch" {
+            match sketch_history::prepare(workspace.active(), &workspace.active_session_id, payload)
+            {
+                Ok(history) => history,
+                Err(error) => return err_json(error),
+            }
+        } else {
+            None
+        };
         let inner = workspace.active_mut();
         inner.invalidate_for_command(method);
         let result = host::handle(&mut inner.manager, method, payload);
         let succeeded = serde_json::from_str::<serde_json::Value>(&result)
             .ok()
             .is_some_and(|reply| reply["ok"] == true);
+        if succeeded && method == "edit_sketch" {
+            inner.sketch_history_view = sketch_history;
+            inner.geometry_revision = inner.geometry_revision.wrapping_add(1);
+        } else if !inner.manager.has_active_sketch() && inner.sketch_history_view.take().is_some() {
+            inner.geometry_revision = inner.geometry_revision.wrapping_add(1);
+        }
         if succeeded && method == "solid_rename_feature" {
             let renamed_sketch = serde_json::from_str::<serde_json::Value>(payload)
                 .ok()
@@ -1504,6 +1523,7 @@ impl NativeEngineHost {
             &verified,
         ) {
             Ok(update) => {
+                inner.sketch_history_view = None;
                 inner.geometry_revision = inner.geometry_revision.wrapping_add(1);
                 inner.record_geometry_commit(&session_id);
                 ok_json(update)
@@ -1536,20 +1556,30 @@ impl NativeEngineHost {
         let workspace = self.inner.lock().expect("engine lock poisoned");
         let inner = workspace.active();
         let mut cache = inner.viewport_cache.borrow_mut();
-        let cached = cache.get_or_insert_with(|| CachedViewport {
-            document: Arc::new(NativeViewportDocument {
-                metadata_revision: inner.viewport_revision,
-                scene: inner.manager.solid_scene_snapshot(),
-                geometry_proof: inner.geometry_proof.clone(),
-                active_sketch: inner.manager.active_snapshot(),
-                finished_sketches: inner.manager.finished_sketches(),
-                datum_planes: inner.manager.datum_plane_definitions(),
-                profile_catalog: inner.manager.profile_catalog(),
-                body_appearances: inner.manager.body_appearances(),
-            }),
-            placement: None,
+        let cached = cache.get_or_insert_with(|| {
+            let mut document =
+                sketch_history::document(inner).unwrap_or_else(|| NativeViewportDocument {
+                    metadata_revision: inner.viewport_revision,
+                    scene: inner.manager.solid_scene_snapshot(),
+                    geometry_proof: inner.geometry_proof.clone(),
+                    active_sketch: inner.manager.active_snapshot(),
+                    finished_sketches: inner.manager.finished_sketches(),
+                    datum_planes: inner.manager.datum_plane_definitions(),
+                    profile_catalog: inner.manager.profile_catalog(),
+                    body_appearances: inner.manager.body_appearances(),
+                });
+            if inner.sketch_history_view.is_none() {
+                sketch_history::filter_metadata(&inner.manager, &mut document);
+            }
+            CachedViewport {
+                document: Arc::new(document),
+                placement: None,
+            }
         });
         let placement = cached.placement.get_or_insert_with(|| {
+            if let Some(placement) = sketch_history::placement(inner) {
+                return placement;
+            }
             let assembly = inner
                 .manager
                 .presentation_solution()

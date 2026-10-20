@@ -50,6 +50,7 @@ mod ffi {
         feature_id: u64,
         kind: u8,
         operation: u8,
+        require_single_solid: bool,
         points: Vec<f64>,
         profile_offsets: Vec<u32>,
         /// Exact planar-face source. Zero / u32::MAX means sketch profiles.
@@ -1301,6 +1302,7 @@ fn empty_ffi_job(feature_id: u64, kind: u8) -> ffi::FfiJob {
         feature_id,
         kind,
         operation: 0,
+        require_single_solid: false,
         points: Vec::new(),
         profile_offsets: vec![0],
         source_body_id: 0,
@@ -1398,6 +1400,7 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
         KernelJobDto::Extrude(source) => {
             let mut job = empty_ffi_job(source.feature_id.0, 0);
             job.operation = operation_code(source.operation);
+            job.require_single_solid = source.require_single_solid;
             set_profiles(&mut job, profile_buffers(&source.profiles));
             if let Some(face) = &source.source_face {
                 job.source_body_id = face.body_id.0;
@@ -1437,6 +1440,7 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
         KernelJobDto::Revolve(source) => {
             let mut job = empty_ffi_job(source.feature_id.0, 1);
             job.operation = operation_code(source.operation);
+            job.require_single_solid = source.require_single_solid;
             set_profiles(&mut job, profile_buffers(&source.profiles));
             job.axis_origin_x = source.axis_origin.x;
             job.axis_origin_y = source.axis_origin.y;
@@ -2121,6 +2125,7 @@ mod tests {
 
     fn box_job(feature_id: u64, body_id: u64) -> KernelJobDto {
         KernelJobDto::Extrude(KernelExtrudeJobDto {
+            require_single_solid: false,
             feature_id: FeatureId(feature_id),
             operation: ExtrudeOperation::NewBody,
             source_face: None,
@@ -2844,6 +2849,7 @@ mod tests {
             transaction_id: 1,
             errors: Vec::new(),
             jobs: vec![KernelJobDto::Extrude(KernelExtrudeJobDto {
+                require_single_solid: false,
                 feature_id: FeatureId(2),
                 operation: ExtrudeOperation::NewBody,
                 source_face: None,
@@ -4041,6 +4047,7 @@ mod tests {
                         data_base64: encode_base64(&step),
                     }),
                     KernelJobDto::Extrude(KernelExtrudeJobDto {
+                        require_single_solid: false,
                         feature_id: FeatureId(2),
                         operation: ExtrudeOperation::NewBody,
                         source_face: None,
@@ -4254,6 +4261,7 @@ mod tests {
                 transaction_id: 1,
                 errors: Vec::new(),
                 jobs: vec![KernelJobDto::Extrude(KernelExtrudeJobDto {
+                    require_single_solid: false,
                     feature_id: FeatureId(2),
                     operation: ExtrudeOperation::Join,
                     source_face: None,
@@ -4293,6 +4301,7 @@ mod tests {
     fn occt_combine_join_unifies_coplanar_faces_and_removes_the_seam() {
         let new_body = |feature_id, body_id, profile| {
             KernelJobDto::Extrude(KernelExtrudeJobDto {
+                require_single_solid: false,
                 feature_id: FeatureId(feature_id),
                 operation: ExtrudeOperation::NewBody,
                 source_face: None,
@@ -4369,6 +4378,7 @@ mod tests {
                 transaction_id: 1,
                 errors: Vec::new(),
                 jobs: vec![KernelJobDto::Extrude(KernelExtrudeJobDto {
+                    require_single_solid: false,
                     feature_id: FeatureId(2),
                     operation: ExtrudeOperation::NewBody,
                     source_face: None,
@@ -4442,6 +4452,7 @@ mod tests {
                 transaction_id: 1,
                 errors: Vec::new(),
                 jobs: vec![KernelJobDto::Extrude(KernelExtrudeJobDto {
+                    require_single_solid: false,
                     feature_id: FeatureId(2),
                     operation: ExtrudeOperation::NewBody,
                     source_face: None,
@@ -4551,6 +4562,7 @@ mod tests {
                 transaction_id: 1,
                 errors: Vec::new(),
                 jobs: vec![KernelJobDto::Extrude(KernelExtrudeJobDto {
+                    require_single_solid: false,
                     feature_id: FeatureId(2),
                     operation: ExtrudeOperation::NewBody,
                     source_face: None,
@@ -4713,6 +4725,7 @@ mod tests {
         inner.profile_index = 1;
         outer.holes.push(inner);
         let base_job = KernelJobDto::Extrude(KernelExtrudeJobDto {
+            require_single_solid: false,
             feature_id: FeatureId(2),
             operation: ExtrudeOperation::NewBody,
             source_face: None,
@@ -4754,6 +4767,7 @@ mod tests {
                 jobs: vec![
                     base_job.clone(),
                     KernelJobDto::Extrude(KernelExtrudeJobDto {
+                        require_single_solid: false,
                         feature_id: FeatureId(3),
                         operation: ExtrudeOperation::NewBody,
                         source_face: Some(KernelPlanarFaceSourceDto {
@@ -4811,6 +4825,7 @@ mod tests {
                 jobs: vec![
                     base_job,
                     KernelJobDto::Extrude(KernelExtrudeJobDto {
+                        require_single_solid: false,
                         feature_id: FeatureId(3),
                         operation: ExtrudeOperation::NewBody,
                         source_face: Some(KernelPlanarFaceSourceDto {
@@ -4987,6 +5002,7 @@ mod tests {
             holes: Vec::new(),
         };
         let base_job = KernelJobDto::Extrude(KernelExtrudeJobDto {
+            require_single_solid: false,
             feature_id: FeatureId(2),
             operation: ExtrudeOperation::NewBody,
             source_face: None,
@@ -5233,6 +5249,7 @@ mod tests {
             holes: Vec::new(),
         };
         let base_job = KernelJobDto::Extrude(KernelExtrudeJobDto {
+            require_single_solid: false,
             feature_id: FeatureId(2),
             operation: ExtrudeOperation::NewBody,
             source_face: None,
@@ -5560,6 +5577,7 @@ mod tests {
     fn notched_plate_job() -> KernelJobDto {
         let corner = |x: f64, y: f64| Point3Dto { x, y, z: 0.0 };
         KernelJobDto::Extrude(KernelExtrudeJobDto {
+            require_single_solid: false,
             feature_id: FeatureId(2),
             operation: ExtrudeOperation::NewBody,
             source_face: None,
@@ -5651,6 +5669,7 @@ mod tests {
             transaction_id: 1,
             errors: Vec::new(),
             jobs: vec![KernelJobDto::Revolve(KernelRevolveJobDto {
+                require_single_solid: false,
                 feature_id: FeatureId(2),
                 operation: ExtrudeOperation::NewBody,
                 profiles: vec![KernelProfileDto {
@@ -5996,6 +6015,7 @@ mod tests {
             transaction_id: 1,
             errors: Vec::new(),
             jobs: vec![KernelJobDto::Revolve(KernelRevolveJobDto {
+                require_single_solid: false,
                 feature_id: FeatureId(2),
                 operation: ExtrudeOperation::NewBody,
                 profiles: vec![KernelProfileDto {
@@ -6188,6 +6208,7 @@ mod tests {
     #[test]
     fn occt_applies_revolve_boolean_to_an_existing_body() {
         let base = KernelJobDto::Extrude(KernelExtrudeJobDto {
+            require_single_solid: false,
             feature_id: FeatureId(2),
             operation: ExtrudeOperation::NewBody,
             source_face: None,
@@ -6230,6 +6251,7 @@ mod tests {
             result_body_ids: vec![BodyId(1)],
         });
         let cut = KernelJobDto::Revolve(KernelRevolveJobDto {
+            require_single_solid: false,
             feature_id: FeatureId(3),
             operation: ExtrudeOperation::Cut,
             profiles: vec![KernelProfileDto {

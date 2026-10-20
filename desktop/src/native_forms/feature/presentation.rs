@@ -43,6 +43,7 @@ impl SolidForm {
             sketch_name,
             profile_indices,
             source_face,
+            merge_profiles: self.operation == ExtrudeOperation::NewBody && self.merge_profiles,
             operation: self.operation,
             extent: ExtrudeExtent::Distance {
                 distance: self
@@ -239,6 +240,11 @@ impl SolidForm {
         }
         if self.kind() == K::Extrude {
             result.operation_hint = Some(match self.operation {
+                ExtrudeOperation::NewBody
+                    if self.merge_profiles && self.selected_profiles().len() > 1 =>
+                {
+                    "extrude.mergedBodyHint"
+                }
                 ExtrudeOperation::NewBody if self.selected_profiles().len() > 1 => {
                     "extrude.newBodyMultipleHint"
                 }

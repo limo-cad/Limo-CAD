@@ -333,6 +333,12 @@ jobs:
         if: matrix.family == 'all' || matrix.family == 'keyboard'
         run: cargo test --locked --manifest-path desktop/Cargo.toml
 
+      - name: Test standard Bevy controls and dialogs
+        if: matrix.family == 'all' || matrix.family == 'keyboard'
+        run: |
+          cargo test --locked --manifest-path desktop/Cargo.toml --features experimental-ui-widgets --lib native_viewport::interface_shell -- --test-threads=1
+          cargo test --locked --manifest-path desktop/Cargo.toml --features experimental-ui-widgets --lib session_bridge::native_interface::controller::app_settings -- --test-threads=1
+
       - name: Guard explicit service wakes without an OS redraw
         if: matrix.family == 'all' || matrix.family == 'keyboard'
         run: cargo test --locked --manifest-path desktop/Cargo.toml -p bevy_winit explicit_service_wakes_advance_app_without_os_redraw_and_return_to_idle -- --test-threads=1
@@ -540,6 +546,10 @@ jobs:
         run: cargo clippy --locked --manifest-path desktop/Cargo.toml --all-targets --all-features --no-deps -- -D warnings
       - name: Test the native Bevy host
         run: cargo test --locked --manifest-path desktop/Cargo.toml --lib
+      - name: Test standard Bevy controls and dialogs
+        run: |
+          cargo test --locked --manifest-path desktop/Cargo.toml --features experimental-ui-widgets --lib native_viewport::interface_shell -- --test-threads=1
+          cargo test --locked --manifest-path desktop/Cargo.toml --features experimental-ui-widgets --lib session_bridge::native_interface::controller::app_settings -- --test-threads=1
       - name: Guard explicit service wakes without an OS redraw
         run: cargo test --locked --manifest-path desktop/Cargo.toml -p bevy_winit explicit_service_wakes_advance_app_without_os_redraw_and_return_to_idle -- --test-threads=1
       - name: Build the live native host
@@ -625,6 +635,11 @@ jobs:
       - name: Test the native Bevy host
         if: inputs.input-family != 'windows-print'
         run: cargo test --locked --manifest-path desktop/Cargo.toml --lib
+      - name: Test standard Bevy controls and dialogs
+        if: inputs.input-family != 'windows-print'
+        run: |
+          cargo test --locked --manifest-path desktop/Cargo.toml --features experimental-ui-widgets --lib native_viewport::interface_shell -- --test-threads=1
+          cargo test --locked --manifest-path desktop/Cargo.toml --features experimental-ui-widgets --lib session_bridge::native_interface::controller::app_settings -- --test-threads=1
       - name: Guard explicit service wakes without an OS redraw
         if: inputs.input-family != 'windows-print'
         run: cargo test --locked --manifest-path desktop/Cargo.toml -p bevy_winit explicit_service_wakes_advance_app_without_os_redraw_and_return_to_idle -- --test-threads=1

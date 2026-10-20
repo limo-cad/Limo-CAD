@@ -10,6 +10,7 @@ use limo_cad_solid::{
 fn exact_clearance_keeps_touching_partial_and_contained_solid_semantics() {
     let cube = |id, size| {
         KernelJobDto::Extrude(KernelExtrudeJobDto {
+            require_single_solid: false,
             feature_id: FeatureId(id),
             operation: ExtrudeOperation::NewBody,
             source_face: None,

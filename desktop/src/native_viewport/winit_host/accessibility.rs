@@ -50,7 +50,15 @@ struct ActionWakers(HashMap<Entity, Weak<Mutex<WinitActionRequestHandler>>>);
 #[derive(Resource, Default)]
 struct EditorFocusProjection(Option<InputFocus>);
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct AccessiblePublication;
+
 pub(super) fn install(app: &mut App) {
+    #[cfg(feature = "experimental-ui-widgets")]
+    app.configure_sets(
+        PostUpdate,
+        AccessiblePublication.after(super::super::interface_shell::widgets::WidgetLayout),
+    );
     app.init_resource::<InputFocus>()
         .init_resource::<AccessibleControls>()
         .init_resource::<ActionWakers>()
@@ -58,6 +66,7 @@ pub(super) fn install(app: &mut App) {
         .add_systems(
             PostUpdate,
             publish
+                .in_set(AccessiblePublication)
                 .after(InterfaceLayout)
                 .after(bevy::ui::UiSystems::PostLayout)
                 .after(bevy::input_focus::InputFocusSystems::FocusChangeEvents)
@@ -190,15 +199,36 @@ fn publish(world: &mut World) {
     let mut next_focus = None;
     for control in controls {
         let old = previous.remove(&control.key);
+        #[cfg(feature = "experimental-ui-widgets")]
+        let widget = super::super::interface_shell::widgets::is_widget(
+            world,
+            Entity::from_bits(control.key.0),
+        );
+        #[cfg(not(feature = "experimental-ui-widgets"))]
+        let widget = false;
         let retained = old
             .as_ref()
             .filter(|(_, old)| old.action == control.action && old.role == control.role);
         let unchanged = !scale_changed && retained.is_some_and(|(_, old)| old == &control);
-        let entity = if let Some((entity, _)) = retained {
+        let entity = if widget {
+            if let Some((entity, _)) = old
+                .as_ref()
+                .filter(|(entity, _)| *entity != Entity::from_bits(control.key.0))
+            {
+                world.despawn(*entity);
+            }
+            Entity::from_bits(control.key.0)
+        } else if let Some((entity, _)) = retained {
             *entity
         } else {
             if let Some((entity, _)) = old {
-                world.despawn(entity);
+                if entity == Entity::from_bits(control.key.0) {
+                    world
+                        .entity_mut(entity)
+                        .remove::<(AccessibilityNode, AccessibleBinding)>();
+                } else {
+                    world.despawn(entity);
+                }
             }
             world.spawn_empty().id()
         };
@@ -288,8 +318,14 @@ fn publish(world: &mut World) {
             .insert(AccessibleBinding(control.action.clone()));
         current.insert(control.key, (entity, control));
     }
-    for (_, (entity, _)) in previous {
-        world.despawn(entity);
+    for (key, (entity, _)) in previous {
+        if entity == Entity::from_bits(key.0) {
+            if let Ok(mut node) = world.get_entity_mut(entity) {
+                node.remove::<(AccessibilityNode, AccessibleBinding)>();
+            }
+        } else {
+            world.despawn(entity);
+        }
     }
     let mut published = world.resource_mut::<AccessibleControls>();
     published.controls = current;
@@ -303,9 +339,19 @@ fn publish(world: &mut World) {
         return;
     }
     let actual_focus = world.resource::<InputFocus>().get();
+    #[cfg(feature = "experimental-ui-widgets")]
+    if actual_focus
+        .is_some_and(|entity| super::super::interface_shell::widgets::is_widget(world, entity))
+    {
+        return;
+    }
     if actual_focus.is_some_and(|entity| {
         focused == Some(ControlKey(entity.to_bits()))
-            && world.get::<bevy::text::EditableText>(entity).is_some()
+            && (world.get::<bevy::text::EditableText>(entity).is_some()
+                || (cfg!(feature = "experimental-ui-widgets")
+                    && world
+                        .get::<super::super::interface_shell::InterfaceControl>(entity)
+                        .is_some()))
     }) && next_focus.is_some()
         && next_focus != actual_focus
     {

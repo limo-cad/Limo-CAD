@@ -758,6 +758,8 @@ fn update_inner(
         }
     }
 
+    #[cfg(feature = "experimental-ui-widgets")]
+    crate::native_viewport::interface_shell::widgets::enqueue_actions(world, handle);
     while !worker::busy(world) {
         let Some(action) = handle.take_next_action()? else {
             break;

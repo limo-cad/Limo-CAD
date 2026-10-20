@@ -1452,6 +1452,7 @@ mod tests {
                 .collect::<Vec<_>>();
             let plan = manager
                 .prepare_extrude(ExtrudeRequest {
+                    merge_profiles: false,
                     source_face: None,
                     sketch_name: sketch.into(),
                     profile_indices: vec![0],
@@ -2222,6 +2223,7 @@ mod tests {
         manager.end_sketch().unwrap();
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".into(),
                 profile_indices: vec![0],
@@ -2257,6 +2259,7 @@ mod tests {
         manager.end_sketch().unwrap();
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch2".into(),
                 profile_indices: vec![0],

@@ -55,6 +55,7 @@ fn shaded_extrusion_preserves_concavity_holes_and_each_signed_extent() {
         ),
     ] {
         let request = ExtrudeRequest {
+            merge_profiles: false,
             sketch_name: "Sketch1".into(),
             profile_indices: vec![0],
             source_face: None,
@@ -263,4 +264,32 @@ fn extrusion_arrow_edits_only_the_draft_and_disappearing_volume_cannot_be_dragge
         ControlInput::Click,
     )
     .unwrap();
+}
+
+#[test]
+fn merging_a_selected_inner_region_removes_its_internal_preview_wall() {
+    let _lock = super::super::super::super::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    sketch(&fixture);
+    let mut viewport = model_snapshot(&fixture.engine);
+    Arc::make_mut(&mut viewport.document).profile_catalog[0].profiles = serde_json::from_value(json!([
+        {"index":0,"points":[{"x":0.,"y":0.},{"x":10.,"y":0.},{"x":10.,"y":10.},{"x":0.,"y":10.}],"area":100.,"nesting_depth":0},
+        {"index":1,"points":[{"x":2.,"y":2.},{"x":4.,"y":2.},{"x":4.,"y":4.},{"x":2.,"y":4.}],"area":4.,"nesting_depth":1,"parent_index":0}
+    ])).unwrap();
+    for merge in [false, true] {
+        let request: ExtrudeRequest = serde_json::from_value(
+            json!({"sketch_name":"Sketch1","profile_indices":[0,1],"merge_profiles":merge}),
+        )
+        .unwrap();
+        let preview = preview::build(&request, &viewport).unwrap();
+        assert!((area(&preview.triangles[1].positions) - 100.).abs() < 1e-5);
+        let walls = preview.triangles[0]
+            .positions
+            .as_chunks::<9>()
+            .0
+            .iter()
+            .filter(|p| p[2] != p[5] || p[5] != p[8])
+            .count();
+        assert_eq!(walls, if merge { 8 } else { 16 });
+    }
 }

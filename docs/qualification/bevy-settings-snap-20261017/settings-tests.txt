@@ -1,0 +1,12 @@
+
+running 7 tests
+test session_bridge::native_interface::controller::app_settings::tests::a_watcher_notification_bypasses_the_recent_ui_read_without_an_extra_input_frame ... ok
+test session_bridge::native_interface::controller::app_settings::tests::absent_preferences_keep_os_language_and_do_not_persist_detected_defaults ... ok
+test session_bridge::native_interface::controller::app_settings::tests::failed_save_keeps_live_choice_and_error_until_retry_merges_fresh_other_fields ... ok
+test session_bridge::native_interface::controller::app_settings::tests::interface_size_shortcuts_persist_and_respect_document_editor_and_modal_ownership ... ok
+test session_bridge::native_interface::controller::app_settings::tests::retry_is_reachable_by_the_shell_pointer_above_the_retained_error_footer ... ok
+test session_bridge::native_interface::controller::app_settings::tests::settings_build_identity_wraps_without_overlapping_description_or_controls ... ok
+test session_bridge::native_interface::controller::app_settings::tests::shared_theme_and_locale_repaint_retained_edits_without_document_history ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 1120 filtered out; finished in 0.93s
+

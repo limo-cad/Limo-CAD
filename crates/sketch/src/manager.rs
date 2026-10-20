@@ -2084,13 +2084,36 @@ impl SketchManager {
                 CAM_TOOLPATH_PLANNER_REVISION,
                 setup_intent,
             ))?,
-            upstream: stable_cam_fingerprint(&(
-                "cam-upstream-dependencies",
-                CAM_TOOLPATH_PLANNER_REVISION,
-                upstream_setups,
-                upstream_tools,
-                upstream_linking,
-            ))?,
+            upstream: if upstream_setups.is_empty() {
+                // Preserve independent setups' existing generation evidence.
+                stable_cam_fingerprint(&(
+                    "cam-upstream-dependencies",
+                    CAM_TOOLPATH_PLANNER_REVISION,
+                    upstream_setups,
+                    upstream_tools,
+                    upstream_linking,
+                ))?
+            } else {
+                // Heights are stored outside setup/operation records. Include
+                // every transitive source's intent even before regeneration
+                // updates its cached numerical heights. Version only this key:
+                // old rest stamps cannot prove these inputs were unchanged.
+                let upstream_heights = self
+                    .cam
+                    .height_expressions
+                    .iter()
+                    .filter(|h| upstream_operation_ids.contains(&h.operation_id))
+                    .map(|h| (h.operation_id, h))
+                    .collect::<BTreeMap<_, _>>();
+                stable_cam_fingerprint(&(
+                    "cam-upstream-dependencies-v2",
+                    CAM_TOOLPATH_PLANNER_REVISION,
+                    upstream_setups,
+                    upstream_tools,
+                    upstream_linking,
+                    upstream_heights,
+                ))?
+            },
         })
     }
 
@@ -7195,6 +7218,7 @@ mod project_tests {
         manager.end_sketch().unwrap();
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: vec![0],
@@ -7334,6 +7358,7 @@ mod project_tests {
                 let sketch_name = manager.finished_sketches().last().unwrap().name.clone();
                 let plan = manager
                     .prepare_extrude(ExtrudeRequest {
+                        merge_profiles: false,
                         source_face: None,
                         sketch_name,
                         profile_indices: vec![0],
@@ -7581,6 +7606,7 @@ mod project_tests {
         manager.end_sketch().unwrap();
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: vec![0],
@@ -7748,6 +7774,7 @@ mod project_tests {
         manager.end_sketch().unwrap();
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: vec![0],
@@ -7921,6 +7948,7 @@ mod project_tests {
             manager.end_sketch().unwrap();
             let plan = manager
                 .prepare_extrude(ExtrudeRequest {
+                    merge_profiles: false,
                     source_face: None,
                     sketch_name: name.to_string(),
                     profile_indices: vec![0],
@@ -8083,6 +8111,7 @@ mod project_tests {
         manager.end_sketch().unwrap();
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: vec![0],
@@ -9588,6 +9617,7 @@ mod project_tests {
             manager.end_sketch().unwrap();
             let plan = manager
                 .prepare_extrude(ExtrudeRequest {
+                    merge_profiles: false,
                     source_face: None,
                     sketch_name: expected_name.to_string(),
                     profile_indices: vec![0],
@@ -9666,7 +9696,7 @@ mod project_tests {
     }
 
     #[test]
-    fn nested_sketch_loops_plan_one_material_region_with_an_inner_wire() {
+    fn nested_sketch_loops_allow_selecting_the_inner_region_independently() {
         let mut manager = SketchManager::new();
         manager
             .begin_sketch(PlaneRef::OriginPlane {
@@ -9706,6 +9736,7 @@ mod project_tests {
 
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: vec![inner.index],
@@ -9720,9 +9751,8 @@ mod project_tests {
             panic!("nested profile should plan an Extrude job");
         };
         assert_eq!(job.profiles.len(), 1);
-        assert_eq!(job.profiles[0].profile_index, outer.index);
-        assert_eq!(job.profiles[0].holes.len(), 1);
-        assert_eq!(job.profiles[0].holes[0].profile_index, inner.index);
+        assert_eq!(job.profiles[0].profile_index, inner.index);
+        assert!(job.profiles[0].holes.is_empty());
         assert_eq!(job.result_body_ids.len(), 1);
     }
 
@@ -9827,6 +9857,7 @@ mod project_tests {
 
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: vec![outer.index],
@@ -9890,6 +9921,7 @@ mod project_tests {
         for profile in &catalog[0].profiles {
             let plan = manager
                 .prepare_extrude(ExtrudeRequest {
+                    merge_profiles: false,
                     source_face: None,
                     sketch_name: "Sketch1".to_string(),
                     profile_indices: vec![profile.index],
@@ -10011,6 +10043,7 @@ mod project_tests {
 
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: profiles.iter().map(|profile| profile.index).collect(),
@@ -10071,6 +10104,7 @@ mod project_tests {
 
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: profiles.iter().map(|profile| profile.index).collect(),
@@ -10431,6 +10465,7 @@ mod project_tests {
 
         let extrude = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: vec![0],
@@ -10591,6 +10626,7 @@ mod project_tests {
 
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: vec![0],
@@ -10688,6 +10724,7 @@ mod project_tests {
 
         let plan = manager
             .prepare_extrude(ExtrudeRequest {
+                merge_profiles: false,
                 source_face: None,
                 sketch_name: "Sketch1".to_string(),
                 profile_indices: vec![0],

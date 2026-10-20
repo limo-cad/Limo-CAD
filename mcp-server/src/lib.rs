@@ -2519,6 +2519,7 @@ fn build_tool_specs() -> Vec<ToolSpec> {
         json!({
             "sketch_name": { "type": "string", "minLength": 1 },
             "profile_indices": profile_indices.clone(),
+            "merge_profiles": { "type":"boolean", "default":false, "description":"Fuse contacting selected regions into a single New Body; disjoint or point-only contact is rejected." },
             "operation": { "type": "string", "enum": ["new_body", "join", "cut", "intersect"] },
             "extent": {
                 "type": "object",
@@ -2543,6 +2544,7 @@ fn build_tool_specs() -> Vec<ToolSpec> {
         json!({
             "sketch_name": { "type": "string", "minLength": 1 },
             "profile_indices": profile_indices,
+            "merge_profiles": { "type":"boolean", "default":false, "description":"Fuse contacting selected regions into a single New Body; disjoint or point-only contact is rejected." },
             "axis_origin": point.clone(),
             "axis_direction": point.clone(),
             "axis_line_sketch_name": { "type": ["string", "null"], "minLength": 1, "description": "Optional sketch owning the stable axis line. It must be coplanar with sketch_name; omitted values use sketch_name." },

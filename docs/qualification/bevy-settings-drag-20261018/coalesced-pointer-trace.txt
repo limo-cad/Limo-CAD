@@ -1,0 +1,50 @@
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(275.0, 103.0) }, action: Release(Primary) }
+SETTINGS_TRACE hover Mouse 813v1 name=None control=Some("Close dialog") title=false resize=false
+SETTINGS_TRACE frame=119 batch=1
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(275.0, 103.0) }, action: Move { delta: Vec2(0.0, 0.0) } }
+SETTINGS_TRACE hover Mouse 850v1 name=None control=None title=true resize=false
+SETTINGS_TRACE PRESS 850v1 name=None control=None title=true resize=false pos=Vec2(275.0, 103.0)
+SETTINGS_TRACE PRESS 812v1 name=None control=None title=false resize=false pos=Vec2(275.0, 103.0)
+SETTINGS_TRACE PRESS 771v0 name=None control=None title=false resize=false pos=Vec2(275.0, 103.0)
+SETTINGS_TRACE PRESS 66v0 name=None control=None title=false resize=false pos=Vec2(275.0, 103.0)
+SETTINGS_TRACE frame=122 batch=3
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(275.0, 103.0) }, action: Move { delta: Vec2(0.0, 0.0) } }
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(275.0, 103.0) }, action: Press(Primary) }
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(275.0, 103.0) }, action: Move { delta: Vec2(0.0, 0.0) } }
+SETTINGS_TRACE hover Mouse 850v1 name=None control=None title=true resize=false
+SETTINGS_TRACE START 850v1 name=None control=None title=true resize=false pos=Vec2(15.0, 103.0)
+SETTINGS_TRACE START 812v1 name=None control=None title=false resize=false pos=Vec2(15.0, 103.0)
+SETTINGS_TRACE START 771v0 name=None control=None title=false resize=false pos=Vec2(15.0, 103.0)
+SETTINGS_TRACE START 66v0 name=None control=None title=false resize=false pos=Vec2(15.0, 103.0)
+SETTINGS_TRACE DRAG 850v1 name=None control=None title=true resize=false pos=Vec2(15.0, 103.0) distance=Vec2(-260.0, 0.0) delta=Vec2(-260.0, 0.0)
+SETTINGS_TRACE DRAG 812v1 name=None control=None title=false resize=false pos=Vec2(15.0, 103.0) distance=Vec2(-260.0, 0.0) delta=Vec2(-260.0, 0.0)
+SETTINGS_TRACE DRAG 771v0 name=None control=None title=false resize=false pos=Vec2(15.0, 103.0) distance=Vec2(-260.0, 0.0) delta=Vec2(-260.0, 0.0)
+SETTINGS_TRACE DRAG 66v0 name=None control=None title=false resize=false pos=Vec2(15.0, 103.0) distance=Vec2(-260.0, 0.0) delta=Vec2(-260.0, 0.0)
+SETTINGS_TRACE frame=125 batch=3
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(15.0, 103.0) }, action: Move { delta: Vec2(-260.0, 0.0) } }
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(15.0, 103.0) }, action: Move { delta: Vec2(0.0, 0.0) } }
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(15.0, 103.0) }, action: Release(Primary) }
+SETTINGS_TRACE hover Mouse 813v1 name=None control=Some("Close dialog") title=false resize=false
+SETTINGS_TRACE frame=145 batch=1
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(140.0, 103.0) }, action: Move { delta: Vec2(125.0, 0.0) } }
+SETTINGS_TRACE hover Mouse 850v1 name=None control=None title=true resize=false
+SETTINGS_TRACE PRESS 813v1 name=None control=Some("Close dialog") title=false resize=false pos=Vec2(140.0, 103.0)
+SETTINGS_TRACE START 813v1 name=None control=Some("Close dialog") title=false resize=false pos=Vec2(720.0, 435.5)
+SETTINGS_TRACE START 771v0 name=None control=None title=false resize=false pos=Vec2(720.0, 435.5)
+SETTINGS_TRACE START 66v0 name=None control=None title=false resize=false pos=Vec2(720.0, 435.5)
+SETTINGS_TRACE DRAG 813v1 name=None control=Some("Close dialog") title=false resize=false pos=Vec2(720.0, 435.5) distance=Vec2(580.0, 332.5) delta=Vec2(580.0, 332.5)
+SETTINGS_TRACE DRAG 771v0 name=None control=None title=false resize=false pos=Vec2(720.0, 435.5) distance=Vec2(580.0, 332.5) delta=Vec2(580.0, 332.5)
+SETTINGS_TRACE DRAG 66v0 name=None control=None title=false resize=false pos=Vec2(720.0, 435.5) distance=Vec2(580.0, 332.5) delta=Vec2(580.0, 332.5)
+SETTINGS_TRACE frame=148 batch=3
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(140.0, 103.0) }, action: Move { delta: Vec2(0.0, 0.0) } }
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(140.0, 103.0) }, action: Press(Primary) }
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(720.0, 435.5) }, action: Move { delta: Vec2(580.0, 332.5) } }
+SETTINGS_TRACE hover Mouse 813v1 name=None control=Some("Close dialog") title=false resize=false
+SETTINGS_TRACE DRAG 813v1 name=None control=Some("Close dialog") title=false resize=false pos=Vec2(1300.0, 768.0) distance=Vec2(1160.0, 665.0) delta=Vec2(580.0, 332.5)
+SETTINGS_TRACE DRAG 771v0 name=None control=None title=false resize=false pos=Vec2(1300.0, 768.0) distance=Vec2(1160.0, 665.0) delta=Vec2(580.0, 332.5)
+SETTINGS_TRACE DRAG 66v0 name=None control=None title=false resize=false pos=Vec2(1300.0, 768.0) distance=Vec2(1160.0, 665.0) delta=Vec2(580.0, 332.5)
+SETTINGS_TRACE frame=151 batch=3
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(1300.0, 768.0) }, action: Move { delta: Vec2(580.0, 332.5) } }
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(1300.0, 768.0) }, action: Move { delta: Vec2(0.0, 0.0) } }
+SETTINGS_TRACE input PointerInput { pointer_id: Mouse, location: Location { target: Window(NormalizedWindowRef(66v0)), position: Vec2(1300.0, 768.0) }, action: Release(Primary) }
+SETTINGS_TRACE hover Mouse 813v1 name=None control=Some("Close dialog") title=false resize=false
