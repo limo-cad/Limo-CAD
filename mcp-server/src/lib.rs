@@ -341,7 +341,7 @@ impl CadServer {
             let _ = limo_cad_export::slicer_verification::local_slicer_service()
                 .observe_owned_model(&self.verification_owner_id, || {
                     self.manager
-                        .export_project_model()
+                        .project_model_projection()
                         .map_err(|error| error.to_string())
                 });
         }
@@ -591,7 +591,7 @@ impl CadServer {
                         request.expected_model_json.as_deref(),
                         &self
                             .manager
-                            .export_project_model()
+                            .project_model_projection()
                             .map_err(|e| e.to_string())?,
                     )?;
                 }
@@ -1899,7 +1899,7 @@ impl CadServer {
                 .check_model_snapshot(
                     &self
                         .manager
-                        .export_project_model()
+                        .project_model_projection()
                         .map_err(|e| e.to_string())?,
                 )
                 .map_err(|e| e.to_string())?;
@@ -2039,7 +2039,7 @@ impl CadServer {
             .check_model_snapshot(
                 &self
                     .manager
-                    .export_project_model()
+                    .project_model_projection()
                     .map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?;
