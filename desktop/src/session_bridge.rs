@@ -782,6 +782,7 @@ fn engine_envelope_value(mut envelope: Value) -> Result<Value, String> {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn engine_text(value: Value, missing: &str) -> Result<String, String> {
     match value {
         Value::String(text) => Ok(text),
