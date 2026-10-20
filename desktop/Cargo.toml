@@ -112,7 +112,7 @@ wgpu = { version = "=30.0.1", default-features = false, features = ["std"] }
 raw-window-handle = "0.6.2"
 # Bevy 0.20 exposes AccessKit 0.24 nodes and action requests without re-exporting
 # the crate. Keep the same types at that boundary until Bevy upgrades AccessKit.
-accesskit = { version = "=0.25.1" }
+accesskit = { version = "=0.24.1" }
 svg2pdf = { version = "=0.13.0", default-features = false }
 winit = { version = "=0.30.13", default-features = false }
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }

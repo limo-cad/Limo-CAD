@@ -42,7 +42,7 @@ name = "bevy_ui_widgets"
 path = "src/lib.rs"
 
 [dependencies.accesskit]
-version = "0.25"
+version = "0.24"
 
 [dependencies.bevy_a11y]
 version = "0.20.0"
@@ -91,11 +91,11 @@ version = "0.20.0"
 version = "0.20.0"
 
 [dependencies.parley]
-version = "0.12.0"
+version = "0.11.0"
 default-features = false
 
 [dependencies.smol_str]
-version = "0.3"
+version = "0.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
 version = "0.3"

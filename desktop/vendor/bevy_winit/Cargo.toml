@@ -67,10 +67,10 @@ name = "bevy_winit"
 path = "src/lib.rs"
 
 [dependencies.accesskit]
-version = "0.25"
+version = "0.24"
 
 [dependencies.accesskit_winit]
-version = "0.34"
+version = "0.33"
 features = ["rwh_06"]
 default-features = false
 
