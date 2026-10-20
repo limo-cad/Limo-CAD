@@ -56,7 +56,7 @@ impl Evidence {
     }
 }
 fn digest(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    crate::hash::hex(&Sha256::digest(bytes))
 }
 fn bounded_read(path: &Path) -> Result<Vec<u8>> {
     ensure!(
