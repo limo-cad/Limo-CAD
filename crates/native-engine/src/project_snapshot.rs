@@ -28,6 +28,18 @@ impl NativeEngineHost {
             .map_err(|error| error.to_string())
     }
 
+    /// Read a transient model projection under the engine lock without copying
+    /// domain payloads. Model-scoped preconditions and inspection may use this;
+    /// saving, replacement, history and replay require `project_snapshot`.
+    pub fn project_model_projection(&self) -> Result<String, String> {
+        let workspace = self.inner.lock().map_err(|_| "Engine lock poisoned")?;
+        workspace
+            .active()
+            .manager
+            .project_model_projection()
+            .map_err(|error| error.to_string())
+    }
+
     /// Load paired model/domain intent through the same kernel transaction as
     /// legacy project loading. A preparation rejection carries the existing
     /// unchanged marker; callers must preserve normal replacement retirement
@@ -71,6 +83,10 @@ mod tests {
         .unwrap();
         assert_eq!(result(host.project_load_snapshot(&candidate))["ok"], true);
         assert_eq!(host.project_snapshot().unwrap(), candidate);
+        assert_eq!(
+            host.project_model_projection().unwrap(),
+            candidate.model_json()
+        );
         // An incomplete legacy export must still refuse to discard domain data.
         assert_eq!(
             result(host.engine_call("project_export_model", ""))["ok"],
