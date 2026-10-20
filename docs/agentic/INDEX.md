@@ -8,8 +8,8 @@
 
 Committed operating docs for humans and coding agents working on Limo CAD.
 Shared contribution policy lives in [CONTRIBUTING.md](../../CONTRIBUTING.md) and
-[the project workflow](../contributing/pr-lifecycle.md). Root AGENTS.md is a short
-pointer to that policy; personal editor and agent configuration stays local.
+[the project workflow](../contributing/pr-lifecycle.md). Editor and coding-agent
+configuration and instruction files stay local.
 
 | Doc | Purpose |
 |-----|---------|

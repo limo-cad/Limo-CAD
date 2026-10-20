@@ -56,8 +56,8 @@
       "--", "--exact", "--test-threads=1"
     ],
     "environment": {
-      "CARGO_TARGET_DIR": "D:/noBS-CAD-builds/finish-bevy-rc2/release-target",
-      "OCCT_ROOT": "C:/Users/jeffg/dev/noBS-CAD/vcpkg_installed/x64-windows",
+      "CARGO_TARGET_DIR": "<local-root>/noBS-CAD-builds/finish-bevy-rc2/release-target",
+      "OCCT_ROOT": "<local-root>/Users/<user>/dev/noBS-CAD/vcpkg_installed/x64-windows",
       "features": "Default desktop dependencies; native OCCT, no native computer control",
       "profile": "Unoptimized test profile with debuginfo",
       "rustflags": []

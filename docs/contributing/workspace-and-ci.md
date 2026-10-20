@@ -10,8 +10,9 @@ local files. Repository visibility is a separate maintainer decision.
 - Commit portable project conventions and reproducible commands. Keep credentials,
   permissions overrides, personal editor/agent settings, machine paths, internal
   coordination identities, transcripts and recovery data out of commits and PRs.
-- Root AGENTS.md is a short entry point. Link task-specific guidance only when
-  relevant; avoid duplicate rules, provider personas and mandatory context dumps.
+- Keep coding-agent settings, prompts, skills and instruction files local,
+  including root AGENTS.md. Put shared requirements in CONTRIBUTING.md and the
+  relevant project documentation; avoid duplicate rules and provider personas.
 - Treat logs, screenshots, examples, CI artifacts and caches as shareable with the
   repository's audience. Use synthetic fixtures and explicit output paths; inspect
   evidence before publishing. Gitignore does not remove already tracked content.
@@ -48,7 +49,12 @@ local files. Repository visibility is a separate maintainer decision.
   contain active reusable jobs; preserve running SDK and cache owners.
 
 The [offline workspace check](../../scripts/ci/check-workspace-policy.rs) rejects
-private configuration paths and host context in shared guidance.
+private configuration paths and developer home paths in tracked text, plus local
+accounts in identity fields and task-list CSV columns. Retained qualification and
+startup evidence must use placeholders for absolute local drive roots. Portable
+source-code fixtures and documented SDK examples remain valid. It also checks shared guidance
+for internal coordination context. This is a focused regression guard, not a
+general credential scanner.
 [Workflow contract tests](../../xtask/src/workflow_contracts.rs) check immutable
 actions, checkout credentials and publication gates. GitHub access controls and
 secret scanning remain separate administrator-managed controls.

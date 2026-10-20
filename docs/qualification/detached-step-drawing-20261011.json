@@ -4,7 +4,7 @@
   "recorded_utc": "2026-10-11T12:46:09.0375578Z",
   "qualification": "focused_source_checks_passed_live_acceptance_pending",
   "integration": "PR124; both Bevy aliases; incoming6c897699 preserved; main untouched; Jack PRs untouched",
-  "results_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/step-drawing-guards-fd85a556-results.json",
+  "results_receipt": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/step-drawing-guards-fd85a556-results.json",
   "strict_windows_packages": [
     "desktop",
     "native-engine",
@@ -15,12 +15,12 @@
   "artifacts": [
     {
       "kind": "desktop",
-      "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-9b90afe074be23da.exe",
+      "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-9b90afe074be23da.exe",
       "sha256": "18648b930081e7dc3b65b9c18d3fdd8844b74a1d460df56e77d8db376168d2ce"
     },
     {
       "kind": "native-engine",
-      "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_native_engine-ff1a5f47721e5df5.exe",
+      "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_native_engine-ff1a5f47721e5df5.exe",
       "sha256": "3a246a72506aaf58038a3648c91ba888f7d2dde615b75f3b70c6131eea0f315f"
     }
   ],
@@ -43,7 +43,7 @@
   },
   "preserved_failure": {
     "revision": "8d4acaea047223af8f75dab8bb0603d5d1cc44c3",
-    "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/step-drawing-guards-8d4acaea-results.json",
+    "receipt": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/step-drawing-guards-8d4acaea-results.json",
     "scope": "Strict lint stopped before artifacts/tests on two newly written STEP bounds-oracle iterator lints.",
     "correction": "76655f57 uses fixed array chunks and direct coordinate iteration; all independent geometry assertions retained. No test or production guard weakened."
   },

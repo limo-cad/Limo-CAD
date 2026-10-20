@@ -27,7 +27,7 @@
   },
   "thread_actual_ui": {
     "qualified_export_runtime": "8e0a0bda674e2f53588904e278e45783872eb11c",
-    "saved_file": "D:/limo-cad-maintenance/ui-models/Threaded annulus - verified human UI.limo",
+    "saved_file": "<local-root>/limo-cad-maintenance/ui-models/Threaded annulus - verified human UI.limo",
     "saved_bytes": 3172,
     "saved_sha256": "a11c39f43acef2a8172baa7b0b9b2ddf5285293935c1282f5a6ed1a209bc3f22",
     "live_matches_saved_model": true,
@@ -36,7 +36,7 @@
     "inner_radius_saved_mm": 4.999999999999999,
     "thread": { "pitch_mm": 2.5, "length_mm": 8, "hand": "right", "representation": "modeled", "flip": true },
     "three_mf": {
-      "file": "D:/limo-cad-maintenance/ui-models/Threaded annulus - native precision human UI.3mf",
+      "file": "<local-root>/limo-cad-maintenance/ui-models/Threaded annulus - native precision human UI.3mf",
       "bytes": 28376,
       "sha256": "a110e394b2f49b1d50722872dafce63896a95406d074e1ff3b6ffe5d96c1c658",
       "vertices": 863,
@@ -45,7 +45,7 @@
       "invalid_directed_edges": 0
     },
     "stl": {
-      "file": "D:/limo-cad-maintenance/ui-models/Threaded annulus - native precision human UI.stl",
+      "file": "<local-root>/limo-cad-maintenance/ui-models/Threaded annulus - native precision human UI.stl",
       "bytes": 521657,
       "sha256": "b68c63ca58259f45f278f692af08a76f445a22892685285a2394d2d55c224010",
       "format": "ascii",
@@ -56,19 +56,19 @@
       "ordered_coordinate_mismatches_against_three_mf": 0
     },
     "native_dialog_full_filename_visibly_verified_before_enter": true,
-    "original_accidental_save_preserved": "D:/li.limo",
+    "original_accidental_save_preserved": "<local-root>/li.limo",
     "exact_ci_topology_equivalence_claimed": false
   },
   "medix_regression": {
     "runtime": "8e0a0bda674e2f53588904e278e45783872eb11c",
     "saved_import_live_matches_archive": true,
-    "three_mf_file": "D:/limo-cad-maintenance/ui-models/Medix KW22 v4 - 8e native regression human UI.3mf",
+    "three_mf_file": "<local-root>/limo-cad-maintenance/ui-models/Medix KW22 v4 - 8e native regression human UI.3mf",
     "bytes": 6815148,
     "sha256": "3196c28b2830e5bc0c31ac8e758805305b9181eed1ffab1adeecb6137756354a",
     "byte_identical_to_qualified_export": true
   },
   "bench_checkpoint": {
-    "file": "D:/limo-cad-maintenance/ui-models/Crown garden bench - lower stock isolated human UI.limo",
+    "file": "<local-root>/limo-cad-maintenance/ui-models/Crown garden bench - lower stock isolated human UI.limo",
     "bytes": 7221,
     "sha256": "0eedefb032735910414aec8738440bea7784231647993f6dc6557eb324377837",
     "committed_checkpoint": "examples/checkpoints/garden-bench-front-support-stock-human-ui.limo",

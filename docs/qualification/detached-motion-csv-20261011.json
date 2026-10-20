@@ -15,7 +15,7 @@
   },
   "qualification": {
     "revision": "e224021b196ef4646e9cf4d2f253eb04d685bb49",
-    "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+    "checkout": "<local-root>\\limo-cad-maintenance\\ownership-worktree",
     "desktop_filters": [
       "session_bridge::native_interface::controller::assembly::studies::tests::ordered_motion_csv_export_releases_live_guards_and_rejects_retired_file_authority",
       "session_bridge::native_control::tests::native_motion_csv_query_releases_live_guards_and_fences_original_completion_once"
@@ -23,9 +23,9 @@
     "native_filters": [
       "host::motion_path_snapshot::tests::detached_motion_path_preserves_physical_csv_and_rejects_stale_inputs"
     ],
-    "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+    "occt_root": "<local-root>\\limo-cad-maintenance\\checked-occt-sdk",
     "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
-    "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+    "target": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
     "msvc": "14.44.35207",
     "windows_sdk": "10.0.26100.0\\",
     "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
@@ -34,12 +34,12 @@
     "artifacts": [
       {
         "kind": "desktop",
-        "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
+        "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
         "sha256": "2d2a4a6e848ec62e05724849f5e273ae4f2dcbc9810fc980dad156bb10b77814"
       },
       {
         "kind": "native-engine",
-        "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_native_engine-ff1a5f47721e5df5.exe",
+        "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_native_engine-ff1a5f47721e5df5.exe",
         "sha256": "8d78c0a44adf6190e3724e3353176127a8c43424f9c2a1c6b03850ab87c762fd"
       }
     ],
@@ -48,20 +48,20 @@
         "kind": "strict-desktop",
         "exit_code": 0,
         "elapsed_seconds": 58.7100576,
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-strict-desktop.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-strict-desktop.log"
       },
       {
         "kind": "strict-native-engine-occt",
         "exit_code": 0,
         "elapsed_seconds": 2.3727081,
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-strict-native-engine-occt.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-strict-native-engine-occt.log"
       },
       {
         "kind": "desktop_artifact_compile",
         "exit_code": 0,
         "elapsed_seconds": 740.8381711999999,
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-desktop-compile.jsonl",
-        "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-desktop-compile.stderr.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-desktop-compile.jsonl",
+        "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-desktop-compile.stderr.log"
       },
       {
         "kind": "desktop_regression",
@@ -70,7 +70,7 @@
         "exact_one_pass": true,
         "elapsed_seconds": 0.4925986,
         "binary_sha256": "2d2a4a6e848ec62e05724849f5e273ae4f2dcbc9810fc980dad156bb10b77814",
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-desktop-test-0.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-desktop-test-0.log"
       },
       {
         "kind": "desktop_regression",
@@ -79,14 +79,14 @@
         "exact_one_pass": true,
         "elapsed_seconds": 0.3992386,
         "binary_sha256": "2d2a4a6e848ec62e05724849f5e273ae4f2dcbc9810fc980dad156bb10b77814",
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-desktop-test-1.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-desktop-test-1.log"
       },
       {
         "kind": "native-engine_artifact_compile",
         "exit_code": 0,
         "elapsed_seconds": 32.695061599999995,
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-native-engine-compile.jsonl",
-        "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-native-engine-compile.stderr.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-native-engine-compile.jsonl",
+        "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-native-engine-compile.stderr.log"
       },
       {
         "kind": "native-engine_regression",
@@ -95,7 +95,7 @@
         "exact_one_pass": true,
         "elapsed_seconds": 0.050429299999999996,
         "binary_sha256": "8d78c0a44adf6190e3724e3353176127a8c43424f9c2a1c6b03850ab87c762fd",
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-native-engine-test-0.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-motion-csv-e224021b-native-engine-test-0.log"
       }
     ],
     "scope": "Strict changed-package Windows desktop/native-engine/OCCT checks on reviewed detached pure sampler motion CSV and genuine revocable study-file authority. One artifact per package; exactly three NEW native/ordered-UI/admitted-MCP CSV regressions, no contact/sweep/section/static passing filters repeated. Unchanged existing sampler/CSV validation/limits/row-order/14-column derivative semantics; genuine repeated stock slider with independent4Hz physical rows time0 through1 and Z5 through0. Compute from required owned Assembly and SceneArc off original live guards, no unnecessary native BRep/native-identity dependency. Native proof uses original host/session/revision/WeakScene/exactauthored intent; final UI publisher-to-revocable-file-lease-to-source-proof-to-atomicwrite order. Cancellation, draft/hide/tab/StateDrop, retired picker, raw study/edit/replacement refusals and successful overwrite; actual MCP lease/publisher reentry, owned CSV transfer, original ticket/retained outcome and delivery-only retry. Required assembly capture, original per-frame sampler clones, formatting/output and final source equality/write still scale; no performance or zero-latency claim. Incoming direct Bevy source/docs preserved; separately authored macOS renderer/section evidence retained without repeating its passing cases or claiming Windows human/GPU acceptance. No suites, recipe replay, live UI/MCP input, runtime restart, deployment, main/Jack PR action or parent epic closure."

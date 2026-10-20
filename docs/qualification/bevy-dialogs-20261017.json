@@ -70,11 +70,11 @@
     "features": [
       "experimental-ui-widgets"
     ],
-    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v8/widgets/Limo CAD PR420 Widgets V8.app",
+    "application": "/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v8/widgets/Limo CAD PR420 Widgets V8.app",
     "engine_sha256": "004af36102ae09b68bca35fd0b9cf35f831d071375224045246a530000adcc5c",
     "signature": "ad-hoc; deep strict verification passed",
     "bundled_occt_loaded": true,
-    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "source_worktree": "/Users/<user>/.codex/worktrees/pr420-visual-parity/noBS-CAD",
     "baseline": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
     "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
     "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
@@ -276,7 +276,7 @@
   "broad_qualification": "paused; existing UI/MCP ledger unchanged; no MCP mutations or modeling scripts",
   "prior_standard_input_evidence": "bevy-widgets-standard-input-20261017.json",
   "feature": "experimental-ui-widgets remains opt-in; PR remains draft",
-  "artifact_root": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
+  "artifact_root": "/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
   "disk_cleanup": {
     "initial_recovered_bytes": 68668850176,
     "final_rebuild_cleanup_recovered_bytes": 2694721536,

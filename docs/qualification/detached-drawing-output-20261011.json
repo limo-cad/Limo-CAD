@@ -5,7 +5,7 @@
   "qualification": "focused_source_checks_passed_live_acceptance_pending",
   "integration": "PR124; no Bevy merge into main",
   "strict_windows_checks": ["desktop", "native-engine and OCCT", "MCP"],
-  "results_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/drawing-bambu-combined-1c0dc76e-results.json",
+  "results_receipt": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/drawing-bambu-combined-1c0dc76e-results.json",
   "new_checks": {
     "desktop_artifact_sha256": "974159e6ad0b32c7506988fd340ded20d8fae41b1c38d49bb26332dbdf0e69e1",
     "desktop_filters": [
@@ -22,7 +22,7 @@
   },
   "retained_without_repetition": {
     "source_revision": "de62fa52313a1345237dc103b809639637ec2ab3",
-    "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/detached-drawing-de62fa52-unrun3-results.json",
+    "receipt": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/detached-drawing-de62fa52-unrun3-results.json",
     "desktop_artifact_sha256": "3b46fb85affd9f607576c5d8a142693826222db54df2e35de751ceaa11acf58e",
     "filters": [
       "session_bridge::native_interface::controller::workbench::drawing_authoring::repair::tests::broken_detail_keeps_its_real_parent_pickable_and_repairs_in_one_history_entry",

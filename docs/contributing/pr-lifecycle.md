@@ -2,8 +2,7 @@
 
 This policy applies to every contributor and every development tool used on the
 project. Personal editor settings and tool-specific instruction files stay out
-of the repository. Shared agreements belong in CONTRIBUTING.md and these docs;
-AGENTS.md is a short entry point to the same policy.
+of the repository. Shared agreements belong in CONTRIBUTING.md and these docs.
 
 ## Group work before review
 

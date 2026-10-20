@@ -55,8 +55,12 @@ git checkout -b fix/short-slug origin/main
 ## Shared project policy
 
 These agreements apply to humans and coding tools alike. Personal editor and
-agent configuration stays local; project policy lives here and in the linked
-documents. AGENTS.md only provides an entry point to this shared guidance.
+agent configuration and instruction files stay local, including AGENTS.md.
+Project policy lives here and in the linked documents.
+
+Before UI/MCP qualification, read the surface policy and coverage ledger below.
+Respect a paused run until the user resumes it. Preserve incoming work, documents
+and recovery data throughout review and cleanup.
 
 - [Grouped PRs, draft/review states, approval and squash merge](docs/contributing/pr-lifecycle.md)
 - [Localization and native text validation](docs/contributing/localized-ui.md)

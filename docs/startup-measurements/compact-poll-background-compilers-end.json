@@ -7,12 +7,12 @@
   "queries": [
     {
       "image": "cargo.exe",
-      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"cargo.exe\",\"21844\",\"Console\",\"1\",\"8,840 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"24412\",\"Console\",\"1\",\"9,260 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"11124\",\"Console\",\"1\",\"10,488 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"23464\",\"Console\",\"1\",\"64,420 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:01\",\"N/A\"\r\n",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"cargo.exe\",\"21844\",\"Console\",\"1\",\"8,840 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"24412\",\"Console\",\"1\",\"9,260 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"11124\",\"Console\",\"1\",\"10,488 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"23464\",\"Console\",\"1\",\"64,420 K\",\"Unknown\",\"<local-account>\",\"0:00:01\",\"N/A\"\r\n",
       "error": null
     },
     {
       "image": "rustc.exe",
-      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"rustc.exe\",\"47832\",\"Console\",\"1\",\"61,004 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"rustc.exe\",\"47832\",\"Console\",\"1\",\"61,004 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n",
       "error": null
     },
     {
@@ -22,7 +22,7 @@
     },
     {
       "image": "link.exe",
-      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"link.exe\",\"50104\",\"Console\",\"1\",\"376,356 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"link.exe\",\"50104\",\"Console\",\"1\",\"376,356 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n",
       "error": null
     },
     {

@@ -78,5 +78,5 @@
 </details>
 
 Shared contribution policy lives in [CONTRIBUTING.md](../CONTRIBUTING.md) and
-[the project workflow](contributing/pr-lifecycle.md). Root AGENTS.md is a short
-entry point; personal editor and agent configuration remains local and ignored.
+[the project workflow](contributing/pr-lifecycle.md). Editor and coding-agent
+configuration and instruction files remain local and ignored.

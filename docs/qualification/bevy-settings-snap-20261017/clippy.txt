@@ -1118,7 +1118,7 @@ warning: limo-cad-occt@0.3.0-rc.1: /private/tmp/limo-local-build-4647d5e4/occt-s
 warning: limo-cad-occt@0.3.0-rc.1:   136 |     #define Standard_DEPRECATED(theMsg) __attribute__((deprecated(theMsg)))
 warning: limo-cad-occt@0.3.0-rc.1:       |                                                        ^
 warning: limo-cad-occt@0.3.0-rc.1: 99 warnings generated.
-   Compiling limo-cad-build-info v0.3.0-rc.1 (/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD/crates/build-info)
-    Checking limo-cad-mcp v0.3.0-rc.1 (/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD/mcp-server)
-    Checking limo-cad v0.3.0-rc.1 (/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD/desktop)
+   Compiling limo-cad-build-info v0.3.0-rc.1 (/Users/<user>/.codex/worktrees/pr420-visual-parity/noBS-CAD/crates/build-info)
+    Checking limo-cad-mcp v0.3.0-rc.1 (/Users/<user>/.codex/worktrees/pr420-visual-parity/noBS-CAD/mcp-server)
+    Checking limo-cad v0.3.0-rc.1 (/Users/<user>/.codex/worktrees/pr420-visual-parity/noBS-CAD/desktop)
     Finished `release` profile [optimized] target(s) in 34.28s

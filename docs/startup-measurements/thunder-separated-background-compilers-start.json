@@ -4,12 +4,12 @@
     {
       "image": "cargo.exe",
       "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"cargo.exe\",\"42172\",\"Console\"",
-      "error": "Command failed: C:/Windows/System32/tasklist.exe /FI IMAGENAME eq cargo.exe /FO CSV /V\n"
+      "error": "Command failed: <local-root>/Windows/System32/tasklist.exe /FI IMAGENAME eq cargo.exe /FO CSV /V\n"
     },
     {
       "image": "rustc.exe",
-      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"rustc.exe\",\"46776\",\"Console\",\"1\",\"1,134,712 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:02:47\",\"N/A\"\r\n\"rustc.exe\",\"39948\",\"Console\",\"1\",\"505,440 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:07\",\"N/A\"\r\n\"rustc.exe\",\"45724\",\"Console\",\"1\",\"201,112 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:01\",\"N/A\"\r\n\"rustc.exe\",\"2856\",\"Console\",\"1\",\"199,148 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:02\",\"N/A\"\r\n\"rustc.exe\",\"46784\",\"Console\",\"1\",\"56,160 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:01\",\"N/A\"\r\n\"rustc.exe\",\"28732\",\"Console\",\"1\",\"105,964 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"51460\",\"Console\",\"1\",\"104,392 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"51076\",\"Console\",\"1\",\"50,176 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"6628\",\"Console\",\"1\",\"85,240 K\",\"Unknown\",",
-      "error": "Command failed: C:/Windows/System32/tasklist.exe /FI IMAGENAME eq rustc.exe /FO CSV /V\n"
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"rustc.exe\",\"46776\",\"Console\",\"1\",\"1,134,712 K\",\"Unknown\",\"<local-account>\",\"0:02:47\",\"N/A\"\r\n\"rustc.exe\",\"39948\",\"Console\",\"1\",\"505,440 K\",\"Unknown\",\"<local-account>\",\"0:00:07\",\"N/A\"\r\n\"rustc.exe\",\"45724\",\"Console\",\"1\",\"201,112 K\",\"Unknown\",\"<local-account>\",\"0:00:01\",\"N/A\"\r\n\"rustc.exe\",\"2856\",\"Console\",\"1\",\"199,148 K\",\"Unknown\",\"<local-account>\",\"0:00:02\",\"N/A\"\r\n\"rustc.exe\",\"46784\",\"Console\",\"1\",\"56,160 K\",\"Unknown\",\"<local-account>\",\"0:00:01\",\"N/A\"\r\n\"rustc.exe\",\"28732\",\"Console\",\"1\",\"105,964 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"51460\",\"Console\",\"1\",\"104,392 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"51076\",\"Console\",\"1\",\"50,176 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"rustc.exe\",\"6628\",\"Console\",\"1\",\"85,240 K\",\"Unknown\",",
+      "error": "Command failed: <local-root>/Windows/System32/tasklist.exe /FI IMAGENAME eq rustc.exe /FO CSV /V\n"
     },
     {
       "image": "cl.exe",

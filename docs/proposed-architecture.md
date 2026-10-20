@@ -1,128 +1,24 @@
-# Proposed architecture (not yet accepted product commits)
+# Architecture proposals and decisions
 
-This document collects **aspirational / proposed** implementation ideas.
-They are useful for discussion and issues. They are **not** promises that
-`main` already behaves this way.
+The original July proposals discussed a React desktop shell, static MCP tool
+disclosure and a future 3MF writer. Those starting assumptions are obsolete.
+The [historical proposal](https://github.com/limo-cad/Limo-CAD/blob/0dc4a95b91ac909299fe20983592b57007a43690/docs/proposed-architecture.md)
+remains available for context.
 
-Accepted product directions (without binding IPC/UI architecture) live in
-[goals.md](goals.md). Factual MCP notes live in [mcp-harness.md](mcp-harness.md).
+Use the maintained decisions and contracts when proposing changes:
 
-## Status key
+- [One Bevy application interface](adr/0003-bevy-interface.md) defines desktop,
+  command and rendering ownership.
+- [MCP focus and session decisions](adr/0006-dynamic-mcp-focus.md) and the
+  [MCP operating guide](agentic/STEERABLE_MCP.md) describe discovery and attachment.
+- [3MF and STL export](adr/0003-3mf-export.md) records export scope and validation
+  limits; [manufacturing validation](manufacturing/VALIDATION.md) tracks slicer checks.
+- [Product directions](goals.md) distinguish goals from shipped behavior.
 
-| Status | Meaning |
-|--------|---------|
-| Proposed | Open for prototyping; may change |
-| Deferred | Interesting later; not near-term P0 |
+Record new proposals against the current implementation, with a concrete problem,
+tradeoffs and acceptance evidence. An accepted design does not establish that
+every platform or workflow has been qualified.
 
----
-
-## 1. Focus-scoped MCP tools — Proposed
-
-**Problem today:** `limo-cad-mcp` advertises `tools.listChanged: false` and returns
-a large static tool list (~100 tools), which floods agent context.
-
-**Proposal:** when modeling **focus** changes (document / sketch / solid /
-modify / history / print):
-
-1. Advertise `tools.listChanged: true`.
-2. Add/remove tools for that focus.
-3. Send `notifications/tools/list_changed` (exact MCP notification name).
-4. Keep a tiny always-on spine (status, set focus, safe cancel).
-
-**Invariant:** keep a fully **local** automation path. Today that is **stdio**.
-Stdio is the current supported transport, not an irreversible forever decision —
-offline/local behavior is the invariant; internal IPC can evolve with evidence.
-
-Spec reference: [MCP tools / listChanged](https://modelcontextprotocol.io/specification/2025-06-18/server/tools).
-
-**Branch note (`feat/3mf-print-export`):** soft disclosure prototype is implemented;
-see [mcp-harness.md](mcp-harness.md). `main` still uses a static list until merge.
-
----
-
-## 2. Co-link MCP ↔ one active UI document — Proposed (first milestone)
-
-**Problem today:** MCP owns an independent document from the visible UI
-(fork of truth). Same Rust planner crates; separate instances.
-
-**Proposal:** attach MCP to **one** live UI/engine session
-(`list_sessions` / `attach` with `document_id`, optional `window_id`).
-
-**v1 rules sketch:** explicit attach; writer lock or clear conflict errors;
-headless MCP without UI remains valid for CI goldens.
-
-This is the useful first automation milestone. Prototype before treating it as
-required product behavior.
-
-**Branch note:** `cad_list_sessions` / `cad_attach` / `cad_refresh` /
-`cad_detach` implement **read-only snapshot** load from headless session dirs
-(require valid `model.json`; no MCP writeback). Not a live shared UI document.
-
----
-
-## 3. Multi-window / multi-document MCP broker — Deferred
-
-Multiple open windows may matter later. A stdio **broker** that routes by
-`window_id` / `document_id` is one option; one MCP process per document is
-another (especially for CI).
-
-**Not a P0 product requirement** until real use cases justify it. Co-link to
-one active document comes first.
-
----
-
-## 4. 3MF export with materials/colors — Proposed target
-
-**Accepted direction:** additive manufacturing / 3MF with useful appearance
-metadata ([goals.md](goals.md)).
-
-**Proposed implementation sketch:**
-
-- Rust export from OCCT tessellation → 3MF primary, STL fallback
-- UI + MCP export tools when ready
-- v1 appearance may be per-body color + named material
-- Golden fixtures: colored cube → 3MF
-
-Describe as a **target with testable scope**, not current functionality.
-(No 3MF writer on `main` today.)
-
-**Branch note (`feat/3mf-print-export`):** native 3MF/STL export + MCP print pack
-(portable model for standard/Bambu/Orca; Prusa/Cura metadata — not a sliced
-G-code project).
-
----
-
-## 5. Rust crate roles (factual guidance for proposals)
-
-When proposing engine work, keep these boundaries clear:
-
-| Crate | Role |
-|-------|------|
-| `limo-cad-core`, `limo-cad-sketch`, `limo-cad-solid` | Host-neutral model logic (document, sketches, features, history, planning) |
-| `limo-cad-occt` | Native geometry adapter (OCCT) |
-| `limo-cad-wasm` | Browser adapter path (WASM host + OpenCascade.js for solids in the browser build) |
-
-UI (React/Three.js/Tauri) displays and commands; geometry truth stays in the
-Rust model + kernel adapters.
-
----
-
-## 6. Shared contribution policy
-
-Project and organization agreements belong in
-[CONTRIBUTING.md](../CONTRIBUTING.md) and the shared contribution documents it
-links. They apply to humans and development tools alike. Root AGENTS.md is a
-short entry point to the same policy, including grouped PRs, proportional
-validation, independent review and squash merge.
-
-Personal editor settings and tool-specific steering files remain local and
-ignored. Public MCP and architecture documentation stays in `docs/` and
-`mcp-server/README.md`.
-
----
-
-## 7. Education / quests — Deferred product layer
-
-Tutor-style loops that reuse golden MCP scenarios are attractive later. Keep
-them out of the top-level committed goals until the CAD foundation and local
-automation path are stronger.
+Shared development policy lives in [CONTRIBUTING.md](../CONTRIBUTING.md) and its
+linked documents. Personal editor settings and coding-agent instructions stay
+local and ignored.
