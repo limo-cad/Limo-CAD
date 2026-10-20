@@ -20,7 +20,9 @@ Shader-error recovery rebuilds contaminated renderer caches once on the existing
 
 `guided-experience.json` records source hashes, capture scope and timings. GIFs sample real native component captures at authored pauses, including intermediate motion. They are not OS pointer recordings. The native suite covers all lessons and both Cut outcomes, four locales at 175%, dimension raster ink, instruction clipping, a full automatic Sketch playback without blank model frames, and bounded texture imports. CPU regressions cover pause/resume, stale replies, deadline ordering and authored geometry. Independent code/performance and visual reviews informed the fixes.
 
-Older provenance files describe earlier capture batches. Four unrelated sketch/docs patches remain preserved in the capture checkout and are excluded from PR432. Broad live UI/MCP qualification remains paused. Published media budget: 8 MiB.
+Current review captures come from the successful [native visual job](https://github.com/limo-cad/Limo-CAD/actions/runs/39359657089/job/118422580828) at `2e313e7a4069ab194ec99202916c0c0ab399bfda`. `review-captures-20261020.json` records their exact paths and hashes. The Spanish guide and German instructions both use a 1200 by 760 surface at 175% scale. The instructions fit this capture; scrolling behavior is verified separately by tests. These are native component captures, not recordings of the packaged application.
+
+Existing GIFs and `guided-experience.json` retain their original capture provenance. Broad live UI/MCP qualification remains paused. Published media budget: 8 MiB.
 
 Use the registered Cargo lane, matching OCCT SDK, and a fresh evidence directory:
 
