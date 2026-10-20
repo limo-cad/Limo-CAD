@@ -188,7 +188,24 @@ impl WindowPublisher {
         let previous = self.active_key().to_string();
 
         if previous == UNBOUND_PROJECT || previous == BOOTSTRAP_SESSION_ID {
-            if let Some(existing) = self.by_project.remove(&previous) {
+            if let Some(mut existing) = self.by_project.remove(&previous) {
+                if existing.last_composite_committed.is_some() {
+                    // A committed capsule's directory has an immutable document
+                    // owner. Keep the engine/history lineage, but retire the
+                    // bootstrap transport before publishing the real owner.
+                    if let Err(error) = write_closed_tombstone(&existing.session_id) {
+                        eprintln!("session bridge could not retire bootstrap publication: {error}");
+                    }
+                    existing.session_id = Uuid::new_v4().to_string();
+                    existing.next_export_sequence = 0;
+                    existing.last_export_sequence = 0;
+                    existing.published_generation = 0;
+                    existing.last_model_generation = None;
+                    existing.last_composite_committed = None;
+                    existing.last_composite_published = None;
+                    existing.active_sketch_generation = None;
+                    existing.pending_exports.clear();
+                }
                 self.by_project
                     .insert(project_session_id.to_string(), existing);
             }

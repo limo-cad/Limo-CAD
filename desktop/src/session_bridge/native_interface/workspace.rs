@@ -169,12 +169,14 @@ mod sketch_cleanliness;
 pub(crate) use retention::MemoryPressure;
 
 impl DocumentWorkspace {
-    pub(crate) fn observe(
+    /// Prepare the first real owner without exposing a tab before its initial
+    /// publication succeeds. Retain that publication obligation across retries.
+    pub(super) fn prepare_owner(
         &mut self,
         bridge: &SessionBridgeState,
         engine: &AppState,
         window: &str,
-    ) -> Result<DocumentReceipt, String> {
+    ) -> Result<DocumentContext, String> {
         if self.tabs.is_empty()
             && engine.active_project_session_id() == crate::state::BOOTSTRAP_SESSION_ID
         {
@@ -184,11 +186,19 @@ impl DocumentWorkspace {
                 engine.bind_project_session(&id)
             }))?;
         }
-        let owner = bridge.native_document_context(window, engine)?;
+        bridge.native_document_context(window, engine)
+    }
+
+    pub(crate) fn observe(
+        &mut self,
+        bridge: &SessionBridgeState,
+        engine: &AppState,
+        window: &str,
+    ) -> Result<DocumentReceipt, String> {
+        let owner = self.prepare_owner(bridge, engine, window)?;
         if self.initial_publication_pending {
-            // Rebinding retains the startup session, but its published metadata
-            // still names the bootstrap document. Publish the real owner before
-            // exposing the first tab; retain this obligation if storage fails.
+            // Publish the real owner's metadata before exposing the first tab;
+            // retain this obligation if any publication step fails.
             bridge.publish_native_document(engine, &owner, "solid")?;
             self.initial_publication_pending = false;
         }
