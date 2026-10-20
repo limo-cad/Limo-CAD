@@ -55,6 +55,8 @@ windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Secur
 windows-sys = { version = "0.61.2", features = ["Win32_System_Pipes"] }
 
 [dev-dependencies]
+ciborium = "0.2.2"
+sha2 = "0.11.1"
 limo-cad-export = { path = "../crates/export", features = ["test-utils"] }
 jsonschema = { version = "0.58.6", default-features = false }
 zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
