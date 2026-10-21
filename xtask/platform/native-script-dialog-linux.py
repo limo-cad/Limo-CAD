@@ -24,6 +24,17 @@ def command(*args, missing=False):
     return result.stdout.strip()
 
 
+def wait_for_close(is_visible, guard_owner):
+    # A chooser may retire between visibility reads after Return. Only the
+    # still-live host is an ownership requirement during this passive wait.
+    deadline = time.monotonic() + 5
+    while is_visible():
+        guard_owner()
+        require(time.monotonic() < deadline, "Owned script chooser did not close after path entry")
+        time.sleep(0.1)
+    guard_owner()
+
+
 def main():
     spec = importlib.util.spec_from_file_location(
         "native_drawing", Path(__file__).with_name("native-drawing-linux.py"))
@@ -84,10 +95,13 @@ def main():
                         "No script chooser is transient for this exact owned host")
                 time.sleep(0.1)
 
-        def guard(focus=False):
+        def guard_owner():
             require(Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[1].split()[19] == started,
                     "Owned host lifetime changed")
             require(command("xdotool", "getwindowpid", str(owner)) == str(pid), "Native window owner changed")
+
+        def guard(focus=False):
+            guard_owner()
             require(selected in windows("--name", "^" + re.escape(title) + "$")
                     and owner in transient_chain(selected), "Owned chooser relation changed")
             if focus:
@@ -116,11 +130,8 @@ def main():
         if selected in windows("--name", "^" + re.escape(title) + "$"):
             guard(focus=True)
             command("xdotool", "key", "--clearmodifiers", "Return")
-        deadline = time.monotonic() + 5
-        while selected in windows("--name", "^" + re.escape(title) + "$"):
-            guard()
-            require(time.monotonic() < deadline, "Owned script chooser did not close after path entry")
-            time.sleep(0.1)
+        wait_for_close(
+            lambda: selected in windows("--name", "^" + re.escape(title) + "$"), guard_owner)
         receipt.update(status="completed", physical_path_entry=True)
         output.with_suffix(".json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     finally:

@@ -382,6 +382,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 xtask/platform/test_native_script_dialog_linux.py
           for scale in 1 2; do
             WINIT_X11_SCALE_FACTOR="$scale" XDG_CURRENT_DESKTOP=GNOME \
               xvfb-run --auto-servernum --server-args='-screen 0 3200x2160x24' \
