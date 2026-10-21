@@ -49,6 +49,11 @@ pub(super) fn exercise(c: &mut Client, out: &Path) -> Result<Value> {
         serde_json::to_vec_pretty(&json!({"root":source,"fragment":fragment}))?,
     )?;
     control(c, "Scripts", None)?;
+    // Reopening Scripts retains the previous lesson's source editor.
+    let scripts = ui(c, json!({"action":"inspect"}))?;
+    if controls(&scripts).any(|row| row["label"] == "Authored script source") {
+        control(c, "Back to Scripts", None)?;
+    }
     if os_input::enabled() {
         let opened = control(c, "Open script...", None)?;
         ensure!(
