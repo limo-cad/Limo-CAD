@@ -897,34 +897,29 @@ jobs:
           test ! -e "$hidden_stage"
           mkdir -p "$mount"
           stage_moved=false
-          attached=false
+          mounted=false
           cleanup_mcp_package() {
-            status=$?
+            local status=$?
             trap - EXIT
             if [[ "$stage_moved" == true ]]; then
-              if ! mv "$hidden_stage" "$stage"; then
-                if [[ "$status" -eq 0 ]]; then status=1; fi
+              if mv "$hidden_stage" "$stage"; then :; else
+                local restore_status=$?
+                echo "SDK stage restoration failed (exit $restore_status)" >&2
+                if [[ "$status" -eq 0 ]]; then status=$restore_status; fi
               fi
             fi
-            if [[ "$attached" == true ]]; then
-              detached=false
-              for _ in {1..20}; do
-                if hdiutil detach "$mount"; then
-                  detached=true
-                  break
-                fi
-                sleep 0.5
-              done
-              if [[ "$detached" != true ]]; then
-                echo "Owned package-check DMG did not detach before the deadline" >&2
-                if [[ "$status" -eq 0 ]]; then status=1; fi
+            if [[ "$mounted" == true ]]; then
+              if cargo xtask package detach-dmg "$mount"; then :; else
+                local detach_status=$?
+                echo "DMG detach failed (exit $detach_status)" >&2
+                if [[ "$status" -eq 0 ]]; then status=$detach_status; fi
               fi
             fi
             exit "$status"
           }
           trap cleanup_mcp_package EXIT
           hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount"
-          attached=true
+          mounted=true
           python3 - "$mount/Limo CAD.app/Contents/Info.plist" "$RUNNER_TEMP/limo-cad-macos-uri.json" <<'PY'
           import json, plistlib, sys
           with open(sys.argv[1], 'rb') as file:

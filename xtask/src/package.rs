@@ -8,10 +8,14 @@ mod windows;
 mod xkb;
 
 pub(crate) use common::{ordinary_directory, ordinary_file};
+pub(crate) use dmg::detach as detach_dmg;
 pub(crate) use windows::{runtime_bin, stage_runtime};
 
 use anyhow::{bail, ensure, Context, Result};
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(super) struct Options {
@@ -105,9 +109,18 @@ impl Options {
     }
 }
 pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
+    let mut args = args.peekable();
+    if args.peek().is_some_and(|arg| arg == "detach-dmg") {
+        args.next();
+        let mount = args
+            .next()
+            .context("detach-dmg requires an owned mountpoint")?;
+        ensure!(args.next().is_none(), "detach-dmg accepts one mountpoint");
+        return detach_dmg(Path::new(&mount));
+    }
     let options = Options::parse(args)?;
     if options.help {
-        println!("Native Rust packaging; no Node, npm or PowerShell bundler.\nUsage: cargo xtask package [--bundle portable|deb|appimage|app|dmg] [--target WINDOWS_TARGET]\n       [--occt-root SDK_DIRECTORY] [--stage-licenses] [--computer-control]\nDefaults: Windows portable ZIP, Linux DEB + AppImage, macOS app + DMG.\nmacOS --bundle app produces the signed app without a disk image.\nWindows targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc.\nWindows --computer-control enables guarded OS input for packaged keyboard qualification; default builds leave it disabled.\nInstall the host SDK and packaging/signing tools in docs/DEVELOPMENT.md.\nOCCT_ROOT, CARGO_TARGET_DIR and existing signing variables remain supported.");
+        println!("Native Rust packaging; no Node, npm or PowerShell bundler.\nUsage: cargo xtask package [--bundle portable|deb|appimage|app|dmg] [--target WINDOWS_TARGET]\n       [--occt-root SDK_DIRECTORY] [--stage-licenses] [--computer-control]\n       cargo xtask package detach-dmg OWNED_MOUNTPOINT\nDefaults: Windows portable ZIP, Linux DEB + AppImage, macOS app + DMG.\nmacOS --bundle app produces the signed app without a disk image.\nWindows targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc.\nWindows --computer-control enables guarded OS input for packaged keyboard qualification; default builds leave it disabled.\nInstall the host SDK and packaging/signing tools in docs/DEVELOPMENT.md.\nOCCT_ROOT, CARGO_TARGET_DIR and existing signing variables remain supported.");
         return Ok(());
     }
     options.validate(env::consts::OS, env::consts::ARCH)?;
