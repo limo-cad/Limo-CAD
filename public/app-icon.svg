@@ -1,7 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
-  <title id="title">Limo CAD NB monogram</title>
+  <title id="title">Limo CAD wordmark</title>
+  <defs>
+    <linearGradient id="ink" x1="98" y1="256" x2="418" y2="256" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5da9ff"/>
+      <stop offset="1" stop-color="#a394ff"/>
+    </linearGradient>
+  </defs>
   <rect x="34" y="34" width="444" height="444" rx="112" fill="#23262b"/>
   <rect x="40" y="40" width="432" height="432" rx="106" fill="none" stroke="#4a4f59" stroke-width="12"/>
-  <path d="M132 340V172L244 340V172" fill="none" stroke="#5da9ff" stroke-width="38" stroke-linecap="square" stroke-linejoin="round"/>
-  <path d="M286 172V340M286 172H335C371 172 392 190 392 216C392 243 371 258 335 258H286M335 258C376 258 399 274 399 300C399 326 376 340 335 340H286" fill="none" stroke="#8b7ce8" stroke-width="38" stroke-linecap="square" stroke-linejoin="round"/>
+  <g fill="none" stroke="url(#ink)" stroke-width="23" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M103 192V309H160"/>
+    <path d="M191 242V309"/>
+    <path d="M231 309V242M231 260C231 236 270 236 270 260V309M270 260C270 236 309 236 309 260V309"/>
+    <rect x="345" y="242" width="64" height="67" rx="32"/>
+  </g>
+  <circle cx="191" cy="207" r="12" fill="#72a3ff"/>
 </svg>
