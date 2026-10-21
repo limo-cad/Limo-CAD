@@ -1,0 +1,76 @@
+{
+  "assembly_scope_shown": true,
+  "baseline_assembly_notices": 0,
+  "build": {
+    "channel": "development",
+    "modified": false,
+    "revision": "4d08b02a1633a15f092fe5fc0d73ba4add2c2ad2",
+    "version": "0.3.0-rc.1"
+  },
+  "capture_pixels": [
+    1200,
+    760
+  ],
+  "captures": [
+    "entry.png",
+    "baseline.png",
+    "final.png",
+    "closed.png"
+  ],
+  "close_receipt": {
+    "preview_open": false
+  },
+  "closed_background_pixels_checked": 15000,
+  "closed_imported_textures": 0,
+  "closed_retained_textures": 0,
+  "final_assembly_notices": 1,
+  "frame_count": 2,
+  "locale": "zh-CN",
+  "package_identity": {
+    "byte_length": 3823,
+    "sha256": [
+      230,
+      18,
+      116,
+      246,
+      61,
+      32,
+      66,
+      129,
+      163,
+      203,
+      245,
+      142,
+      7,
+      74,
+      139,
+      74,
+      57,
+      55,
+      235,
+      109,
+      209,
+      111,
+      31,
+      31,
+      84,
+      160,
+      144,
+      192,
+      210,
+      152,
+      16,
+      238
+    ]
+  },
+  "preserved": {
+    "model_revision": true,
+    "owner": true,
+    "package": true,
+    "source": true,
+    "view": true
+  },
+  "preview_widgets_retired": true,
+  "scope": "windowless production native Bevy UI; package preview, not packaged OS/input qualification",
+  "ui_scale": 1.75
+}

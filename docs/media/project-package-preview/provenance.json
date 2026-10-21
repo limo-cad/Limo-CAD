@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "scope": "Four checkpoints from the windowless production native Bevy package-preview fixture at 175%; not a continuous recording or packaged OS/input qualification.",
+  "source": {
+    "pull_request": 516,
+    "pr_head": "8e76ff9578bb04b918e20531b8fb005bbda63889",
+    "capture_commit": "4d08b02a1633a15f092fe5fc0d73ba4add2c2ad2",
+    "capture_tree": "8389f741d6c33e4c6e240ae7a6f9416caf2ded78",
+    "capture_commit_parents": [
+      "e287ba866b4b0ece53ca3215a02401390a7b47d9",
+      "8e76ff9578bb04b918e20531b8fb005bbda63889"
+    ],
+    "source_tree_matches_capture_tree": true,
+    "actions_run_url": "https://github.com/limo-cad/Limo-CAD/actions/runs/39551633572",
+    "actions_job": 119061929752,
+    "artifact": 12330066079,
+    "artifact_zip_sha256": "404e4552732ad5c681a4b597ec2472f50b1f33a5942f5ce8f4fd038942e07b7d"
+  },
+  "capture": {
+    "pixels": [
+      1200,
+      760
+    ],
+    "ui_scale": 1.75,
+    "locales": [
+      "en",
+      "de",
+      "es",
+      "zh-CN"
+    ],
+    "localized_scope": "Project-preview panel; surrounding source editor remains English."
+  },
+  "clip": {
+    "path": "preview-checkpoints.gif",
+    "bytes": 138935,
+    "sha256": "9fffcf64e0d04a36aa9288b2088f700a5b289bd69aff01fb8255026cdc045a60",
+    "encoder": "Pillow 12.3.0",
+    "pixel_processing": "Original full-size PNG checkpoints encoded to GIF with a 256-color palette per frame; no crop, resize, retouching or generated in-between frames.",
+    "loop": true,
+    "frames": [
+      {
+        "stage": "entry",
+        "duration_ms": 1800,
+        "decoded_rgb_sha256": "3593a76fdec55eba9f56f6ea022dcf60bc96188eeccc482132ae140edd02ec65"
+      },
+      {
+        "stage": "baseline",
+        "duration_ms": 1600,
+        "decoded_rgb_sha256": "ef13a3e71c343c6a6beb73d42ad2f2e0be6c11bb62b5508549ea63ca5454be59"
+      },
+      {
+        "stage": "final",
+        "duration_ms": 2400,
+        "decoded_rgb_sha256": "e931349c663124ab862e3a0b4e7ac0ba91a4214e16b074d2c45524f18c9fb24c"
+      },
+      {
+        "stage": "closed",
+        "duration_ms": 1800,
+        "decoded_rgb_sha256": "68d5fcda2538bc7eb6152b1fe9a6873d0ef881262f4bca1f5465b6c1cb8f0ed3"
+      }
+    ]
+  },
+  "published_source_files": [
+    {
+      "path": "en/baseline.png",
+      "bytes": 50829,
+      "sha256": "5ce9c84af1974d990f46ab79e46ca9e868da84b2e0332f5e9d3cc6e6e3d02b83"
+    },
+    {
+      "path": "en/entry.png",
+      "bytes": 117111,
+      "sha256": "c199f0c1c6c285d62e3ceabb3c7a06954a67908aab89c9a77f22965ea40b54c0"
+    },
+    {
+      "path": "en/final.png",
+      "bytes": 64024,
+      "sha256": "3dfdcddbd0d0aa3e4adcee5de571d002cdc827909adda1c189e456131f57caa8"
+    },
+    {
+      "path": "en/closed.png",
+      "bytes": 103212,
+      "sha256": "fa8ca90296da1a14640e2d793e6f6666e1b21709962976b3b6913a9f1821a372"
+    },
+    {
+      "path": "en/state.json",
+      "bytes": 1296,
+      "sha256": "9e6b6eac95a70deb5db4c50a25886f5ec1f85924e31daf7a0bd6f310c399d6ae"
+    },
+    {
+      "path": "de/final.png",
+      "bytes": 70819,
+      "sha256": "2460fd8a8415c547f374c091fc3fdc3d0288b1b2911749c8e6c8c66ccdea417e"
+    },
+    {
+      "path": "de/state.json",
+      "bytes": 1296,
+      "sha256": "bec61b9f02e662453f3d6b8501cf79eeccaa0297942e2ad3f5e54cb9c58cfb64"
+    },
+    {
+      "path": "es/final.png",
+      "bytes": 72862,
+      "sha256": "63c4cce9bc3d93f9fbbf4c425be16c52dda29b1b9aedc89f7fd220eba0603d35"
+    },
+    {
+      "path": "es/state.json",
+      "bytes": 1296,
+      "sha256": "cac25f9fdddf46b84e227185842f0a8d4587304676cf5b8b951dfb6202f18d95"
+    },
+    {
+      "path": "zh-CN/final.png",
+      "bytes": 60985,
+      "sha256": "d52fd1786ee4d4d54bf8cdc4cfe2359d7c60163689edf462cf3143908572b7a6"
+    },
+    {
+      "path": "zh-CN/state.json",
+      "bytes": 1299,
+      "sha256": "aafcc5b86be20d8b5f098de7e6a63d76ef7855312089652931c318a90a456ad0"
+    }
+  ],
+  "all_capture_source_files": [
+    {
+      "path": "en/baseline.png",
+      "bytes": 50829,
+      "sha256": "5ce9c84af1974d990f46ab79e46ca9e868da84b2e0332f5e9d3cc6e6e3d02b83"
+    },
+    {
+      "path": "en/entry.png",
+      "bytes": 117111,
+      "sha256": "c199f0c1c6c285d62e3ceabb3c7a06954a67908aab89c9a77f22965ea40b54c0"
+    },
+    {
+      "path": "en/final.png",
+      "bytes": 64024,
+      "sha256": "3dfdcddbd0d0aa3e4adcee5de571d002cdc827909adda1c189e456131f57caa8"
+    },
+    {
+      "path": "en/closed.png",
+      "bytes": 103212,
+      "sha256": "fa8ca90296da1a14640e2d793e6f6666e1b21709962976b3b6913a9f1821a372"
+    },
+    {
+      "path": "en/state.json",
+      "bytes": 1296,
+      "sha256": "9e6b6eac95a70deb5db4c50a25886f5ec1f85924e31daf7a0bd6f310c399d6ae"
+    },
+    {
+      "path": "de/baseline.png",
+      "bytes": 55218,
+      "sha256": "561bdff2b57c5467aef34f8fc9e8d56a85ce3c70b3f0fac09b9034fdf3051b4f"
+    },
+    {
+      "path": "de/entry.png",
+      "bytes": 117155,
+      "sha256": "779fb25695dff34e5973a7f5f75ad3d25045e7d0f8455cbe950c118b18222b29"
+    },
+    {
+      "path": "de/final.png",
+      "bytes": 70819,
+      "sha256": "2460fd8a8415c547f374c091fc3fdc3d0288b1b2911749c8e6c8c66ccdea417e"
+    },
+    {
+      "path": "de/closed.png",
+      "bytes": 103273,
+      "sha256": "a582c6b8fc61968e80bc10c9f625cf6dcc37077e3b97de6d8a536cc90a6d73cd"
+    },
+    {
+      "path": "de/state.json",
+      "bytes": 1296,
+      "sha256": "bec61b9f02e662453f3d6b8501cf79eeccaa0297942e2ad3f5e54cb9c58cfb64"
+    },
+    {
+      "path": "es/baseline.png",
+      "bytes": 54846,
+      "sha256": "f8aaa3876d88cc28fee6ca1c76ca6cc493721b37a96c4fbbb249ae6440553e03"
+    },
+    {
+      "path": "es/entry.png",
+      "bytes": 118062,
+      "sha256": "7dd38fcdfc1a79cf8e1854f6c4de2b02b38c25dc0dc3367db1d6e8a99aa89dd9"
+    },
+    {
+      "path": "es/final.png",
+      "bytes": 72862,
+      "sha256": "63c4cce9bc3d93f9fbbf4c425be16c52dda29b1b9aedc89f7fd220eba0603d35"
+    },
+    {
+      "path": "es/closed.png",
+      "bytes": 104122,
+      "sha256": "a09081cd3934461dc28c736d6566e7c8f8b2c235b9cd45156781c61140f6c214"
+    },
+    {
+      "path": "es/state.json",
+      "bytes": 1296,
+      "sha256": "cac25f9fdddf46b84e227185842f0a8d4587304676cf5b8b951dfb6202f18d95"
+    },
+    {
+      "path": "zh-CN/baseline.png",
+      "bytes": 45648,
+      "sha256": "e97129b7c81caa3cb2f1caf9e35683671ba03ac36ab299023b8f6326c221d52f"
+    },
+    {
+      "path": "zh-CN/entry.png",
+      "bytes": 115649,
+      "sha256": "0acd0ccf142152988e27ac6cb977ed1fddb6a34a48a17ebe3349b97f92fa92a2"
+    },
+    {
+      "path": "zh-CN/final.png",
+      "bytes": 60985,
+      "sha256": "d52fd1786ee4d4d54bf8cdc4cfe2359d7c60163689edf462cf3143908572b7a6"
+    },
+    {
+      "path": "zh-CN/closed.png",
+      "bytes": 101719,
+      "sha256": "5ea68d3a750412ef0e364d3e0b6055aa0a99739c7ab67803f801959d44c4ad10"
+    },
+    {
+      "path": "zh-CN/state.json",
+      "bytes": 1299,
+      "sha256": "aafcc5b86be20d8b5f098de7e6a63d76ef7855312089652931c318a90a456ad0"
+    }
+  ],
+  "review": {
+    "result": "No scoped visual blocker in four locales; preview text/glyphs fit and Close leaves no visible preview residue.",
+    "close_receipts": "Each locale records retired widgets, 15000 checked background pixels, zero imported/retained textures, and preserved source/view/model revision/owner/package.",
+    "limits": [
+      "No packaged OS/input qualification",
+      "No full source-editor localization claim",
+      "No elapsed-time or playback-performance inference from this paced checkpoint sequence"
+    ]
+  }
+}
