@@ -1961,11 +1961,13 @@ fn drain_actions(world: &mut World) {
 #[derive(Component)]
 pub struct InterfaceCamera;
 
-fn setup_camera(mut commands: Commands) {
+pub(super) fn setup_camera(mut commands: Commands) {
     commands.spawn((
         Name::new("Native application interface camera"),
         InterfaceCamera,
         Camera2d,
+        // Match the UI canvas so this pass loads its unsampled CAD pixels.
+        Msaa::Off,
         bevy::camera::visibility::RenderLayers::none(),
         Camera {
             order: 2,
