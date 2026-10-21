@@ -222,6 +222,7 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
     app.insert_resource(handle.clone())
         .init_resource::<Captured>();
     install(&mut app);
+    app.add_systems(Startup, interface_shell::setup_camera);
     let (release, receiver) = mpsc::sync_channel(1);
     let (entered, compiling) = mpsc::channel();
     app.insert_resource(CompilationGate {
@@ -270,13 +271,24 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
         .query_filtered::<Entity, With<NativeOverlayCamera>>()
         .single(app.world())
         .unwrap();
+    let interface_camera = app
+        .world_mut()
+        .query_filtered::<Entity, With<interface_shell::InterfaceCamera>>()
+        .single(app.world())
+        .unwrap();
+    for camera in [camera, interface_camera] {
+        app.world_mut()
+            .entity_mut(camera)
+            .insert(bevy::camera::RenderTarget::Image(target.clone().into()));
+    }
     app.world_mut()
-        .entity_mut(camera)
-        .insert(bevy::camera::RenderTarget::Image(target.clone().into()));
+        .get_mut::<Camera>(interface_camera)
+        .unwrap()
+        .is_active = true;
     let button = app
         .world_mut()
         .spawn((
-            UiTargetCamera(camera),
+            UiTargetCamera(interface_camera),
             Node {
                 position_type: PositionType::Absolute,
                 left: px(8),
@@ -444,6 +456,12 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
         },
     )
     .unwrap();
+    // Frame the real solid centrally before its first completed worker image.
+    let mut first_camera = app.world().resource::<CameraResource>().camera;
+    first_camera.position = [180., 180., 140.];
+    first_camera.target = [30., 15., 18.];
+    first_camera.vertical_fov_degrees = 35.;
+    apply_camera_state(app.world_mut(), first_camera);
     release.send(()).unwrap();
     ready(&mut app);
     let frame = app
@@ -462,6 +480,15 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
         changed(&interactive, &composed) > 2000,
         "the real CAD scene must be visible through the shared GPU texture"
     );
+    assert!(
+        region(&composed)
+            .iter()
+            .zip(region(&cleared))
+            .filter(|(a, b)| **a != *b)
+            .count()
+            > 500,
+        "the later interface camera must preserve central CAD pixels"
+    );
     let mut camera = app.world().resource::<CameraResource>().camera;
     camera.position = [180., -180., 140.];
     camera.target = [30., 15., 18.];
@@ -474,6 +501,22 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
         changed(&composed, &turned) > 1000,
         "camera update must reach the viewport without replacing the source model"
     );
+    assert!(
+        region(&composed)
+            .iter()
+            .zip(region(&turned))
+            .filter(|(a, b)| **a != *b)
+            .count()
+            > 200,
+        "central CAD pixels must still update beneath the later interface camera"
+    );
+    for pixels in [&composed, &turned] {
+        let button_pixel = pixels.as_chunks::<4>().0[20 * 320 + 20];
+        assert!(
+            button_pixel[2] > 200 && button_pixel[0] < 60 && button_pixel[1] < 100,
+            "the later camera must retain its blue interface button alongside CAD pixels"
+        );
+    }
     assert!(Arc::ptr_eq(
         &app.world().resource::<ModelResource>().document,
         &document
