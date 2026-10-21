@@ -510,11 +510,23 @@ fn native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_fram
             > 200,
         "central CAD pixels must still update beneath the later interface camera"
     );
+    // Compare the opaque menu's actual pixels, including its text. A fixed
+    // background-color probe can land on an antialiased glyph instead.
     for pixels in [&composed, &turned] {
-        let button_pixel = pixels.as_chunks::<4>().0[20 * 320 + 20];
+        let (count, unchanged) = pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(interactive.as_chunks::<4>().0)
+            .enumerate()
+            .filter(|(i, _)| (12..180).contains(&(i % 320)) && (12..40).contains(&(i / 320)))
+            .fold((0, true), |(count, unchanged), (_, (actual, expected))| {
+                (count + 1, unchanged && actual == expected)
+            });
+        assert_eq!(count, 168 * 28, "the complete menu region must be checked");
         assert!(
-            button_pixel[2] > 200 && button_pixel[0] < 60 && button_pixel[1] < 100,
-            "the later camera must retain its blue interface button alongside CAD pixels"
+            unchanged,
+            "the later camera must retain its rendered menu alongside CAD pixels"
         );
     }
     assert!(Arc::ptr_eq(
