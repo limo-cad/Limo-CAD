@@ -23,10 +23,10 @@ bounds aggregate model and intent bytes before reading another payload; encoded
 field overhead also counts against the writer limit. Container staging and
 archive-size limits remain applicable and preparation can fail without mutation.
 
-This is the shared snapshot boundary, not completed native history or recovery
-integration. Native mutation receipts, Undo/Redo tickets, Save/Open and session
-publication still need to adopt it. Results, worker identities and UI state do
-not belong in persistent domain intent. Live native qualification remains open.
+Native callers capture the paired manager state under the existing document
+owner and revision fences. Native history, tab eviction/restore, `.limo`
+Save/Open and session publication use complete snapshots. Active sketch editing
+state, derived results, worker identities and UI state are excluded.
 
 ## Authoritative manager integration
 
@@ -49,8 +49,25 @@ Unknown payloads remain opaque; a caller editing one domain must preserve all
 other entries unless their removal was explicitly requested. A document with
 any domain intent is not blank for automatic script playback.
 
-These are Rust manager APIs. Native callers must still route them through the
-existing owner/revision mutation fence and adopt complete snapshots in history,
-Save/Open and session publication. No new MCP tools or native controls are
-exposed by this layer. Until those paths migrate, model-only export reports an
-explicit error for domain-bearing documents rather than losing their content.
+## Native and MCP integration
+
+Native mutation and history adapters keep the complete snapshot inside the
+document owner/revision fence. File Save stages model and intent together in a
+separate archive candidate; Open and cold-tab restore replace the pair only
+after a successful owned transaction. Failed or stale preparation retains the
+previous document.
+
+Native publication writes a typed capsule and commit record, then acknowledges
+the matching receipt in its heartbeat. MCP attachment reads that complete
+capsule and verifies the document route and receipt. The public
+`cad_load_project_snapshot` tool supports complete loads.
+
+Read-only model projections support geometry exports and print metadata without
+copying domain payloads. They must not replace complete snapshots for Save,
+history or publication. Legacy model-only export still rejects domain-bearing
+documents; `cad_script` and script export retain that restriction until portable
+replay support is integrated.
+
+This integration adds no visible domain controls. Unknown domain bytes remain
+opaque. Publication commits provide process-failure consistency; power-loss
+durability depends on the filesystem.
