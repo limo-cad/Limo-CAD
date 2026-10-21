@@ -732,21 +732,6 @@ mod tests {
         assert_eq!(target.kills, 0);
     }
     #[cfg(target_os = "macos")]
-    const FIXTURE_READY: &str = "LIMO_MACOS_SAMPLER_FIXTURE_READY";
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn sampler_sleeping_fixture() {
-        // Only this explicitly spawned test child receives the marker/path.
-        // A normal test invocation returns immediately and reads no other env.
-        let Some(ready) = std::env::var_os(FIXTURE_READY) else {
-            return;
-        };
-        std::fs::write(ready, b"ready").unwrap();
-        std::thread::sleep(Duration::from_secs(30));
-    }
-
-    #[cfg(target_os = "macos")]
     #[test]
     fn owned_sampler_adapter_smoke() {
         use std::{fs, process::Stdio, time::Instant};
@@ -758,36 +743,17 @@ mod tests {
             }
         }
         let directory = tempfile::tempdir().unwrap();
-        let ready = directory.path().join("fixture-ready");
-        let test_module = module_path!().split_once("::").unwrap().1;
-        let fixture = format!("{test_module}::sampler_sleeping_fixture");
         let mut target = OwnedTarget(
-            Command::new(std::env::current_exe().unwrap())
-                .args([
-                    fixture.as_str(),
-                    "--exact",
-                    "--nocapture",
-                    "--test-threads=1",
-                ])
-                .env(FIXTURE_READY, &ready)
+            // Keep adapter qualification independent of the large debug test image.
+            // This is our spawned child, never a name-based lookup or existing process.
+            Command::new("/bin/sleep")
+                .arg("30")
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()
                 .unwrap(),
         );
-        let ready_deadline = Instant::now() + RUN_LIMIT;
-        while !ready.is_file() {
-            assert!(
-                target.0.try_wait().unwrap().is_none(),
-                "Fixture exited before readiness"
-            );
-            assert!(
-                Instant::now() < ready_deadline,
-                "Fixture readiness timed out"
-            );
-            std::thread::sleep(POLL);
-        }
         let pid = target.0.id();
         let started = Instant::now();
         super::capture(directory.path(), &mut target.0);
