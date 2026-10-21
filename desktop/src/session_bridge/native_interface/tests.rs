@@ -830,6 +830,10 @@ fn drafting_dispatch_shares_native_history_and_rejects_stale_owners() {
         "name":"Geometry","visible":true,"locked":false,"plottable":true,
         "style":{"line_type":null,"color_rgb":[0,0,0],"width_mm":0.25}
     }});
+    let inbox_error =
+        dispatch_inbox_on_engine(&fixture.engine, "drawing_drafting_apply", &command).unwrap_err();
+    assert!(inbox_error.contains("unsupported inbox mutate"));
+    assert_eq!(export(), before);
     let created = fixture
         .bridge
         .apply_native_mutation(

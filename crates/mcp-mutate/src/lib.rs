@@ -330,13 +330,6 @@ pub static MUTATES: &[MutateSpec] = &[
         payload: PayloadKind::Object,
         execution: ExecutionKind::Direct,
     },
-    // Keep the drawing prefix: native transaction history snapshots these edits.
-    MutateSpec {
-        name: "drawing_drafting_apply",
-        engine_method: "drawing_drafting_apply",
-        payload: PayloadKind::Object,
-        execution: ExecutionKind::Direct,
-    },
     MutateSpec {
         name: "drawing_create_sheet",
         engine_method: "drawing_create_sheet",
