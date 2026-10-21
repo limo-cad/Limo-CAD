@@ -108,9 +108,78 @@ fn control(client: &mut Client, label: &str, value: Option<&str>) -> Result<Valu
     crate::native_fixture::control(client, label, value)
         .map_err(|error| anyhow::anyhow!("Native Scripts control {label:?}: {error:#}"))
 }
+#[cfg(target_os = "linux")]
+fn capture_owned_x11_before_bevy(out: &std::path::Path) -> Result<()> {
+    let pid = std::env::var("LIMO_CAD_NATIVE_OWNED_PID")
+        .context("LIMO_CAD_NATIVE_OWNED_PID")?
+        .parse::<u32>()
+        .context("LIMO_CAD_NATIVE_OWNED_PID")?;
+    ensure!(pid > 1, "Owned native host PID must be greater than one");
+    // Invoke the read-only helper directly; the input wrapper also focuses the window.
+    let mut child = std::process::Command::new("python3")
+        .arg(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("platform/native-window-capture-linux.py"),
+        )
+        .arg(pid.to_string())
+        .arg(out)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::inherit())
+        .spawn()
+        .context("Start owned X11 window capture")?;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                child.wait().context("Reap owned X11 window capture")?;
+                ensure!(
+                    status.success(),
+                    "Owned X11 window capture failed: {status}"
+                );
+                return Ok(());
+            }
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                anyhow::bail!("Owned X11 window capture exceeded 20 seconds");
+            }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error).context("Poll owned X11 window capture");
+            }
+        }
+    }
+}
+
 fn capture(client: &mut Client, out: &std::path::Path, name: &str) -> Result<()> {
-    crate::native_fixture::capture(client, out, name)
-        .map_err(|error| anyhow::anyhow!("Native Scripts capture {name:?}: {error:#}"))
+    let result: Result<()> = (|| {
+        let before = ui(client, json!({"action":"inspect"}))?;
+        #[cfg(target_os = "linux")]
+        if name == "native-lessons"
+            && std::env::var("LIMO_CAD_NATIVE_SCRIPT_INPUT").as_deref() == Ok("1")
+        {
+            capture_owned_x11_before_bevy(out)?;
+        }
+        let captured = ui(
+            client,
+            json!({"action":"capture","path":out.join(format!("{name}.png"))}),
+        )?;
+        std::fs::write(
+            out.join(format!("{name}.capture.json")),
+            serde_json::to_vec_pretty(&json!({"before_capture":before,"capture":captured}))?,
+        )?;
+        ensure!(
+            captured["presented"] == true && captured["render_status"] == "submitted",
+            "Native window capture has no matching submitted frame: {captured}"
+        );
+        Ok(())
+    })();
+    result.map_err(|error| anyhow::anyhow!("Native Scripts capture {name:?}: {error:#}"))
 }
 
 fn inspect_example_library(c: &mut Client, entries: &[Value]) -> Result<Value> {
@@ -443,7 +512,7 @@ pub(super) fn run(args: impl Iterator<Item = String>) -> Result<()> {
         c.call("cad_project_model", json!({}))? == exported,
         "Restoring the completed lesson changed its model"
     );
-    ui(c, json!({"action":"capture","path":fixture.capture}))?;
+    capture(c, &fixture.out, "native-lessons")?;
     ui(
         c,
         json!({"action":"file","command":"save","path":fixture.project}),

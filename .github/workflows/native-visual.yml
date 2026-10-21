@@ -86,6 +86,10 @@ jobs:
         env:
           LIMO_VIEWPORT_RENDER_PROOFS: ${{ github.workspace }}/docs/qa/native-boundary
         run: cargo xtask ci native-ignored-test sketch-commit
+      - name: Verify CAD pixels survive the later native interface camera
+        env:
+          LIMO_VIEWPORT_RENDER_PROOFS: ${{ github.workspace }}/docs/qa/native-boundary
+        run: cargo xtask ci native-ignored-test composition
       - name: Retain native visual evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
