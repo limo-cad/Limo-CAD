@@ -318,12 +318,19 @@ pub(super) fn exercise(
             && started["value"]["document_id"] != observed["control_admission"]["document_id"],
         "Run did not retain the exact owned window/process and create a fresh document"
     );
+    let run_receipt = serde_json::to_vec_pretty(&started)?;
+    ensure!(
+        run_receipt.len() as u64 <= MAX_FILE_BYTES,
+        "Run receipt exceeds 8 MiB"
+    );
+    fs::write(evidence.out.join("run-started.json"), run_receipt)?;
+    evidence.publish(false)?;
     let target = json!({"window_id":window,"document_id":document});
     let deadline = Instant::now() + Duration::from_secs(90);
     let successor = loop {
         // Baseline adoption retires the initial Run transport. Read the owned
         // registry without sending a control request through that stale route.
-        let registry = c.call("cad_sessions", json!({}))?;
+        let registry = c.call("cad_list_sessions", json!({}))?;
         let windows: Vec<_> = registry["windows"]
             .as_array()
             .context("Session windows missing")?
