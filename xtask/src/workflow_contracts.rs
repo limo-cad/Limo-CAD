@@ -37,6 +37,102 @@ fn workflow(file: &str) -> Value {
     serde_yaml_ng::from_str(&read(file)).unwrap_or_else(|error| panic!("invalid {file}: {error}"))
 }
 
+#[cfg(unix)]
+#[test]
+fn macos_package_cleanup_restores_stage_and_preserves_failures() {
+    let source = workflow(".github/workflows/desktop-packages.yml");
+    let (_, step) = named_step(
+        &source["jobs"]["build-macos-apple-silicon"],
+        "Verify default packaged desktop stdio",
+    )
+    .unwrap();
+    let run = step["run"].as_str().unwrap();
+    let commands = r#"
+    hdiutil() {
+      if [[ "$1" == attach ]]; then return "$FAKE_ATTACH"; fi
+      test "$1" = detach || return 98
+      test "$2" = "$RUNNER_TEMP/limo-cad-mcp-dmg" || return 98
+      printf 'detach\n' >>"$RUNNER_TEMP/calls"
+      return "$FAKE_DETACH"
+    }
+    python3() { cat >/dev/null; return "$FAKE_PLIST"; }
+    cargo() {
+      if [[ "$1 $2" == "xtask verify-package-mcp" ]]; then
+        printf 'verify\n' >>"$RUNNER_TEMP/calls"
+        return "$FAKE_VERIFY"
+      fi
+      test "$1 $2 $3" = "xtask package detach-dmg" || return 98
+      test "$4" = "$RUNNER_TEMP/limo-cad-mcp-dmg" || return 98
+      printf 'detach\n' >>"$RUNNER_TEMP/calls"
+      return "$FAKE_DETACH"
+    }
+    mv() {
+      if [[ "$1" == "$GITHUB_WORKSPACE/desktop/occt-libs.mcp-verification" ]]; then
+        printf 'restore\n' >>"$RUNNER_TEMP/calls"
+        if [[ "$FAKE_RESTORE" != 0 ]]; then return "$FAKE_RESTORE"; fi
+      fi
+      command mv "$@"
+    }
+    "#;
+    // Successful cleanup, each isolated failure, and competing failures. Failed
+    // attach must not detach anything; failed restore must still attempt detach.
+    for (attach, plist, verify, restore, detach, expected) in [
+        (0, 0, 0, 0, 0, 0),
+        (0, 0, 17, 0, 0, 17),
+        (0, 0, 0, 0, 9, 9),
+        (0, 0, 17, 0, 9, 17),
+        (0, 0, 0, 8, 0, 8),
+        (0, 0, 17, 8, 9, 17),
+        (7, 0, 0, 0, 0, 7),
+        (0, 11, 0, 0, 9, 11),
+    ] {
+        let temporary = tempfile::tempdir().unwrap();
+        let workspace = temporary.path().join("workspace with spaces");
+        let runner = temporary.path().join("runner temp");
+        let bundles = workspace.join("desktop/target/release/bundle/dmg");
+        let stage = workspace.join("desktop/occt-libs");
+        let hidden = workspace.join("desktop/occt-libs.mcp-verification");
+        fs::create_dir_all(&bundles).unwrap();
+        fs::create_dir_all(&stage).unwrap();
+        fs::create_dir_all(&runner).unwrap();
+        fs::write(bundles.join("test image.dmg"), b"fixture").unwrap();
+        fs::write(stage.join("library"), b"preserved SDK library").unwrap();
+        fs::write(runner.join("calls"), b"").unwrap();
+        let output = std::process::Command::new("bash")
+            .args(["-c", &format!("{commands}\n{run}")])
+            .current_dir(&workspace)
+            .env("GITHUB_WORKSPACE", &workspace)
+            .env("RUNNER_TEMP", &runner)
+            .env("FAKE_ATTACH", attach.to_string())
+            .env("FAKE_PLIST", plist.to_string())
+            .env("FAKE_VERIFY", verify.to_string())
+            .env("FAKE_RESTORE", restore.to_string())
+            .env("FAKE_DETACH", detach.to_string())
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(expected),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let calls = fs::read_to_string(runner.join("calls")).unwrap();
+        assert_eq!(calls.contains("detach\n"), attach == 0);
+        assert_eq!(calls.contains("restore\n"), attach == 0 && plist == 0);
+        let retained_stage = if attach == 0 && plist == 0 && restore != 0 {
+            assert!(!stage.exists());
+            &hidden
+        } else {
+            assert!(!hidden.exists());
+            &stage
+        };
+        assert_eq!(
+            fs::read(retained_stage.join("library")).unwrap(),
+            b"preserved SDK library"
+        );
+    }
+}
+
 fn uses_action(step: &Value, action: &str) -> bool {
     step["uses"].as_str().is_some_and(|uses| {
         uses.split_once('@').is_some_and(|(name, revision)| {

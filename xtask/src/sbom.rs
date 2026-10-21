@@ -428,9 +428,11 @@ fn release(root: &Path, options: Options) -> Result<()> {
         Ok(())
     })();
     if let Some(mount) = mount {
-        let detached = execute(Command::new("hdiutil").arg("detach").arg(mount));
+        let detached = crate::package::detach_dmg(&mount);
         if result.is_ok() {
             detached?;
+        } else if let Err(error) = detached {
+            eprintln!("DMG cleanup also failed: {error:#}");
         }
     }
     result
