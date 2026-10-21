@@ -216,11 +216,15 @@ pub(super) fn draw(
                     );
                     let semantic = dxf_dimensions::Dimension::resolve(
                         &geometry,
+                        if *mode == DrawingLineDimensionMode::Length {
+                            dxf_dimensions::LinearMode::Aligned
+                        } else {
+                            dxf_dimensions::LinearMode::Rotated
+                        },
                         presentation,
                         *precision,
                         units,
-                        prefix,
-                        suffix,
+                        (prefix, suffix),
                         &sheet.style,
                     );
                     let start = paper.items.len();
@@ -276,11 +280,11 @@ pub(super) fn draw(
             );
             let semantic = dxf_dimensions::Dimension::resolve(
                 &geometry,
+                dxf_dimensions::LinearMode::Rotated,
                 presentation,
                 *precision,
                 units,
-                prefix,
-                suffix,
+                (prefix, suffix),
                 &sheet.style,
             );
             let start = paper.items.len();

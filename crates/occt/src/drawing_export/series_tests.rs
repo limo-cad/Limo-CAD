@@ -73,11 +73,7 @@ fn multiple_series_batches_keep_independent_dimension_blocks_and_scaled_measurem
                     dimensions.iter().map(|v| &v["2"]).collect();
                 assert_eq!(blocks.len(), 4);
                 for (i, dim) in dimensions.iter().enumerate() {
-                    let num = |k: &str| dim[k].parse::<f64>().unwrap();
-                    let angle = num("50").to_radians();
-                    let paper = ((num("14") - num("13")) * angle.cos()
-                        + (num("24") - num("23")) * angle.sin())
-                    .abs();
+                    let paper = super::straight_tests::linear_measurement(dim);
                     let style = styles
                         .iter()
                         .find(|s| s.get("2") == Some(&dim["3"]))

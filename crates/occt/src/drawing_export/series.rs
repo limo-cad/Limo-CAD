@@ -69,11 +69,15 @@ pub(super) fn draw(
                     dimension_text(span.value, *precision, prefix, suffix, presentation, units);
                 let semantic = dxf_dimensions::Dimension::resolve(
                     &span,
+                    if *mode == DrawingLinearDimensionMode::Aligned {
+                        dxf_dimensions::LinearMode::Aligned
+                    } else {
+                        dxf_dimensions::LinearMode::Rotated
+                    },
                     presentation,
                     *precision,
                     units,
-                    prefix,
-                    suffix,
+                    (prefix, suffix),
                     &sheet.style,
                 );
                 let mut paper = Paper {

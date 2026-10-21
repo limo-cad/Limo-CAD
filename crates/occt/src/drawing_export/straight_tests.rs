@@ -51,6 +51,135 @@ fn replace_annotation(document: &mut DrawingDocumentDto, change: impl FnOnce(&mu
     document.sheets[0].annotations[0] = serde_json::from_value(value).unwrap();
 }
 
+pub(super) fn linear_measurement(dimension: &BTreeMap<String, String>) -> f64 {
+    let num = |key: &str| dimension[key].parse::<f64>().unwrap();
+    let delta = [num("14") - num("13"), num("24") - num("23")];
+    match dimension["70"].parse::<u16>().unwrap() & 7 {
+        0 => {
+            let angle = num("50").to_radians();
+            (delta[0] * angle.cos() + delta[1] * angle.sin()).abs()
+        }
+        1 => delta[0].hypot(delta[1]),
+        kind => panic!("Expected a linear dimension, got {kind}"),
+    }
+}
+
+#[test]
+fn definition_point_edits_preserve_aligned_and_axis_modes_across_annotation_families() {
+    for family in ["line", "linear", "chain", "baseline", "continued"] {
+        for mode in ["aligned", "horizontal", "vertical"] {
+            if family == "line" && mode != "aligned" {
+                continue;
+            }
+            let (mut document, scene, projection) = fixture::fixture("length", 40.);
+            let anchor = |edge_id, edge_key: &str, endpoint: &str| {
+                json!({"body_id":1,"edge_id":edge_id,"edge_key":edge_key,
+                    "topology_signature":"feature:1:rectangle-connectivity",
+                    "endpoint":endpoint,"fallback_point":[999.,999.,999.]})
+            };
+            if family != "line" {
+                let first = anchor(1, "bottom", "start");
+                let second = if mode == "vertical" {
+                    anchor(2, "right", "end")
+                } else {
+                    anchor(1, "bottom", "end")
+                };
+                let annotation = if family == "linear" {
+                    json!({"kind":"linear_dimension","id":1,"view_id":1,
+                        "first":first,"second":second,"mode":mode,"offset":15.})
+                } else {
+                    json!({"kind":"chain_dimension","id":1,"view_id":1,
+                        "anchors":[first,second],"mode":mode,"layout":family,
+                        "offset":15.,"spacing":10.})
+                };
+                document.sheets[0].annotations[0] = serde_json::from_value(annotation).unwrap();
+            }
+            let dxf = export(
+                &document,
+                &scene,
+                &projection,
+                UnitSystem::Mm,
+                DrawingExportFormat::Dxf,
+            )
+            .unwrap();
+            let mut dimensions = dxf_entities(&dxf, "DIMENSION");
+            assert_eq!(dimensions.len(), 1, "{family}/{mode}");
+            let dimension = &mut dimensions[0];
+            assert_eq!(
+                dimension["70"],
+                if mode == "aligned" { "161" } else { "160" }
+            );
+            assert_eq!(dimension.contains_key("50"), mode != "aligned");
+            assert_eq!(
+                dxf.contains("100\nAcDbRotatedDimension\n"),
+                mode != "aligned"
+            );
+            let styles = dxf_entities(&dxf, "DIMSTYLE");
+            let style = styles
+                .iter()
+                .find(|s| s.get("2") == Some(&dimension["3"]))
+                .unwrap();
+            let factor = style["144"].parse::<f64>().unwrap();
+            assert!((factor - 0.5).abs() < 1e-12);
+            let x = dimension["13"].parse::<f64>().unwrap();
+            let y = dimension["23"].parse::<f64>().unwrap();
+            let (dx, dy) = if mode == "vertical" {
+                (60., 80.)
+            } else {
+                (80., 60.)
+            };
+            dimension.insert("14".into(), (x + dx).to_string());
+            dimension.insert("24".into(), (y + dy).to_string());
+            let expected = if mode == "aligned" { 50. } else { 40. };
+            assert!(
+                (linear_measurement(dimension) * factor - expected).abs() < 1e-10,
+                "{family}/{mode} changed measurement semantics"
+            );
+        }
+    }
+}
+
+#[test]
+fn small_scale_dimensions_regenerate_the_saved_precision_in_each_unit() {
+    for scale in [0.001, 0.0001] {
+        for precision in [6, 7, 8] {
+            for (units, unit_mm) in [
+                (UnitSystem::Mm, 1.),
+                (UnitSystem::Cm, 10.),
+                (UnitSystem::In, 25.4),
+            ] {
+                let (mut document, scene, projection) = fixture::fixture("length", 40.12345678);
+                document.sheets[0].views[0].scale = scale;
+                replace_annotation(&mut document, |a| a["precision"] = json!(precision));
+                let dxf = export(
+                    &document,
+                    &scene,
+                    &projection,
+                    units,
+                    DrawingExportFormat::Dxf,
+                )
+                .unwrap();
+                let dimensions = dxf_entities(&dxf, "DIMENSION");
+                assert_eq!(dimensions.len(), 1, "scale={scale}, precision={precision}");
+                let dimension = &dimensions[0];
+                let styles = dxf_entities(&dxf, "DIMSTYLE");
+                let style = styles
+                    .iter()
+                    .find(|s| s.get("2") == Some(&dimension["3"]))
+                    .unwrap();
+                let value = linear_measurement(dimension) * style["144"].parse::<f64>().unwrap();
+                let expected = format!("{:.*}", precision, 40.12345678 / unit_mm);
+                assert_eq!(format!("{value:.precision$}"), expected, "scale={scale}");
+                let label = format!(
+                    "{expected} {}",
+                    crate::drawing_presentation::text::unit_label(units)
+                );
+                assert!(dxf_entities(&dxf, "TEXT").iter().any(|t| t["1"] == label));
+            }
+        }
+    }
+}
+
 #[test]
 fn semantic_radius_and_diameter_preserve_measurement_after_scale_and_leader_changes() {
     for mode in ["radius", "diameter"] {
@@ -194,11 +323,7 @@ fn semantic_linear_dimensions_preserve_model_measurement_at_each_paper_scale_and
                 );
                 let styles = dxf_entities(&dxf, "DIMSTYLE");
                 let style = styles.iter().find(|s| s.get("2") == Some(&d["3"])).unwrap();
-                let num = |key: &str| d[key].parse::<f64>().unwrap();
-                let angle = num("50").to_radians();
-                let paper_measurement = ((num("14") - num("13")) * angle.cos()
-                    + (num("24") - num("23")) * angle.sin())
-                .abs();
+                let paper_measurement = linear_measurement(d);
                 let factor = style["144"].parse::<f64>().unwrap();
                 let expected = if kind == "length" { 40. } else { 30. } / unit_mm;
                 assert!(

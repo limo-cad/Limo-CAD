@@ -1459,7 +1459,12 @@ fn draw_annotation(
             };
             let semantic = dxf_dimensions::Dimension::resolve(
                 &crate::drawing_presentation::geometry::Linear { first: a, second: b, start: c, end: d, value },
-                presentation, *precision, units, prefix, suffix, style,
+                if *mode == DrawingLinearDimensionMode::Aligned {
+                    dxf_dimensions::LinearMode::Aligned
+                } else {
+                    dxf_dimensions::LinearMode::Rotated
+                },
+                presentation, *precision, units, (prefix, suffix), style,
             );
             let start = paper.items.len();
             paper.line(vec![a, c], "EXTENSION", &style.extension);
@@ -1722,12 +1727,13 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
     let block_table = handles.next();
     let model_space = handles.next();
     let paper_space = handles.next();
-    let dimension_table = (!p.dimensions.is_empty()).then(|| handles.next());
-    let dimension_handles: Vec<_> = p
+    let dimensions: Vec<_> = p
         .dimensions
         .iter()
-        .map(|_| (handles.next(), handles.next()))
+        .filter(|dimension| dimension.preserves_measurement(p.size[1]))
+        .map(|dimension| (dimension, handles.next(), handles.next()))
         .collect();
+    let dimension_table = (!dimensions.is_empty()).then(|| handles.next());
     let mut s = format!(
         "0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLTYPE\n5\n2\n330\n0\n100\nAcDbSymbolTable\n70\n{}\n",
         styles.len() + 1,
@@ -1766,21 +1772,19 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
     writeln!(
         s,
         "0\nTABLE\n2\nBLOCK_RECORD\n5\n{block_table:X}\n330\n0\n100\nAcDbSymbolTable\n70\n{}",
-        p.dimensions.len() + 2
+        dimensions.len() + 2
     )
     .unwrap();
     for (name, handle) in [("*Model_Space", model_space), ("*Paper_Space", paper_space)] {
         writeln!(s, "0\nBLOCK_RECORD\n5\n{handle:X}\n330\n{block_table:X}\n100\nAcDbSymbolTableRecord\n100\nAcDbBlockTableRecord\n2\n{name}\n70\n4\n280\n1\n281\n0").unwrap();
     }
-    for (index, (_, handle)) in dimension_handles.iter().enumerate() {
+    for (index, (_, _, handle)) in dimensions.iter().enumerate() {
         writeln!(s, "0\nBLOCK_RECORD\n5\n{handle:X}\n330\n{block_table:X}\n100\nAcDbSymbolTableRecord\n100\nAcDbBlockTableRecord\n2\n*D{index}\n70\n4\n280\n1\n281\n0").unwrap();
     }
     s.push_str("0\nENDTAB\n");
     if let Some(table) = dimension_table {
-        writeln!(s, "0\nTABLE\n2\nDIMSTYLE\n5\n{table:X}\n330\n0\n100\nAcDbSymbolTable\n100\nAcDbDimStyleTable\n70\n{}", p.dimensions.len()).unwrap();
-        for (index, (dimension, (style, _))) in
-            p.dimensions.iter().zip(&dimension_handles).enumerate()
-        {
+        writeln!(s, "0\nTABLE\n2\nDIMSTYLE\n5\n{table:X}\n330\n0\n100\nAcDbSymbolTable\n100\nAcDbDimStyleTable\n70\n{}", dimensions.len()).unwrap();
+        for (index, (dimension, style, _)) in dimensions.iter().enumerate() {
             dimension.style(&mut s, index, table, *style, style_table_handle + 1);
         }
         s.push_str("0\nENDTAB\n");
@@ -1788,8 +1792,7 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
     s.push_str("0\nENDSEC\n0\nSECTION\n2\nBLOCKS\n");
     handles.empty_space(&mut s, "*Model_Space", model_space);
     handles.empty_space(&mut s, "*Paper_Space", paper_space);
-    for (index, (dimension, (_, owner))) in p.dimensions.iter().zip(&dimension_handles).enumerate()
-    {
+    for (index, (dimension, _, owner)) in dimensions.iter().enumerate() {
         handles.entity(&mut s, "BLOCK", *owner, "0");
         writeln!(
             s,
@@ -1809,7 +1812,7 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
     }
     s.push_str("0\nENDSEC\n0\nSECTION\n2\nENTITIES\n");
     let mut cursor = 0;
-    for (index, dimension) in p.dimensions.iter().enumerate() {
+    for (index, (dimension, _, _)) in dimensions.iter().enumerate() {
         dxf_items(
             &mut s,
             &p.items[cursor..dimension.range.start],
