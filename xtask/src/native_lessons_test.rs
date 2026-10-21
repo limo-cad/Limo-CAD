@@ -109,8 +109,23 @@ fn control(client: &mut Client, label: &str, value: Option<&str>) -> Result<Valu
         .map_err(|error| anyhow::anyhow!("Native Scripts control {label:?}: {error:#}"))
 }
 fn capture(client: &mut Client, out: &std::path::Path, name: &str) -> Result<()> {
-    crate::native_fixture::capture(client, out, name)
-        .map_err(|error| anyhow::anyhow!("Native Scripts capture {name:?}: {error:#}"))
+    let result: Result<()> = (|| {
+        let before = ui(client, json!({"action":"inspect"}))?;
+        let captured = ui(
+            client,
+            json!({"action":"capture","path":out.join(format!("{name}.png"))}),
+        )?;
+        std::fs::write(
+            out.join(format!("{name}.capture.json")),
+            serde_json::to_vec_pretty(&json!({"before_capture":before,"capture":captured}))?,
+        )?;
+        ensure!(
+            captured["presented"] == true && captured["render_status"] == "submitted",
+            "Native window capture has no matching submitted frame: {captured}"
+        );
+        Ok(())
+    })();
+    result.map_err(|error| anyhow::anyhow!("Native Scripts capture {name:?}: {error:#}"))
 }
 
 fn inspect_example_library(c: &mut Client, entries: &[Value]) -> Result<Value> {
@@ -443,7 +458,7 @@ pub(super) fn run(args: impl Iterator<Item = String>) -> Result<()> {
         c.call("cad_project_model", json!({}))? == exported,
         "Restoring the completed lesson changed its model"
     );
-    ui(c, json!({"action":"capture","path":fixture.capture}))?;
+    capture(c, &fixture.out, "native-lessons")?;
     ui(
         c,
         json!({"action":"file","command":"save","path":fixture.project}),

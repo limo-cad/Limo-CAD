@@ -254,6 +254,11 @@ pub(super) fn exercise(c: &mut Client, out: &Path) -> Result<Value> {
         "Imported source modified the retained original lesson"
     );
     capture(c, out, "scripts-retained-original")?;
+    // Run closes Scripts while retaining its source editor.
+    let scripts = ui(c, json!({"action":"inspect"}))?;
+    if controls(&scripts).any(|row| row["label"] == "Scripts" && row["selected"] == false) {
+        control(c, "Scripts", None)?;
+    }
     // Source Save as clears dirty state. Recreate a deliberate unsaved edit for
     // the catalog's existing Save/Discard/Cancel decision instead of assuming it.
     let catalog_source = format!("{edited}\n// Unsaved catalog decision fixture.\n");
