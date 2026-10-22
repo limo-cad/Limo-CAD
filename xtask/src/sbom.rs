@@ -279,6 +279,29 @@ fn convert(cdx: &Path, spdx: &Path) -> Result<()> {
     write_json(spdx, &document)
 }
 
+/// Actions' subject-path input is a glob. Windows canonicalization adds a
+/// verbatim prefix whose question mark must not reach that glob parser.
+fn github_output_path(path: &Path) -> Result<String> {
+    let text = path.to_str().context("UTF-8 report path")?;
+    let text = if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else if let Some(drive) = text.strip_prefix(r"\\?\") {
+        ensure!(
+            drive
+                .as_bytes()
+                .first()
+                .is_some_and(u8::is_ascii_alphabetic)
+                && drive.as_bytes().get(1..3) == Some(b":\\"),
+            "unsupported verbatim workflow path"
+        );
+        drive.to_owned()
+    } else {
+        text.to_owned()
+    };
+    ensure!(!text.contains(['\n', '\r']), "unsafe workflow output");
+    Ok(text.replace('\\', "/"))
+}
+
 fn release(root: &Path, options: Options) -> Result<()> {
     ensure!(
         options.directory.is_none() && !options.require_release_evidence,
@@ -413,11 +436,7 @@ fn release(root: &Path, options: Options) -> Result<()> {
                 ("checksums", &checksum_name),
             ] {
                 let path = parent.join(file);
-                let text = path
-                    .to_str()
-                    .context("UTF-8 report path")?
-                    .replace('\\', "/");
-                ensure!(!text.contains(['\n', '\r']), "unsafe workflow output");
+                let text = github_output_path(&path)?;
                 writeln!(output, "{key}={text}")?;
             }
         }
