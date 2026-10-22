@@ -1007,6 +1007,10 @@ fn reduce_inner(
                         state.original = None;
                         state.draft = None;
                         state.draft_baseline = None;
+                        state.placement = None;
+                        state.placement_dirty = false;
+                        state.target.clear();
+                        state.report = None;
                     }
                 }
             }

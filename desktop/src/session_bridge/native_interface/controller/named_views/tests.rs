@@ -19,8 +19,17 @@ impl ViewControls {
         };
         let handle = NativeInterfaceHandle::new(|| {});
         let mut app = native_viewport::interface_scene_fixture();
-        app.init_resource::<Assets<Image>>()
-            .init_resource::<ViewportUiAssets>();
+        app.add_schedule(Schedule::new(Startup))
+            .add_schedule(Schedule::new(Update))
+            .add_schedule(Schedule::new(Last))
+            .add_plugins(bevy::text::TextPlugin)
+            .init_resource::<Assets<Image>>()
+            .init_resource::<ViewportUiAssets>()
+            .init_resource::<Time<bevy::time::Real>>()
+            .init_resource::<UiScale>()
+            .init_resource::<bevy::input_focus::InputFocus>()
+            .insert_resource(handle.clone());
+        interface_shell::fields::install(&mut app);
         let camera = app.world_mut().spawn(InterfaceCamera).id();
         let bodies = refresh_native_model(&fixture.engine, app.world_mut(), true).unwrap();
         let receipt = fixture
@@ -132,18 +141,30 @@ impl ViewControls {
                 InheritedVisibility::VISIBLE,
             ));
         }
-        interface_shell::tests::publish_layout_once(world, self.handle.clone());
+        self.app.update();
+        self.app
+            .world_mut()
+            .run_system_cached(bevy::ui::widget::update_editable_text_styles)
+            .unwrap();
+        self.app
+            .world_mut()
+            .run_system_cached(bevy::ui::widget::update_editable_text_layout)
+            .unwrap();
+        interface_shell::tests::publish_layout_once(self.app.world_mut(), self.handle.clone());
     }
 
-    fn action(&mut self, label: &str, input: ControlInput) -> NativeInterfaceAction {
-        let entity = self
-            .app
+    fn entity(&mut self, label: &str) -> Entity {
+        self.app
             .world_mut()
             .query::<(Entity, &InterfaceControl)>()
             .iter(self.app.world())
             .find(|(_, control)| control.label == label)
             .unwrap_or_else(|| panic!("Missing {label}"))
-            .0;
+            .0
+    }
+
+    fn action(&mut self, label: &str, input: ControlInput) -> NativeInterfaceAction {
+        let entity = self.entity(label);
         self.handle
             .resolve_input(
                 limo_cad_interface::ControlKey(entity.to_bits()),
@@ -151,6 +172,23 @@ impl ViewControls {
                 &self.owner,
             )
             .unwrap()
+    }
+
+    fn type_in_buffer(&mut self, label: &str, value: &str) {
+        use bevy::text::{EditableText, TextEdit};
+        self.invoke(label, ControlInput::Click).unwrap();
+        let entity = self.entity(label);
+        let mut editor = self
+            .app
+            .world_mut()
+            .get_mut::<EditableText>(entity)
+            .unwrap();
+        editor.queue_edit(TextEdit::SelectAll);
+        editor.queue_edit(TextEdit::Insert(value.into()));
+        self.app
+            .world_mut()
+            .run_system_cached(bevy::text::apply_text_edits)
+            .unwrap();
     }
 
     fn invoke(&mut self, label: &str, input: ControlInput) -> Result<Value, String> {
@@ -164,13 +202,11 @@ impl ViewControls {
         )
     }
 
-    fn drain(&mut self) {
+    fn outcome(&mut self) -> Result<Value, String> {
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
         loop {
             if let Some(outcome) = worker::poll(self.app.world_mut(), &self.services) {
-                let value = outcome.value.unwrap();
-                assert!(value["render_error"].is_null(), "{value}");
-                return;
+                return outcome.value;
             }
             assert!(
                 std::time::Instant::now() < deadline,
@@ -178,6 +214,11 @@ impl ViewControls {
             );
             std::thread::sleep(Duration::from_millis(2));
         }
+    }
+
+    fn drain(&mut self) {
+        let value = self.outcome().unwrap();
+        assert!(value["render_error"].is_null(), "{value}");
     }
 }
 
@@ -259,14 +300,17 @@ fn browser_activation_and_editor_selection_preserve_unfinished_view_edits() {
         )
         .unwrap();
         ui.paint(1360., 860.);
-        ui.invoke(
-            "View name",
-            ControlInput::SetValue("Unfinished edits".into()),
-        )
-        .unwrap();
-        ui.paint(1360., 860.);
-        let draft = ui.app.world().resource::<State>().draft.clone();
+        ui.type_in_buffer("View name", "Unfinished edits");
         let before = read_views(&fixture.engine).unwrap();
+        // The browser click must flush the real text buffer before deciding
+        // whether switching would discard an edit.
+        assert!(ui
+            .invoke(&second.name, ControlInput::Click)
+            .unwrap_err()
+            .contains("Save or discard"));
+        let draft = ui.app.world().resource::<State>().draft.clone();
+        assert_eq!(draft.as_ref().unwrap().name, "Unfinished edits");
+        ui.paint(1360., 860.);
         for label in [&second.name, &format!("Edit saved view {}", second.name)] {
             assert!(ui
                 .invoke(label, ControlInput::Click)
@@ -402,6 +446,103 @@ fn a_saved_view_click_cannot_follow_document_replacement() {
         assert!(
             !has_unsaved_changes(ui.app.world().resource::<State>()),
             "An untouched new draft can be replaced without losing an edit"
+        );
+    });
+}
+
+#[test]
+fn deleting_a_view_clears_its_draft_baseline_before_another_activation() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut second = saved.clone();
+        second.name = "Remaining view".into();
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &fixture.owner(),
+                "upsert_named_view",
+                &serde_json::to_value(&second).unwrap(),
+                || Ok(()),
+            )
+            .unwrap();
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        let occurrence = format!("occurrence:{}", saved.occurrence_offsets[0].occurrence_id.0);
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Target,
+            &occurrence,
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Translation(0),
+            "unfinished+",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        ui.app.world_mut().resource_mut::<State>().scroll = usize::MAX;
+        ui.paint(1360., 860.);
+        ui.invoke("Delete saved view", ControlInput::Click).unwrap();
+        ui.drain();
+        assert!(!has_unsaved_changes(ui.app.world().resource::<State>()));
+        assert!(ui.app.world().resource::<State>().draft_baseline.is_none());
+        ui.paint(1360., 860.);
+        ui.invoke(&second.name, ControlInput::Click).unwrap();
+        ui.drain();
+        assert_eq!(
+            read_views(&fixture.engine).unwrap().active.as_deref(),
+            Some(second.name.as_str())
+        );
+        assert!(!read_views(&fixture.engine)
+            .unwrap()
+            .views
+            .iter()
+            .any(|view| view.name == saved.name));
+    });
+}
+
+#[test]
+fn failed_async_recall_preserves_the_camera_and_editor() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        let camera = native_viewport::interface_view(ui.app.world()).1;
+        let before = read_views(&fixture.engine).unwrap();
+        let draft = ui.app.world().resource::<State>().draft.clone();
+        activate(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &fixture.bridge,
+            &ui.owner,
+            "Missing view",
+        )
+        .unwrap();
+        assert!(ui.outcome().is_err());
+        assert_eq!(native_viewport::interface_view(ui.app.world()).1, camera);
+        assert_eq!(read_views(&fixture.engine).unwrap(), before);
+        assert_eq!(
+            ui.app.world().resource::<State>().draft.as_ref(),
+            draft.as_ref()
         );
     });
 }
