@@ -349,3 +349,133 @@ fn non_utf8_entry_names_leave_the_original_archive_intact() {
     );
     assert_eq!(archive.original.as_deref(), Some(bytes.as_slice()));
 }
+
+#[test]
+fn intent_overlay_preserves_unrelated_entries_and_replaces_without_duplicates() {
+    let base = ProjectArchive::new(model(14), metadata()).unwrap();
+    let bytes = fixture(
+        base.manifest(),
+        base.model_json().as_bytes(),
+        &[
+            ("preview.png", b"thumbnail"),
+            ("intent/vendor.cbor", b"opaque"),
+        ],
+    );
+    let mut archive = ProjectArchive::decode(bytes).unwrap();
+    assert_eq!(
+        archive.read_intent("intent/thermal.cbor", 100).unwrap(),
+        None
+    );
+    for payload in [b"first".as_slice(), b"second".as_slice()] {
+        archive
+            .set_intent("intent/thermal.cbor", Some(payload.to_vec()))
+            .unwrap();
+        assert_eq!(
+            archive
+                .read_intent("intent/thermal.cbor", 100)
+                .unwrap()
+                .unwrap(),
+            payload
+        );
+        let encoded = archive.encode().unwrap();
+        let mut zip = ZipArchive::new(Cursor::new(&encoded)).unwrap();
+        assert_eq!(zip.comment(), b"project annotations");
+        let mut preview = Vec::new();
+        zip.by_name("preview.png")
+            .unwrap()
+            .read_to_end(&mut preview)
+            .unwrap();
+        assert_eq!(preview, b"thumbnail");
+        assert_eq!(
+            zip.file_names()
+                .filter(|name| name
+                    .as_ref()
+                    .is_ok_and(|name| name.as_ref() == "intent/thermal.cbor"))
+                .count(),
+            1
+        );
+        archive = ProjectArchive::decode(encoded).unwrap();
+        assert_eq!(
+            archive
+                .read_intent("intent/vendor.cbor", 100)
+                .unwrap()
+                .unwrap(),
+            b"opaque"
+        );
+        assert_eq!(
+            archive
+                .read_intent("intent/thermal.cbor", 100)
+                .unwrap()
+                .unwrap(),
+            payload
+        );
+    }
+    archive.set_intent("intent/thermal.cbor", None).unwrap();
+    assert_eq!(
+        archive.read_intent("intent/thermal.cbor", 100).unwrap(),
+        None
+    );
+    let reopened = ProjectArchive::decode(archive.encode().unwrap()).unwrap();
+    assert_eq!(
+        reopened.read_intent("intent/thermal.cbor", 100).unwrap(),
+        None
+    );
+    assert_eq!(
+        reopened
+            .read_intent("intent/vendor.cbor", 100)
+            .unwrap()
+            .unwrap(),
+        b"opaque"
+    );
+}
+#[test]
+fn intent_names_and_caller_limits_reject_without_modifying_candidate() {
+    let mut archive = ProjectArchive::new(model(14), metadata()).unwrap();
+    archive
+        .set_intent("intent/thermal.cbor", Some(b"keep".to_vec()))
+        .unwrap();
+    for name in [
+        "model.json",
+        "manifest.json",
+        "/intent/x",
+        "intent/../x",
+        "intent/./x",
+        "intent//x",
+        "intent/x/",
+        "intent\\x",
+        "intent/C:x",
+    ] {
+        assert!(archive.set_intent(name, Some(vec![1])).is_err(), "{name}");
+        assert!(archive.read_intent(name, 100).is_err());
+    }
+    assert!(archive.read_intent("intent/thermal.cbor", 3).is_err());
+    assert_eq!(
+        archive
+            .read_intent("intent/thermal.cbor", 4)
+            .unwrap()
+            .unwrap(),
+        b"keep"
+    );
+    let reopened = ProjectArchive::decode(archive.encode().unwrap()).unwrap();
+    assert!(reopened.read_intent("intent/thermal.cbor", 3).is_err());
+    assert_eq!(
+        reopened
+            .read_intent("intent/thermal.cbor", 4)
+            .unwrap()
+            .unwrap(),
+        b"keep"
+    );
+}
+#[test]
+fn staged_intents_obey_count_and_expanded_archive_limits() {
+    let mut archive = ProjectArchive::new(model(14), metadata()).unwrap();
+    for n in 0..64 {
+        archive
+            .set_intent(&format!("intent/{n}"), Some(vec![0; 16]))
+            .unwrap();
+    }
+    assert!(archive.set_intent("intent/extra", None).is_err());
+    archive.set_intent("intent/0", Some(vec![1; 17])).unwrap();
+    assert!(archive.encode_bounded(MAX_FILE_BYTES, 1000).is_err());
+    assert!(archive.encode().is_ok());
+}

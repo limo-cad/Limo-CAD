@@ -67,18 +67,18 @@
   },
   "qualification": {
     "owned_child_diagnostics": {
-      "receipt_path": "D:/limo-cad-maintenance/backlog-autonomous-20261010/owned-process-diagnostics-03623e2c-results.json",
+      "receipt_path": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/owned-process-diagnostics-03623e2c-results.json",
       "receipt_sha256": "af3690930194d832f125c58c68f1358a9de1d4ec133810bcd7b26c78dd391151",
       "receipt": {
         "revision": "03623e2ca5e0ca55c677735bfd486a1339f424c9",
-        "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+        "checkout": "<local-root>\\limo-cad-maintenance\\ownership-worktree",
         "help_filters": [],
         "xtask_filters": [
           "replay::tests::disconnected_rpc_records_exit_before_cleanup_and_live_eof_separately"
         ],
-        "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+        "occt_root": "<local-root>\\limo-cad-maintenance\\checked-occt-sdk",
         "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
-        "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+        "target": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
         "msvc": "14.44.35207",
         "windows_sdk": "10.0.26100.0\\",
         "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
@@ -135,7 +135,7 @@
             "kind": "xtask",
             "target_name": "xtask",
             "target_kind": "bin",
-            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\xtask-cac2d272a202a472.exe",
+            "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\xtask-cac2d272a202a472.exe",
             "sha256": "3560fc3a97806cad110d0a68caee3083d2e3fca840c1ab3b000719fd653c94a1"
           }
         ],
@@ -210,7 +210,7 @@
               "-D",
               "warnings"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-strict-xtask.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-strict-xtask.log"
           },
           {
             "kind": "xtask_artifact_compile",
@@ -280,8 +280,8 @@
               "--config",
               "profile.release.package.limo-cad-wasm.opt-level=1"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-xtask-compile.jsonl",
-            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-xtask-compile.stderr.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-xtask-compile.jsonl",
+            "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-xtask-compile.stderr.log"
           },
           {
             "kind": "xtask_regression",
@@ -290,18 +290,18 @@
             "exact_one_pass": true,
             "elapsed_seconds": 0.353809,
             "binary_sha256": "3560fc3a97806cad110d0a68caee3083d2e3fca840c1ab3b000719fd653c94a1",
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-xtask-test-0.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\owned-process-diagnostics-03623e2c-xtask-test-0.log"
           }
         ],
         "scope": "One strict changed xtask --bin xtask Clippy check with native-control-harness; exactly one new CPU owned-child regression for observed exit 23 versus live transport disconnect, bounded Unicode method/context receipts, no parameter retention, cleanup reservation, reaping and idempotence. No CAD process, suite, recipe replay, model fixture, GUI input, live session/model/inbox writes, runtime change, deployment, main change or Jack PR action."
       }
     },
     "surface_toolpath_tangent": {
-      "receipt_path": "D:/limo-cad-maintenance/backlog-autonomous-20261010/surface-toolpath-batch-b1ffcde3-results.json",
+      "receipt_path": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/surface-toolpath-batch-b1ffcde3-results.json",
       "receipt_sha256": "1ab6aaa4f41dbc7f1faf4d8d83be7894a6e2549b3b5ed193a06c0339b35ee0e1",
       "receipt": {
         "revision": "b1ffcde3e842b414fe34ef51ffb42dc33e17e9b7",
-        "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+        "checkout": "<local-root>\\limo-cad-maintenance\\ownership-worktree",
         "desktop_filters": [
           "native_viewport::platform::viewport_renderer::surface_submission::tests::worker_submission_and_compilation_preserve_surface_order_and_frame_readiness"
         ],
@@ -312,9 +312,9 @@
         "mcp_filters": [
           "tests::native_bore_tangent_to_stock_boundary_has_no_inner_wire_through_proof"
         ],
-        "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+        "occt_root": "<local-root>\\limo-cad-maintenance\\checked-occt-sdk",
         "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
-        "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+        "target": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
         "msvc": "14.44.35207",
         "windows_sdk": "10.0.26100.0\\",
         "profile_flags": [
@@ -363,24 +363,24 @@
           "--config",
           "profile.release.package.limo-cad-wasm.opt-level=1"
         ],
-        "unit_session_registry": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-unit-session-registry",
+        "unit_session_registry": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-unit-session-registry",
         "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
         "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
         "recorded_utc": "2026-10-11T21:33:04.1420381Z",
         "artifacts": [
           {
             "kind": "desktop",
-            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
+            "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
             "sha256": "8ac2d57df38e78424922c11fffc814faa53195a9b3a4b77e9f0bcb1df8db07f3"
           },
           {
             "kind": "export",
-            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_export-df7b06d8934930ed.exe",
+            "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_export-df7b06d8934930ed.exe",
             "sha256": "21ea2b02faf8c53b661ce756dcdfc5ba482663a8ce6a408c5961663251b69fb0"
           },
           {
             "kind": "mcp",
-            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_mcp-c628fbc944ba67ed.exe",
+            "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_mcp-c628fbc944ba67ed.exe",
             "sha256": "6d20a2e2807e9d199aa466ccf3c2c2df30b97ac74998e529a52f527a9fcaa1ce"
           }
         ],
@@ -453,7 +453,7 @@
               "-D",
               "warnings"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-strict-desktop.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-strict-desktop.log"
           },
           {
             "kind": "strict-export",
@@ -523,7 +523,7 @@
               "-D",
               "warnings"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-strict-export.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-strict-export.log"
           },
           {
             "kind": "strict-mcp",
@@ -593,7 +593,7 @@
               "-D",
               "warnings"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-strict-mcp.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-strict-mcp.log"
           },
           {
             "kind": "desktop_artifact_compile",
@@ -662,8 +662,8 @@
               "--features",
               "native-computer-control"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-desktop-compile.jsonl",
-            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-desktop-compile.stderr.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-desktop-compile.jsonl",
+            "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-desktop-compile.stderr.log"
           },
           {
             "kind": "desktop_regression",
@@ -672,14 +672,14 @@
             "exact_one_pass": true,
             "elapsed_seconds": 0.0555258,
             "command": [
-              "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
+              "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
               "--exact",
               "native_viewport::platform::viewport_renderer::surface_submission::tests::worker_submission_and_compilation_preserve_surface_order_and_frame_readiness",
               "--nocapture",
               "--test-threads=1"
             ],
             "binary_sha256": "8ac2d57df38e78424922c11fffc814faa53195a9b3a4b77e9f0bcb1df8db07f3",
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-desktop-test-0.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-desktop-test-0.log"
           },
           {
             "kind": "export_artifact_compile",
@@ -746,8 +746,8 @@
               "--config",
               "profile.release.package.limo-cad-wasm.opt-level=1"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-export-compile.jsonl",
-            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-export-compile.stderr.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-export-compile.jsonl",
+            "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-export-compile.stderr.log"
           },
           {
             "kind": "export_regression",
@@ -756,14 +756,14 @@
             "exact_one_pass": true,
             "elapsed_seconds": 0.2906933,
             "command": [
-              "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_export-df7b06d8934930ed.exe",
+              "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_export-df7b06d8934930ed.exe",
               "--exact",
               "slicer_verification::tests::toolpath_evidence_requires_executable_finite_movement_not_comment_or_display_text",
               "--nocapture",
               "--test-threads=1"
             ],
             "binary_sha256": "21ea2b02faf8c53b661ce756dcdfc5ba482663a8ce6a408c5961663251b69fb0",
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-export-test-0.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-export-test-0.log"
           },
           {
             "kind": "mcp_artifact_compile",
@@ -832,8 +832,8 @@
               "--features",
               "native-computer-control"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-mcp-compile.jsonl",
-            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-mcp-compile.stderr.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-mcp-compile.jsonl",
+            "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-mcp-compile.stderr.log"
           },
           {
             "kind": "mcp_regression",
@@ -842,14 +842,14 @@
             "exact_one_pass": true,
             "elapsed_seconds": 0.17901029999999998,
             "command": [
-              "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_mcp-c628fbc944ba67ed.exe",
+              "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_mcp-c628fbc944ba67ed.exe",
               "--exact",
               "tests::native_bore_tangent_to_stock_boundary_has_no_inner_wire_through_proof",
               "--nocapture",
               "--test-threads=1"
             ],
             "binary_sha256": "6d20a2e2807e9d199aa466ccf3c2c2df30b97ac74998e529a52f527a9fcaa1ce",
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-mcp-test-0.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\surface-toolpath-batch-b1ffcde3-mcp-test-0.log"
           }
         ],
         "scope": "Strict changed desktop, export and MCP Windows package Clippy checks; one affected CPU renderer scheduling regression with the new executed-system tick assertion, one new synthetic production-output-inspector regression, and one strengthened authentic native tangent/full-reader regression in an isolated in-process scratch document. The earlier renderer pass preceded a real source correction and does not cover its new tick assertion. Earlier unrelated passing tests and the qualified xtask diagnostic filter are not rerun. The native fixture retains genuine STEP bytes before ownership assertions and requires exact source preservation; unit session storage is isolated under this receipt directory. No GPU desktop process, suite, recipe replay, live model/session/inbox write, GUI input, runtime restart, deployment, main change or Jack PR action. Actual packaged GPU acceptance is left to normal hosted checks on the repaired head; a matched live desktop/MCP tangent witness remains unqualified."
@@ -857,11 +857,11 @@
     }
   },
   "native_witness": {
-    "path": "D:/limo-cad-maintenance/backlog-autonomous-20261010/native-tangent-b1ffcde3-witness.step",
+    "path": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/native-tangent-b1ffcde3-witness.step",
     "repository_path": "docs/qualification/fixtures/native-exact-tangent-20261011.step",
     "bytes": 27598,
     "sha256": "a8246e6a461be517b0b05b72be9c97be835fc575b8bc5ed5874e94699cffbee2",
-    "captured_log": "D:/limo-cad-maintenance/backlog-autonomous-20261010/surface-toolpath-batch-b1ffcde3-mcp-test-0.log",
+    "captured_log": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/surface-toolpath-batch-b1ffcde3-mcp-test-0.log",
     "captured_log_sha256": "4e8cb84a83055b5ef67b06ddab4b6bc1011c11b7156aa23e2465464ae042aea8",
     "maximum_native_edge_face_owners": 4,
     "donor_native_ownership": {

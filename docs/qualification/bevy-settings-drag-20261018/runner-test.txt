@@ -1,4 +1,4 @@
-   Compiling bevy_winit v0.20.0 (/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD/desktop/vendor/bevy_winit)
+   Compiling bevy_winit v0.20.0 (/Users/<user>/.codex/worktrees/pr420-visual-parity/noBS-CAD/desktop/vendor/bevy_winit)
     Finished `release` profile [optimized] target(s) in 5.97s
      Running unittests src/lib.rs (/private/tmp/pr420-controls-target/release/deps/bevy_winit-31d4a944380d183a)
 

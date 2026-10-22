@@ -47,9 +47,19 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
+      - name: Check private workspace boundary (offline)
+        run: |
+          rustc --edition=2021 -D warnings scripts/ci/check-workspace-policy.rs -o "$RUNNER_TEMP/check-workspace-policy"
+          "$RUNNER_TEMP/check-workspace-policy"
+          rustc --edition=2021 -D warnings --test scripts/ci/check-workspace-policy.rs -o "$RUNNER_TEMP/check-workspace-policy-tests"
+          "$RUNNER_TEMP/check-workspace-policy-tests"
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: repository-tools
+      - name: Check MCP transport and process boundaries without the CAD kernel
+        run: |
+          rustc --edition=2021 --test scripts/ci/test-mcp-boundaries.rs -o "$RUNNER_TEMP/mcp-boundaries"
+          "$RUNNER_TEMP/mcp-boundaries"
       - name: Check formatting in every Rust workspace
         run: |
           cargo fmt --all -- --check

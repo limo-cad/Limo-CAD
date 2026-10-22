@@ -15,18 +15,18 @@
     "native_file_open": {
       "status": "passed",
       "tested_source_revision": "abdfb8cf9ab8c3d771a14f6bb8fea55b7c3f186d",
-      "receipt_path": "D:/limo-cad-maintenance/backlog-autonomous-20261010/compact-file-open-abdfb8cf-results.json",
+      "receipt_path": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/compact-file-open-abdfb8cf-results.json",
       "receipt_sha256": "f49879f860719d3c5f3b0e012196197b3f5cf4c457b7a3534123994521e938db",
       "receipt": {
         "revision": "abdfb8cf9ab8c3d771a14f6bb8fea55b7c3f186d",
-        "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+        "checkout": "<local-root>\\limo-cad-maintenance\\ownership-worktree",
         "desktop_filters": [
           "session_bridge::native_interface::controller::files::tests::lifecycle::file_open_receipt_is_compact_and_preserves_native_geometry_and_owner_guards"
         ],
         "native_filters": [],
-        "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+        "occt_root": "<local-root>\\limo-cad-maintenance\\checked-occt-sdk",
         "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
-        "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+        "target": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
         "msvc": "14.44.35207",
         "windows_sdk": "10.0.26100.0\\",
         "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
@@ -35,7 +35,7 @@
         "artifacts": [
           {
             "kind": "desktop",
-            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
+            "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-cbc1e47046f5d81a.exe",
             "sha256": "3b0f620cc96419daa9e398c557379744c82583946f2f2b80347c327bed7922d5"
           }
         ],
@@ -44,14 +44,14 @@
             "kind": "strict-desktop",
             "exit_code": 0,
             "elapsed_seconds": 60.4210254,
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\compact-file-open-abdfb8cf-strict-desktop.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\compact-file-open-abdfb8cf-strict-desktop.log"
           },
           {
             "kind": "desktop_artifact_compile",
             "exit_code": 0,
             "elapsed_seconds": 623.2511747,
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\compact-file-open-abdfb8cf-desktop-compile.jsonl",
-            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\compact-file-open-abdfb8cf-desktop-compile.stderr.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\compact-file-open-abdfb8cf-desktop-compile.jsonl",
+            "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\compact-file-open-abdfb8cf-desktop-compile.stderr.log"
           },
           {
             "kind": "desktop_regression",
@@ -60,7 +60,7 @@
             "exact_one_pass": true,
             "elapsed_seconds": 0.10850309999999999,
             "binary_sha256": "3b0f620cc96419daa9e398c557379744c82583946f2f2b80347c327bed7922d5",
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\compact-file-open-abdfb8cf-desktop-test-0.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\compact-file-open-abdfb8cf-desktop-test-0.log"
           }
         ],
         "scope": "One strict changed desktop Windows package check and exactly one new isolated native File controller regression. A genuine 10x6x3 OCCT stock archive is opened through the ordered File worker with exact model/scene equality, saved source bytes, dirty-open cancellation, explicit discard, clean path, renderer ownership and old-owner rejection. File completion omits document and tessellated geometry while moving exact load diagnostics/body count; direct native and explicit scene/model responses are unchanged. No suite, recipe replay, modeling script, prior passing test, live CAD input/session write, process/runtime restart, deployment, main change or Jack PR action."
@@ -78,7 +78,7 @@
     },
     "localized_entrances_static": {
       "status": "passed",
-      "receipt_path": "D:/limo-cad-maintenance/backlog-autonomous-20261010/localized-entrances-20261011-static-check.json",
+      "receipt_path": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/localized-entrances-20261011-static-check.json",
       "receipt_sha256": "a8d84c0cd0e4ebcf7e3322cf4483dc8819d5ea9ddea1844a4d9bfdd13f02e76f",
       "receipt": {
         "schema": 1,
@@ -256,11 +256,11 @@
     },
     "practical_lesson_checks": {
       "status": "passed",
-      "receipt_path": "D:/limo-cad-maintenance/backlog-autonomous-20261010/practical-lessons-70eba71a-results.json",
+      "receipt_path": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/practical-lessons-70eba71a-results.json",
       "receipt_sha256": "a6ff2d87973b16019d2457878ea2106504150f790f8fe4e9819db889c1c22379",
       "receipt": {
         "revision": "70eba71ab14d35049d931a8d266ed09e4dff3fc1",
-        "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+        "checkout": "<local-root>\\limo-cad-maintenance\\ownership-worktree",
         "help_filters": [
           "tests::practical_lesson_guides_are_bundled_and_findable_for_edit_recovery"
         ],
@@ -269,9 +269,9 @@
           "native_lessons_test::tests::source_inspection_matches_utf16_excerpt_and_rejects_wrong_buffer",
           "knowledge::tests::real_index_is_byte_identical_and_bundle_valid"
         ],
-        "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+        "occt_root": "<local-root>\\limo-cad-maintenance\\checked-occt-sdk",
         "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
-        "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+        "target": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
         "msvc": "14.44.35207",
         "windows_sdk": "10.0.26100.0\\",
         "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
@@ -328,14 +328,14 @@
             "kind": "help",
             "target_name": "limo_cad_help",
             "target_kind": "lib",
-            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_help-e2fa5aaca09fc4e1.exe",
+            "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_help-e2fa5aaca09fc4e1.exe",
             "sha256": "ba4e147a2248821045f17b437a3d3f757712211e8809638f9280e06d218a3664"
           },
           {
             "kind": "xtask",
             "target_name": "xtask",
             "target_kind": "bin",
-            "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\xtask-cac2d272a202a472.exe",
+            "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\xtask-cac2d272a202a472.exe",
             "sha256": "543526435218984f207eb21adbbd9357f5b41181905b654a38b5e9f245e8999d"
           }
         ],
@@ -407,7 +407,7 @@
               "-D",
               "warnings"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-strict-help.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-strict-help.log"
           },
           {
             "kind": "strict-xtask",
@@ -479,7 +479,7 @@
               "-D",
               "warnings"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-strict-xtask.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-strict-xtask.log"
           },
           {
             "kind": "help_artifact_compile",
@@ -546,8 +546,8 @@
               "--config",
               "profile.release.package.limo-cad-wasm.opt-level=1"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-help-compile.jsonl",
-            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-help-compile.stderr.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-help-compile.jsonl",
+            "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-help-compile.stderr.log"
           },
           {
             "kind": "help_regression",
@@ -556,7 +556,7 @@
             "exact_one_pass": true,
             "elapsed_seconds": 0.0290648,
             "binary_sha256": "ba4e147a2248821045f17b437a3d3f757712211e8809638f9280e06d218a3664",
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-help-test-0.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-help-test-0.log"
           },
           {
             "kind": "xtask_artifact_compile",
@@ -626,8 +626,8 @@
               "--config",
               "profile.release.package.limo-cad-wasm.opt-level=1"
             ],
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-xtask-compile.jsonl",
-            "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-xtask-compile.stderr.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-xtask-compile.jsonl",
+            "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-xtask-compile.stderr.log"
           },
           {
             "kind": "xtask_regression",
@@ -636,7 +636,7 @@
             "exact_one_pass": true,
             "elapsed_seconds": 0.3393485,
             "binary_sha256": "543526435218984f207eb21adbbd9357f5b41181905b654a38b5e9f245e8999d",
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-xtask-test-0.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-xtask-test-0.log"
           },
           {
             "kind": "xtask_regression",
@@ -645,7 +645,7 @@
             "exact_one_pass": true,
             "elapsed_seconds": 0.020853899999999998,
             "binary_sha256": "543526435218984f207eb21adbbd9357f5b41181905b654a38b5e9f245e8999d",
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-xtask-test-1.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-xtask-test-1.log"
           },
           {
             "kind": "xtask_regression",
@@ -654,7 +654,7 @@
             "exact_one_pass": true,
             "elapsed_seconds": 0.8620772999999999,
             "binary_sha256": "543526435218984f207eb21adbbd9357f5b41181905b654a38b5e9f245e8999d",
-            "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-xtask-test-2.log"
+            "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\practical-lessons-70eba71a-xtask-test-2.log"
           }
         ],
         "scope": "Strict Clippy -D warnings once for only limo-cad-help --lib and xtask --bin xtask with native-control-harness. Compile exactly one test artifact per selected target, inventory it read-only, then run exactly one NEW bundled practical-guide retrieval/search regression and two NEW pure lesson catalog/UTF-16 inspection contracts plus one affected existing actual-knowledge corpus validation. The corpus check validates authored Markdown frontmatter, local links, related recipe references and byte-identical machine-design index. No native lesson acceptance, recipe replay, modeling script, suite, unrelated prior passing test, GUI input, live model/session/inbox write, resource/runtime changes, process restart, deployment, main change or Jack PR action."

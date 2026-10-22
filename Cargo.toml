@@ -6,6 +6,7 @@ members = [
     "crates/interface",
     "crates/project-file",
     "crates/core",
+    "crates/fem",
     "crates/assembly",
     "crates/cam",
     "crates/sketch",

@@ -165,3 +165,12 @@ repository as `origin`; a personal fork is optional. Before deleting a fork,
 preserve unique commits and finish or migrate any upstream PR using its branches.
 Disable redundant fork Actions separately so retiring a fork does not remove
 upstream test coverage.
+
+## Squash merge configuration
+
+The shared project workflow uses squash merge. Repository administrators should
+enable squash merges and disable merge commits and rebase merges in the host
+settings, while preserving the existing review and status-check protections.
+On 2026-10-19 the host still allowed all three methods; contributor WRITE access
+cannot change those administrator settings. This policy update does not claim
+that the host settings have been changed.
