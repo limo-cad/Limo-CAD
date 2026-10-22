@@ -789,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-fem"
-version = "0.3.0-rc.1"
+version = "0.30.0-rc.1"
 dependencies = [
  "cddl-cat",
  "ciborium",
