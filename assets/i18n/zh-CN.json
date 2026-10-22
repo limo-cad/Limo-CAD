@@ -1,4 +1,11 @@
 {
+  "namedViews": {
+    "activate": "激活视图",
+    "edit": "编辑已保存的视图 {name}",
+    "discard": "放弃更改",
+    "finishEdits": "切换视图前，请保存或放弃对视图的更改。",
+    "finishOperation": "激活已保存的视图前，请完成当前操作。"
+  },
   "runtimeActivity": {
     "title": "任务",
     "current": "正在进行",

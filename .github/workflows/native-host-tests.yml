@@ -16,6 +16,10 @@ on:
         description: Only run Ubuntu desktop shell and native host checks, including optional desktop input
         type: boolean
         default: false
+      saved-views-proof:
+        description: Capture the finite saved-view activation and draft-preservation flow on an owned native host
+        type: boolean
+        default: false
       input-family:
         description: Select an isolated input family; windows-ime and switching run dedicated disposable checks
         type: choice
@@ -54,6 +58,9 @@ on:
         type: boolean
         default: false
       linux-only:
+        type: boolean
+        default: false
+      saved-views-proof:
         type: boolean
         default: false
       input-family:
@@ -345,8 +352,28 @@ jobs:
 
       - name: Build the live native host
         id: native-build
-        if: inputs.desktop-input
+        if: inputs.desktop-input || inputs.saved-views-proof
         run: cargo build --locked --manifest-path desktop/Cargo.toml --bin limo-cad
+
+      - name: Verify and capture direct saved-view activation
+        if: inputs.saved-views-proof && matrix.family == 'all'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 'true'
+          WGPU_BACKEND: vulkan
+        run: |
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1360x860x24' \
+            cargo xtask test-mcp native-saved-views \
+            --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
+            --out "$RUNNER_TEMP/native-saved-views"
+
+      - name: Retain saved-view native evidence
+        if: always() && inputs.saved-views-proof && matrix.family == 'all'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-saved-views
+          path: ${{ runner.temp }}/native-saved-views/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Verify installed CJK and emoji fonts through Bevy shaping
         if: inputs.desktop-input && matrix.family == 'keyboard'
