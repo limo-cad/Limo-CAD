@@ -83,7 +83,7 @@ impl ProjectArchive {
                 intents.push(crate::SnapshotIntent { name, payload });
             }
         }
-        crate::ProjectSnapshot::new(self.model_json.clone(), intents)
+        crate::ProjectSnapshot::from_archive(self.model_json.clone(), intents)
     }
 
     /// Build a complete replacement candidate. The original stays unchanged if

@@ -84,6 +84,115 @@ fn native_save_open_retains_known_and_unknown_domain_bytes() {
 }
 
 #[test]
+fn native_legacy_open_and_resave_preserve_complete_project_intent() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let mut workspace = DocumentWorkspace::default();
+    let initial = observe(&mut workspace, &fixture);
+    let current: Value =
+        serde_json::from_str(fixture.engine.project_snapshot().unwrap().model_json()).unwrap();
+    let source =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples/testPiece.nbcad");
+    let mut archive = ProjectArchive::decode(fs::read(source).unwrap()).unwrap();
+    let legacy_model = archive.model_json().to_owned();
+    let mut thermal = Vec::new();
+    ciborium::into_writer(
+        &json!({"format":"limo-cad-thermal-studies","version":1,"studies":[]}),
+        &mut thermal,
+    )
+    .unwrap();
+    let intents = vec![
+        SnapshotIntent {
+            name: "intent/future-domain.cbor".into(),
+            payload: vec![0, 255, 7, 42],
+        },
+        SnapshotIntent {
+            name: "intent/thermal-studies.cbor".into(),
+            payload: thermal,
+        },
+    ];
+    for intent in &intents {
+        archive
+            .set_intent(&intent.name, Some(intent.payload.clone()))
+            .unwrap();
+    }
+    let legacy_bytes = archive.encode().unwrap();
+    let legacy_path = path("legacy-source.nbcad");
+    fs::write(&legacy_path, &legacy_bytes).unwrap();
+    let opened = workspace
+        .open_guarded(
+            &fixture.bridge,
+            &fixture.engine,
+            &initial,
+            legacy_path.clone(),
+            true,
+            || Ok(()),
+        )
+        .unwrap();
+    assert_ne!(opened.context, initial.owner);
+    let snapshot = fixture.engine.project_snapshot().unwrap();
+    assert_eq!(snapshot.intents(), intents.as_slice());
+    let migrated: Value = serde_json::from_str(snapshot.model_json()).unwrap();
+    assert_eq!(migrated["format"], limo_cad_project_file::PROJECT_FORMAT);
+    assert_eq!(migrated["schema_version"], current["schema_version"]);
+    assert_eq!(migrated["document"]["name"], "testPiece");
+    assert_eq!(migrated["sketches"].as_array().unwrap().len(), 1);
+    assert_eq!(migrated["extrudes"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        workspace.tabs[0]
+            .archive
+            .as_ref()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .model_json(),
+        legacy_model
+    );
+    fixture
+        .rename(&opened.context, "Edited legacy project")
+        .unwrap();
+    let receipt = observe(&mut workspace, &fixture);
+    let saved_path = path("legacy-migrated.limo");
+    let prepared = workspace
+        .prepare_save_guarded(
+            &fixture.bridge,
+            &fixture.engine,
+            &receipt,
+            (saved_path.clone(), false),
+            metadata(),
+            || Ok(()),
+        )
+        .unwrap();
+    workspace
+        .complete_save(&fixture.bridge, prepared.write())
+        .unwrap();
+    let saved = ProjectArchive::decode(fs::read(&saved_path).unwrap()).unwrap();
+    let saved_snapshot = saved.snapshot().unwrap();
+    assert_eq!(saved_snapshot.intents(), intents.as_slice());
+    assert_eq!(
+        saved.manifest()["format"],
+        limo_cad_project_file::PROJECT_FORMAT
+    );
+    assert_eq!(fs::read(&legacy_path).unwrap(), legacy_bytes);
+    let receipt = observe(&mut workspace, &fixture);
+    workspace
+        .open_guarded(
+            &fixture.bridge,
+            &fixture.engine,
+            &receipt,
+            saved_path,
+            true,
+            || Ok(()),
+        )
+        .unwrap();
+    let reopened = fixture.engine.project_snapshot().unwrap();
+    assert_eq!(reopened.intents(), intents.as_slice());
+    let model: Value = serde_json::from_str(reopened.model_json()).unwrap();
+    assert_eq!(model["document"]["name"], "Edited legacy project");
+    assert_eq!(model["schema_version"], current["schema_version"]);
+}
+
+#[test]
 fn invalid_domain_open_preserves_live_owner_archive_and_path() {
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
     let fixture = Fixture::new();
