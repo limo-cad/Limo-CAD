@@ -101,10 +101,30 @@ impl ParamTable {
         self.params.iter().find(|p| p.name == name)
     }
 
-    /// Allocate the next auto name (d1, d2, … in creation order).
-    fn alloc_name(&mut self) -> String {
-        self.next_name += 1;
-        format!("d{}", self.next_name)
+    /// Allocate the next unused auto name; a rename may already own dN.
+    fn alloc_name(&mut self) -> Result<String, ExprError> {
+        loop {
+            self.next_name = self.next_name.checked_add(1).ok_or_else(|| {
+                ExprError::UnexpectedToken("parameter name space exhausted".into())
+            })?;
+            let name = format!("d{}", self.next_name);
+            if self.by_name(&name).is_none() {
+                return Ok(name);
+            }
+        }
+    }
+
+    /// Publish definitions and cached values together only after the whole
+    /// dependency graph evaluates. Callers do not need a second rollback path.
+    fn update<T>(
+        &mut self,
+        edit: impl FnOnce(&mut Self) -> Result<T, ExprError>,
+    ) -> Result<T, ExprError> {
+        let mut candidate = self.clone();
+        let result = edit(&mut candidate)?;
+        candidate.reevaluate()?;
+        *self = candidate;
+        Ok(result)
     }
 
     /// Add a parameter with an auto-assigned name. `text: None` = literal
@@ -116,22 +136,22 @@ impl ParamTable {
         text: Option<&str>,
         literal: f64,
     ) -> Result<ParamId, ExprError> {
-        self.next_id += 1;
-        let id = ParamId(self.next_id);
-        let name = self.alloc_name();
-        self.params.push(Parameter {
-            id,
-            name,
-            kind,
-            expression: text.map(|t| t.trim().trim_start_matches('=').trim().to_string()),
-            value: literal,
-        });
-        if let Err(e) = self.reevaluate() {
-            self.params.retain(|p| p.id != id);
-            let _ = self.reevaluate();
-            return Err(e);
-        }
-        Ok(id)
+        self.update(|candidate| {
+            candidate.next_id = candidate
+                .next_id
+                .checked_add(1)
+                .ok_or_else(|| ExprError::UnexpectedToken("parameter id space exhausted".into()))?;
+            let id = ParamId(candidate.next_id);
+            let name = candidate.alloc_name()?;
+            candidate.params.push(Parameter {
+                id,
+                name,
+                kind,
+                expression: text.map(|t| t.trim().trim_start_matches('=').trim().to_string()),
+                value: literal,
+            });
+            Ok(id)
+        })
     }
 
     /// Remove a parameter (dimension delete orphan cleanup).
@@ -146,27 +166,20 @@ impl ParamTable {
         if trimmed.is_empty() {
             return Err(ExprError::UnexpectedToken("empty expression".to_string()));
         }
-        let param = self
-            .params
-            .iter_mut()
-            .find(|p| p.id == id)
-            .ok_or_else(|| ExprError::UnknownParameter(format!("#{id:?}")))?;
-        if let Ok(v) = trimmed.parse::<f64>() {
-            param.expression = None;
-            param.value = v;
-        } else {
-            let old = param.expression.clone();
-            param.expression = Some(trimmed.to_string());
-            if let Err(e) = self.reevaluate() {
-                if let Some(param) = self.params.iter_mut().find(|p| p.id == id) {
-                    param.expression = old;
-                }
-                let _ = self.reevaluate();
-                return Err(e);
+        self.update(|candidate| {
+            let param = candidate
+                .params
+                .iter_mut()
+                .find(|p| p.id == id)
+                .ok_or_else(|| ExprError::UnknownParameter(format!("#{id:?}")))?;
+            if let Ok(v) = trimmed.parse::<f64>() {
+                param.expression = None;
+                param.value = v;
+            } else {
+                param.expression = Some(trimmed.to_string());
             }
-            return Ok(());
-        }
-        self.reevaluate()
+            Ok(())
+        })
     }
 
     /// Rename a parameter (stable internal id). References in other
@@ -174,7 +187,12 @@ impl ParamTable {
     /// when the new name is already in use (documented choice).
     pub fn rename(&mut self, id: ParamId, new_name: &str) -> Result<(), ExprError> {
         let new_name = new_name.trim();
-        if new_name.is_empty() || !new_name.chars().next().unwrap().is_ascii_alphabetic() {
+        if new_name.is_empty()
+            || !new_name.chars().next().unwrap().is_ascii_alphabetic()
+            || !new_name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
             return Err(ExprError::UnexpectedToken(format!(
                 "invalid parameter name '{new_name}'"
             )));
@@ -195,17 +213,19 @@ impl ParamTable {
         if old_name == new_name {
             return Ok(());
         }
-        for p in self.params.iter_mut() {
-            if p.id == id {
-                p.name = new_name.to_string();
-            } else if let Some(text) = &p.expression {
-                if let Ok(mut ast) = expr::parse(text) {
+        self.update(|candidate| {
+            for p in candidate.params.iter_mut() {
+                if p.id == id {
+                    p.name = new_name.to_string();
+                }
+                if let Some(text) = &p.expression {
+                    let mut ast = expr::parse(text)?;
                     expr::rename_ident(&mut ast, &old_name, new_name);
                     p.expression = Some(expr::to_string(&ast));
                 }
             }
-        }
-        self.reevaluate()
+            Ok(())
+        })
     }
 
     /// Recompute every parameter's value in dependency order.
@@ -255,6 +275,9 @@ impl ParamTable {
                     expr::eval(ast, &mut resolver)?
                 }
             };
+            if !value.is_finite() {
+                return Err(ExprError::NonFiniteValue);
+            }
             stack.pop();
             state[i] = 2;
             values[i] = value;

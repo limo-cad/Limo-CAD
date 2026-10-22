@@ -2084,13 +2084,36 @@ impl SketchManager {
                 CAM_TOOLPATH_PLANNER_REVISION,
                 setup_intent,
             ))?,
-            upstream: stable_cam_fingerprint(&(
-                "cam-upstream-dependencies",
-                CAM_TOOLPATH_PLANNER_REVISION,
-                upstream_setups,
-                upstream_tools,
-                upstream_linking,
-            ))?,
+            upstream: if upstream_setups.is_empty() {
+                // Preserve independent setups' existing generation evidence.
+                stable_cam_fingerprint(&(
+                    "cam-upstream-dependencies",
+                    CAM_TOOLPATH_PLANNER_REVISION,
+                    upstream_setups,
+                    upstream_tools,
+                    upstream_linking,
+                ))?
+            } else {
+                // Heights are stored outside setup/operation records. Include
+                // every transitive source's intent even before regeneration
+                // updates its cached numerical heights. Version only this key:
+                // old rest stamps cannot prove these inputs were unchanged.
+                let upstream_heights = self
+                    .cam
+                    .height_expressions
+                    .iter()
+                    .filter(|h| upstream_operation_ids.contains(&h.operation_id))
+                    .map(|h| (h.operation_id, h))
+                    .collect::<BTreeMap<_, _>>();
+                stable_cam_fingerprint(&(
+                    "cam-upstream-dependencies-v2",
+                    CAM_TOOLPATH_PLANNER_REVISION,
+                    upstream_setups,
+                    upstream_tools,
+                    upstream_linking,
+                    upstream_heights,
+                ))?
+            },
         })
     }
 
@@ -7696,6 +7719,12 @@ mod project_tests {
 
     #[test]
     fn project_roundtrip_persists_appearance_and_visibility_and_scrubs_orphans() {
+        for kind in ["plastic", "concrete", "wood", "liquid", "gas"] {
+            check_material_project_roundtrip(kind);
+        }
+    }
+
+    fn check_material_project_roundtrip(kind: &str) {
         use limo_cad_core::{BodyAppearance, Rgba8};
 
         let mut manager = SketchManager::new();
@@ -7705,7 +7734,7 @@ mod project_tests {
         .origin_basis()
         .unwrap();
         let material = limo_cad_core::MaterialDetails {
-            kind: "plastic".into(),
+            kind: kind.into(),
             catalog_id: "saved.material".into(),
             warnings: vec!["Saved reference data".into()],
             sources: vec![limo_cad_core::MaterialSource {

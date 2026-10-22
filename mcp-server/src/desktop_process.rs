@@ -1,7 +1,11 @@
 //! The desktop outlives its MCP launcher, without retaining the MCP's pipes.
 
 #[cfg(not(windows))]
-pub(super) fn spawn(path: &std::path::Path) -> std::io::Result<std::process::Child> {
+#[path = "desktop_process_reaper.rs"]
+mod reaper;
+
+#[cfg(not(windows))]
+pub(super) fn spawn(path: &std::path::Path) -> std::io::Result<reaper::DesktopChild> {
     use std::process::{Command, Stdio};
     let mut command = Command::new(path);
     command
@@ -11,7 +15,7 @@ pub(super) fn spawn(path: &std::path::Path) -> std::io::Result<std::process::Chi
     if let Some(parent) = path.parent() {
         command.current_dir(parent);
     }
-    command.spawn()
+    reaper::spawn(&mut command)
 }
 
 #[cfg(windows)]

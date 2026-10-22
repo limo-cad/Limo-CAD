@@ -13,6 +13,7 @@ pub mod edge_chain;
 mod feature;
 mod ids;
 mod material;
+mod material_response;
 mod plane;
 mod print_bed;
 mod print_handoff;
@@ -33,6 +34,7 @@ pub use ids::{BodyId, EdgeId, FaceId};
 pub use material::{
     MaterialDetails, MaterialPrintProfile, MaterialProperty, MaterialSource, MaterialValue,
 };
+pub use material_response::{IsotropicConduction, IsotropicElasticity, MaterialPropertyFilter};
 pub use plane::{
     OriginPlane, PlaneBasis, PlaneError, PlaneProjection, PlaneProjectionError, PlaneRef,
 };
@@ -44,4 +46,6 @@ pub use print_handoff::*;
 pub use print_heights::*;
 pub use print_intent::*;
 pub use print_zones::*;
-pub use units::{DimensionStyle, DocumentSettings, UnitSystem};
+pub use units::{
+    physical_value_si, DimensionStyle, DocumentSettings, PhysicalDimension, UnitSystem,
+};
