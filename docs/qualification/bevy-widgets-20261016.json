@@ -62,7 +62,7 @@
   "acceptance": "Comparable appearance; minor differences acceptable when existing workflow remains intact.",
   "input_gate": {
     "status": "user_authorized_scoped_macos_exception",
-    "rule": ".cursor/rules/surface-qualification.mdc",
+    "rule": "docs/contributing/surface-qualification.md",
     "authorization": "User authorized the scoped macOS app automation and then instructed: push it, and start testing again.",
     "mechanism": "CUA native app pointer/keyboard actions with fresh observations; isolated signed PR420 test apps and fixture copies.",
     "modeling_scripts_or_mcp_mutations_used": false
@@ -1352,7 +1352,7 @@
     ],
     "input_gate": {
       "status": "pending_user_scope_exception",
-      "rule": ".cursor/rules/surface-qualification.mdc",
+      "rule": "docs/contributing/surface-qualification.md",
       "requirement": "All CAD input uses guarded Rust computer control with observation before every input.",
       "implementation_platform": "Windows only",
       "requested_exception": "macOS app automation for the scoped visual check; isolated documents and fresh observations"

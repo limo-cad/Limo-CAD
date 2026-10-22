@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "label": "after-compact-poll",
-  "executable": "D:\\limo-startup-candidate-compact-poll-runtime\\nbcad.exe",
+  "executable": "<local-root>\\limo-startup-candidate-compact-poll-runtime\\nbcad.exe",
   "executableSha256": "f9d476b25c3d5a37effd2ff3990d0c93bd5d22c3a71fe847102cd6307a220ebb",
   "profile": "dev-app1-debug2-deps3-debug0",
   "cacheCondition": "warm",
@@ -16,7 +16,7 @@
     "memoryBytes": 34266349568
   },
   "startedAt": "2026-10-11T20:35:35.552Z",
-  "userDataDirectory": "D:\\limo-startup-results-compact-poll\\after-compact-poll-empty-en\\webview2-user-data",
+  "userDataDirectory": "<local-root>\\limo-startup-results-compact-poll\\after-compact-poll-empty-en\\webview2-user-data",
   "warmups": [
     {
       "index": 1,

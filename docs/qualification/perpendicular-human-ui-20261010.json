@@ -6,7 +6,7 @@
   "runtime_modified": false,
   "build_pair": "matched",
   "operator": "One operator; guarded Rust cad_computer_control individual interactive requests; read-only MCP verification",
-  "fixture": "D:/limo-cad-maintenance/ui-models/Perpendicular check.limo",
+  "fixture": "<local-root>/limo-cad-maintenance/ui-models/Perpendicular check.limo",
   "checkpoint": "examples/checkpoints/surface-ui-sketch-perpendicular-human-ui.limo",
   "reopened_session": "a1c87347-c3ee-43b3-a766-5ba9203ef2b4",
   "expected": "Two free sloped lines become perpendicular; inappropriate geometry rejects safely; retained relation, Undo/Redo and persistence agree with the visible UI.",
@@ -25,7 +25,7 @@
   "control_observations": [
     "Native file-list double-click opened the saved document but the remaining pointer sequence stopped with input_incomplete / Pointer target is occluded by another window as the dialog disappeared. No gesture retry. Fresh session discovery and model inspection verified actual successful reopen."
   ],
-  "evidence_root": "D:/limo-cad-maintenance",
+  "evidence_root": "<local-root>/limo-cad-maintenance",
   "evidence": [
     "perpendicular-empty-guidance-20261010.png",
     "perpendicular-baseline-20261010.json",

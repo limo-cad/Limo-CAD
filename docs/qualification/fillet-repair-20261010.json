@@ -7,8 +7,8 @@
   "runtime_modified": false,
   "build_pair": "matched",
   "operator": "guarded Rust cad_computer_control, individual interactive requests",
-  "source_fixture": "D:/limo-cad-maintenance/ui-models/Surface UI - sketch fillet human UI.limo",
-  "saved_fixture": "D:/limo-cad-maintenance/ui-models/Surface UI - fillet repair verified.limo",
+  "source_fixture": "<local-root>/limo-cad-maintenance/ui-models/Surface UI - sketch fillet human UI.limo",
+  "saved_fixture": "<local-root>/limo-cad-maintenance/ui-models/Surface UI - fillet repair verified.limo",
   "status": "needs_recheck",
   "passed": [
     "Opened the original fixture through the native file dialog, with the complete filename visibly verified.",
@@ -33,7 +33,7 @@
     "Overshoot rejection displays generic solver conflict guidance, preserves geometry, and loses dimension text focus. Functional rejection passes; focus polish remains unresolved.",
     "Two-fillet consumed R18 reports 25 DOF; shrink restores nine. No constant-DOF claim for this singular case."
   ],
-  "evidence_root": "D:/limo-cad-maintenance",
+  "evidence_root": "<local-root>/limo-cad-maintenance",
   "evidence": [
     "resume-fillet-open-name.png",
     "resume-fillet-before.png",

@@ -6,7 +6,7 @@
   "runtime_modified": false,
   "build_pair": "matched",
   "operator": "One operator, individual guarded Rust computer control; read-only MCP verification",
-  "fixture": "D:\\limo-cad-maintenance\\ui-models\\Concentric check.limo",
+  "fixture": "<local-root>\\limo-cad-maintenance\\ui-models\\Concentric check.limo",
   "checkpoint": "examples/checkpoints/surface-ui-sketch-concentric-human-ui.limo",
   "reopened_session": "7ae9dd5c-6fa5-48cf-be80-612870ddab8f",
   "passed": [
@@ -19,7 +19,7 @@
   "interaction": "passed",
   "polish": "passed",
   "scope": "Representative unequal circle pair, invalid point/curve, cancel, retained deletion, history and native persistence. Arc-specific variants not separately exercised.",
-  "evidence_root": "D:\\limo-cad-maintenance",
+  "evidence_root": "<local-root>\\limo-cad-maintenance",
   "evidence": [
     "concentric-applied-20261010.json",
     "concentric-applied-20261010.png",

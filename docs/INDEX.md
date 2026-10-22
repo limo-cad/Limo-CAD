@@ -77,5 +77,6 @@
 
 </details>
 
-Shared agent guidance belongs in `docs/agentic/`. Editor-specific `AGENTS.md`
-and `.cursor/` files remain gitignored under the repository's existing policy.
+Shared contribution policy lives in [CONTRIBUTING.md](../CONTRIBUTING.md) and
+[the project workflow](contributing/pr-lifecycle.md). Editor and coding-agent
+configuration and instruction files remain local and ignored.
