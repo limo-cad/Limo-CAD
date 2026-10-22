@@ -1,6 +1,6 @@
 [package]
 name = "limo-cad-mcp"
-version = "0.30.0-rc.1"
+version = "0.3.0-rc.2"
 edition = "2021"
 description = "Headless MCP stdio server for Limo CAD sketch and solid tools"
 license = "LGPL-2.1-or-later"

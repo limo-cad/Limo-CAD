@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "limo-cad-native-dependencies",
-  "version-string": "0.30.0-rc.1",
+  "version-string": "0.3.0-rc.2",
   "builtin-baseline": "716b42043743cdceabed9c8e2e6cf80ddae1e0c1",
   "dependencies": [
     "opencascade"
