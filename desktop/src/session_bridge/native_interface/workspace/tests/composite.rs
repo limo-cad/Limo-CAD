@@ -1,5 +1,6 @@
 use super::*;
 use limo_cad_project_file::{ProjectSnapshot, SnapshotIntent};
+use serde_json::Value;
 
 #[test]
 fn native_save_open_retains_known_and_unknown_domain_bytes() {
