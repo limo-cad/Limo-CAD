@@ -147,6 +147,16 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  saved-views-options:
+    name: Reject incompatible saved-view proof options
+    if: inputs.saved-views-proof && (inputs.ime-probe-only || inputs.ime-native-macos || inputs.input-family == 'windows-ime' || inputs.input-family == 'windows-print' || inputs.input-family == 'switching')
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Require a regular Linux native host
+        run: |
+          echo '::error::Saved-view proof requires the regular Linux native host. Disable IME probes and choose all or a regular input family.'
+          exit 1
+
   switching-measurement:
     if: inputs.desktop-input && inputs.input-family == 'switching' && !inputs.ime-probe-only && !inputs.ime-native-macos
     uses: ./.github/workflows/native-switching.yml
@@ -355,19 +365,25 @@ jobs:
         if: inputs.desktop-input || inputs.saved-views-proof
         run: cargo build --locked --manifest-path desktop/Cargo.toml --bin limo-cad
 
+      - name: Install the owned-window resize tool
+        if: inputs.saved-views-proof && (matrix.family == 'all' || matrix.family == 'keyboard' || (inputs.input-family && inputs.input-family != 'all'))
+        run: sudo apt-get install --yes --no-install-recommends xdotool
+
       - name: Verify and capture direct saved-view activation
-        if: inputs.saved-views-proof && matrix.family == 'all'
+        id: saved-views-proof
+        if: inputs.saved-views-proof && (matrix.family == 'all' || matrix.family == 'keyboard' || (inputs.input-family && inputs.input-family != 'all'))
         env:
           LIBGL_ALWAYS_SOFTWARE: 'true'
           WGPU_BACKEND: vulkan
         run: |
+          cargo xtask ci native-ignored-test named-view-copy
           dbus-run-session -- xvfb-run -a -s '-screen 0 1360x860x24' \
             cargo xtask test-mcp native-saved-views \
             --server "$GITHUB_WORKSPACE/desktop/target/debug/limo-cad" \
             --out "$RUNNER_TEMP/native-saved-views"
 
       - name: Retain saved-view native evidence
-        if: always() && inputs.saved-views-proof && matrix.family == 'all'
+        if: always() && inputs.saved-views-proof && steps.saved-views-proof.outcome != 'skipped' && (matrix.family == 'all' || matrix.family == 'keyboard' || (inputs.input-family && inputs.input-family != 'all'))
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-saved-views

@@ -75,7 +75,7 @@ impl ViewControls {
                 x: 0.,
                 y: 120.,
                 width: 232.,
-                height: height - 160.,
+                height: f64::from(height) - 160.,
             },
             &mut 0.,
         )
@@ -92,8 +92,8 @@ impl ViewControls {
         let client = InterfaceRect {
             x: 0.,
             y: 0.,
-            width,
-            height,
+            width: width.into(),
+            height: height.into(),
         };
         self.handle
             .present(InterfaceFrame {
@@ -418,6 +418,22 @@ fn a_saved_view_click_cannot_follow_document_replacement() {
         let fixture = Fixture::new();
         let saved = solid_and_view(&fixture);
         let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Name,
+            "Previous document draft",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        assert!(has_unsaved_changes(ui.app.world().resource::<State>()));
         let stale = ui.action(&saved.name, ControlInput::Click);
         fixture
             .bridge

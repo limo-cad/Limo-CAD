@@ -71,6 +71,50 @@ fn preferences(config: &Path, locale: &str, scale: f64) -> Result<()> {
     Ok(())
 }
 
+fn minimum_window(c: &Client) -> Result<()> {
+    crate::linux_fixture::verify_private_display()?;
+    let read =
+        |command: &mut Command| crate::linux_fixture::output(command, Duration::from_secs(5));
+    let windows = read(Command::new("xdotool").args([
+        "search",
+        "--onlyvisible",
+        "--pid",
+        &c.process_id().to_string(),
+    ]))?;
+    let windows: Vec<_> = windows.lines().collect();
+    ensure!(
+        windows.len() == 1 && windows[0].bytes().all(|b| b.is_ascii_digit()),
+        "Expected one owned native window"
+    );
+    let window = windows[0];
+    let pid = read(Command::new("xdotool").args(["getwindowpid", window]))?;
+    ensure!(
+        pid.trim().parse::<u32>()? == c.process_id(),
+        "Window PID changed"
+    );
+    // This resize targets only the fixture's verified child on its private Xvfb.
+    let status = Command::new("xdotool")
+        .args(["windowsize", window, "1200", "760"])
+        .status()?;
+    ensure!(status.success(), "Owned minimum-window resize failed");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let geometry =
+            read(Command::new("xdotool").args(["getwindowgeometry", "--shell", window]))?;
+        if geometry.lines().any(|v| v == "WIDTH=1200")
+            && geometry.lines().any(|v| v == "HEIGHT=760")
+        {
+            break;
+        }
+        ensure!(
+            Instant::now() < deadline,
+            "Minimum window was not applied: {geometry}"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Ok(())
+}
+
 fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
     ensure!(
         c.call("cad_document", json!({}))?["features"]
@@ -150,6 +194,7 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
     assert_camera(c, &front)?;
     capture(c, out, "06-front-after-discard")?;
 
+    minimum_window(c)?;
     let mut locales = Vec::new();
     for (locale, scale, edit) in [
         ("en", 1., "Edit saved view Front"),
@@ -171,6 +216,29 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
             std::thread::sleep(Duration::from_millis(100));
         }
         capture(c, out, &format!("locale-{locale}"))?;
+        field(c, "View name", Some("Unfinished Front"))?;
+        let state = ui(c, json!({"action":"inspect"}))?;
+        let overview = controls(&state)
+            .find(|v| v["label"] == "Overview" && v["role"] == "treeitem")
+            .context("Overview browser row")?;
+        let rejected = c.call(
+            "cad_interface",
+            json!({"action":"click","target":overview["id"]}),
+        );
+        ensure!(
+            rejected.is_err() || rejected.is_ok_and(|v| v["status"] == "failed"),
+            "Localized dirty editor lost its draft"
+        );
+        capture(c, out, &format!("locale-{locale}-unsaved"))?;
+        let png = fs::read(out.join(format!("locale-{locale}-unsaved.png")))?;
+        ensure!(
+            png.len() >= 24
+                && &png[..8] == b"\x89PNG\r\n\x1a\n"
+                && u32::from_be_bytes(png[16..20].try_into()?) == 1200
+                && u32::from_be_bytes(png[20..24].try_into()?) == 760,
+            "Native capture does not cover the supported 1200x760 minimum window"
+        );
+        control(c, "Discard named-view edits", None)?;
         locales.push(json!({"locale":locale,"ui_scale":scale}));
     }
     ensure!(
@@ -179,11 +247,12 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
     );
     Ok(
         json!({"passed":true,"native_camera_restore":true,"separate_edit":true,"draft_preserved":true,
-        "locales":locales,"not_proven":["physical keyboard","OS pointer delivery","visual correctness before inspecting captures"]}),
+        "locales":locales,"minimum_window":[1200,760],"not_proven":["physical keyboard","OS pointer delivery","visual correctness before inspecting captures"]}),
     )
 }
 
 pub(super) fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
+    crate::linux_fixture::verify_private_display()?;
     let mut server = None;
     let mut out = None;
     while let Some(arg) = args.next() {
