@@ -4757,7 +4757,7 @@ fn build_tool_specs() -> Vec<ToolSpec> {
                         "type": ["object", "null"],
                         "description": "Frozen merged MaterialDetails from material_catalog or body_appearances. Pass the complete saved object to preserve its properties. Property source_id values must refer to sources in this snapshot.",
                         "properties": {
-                            "kind": {"type":"string","enum":["plastic","metal"]},
+                            "kind": {"type":"string","enum":limo_cad_core::MaterialDetails::SUPPORTED_KINDS},
                             "catalog_id": {"type":"string"},
                             "properties": {"type":"array","items":{"type":"object"}},
                             "sources": {"type":"array","items":{"type":"object"}},
@@ -9621,6 +9621,46 @@ mod tests {
             .collect();
         assert_eq!(corners(raw), expected_corners, "native box dimensions");
         assert_eq!(corners(&parsed), corners(raw), "3MF preserves box geometry");
+    }
+
+    #[test]
+    fn material_kind_schema_accepts_all_core_families_and_rejects_unknown() {
+        let catalog = full_tool_catalog();
+        let tool = catalog
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "set_body_appearance")
+            .unwrap();
+        let validator = jsonschema::validator_for(&tool["inputSchema"]).unwrap();
+        for kind in [
+            "plastic",
+            "metal",
+            "ceramic",
+            "glass",
+            "wood",
+            "concrete",
+            "masonry",
+            "composite",
+            "liquid",
+            "gas",
+            "other",
+            "unsupported",
+        ] {
+            let material = limo_cad_core::MaterialDetails {
+                kind: kind.into(),
+                catalog_id: "contract.material".into(),
+                ..Default::default()
+            };
+            let accepted = material.validate().is_ok();
+            assert_eq!(accepted, kind != "unsupported", "core family {kind}");
+            let request = json!({"body_id": 1, "material": material});
+            assert_eq!(
+                validator.is_valid(&request),
+                accepted,
+                "advertised material family {kind} must match shared validation"
+            );
+        }
     }
 
     #[test]
