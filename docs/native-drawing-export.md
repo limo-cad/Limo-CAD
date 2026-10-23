@@ -84,8 +84,39 @@ retains responsibility, material, tolerance and release fields, and positioned
 revision tables retain every revision field. Reserve the bottom-right 180 by
 44 mm for the title block, inside the 10 mm sheet border.
 
-Rust DXF output is **graphical** LINE/TEXT/SOLID artwork, not editable associative
-DXF DIMENSION entities. The native File menu exports the active drawing as SVG,
+Rust DXF output includes editable linear DIMENSION entities for ordinary endpoint,
+line-length, parallel-line distance and point-line dimensions. Their defining
+points and dimension styles preserve model measurement at the drawing scale,
+mm/cm/in units, precision and plain prefixes/suffixes. Ordinary line-angle and
+three-point angular dimensions export editable three-point DIMENSION entities
+with degree units, angular precision and the selected minor-angle sector.
+Radius and diameter dimensions retain editable circle definition points and
+scaled measurements, with their symbols and units in the dimension style.
+Ordinary chain, baseline and continued dimensions export one editable linear
+entity per span, using the existing resolved series layout. These DXF spans are
+independently editable; native series relationships are not serialized as DXF
+constraints. The saved native annotation remains unchanged.
+Signed ordinate X/Y values (including the combined X/Y label) remain graphical.
+AutoCAD ordinate dimensions use absolute coordinate distances; adding a fixed
+minus sign or negative measurement factor would become incorrect when an edited
+feature crosses the datum. Editable signed-coordinate exchange therefore needs
+an explicitly qualified representation, not an ordinary ordinate DIMENSION with
+a frozen text/sign override. See Autodesk's
+[ordinate dimension semantics](https://help.autodesk.com/cloudhelp/2018/ENU/OARX-DevGuide-Managed/files/GUID-7CA392C3-307C-4794-9EE6-30246672943F.htm).
+Anonymous picture blocks
+reuse the same graphics as SVG. They do not carry model topology associations.
+Reference parentheses and trimmed fit classes use the same native label formatter
+around the live measurement, including radial symbol and prefix/suffix ordering.
+Other dimension families, complex tolerance/basic/dual-unit
+presentation, precision above eight decimals and CAD-markup prefixes/suffixes or fit classes
+retain graphical artwork until their regeneration semantics are supported.
+R2007 graphics, including Unicode outline hatches, have unique deterministic
+handles and explicit model-space or picture-block ownership. Model and
+paper-space block records share the same handle namespace as the tables and
+entities; `$HANDSEED` follows all emitted handles. This structure preserves entity
+identity for exchange without changing the native annotation records.
+
+The native File menu exports the active drawing as SVG,
 DXF or PDF using this shared engine command. PDF uses the validated SVG and the
 same bounded, font-resolved page preparation as native printing, preserving the
 physical sheet dimensions. **Export Drawing PDF…** uses the CAD-owned native
@@ -186,9 +217,13 @@ For reproducible artifacts without opening a window, run from the repository:
 cargo run -p limo-cad-occt --example drawing_straight_export -- C:\absolute\fresh\straight-export-evidence
 ```
 
-The example preserves prior evidence and writes 24 SVG/DXF pairs plus their
-source drawing, scene, projection and unit records: Length, Distance, Angle and
-Point-line, each in mm/cm/in and default/full presentation. This is an explicit
+The example preserves prior evidence and writes 42 SVG/DXF pairs plus their
+source drawing, scene, projection and unit records: length, distance, line-angle,
+point-line, three-point angle, radius and diameter, each in mm/cm/in and
+default/full presentation. Pass `--radial-only` after the destination to retain
+just the 12 radius/diameter cases when checking those changes. Pass
+`--presentation-only` to retain 63 reference-only, fit-only and combined cases
+across all seven families and three unit systems. This is an explicit
 **synthetic projection** fixture, not proof of OCC projection or physical input.
 Render the SVG and inspect DXF through an independent parser/renderer before
 claiming visual parity. The manifest deliberately leaves pixel review required.

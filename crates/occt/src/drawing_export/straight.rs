@@ -214,13 +214,44 @@ pub(super) fn draw(
                         presentation,
                         units,
                     );
+                    let semantic = dxf_dimensions::Dimension::resolve(
+                        &geometry,
+                        if *mode == DrawingLineDimensionMode::Length {
+                            dxf_dimensions::LinearMode::Aligned
+                        } else {
+                            dxf_dimensions::LinearMode::Rotated
+                        },
+                        presentation,
+                        *precision,
+                        units,
+                        (prefix, suffix),
+                        &sheet.style,
+                    );
+                    let start = paper.items.len();
                     draw_linear(paper, sheet, geometry, value, presentation)?;
+                    if let Some(mut dimension) = semantic {
+                        dimension.range = start..paper.items.len();
+                        paper.dimensions.push(dimension);
+                    }
                 }
                 geometry::LineDimension::Angular(geometry) => {
                     let mut format = presentation.clone();
                     format.basic = false;
                     let value = text::angular(geometry.value, *precision, prefix, suffix, &format);
+                    let semantic = dxf_dimensions::Dimension::angular(
+                        &geometry,
+                        presentation,
+                        *precision,
+                        prefix,
+                        suffix,
+                        &sheet.style,
+                    );
+                    let start = paper.items.len();
                     draw_angular(paper, sheet, geometry, value, presentation)?;
+                    if let Some(mut dimension) = semantic {
+                        dimension.range = start..paper.items.len();
+                        paper.dimensions.push(dimension);
+                    }
                 }
             }
         }
@@ -247,7 +278,21 @@ pub(super) fn draw(
                 presentation,
                 units,
             );
+            let semantic = dxf_dimensions::Dimension::resolve(
+                &geometry,
+                dxf_dimensions::LinearMode::Rotated,
+                presentation,
+                *precision,
+                units,
+                (prefix, suffix),
+                &sheet.style,
+            );
+            let start = paper.items.len();
             draw_linear(paper, sheet, geometry, value, presentation)?;
+            if let Some(mut dimension) = semantic {
+                dimension.range = start..paper.items.len();
+                paper.dimensions.push(dimension);
+            }
         }
         _ => unreachable!("Only straight dimensions enter this painter"),
     }

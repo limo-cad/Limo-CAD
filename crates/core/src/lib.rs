@@ -35,7 +35,9 @@ pub use material::{
     MaterialDetails, MaterialPrintProfile, MaterialProperty, MaterialSource, MaterialValue,
 };
 pub use material_response::{IsotropicConduction, IsotropicElasticity, MaterialPropertyFilter};
-pub use plane::{OriginPlane, PlaneBasis, PlaneError, PlaneRef};
+pub use plane::{
+    OriginPlane, PlaneBasis, PlaneError, PlaneProjection, PlaneProjectionError, PlaneRef,
+};
 pub use print_bed::{
     embedded_printer_catalog, PrintBedDto, PrintNozzleMode, PrintProfileSource, PrinterCatalogDto,
     PrinterExtruderDto, PrinterProfileDto,
