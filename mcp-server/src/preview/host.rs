@@ -9,7 +9,8 @@ use serde_json::{json, Value};
 
 /// Execute on a serialized preview preparation worker. The caller checks its
 /// cancellation/deadline in `check`; it is called before engine creation, around
-/// baseline loading, around each operation, and before returning the report.
+/// baseline loading, around each operation, during bounded expression/step/
+/// export evaluation, and before returning the report.
 /// Synchronous kernel calls cannot be interrupted by these cooperative checks.
 /// Generated baseline/final frames carry solid geometry and assembly placement.
 /// Authored exports remain in the separate report; domain visualization is not
@@ -35,7 +36,7 @@ pub fn run_prepared_project_preview(
         unrendered_domain_intents: std::collections::BTreeSet::new(),
         check: &mut check,
     };
-    let report = script.run(&mut host, options)?;
+    let report = script.run_bounded(&mut host, options, super::EVALUATION_LIMITS)?;
     host.ensure_detached()?;
     (host.check)()?;
     host.capture(ProjectPreviewStage::Final)?;
@@ -101,6 +102,10 @@ impl<F: FnMut() -> Result<(), String>> DetachedHost<'_, F> {
 #[path = "host/visibility_tests.rs"]
 mod visibility_tests;
 impl<F: FnMut() -> Result<(), String>> ProjectReplayHost for DetachedHost<'_, F> {
+    fn checkpoint(&mut self) -> Result<(), String> {
+        (self.check)()
+    }
+
     fn validate_call(&mut self, group: &str, operation: &str) -> Result<(), String> {
         self.ensure_detached()?;
         (self.check)()?;

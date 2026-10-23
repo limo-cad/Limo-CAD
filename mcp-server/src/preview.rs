@@ -3,7 +3,7 @@
 //! not establish preview isolation. New operations are unavailable here until
 //! their detached execution and resource costs have been reviewed.
 use limo_cad_project_file::{ProjectArchive, ReplayPackage};
-use limo_cad_script::{ProjectScript, RunOptions, Script};
+use limo_cad_script::{EvaluationLimits, ProjectScript, RunOptions, Script};
 
 mod frames;
 mod host;
@@ -15,6 +15,20 @@ pub use host::run_prepared_project_preview;
 const MAX_SOURCE_BYTES: usize = 2 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_EXPANDED_BYTES: u64 = 32 * 1024 * 1024;
+
+// One preparation worker, no evaluation during hover/playback. Cumulative (no
+// refunds): source/host values, clones, keys, bindings, exports and temporaries.
+// This 8 MiB data allowance / 65,536 nodes is separate from the 2 MiB source,
+// 32 MiB expanded archive, 16 MiB frame sink and shared 32 MiB render cache.
+// Host/kernel allocations and synchronous call duration need their own limits;
+// interpreter checkpoints cannot interrupt a kernel call. Keep the existing
+// host operation budget unchanged.
+const EVALUATION_LIMITS: EvaluationLimits = EvaluationLimits {
+    max_bytes: 8 * 1024 * 1024,
+    max_nodes: 65_536,
+    max_depth: 64,
+    max_work: 1_000_000,
+};
 
 /// Admitted preview input, distinct from a live replay/publication request.
 /// No kernel has been created and domain semantics have not been staged.
