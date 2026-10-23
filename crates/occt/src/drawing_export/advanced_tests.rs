@@ -150,6 +150,7 @@ fn mixed_advanced_annotations_share_the_sheet_graphics_budget() {
 #[test]
 fn dashed_curves_keep_one_continuous_dxf_path_across_short_tessellation_segments() {
     let mut paper = Paper {
+        dimensions: Vec::new(),
         size: [50., 40.],
         items: vec![],
     };
