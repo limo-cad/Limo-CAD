@@ -436,35 +436,61 @@ fn check_package_gates(source: &Value) -> Result<()> {
 }
 
 const GRYPE_EXCEPTIONS: &str = crate::release_tooling::advisory_exceptions::CONFIG;
+const RELEASE_GRYPE_SCAN: &str = "if grype \"sbom:$sbom\" --fail-on high --output json --config .github/grype/exceptions.yaml > \"$report\"; then";
+const RESCAN_GRYPE_SCAN: &str = "if ! grype \"sbom:$sbom\" --fail-on high --output json --config .github/grype/exceptions.yaml > \"$sbom.grype.json\"; then";
 
 // Every grype scan loads the reviewed exceptions, and only after the checker
 // has rejected expired, malformed, unmatched or broadened rules in that step.
-fn check_exception_scan(step: &Value) -> Result<()> {
+fn check_exception_scan(step: &Value, command: &str) -> Result<()> {
     let run = step["run"].as_str().context("scan run command")?;
     let lines: Vec<_> = run.lines().map(str::trim).collect();
-    let checker = lines
-        .iter()
-        .position(|line| *line == "cargo xtask advisory-exceptions")
-        .context("check advisory exceptions before scanning")?;
+    ensure!(
+        lines.first() == Some(&"set -euo pipefail"),
+        "exception validation failures must stop the scan loop"
+    );
     let scans: Vec<_> = lines
         .iter()
         .enumerate()
         .filter(|(_, line)| line.contains("grype "))
         .collect();
-    ensure!(!scans.is_empty(), "scan step runs grype");
+    ensure!(
+        scans.len() == 1,
+        "scan loop runs one approved grype command"
+    );
     for (index, line) in scans {
         ensure!(
-            checker < index,
-            "check advisory exceptions before every grype scan"
+            index > 0 && lines[index - 1] == "cargo xtask advisory-exceptions",
+            "check advisory exceptions immediately before every grype scan"
         );
         ensure!(
-            line.contains(&format!(
-                "--fail-on high --output json --config {GRYPE_EXCEPTIONS} >"
-            )) && line.matches("--config").count() == 1,
+            *line == command,
             "every grype scan applies only the reviewed exceptions: {line}"
         );
     }
     Ok(())
+}
+
+fn check_rescan_exceptions(source: &Value) -> Result<()> {
+    let job = executable_job(source, "released-native-dependencies")?;
+    let steps = executable_steps(job)?;
+    let rust = steps
+        .iter()
+        .position(|step| step["uses"].as_str() == Some("./.github/actions/setup-rust"))
+        .context("scheduled rescan builds the exception checker")?;
+    let (check_index, check) = named_step(job, "Check reviewed advisory exceptions")?;
+    ensure!(
+        check_index == rust + 1
+            && check["if"].is_null()
+            && check["run"].as_str() == Some("cargo xtask advisory-exceptions"),
+        "validate exceptions unconditionally immediately after Rust setup, even without SBOMs"
+    );
+    let (find_index, _) = named_step(job, "Find signed SBOMs on the latest published release")?;
+    let (scan_index, scan) = named_step(job, "Check newly disclosed native vulnerabilities")?;
+    ensure!(
+        check_index < find_index && find_index < scan_index,
+        "validate before release discovery"
+    );
+    check_exception_scan(scan, RESCAN_GRYPE_SCAN)
 }
 
 #[test]
@@ -472,38 +498,59 @@ fn both_native_scans_check_reviewed_exceptions_before_applying_them() {
     let release = workflow(".github/workflows/desktop-packages.yml");
     let rescan = workflow(".github/workflows/dependency-security.yml");
     let job = &rescan["jobs"]["released-native-dependencies"];
-    let (scan_index, scan) =
-        named_step(job, "Check newly disclosed native vulnerabilities").unwrap();
-    check_exception_scan(scan).unwrap();
-    let rust = executable_steps(job)
-        .unwrap()
-        .iter()
-        .position(|step| step["uses"].as_str() == Some("./.github/actions/setup-rust"))
-        .expect("scheduled rescan builds the exception checker");
-    assert!(rust < scan_index);
+    let (_, scan) = named_step(job, "Check newly disclosed native vulnerabilities").unwrap();
+    check_rescan_exceptions(&rescan).unwrap();
     let (_, release_scan) = named_step(
         &release["jobs"]["release_security"],
         "Check native and compiled release advisories",
     )
     .unwrap();
-    check_exception_scan(release_scan).unwrap();
-    let run = scan["run"].as_str().unwrap();
-    for broken in [
-        run.replace("cargo xtask advisory-exceptions\n", ""),
-        run.replace("cargo xtask advisory-exceptions\n", "")
-            .replace(
-                "exit \"$failed\"",
-                "cargo xtask advisory-exceptions\nexit \"$failed\"",
-            ),
-        run.replace(&format!(" --config {GRYPE_EXCEPTIONS}"), ""),
-        run.replace(
-            &format!(" --config {GRYPE_EXCEPTIONS}"),
-            &format!(" --config {GRYPE_EXCEPTIONS} --config other.yaml"),
-        ),
+    check_exception_scan(release_scan, RELEASE_GRYPE_SCAN).unwrap();
+    for (scan, command) in [
+        (scan, RESCAN_GRYPE_SCAN),
+        (release_scan, RELEASE_GRYPE_SCAN),
     ] {
-        let mut step = scan.clone();
-        step["run"] = Value::String(broken);
-        assert!(check_exception_scan(&step).is_err());
+        assert!(command.contains(&format!(" --config {GRYPE_EXCEPTIONS} >")));
+        let run = scan["run"].as_str().unwrap();
+        let mut broken_runs = vec![
+            run.replace("cargo xtask advisory-exceptions\n", ""),
+            run.replace("  cargo xtask advisory-exceptions\n", ""),
+            run.replace("cargo xtask advisory-exceptions\n", "")
+                .replace(
+                    "exit \"$failed\"",
+                    "cargo xtask advisory-exceptions\nexit \"$failed\"",
+                ),
+            run.replace(&format!(" --config {GRYPE_EXCEPTIONS}"), ""),
+            run.replace(
+                &format!(" --config {GRYPE_EXCEPTIONS}"),
+                &format!(" --config {GRYPE_EXCEPTIONS} --config other.yaml"),
+            ),
+        ];
+        for flag in ["--only-fixed", "-c other.yaml"] {
+            broken_runs.push(run.replace(
+                command,
+                &command.replace("grype ", &format!("grype {flag} ")),
+            ));
+            broken_runs.push(run.replace(
+                command,
+                &command.replace("; then", &format!(" {flag}; then")),
+            ));
+        }
+        for broken in broken_runs {
+            assert_ne!(broken, run);
+            let mut step = scan.clone();
+            step["run"] = Value::String(broken);
+            assert!(check_exception_scan(&step, command).is_err());
+        }
+    }
+    let (check_index, _) = named_step(job, "Check reviewed advisory exceptions").unwrap();
+    for condition in [
+        Value::Bool(false),
+        Value::String("steps.release.outputs.available == 'true'".into()),
+    ] {
+        let mut conditional = rescan.clone();
+        conditional["jobs"]["released-native-dependencies"]["steps"][check_index]["if"] = condition;
+        assert!(check_rescan_exceptions(&conditional).is_err());
     }
 }
 
@@ -594,15 +641,7 @@ fn check_release_sbom_gates(source: &Value) -> Result<()> {
         "cargo xtask sbom verify --directory dist --require-release-evidence",
     )?;
     let (scan_index, scan) = named_step(scanner, "Check native and compiled release advisories")?;
-    ensure!(
-        scan["run"]
-            .as_str()
-            .is_some_and(|run| run.lines().any(|line| line
-                .trim()
-                .starts_with("if grype \"sbom:$sbom\" --fail-on high --output json"))),
-        "retain all findings and block high/critical advisories"
-    );
-    check_exception_scan(scan)?;
+    check_exception_scan(scan, RELEASE_GRYPE_SCAN)?;
     requires_command(scan, "test \"$checked\" -eq 5")?;
     requires_command(scan, "exit \"$failed\"")?;
     ensure!(
@@ -670,6 +709,20 @@ fn release_sbom_gates_reject_omitted_inventories_bypassed_scans_and_unsigned_pub
     ignored["jobs"]["release_security"]["steps"][scan_index]["continue-on-error"] =
         Value::Bool(true);
     assert!(check_release_sbom_gates(&ignored).is_err());
+    let run = source["jobs"]["release_security"]["steps"][scan_index]["run"]
+        .as_str()
+        .unwrap();
+    for flag in ["--only-fixed", "-c other.yaml"] {
+        for command in [
+            RELEASE_GRYPE_SCAN.replace("grype ", &format!("grype {flag} ")),
+            RELEASE_GRYPE_SCAN.replace("; then", &format!(" {flag}; then")),
+        ] {
+            let mut bypass = source.clone();
+            bypass["jobs"]["release_security"]["steps"][scan_index]["run"] =
+                Value::String(run.replace(RELEASE_GRYPE_SCAN, &command));
+            assert!(check_release_sbom_gates(&bypass).is_err());
+        }
+    }
     let signature_index = named_step(
         &source["jobs"]["publish_release"],
         "Verify inventories and their signed release identity",

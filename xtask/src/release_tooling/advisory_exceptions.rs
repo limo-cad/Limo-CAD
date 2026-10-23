@@ -84,23 +84,21 @@ fn scope(id: &str, scope: &Scope) -> Result<()> {
         scope.kind
     );
     // A leading `**/` absorbs the scanner's temporary staging directory. The
-    // file itself and at least one directory naming the package must be fixed.
+    // file itself must be literal. Named directories may use only single `*`
+    // wildcards after an ASCII alphanumeric first character.
     let segments: Vec<_> = scope
         .location
         .strip_prefix("**/")
         .with_context(|| format!("{id}: location must start with **/"))?
         .split('/')
         .collect();
-    let wildcard = |segment: &str| segment.contains(['*', '?', '[', ']', '{', '}', '\\']);
+    let directory = Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._*-]*$")?;
     ensure!(
         segments.len() >= 2
-            && segments
-                .iter()
-                .all(|segment| !segment.is_empty() && !segment.contains("**"))
-            && !wildcard(segments[segments.len() - 1])
+            && literal.is_match(segments[segments.len() - 1])
             && segments[..segments.len() - 1]
                 .iter()
-                .any(|segment| segment.chars().any(|c| c.is_ascii_alphanumeric())),
+                .all(|segment| directory.is_match(segment) && !segment.contains("**")),
         "{id}: location {:?} must end in a literal file under a named directory",
         scope.location
     );
@@ -222,17 +220,101 @@ mod tests {
         assert!(error.contains(reason), "expected {reason:?}, got {error:?}");
     }
 
+    fn check_repository(
+        config: &str,
+        reviews: &str,
+        record: &str,
+        now: Date,
+    ) -> Result<Vec<(String, Date)>> {
+        let parsed: Reviews = serde_yaml_ng::from_str(reviews).context(REVIEWS)?;
+        let today = parsed.reviews.iter().try_fold(now, |earliest, review| {
+            review_date(&review.vulnerability, &review.review_by).map(|date| earliest.min(date))
+        })?;
+        check(config, reviews, record, today)
+    }
+
     #[test]
     fn repository_exceptions_are_reviewed_and_current() {
         let root = super::super::root();
         let read = |file| fs::read_to_string(root.join(file)).unwrap();
-        // Use each review date as "today" so this stays a scope check after
-        // expiry; the scans run the deadline check against the real date.
-        let reviews: Reviews = serde_yaml_ng::from_str(&read(REVIEWS)).unwrap();
-        for review in &reviews.reviews {
-            let date = review_date(&review.vulnerability, &review.review_by).unwrap();
-            check(&read(CONFIG), &read(REVIEWS), &read(RECORD), date).unwrap();
+        // Validate once, including an empty ledger. Clamp only this repository
+        // scope test to the earliest deadline after expiry; scans use real UTC.
+        check_repository(
+            &read(CONFIG),
+            &read(REVIEWS),
+            &read(RECORD),
+            OffsetDateTime::now_utc().date(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn repository_scope_check_validates_config_with_an_empty_review_ledger() {
+        rejects(
+            check_repository(RULE, "reviews: []\n", ROW, TODAY),
+            "has no review with exactly that scope",
+        );
+        rejects(
+            check_repository("ignore: []\nonly-fixed: true\n", "reviews: []\n", "", TODAY),
+            "unknown field",
+        );
+        check_repository("ignore: []\n", "reviews: []\n", "", TODAY).unwrap();
+    }
+
+    #[test]
+    fn repository_scope_check_accepts_different_review_deadlines() {
+        let rules = format!(
+            "{RULE}{}",
+            RULE["ignore:\n".len()..].replace("85091", "85092")
+        );
+        let reviews = format!(
+            "{REVIEW}{}",
+            REVIEW["reviews:\n".len()..]
+                .replace("85091", "85092")
+                .replace("2026-11-06", "2026-11-07")
+        );
+        let record = format!(
+            "{ROW}{}",
+            ROW.replace("85091", "85092")
+                .replace("2026-11-06", "2026-11-07")
+        );
+        let last = review_date("test", "2026-11-07").unwrap();
+        for now in [TODAY, last, last.next_day().unwrap()] {
+            assert_eq!(
+                check_repository(&rules, &reviews, &record, now)
+                    .unwrap()
+                    .len(),
+                2
+            );
         }
+    }
+
+    #[test]
+    fn repository_scope_check_retains_the_90_day_cap() {
+        rejects(
+            check_repository(
+                RULE,
+                &REVIEW.replace("2026-11-06", "2027-10-23"),
+                ROW,
+                TODAY,
+            ),
+            "more than 90 days away",
+        );
+        let rules = format!(
+            "{RULE}{}",
+            RULE["ignore:\n".len()..].replace("85091", "85092")
+        );
+        let reviews = format!(
+            "{REVIEW}{}",
+            REVIEW["reviews:\n".len()..]
+                .replace("85091", "85092")
+                .replace("2026-11-06", "2027-02-05")
+        );
+        let now = review_date("test", "2027-03-01").unwrap();
+        rejects(
+            check_repository(&rules, &reviews, ROW, now),
+            "more than 90 days away",
+        );
     }
 
     #[test]
@@ -292,6 +374,61 @@ mod tests {
             (
                 LOCATION,
                 "\"**/Limo-CAD-*-windows-*/*.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "\"**/{*,a}/z.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "\"**/*a*/z.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "\"**/?*a/z.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "\"**/.../z.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "\"**/Limo-CAD-?/z.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "\"**/Limo-CAD-[ab]/z.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "\"**/Limo-CAD-{a,b}/z.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "\"**/Limo-CAD-*/./z.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "\"**/Limo-CAD-*//z.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "\"**/Limo-CAD-*/../z.dll\"",
+                "literal file under a named directory",
+            ),
+            (
+                LOCATION,
+                "'**/Limo-CAD-*/a\\b/z.dll'",
                 "literal file under a named directory",
             ),
         ] {

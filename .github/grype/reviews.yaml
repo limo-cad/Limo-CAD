@@ -9,6 +9,30 @@ reviews:
       name: zlib
       version: 1.3.2
       type: binary
-      location: "**/Limo-CAD-*-windows-*/z.dll"
+      location: "**/Limo-CAD-0.3.0-rc.2-windows-x64/z.dll"
+    owner: "@jackControls"
+    review-by: "2026-11-06"
+  - vulnerability: CVE-2026-85091
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-0.3.0-rc.2-windows-arm64/z.dll"
+    owner: "@jackControls"
+    review-by: "2026-11-06"
+  - vulnerability: CVE-2026-85091
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-0.3.0-rc.3-windows-x64/z.dll"
+    owner: "@jackControls"
+    review-by: "2026-11-06"
+  - vulnerability: CVE-2026-85091
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-0.3.0-rc.3-windows-arm64/z.dll"
     owner: "@jackControls"
     review-by: "2026-11-06"

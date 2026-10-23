@@ -1026,6 +1026,7 @@ jobs:
           checked=0
           while IFS= read -r sbom; do
             report="security-reports/$(basename "$sbom").grype.json"
+            cargo xtask advisory-exceptions
             if grype "sbom:$sbom" --fail-on high --output json --config .github/grype/exceptions.yaml > "$report"; then
               echo "Advisories: $(basename "$sbom") passed the high/critical gate"
             else
