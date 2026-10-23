@@ -122,10 +122,10 @@ impl Recording<'_> {
 
     fn wait(&mut self, phase: &str, ready: impl Fn(&State) -> bool) {
         loop {
-            self.pump();
             if ready(&self.app.world().resource::<Files>().script.preview) {
                 break;
             }
+            self.pump();
             assert!(
                 self.started.elapsed() < RECORDING_LIFETIME,
                 "Waiting for {phase}"
@@ -290,6 +290,8 @@ impl Recording<'_> {
     }
 
     fn finish(mut self, source_revision: String) {
+        let compiled = limo_cad_build_info::build_info();
+        assert_eq!(compiled.revision, source_revision);
         let finished = self.elapsed_ms();
         assert!(self.started.elapsed() < RECORDING_LIFETIME);
         for i in 0..self.frames.len() {
@@ -316,7 +318,8 @@ impl Recording<'_> {
             _ => unreachable!("finite representative recording"),
         };
         let report = json!({"version":1,"lesson":self.id,"implementation_base":BASE,
-            "executed_source_revision":source_revision,"revision_attestation":"CI/environment supplied for this test executable",
+            "executed_source_revision":source_revision,"revision_attestation":"compiled build identity; runtime revision values checked",
+            "compiled_modified":compiled.modified,"compiled_version":compiled.version,"compiled_channel":compiled.channel,
             "recipe_source_sha256_lf":sha256(source.replace("\r\n", "\n").as_bytes()),"embedded_asset_sha256":sha256(asset),
             "crate_version":env!("CARGO_PKG_VERSION"),"debug_assertions":cfg!(debug_assertions),
             "locale":lesson::language(self.app.world()),
@@ -364,12 +367,15 @@ pub(super) fn record(
         0,
         "Choose a fresh operational output directory"
     );
-    let source_revision = std::env::var("LIMO_CAD_BUILD_REVISION")
-        .or_else(|_| std::env::var("GITHUB_SHA"))
-        .expect("Set LIMO_CAD_BUILD_REVISION to the exact native test build source SHA");
+    let source_revision = limo_cad_build_info::build_info().revision.to_owned();
     assert!(source_revision.len() == 40 && source_revision.bytes().all(|b| b.is_ascii_hexdigit()));
-    if let Some(compiled) = option_env!("LIMO_CAD_BUILD_REVISION") {
-        assert_eq!(compiled, source_revision);
+    for variable in ["LIMO_CAD_BUILD_REVISION", "GITHUB_SHA"] {
+        if let Ok(declared) = std::env::var(variable) {
+            assert_eq!(
+                declared, source_revision,
+                "{variable} conflicts with the compiled source revision"
+            );
+        }
     }
     let mut r = Recording {
         app,

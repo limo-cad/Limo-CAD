@@ -847,7 +847,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-fem"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "ciborium",
  "limo-cad-core",
@@ -914,13 +914,14 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-native-engine"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "base64",
  "limo-cad-cam",
  "limo-cad-core",
  "limo-cad-export",
  "limo-cad-occt",
+ "limo-cad-project-file",
  "limo-cad-sketch",
  "limo-cad-solid",
  "serde",
@@ -955,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-project-file"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "base64",
  "ciborium",
@@ -982,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-session-publication"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "ciborium",
  "limo-cad-project-file",
