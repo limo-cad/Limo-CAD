@@ -19,6 +19,9 @@ mod profile_output;
 mod scripts;
 pub(super) use panel::synchronize;
 pub(super) use printing::message as print_message;
+#[cfg(test)]
+pub(super) use scripts::paint_feature_hint;
+pub(super) use scripts::paint_workbench_feature_hint;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum FileCommand {
@@ -727,10 +730,19 @@ fn execute(
         FileCommand::ShowScripts | FileCommand::ShowSettings
     ) {
         scripts::retain_source_error(world);
-        let mut files = world.resource_mut::<Files>();
-        if files.dialog.is_some() || files.picker.is_some() {
+        if world.resource::<Files>().dialog.is_some() || world.resource::<Files>().picker.is_some()
+        {
             return Err("Finish the current File dialog first".into());
         }
+        if world.resource::<Files>().script.preview.contextual() {
+            scripts::preview_command(
+                world,
+                handle,
+                scripts::PreviewAction::Close,
+                &ControlInput::Click,
+            )?;
+        }
+        let mut files = world.resource_mut::<Files>();
         files.menu = false;
         match command {
             FileCommand::ShowScripts => {

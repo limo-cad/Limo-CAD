@@ -41,6 +41,12 @@ fn native_sketch_dimension_leaders_remain_visible_over_solid_faces() {
         .id
         .0;
     let document = PreviewDocument::new(vec![Frame {
+        profile: None,
+        cue: None,
+        duration_ms: None,
+        finish: None,
+        edges: vec![],
+        inspection: None,
         caption: "Cube".into(),
         scene,
     }])
@@ -52,6 +58,7 @@ fn native_sketch_dimension_leaders_remain_visible_over_solid_faces() {
         std::fs::create_dir_all(path).unwrap();
     }
     let mut request = RenderRequest {
+        palette: None,
         preview_id: "dimension-visibility".into(),
         view_id: String::new(),
         revision: 1,

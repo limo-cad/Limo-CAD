@@ -1,0 +1,453 @@
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Repeat mounting lugs around an axis",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Prepared inputs",
+      "note": "One 8 x 6 x 8 mm mounting lug is prepared at radius 20 mm from the world Z axis, with center X20/Y0.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "empty_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "lug_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "lug",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "lug_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": 16,
+            "y": -3
+          },
+          "corner_hint": {
+            "x": 24,
+            "y": 3
+          },
+          "width_mm": 8,
+          "height_mm": 6,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "lug_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "lug_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": 16,
+                "/position/y": -3
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "lug_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "lug_build",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "lug",
+          "profile_indices": [
+            0
+          ],
+          "operation": "new_body",
+          "extent": {
+            "type": "distance",
+            "distance": 8
+          },
+          "taper_angle_deg": 0,
+          "flip": false,
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "lug_body": {
+          "$select": {
+            "from": {
+              "$ref": "lug_build"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/feature_id": {
+                "$select": {
+                  "from": {
+                    "$ref": "lug_build"
+                  },
+                  "path": "/document/features",
+                  "where": {},
+                  "take": "last",
+                  "pointer": "/id"
+                }
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "chapter": "Circular pattern",
+      "note": "Use the world Z axis and a full 360-degree pattern. Increase the total count from two to four to obtain 90-degree spacing.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "preview",
+      "call": {
+        "group": "solid/repeat",
+        "operation": "solid_circular_pattern",
+        "arguments": {
+          "body_ids": [
+            {
+              "$ref": "lug_body",
+              "pointer": "/id"
+            }
+          ],
+          "axis_origin": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "axis_direction": {
+            "x": 0,
+            "y": 0,
+            "z": 1
+          },
+          "count": 2,
+          "total_angle_deg": 360
+        }
+      }
+    },
+    {
+      "let": {
+        "lesson_feature": {
+          "$select": {
+            "from": {
+              "$ref": "preview"
+            },
+            "path": "/document/features",
+            "where": {},
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "result",
+      "call": {
+        "group": "solid/repeat",
+        "operation": "solid_edit_circular_pattern",
+        "arguments": {
+          "feature_id": {
+            "$ref": "lesson_feature"
+          },
+          "request": {
+            "body_ids": [
+              {
+                "$ref": "lug_body",
+                "pointer": "/id"
+              }
+            ],
+            "axis_origin": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "axis_direction": {
+              "x": 0,
+              "y": 0,
+              "z": 1
+            },
+            "count": 4,
+            "total_angle_deg": 360
+          }
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 4
+    },
+    {
+      "id": "definitions",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_body_feature_definitions",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "definitions"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/type"
+      },
+      "equals": "circular_pattern"
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/axis_origin"
+      },
+      "equals": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/axis_direction"
+      },
+      "equals": {
+        "x": 0,
+        "y": 0,
+        "z": 1
+      }
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/count"
+      },
+      "equals": 4
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/total_angle_deg"
+      },
+      "equals": 360
+    },
+    {
+      "assert": {
+        "$ref": "final_scene",
+        "pointer": "/bodies"
+      },
+      "equals": {
+        "$ref": "result",
+        "pointer": "/scene/bodies"
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "definitions",
+          "pointer": "/0/new_body_ids"
+        }
+      },
+      "equals": 3
+    },
+    {
+      "let": {
+        "last_lug": {
+          "$select": {
+            "from": {
+              "$ref": "final_scene"
+            },
+            "path": "/bodies",
+            "where": {
+              "/id": {
+                "$ref": "definitions",
+                "pointer": "/0/new_body_ids/2"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "last_lug"
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/1": -1,
+              "/plane/origin/1": -24
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 1
+    }
+  ],
+  "exports": {
+    "lessons": {
+      "circular_pattern": [
+        {
+          "caption": "circular_pattern.inputs",
+          "scene": {
+            "$ref": "lug_build",
+            "pointer": "/scene"
+          },
+          "cue": "body",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "circular_pattern.preview",
+          "scene": {
+            "$ref": "preview",
+            "pointer": "/scene"
+          },
+          "cue": "dimension",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "circular_pattern.parameter",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "dimension",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "circular_pattern.apply",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "apply",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        }
+      ]
+    },
+    "preview_frames": [
+      {
+        "caption": "circular_pattern.inputs",
+        "scene": {
+          "$ref": "lug_build",
+          "pointer": "/scene"
+        },
+        "cue": "body",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "circular_pattern.preview",
+        "scene": {
+          "$ref": "preview",
+          "pointer": "/scene"
+        },
+        "cue": "dimension",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "circular_pattern.parameter",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "dimension",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "circular_pattern.apply",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "apply",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      }
+    ],
+    "final_scene": {
+      "$ref": "final_scene"
+    }
+  }
+}

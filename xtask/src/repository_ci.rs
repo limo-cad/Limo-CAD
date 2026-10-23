@@ -27,7 +27,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "desktop-changes" => return crate::desktop_changes::run(args),
         "native-ignored-test" => {
             let suite = args.next().context(
-                "missing native ignored suite (fonts, sketch-visual, grid-redraw, sketch-commit or composition)",
+                "missing native ignored suite (fonts, sketch-visual, grid-redraw, sketch-commit, composition, extrude-preview, show-me-ui or show-me-lifecycle)",
             )?;
             ensure!(
                 args.next().is_none(),
@@ -145,8 +145,26 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             "native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_frames",
             &["native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_frames"],
         )),
+        "extrude-preview" => Ok((
+            "extrude_preview_renders_selected_profile_and_real_solid",
+            &["extrude_preview_renders_selected_profile_and_real_solid"],
+        )),
+        "show-me-ui" => Ok((
+            "native_show_me_ui_",
+            &[
+                "native_show_me_ui_evidence_and_performance",
+                "native_show_me_ui_operational_component_recordings",
+            ],
+        )),
+        "show-me-lifecycle" => Ok((
+            "native_shared_teaching_",
+            &[
+                "native_shared_teaching_preserves_main_and_exhausted_targets_do_not_block_main",
+                "native_shared_teaching_shader_failure_recovers_main_and_main_failure_is_fatal",
+            ],
+        )),
         _ => bail!(
-            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit or composition"
+            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit, composition, extrude-preview, show-me-ui or show-me-lifecycle"
         ),
     }
 }
@@ -345,6 +363,9 @@ mod tests {
             "grid-redraw",
             "sketch-commit",
             "composition",
+            "extrude-preview",
+            "show-me-ui",
+            "show-me-lifecycle",
         ] {
             let (filter, expected) = native_ignored_suite(suite).unwrap();
             let inventory = expected

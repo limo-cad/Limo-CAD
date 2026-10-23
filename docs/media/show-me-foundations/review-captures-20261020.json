@@ -1,0 +1,21 @@
+{
+  "source_head": "2e313e7a4069ab194ec99202916c0c0ab399bfda",
+  "run_url": "https://github.com/limo-cad/Limo-CAD/actions/runs/39359657089/job/118422580828",
+  "artifact_id": 12238859417,
+  "artifact_name": "native-sketch-visuals",
+  "scope": "Windowless production native components, 1200x760 surface, 175% scale. Current instructions and guide captures; not packaged application or pointer recordings.",
+  "captures": [
+    {
+      "path": "docs/media/show-me-foundations/review-demo-175-es.png",
+      "source_path": "show-me/extrude/demo-175-es.png",
+      "bytes": 105594,
+      "sha256": "ac4388c39ef337c1cfdf609f9ba1c1f4d2e52cb9fee065531f9f970f0833eef0"
+    },
+    {
+      "path": "docs/media/show-me-foundations/review-help-175-de.png",
+      "source_path": "show-me/extrude/help-175-de-top.png",
+      "bytes": 193132,
+      "sha256": "06b8a42da47ad0cf48893d6ebedadc5696fa06f12c019299ba48ff09fc41b265"
+    }
+  ]
+}
