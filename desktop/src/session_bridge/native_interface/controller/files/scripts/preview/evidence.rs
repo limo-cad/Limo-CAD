@@ -416,45 +416,34 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         .unwrap();
     let mut widgets = chrome::Widgets::default();
     widgets.begin();
+    let anchor_caption = feature::solid_kind(id).map_or("Create Sketch", |kind| kind.label());
+    let anchor_command = if let Some(kind) = feature::solid_kind(id) {
+        NativeCommand::Feature(
+            crate::session_bridge::native_interface::feature::FeatureCommand::Open {
+                kind,
+                feature_id: None,
+            },
+        )
+    } else {
+        assert_eq!(
+            id,
+            lesson::Id::Sketch,
+            "Add a real native anchor for this guide"
+        );
+        NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
+            crate::native_editor::support::Command::Start,
+        ))
+    };
     let anchor = widgets
         .button(
             app.world_mut(),
             camera,
-            "fixture-extrude",
-            InterfaceControl::button(
-                "solid/build",
-                match id {
-                    lesson::Id::Sketch => "Create Sketch",
-                    lesson::Id::Fillet => "Fillet",
-                    _ => "Extrude",
-                },
-            ),
-            Some(match id {
-                lesson::Id::Sketch => "Create Sketch",
-                lesson::Id::Fillet => "Fillet",
-                _ => "Extrude",
-            }),
-            if id == lesson::Id::Sketch {
-                NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
-                    crate::native_editor::support::Command::Start,
-                ))
-            } else if id == lesson::Id::Fillet {
-                NativeCommand::Feature(
-                    crate::session_bridge::native_interface::feature::FeatureCommand::Open {
-                        kind:
-                            crate::session_bridge::native_interface::feature::SolidFormKind::Fillet,
-                        feature_id: None,
-                    },
-                )
-            } else {
-                NativeCommand::File(FileCommand::ScriptPreview(Action::Model))
-            },
+            "fixture-operation",
+            InterfaceControl::button("solid/build", anchor_caption),
+            Some(anchor_caption),
+            anchor_command,
             chrome::rect(24., 4., 128., 32.),
-            Some(if id == lesson::Id::Fillet {
-                interface_shell::ribbon::Icon::Fillet
-            } else {
-                interface_shell::ribbon::Icon::Extrude
-            }),
+            None,
             50,
         )
         .unwrap();
@@ -466,18 +455,7 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         .resolve_retained(limo_cad_interface::ControlKey(anchor.to_bits()))
         .unwrap();
     handle.prepare_activation(&action).unwrap();
-    feature::paint_hint(
-        app.world_mut(),
-        camera,
-        if id == lesson::Id::Fillet {
-            None
-        } else {
-            Some(anchor)
-        },
-        &mut widgets,
-        432.,
-    )
-    .unwrap();
+    feature::paint_hint(app.world_mut(), camera, None, &mut widgets, 432.).unwrap();
     assert!(
         widgets
             .entity(&format!(
@@ -504,6 +482,34 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
     widgets.finish(app.world_mut());
     capture(&mut app, &target, &out.join("help-index.png"));
+    let mut index_page = 1;
+    while widgets.entity("help-index-next").is_some_and(|entity| {
+        app.world()
+            .get::<InterfaceControl>(entity)
+            .is_some_and(|control| !control.disabled)
+    }) {
+        command(
+            app.world_mut(),
+            &handle,
+            Action::IndexPage(true),
+            &ControlInput::Click,
+        )
+        .unwrap();
+        widgets.begin();
+        panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
+        widgets.finish(app.world_mut());
+        for _ in 0..8 {
+            update(&mut app);
+        }
+        capture(
+            &mut app,
+            &target,
+            &out.join(format!("help-index-page-{index_page}.png")),
+        );
+        index_page += 1;
+        assert!(index_page <= lesson::ALL.len());
+    }
+
     assert_eq!(
         app.world().resource::<Files>().script.preview.render_jobs,
         0

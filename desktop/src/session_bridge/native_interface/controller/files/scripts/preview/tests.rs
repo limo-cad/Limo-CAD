@@ -453,22 +453,22 @@ fn native_script_preview_high_dpi_layout_respects_the_bounded_renderer() {
 }
 
 #[test]
-fn native_script_preview_all_connected_stages_retain_independent_profiles() {
+fn native_script_preview_all_authored_stages_retain_independent_profiles() {
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
-    let source = &catalog::examples()
-        .iter()
-        .find(|example| example.id == lesson::RECIPE)
-        .unwrap()
-        .source;
     for id in lesson::ALL {
+        let source = &catalog::examples()
+            .iter()
+            .find(|example| example.id == id.recipe())
+            .unwrap()
+            .source;
         let frames = prepare_lesson(source, Some(id)).unwrap();
+        assert_eq!(frames.len(), id.frame_count());
         assert_eq!(
-            frames.len(),
-            match id {
-                lesson::Id::Cut => 6,
-                lesson::Id::Fillet => 4,
-                _ => 5,
-            }
+            frames
+                .iter()
+                .map(|frame| frame.caption.as_str())
+                .collect::<Vec<_>>(),
+            id.captions()
         );
         for frame in &frames {
             if let Some(profile) = &frame.profile {
@@ -495,12 +495,36 @@ fn native_script_preview_help_entry_is_localized_dormant_and_restores_the_draft(
     let theme = crate::native_viewport::ui::theme(&world);
     for locale in crate::app_preferences::locale::SUPPORTED {
         crate::native_viewport::localization::set_locale(&mut world, locale);
-        widgets.begin();
-        panel::paint(&mut world, camera, &mut widgets, 700., 440., theme).unwrap();
-        widgets.finish(&mut world);
-        for id in lesson::ALL {
-            assert!(widgets.entity(&format!("help-{}", id.key())).is_some());
+        let mut visited = Vec::new();
+        let mut page = 0;
+        loop {
+            world.resource_mut::<Files>().script.preview.index_page = page;
+            widgets.begin();
+            panel::paint(&mut world, camera, &mut widgets, 700., 440., theme).unwrap();
+            widgets.finish(&mut world);
+            // Match paint_index's actual logical height. No off-page controls
+            // may survive cleanup or enter the native keyboard tab order.
+            let available = (440. - card::Card::new(700.).y - 12.).max(186.);
+            let (_, range) = feature::index_range(page, lesson::ALL.len(), available);
+            for (index, id) in lesson::ALL.into_iter().enumerate() {
+                let visible = widgets
+                    .entity(&format!("help-{}", id.key()))
+                    .is_some_and(|entity| {
+                        world
+                            .get::<InterfaceControl>(entity)
+                            .is_some_and(|control| control.visible)
+                    });
+                assert_eq!(visible, range.contains(&index), "{id:?}/page {page}");
+                if visible {
+                    visited.push(id);
+                }
+            }
+            if range.end == lesson::ALL.len() {
+                break;
+            }
+            page += 1;
         }
+        assert_eq!(visited, lesson::ALL);
         for id in lesson::ALL {
             command(&mut world, &handle, Action::Read(id), &ControlInput::Click).unwrap();
             let channel = world

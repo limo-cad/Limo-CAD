@@ -12,8 +12,7 @@ pub(super) fn current(world: &World) -> Option<Id> {
     preview.lesson.or_else(|| {
         preview.retained.as_ref().and_then(|r| {
             let caption = r.descriptor.captions.get(preview.index)?;
-            ALL.into_iter()
-                .find(|id| caption.starts_with(&format!("{}.", id.key())))
+            Id::from_key(caption.split_once('.')?.0)
         })
     })
 }

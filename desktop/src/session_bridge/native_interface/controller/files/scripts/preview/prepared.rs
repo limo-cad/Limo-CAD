@@ -93,11 +93,7 @@ impl Cache {
 
 fn authored(source: &str, id: Option<lesson::Id>) -> Option<lesson::Id> {
     let id = id?;
-    (source.len() <= MAX_SOURCE_BYTES
-        && catalog::examples()
-            .iter()
-            .any(|example| example.id == id.recipe() && example.source == source))
-    .then_some(id)
+    (source.len() <= MAX_SOURCE_BYTES && source == bundled::known_source(id)).then_some(id)
 }
 
 pub(super) fn prepare(
@@ -107,7 +103,8 @@ pub(super) fn prepare(
 ) -> Result<Vec<Frame>, String> {
     prepare_with(cache, source, id, || match authored(source, id) {
         Some(id) => bundled::load(source, id),
-        None => prepare_lesson(source, id),
+        None if id.is_some() => Err("Guided examples require their exact authored source".into()),
+        None => prepare_lesson(source, None),
     })
 }
 
@@ -154,6 +151,25 @@ mod tests {
             caption: caption.into(),
             ..Default::default()
         }]
+    }
+
+    #[test]
+    fn native_script_preview_authored_source_guard_rejects_edits_and_other_recipes() {
+        let cache = Mutex::new(Cache::default());
+        for id in lesson::ALL {
+            let source = bundled::known_source(id);
+            assert_eq!(authored(source, Some(id)), Some(id));
+            let edited = format!("{source}\n");
+            assert_eq!(authored(&edited, Some(id)), None);
+            assert!(prepare(&cache, &edited, Some(id)).is_err());
+            let other = lesson::ALL
+                .into_iter()
+                .find(|other| other.recipe() != id.recipe())
+                .unwrap();
+            assert_eq!(authored(bundled::known_source(other), Some(id)), None);
+            assert!(prepare(&cache, bundled::known_source(other), Some(id)).is_err());
+        }
+        assert!(cache.lock().unwrap().entries.is_empty());
     }
 
     #[test]

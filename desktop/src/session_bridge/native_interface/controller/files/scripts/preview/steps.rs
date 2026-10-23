@@ -24,26 +24,12 @@ fn page_range(
 }
 
 fn label(language: &str, caption: &str) -> String {
-    let key = match caption {
-        "sketch.plane" => "step.plane",
-        "sketch.outline" => "step.draw",
-        "sketch.close" => "step.close",
-        "sketch.dimension" => "step.dimension",
-        "sketch.finish" => "step.finish",
-        "extrude.profile" => "step.profile",
-        "extrude.start" => "step.extrude",
-        "extrude.distance" => "step.depth",
-        "extrude.width" => return "40 mm".into(),
-        "cut.profile" => "step.profile",
-        "cut.operation" => "step.cut",
-        "cut.through" => "step.through",
-        "cut.measured.depth" => return "4 mm".into(),
-        "fillet.body" => "step.body",
-        "fillet.edges" => "step.edges",
-        "fillet.radius" => "step.radius",
-        _ => "step.apply",
-    };
-    limo_cad_mcp::lessons::text(language, key).into()
+    let label = limo_cad_mcp::lessons::text(language, &format!("step.{caption}"));
+    if label.is_empty() {
+        limo_cad_mcp::lessons::caption(language, caption)
+    } else {
+        label.into()
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -202,6 +188,19 @@ mod tests {
         assert_eq!(visible(0, 1), 0..1);
         assert_eq!(visible(0, 0), 0..0);
         for locale in limo_cad_mcp::lessons::LOCALES {
+            for id in lesson::ALL {
+                for caption in id.captions() {
+                    assert_eq!(
+                        label(locale, caption),
+                        limo_cad_mcp::lessons::text(locale, &format!("step.{caption}"))
+                    );
+                    assert!(
+                        !limo_cad_mcp::lessons::text(locale, &format!("action.{caption}"))
+                            .is_empty()
+                    );
+                }
+            }
+            assert_eq!(label(locale, "unknown.caption"), "unknown.caption");
             for key in [
                 "sketch.outline",
                 "sketch.close",

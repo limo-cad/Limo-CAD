@@ -1,14 +1,66 @@
 //! Contextual hints and Help use the shared operation lessons.
 use super::super::super::super::chrome::{self, rect};
 use super::*;
+use crate::session_bridge::native_interface::feature::{FeatureCommand, SolidFormKind};
 use std::sync::OnceLock;
 
 const HOVER_DELAY: Duration = Duration::from_millis(700);
-fn entries(id: lesson::Id) -> &'static [lesson::Id] {
+fn entries(id: &lesson::Id) -> &[lesson::Id] {
     match id {
-        lesson::Id::Sketch => &[lesson::Id::Sketch],
-        lesson::Id::Fillet => &[lesson::Id::Fillet],
-        _ => &[lesson::Id::Extrude, lesson::Id::Cut],
+        lesson::Id::Extrude | lesson::Id::Cut => &[lesson::Id::Extrude, lesson::Id::Cut],
+        _ => std::slice::from_ref(id),
+    }
+}
+
+// One typed mapping for every native solid/datum creation command. Exhaustive
+// over SolidFormKind so a new native form cannot silently open another guide.
+macro_rules! solid_guides {
+    ($($kind:ident => $guide:ident),+ $(,)?) => {
+        fn solid_lesson(kind: SolidFormKind) -> lesson::Id {
+            match kind { $(SolidFormKind::$kind => lesson::Id::$guide,)+ }
+        }
+        #[cfg(test)]
+        pub(super) fn solid_kind(id: lesson::Id) -> Option<SolidFormKind> {
+            match id {
+                $(lesson::Id::$guide => Some(SolidFormKind::$kind),)+
+                lesson::Id::Cut => Some(SolidFormKind::Extrude),
+                _ => None,
+            }
+        }
+    };
+}
+solid_guides! {
+    Extrude => Extrude,
+    Revolve => Revolve,
+    Sweep => Sweep,
+    Loft => Loft,
+    Rib => Rib,
+    Fillet => Fillet,
+    Chamfer => Chamfer,
+    Shell => Shell,
+    ExternalThread => ExternalThread,
+    Hole => Hole,
+    MoveCopy => MoveCopy,
+    Combine => Combine,
+    OffsetPlane => OffsetPlane,
+    Midplane => Midplane,
+    AnglePlane => PlaneAtAngle,
+    Mirror => Mirror,
+    SplitBody => SplitBody,
+    RectangularPattern => RectangularPattern,
+    CircularPattern => CircularPattern,
+}
+
+fn command_lesson(command: &NativeCommand) -> Option<lesson::Id> {
+    match command {
+        NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
+            crate::native_editor::support::Command::Start,
+        )) => Some(lesson::Id::Sketch),
+        NativeCommand::Feature(FeatureCommand::Open {
+            kind,
+            feature_id: None,
+        }) => Some(solid_lesson(*kind)),
+        _ => None,
     }
 }
 #[derive(Resource, Default)]
@@ -64,7 +116,7 @@ fn ready_hint(
 pub(crate) fn paint_hint(
     world: &mut World,
     camera: Entity,
-    extrude: Option<Entity>,
+    _extrude: Option<Entity>,
     widgets: &mut chrome::Widgets,
     width: f32,
 ) -> Result<(), String> {
@@ -96,46 +148,15 @@ pub(crate) fn paint_hint(
         .get_resource::<NativeInterfaceHandle>()
         .and_then(NativeInterfaceHandle::focused_key)
         .filter(|_| window.is_none_or(|w| w.focused));
-    let sketch = world
-        .query::<(Entity, &NativeCommandBinding)>()
-        .iter(world)
-        .find_map(|(entity, binding)| {
-            matches!(
-                binding.command,
-                NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
-                    crate::native_editor::support::Command::Start
-                ))
-            )
-            .then_some(entity)
-        });
     let mut selected = None;
-    let fillet = world
-        .query::<(Entity, &NativeCommandBinding)>()
-        .iter(world)
-        .find_map(|(entity, binding)| {
-            matches!(
-                binding.command,
-                NativeCommand::Feature(
-                    crate::session_bridge::native_interface::feature::FeatureCommand::Open {
-                        kind:
-                            crate::session_bridge::native_interface::feature::SolidFormKind::Fillet,
-                        feature_id: None
-                    }
-                )
-            )
-            .then_some(entity)
-        });
-    for (entity, id) in [
-        (sketch, lesson::Id::Sketch),
-        (extrude, lesson::Id::Extrude),
-        (fillet, lesson::Id::Fillet),
-    ] {
-        let Some(entity) =
-            entity.filter(|e| world.get::<InterfaceControl>(*e).is_some_and(|c| c.visible))
-        else {
+    // One query across visible commands, independent of the number of guides.
+    // Future Sketch commands can join command_lesson without new scans/workers.
+    let mut anchors = world.query::<(Entity, &NativeCommandBinding, &InterfaceControl, &Node)>();
+    for (entity, binding, control, node) in anchors.iter(world) {
+        if !control.visible {
             continue;
-        };
-        let Some(node) = world.get::<Node>(entity) else {
+        }
+        let Some(id) = command_lesson(&binding.command) else {
             continue;
         };
         let (Val::Px(x), Val::Px(y), Val::Px(w), Val::Px(h)) =
@@ -147,7 +168,7 @@ pub(crate) fn paint_hint(
         let cw = (width - 24.).clamp(260., 280.);
         let cx = x.min((width - cw - 8.).max(4.));
         let cy = y + h + 6.;
-        let entries = entries(id);
+        let entries = entries(&id);
         let keyboard = focused.is_some_and(|key| {
             key.0 == entity.to_bits()
                 || entries.iter().any(|id| {
@@ -204,7 +225,7 @@ pub(crate) fn paint_hint(
         Node {
             border: UiRect::all(px(1.)),
             border_radius: BorderRadius::all(px(6.)),
-            ..rect(x, y, w, 44. + entries(id).len() as f32 * 36.)
+            ..rect(x, y, w, 44. + entries(&id).len() as f32 * 36.)
         },
         theme.panel.with_alpha(1.),
         65,
@@ -218,7 +239,7 @@ pub(crate) fn paint_hint(
         12.,
         66,
     );
-    let entries = entries(id);
+    let entries = entries(&id);
     widgets.panel(
         world,
         camera,
@@ -463,7 +484,11 @@ pub(super) fn paint_instructions(
 
 /// Keep the catalog bounded by the actual logical window height, including at
 /// large UI scales. Only the visible page creates controls or shapes text.
-fn index_range(page: usize, count: usize, height: f32) -> (usize, std::ops::Range<usize>) {
+pub(super) fn index_range(
+    page: usize,
+    count: usize,
+    height: f32,
+) -> (usize, std::ops::Range<usize>) {
     let capacity = ((height - 124.).max(62.) / 62.).floor() as usize;
     let page = page.min(count.saturating_sub(1) / capacity);
     let start = page * capacity;
@@ -593,9 +618,40 @@ pub(super) fn paint_index(
 mod tests {
     use super::*;
     #[test]
+    fn native_script_preview_every_authored_command_routes_only_to_its_guides() {
+        for id in lesson::ALL {
+            let command = if id == lesson::Id::Sketch {
+                NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
+                    crate::native_editor::support::Command::Start,
+                ))
+            } else {
+                NativeCommand::Feature(FeatureCommand::Open {
+                    kind: solid_kind(id).expect("Every solid guide has a native form"),
+                    feature_id: None,
+                })
+            };
+            let actual = command_lesson(&command).unwrap();
+            assert!(entries(&actual).contains(&id), "{id:?}");
+            if let Some(kind) = solid_kind(id) {
+                assert!(
+                    command_lesson(&NativeCommand::Feature(FeatureCommand::Open {
+                        kind,
+                        feature_id: Some(1),
+                    }))
+                    .is_none(),
+                    "Editing a feature does not masquerade as its ribbon entry"
+                );
+            }
+            if !matches!(id, lesson::Id::Extrude | lesson::Id::Cut) {
+                assert_eq!(entries(&id), &[id]);
+            }
+        }
+    }
+
+    #[test]
     fn native_script_preview_catalog_pages_every_guide_at_small_logical_heights() {
         for height in [186., 240., 330., 600.] {
-            for count in [0, 1, 4, 17, 200] {
+            for count in [0, 1, 4, 17, lesson::ALL.len(), 200] {
                 let mut visited = Vec::new();
                 let mut page = 0;
                 loop {
