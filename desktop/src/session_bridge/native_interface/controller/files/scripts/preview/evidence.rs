@@ -13,6 +13,8 @@ use bevy::{
 };
 use std::{path::Path, sync::atomic::AtomicUsize};
 
+mod operational;
+
 #[derive(Resource, Default)]
 struct Capture(Option<Vec<u8>>);
 
@@ -146,6 +148,11 @@ fn released_textures(app: &mut App) {
     }
 }
 fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
+    capture_component(app, target, path, true);
+}
+
+// Operational entry/Close have no card. Existing captures retain every card/font/ink gate.
+fn capture_component(app: &mut App, target: &Handle<Image>, path: &Path, card_visible: bool) {
     for _ in 0..8 {
         update(app);
     }
@@ -184,7 +191,7 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
                 bytes.len() > 10_000,
                 "Native UI capture must contain actual pixels"
             );
-            if path.file_name().unwrap() != "entry.png" {
+            if card_visible && path.file_name().unwrap() != "entry.png" {
                 let decoded = Image::from_buffer(
                     &bytes,
                     ImageType::Extension("png"),
@@ -401,7 +408,53 @@ fn visible_motion(samples: &[Vec<u8>], id: lesson::Id) -> usize {
     distinct_samples
 }
 
+fn paint_anchor(
+    world: &mut World,
+    camera: Entity,
+    widgets: &mut chrome::Widgets,
+    id: lesson::Id,
+) -> Entity {
+    let anchor_caption = id.title("en");
+    let anchor_command =
+        feature::command_for_guide(id).expect("Every guide has a real entry command");
+    let anchor_group = match &anchor_command {
+        NativeCommand::Sketch(crate::native_editor::EditorCommand::Interaction(command)) => {
+            match command {
+                crate::native_editor::InteractionCommand::Form(kind) => kind.group(),
+                crate::native_editor::InteractionCommand::Relation(_) => "sketch/constrain",
+                crate::native_editor::InteractionCommand::Dimension => "sketch/dimension",
+                _ => "sketch/edit",
+            }
+        }
+        NativeCommand::Sketch(_) => "sketch/draw",
+        _ => "solid/build",
+    };
+    widgets
+        .button(
+            world,
+            camera,
+            "fixture-operation",
+            InterfaceControl::button(anchor_group, anchor_caption),
+            Some(anchor_caption),
+            anchor_command,
+            chrome::rect(24., 4., 128., 32.),
+            None,
+            50,
+        )
+        .unwrap()
+}
+
 fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path, capture_index: bool) {
+    capture_lesson_mode(id, scenario, out, capture_index, false);
+}
+
+fn capture_lesson_mode(
+    id: lesson::Id,
+    scenario: lesson::CutScenario,
+    out: &Path,
+    capture_index: bool,
+    operational_only: bool,
+) {
     use crate::native_viewport::interface_shell::{InterfaceCamera, InterfaceFrame};
     use limo_cad_interface::{DocumentContext, Rect, Surface};
     std::fs::create_dir_all(out).unwrap();
@@ -490,34 +543,7 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path, cap
         .unwrap();
     let mut widgets = chrome::Widgets::default();
     widgets.begin();
-    let anchor_caption = id.title("en");
-    let anchor_command =
-        feature::command_for_guide(id).expect("Every guide has a real entry command");
-    let anchor_group = match &anchor_command {
-        NativeCommand::Sketch(crate::native_editor::EditorCommand::Interaction(command)) => {
-            match command {
-                crate::native_editor::InteractionCommand::Form(kind) => kind.group(),
-                crate::native_editor::InteractionCommand::Relation(_) => "sketch/constrain",
-                crate::native_editor::InteractionCommand::Dimension => "sketch/dimension",
-                _ => "sketch/edit",
-            }
-        }
-        NativeCommand::Sketch(_) => "sketch/draw",
-        _ => "solid/build",
-    };
-    let anchor = widgets
-        .button(
-            app.world_mut(),
-            camera,
-            "fixture-operation",
-            InterfaceControl::button(anchor_group, anchor_caption),
-            Some(anchor_caption),
-            anchor_command,
-            chrome::rect(24., 4., 128., 32.),
-            None,
-            50,
-        )
-        .unwrap();
+    let anchor = paint_anchor(app.world_mut(), camera, &mut widgets, id);
     widgets.finish(app.world_mut());
     for _ in 0..8 {
         update(&mut app);
@@ -541,6 +567,19 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path, cap
         "The native hint must teach its actual operation"
     );
     widgets.finish(app.world_mut());
+    if operational_only {
+        operational::record(
+            &mut app,
+            &handle,
+            camera,
+            &mut widgets,
+            &target,
+            id,
+            out,
+            &wakes,
+        );
+        return;
+    }
     capture(&mut app, &target, &out.join("entry.png"));
     // Entry, endpoints and locales remain per guide; walk the complete index once.
     if capture_index {

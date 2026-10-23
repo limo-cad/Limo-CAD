@@ -146,8 +146,11 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             &["extrude_preview_renders_selected_profile_and_real_solid"],
         )),
         "show-me-ui" => Ok((
-            "native_show_me_ui_evidence_and_performance",
-            &["native_show_me_ui_evidence_and_performance"],
+            "native_show_me_ui_",
+            &[
+                "native_show_me_ui_evidence_and_performance",
+                "native_show_me_ui_operational_component_recordings",
+            ],
         )),
         "show-me-lifecycle" => Ok((
             "native_shared_teaching_",

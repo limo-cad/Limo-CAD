@@ -251,7 +251,10 @@ pub(crate) fn paint(
                 world,
                 camera,
                 "scripts-preview-blend",
-                rect(0., 0., image_width, image_height),
+                Node {
+                    border_radius: BorderRadius::all(px(8.)),
+                    ..rect(0., 0., image_width, image_height)
+                },
                 Color::NONE,
                 61,
             );

@@ -88,7 +88,7 @@ fn begin_static(world: &mut World) -> Handle<Image> {
 }
 
 #[test]
-fn native_preview_dissolve_pause_resume_ticks_do_not_change_render_key_revision_or_jobs() {
+fn native_preview_pause_finishes_dissolve_without_changing_render_key_revision_or_jobs() {
     let (mut world, handle, wakes) = fixture();
     let source = begin_static(&mut world);
     publish_current(&mut world);
@@ -112,14 +112,13 @@ fn native_preview_dissolve_pause_resume_ticks_do_not_change_render_key_revision_
         arm_replay(preview, now + ANIMATION_INTERVAL * tick);
     }
     command(&mut world, &handle, Action::Stop, &ControlInput::Click).unwrap();
-    let alpha = world
-        .resource::<Files>()
-        .script
-        .preview
-        .blend
-        .as_ref()
-        .unwrap()
-        .alpha();
+    {
+        let preview = &world.resource::<Files>().script.preview;
+        assert!(preview.blend.is_none());
+        assert!(preview.animation_complete());
+        assert_eq!(preview.display_index(), 1);
+        assert_eq!(preview.display_frame_index(), 1);
+    }
     let count = wakes.load(Ordering::Relaxed);
     for _ in 0..100 {
         replay(
@@ -131,34 +130,17 @@ fn native_preview_dissolve_pause_resume_ticks_do_not_change_render_key_revision_
         poll(&mut world);
     }
     assert_eq!(wakes.load(Ordering::Relaxed), count);
-    assert_eq!(
-        world
-            .resource::<Files>()
-            .script
-            .preview
-            .blend
-            .as_ref()
-            .unwrap()
-            .alpha(),
-        alpha
-    );
     command(&mut world, &handle, Action::Resume, &ControlInput::Click).unwrap();
     let preview = &mut world.resource_mut::<Files>().script.preview;
     let resumed = now + Duration::from_secs(120);
     arm_replay(preview, resumed);
+    assert_eq!(preview.wake.as_ref().unwrap().due, resumed + FRAME_DELAY);
+    replay(preview, &handle, resumed + ANIMATION_INTERVAL * 4).unwrap();
     assert_eq!(
-        preview.wake.as_ref().unwrap().due,
-        resumed + ANIMATION_INTERVAL
+        preview.index, 1,
+        "Completed target keeps its readable dwell on Resume"
     );
-    for tick in 1..=4 {
-        replay(preview, &handle, resumed + ANIMATION_INTERVAL * tick).unwrap();
-        arm_replay(preview, resumed + ANIMATION_INTERVAL * tick);
-    }
     assert!(preview.animation_complete());
-    assert_eq!(
-        preview.wake.as_ref().unwrap().due,
-        resumed + ANIMATION_INTERVAL * 4 + FRAME_DELAY
-    );
     assert!(images::Key::current(preview) == key);
     assert_eq!(
         (
@@ -196,6 +178,166 @@ fn native_preview_cached_static_target_blends_without_connecting_or_scheduling_g
 }
 
 #[test]
+fn native_preview_pause_read_controls_finish_zero_alpha_blends_and_keep_pending_receipts() {
+    for action in [Action::Stop, Action::Help, Action::Demo, Action::Steps] {
+        for pending in [false, true] {
+            let (mut world, handle, _) = fixture();
+            let source = begin_static(&mut world);
+            let receipt = if pending {
+                let (send, receive) = mpsc::channel();
+                let preview = &mut world.resource_mut::<Files>().script.preview;
+                preview.render = Some(InFlight::Fixture(Mutex::new(receive)));
+                preview.render_revision = preview.revision;
+                preview.attempted = preview.revision;
+                Some(send)
+            } else {
+                publish_current(&mut world);
+                arm_replay(
+                    &mut world.resource_mut::<Files>().script.preview,
+                    Instant::now(),
+                );
+                None
+            };
+            let preview = &world.resource::<Files>().script.preview;
+            assert_eq!(preview.blend.as_ref().unwrap().alpha(), 0.);
+            let (revision, rendered, attempted, jobs, key) = (
+                preview.revision,
+                preview.rendered,
+                preview.attempted,
+                preview.render_jobs,
+                images::Key::current(preview),
+            );
+            command(&mut world, &handle, action, &ControlInput::Click).unwrap();
+            let preview = &world.resource::<Files>().script.preview;
+            assert!(preview.blend.is_none() && preview.wake.is_none() && !preview.playing);
+            assert_eq!(
+                (
+                    preview.revision,
+                    preview.rendered,
+                    preview.attempted,
+                    preview.render_jobs
+                ),
+                (revision, rendered, attempted, jobs)
+            );
+            assert!(images::Key::current(preview) == key);
+            if let Some(receipt) = receipt {
+                assert!(
+                    preview.render.is_some(),
+                    "Pause/read must retain the pending target receipt"
+                );
+                assert_eq!(
+                    preview.display_index(),
+                    0,
+                    "Pending target keeps its source caption"
+                );
+                assert_eq!(preview.image.as_ref(), Some(&source));
+                let view = preview.retained.as_ref().unwrap().view.clone();
+                receipt
+                    .send(Ok(Rendered {
+                        view,
+                        revision,
+                        image: image(),
+                    }))
+                    .unwrap();
+                poll(&mut world);
+            }
+            let preview = &world.resource::<Files>().script.preview;
+            assert!(preview.image_ready() && preview.animation_complete());
+            assert!(preview.blend.is_none() && preview.render.is_none() && preview.wake.is_none());
+            assert_eq!(preview.display_index(), 1);
+            assert_eq!(preview.display_frame_index(), 1);
+            assert_ne!(
+                preview.image.as_ref(),
+                Some(&source),
+                "Published target must match the current caption"
+            );
+            assert_eq!((preview.revision, preview.render_jobs), (revision, jobs));
+            assert!(images::Key::current(preview) == key);
+        }
+    }
+}
+
+#[test]
+fn native_preview_paused_terminal_target_exposes_replay_and_cut_alternative() {
+    for id in [lesson::Id::Fillet, lesson::Id::Cut] {
+        let (mut world, handle, _) = fixture();
+        if id == lesson::Id::Cut {
+            let preview = &mut world.resource_mut::<Files>().script.preview;
+            preview.retained = Some(
+                Retained::new(
+                    preview.service.clone(),
+                    (0..6)
+                        .map(|index| Frame {
+                            caption: format!("Frame {index}"),
+                            ..default()
+                        })
+                        .collect(),
+                )
+                .unwrap(),
+            );
+        }
+        world.resource_mut::<Files>().script.preview.lesson = Some(id);
+        world.init_resource::<ViewportUiAssets>();
+        let camera = world.spawn_empty().id();
+        let theme = crate::native_viewport::ui::theme(&world);
+        let mut widgets = super::super::super::super::chrome::Widgets::default();
+        widgets.begin();
+        panel::paint(&mut world, camera, &mut widgets, 432., 600., theme).unwrap();
+        widgets.finish(&mut world);
+        publish_current(&mut world);
+        let source = world
+            .resource::<Files>()
+            .script
+            .preview
+            .image
+            .clone()
+            .unwrap();
+        {
+            let preview = &mut world.resource_mut::<Files>().script.preview;
+            preview.index = preview.count() - 1;
+            preview.playing = true;
+            preview.changed().unwrap();
+            preview.begin_animation();
+        }
+        publish_current(&mut world);
+        widgets.begin();
+        panel::paint(&mut world, camera, &mut widgets, 432., 600., theme).unwrap();
+        widgets.finish(&mut world);
+        let model = widgets.entity("scripts-preview-model").unwrap();
+        assert_eq!(world.get::<ImageNode>(model).unwrap().image, source);
+        let preview = &world.resource::<Files>().script.preview;
+        let (revision, jobs, key, target, caption) = (
+            preview.revision,
+            preview.render_jobs,
+            images::Key::current(preview),
+            preview.image.clone().unwrap(),
+            preview.retained.as_ref().unwrap().descriptor.captions[preview.frame_index()].clone(),
+        );
+        command(&mut world, &handle, Action::Stop, &ControlInput::Click).unwrap();
+        widgets.begin();
+        panel::paint(&mut world, camera, &mut widgets, 432., 600., theme).unwrap();
+        widgets.finish(&mut world);
+        assert_eq!(world.get::<ImageNode>(model).unwrap().image, target);
+        assert!(widgets.entity("scripts-preview-blend").is_none());
+        let primary = widgets.entity("scripts-preview-primary").unwrap();
+        assert_eq!(
+            world.get::<NativeCommandBinding>(primary).unwrap().command,
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Replay))
+        );
+        let text = widgets.entity("scripts-preview-caption").unwrap();
+        assert_eq!(world.get::<Text>(text).unwrap().0, caption);
+        assert_eq!(
+            widgets.entity("cut-scenario-alternative").is_some(),
+            id == lesson::Id::Cut
+        );
+        let preview = &world.resource::<Files>().script.preview;
+        assert!(preview.animation_complete() && preview.image_ready());
+        assert_eq!((preview.revision, preview.render_jobs), (revision, jobs));
+        assert!(images::Key::current(preview) == key);
+    }
+}
+
+#[test]
 fn native_preview_navigation_view_changes_and_owner_retirement_fence_blend_handles() {
     for action in [
         Action::Step(2),
@@ -212,18 +354,6 @@ fn native_preview_navigation_view_changes_and_owner_retirement_fence_blend_handl
         let preview = &world.resource::<Files>().script.preview;
         assert!(preview.blend.is_none() && preview.wake.is_none());
         assert!(!preview.playing);
-    }
-    for action in [Action::Help, Action::Steps] {
-        let (mut world, handle, _) = fixture();
-        begin_static(&mut world);
-        publish_current(&mut world);
-        command(&mut world, &handle, action, &ControlInput::Click).unwrap();
-        let preview = &world.resource::<Files>().script.preview;
-        assert!(!preview.playing && preview.wake.is_none());
-        assert!(
-            preview.blend.is_some(),
-            "Reading parks the current transition"
-        );
     }
     for camera in [false, true] {
         let (mut world, _, _) = fixture();
@@ -267,6 +397,14 @@ fn native_preview_blend_layer_preserves_model_input_and_retires_on_completion_an
     widgets.finish(&mut world);
     let model = widgets.entity("scripts-preview-model").unwrap();
     let overlay = widgets.entity("scripts-preview-blend").unwrap();
+    assert_eq!(
+        world.get::<Node>(overlay).unwrap().border_radius,
+        BorderRadius::all(px(8.))
+    );
+    assert_eq!(
+        world.get::<Node>(overlay).unwrap().border_radius,
+        world.get::<Node>(model).unwrap().border_radius
+    );
     assert_eq!(world.get::<ImageNode>(model).unwrap().image, source);
     assert_eq!(world.get::<ChildOf>(overlay).unwrap().parent(), model);
     assert!(world.get::<NativeCommandBinding>(overlay).is_none());

@@ -89,10 +89,14 @@ jobs:
         run: |
           cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_bundled_assets
           cargo test --locked --manifest-path desktop/Cargo.toml --lib chamfer_form
+          cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::transition_tests:: -- --test-threads=1
+          cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_tabs_after_extrude_in_the_production_ribbon -- --test-threads=1
       - name: Verify the Extrude lesson profile and solid on the GPU
         env:
           LIMO_CAD_PREVIEW_PROOF_DIR: ${{ github.workspace }}/docs/qa/native-boundary
           LIMO_CAD_SHOW_ME_PROOF_DIR: ${{ github.workspace }}/docs/qa/native-boundary/show-me
+          LIMO_CAD_BUILD_REVISION: ${{ github.sha }}
+          RUST_TEST_THREADS: 1
         run: |
           cargo xtask ci native-ignored-test extrude-preview
           cargo xtask ci native-ignored-test show-me-ui

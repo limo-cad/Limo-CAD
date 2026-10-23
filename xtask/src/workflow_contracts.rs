@@ -1707,6 +1707,11 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
     )?;
     requires_command(lesson, "cargo xtask ci native-ignored-test extrude-preview")?;
     requires_command(lesson, "cargo xtask ci native-ignored-test show-me-ui")?;
+    ensure!(
+        lesson["env"]["RUST_TEST_THREADS"].as_i64() == Some(1)
+            && lesson["env"]["LIMO_CAD_BUILD_REVISION"].as_str() == Some("${{ github.sha }}"),
+        "Operational GPU fixtures must run serially and attest the compiled source revision"
+    );
     requires_command(
         lesson,
         "cargo xtask ci native-ignored-test show-me-lifecycle",

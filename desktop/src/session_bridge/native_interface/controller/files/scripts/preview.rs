@@ -645,6 +645,7 @@ pub(crate) fn command(
                 preview.help = action == Action::Help && !preview.help;
                 preview.focus_owner = handle.presented_context();
                 preview.playing = false;
+                preview.blend = None;
                 preview.wake = None;
                 preview.help_view = feature::HelpView::default();
                 preview.help_view.return_focus = !preview.help;
@@ -658,6 +659,7 @@ pub(crate) fn command(
                 preview.steps_page = None;
                 preview.steps_return_focus = !preview.steps_open;
                 preview.playing = false;
+                preview.blend = None;
                 preview.wake = None;
                 preview.focus_owner = handle.presented_context();
             }
@@ -733,6 +735,7 @@ pub(crate) fn command(
             }
             Action::Stop => {
                 preview.playing = false;
+                preview.blend = None;
                 preview.wake = None;
             }
             Action::Fit => preview.turn(HOME.0, HOME.1)?,
