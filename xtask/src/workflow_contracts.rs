@@ -3,6 +3,8 @@ use anyhow::{ensure, Context, Result};
 use regex::Regex;
 use serde_yaml_ng::Value;
 use std::fs;
+
+mod dependency_graph;
 fn read(file: &str) -> String {
     fs::read_to_string(crate::release_tooling::root().join(file))
         .unwrap()
