@@ -46,6 +46,7 @@ fn native_sketch_dimension_leaders_remain_visible_over_solid_faces() {
         duration_ms: None,
         finish: None,
         edges: vec![],
+        inspection: None,
         caption: "Cube".into(),
         scene,
     }])

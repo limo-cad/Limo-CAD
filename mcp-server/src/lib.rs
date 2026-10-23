@@ -25,6 +25,7 @@ mod drawing_tools;
 mod inbox;
 mod interface;
 mod knowledge;
+pub mod lesson_authoring;
 #[cfg(test)]
 mod lesson_tests;
 mod local_slicer_tools;

@@ -100,15 +100,44 @@ fn sketch_lesson(command: &SketchCommand) -> Option<lesson::Id> {
                 Relation::Symmetry => lesson::Id::SketchSymmetry,
             },
             InteractionCommand::Dimension => lesson::Id::SketchDimension,
+            InteractionCommand::Select => lesson::Id::SelectionSketch,
             _ => return None,
         },
         _ => return None,
     })
 }
 
+fn construction_reference_command(operation: &str, arguments: &serde_json::Value) -> bool {
+    // The actual ribbon emits project_set_visibility with a complete snapshot.
+    // Body-only Browser mutations must not acquire this construction guide.
+    operation == "project_set_visibility"
+        && arguments
+            .get("hidden_sketch_names")
+            .is_some_and(serde_json::Value::is_array)
+        && arguments
+            .get("hidden_datum_plane_ids")
+            .is_some_and(serde_json::Value::is_array)
+}
+
 fn command_lesson(command: &NativeCommand) -> Option<lesson::Id> {
     match command {
         NativeCommand::Sketch(command) => sketch_lesson(command),
+        NativeCommand::Workbench(super::super::super::super::workbench::Command::Navigation(
+            super::super::super::super::workbench::NavigationTool::Select,
+        )) => Some(lesson::Id::SelectionSolid),
+        NativeCommand::Measure(_, super::super::super::super::measure::Command::Open) => {
+            Some(lesson::Id::Measure)
+        }
+        NativeCommand::SectionReview(
+            _,
+            super::super::super::super::section_review::Command::Open,
+        ) => Some(lesson::Id::SectionAnalysis),
+        NativeCommand::Mutation {
+            operation,
+            arguments,
+        } if construction_reference_command(operation, arguments) => {
+            Some(lesson::Id::ConstructionVisibility)
+        }
         NativeCommand::Feature(FeatureCommand::Open {
             kind,
             feature_id: None,
@@ -121,6 +150,34 @@ fn command_lesson(command: &NativeCommand) -> Option<lesson::Id> {
 // absent from the production hover path and never executes the command.
 #[cfg(test)]
 pub(super) fn command_for_guide(id: lesson::Id) -> Option<NativeCommand> {
+    match id {
+        lesson::Id::SelectionSolid => {
+            return Some(NativeCommand::Workbench(
+                super::super::super::super::workbench::Command::Navigation(
+                    super::super::super::super::workbench::NavigationTool::Select,
+                ),
+            ))
+        }
+        lesson::Id::Measure => {
+            return Some(NativeCommand::Measure(
+                0,
+                super::super::super::super::measure::Command::Open,
+            ))
+        }
+        lesson::Id::SectionAnalysis => {
+            return Some(NativeCommand::SectionReview(
+                0,
+                super::super::super::super::section_review::Command::Open,
+            ))
+        }
+        lesson::Id::ConstructionVisibility => {
+            return Some(NativeCommand::Mutation {
+                operation: "project_set_visibility".into(),
+                arguments: json!({"hidden_body_ids":[],"hidden_sketch_names":[],"hidden_datum_plane_ids":[]}),
+            })
+        }
+        _ => {}
+    }
     if let Some(kind) = solid_kind(id) {
         return Some(NativeCommand::Feature(FeatureCommand::Open {
             kind,
@@ -213,6 +270,7 @@ pub(super) fn command_for_guide(id: lesson::Id) -> Option<NativeCommand> {
             SketchCommand::Interaction(InteractionCommand::Relation(Relation::Symmetry))
         }
         lesson::Id::SketchDimension => SketchCommand::Interaction(InteractionCommand::Dimension),
+        lesson::Id::SelectionSketch => SketchCommand::Interaction(InteractionCommand::Select),
         _ => return None,
     }))
 }
@@ -772,6 +830,51 @@ mod tests {
     use super::*;
 
     #[test]
+    fn native_script_preview_inspection_commands_keep_real_control_identity() {
+        use super::super::super::super::super::{measure, section_review, workbench};
+        assert_eq!(
+            command_lesson(&NativeCommand::Workbench(workbench::Command::Navigation(
+                workbench::NavigationTool::Select
+            ))),
+            Some(lesson::Id::SelectionSolid)
+        );
+        assert_eq!(
+            command_lesson(&NativeCommand::Sketch(SketchCommand::Interaction(
+                InteractionCommand::Select
+            ))),
+            Some(lesson::Id::SelectionSketch)
+        );
+        assert_eq!(
+            command_lesson(&NativeCommand::Measure(31, measure::Command::Open)),
+            Some(lesson::Id::Measure)
+        );
+        assert_eq!(
+            command_lesson(&NativeCommand::SectionReview(
+                42,
+                section_review::Command::Open
+            )),
+            Some(lesson::Id::SectionAnalysis)
+        );
+        for command in [
+            NativeCommand::Workbench(workbench::Command::Navigation(
+                workbench::NavigationTool::Orbit,
+            )),
+            NativeCommand::Measure(31, measure::Command::Close),
+            NativeCommand::SectionReview(42, section_review::Command::ToggleView),
+            NativeCommand::Mutation {
+                operation: "project_set_visibility".into(),
+                arguments: json!({"hidden_body_ids":[1]}),
+            },
+            NativeCommand::Mutation {
+                operation: "construction_set_visibility".into(),
+                arguments: json!({"hidden_sketch_names":[],"hidden_datum_plane_ids":[]}),
+            },
+        ] {
+            assert_eq!(command_lesson(&command), None);
+        }
+    }
+
+    #[test]
     fn native_script_preview_sketch_variants_preserve_their_operation_identity() {
         use limo_cad_sketch::{CircleMode, RectangleMode, SlotMode};
         for (tool, id) in [
@@ -820,7 +923,6 @@ mod tests {
             SketchCommand::Interaction(InteractionCommand::Menu(Some("draw"))),
             SketchCommand::Interaction(InteractionCommand::Menu(Some("edit"))),
             SketchCommand::Interaction(InteractionCommand::Menu(Some("constrain"))),
-            SketchCommand::Interaction(InteractionCommand::Select),
             SketchCommand::Interaction(InteractionCommand::DimensionActions),
             SketchCommand::Interaction(InteractionCommand::DimensionReference),
             SketchCommand::Interaction(InteractionCommand::ApplyForm { id: 1 }),

@@ -876,6 +876,7 @@ dependencies = [
  "limo-cad-help",
  "limo-cad-interface",
  "limo-cad-mcp-mutate",
+ "limo-cad-native-engine",
  "limo-cad-occt",
  "limo-cad-print",
  "limo-cad-recipes",
@@ -896,6 +897,21 @@ name = "limo-cad-mcp-mutate"
 version = "0.3.0-rc.1"
 dependencies = [
  "limo-cad-export",
+ "serde_json",
+]
+
+[[package]]
+name = "limo-cad-native-engine"
+version = "0.3.0-rc.1"
+dependencies = [
+ "base64",
+ "limo-cad-cam",
+ "limo-cad-core",
+ "limo-cad-export",
+ "limo-cad-occt",
+ "limo-cad-sketch",
+ "limo-cad-solid",
+ "serde",
  "serde_json",
 ]
 

@@ -3622,6 +3622,7 @@ dependencies = [
  "limo-cad-help",
  "limo-cad-interface",
  "limo-cad-mcp-mutate",
+ "limo-cad-native-engine",
  "limo-cad-occt",
  "limo-cad-print",
  "limo-cad-recipes",

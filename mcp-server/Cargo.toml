@@ -39,6 +39,7 @@ limo-cad-solid = { path = "../crates/solid" }
 limo-cad-export = { path = "../crates/export" }
 limo-cad-occt = { path = "../crates/occt", features = ["native-occt"] }
 limo-cad-mcp-mutate = { path = "../crates/mcp-mutate" }
+limo-cad-native-engine = { path = "../crates/native-engine", features = ["native-occt"] }
 limo-cad-print = { path = "../crates/print" }
 
 [target.'cfg(unix)'.dependencies]

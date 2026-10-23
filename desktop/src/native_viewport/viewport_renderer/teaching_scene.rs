@@ -6,6 +6,8 @@ use crate::native_viewport::script_preview::{
 
 #[path = "teaching_animation.rs"]
 mod animation;
+#[path = "teaching_inspection.rs"]
+mod inspection;
 const LAYER: usize = 2;
 #[derive(Component)]
 struct TeachingOwned;
@@ -33,6 +35,8 @@ struct Scene {
     profile: Option<limo_cad_sketch::SketchDto>,
     plane: Option<([f64; 2], [f64; 2])>,
     selected: Vec<u64>,
+    inspection: Option<crate::native_viewport::script_preview::inspection::Inspection>,
+    datum_bounds: ([f64; 2], [f64; 2]),
     camera: Option<ViewportCamera>,
     viewport: Option<ViewportSizeResource>,
 }
@@ -91,36 +95,38 @@ pub(super) fn show(
         let mut mesh_handles = Vec::new();
         let mut material_handles = Vec::new();
         for body in &source.scene.bodies {
-            let Some(mesh) = body_mesh(body) else {
-                continue;
-            };
-            let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
-            let material = world
-                .resource_mut::<Assets<StandardMaterial>>()
-                .add(StandardMaterial {
-                    base_color: if matches!(frame.finish, Some(PreviewFinish::SatinAluminum)) {
-                        Color::srgb(0.75, 0.78, 0.79)
-                    } else {
-                        rgb(palette.body)
-                    },
-                    metallic: if frame.finish.is_some() { 0.55 } else { 0.0 },
-                    perceptual_roughness: if frame.finish.is_some() { 0.34 } else { 0.86 },
-                    cull_mode: None,
-                    ..default()
-                });
-            entities.push(
-                world
-                    .spawn((
-                        TeachingOwned,
-                        Mesh3d(mesh.clone()),
-                        MeshMaterial3d(material.clone()),
-                        Transform::default(),
-                        RenderLayers::layer(LAYER),
-                    ))
-                    .id(),
-            );
-            mesh_handles.push(mesh);
-            material_handles.push(material);
+            for (mesh, accent) in inspection::meshes(body, source.inspection.as_ref()) {
+                let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
+                let material =
+                    world
+                        .resource_mut::<Assets<StandardMaterial>>()
+                        .add(StandardMaterial {
+                            base_color: if accent {
+                                rgb(palette.accent)
+                            } else if matches!(frame.finish, Some(PreviewFinish::SatinAluminum)) {
+                                Color::srgb(0.75, 0.78, 0.79)
+                            } else {
+                                rgb(palette.body)
+                            },
+                            metallic: if frame.finish.is_some() { 0.55 } else { 0.0 },
+                            perceptual_roughness: if frame.finish.is_some() { 0.34 } else { 0.86 },
+                            cull_mode: None,
+                            ..default()
+                        });
+                entities.push(
+                    world
+                        .spawn((
+                            TeachingOwned,
+                            Mesh3d(mesh.clone()),
+                            MeshMaterial3d(material.clone()),
+                            Transform::default(),
+                            RenderLayers::layer(LAYER),
+                        ))
+                        .id(),
+                );
+                mesh_handles.push(mesh);
+                material_handles.push(material);
+            }
         }
         let mut scene = world.resource_mut::<Scene>();
         scene.geometry = entities;
@@ -128,7 +134,14 @@ pub(super) fn show(
         scene.materials = material_handles;
         scene.solid = Some(source.scene.clone());
         scene.geometry_frame = Some(source_index);
-        scene.profile = frame.profile.clone();
+        scene.profile = frame.profile.clone().filter(|p| {
+            frame
+                .inspection
+                .as_ref()
+                .is_none_or(|i| i.profile_visible(&p.name))
+        });
+        scene.inspection = frame.inspection.clone();
+        scene.datum_bounds = plane_bounds(document);
         scene.plane = (frame.cue == Some(PreviewCue::Plane)).then(|| plane_bounds(document));
         scene.selected = source.edges.clone();
         scene.key = Some(key);
@@ -261,6 +274,32 @@ fn draw(
     };
     let transform = scene.transform;
     for body in &solid.bodies {
+        if scene
+            .inspection
+            .as_ref()
+            .and_then(|i| i.visibility.as_ref())
+            .is_some_and(|v| v.hidden_body_ids.contains(&body.id.0))
+        {
+            continue;
+        }
+        if let Some(section) = scene
+            .inspection
+            .as_ref()
+            .and_then(|i| i.section.as_ref())
+            .filter(|s| s.request.body_id == body.id)
+        {
+            if let Some(cutaway) = &section.cutaway {
+                for edge in &cutaway.edges {
+                    for pair in edge.points.windows(2) {
+                        let point = |p: &limo_cad_solid::Point3Dto| {
+                            Vec3::new(p.x as f32, p.y as f32, p.z as f32)
+                        };
+                        edges.line(point(&pair[0]), point(&pair[1]), rgba(palette.edge, 0.92));
+                    }
+                }
+            }
+            continue;
+        }
         let sides = edge_side_faces(body, &transform);
         for edge in &body.edges {
             let side = sides.get(edge.key.as_str()).copied().unwrap_or_default();
@@ -276,10 +315,11 @@ fn draw(
                     ceiling: MODEL_EDGE_MAX_LIFT_MM,
                 }),
             );
-            if scene.selected.contains(&edge.id.0)
-                && scene
-                    .animation
-                    .edge_visible(edge.id.0, &scene.selected, scene.progress)
+            if inspection::edge_selected(scene.inspection.as_ref(), body, edge)
+                || scene.selected.contains(&edge.id.0)
+                    && scene
+                        .animation
+                        .edge_visible(edge.id.0, &scene.selected, scene.progress)
             {
                 draw_edge_segments(
                     &mut selected,
@@ -288,6 +328,24 @@ fn draw(
                     &transform,
                     None,
                 );
+            }
+        }
+    }
+    if let Some(i) = &scene.inspection {
+        for datum in &i.datums {
+            if i.visibility
+                .as_ref()
+                .is_some_and(|v| v.hidden_datum_plane_ids.contains(&datum.datum_id.0))
+            {
+                continue;
+            }
+            let (low, high) = scene.datum_bounds;
+            for (a, b) in plane_segments(low, high) {
+                let point = |p| {
+                    let p = datum.basis.to_3d(p);
+                    Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32)
+                };
+                selected.line(point(a), point(b), rgba(palette.accent, 0.6));
             }
         }
     }
@@ -337,7 +395,16 @@ fn draw(
                 &mut selected,
                 &profile.basis,
                 &entity,
-                rgb(palette.accent),
+                if scene
+                    .inspection
+                    .as_ref()
+                    .and_then(|i| i.selection.as_ref())
+                    .is_none_or(|s| s.sketch_entity_ids.contains(&entity.id().0))
+                {
+                    rgb(palette.accent)
+                } else {
+                    rgba(palette.edge, 0.8)
+                },
                 DIRECT_PICK_FEEDBACK_OFFSET,
             );
         }

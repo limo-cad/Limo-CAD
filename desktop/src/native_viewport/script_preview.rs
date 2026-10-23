@@ -6,6 +6,8 @@ use super::*;
 #[cfg(test)]
 use crate::native_viewport::FinishedSketchEntityPickRef;
 use bevy::render::texture::GpuImage;
+#[path = "script_preview/inspection.rs"]
+pub(crate) mod inspection;
 #[path = "script_preview/textures.rs"]
 pub(crate) mod textures;
 #[cfg(test)]
@@ -32,7 +34,6 @@ use std::{
 };
 
 const MAX_CACHE_BYTES: usize = 32 * 1024 * 1024;
-const MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_DOCUMENTS: usize = 8;
 const MAX_VIEWS: usize = 8;
 pub(crate) const MAX_RENDER_SIZE: [u32; 2] = [640, 400];
@@ -40,28 +41,7 @@ const REQUEST_LIFETIME: Duration = Duration::from_secs(20);
 const PREVIEW_CLOSED: &str = "Feature preview closed";
 const PREVIEW_TIMED_OUT: &str = "Feature preview request timed out";
 
-#[derive(Clone, Default, Deserialize, Serialize)]
-pub(crate) struct Frame {
-    pub caption: String,
-    pub scene: SolidSceneDto,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub profile: Option<limo_cad_sketch::SketchDto>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cue: Option<PreviewCue>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub duration_ms: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub finish: Option<PreviewFinish>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub edges: Vec<u64>,
-}
-
-/// An opt-in teaching finish; never changes the main viewport's materials.
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum PreviewFinish {
-    SatinAluminum,
-}
+pub(crate) use limo_cad_native_engine::teaching::{Frame, PreviewCue, PreviewFinish};
 
 #[cfg(test)]
 #[derive(Resource, Default)]
@@ -84,21 +64,6 @@ fn apply_teaching_finish(
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum PreviewCue {
-    Plane,
-    Dimension,
-    Cut,
-    Profile,
-    Extrude,
-    Depth,
-    Apply,
-    Body,
-    Edges,
-    Radius,
-}
-
 #[derive(Serialize)]
 pub(super) struct RetainedFrame {
     pub(super) caption: String,
@@ -114,6 +79,8 @@ pub(super) struct RetainedFrame {
     pub(super) finish: Option<PreviewFinish>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(super) edges: Vec<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) inspection: Option<inspection::Inspection>,
 }
 
 fn serialize_scene<S: serde::Serializer>(
@@ -132,166 +99,10 @@ pub(super) struct PreviewDocument {
 
 impl PreviewDocument {
     pub(super) fn new(frames: Vec<Frame>) -> Result<Self, String> {
-        if frames.is_empty() || frames.len() > 16 {
-            return Err("A feature preview needs between 1 and 16 frames".into());
-        }
-        let mut low = Vec3::splat(f32::INFINITY);
-        let mut high = Vec3::splat(f32::NEG_INFINITY);
-        let mut triangles = 0;
-        let mut points = 0;
-        let mut bodies = 0;
-        let mut faces = 0;
-        let mut edges = 0;
-        for frame in &frames {
-            if frame.edges.len() > 16
-                || frame.edges.iter().any(|id| {
-                    !frame
-                        .scene
-                        .bodies
-                        .iter()
-                        .any(|body| body.edges.iter().any(|edge| edge.id.0 == *id))
-                })
-            {
-                return Err("Preview edge selection must reference at most 16 owned edges".into());
-            }
-            if frame
-                .duration_ms
-                .is_some_and(|delay| !(100..=5000).contains(&delay))
-            {
-                return Err("Preview frame timing must be between 100 and 5000 ms".into());
-            }
-            if let Some(profile) = &frame.profile {
-                if profile.entities.len() > 128
-                    || profile.dimensions.len() > 32
-                    || !profile.projected_edges.is_empty()
-                    || !profile.reference_midpoints.is_empty()
-                {
-                    return Err("Preview profiles must be small, independent line sketches".into());
-                }
-                let mut point = |p: limo_cad_sketch::Vec2| -> Result<(), String> {
-                    let p = profile.basis.to_3d([p.x, p.y]);
-                    if p.iter().any(|v| !v.is_finite() || v.abs() > 10_000.) {
-                        return Err("Invalid preview profile point".into());
-                    }
-                    let p = Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
-                    low = low.min(p);
-                    high = high.max(p);
-                    Ok(())
-                };
-                for entity in &profile.entities {
-                    match entity {
-                        limo_cad_sketch::EntityDto::Point { position, .. } => point(*position)?,
-                        limo_cad_sketch::EntityDto::Line { start, end, .. } => {
-                            point(*start)?;
-                            point(*end)?;
-                        }
-                        limo_cad_sketch::EntityDto::Circle { center, radius, .. } => {
-                            if !radius.is_finite() || *radius <= 0. || *radius > 10_000. {
-                                return Err("Invalid preview circle radius".into());
-                            }
-                            for (x, y) in [(1., 0.), (-1., 0.), (0., 1.), (0., -1.)] {
-                                point(limo_cad_sketch::Vec2::new(
-                                    center.x + x * radius,
-                                    center.y + y * radius,
-                                ))?;
-                            }
-                        }
-                        _ => {
-                            return Err(
-                                "Preview profiles support straight segments and circles".into()
-                            )
-                        }
-                    }
-                }
-            }
-            if frame.caption.len() > 4000 || !frame.scene.errors.is_empty() {
-                return Err("A preview frame has an invalid caption or failed geometry".into());
-            }
-            for body in &frame.scene.bodies {
-                let mesh = &body.mesh;
-                bodies += 1;
-                faces += body.faces.len();
-                edges += body.edges.len();
-                triangles += mesh.indices.len() / 3;
-                points += mesh.positions.len() / 3
-                    + body
-                        .edges
-                        .iter()
-                        .map(|edge| edge.points.len())
-                        .sum::<usize>();
-                if bodies > 256
-                    || faces > 10_000
-                    || edges > 10_000
-                    || triangles > 100_000
-                    || mesh.positions.len() % 3 != 0
-                    || mesh.indices.len() < 3
-                    || points > 300_000
-                    || mesh.positions.len() < 9
-                    || mesh.normals.len() != mesh.positions.len()
-                    || mesh.normals.iter().any(|value| !value.is_finite())
-                    || mesh.indices.len() % 3 != 0
-                    || mesh
-                        .indices
-                        .iter()
-                        .any(|index| *index as usize >= mesh.positions.len() / 3)
-                    || mesh
-                        .positions
-                        .iter()
-                        .any(|value| !value.is_finite() || value.abs() > 10_000.0)
-                {
-                    return Err("This geometry exceeds the bounded feature preview; run the script in a new design".into());
-                }
-
-                let mut ranges = body
-                    .faces
-                    .iter()
-                    .map(|face| (face.first_index as usize, face.index_count as usize))
-                    .collect::<Vec<_>>();
-                ranges.sort_unstable();
-                let mut previous_end = 0;
-                for (start, count) in ranges {
-                    let end = start
-                        .checked_add(count)
-                        .ok_or("Invalid preview face range")?;
-                    if start % 3 != 0
-                        || count % 3 != 0
-                        || start < previous_end
-                        || end > mesh.indices.len()
-                    {
-                        return Err("Invalid preview face range".into());
-                    }
-                    previous_end = end;
-                }
-                if body
-                    .edges
-                    .iter()
-                    .flat_map(|edge| &edge.points)
-                    .any(|point| {
-                        [point.x, point.y, point.z]
-                            .iter()
-                            .any(|value| !value.is_finite() || value.abs() > 10_000.0)
-                    })
-                {
-                    return Err("Invalid preview edge points".into());
-                }
-                for point in mesh.positions.as_chunks::<3>().0 {
-                    let point = Vec3::new(point[0], point[1], point[2]);
-                    low = low.min(point);
-                    high = high.max(point);
-                }
-            }
-        }
-        let bytes = serde_json::to_vec(&frames)
-            .map_err(|error| error.to_string())?
-            .len();
-        if bytes > MAX_DOCUMENT_BYTES {
-            return Err("The feature preview is too large; run the script in a new design".into());
-        }
-        let (center, radius) = if low.is_finite() {
-            ((low + high) * 0.5, low.distance(high).max(2.0) * 0.5)
-        } else {
-            (Vec3::ZERO, 1.0)
-        };
+        let bounds = limo_cad_native_engine::teaching::validate_frames(&frames)?;
+        let center = Vec3::from_array(bounds.center);
+        let radius = bounds.radius;
+        let bytes = bounds.bytes;
         Ok(Self {
             frames: frames
                 .into_iter()
@@ -303,6 +114,7 @@ impl PreviewDocument {
                     duration_ms: frame.duration_ms,
                     finish: frame.finish,
                     edges: frame.edges,
+                    inspection: frame.inspection,
                 })
                 .collect(),
             center,
@@ -534,6 +346,16 @@ impl PreviewService {
             .frames
             .get(request.frame_index)
             .ok_or("Unknown teaching frame")?;
+        if let Some(inspection) = &frame.inspection {
+            if inspection.measurement.is_some() || inspection.section.is_some() {
+                return inspection::annotations(
+                    inspection,
+                    document.camera(request),
+                    size,
+                    [request.width as f32, request.height as f32],
+                );
+            }
+        }
         let Some(profile) = frame
             .profile
             .as_ref()

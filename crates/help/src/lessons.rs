@@ -65,8 +65,13 @@ pub enum Id {
     SketchCollinear,
     SketchConcentric,
     SketchSymmetry,
+    ConstructionVisibility,
+    SectionAnalysis,
+    SelectionSolid,
+    SelectionSketch,
+    Measure,
 }
-pub const ALL: [Id; 53] = [
+pub const ALL: [Id; 58] = [
     Id::Sketch,
     Id::Extrude,
     Id::Cut,
@@ -120,6 +125,11 @@ pub const ALL: [Id; 53] = [
     Id::SketchCollinear,
     Id::SketchConcentric,
     Id::SketchSymmetry,
+    Id::ConstructionVisibility,
+    Id::SectionAnalysis,
+    Id::SelectionSolid,
+    Id::SelectionSketch,
+    Id::Measure,
 ];
 
 /// A small choice of outcomes within Cut, independent of lesson navigation.
@@ -152,6 +162,12 @@ impl Id {
     /// The editable build that authored this guide's immutable geometry.
     pub const fn recipe(self) -> &'static str {
         match self {
+            Self::ConstructionVisibility => "show-me-construction-visibility",
+            Self::SectionAnalysis => "show-me-section-analysis",
+            Self::SelectionSolid => "show-me-selection-solid",
+            Self::SelectionSketch => "show-me-selection-sketch",
+            Self::Measure => "show-me-measure",
+
             Self::Sketch => "extrude-basics",
             Self::Extrude => "extrude-basics",
             Self::Cut => "extrude-basics",
@@ -209,6 +225,12 @@ impl Id {
     }
     pub const fn frame_count(self) -> usize {
         match self {
+            Self::ConstructionVisibility => 4,
+            Self::SectionAnalysis => 4,
+            Self::SelectionSolid => 4,
+            Self::SelectionSketch => 4,
+            Self::Measure => 4,
+
             Self::Sketch => 5,
             Self::Extrude => 5,
             Self::Cut => 6,
@@ -266,6 +288,12 @@ impl Id {
     }
     pub const fn key(self) -> &'static str {
         match self {
+            Self::ConstructionVisibility => "construction_visibility",
+            Self::SectionAnalysis => "section_analysis",
+            Self::SelectionSolid => "selection_solid",
+            Self::SelectionSketch => "selection_sketch",
+            Self::Measure => "measure",
+
             Self::Sketch => "sketch",
             Self::Extrude => "extrude",
             Self::Cut => "cut",
@@ -323,6 +351,12 @@ impl Id {
     }
     pub const fn help(self) -> &'static str {
         match self {
+            Self::ConstructionVisibility => "concepts.show-me-construction-visibility",
+            Self::SectionAnalysis => "concepts.show-me-section-analysis",
+            Self::SelectionSolid => "concepts.show-me-selection-solid",
+            Self::SelectionSketch => "concepts.show-me-selection-sketch",
+            Self::Measure => "concepts.show-me-measure",
+
             Self::Sketch => "concepts.bracket-sketch",
             Self::Extrude => "concepts.extrude-basics",
             Self::Cut => "concepts.bracket-cut",
@@ -380,6 +414,12 @@ impl Id {
     }
     pub const fn prerequisite(self) -> Option<Id> {
         match self {
+            Self::ConstructionVisibility => Some(Self::Extrude),
+            Self::SectionAnalysis => Some(Self::Extrude),
+            Self::SelectionSolid => Some(Self::Extrude),
+            Self::SelectionSketch => Some(Self::Sketch),
+            Self::Measure => Some(Self::Extrude),
+
             Self::Sketch => None,
             Self::Extrude => Some(Self::Sketch),
             Self::Cut => Some(Self::Extrude),
@@ -437,6 +477,12 @@ impl Id {
     }
     pub const fn cues(self) -> [&'static str; 4] {
         match self {
+            Self::ConstructionVisibility => ["body","body","body","body"],
+            Self::SectionAnalysis => ["body","dimension","dimension","body"],
+            Self::SelectionSolid => ["body","body","edges","body"],
+            Self::SelectionSketch => ["body","body","body","body"],
+            Self::Measure => ["body","body","dimension","body"],
+
             Self::Sketch => ["plane", "profile", "dimension", "apply"],
             Self::Extrude => ["profile", "extrude", "depth", "apply"],
             Self::Cut => ["profile", "cut", "depth", "apply"],
@@ -495,6 +541,12 @@ impl Id {
     /// Exact authored captions, including both retained Cut scenarios.
     pub const fn captions(self) -> &'static [&'static str] {
         match self {
+            Self::ConstructionVisibility => &["construction_visibility.inputs","construction_visibility.hide","construction_visibility.isolate","construction_visibility.restore"],
+            Self::SectionAnalysis => &["section_analysis.inputs","section_analysis.plane","section_analysis.reverse","section_analysis.close"],
+            Self::SelectionSolid => &["selection_solid.inputs","selection_solid.face","selection_solid.edge","selection_solid.clear"],
+            Self::SelectionSketch => &["selection_sketch.inputs","selection_sketch.first","selection_sketch.add","selection_sketch.clear"],
+            Self::Measure => &["measure.inputs","measure.first","measure.distance","measure.close"],
+
             Self::Sketch => &[
                 "sketch.plane",
                 "sketch.outline",
@@ -817,6 +869,12 @@ impl Id {
     /// Stable extension point for additional operation and Sketch guides.
     pub fn from_key(key: &str) -> Option<Self> {
         Some(match key {
+            "construction_visibility" => Self::ConstructionVisibility,
+            "section_analysis" => Self::SectionAnalysis,
+            "selection_solid" => Self::SelectionSolid,
+            "selection_sketch" => Self::SelectionSketch,
+            "measure" => Self::Measure,
+
             "sketch" => Self::Sketch,
             "extrude" => Self::Extrude,
             "cut" => Self::Cut,

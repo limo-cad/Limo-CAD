@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "inventory_complete": false,
-  "inventory_note": "Sketch and Solid Modeling are the first rollout; Drawings, Assembly and CAM follow. Catalog controls are inventoried; non-ribbon workflow entries still require reconciliation. Authored means source and bundled geometry exist; native interaction, visual evidence and performance acceptance are separate gates. The broader surface qualification campaign remains paused.",
+  "inventory_note": "Sketch and Solid Modeling are the first rollout; Drawings, Assembly and CAM follow. Catalog controls are inventoried; non-ribbon workflow entries still require reconciliation. Authored means source and bundled geometry exist; native interaction, visual evidence and performance acceptance are separate gates. The broader surface qualification campaign remains paused. Selection is split by actual native command: Solid select -> selection_solid; Sketch select -> selection_sketch. Assembly browser/joints and remaining workflow audits stay deferred.",
   "guides": [
     {
       "id": "sketch",
@@ -192,7 +192,7 @@
     },
     {
       "id": "construction_visibility",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "solid",
@@ -236,7 +236,7 @@
     },
     {
       "id": "measure",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "solid",
@@ -247,7 +247,7 @@
     },
     {
       "id": "section_analysis",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "solid",
@@ -280,22 +280,6 @@
           "workspace": "assembly",
           "control": "createJoint",
           "label_key": "ribbon.assembly.joint"
-        }
-      ]
-    },
-    {
-      "id": "selection",
-      "state": "pending",
-      "entry_points": [
-        {
-          "workspace": "solid",
-          "control": "select",
-          "label_key": "ribbon.solid.select"
-        },
-        {
-          "workspace": "sketch",
-          "control": "select",
-          "label_key": "ribbon.sketch.select"
         }
       ]
     },
@@ -1356,6 +1340,28 @@
           "workspace": "solid",
           "control": "extrude",
           "label_key": "ribbon.solid.extrude"
+        }
+      ]
+    },
+    {
+      "id": "selection_solid",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "select",
+          "label_key": "ribbon.solid.select"
+        }
+      ]
+    },
+    {
+      "id": "selection_sketch",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "select",
+          "label_key": "ribbon.sketch.select"
         }
       ]
     }

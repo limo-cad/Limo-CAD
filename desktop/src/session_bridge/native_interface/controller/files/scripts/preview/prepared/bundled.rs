@@ -12,7 +12,10 @@ struct Bundle {
     version: u32,
     lesson: lesson::Id,
     source_sha256_lf: String,
-    frames: Vec<Frame>,
+    // Recipe exports are JSON numeric values. A bounded CBOR integer such as
+    // coordinate 0 is valid for a typed f64 field after JSON numeric decoding.
+    // Keep envelope/source checks separate from the fail-closed Frame schema.
+    frames: Vec<serde_json::Value>,
 }
 
 fn asset(id: lesson::Id) -> &'static [u8] {
@@ -27,6 +30,11 @@ fn asset(id: lesson::Id) -> &'static [u8] {
         };
     }
     match id {
+        lesson::Id::ConstructionVisibility => embedded!("construction_visibility"),
+        lesson::Id::SectionAnalysis => embedded!("section_analysis"),
+        lesson::Id::SelectionSolid => embedded!("selection_solid"),
+        lesson::Id::SelectionSketch => embedded!("selection_sketch"),
+        lesson::Id::Measure => embedded!("measure"),
         lesson::Id::Sketch => embedded!("sketch"),
         lesson::Id::Extrude => embedded!("extrude"),
         lesson::Id::Cut => embedded!("cut"),
@@ -97,6 +105,11 @@ pub(super) fn known_source(id: lesson::Id) -> &'static str {
         };
     }
     match id {
+        lesson::Id::ConstructionVisibility => source!("show-me-construction-visibility"),
+        lesson::Id::SectionAnalysis => source!("show-me-section-analysis"),
+        lesson::Id::SelectionSolid => source!("show-me-selection-solid"),
+        lesson::Id::SelectionSketch => source!("show-me-selection-sketch"),
+        lesson::Id::Measure => source!("show-me-measure"),
         lesson::Id::Sketch => source!("extrude-basics"),
         lesson::Id::Extrude => source!("extrude-basics"),
         lesson::Id::Cut => source!("extrude-basics"),
@@ -183,8 +196,9 @@ fn decode(bytes: &[u8], source: &str, id: lesson::Id) -> Result<Vec<Frame>, Stri
     if bundle.frames.len() != id.frame_count() {
         return Err("Bundled lesson has an unexpected number of frames".into());
     }
-    if !bundle
-        .frames
+    let frames: Vec<Frame> = serde_json::from_value(serde_json::Value::Array(bundle.frames))
+        .map_err(|error| format!("Bundled lesson frames cannot be decoded: {error}"))?;
+    if !frames
         .iter()
         .map(|frame| frame.caption.as_str())
         .eq(id.captions().iter().copied())
@@ -194,7 +208,7 @@ fn decode(bytes: &[u8], source: &str, id: lesson::Id) -> Result<Vec<Frame>, Stri
     // PreviewService::retain checks geometry/mesh/point/selection budgets before
     // any decoded frame reaches the renderer. These bytes are embedded assets,
     // never a path, network response, or user-supplied CBOR payload.
-    Ok(bundle.frames)
+    Ok(frames)
 }
 
 #[cfg(test)]
@@ -215,7 +229,7 @@ mod tests {
             assert!(catalog::examples()
                 .iter()
                 .any(|example| example.id == id.recipe() && example.source == source));
-            let frames = load(source, id).unwrap();
+            let frames = load(source, id).unwrap_or_else(|error| panic!("{}: {error}", id.key()));
             assert_eq!(
                 frames
                     .iter()
@@ -264,5 +278,16 @@ mod tests {
         ciborium::ser::into_writer(&value, &mut altered).unwrap();
         assert!(decode(&altered, source(), id).is_err());
         assert!(decode(&vec![0; MAX_ASSET_BYTES + 1], source(), id).is_err());
+    }
+
+    #[test]
+    fn native_script_preview_bundled_measure_never_accepts_pending_frames() {
+        let id = lesson::Id::Measure;
+        let source = known_source(id);
+        let mut value: serde_json::Value = ciborium::de::from_reader(asset(id)).unwrap();
+        value["frames"][2]["inspection"]["native_measurement_pending"] = json!(true);
+        let mut bytes = Vec::new();
+        ciborium::ser::into_writer(&value, &mut bytes).unwrap();
+        assert!(decode(&bytes, source, id).is_err());
     }
 }

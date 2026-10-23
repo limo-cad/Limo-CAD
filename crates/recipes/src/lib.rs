@@ -15,12 +15,53 @@ pub struct Recipe {
 
 pub const RECIPES: &[Recipe] = &[
     Recipe {
+        id: "show-me-construction-visibility",
+        source: include_str!("../../../examples/scripts/show-me-construction-visibility.limo.jsonc"),
+        summary: "Clear the bracket view without removing its saved sketch or center datum.",
+        kind: "lesson",
+        focus_operations: &["sketch_begin", "sketch_set_grid_snap", "sketch_add_line", "sketch_add_constraint", "sketch_add_constraints", "sketch_add_dimension", "sketch_finish", "solid_extrude", "solid_scene", "construction_plane_offset", "construction_plane_definitions", "project_visibility", "construction_set_visibility"],
+        preview: true,
+    },
+    Recipe {
+        id: "show-me-section-analysis",
+        source: include_str!("../../../examples/scripts/show-me-section-analysis.limo.jsonc"),
+        summary: "Look through the upright, reverse the retained half, then close the temporary view.",
+        kind: "lesson",
+        focus_operations: &["sketch_begin", "sketch_set_grid_snap", "sketch_add_line", "sketch_add_constraint", "sketch_add_constraints", "sketch_add_dimension", "sketch_finish", "solid_extrude", "solid_scene", "solid_section_review"],
+        preview: true,
+    },
+    Recipe {
+        id: "show-me-selection-solid",
+        source: include_str!("../../../examples/scripts/show-me-selection-solid.limo.jsonc"),
+        summary: "Distinguish the bracket's upright face from its top edge before starting another tool.",
+        kind: "lesson",
+        focus_operations: &["sketch_begin", "sketch_set_grid_snap", "sketch_add_line", "sketch_add_constraint", "sketch_add_constraints", "sketch_add_dimension", "sketch_finish", "solid_extrude", "solid_scene"],
+        preview: true,
+    },
+    Recipe {
+        id: "show-me-selection-sketch",
+        source: include_str!("../../../examples/scripts/show-me-selection-sketch.limo.jsonc"),
+        summary: "Pick one segment, add a second with Shift, then clear the selection.",
+        kind: "lesson",
+        focus_operations: &["sketch_begin", "sketch_set_grid_snap", "sketch_add_line", "sketch_add_constraint", "sketch_add_constraints", "sketch_add_dimension", "solid_scene", "sketch_active"],
+        preview: true,
+    },
+    Recipe {
+        id: "show-me-measure",
+        source: include_str!("../../../examples/scripts/show-me-measure.limo.jsonc"),
+        summary: "Measure the exact gap between the upright's outside and inside faces.",
+        kind: "lesson",
+        focus_operations: &["sketch_begin", "sketch_set_grid_snap", "sketch_add_line", "sketch_add_constraint", "sketch_add_constraints", "sketch_add_dimension", "sketch_finish", "solid_extrude", "solid_scene"],
+        preview: false,
+    },
+    Recipe {
         id: "show-me-sketch-draw",
         source: include_str!("../../../examples/scripts/show-me-sketch-draw.limo.jsonc"),
         summary: "Bracket sketch guides: lines, points and curved profiles",
         kind: "lesson",
         focus_operations: &["sketch_add_line","sketch_add_midpoint_line","sketch_add_point","sketch_add_rectangle_locked","sketch_add_circle_locked","sketch_add_arc_center","sketch_add_arc_3pt","sketch_add_spline","sketch_polygon","sketch_add_slot"],
-        preview: true,
+        // The authored guides use CBOR; the construction bundle exceeds public preview's 80 operations.
+        preview: false,
     },
     Recipe {
         id: "show-me-sketch-edit",
@@ -28,7 +69,8 @@ pub const RECIPES: &[Recipe] = &[
         summary: "Bracket sketch guides: transform, trim and dress layout geometry",
         kind: "lesson",
         focus_operations: &["sketch_move_copy","sketch_scale","sketch_offset","sketch_trim","sketch_extend","sketch_break","sketch_fillet","sketch_chamfer"],
-        preview: true,
+        // The authored guides use CBOR; the construction bundle exceeds public preview's 80 operations.
+        preview: false,
     },
     Recipe {
         id: "show-me-sketch-repeat",
@@ -44,7 +86,8 @@ pub const RECIPES: &[Recipe] = &[
         summary: "Bracket sketch guides: persistent geometric relationships",
         kind: "lesson",
         focus_operations: &["sketch_add_constraint","sketch_toggle_fix"],
-        preview: true,
+        // The authored guides use CBOR; the construction bundle exceeds public preview's 80 operations.
+        preview: false,
     },
     Recipe {
         id: "show-me-revolve",
