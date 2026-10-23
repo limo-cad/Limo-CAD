@@ -152,15 +152,30 @@ impl ProjectArchive {
         Self::decode_bounded(bytes, MAX_FILE_BYTES, MAX_EXPANDED_BYTES)
     }
 
+    /// Decode with caller-specific admission limits, clamped to the product limits.
+    /// Expanded size is checked before reading model/manifest entries. This is
+    /// an archive admission bound, not a bound on later geometry computation.
+    pub fn decode_with_limits(
+        bytes: Vec<u8>,
+        archive_limit: u64,
+        expanded_limit: u64,
+    ) -> Result<Self, ProjectFileError> {
+        Self::decode_bounded(
+            bytes,
+            archive_limit.min(MAX_FILE_BYTES),
+            expanded_limit.min(MAX_EXPANDED_BYTES),
+        )
+    }
+
     fn decode_bounded(
         bytes: Vec<u8>,
         archive_limit: u64,
         expanded_limit: u64,
     ) -> Result<Self, ProjectFileError> {
         if bytes.len() < 4 || bytes.len() as u64 > archive_limit {
-            return Err(error(
-                "the project archive is empty or exceeds the 256 MB safety limit",
-            ));
+            return Err(error(format!(
+                "the project archive is empty or exceeds the {archive_limit} byte safety limit"
+            )));
         }
         if !bytes.starts_with(b"PK") {
             return Err(error("this is not a ZIP-based .limo project"));
@@ -176,7 +191,9 @@ impl ProjectArchive {
                 .checked_add(entry.size())
                 .ok_or_else(|| error("expanded project size overflow"))?;
             if expanded > expanded_limit {
-                return Err(error("expanded project exceeds the 512 MB safety limit"));
+                return Err(error(format!(
+                    "expanded project exceeds the {expanded_limit} byte safety limit"
+                )));
             }
         }
         let manifest_json = read_entry(&mut archive, "manifest.json", expanded_limit)?;
@@ -295,7 +312,9 @@ impl ProjectArchive {
         manifest.push(b'\n');
         let mut expanded = manifest.len() as u64 + self.model_json.len() as u64;
         if expanded > expanded_limit {
-            return Err(error("expanded project exceeds the 512 MB safety limit"));
+            return Err(error(format!(
+                "expanded project exceeds the {expanded_limit} byte safety limit"
+            )));
         }
         let mut writer = ZipWriter::new(BoundedOutput {
             cursor: Cursor::new(Vec::new()),
@@ -361,7 +380,9 @@ impl ProjectArchive {
                     .checked_add(entry.size())
                     .ok_or_else(|| error("expanded project size overflow"))?;
                 if expanded > expanded_limit {
-                    return Err(error("expanded project exceeds the 512 MB safety limit"));
+                    return Err(error(format!(
+                        "expanded project exceeds the {expanded_limit} byte safety limit"
+                    )));
                 }
                 if entry.is_dir() {
                     if entry.size() != 0 {
@@ -387,7 +408,9 @@ impl ProjectArchive {
                 .checked_add(bytes.len() as u64)
                 .ok_or_else(|| error("expanded project size overflow"))?;
             if expanded > expanded_limit {
-                return Err(error("expanded project exceeds the 512 MB safety limit"));
+                return Err(error(format!(
+                    "expanded project exceeds the {expanded_limit} byte safety limit"
+                )));
             }
             writer
                 .start_file(name, options)
@@ -438,7 +461,9 @@ fn read_entry<R: Read + Seek>(
         )
     })?;
     if entry.size() > limit {
-        return Err(error("expanded project exceeds the 512 MB safety limit"));
+        return Err(error(format!(
+            "expanded project exceeds the {limit} byte safety limit"
+        )));
     }
     let mut bytes = Vec::new();
     entry
@@ -446,7 +471,9 @@ fn read_entry<R: Read + Seek>(
         .read_to_end(&mut bytes)
         .map_err(|source| failed("could not read project JSON", source))?;
     if bytes.len() as u64 > limit {
-        return Err(error("expanded project exceeds the 512 MB safety limit"));
+        return Err(error(format!(
+            "expanded project exceeds the {limit} byte safety limit"
+        )));
     }
     String::from_utf8(bytes).map_err(|source| failed("project JSON is not valid UTF-8", source))
 }
@@ -463,9 +490,10 @@ impl Write for BoundedOutput {
             .checked_add(bytes.len() as u64)
             .is_none_or(|end| end > self.limit)
         {
-            return Err(io::Error::other(
-                "project archive exceeds the 256 MB safety limit",
-            ));
+            return Err(io::Error::other(format!(
+                "project archive exceeds the {} byte safety limit",
+                self.limit
+            )));
         }
         self.cursor.write(bytes)
     }

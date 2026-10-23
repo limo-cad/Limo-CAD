@@ -158,6 +158,8 @@ impl Artifact {
 
 pub(super) fn message(locale: crate::app_preferences::Locale, text: &str) -> String {
     let key = match text {
+        "Preview preparation cancelled" => "projectReplay.previewCancelled",
+        "Preview preparation timed out" => "projectReplay.previewTimedOut",
         "Limo CAD project replay (.limo.replay.cbor)" => "projectReplay.filter",
         "Save a project replay to an absolute .limo.replay.cbor path" => "projectReplay.savePath",
         "Open a project replay from an absolute path" => "projectReplay.openPath",

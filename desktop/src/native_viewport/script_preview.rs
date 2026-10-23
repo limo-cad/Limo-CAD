@@ -70,6 +70,8 @@ pub(super) struct RetainedFrame {
     #[serde(serialize_with = "serialize_scene")]
     pub(super) scene: Arc<SolidSceneDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) assembly: Option<limo_cad_sketch::AssemblySolutionDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) profile: Option<limo_cad_sketch::SketchDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) cue: Option<PreviewCue>,
@@ -81,6 +83,20 @@ pub(super) struct RetainedFrame {
     pub(super) edges: Vec<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) inspection: Option<inspection::Inspection>,
+}
+
+/// Exactly the admitted poses used by shared Frame fitting and draw budgets.
+pub(super) fn body_transforms(
+    solution: Option<&limo_cad_sketch::AssemblySolutionDto>,
+    body: u64,
+) -> Vec<Transform> {
+    limo_cad_native_engine::teaching::assembly::body_poses(solution, body)
+        .into_iter()
+        .map(|pose| {
+            Transform::from_translation(Vec3::from_array(pose.translation))
+                .with_rotation(Quat::from_array(pose.rotation))
+        })
+        .collect()
 }
 
 fn serialize_scene<S: serde::Serializer>(
@@ -109,6 +125,7 @@ impl PreviewDocument {
                 .map(|frame| RetainedFrame {
                     caption: frame.caption,
                     scene: Arc::new(frame.scene),
+                    assembly: frame.assembly,
                     profile: frame.profile,
                     cue: frame.cue,
                     duration_ms: frame.duration_ms,
@@ -144,6 +161,7 @@ impl PreviewDocument {
 
 #[derive(Serialize)]
 pub(crate) struct PreviewDescriptor {
+    pub assembly_notice_counts: Vec<usize>,
     pub preview_id: String,
     pub captions: Vec<String>,
     pub cues: Vec<Option<PreviewCue>>,
@@ -308,6 +326,11 @@ impl PreviewService {
     pub fn retain(&self, frames: Vec<Frame>) -> Result<PreviewDescriptor, String> {
         let document = Arc::new(PreviewDocument::new(frames)?);
         let descriptor = PreviewDescriptor {
+            assembly_notice_counts: document
+                .frames
+                .iter()
+                .map(|frame| frame.assembly.as_ref().map_or(0, |a| a.diagnostics.len()))
+                .collect(),
             preview_id: uuid::Uuid::new_v4().to_string(),
             captions: document
                 .frames
