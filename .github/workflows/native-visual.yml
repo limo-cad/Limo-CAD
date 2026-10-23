@@ -24,6 +24,12 @@ on:
       - 'mcp-server/src/**'
       - 'mcp-server/Cargo.toml'
       - 'examples/scripts/extrude-basics.limo.jsonc'
+      - 'examples/scripts/show-me-*.limo.jsonc'
+      - 'examples/scripts/show-me-sketch.lessons.json'
+      - 'knowledge/concepts/show-me-*.md'
+      - 'interface/demonstrations.json'
+      - 'interface/catalog.json'
+      - 'assets/i18n/**'
       - 'knowledge/concepts/extrude-basics.md'
       - 'knowledge/concepts/bracket-sketch.md'
       - 'knowledge/concepts/bracket-cut.md'
@@ -66,6 +72,13 @@ jobs:
           key: native-visual
       - name: Install native geometry kernel
         uses: ./.github/actions/setup-unix-occt
+      - name: Generate Show me snapshots with the checked out engine
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/desktop/target
+        run: |
+          cargo run --locked --manifest-path mcp-server/Cargo.toml --example generate_show_me -- --out desktop/assets/show-me
+          mkdir -p docs/qa/native-boundary/show-me-generated
+          cp desktop/assets/show-me/*.cbor desktop/assets/show-me/provenance.json docs/qa/native-boundary/show-me-generated/
       - name: Verify projected boundaries and thin-wall occlusion on the GPU
         env:
           LIMO_CAD_PREVIEW_PROOF_DIR: ${{ github.workspace }}/docs/qa/native-boundary
@@ -73,7 +86,9 @@ jobs:
       - name: Verify grid visibility restores without pointer input
         run: cargo xtask ci native-ignored-test grid-redraw
       - name: Verify bundled lesson source freshness and geometry budgets
-        run: cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_bundled_assets
+        run: |
+          cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_bundled_assets
+          cargo test --locked --manifest-path desktop/Cargo.toml --lib chamfer_form
       - name: Verify the Extrude lesson profile and solid on the GPU
         env:
           LIMO_CAD_PREVIEW_PROOF_DIR: ${{ github.workspace }}/docs/qa/native-boundary

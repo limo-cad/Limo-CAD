@@ -212,4 +212,30 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn native_script_preview_sketch_step_labels_are_operation_specific() {
+        for locale in limo_cad_mcp::lessons::LOCALES {
+            for (left, right) in [
+                (lesson::Id::SketchLine, lesson::Id::SketchMidpointLine),
+                (lesson::Id::SketchFillet, lesson::Id::SketchChamfer),
+                (lesson::Id::SketchCoincident, lesson::Id::SketchConcentric),
+            ] {
+                let left = left
+                    .captions()
+                    .iter()
+                    .map(|caption| label(locale, caption))
+                    .collect::<Vec<_>>();
+                let right = right
+                    .captions()
+                    .iter()
+                    .map(|caption| label(locale, caption))
+                    .collect::<Vec<_>>();
+                assert_ne!(
+                    left, right,
+                    "{locale}: operation steps must remain distinct"
+                );
+            }
+        }
+    }
 }

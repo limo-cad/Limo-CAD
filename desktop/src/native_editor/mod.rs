@@ -14,6 +14,7 @@ mod modify_preview;
 mod palette;
 pub(crate) use palette::PaletteCommand;
 mod constraints;
+pub(crate) use constraints::Relation;
 mod forms;
 pub(crate) mod mcp;
 pub(crate) mod selection;

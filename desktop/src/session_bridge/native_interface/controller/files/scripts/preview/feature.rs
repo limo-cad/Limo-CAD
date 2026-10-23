@@ -1,6 +1,9 @@
 //! Contextual hints and Help use the shared operation lessons.
 use super::super::super::super::chrome::{self, rect};
 use super::*;
+use crate::native_editor::{
+    CreateTool, EditorCommand as SketchCommand, FormKind, InteractionCommand, ModifyTool, Relation,
+};
 use crate::session_bridge::native_interface::feature::{FeatureCommand, SolidFormKind};
 use std::sync::OnceLock;
 
@@ -51,17 +54,167 @@ solid_guides! {
     CircularPattern => CircularPattern,
 }
 
+// Match the actual native editor command types. Menu headings, feature edits,
+// pending tools and form-control actions never inherit a generic guide.
+fn sketch_lesson(command: &SketchCommand) -> Option<lesson::Id> {
+    Some(match command {
+        SketchCommand::Support(crate::native_editor::support::Command::Start) => lesson::Id::Sketch,
+        SketchCommand::Tool(tool) => match tool {
+            CreateTool::Line => lesson::Id::SketchLine,
+            CreateTool::MidpointLine => lesson::Id::SketchMidpointLine,
+            CreateTool::Point => lesson::Id::SketchPoint,
+            CreateTool::Rectangle(_) => lesson::Id::SketchRectangle,
+            CreateTool::Circle(_) => lesson::Id::SketchCircle,
+            CreateTool::Arc3Point | CreateTool::ArcCenter => lesson::Id::SketchArc,
+            CreateTool::Spline => lesson::Id::SketchSpline,
+            CreateTool::Slot(_) => lesson::Id::SketchSlot,
+        },
+        SketchCommand::Interaction(command) => match command {
+            InteractionCommand::Form(kind) => match kind {
+                FormKind::Fillet => lesson::Id::SketchFillet,
+                FormKind::Chamfer => lesson::Id::SketchChamfer,
+                FormKind::Offset => lesson::Id::SketchOffset,
+                FormKind::MoveCopy => lesson::Id::SketchMoveCopy,
+                FormKind::Scale => lesson::Id::SketchScale,
+                FormKind::Mirror => lesson::Id::SketchMirror,
+                FormKind::RectangularPattern => lesson::Id::SketchRectangularPattern,
+                FormKind::CircularPattern => lesson::Id::SketchCircularPattern,
+                FormKind::Polygon => lesson::Id::SketchPolygon,
+            },
+            InteractionCommand::Modify(tool) => match tool {
+                ModifyTool::Trim => lesson::Id::SketchTrim,
+                ModifyTool::Extend => lesson::Id::SketchExtend,
+                ModifyTool::Break => lesson::Id::SketchBreak,
+            },
+            InteractionCommand::Relation(relation) => match relation {
+                Relation::Align => lesson::Id::SketchHorizontalVertical,
+                Relation::Coincident => lesson::Id::SketchCoincident,
+                Relation::Tangent => lesson::Id::SketchTangent,
+                Relation::Equal => lesson::Id::SketchEqual,
+                Relation::Parallel => lesson::Id::SketchParallel,
+                Relation::Perpendicular => lesson::Id::SketchPerpendicular,
+                Relation::Fix => lesson::Id::SketchFixUnfix,
+                Relation::Midpoint => lesson::Id::SketchMidpoint,
+                Relation::Concentric => lesson::Id::SketchConcentric,
+                Relation::Collinear => lesson::Id::SketchCollinear,
+                Relation::Symmetry => lesson::Id::SketchSymmetry,
+            },
+            InteractionCommand::Dimension => lesson::Id::SketchDimension,
+            _ => return None,
+        },
+        _ => return None,
+    })
+}
+
 fn command_lesson(command: &NativeCommand) -> Option<lesson::Id> {
     match command {
-        NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
-            crate::native_editor::support::Command::Start,
-        )) => Some(lesson::Id::Sketch),
+        NativeCommand::Sketch(command) => sketch_lesson(command),
         NativeCommand::Feature(FeatureCommand::Open {
             kind,
             feature_id: None,
         }) => Some(solid_lesson(*kind)),
         _ => None,
     }
+}
+
+// Evidence/tests must bind a real entry command for each guide. This helper is
+// absent from the production hover path and never executes the command.
+#[cfg(test)]
+pub(super) fn command_for_guide(id: lesson::Id) -> Option<NativeCommand> {
+    if let Some(kind) = solid_kind(id) {
+        return Some(NativeCommand::Feature(FeatureCommand::Open {
+            kind,
+            feature_id: None,
+        }));
+    }
+    Some(NativeCommand::Sketch(match id {
+        lesson::Id::Sketch => SketchCommand::Support(crate::native_editor::support::Command::Start),
+        lesson::Id::SketchLine => SketchCommand::Tool(CreateTool::Line),
+        lesson::Id::SketchMidpointLine => SketchCommand::Tool(CreateTool::MidpointLine),
+        lesson::Id::SketchPoint => SketchCommand::Tool(CreateTool::Point),
+        lesson::Id::SketchRectangle => SketchCommand::Tool(CreateTool::Rectangle(
+            limo_cad_sketch::RectangleMode::TwoPoint,
+        )),
+        lesson::Id::SketchCircle => SketchCommand::Tool(CreateTool::Circle(
+            limo_cad_sketch::CircleMode::CenterDiameter,
+        )),
+        lesson::Id::SketchArc => SketchCommand::Tool(CreateTool::Arc3Point),
+        lesson::Id::SketchSpline => SketchCommand::Tool(CreateTool::Spline),
+        lesson::Id::SketchSlot => {
+            SketchCommand::Tool(CreateTool::Slot(limo_cad_sketch::SlotMode::CenterToCenter))
+        }
+        lesson::Id::SketchFillet => {
+            SketchCommand::Interaction(InteractionCommand::Form(FormKind::Fillet))
+        }
+        lesson::Id::SketchChamfer => {
+            SketchCommand::Interaction(InteractionCommand::Form(FormKind::Chamfer))
+        }
+        lesson::Id::SketchOffset => {
+            SketchCommand::Interaction(InteractionCommand::Form(FormKind::Offset))
+        }
+        lesson::Id::SketchMoveCopy => {
+            SketchCommand::Interaction(InteractionCommand::Form(FormKind::MoveCopy))
+        }
+        lesson::Id::SketchScale => {
+            SketchCommand::Interaction(InteractionCommand::Form(FormKind::Scale))
+        }
+        lesson::Id::SketchMirror => {
+            SketchCommand::Interaction(InteractionCommand::Form(FormKind::Mirror))
+        }
+        lesson::Id::SketchRectangularPattern => {
+            SketchCommand::Interaction(InteractionCommand::Form(FormKind::RectangularPattern))
+        }
+        lesson::Id::SketchCircularPattern => {
+            SketchCommand::Interaction(InteractionCommand::Form(FormKind::CircularPattern))
+        }
+        lesson::Id::SketchPolygon => {
+            SketchCommand::Interaction(InteractionCommand::Form(FormKind::Polygon))
+        }
+        lesson::Id::SketchTrim => {
+            SketchCommand::Interaction(InteractionCommand::Modify(ModifyTool::Trim))
+        }
+        lesson::Id::SketchExtend => {
+            SketchCommand::Interaction(InteractionCommand::Modify(ModifyTool::Extend))
+        }
+        lesson::Id::SketchBreak => {
+            SketchCommand::Interaction(InteractionCommand::Modify(ModifyTool::Break))
+        }
+        lesson::Id::SketchHorizontalVertical => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Align))
+        }
+        lesson::Id::SketchCoincident => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Coincident))
+        }
+        lesson::Id::SketchTangent => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Tangent))
+        }
+        lesson::Id::SketchEqual => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Equal))
+        }
+        lesson::Id::SketchParallel => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Parallel))
+        }
+        lesson::Id::SketchPerpendicular => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Perpendicular))
+        }
+        lesson::Id::SketchFixUnfix => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Fix))
+        }
+        lesson::Id::SketchMidpoint => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Midpoint))
+        }
+        lesson::Id::SketchConcentric => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Concentric))
+        }
+        lesson::Id::SketchCollinear => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Collinear))
+        }
+        lesson::Id::SketchSymmetry => {
+            SketchCommand::Interaction(InteractionCommand::Relation(Relation::Symmetry))
+        }
+        lesson::Id::SketchDimension => SketchCommand::Interaction(InteractionCommand::Dimension),
+        _ => return None,
+    }))
 }
 #[derive(Resource, Default)]
 struct Hint {
@@ -150,10 +303,10 @@ pub(crate) fn paint_hint(
         .filter(|_| window.is_none_or(|w| w.focused));
     let mut selected = None;
     // One query across visible commands, independent of the number of guides.
-    // Future Sketch commands can join command_lesson without new scans/workers.
+    // Typed Sketch variants and Solid forms share this scan and hover worker.
     let mut anchors = world.query::<(Entity, &NativeCommandBinding, &InterfaceControl, &Node)>();
     for (entity, binding, control, node) in anchors.iter(world) {
-        if !control.visible {
+        if !control.visible || control.disabled {
             continue;
         }
         let Some(id) = command_lesson(&binding.command) else {
@@ -617,19 +770,70 @@ pub(super) fn paint_index(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_script_preview_sketch_variants_preserve_their_operation_identity() {
+        use limo_cad_sketch::{CircleMode, RectangleMode, SlotMode};
+        for (tool, id) in [
+            (CreateTool::Line, lesson::Id::SketchLine),
+            (CreateTool::MidpointLine, lesson::Id::SketchMidpointLine),
+            (CreateTool::Point, lesson::Id::SketchPoint),
+            (
+                CreateTool::Rectangle(RectangleMode::TwoPoint),
+                lesson::Id::SketchRectangle,
+            ),
+            (
+                CreateTool::Rectangle(RectangleMode::Center),
+                lesson::Id::SketchRectangle,
+            ),
+            (
+                CreateTool::Circle(CircleMode::CenterDiameter),
+                lesson::Id::SketchCircle,
+            ),
+            (
+                CreateTool::Circle(CircleMode::TwoPoint),
+                lesson::Id::SketchCircle,
+            ),
+            (CreateTool::Arc3Point, lesson::Id::SketchArc),
+            (CreateTool::ArcCenter, lesson::Id::SketchArc),
+            (CreateTool::Spline, lesson::Id::SketchSpline),
+            (
+                CreateTool::Slot(SlotMode::CenterToCenter),
+                lesson::Id::SketchSlot,
+            ),
+            (CreateTool::Slot(SlotMode::Overall), lesson::Id::SketchSlot),
+            (
+                CreateTool::Slot(SlotMode::CenterPoint),
+                lesson::Id::SketchSlot,
+            ),
+        ] {
+            assert_eq!(
+                command_lesson(&NativeCommand::Sketch(SketchCommand::Tool(tool))),
+                Some(id)
+            );
+        }
+        for command in [
+            SketchCommand::Edit("existing sketch".into()),
+            SketchCommand::Finish,
+            SketchCommand::Cancel,
+            SketchCommand::Complete,
+            SketchCommand::Interaction(InteractionCommand::Menu(Some("draw"))),
+            SketchCommand::Interaction(InteractionCommand::Menu(Some("edit"))),
+            SketchCommand::Interaction(InteractionCommand::Menu(Some("constrain"))),
+            SketchCommand::Interaction(InteractionCommand::Select),
+            SketchCommand::Interaction(InteractionCommand::DimensionActions),
+            SketchCommand::Interaction(InteractionCommand::DimensionReference),
+            SketchCommand::Interaction(InteractionCommand::ApplyForm { id: 1 }),
+            SketchCommand::Interaction(InteractionCommand::CancelForm { id: 1 }),
+        ] {
+            assert!(command_lesson(&NativeCommand::Sketch(command)).is_none());
+        }
+    }
     #[test]
     fn native_script_preview_every_authored_command_routes_only_to_its_guides() {
         for id in lesson::ALL {
-            let command = if id == lesson::Id::Sketch {
-                NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
-                    crate::native_editor::support::Command::Start,
-                ))
-            } else {
-                NativeCommand::Feature(FeatureCommand::Open {
-                    kind: solid_kind(id).expect("Every solid guide has a native form"),
-                    feature_id: None,
-                })
-            };
+            let command =
+                command_for_guide(id).expect("Every authored guide has a real entry command");
             let actual = command_lesson(&command).unwrap();
             assert!(entries(&actual).contains(&id), "{id:?}");
             if let Some(kind) = solid_kind(id) {
@@ -639,7 +843,7 @@ mod tests {
                         feature_id: Some(1),
                     }))
                     .is_none(),
-                    "Editing a feature does not masquerade as its ribbon entry"
+                    "Feature edits cannot masquerade as creation entries"
                 );
             }
             if !matches!(id, lesson::Id::Extrude | lesson::Id::Cut) {
@@ -798,5 +1002,62 @@ mod tests {
         assert!(!keep_hint(Vec2::new(250., 50.), anchor, card, true));
         assert!(!keep_hint(Vec2::new(600., 180.), anchor, card, true));
         assert!(!keep_hint(Vec2::new(250., 180.), anchor, card, false));
+    }
+
+    #[test]
+    fn native_script_preview_sketch_entries_support_retained_keyboard_focus() {
+        for id in lesson::ALL
+            .into_iter()
+            .filter(|id| id.key().starts_with("sketch_"))
+        {
+            use bevy::ui::{ComputedStackIndex, UiGlobalTransform};
+            let (mut app, handle, extrude, _) = interface_shell::tests::fixture();
+            initialize(
+                app.world_mut(),
+                Arc::new(Mutex::new(DocumentWorkspace::default())),
+            );
+            app.world_mut().init_resource::<ViewportUiAssets>();
+            app.world_mut()
+                .entity_mut(extrude)
+                .insert(rect(110., 34., 48., 54.));
+            let camera = app.world_mut().spawn_empty().id();
+            let mut widgets = chrome::Widgets::default();
+            crate::session_bridge::native_interface::bind_command(
+                app.world_mut(),
+                extrude,
+                command_for_guide(id).unwrap(),
+            )
+            .unwrap();
+            let action = handle
+                .resolve_retained(limo_cad_interface::ControlKey(extrude.to_bits()))
+                .unwrap();
+            handle.prepare_activation(&action).unwrap();
+            widgets.begin();
+            paint_hint(app.world_mut(), camera, Some(extrude), &mut widgets, 1000.).unwrap();
+            let entry = widgets.entity(&format!("{}-show-me", id.key())).unwrap();
+            app.world_mut().entity_mut(entry).insert((
+                ComputedNode {
+                    size: Vec2::new(288., 26.),
+                    inverse_scale_factor: 1.,
+                    ..default()
+                },
+                UiGlobalTransform::from_translation(Vec2::new(266., 181.)),
+                ComputedStackIndex(10),
+                InheritedVisibility::VISIBLE,
+            ));
+            app.update();
+            assert!(handle.focus_next(false).unwrap());
+            assert_eq!(
+                handle.focused_key(),
+                Some(limo_cad_interface::ControlKey(entry.to_bits()))
+            );
+            widgets.begin();
+            paint_hint(app.world_mut(), camera, Some(extrude), &mut widgets, 1000.).unwrap();
+            widgets.finish(app.world_mut());
+            assert!(app.world().get::<InterfaceControl>(entry).is_some());
+            assert!(handle
+                .resolve_retained(limo_cad_interface::ControlKey(entry.to_bits()))
+                .is_ok());
+        }
     }
 }

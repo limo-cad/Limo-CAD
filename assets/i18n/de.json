@@ -435,7 +435,7 @@
       "patternCircular": "Kreisförmiges Muster",
       "sketchDimension": "Skizzenbemaßung",
       "fillet": "Fillet",
-      "chamfer": "Kante",
+      "chamfer": "Fase",
       "offset": "Abstand",
       "trim": "Kürzen",
       "extend": "Verlängern",

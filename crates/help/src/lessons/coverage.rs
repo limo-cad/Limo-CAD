@@ -72,7 +72,7 @@ pub fn for_control<'a>(workspace: &'a str, control: &'a str) -> impl Iterator<It
                     .iter()
                     .any(|entry| entry.workspace == workspace && entry.control == control)
         })
-        .filter_map(|guide| ALL.into_iter().find(|id| id.key() == guide.id))
+        .filter_map(|guide| Id::from_key(&guide.id))
 }
 
 #[cfg(test)]

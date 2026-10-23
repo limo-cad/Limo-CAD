@@ -15,6 +15,38 @@ pub struct Recipe {
 
 pub const RECIPES: &[Recipe] = &[
     Recipe {
+        id: "show-me-sketch-draw",
+        source: include_str!("../../../examples/scripts/show-me-sketch-draw.limo.jsonc"),
+        summary: "Bracket sketch guides: lines, points and curved profiles",
+        kind: "lesson",
+        focus_operations: &["sketch_add_line","sketch_add_midpoint_line","sketch_add_point","sketch_add_rectangle_locked","sketch_add_circle_locked","sketch_add_arc_center","sketch_add_arc_3pt","sketch_add_spline","sketch_polygon","sketch_add_slot"],
+        preview: true,
+    },
+    Recipe {
+        id: "show-me-sketch-edit",
+        source: include_str!("../../../examples/scripts/show-me-sketch-edit.limo.jsonc"),
+        summary: "Bracket sketch guides: transform, trim and dress layout geometry",
+        kind: "lesson",
+        focus_operations: &["sketch_move_copy","sketch_scale","sketch_offset","sketch_trim","sketch_extend","sketch_break","sketch_fillet","sketch_chamfer"],
+        preview: true,
+    },
+    Recipe {
+        id: "show-me-sketch-repeat",
+        source: include_str!("../../../examples/scripts/show-me-sketch-repeat.limo.jsonc"),
+        summary: "Bracket sketch guides: dimension, mirror and repeat mounting details",
+        kind: "lesson",
+        focus_operations: &["sketch_add_dimension","sketch_mirror","sketch_rectangular_pattern","sketch_circular_pattern"],
+        preview: true,
+    },
+    Recipe {
+        id: "show-me-sketch-constraints",
+        source: include_str!("../../../examples/scripts/show-me-sketch-constraints.limo.jsonc"),
+        summary: "Bracket sketch guides: persistent geometric relationships",
+        kind: "lesson",
+        focus_operations: &["sketch_add_constraint","sketch_toggle_fix"],
+        preview: true,
+    },
+    Recipe {
         id: "show-me-revolve",
         source: include_str!("../../../examples/scripts/show-me-revolve.limo.jsonc"),
         summary: "Turn a prepared radial section around Y to make a spacer with a 10 mm bore.",

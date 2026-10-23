@@ -416,30 +416,27 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         .unwrap();
     let mut widgets = chrome::Widgets::default();
     widgets.begin();
-    let anchor_caption = feature::solid_kind(id).map_or("Create Sketch", |kind| kind.label());
-    let anchor_command = if let Some(kind) = feature::solid_kind(id) {
-        NativeCommand::Feature(
-            crate::session_bridge::native_interface::feature::FeatureCommand::Open {
-                kind,
-                feature_id: None,
-            },
-        )
-    } else {
-        assert_eq!(
-            id,
-            lesson::Id::Sketch,
-            "Add a real native anchor for this guide"
-        );
-        NativeCommand::Sketch(crate::native_editor::EditorCommand::Support(
-            crate::native_editor::support::Command::Start,
-        ))
+    let anchor_caption = id.title("en");
+    let anchor_command =
+        feature::command_for_guide(id).expect("Every guide has a real entry command");
+    let anchor_group = match &anchor_command {
+        NativeCommand::Sketch(crate::native_editor::EditorCommand::Interaction(command)) => {
+            match command {
+                crate::native_editor::InteractionCommand::Form(kind) => kind.group(),
+                crate::native_editor::InteractionCommand::Relation(_) => "sketch/constrain",
+                crate::native_editor::InteractionCommand::Dimension => "sketch/dimension",
+                _ => "sketch/edit",
+            }
+        }
+        NativeCommand::Sketch(_) => "sketch/draw",
+        _ => "solid/build",
     };
     let anchor = widgets
         .button(
             app.world_mut(),
             camera,
             "fixture-operation",
-            InterfaceControl::button("solid/build", anchor_caption),
+            InterfaceControl::button(anchor_group, anchor_caption),
             Some(anchor_caption),
             anchor_command,
             chrome::rect(24., 4., 128., 32.),

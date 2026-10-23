@@ -301,7 +301,7 @@
     },
     {
       "id": "sketch_line",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -312,7 +312,7 @@
     },
     {
       "id": "sketch_arc",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -333,7 +333,7 @@
     },
     {
       "id": "sketch_rectangle",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -354,7 +354,7 @@
     },
     {
       "id": "sketch_circle",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -375,7 +375,7 @@
     },
     {
       "id": "sketch_spline",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -391,7 +391,7 @@
     },
     {
       "id": "sketch_slot",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -417,7 +417,7 @@
     },
     {
       "id": "sketch_polygon",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -438,7 +438,7 @@
     },
     {
       "id": "sketch_midpoint_line",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -449,7 +449,7 @@
     },
     {
       "id": "sketch_point",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -460,7 +460,7 @@
     },
     {
       "id": "sketch_move_copy",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -471,7 +471,7 @@
     },
     {
       "id": "sketch_trim",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -482,7 +482,7 @@
     },
     {
       "id": "sketch_extend",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -493,7 +493,7 @@
     },
     {
       "id": "sketch_offset",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -504,7 +504,7 @@
     },
     {
       "id": "sketch_fillet",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -515,7 +515,7 @@
     },
     {
       "id": "sketch_chamfer",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -526,7 +526,7 @@
     },
     {
       "id": "sketch_scale",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -537,7 +537,7 @@
     },
     {
       "id": "sketch_break",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -548,7 +548,7 @@
     },
     {
       "id": "sketch_dimension",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -559,7 +559,7 @@
     },
     {
       "id": "sketch_mirror",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -570,7 +570,7 @@
     },
     {
       "id": "sketch_rectangular_pattern",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -581,7 +581,7 @@
     },
     {
       "id": "sketch_circular_pattern",
-      "state": "pending",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -591,8 +591,8 @@
       ]
     },
     {
-      "id": "constraint_coincident",
-      "state": "pending",
+      "id": "sketch_coincident",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -602,8 +602,8 @@
       ]
     },
     {
-      "id": "constraint_hv",
-      "state": "pending",
+      "id": "sketch_horizontal_vertical",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -613,8 +613,8 @@
       ]
     },
     {
-      "id": "constraint_tangent",
-      "state": "pending",
+      "id": "sketch_tangent",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -624,8 +624,8 @@
       ]
     },
     {
-      "id": "constraint_parallel",
-      "state": "pending",
+      "id": "sketch_parallel",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -635,8 +635,8 @@
       ]
     },
     {
-      "id": "constraint_perpendicular",
-      "state": "pending",
+      "id": "sketch_perpendicular",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -646,8 +646,8 @@
       ]
     },
     {
-      "id": "constraint_equal",
-      "state": "pending",
+      "id": "sketch_equal",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -657,8 +657,8 @@
       ]
     },
     {
-      "id": "constraint_fix_unfix",
-      "state": "pending",
+      "id": "sketch_fix_unfix",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -668,8 +668,8 @@
       ]
     },
     {
-      "id": "constraint_midpoint",
-      "state": "pending",
+      "id": "sketch_midpoint",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -679,8 +679,8 @@
       ]
     },
     {
-      "id": "constraint_collinear",
-      "state": "pending",
+      "id": "sketch_collinear",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -690,8 +690,8 @@
       ]
     },
     {
-      "id": "constraint_concentric",
-      "state": "pending",
+      "id": "sketch_concentric",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",
@@ -701,8 +701,8 @@
       ]
     },
     {
-      "id": "constraint_symmetry",
-      "state": "pending",
+      "id": "sketch_symmetry",
+      "state": "authored",
       "entry_points": [
         {
           "workspace": "sketch",

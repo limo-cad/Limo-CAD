@@ -454,6 +454,7 @@ fn native_script_preview_high_dpi_layout_respects_the_bounded_renderer() {
 
 #[test]
 fn native_script_preview_all_authored_stages_retain_independent_profiles() {
+    let cache = Mutex::new(prepared::Cache::default());
     let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
     for id in lesson::ALL {
         let source = &catalog::examples()
@@ -461,7 +462,9 @@ fn native_script_preview_all_authored_stages_retain_independent_profiles() {
             .find(|example| example.id == id.recipe())
             .unwrap()
             .source;
-        let frames = prepare_lesson(source, Some(id)).unwrap();
+        // Exercise the actual immutable-asset path, not the public 80-operation
+        // user-script preview limit. The parent generator owns CAD execution.
+        let frames = prepared::prepare(&cache, source, Some(id)).unwrap();
         assert_eq!(frames.len(), id.frame_count());
         assert_eq!(
             frames
