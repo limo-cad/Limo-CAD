@@ -2,6 +2,8 @@
 //! No host is constructed and no native measurement is computed by decoding a frame.
 use limo_cad_solid::SolidSceneDto;
 use serde::{Deserialize, Serialize};
+#[path = "teaching/assembly.rs"]
+pub mod assembly;
 #[path = "teaching/inspection.rs"]
 mod inspection;
 pub use inspection::{Inspection, Measurement, Selection};
@@ -11,6 +13,8 @@ const MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 pub struct Frame {
     pub caption: String,
     pub scene: SolidSceneDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assembly: Option<limo_cad_sketch::AssemblySolutionDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<limo_cad_sketch::SketchDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -47,6 +51,7 @@ pub enum PreviewCue {
     Radius,
 }
 
+#[derive(Debug)]
 pub struct Bounds {
     pub center: [f32; 3],
     pub radius: f32,
@@ -63,7 +68,10 @@ pub fn validate_frames(frames: &[Frame]) -> Result<Bounds, String> {
     let mut bodies = 0;
     let mut faces = 0;
     let mut edges = 0;
+    let (mut drawn_bodies, mut drawn_triangles, mut drawn_points, mut drawn_faces, mut drawn_edges) =
+        (0, 0, 0, 0, 0);
     for frame in frames {
+        assembly::validate(frame)?;
         if let Some(inspection) = &frame.inspection {
             inspection.validate(frame)?;
         }
@@ -226,13 +234,46 @@ pub fn validate_frames(frames: &[Frame]) -> Result<Bounds, String> {
             {
                 return Err("Invalid preview edge points".into());
             }
-            for point in mesh.positions.as_chunks::<3>().0 {
-                let point = [point[0], point[1], point[2]];
-                for axis in 0..3 {
-                    low[axis] = low[axis].min(point[axis]);
+            for pose in assembly::body_poses(frame.assembly.as_ref(), body.id.0) {
+                drawn_bodies += 1;
+                drawn_triangles += mesh.indices.len() / 3;
+                drawn_faces += body.faces.len();
+                drawn_edges += body.edges.len();
+                drawn_points += mesh.positions.len() / 3
+                    + body
+                        .edges
+                        .iter()
+                        .map(|edge| edge.points.len())
+                        .sum::<usize>();
+                if drawn_bodies > 256
+                    || drawn_triangles > 100_000
+                    || drawn_points > 300_000
+                    || drawn_faces > 10_000
+                    || drawn_edges > 10_000
+                {
+                    return Err("Assembly instances exceed the bounded feature preview".into());
                 }
-                for axis in 0..3 {
-                    high[axis] = high[axis].max(point[axis]);
+                let mesh_points = mesh
+                    .positions
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .map(|p| [p[0], p[1], p[2]]);
+                let edge_points = body
+                    .edges
+                    .iter()
+                    .filter(|_| frame.assembly.is_some())
+                    .flat_map(|edge| &edge.points)
+                    .map(|p| [p.x as f32, p.y as f32, p.z as f32]);
+                for point in mesh_points.chain(edge_points) {
+                    let point = pose.transform_point(point);
+                    if point.iter().any(|v| !v.is_finite() || v.abs() > 10_000.) {
+                        return Err("Invalid transformed preview geometry".into());
+                    }
+                    for axis in 0..3 {
+                        low[axis] = low[axis].min(point[axis]);
+                        high[axis] = high[axis].max(point[axis]);
+                    }
                 }
             }
         }

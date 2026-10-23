@@ -27,6 +27,7 @@ fn select(world: &mut World, id: &str) {
 fn frames() -> Vec<Frame> {
     (0..3)
         .map(|index| Frame {
+            assembly: None,
             caption: format!("Frame {index}"),
             scene: serde_json::from_value(json!({"bodies":[],"errors":[]})).unwrap(),
             ..default()
@@ -896,4 +897,265 @@ fn native_script_preview_keys_and_replay_wait_for_current_frame_and_stop_at_last
     assert_eq!(preview.pitch, 1.3);
     assert!(preview.yaw < std::f32::consts::TAU);
     assert!(preview.turn(f32::NAN, 0.).is_err());
+}
+
+#[test]
+fn native_package_preview_requires_current_source_and_keeps_the_retained_baseline() {
+    use limo_cad_project_file::{ProjectArchive, ReplayPackage, SaveMetadata};
+    let source =
+        json!({"version":2,"name":"Package preview","starting_state":"project","steps":[]})
+            .to_string();
+    let archive = ProjectArchive::new(
+        limo_cad_sketch::SketchManager::new()
+            .export_project_model()
+            .unwrap(),
+        SaveMetadata {
+            application_version: "test",
+            saved_at: "2026-10-17T00:00:00Z",
+        },
+    )
+    .unwrap()
+    .encode()
+    .unwrap();
+    let package = Arc::new(ReplayPackage::new(source.clone(), archive.clone()).unwrap());
+    let identity = package.source_identity(&source).unwrap();
+    let artifact = Artifact::Project {
+        package: Arc::clone(&package),
+        opened: identity.clone(),
+        saved: identity,
+    };
+    let mut world = world();
+    world
+        .resource_mut::<Files>()
+        .script
+        .accept(artifact.inspect(None, &source).unwrap())
+        .unwrap();
+    assert!(offered(&world.resource::<Files>().script));
+    assert!(can_open(&world.resource::<Files>().script));
+    let selected = job::source(&world.resource::<Files>().script).unwrap();
+    world
+        .resource_mut::<Files>()
+        .script
+        .source
+        .push_str("\n// newer draft");
+    assert!(!can_open(&world.resource::<Files>().script));
+    let frames = selected
+        .prepare(
+            crate::app_preferences::Locale::En,
+            &Mutex::new(prepared::Cache::default()),
+            || Ok(()),
+        )
+        .unwrap();
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].caption, "Starting project");
+    assert!(frames[0].assembly.is_some());
+    assert_eq!(package.project_bytes(), archive);
+    assert!(world
+        .resource::<Files>()
+        .script
+        .source
+        .ends_with("// newer draft"));
+    assert!(world.resource::<Files>().lesson.is_none());
+}
+
+#[test]
+fn native_preview_close_cancels_preparation_without_releasing_its_worker_slot() {
+    let mut world = world();
+    let preparation = job::Preparation::new();
+    let cancelled = Arc::clone(&preparation.cancelled);
+    let deadline = preparation.deadline;
+    let (send, receive) = mpsc::channel();
+    let preview = &mut world.resource_mut::<Files>().script.preview;
+    preview.open = true;
+    preview.build = Some(Mutex::new(receive));
+    preview.preparation = Some(preparation);
+    close(&mut world);
+    assert!(job::check(&cancelled, deadline)
+        .unwrap_err()
+        .contains("cancelled"));
+    assert!(world.resource::<Files>().script.preview.building());
+    send.send(Ok(frames())).unwrap();
+    poll(&mut world);
+    assert!(!world.resource::<Files>().script.preview.building());
+    assert!(world.resource::<Files>().script.preview.retained.is_none());
+    assert!(job::check(
+        &AtomicBool::new(false),
+        Instant::now() - Duration::from_secs(1)
+    )
+    .unwrap_err()
+    .contains("timed out"));
+}
+
+#[test]
+fn native_preview_notice_count_follows_frame_without_collapsing_reserved_space() {
+    let mut world = world();
+    retained(&mut world);
+    let preview = &mut world.resource_mut::<Files>().script.preview;
+    preview
+        .retained
+        .as_mut()
+        .unwrap()
+        .descriptor
+        .assembly_notice_counts = vec![0, 2, 0];
+    assert_eq!(preview.assembly_notices(), (0, true));
+    preview.index = 1;
+    assert_eq!(preview.assembly_notices(), (2, true));
+    preview.index = 2;
+    assert_eq!(preview.assembly_notices(), (0, true));
+    close(&mut world);
+    assert_eq!(
+        world.resource::<Files>().script.preview.assembly_notices(),
+        (0, false)
+    );
+}
+
+#[test]
+fn native_preview_notice_count_stays_with_the_image_during_navigation() {
+    let mut world = world();
+    retained(&mut world);
+    let preview = &mut world.resource_mut::<Files>().script.preview;
+    preview
+        .retained
+        .as_mut()
+        .unwrap()
+        .descriptor
+        .assembly_notice_counts = vec![0, 2, 0];
+    preview.image = Some(Handle::default());
+    preview.image_index = Some(0);
+    preview.image_frame = Some(0);
+    preview.index = 1;
+    assert_eq!(preview.assembly_notices(), (0, true));
+    preview.image_index = Some(1);
+    preview.image_frame = Some(1);
+    assert_eq!(preview.assembly_notices(), (2, true));
+}
+
+fn wait_for_package_preparation(world: &mut World) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while world.resource::<Files>().script.preview.building() {
+        poll(world);
+        assert!(
+            Instant::now() < deadline,
+            "bounded package preparation did not settle"
+        );
+        std::thread::yield_now();
+    }
+}
+
+#[test]
+fn native_package_admission_failure_cleans_controller_and_retry_preserves_live_document() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let owner = fixture.owner();
+    let model = fixture.engine.engine_call("project_export_model", "");
+    let source = job::tests::source_text();
+    let oversized = format!("{}{source}", " ".repeat(2 * 1024 * 1024));
+    for (authored, archive, expected) in [
+        (
+            source.clone(),
+            b"PK\x03\x04damaged".to_vec(),
+            "ZIP is damaged",
+        ),
+        (oversized, job::tests::valid_archive(), "2 MiB"),
+        (
+            source.clone(),
+            job::tests::declared_zip_bomb(),
+            "33554432 byte safety limit",
+        ),
+    ] {
+        let mut world = world();
+        let handle = NativeInterfaceHandle::new(|| {});
+        let loaded = job::tests::loaded(&authored, archive);
+        let missing_path = loaded.path.clone().unwrap();
+        world
+            .resource_mut::<Files>()
+            .script
+            .accept((*loaded).clone())
+            .unwrap();
+        let accepted = Arc::clone(world.resource::<Files>().script.loaded.as_ref().unwrap());
+        let generation = world.resource::<Files>().script.generation;
+        let prepared = Arc::clone(&world.resource::<Files>().script.preview.prepared);
+        let service = Arc::clone(&world.resource::<Files>().script.preview.service);
+        open(&mut world, &handle).unwrap();
+        wait_for_package_preparation(&mut world);
+        let files = world.resource::<Files>();
+        let preview = &files.script.preview;
+        assert!(preview.open && preview.project);
+        assert!(preview.error.as_ref().unwrap().contains(expected));
+        assert!(preview.preparation.is_none() && preview.retained.is_none());
+        assert!(preview.render.is_none() && preview.image.is_none() && preview.wake.is_none());
+        assert!(!preview.playing);
+        assert_eq!(preview.render_jobs, 0);
+        assert_eq!(world.resource::<Assets<Image>>().len(), 0);
+        assert_eq!(files.script.source, authored);
+        assert_eq!(files.script.generation, generation);
+        assert!(Arc::ptr_eq(
+            files.script.loaded.as_ref().unwrap(),
+            &accepted
+        ));
+        assert!(!missing_path.exists());
+        assert_eq!(prepared.lock().unwrap().metrics(), (0, 0, 0, 0));
+        assert_eq!(fixture.owner(), owner);
+        assert_eq!(
+            fixture.engine.engine_call("project_export_model", ""),
+            model
+        );
+        // A normal validated replacement can retry after the failed worker has
+        // returned its slot. No renderer is connected to this controller world.
+        close(&mut world);
+        let replacement = job::tests::loaded(&source, job::tests::valid_archive());
+        world
+            .resource_mut::<Files>()
+            .script
+            .accept((*replacement).clone())
+            .unwrap();
+        open(&mut world, &handle).unwrap();
+        wait_for_package_preparation(&mut world);
+        let preview = &world.resource::<Files>().script.preview;
+        assert!(preview.error.is_none(), "{:?}", preview.error);
+        assert!(preview.retained.is_some());
+        assert_eq!(preview.render_jobs, 0);
+        assert!(Arc::ptr_eq(&prepared, &preview.prepared));
+        assert!(Arc::ptr_eq(&service, &preview.service));
+        let view = preview.retained.as_ref().unwrap().view.clone();
+        let document = preview
+            .retained
+            .as_ref()
+            .unwrap()
+            .descriptor
+            .preview_id
+            .clone();
+        close(&mut world);
+        assert!(!world.resource::<Files>().script.preview.open);
+        assert!(world.resource::<Files>().script.preview.retained.is_none());
+        assert!(world
+            .resource::<Files>()
+            .script
+            .preview
+            .preparation
+            .is_none());
+        assert!(!world.resource::<Files>().script.preview.building());
+        assert!(
+            service
+                .render(RenderRequest {
+                    preview_id: document,
+                    view_id: view,
+                    revision: 1,
+                    frame_index: 0,
+                    width: 300,
+                    height: 176,
+                    yaw: 0.5,
+                    pitch: 0.5,
+                    palette: None,
+                })
+                .is_err(),
+            "Close retained a renderable package document/view"
+        );
+        assert_eq!(fixture.owner(), owner);
+        assert_eq!(
+            fixture.engine.engine_call("project_export_model", ""),
+            model
+        );
+        assert!(!missing_path.exists());
+    }
 }

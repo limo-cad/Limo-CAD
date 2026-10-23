@@ -12,6 +12,14 @@ pub(crate) fn paint(
     if world.resource::<Files>().script.preview.index_open {
         return feature::paint_index(world, camera, widgets, width, height, theme);
     }
+    let locale = crate::native_viewport::localization::locale(world);
+    let tr = |key: &'static str| crate::app_preferences::locale::translate(locale, key);
+    let preview = &world.resource::<Files>().script.preview;
+    let project = preview.project;
+    let (notices, has_notices) = preview.assembly_notices();
+    let scope_height = if project { 46. } else { 0. };
+    // Reserve diagnostics across frames and shrink the image at high UI scale.
+    let extra = scope_height + if has_notices { 46. } else { 0. };
     let demo = lesson::current(world);
     let language = lesson::language(world);
     let t = |key: &str| limo_cad_mcp::lessons::text(language, key);
@@ -29,7 +37,7 @@ pub(crate) fn paint(
         0.
     };
     let image_height = ((image_width * 0.72)
-        .min((height - y - 200. - trail_height - instructions_height).max(64.))
+        .min((height - y - 200. - trail_height - instructions_height - extra).max(64.))
         - choice_height)
         .max(64.);
     let scale = world
@@ -74,14 +82,26 @@ pub(crate) fn paint(
             .retained
             .as_ref()
             .map(|r| {
-                limo_cad_mcp::lessons::caption(
-                    language,
-                    &r.descriptor.captions[preview.display_frame_index()],
-                )
+                if project {
+                    r.descriptor.captions[preview.display_frame_index()].clone()
+                } else {
+                    limo_cad_mcp::lessons::caption(
+                        language,
+                        &r.descriptor.captions[preview.display_frame_index()],
+                    )
+                }
             })
-            .unwrap_or_else(|| t("ui.preparing").into())
+            .unwrap_or_else(|| {
+                if project {
+                    tr("projectReplay.previewPreparing")
+                } else {
+                    t("ui.preparing")
+                }
+                .into()
+            })
     });
-    let card_height = image_height + choice_height + trail_height + 192. + instructions_height;
+    let card_height =
+        image_height + choice_height + trail_height + 192. + instructions_height + extra;
     let shell = if side_instructions {
         card::Card {
             x: x - 288.,
@@ -97,9 +117,13 @@ pub(crate) fn paint(
         widgets,
         "demo",
         card_height,
-        demo.map_or(t("ui.guidedExamples"), |d| {
-            t(&format!("{}.example", d.key()))
-        }),
+        if project {
+            tr("projectReplay.previewTitle")
+        } else {
+            demo.map_or(t("ui.guidedExamples"), |d| {
+                t(&format!("{}.example", d.key()))
+            })
+        },
         theme,
     )?;
     if instructions {
@@ -196,7 +220,11 @@ pub(crate) fn paint(
             "document/scripts",
             format!(
                 "{}: {}{caption}",
-                t("ui.modelHint"),
+                if project {
+                    tr("projectReplay.previewTitle")
+                } else {
+                    t("ui.modelHint")
+                },
                 if current { "" } else { t("ui.preparing") }
             ),
         );
@@ -399,7 +427,29 @@ pub(crate) fn paint(
         14.,
         61,
     );
-    let buttons = top + 92.;
+    if project {
+        widgets.text(
+            world,
+            camera,
+            "scripts-preview-scope",
+            rect(x + 16., top + 90., w - 32., 44.),
+            tr("projectReplay.previewScope"),
+            11.,
+            61,
+        );
+    }
+    if notices > 0 {
+        widgets.text(
+            world,
+            camera,
+            "scripts-preview-assembly-notices",
+            rect(x + 16., top + 90. + scope_height, w - 32., 44.),
+            &tr("projectReplay.previewAssemblyNotices").replace("{count}", &notices.to_string()),
+            11.,
+            61,
+        );
+    }
+    let buttons = top + 92. + extra;
     let mut previous = InterfaceControl::button("document/scripts", t("ui.previous"));
     previous.disabled = !ready || index == 0;
     widgets.button(

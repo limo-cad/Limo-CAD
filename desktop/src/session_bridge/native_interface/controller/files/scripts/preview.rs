@@ -19,6 +19,7 @@ mod feature;
 mod hover;
 mod images;
 mod input;
+mod job;
 mod lesson;
 mod panel;
 mod prepared;
@@ -161,6 +162,8 @@ pub(crate) struct State {
     pub open: bool,
     generation: u64,
     build: Option<ResultChannel<Vec<Frame>>>,
+    preparation: Option<job::Preparation>,
+    project: bool,
     render: Option<InFlight>,
     render_revision: u64,
     render_started: Option<Instant>,
@@ -212,6 +215,8 @@ impl Default for State {
             open: false,
             generation: 0,
             build: None,
+            preparation: None,
+            project: false,
             render: None,
             render_revision: 0,
             render_started: None,
@@ -312,6 +317,15 @@ impl State {
     pub fn building(&self) -> bool {
         self.build.is_some()
     }
+    fn assembly_notices(&self) -> (usize, bool) {
+        self.retained.as_ref().map_or((0, false), |retained| {
+            let counts = &retained.descriptor.assembly_notice_counts;
+            (
+                counts.get(self.display_frame_index()).copied().unwrap_or(0),
+                counts.iter().any(|count| *count > 0),
+            )
+        })
+    }
     fn count(&self) -> usize {
         if self.cut_choices() {
             return 4;
@@ -367,6 +381,17 @@ impl State {
     }
 }
 
+pub(super) fn offered(state: &super::State) -> bool {
+    state
+        .loaded
+        .as_ref()
+        .is_some_and(|loaded| loaded.artifact.is_project())
+        || state.example.is_some_and(|example| example.preview)
+}
+pub(super) fn can_open(state: &super::State) -> bool {
+    job::source(state).is_ok()
+}
+
 fn eligible(state: &super::State) -> Result<&'static catalog::Example, String> {
     let example = state
         .example
@@ -414,9 +439,9 @@ fn open(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String>
     available(world)?;
     editor::source_ready(world)?;
     let state = &world.resource::<Files>().script;
-    let example = eligible(state)?;
+    let source = job::source(state)?;
     let generation = state.generation;
-    start(world, handle, example.source.clone(), generation)
+    start_job(world, handle, source, generation)
 }
 
 fn open_extrude(world: &mut World, handle: &NativeInterfaceHandle) -> Result<(), String> {
@@ -475,14 +500,6 @@ fn open_lesson(
     Ok(())
 }
 
-fn start(
-    world: &mut World,
-    handle: &NativeInterfaceHandle,
-    source: String,
-    generation: u64,
-) -> Result<(), String> {
-    start_lesson(world, handle, source, generation, None)
-}
 fn start_lesson(
     world: &mut World,
     handle: &NativeInterfaceHandle,
@@ -490,23 +507,44 @@ fn start_lesson(
     generation: u64,
     lesson: Option<lesson::Id>,
 ) -> Result<(), String> {
-    let state = &world.resource::<Files>().script;
-    let revision = state
+    start_job(
+        world,
+        handle,
+        job::Source::Lesson { source, lesson },
+        generation,
+    )
+}
+
+fn start_job(
+    world: &mut World,
+    handle: &NativeInterfaceHandle,
+    source: job::Source,
+    generation: u64,
+) -> Result<(), String> {
+    let revision = world
+        .resource::<Files>()
+        .script
         .preview
         .revision
         .checked_add(1)
         .ok_or("Preview view sequence exhausted")?;
+    let project = source.is_project();
+    let locale = crate::native_viewport::localization::locale(world);
     close(world);
     let (send, receive) = mpsc::channel();
     let wake = handle.clone();
     let prepared = world.resource::<Files>().script.preview.prepared.clone();
+    let preparation = job::Preparation::new();
+    let cancelled = Arc::clone(&preparation.cancelled);
+    let deadline = preparation.deadline;
     std::thread::Builder::new()
         .name("cad-preview-prepare".into())
         .spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                prepared::prepare(&prepared, &source, lesson)
+                source.prepare(locale, &prepared, || job::check(&cancelled, deadline))
             }))
             .unwrap_or_else(|_| Err("Lesson preview preparation stopped unexpectedly".into()));
+            let result = result.map_err(|error| artifact::message(locale, &error));
             let _ = send.send(result);
             wake.request_redraw();
         })
@@ -524,6 +562,8 @@ fn start_lesson(
     preview.error = None;
     preview.help = false;
     preview.build = Some(Mutex::new(receive));
+    preview.preparation = Some(preparation);
+    preview.project = project;
     Ok(())
 }
 
@@ -532,6 +572,8 @@ fn close(world: &mut World) {
     let images = {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.open = false;
+        preview.preparation = None;
+        preview.project = false;
         preview.render = None;
         preview.render_started = None;
         preview.steps_open = false;
@@ -954,6 +996,7 @@ pub(super) fn poll(world: &mut World) {
     if let Some(result) = receive(&world.resource::<Files>().script.preview.build) {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.build = None;
+        preview.preparation = None;
         if preview.open {
             match result.and_then(|frames| Retained::new(preview.service.clone(), frames)) {
                 Ok(retained) => {
@@ -962,7 +1005,12 @@ pub(super) fn poll(world: &mut World) {
                         preview.begin_animation();
                     }
                 }
-                Err(error) => preview.error = Some(error),
+                Err(error) => {
+                    preview.error = Some(error);
+                    preview.playing = false;
+                    preview.wake = None;
+                    preview.render_started = None;
+                }
             }
             preview.transition = None;
         }
