@@ -1,7 +1,11 @@
 ; Authored drafting document v1. Rust: crates/sketch/src/drafting.rs.
 ; Project schema 16 embeds this graph in drawings.drafting when present.
-; Dedicated native drafting commands and a bounded CBOR codec remain pending.
-; Native payload representation is CBOR; map keys match the serde field names.
+; This feature writes project schema 16 even when the graph is absent. Older
+; projects still load; schema-15 readers reject files saved by this build.
+; The shared host registers drawing_drafting_apply; browser and native adapters
+; call the same typed edits. The current host and project-model representation
+; is JSON. A dedicated CBOR v1 drafting codec remains separate integration work.
+; Map keys below match the serde field names.
 ; Semantic validation also checks IDs, references, DAGs, sheet ownership,
 ; finite geometry and admission limits. CDDL alone does not prove validity.
 drafting-document = {
@@ -43,8 +47,9 @@ viewport = {
   clip_mm: [number, number, number, number], hidden_layers: [* id]
 }
 
-; Typed command contract, revision 1. Host registration and bounded CBOR codec
-; are separate integration work. Create operations never accept caller-owned IDs.
+; Typed command contract, revision 1, registered as drawing_drafting_apply.
+; Create operations never accept caller-owned IDs. A dedicated bounded CBOR codec
+; is separate integration work; this describes the current logical data shape.
 drafting-command =
     {type: "create_layer", arguments: {name: tstr, visible: bool, locked: bool, plottable: bool, style: style}}
   / {type: "update_layer", arguments: layer}

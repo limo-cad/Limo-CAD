@@ -81,7 +81,9 @@ fn curve(curve: &Curve, budget: &mut Budget) -> Result<(), String> {
         Curve::Polyline { points, closed } => {
             budget.points(points)?;
             let minimum = if *closed { 3 } else { 2 };
-            points.len() >= minimum && points.windows(2).all(|pair| pair[0] != pair[1])
+            points.len() >= minimum
+                && points.windows(2).all(|pair| pair[0] != pair[1])
+                && (!closed || points.first() != points.last())
         }
         Curve::Nurbs {
             degree,

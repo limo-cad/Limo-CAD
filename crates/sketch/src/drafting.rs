@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod commands;
+mod dependencies;
 
 #[cfg(test)]
 mod persistence_tests;

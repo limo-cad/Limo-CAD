@@ -852,23 +852,9 @@ fn draw_title_and_revisions(
 }
 
 fn sheet_size(s: &DrawingSheetDto) -> P {
-    let (a, b) = match s.format {
-        DrawingSheetFormat::A0 => (841., 1189.),
-        DrawingSheetFormat::A1 => (594., 841.),
-        DrawingSheetFormat::A2 => (420., 594.),
-        DrawingSheetFormat::A3 => (297., 420.),
-        DrawingSheetFormat::A4 => (210., 297.),
-        DrawingSheetFormat::Letter => (215.9, 279.4),
-        DrawingSheetFormat::AnsiB => (279.4, 431.8),
-        DrawingSheetFormat::AnsiC => (431.8, 558.8),
-        DrawingSheetFormat::AnsiD => (558.8, 863.6),
-        DrawingSheetFormat::AnsiE => (863.6, 1117.6),
-    };
-    match s.orientation {
-        DrawingSheetOrientation::Landscape => [b, a],
-        DrawingSheetOrientation::Portrait => [a, b],
-    }
+    s.size_mm()
 }
+
 fn tolerance_note(n: &DrawingToleranceNoteDto) -> String {
     match n.preset {
         DrawingTolerancePreset::None => n.custom.clone(),

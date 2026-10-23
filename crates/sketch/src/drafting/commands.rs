@@ -162,7 +162,17 @@ fn apply(d: &mut Document, command: Command) -> Result<(), String> {
             });
         }
         Command::UpdateLayer(value) => replace(&mut d.layers, value, |x| x.id.0)?,
-        Command::DeleteLayer { id } => remove(&mut d.layers, id.0, |x| x.id.0)?,
+        Command::DeleteLayer { id } => {
+            if let Some(objects) = d.layer_dependents(id) {
+                let name = d
+                    .layers
+                    .iter()
+                    .find(|layer| layer.id == id)
+                    .map_or_else(|| id.0.to_string(), |layer| format!("{:?}", layer.name));
+                return Err(format!("Layer {name} cannot be deleted because {objects} reference it. Remove the entities from this layer and remove the layer from those viewport hidden-layer lists, then retry. No changes were made."));
+            }
+            remove(&mut d.layers, id.0, |x| x.id.0)?;
+        }
         Command::CreateLineType {
             name,
             pattern,

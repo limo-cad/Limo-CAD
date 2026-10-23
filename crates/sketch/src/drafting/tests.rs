@@ -1,6 +1,6 @@
 use super::*;
 
-fn fixture() -> Document {
+pub(super) fn fixture() -> Document {
     Document {
         next_id: 100,
         layers: vec![Layer {
@@ -55,6 +55,33 @@ fn fixture() -> Document {
         ],
         ..Document::default()
     }
+}
+
+#[test]
+fn closed_polylines_cannot_add_a_zero_length_closing_segment() {
+    let mut document = fixture();
+    let points = vec![[0., 0.], [10., 0.], [0., 0.]];
+    document.entities[0].content = Content::Curve {
+        curve: Curve::Polyline {
+            points: points.clone(),
+            closed: true,
+        },
+    };
+    assert!(document.validate(&[]).is_err());
+    document.entities[0].content = Content::Curve {
+        curve: Curve::Polyline {
+            points,
+            closed: false,
+        },
+    };
+    document.validate(&[]).unwrap();
+    document.entities[0].content = Content::Curve {
+        curve: Curve::Polyline {
+            points: vec![[0., 0.], [10., 0.], [0., 10.]],
+            closed: true,
+        },
+    };
+    document.validate(&[]).unwrap();
 }
 
 #[test]
