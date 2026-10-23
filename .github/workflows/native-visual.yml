@@ -76,7 +76,9 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/desktop/target
         run: |
-          cargo run --locked --manifest-path mcp-server/Cargo.toml --example generate_show_me -- --out desktop/assets/show-me
+          # Cargo examples do not inherit the desktop binary's SDK rpath.
+          DYLD_LIBRARY_PATH="$OCCT_ROOT/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \
+            cargo run --locked --manifest-path mcp-server/Cargo.toml --example generate_show_me -- --out desktop/assets/show-me
           mkdir -p docs/qa/native-boundary/show-me-generated
           cp desktop/assets/show-me/*.cbor desktop/assets/show-me/provenance.json docs/qa/native-boundary/show-me-generated/
       - name: Verify projected boundaries and thin-wall occlusion on the GPU
@@ -90,6 +92,8 @@ jobs:
           cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_bundled_assets
           cargo test --locked --manifest-path desktop/Cargo.toml --lib chamfer_form
           cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::transition_tests:: -- --test-threads=1
+          cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1
+          cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1
           cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_tabs_after_extrude_in_the_production_ribbon -- --test-threads=1
       - name: Verify the Extrude lesson profile and solid on the GPU
         env:
