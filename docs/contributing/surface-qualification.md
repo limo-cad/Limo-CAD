@@ -1,12 +1,7 @@
----
-description: Cover the complete native UI before MCP, with finite repair cycles and evidence-based completion.
-alwaysApply: true
----
-
 # Surface qualification
 
 - The user directs UI-first, MCP-second coverage. Do not substitute flagship modeling or one difficult export for a surface survey.
-- Before qualification work, read `docs/qualification/surface-coverage.json` and the retained evidence it references. Keep its run state paused until the user resumes testing; planning does not resume GUI operation.
+- Before qualification work, read `docs/qualification/surface-coverage.json` and the retained evidence it references. Respect its recorded run state; planning does not resume a paused run.
 - Phase 1 is the entire native UI. Phase 2 is the entire registered MCP surface, including unadvertised tools and meaningful action/argument variants. MCP inspection is permitted during Phase 1; MCP success does not qualify a human UI flow.
 - Finish the inventory first: derive UI entries from the shared catalog and fresh rendered controls, including file/context menus, dynamic dialogs, settings, history, navigation, drawings, CAM and print. Mark the inventory incomplete until every additional area has explicit leaf cases.
 - Use one small reproducible fixture per behavior. Separate geometry correctness, interaction correctness and visual polish. A workspace does not pass because one command works.
@@ -18,8 +13,8 @@ alwaysApply: true
 - For every exercised item, record revision/build identity, fixture, expected versus actual behavior, functional and polish results, evidence paths and issue/fix commit. Input insertion, screenshots alone and CI green are not equivalent to verified UI effects.
 - When a change affects passed cases, mark only those cases and their actual dependent flows `needs_recheck`, explaining the dependency. Preserve other passes; do not reset the entire ledger after every commit.
 - For MCP, refresh `cad_list_all_tools`, expand schema/action variants and compare against the complete ledger before testing. Use isolated scratch documents and individual supported requests; verify return values and actual state/artifacts, including ownership and asynchronous completion.
-- Preserve the current session's no-replay/no-modeling-script/no-raw-model-session-inbox-write restrictions. During UI qualification, all CAD input uses guarded Rust computer control with observation before every input; read-only MCP verifies effects. Never test MCP mutations against the user's GUI documents. Restricted operations remain visibly untested unless the user changes their scope.
+- Respect the active run's input and mutation restrictions recorded in the ledger. Observe the current surface before automated input and verify resulting effects. Never test MCP mutations against the user's GUI documents. Restricted operations remain visibly untested unless the user changes their scope.
 - Keep one GUI operator, preserve documents/recovery and follow the fresh active session after Undo/Redo or document replacement. Require a matched clean GUI/MCP build before live qualification; respect native foreground guards and verify complete text visibly before submitting dialogs.
-- Batch fixes by affected area into reviewable commits/PRs. Do not merge main without Jack's approval. Commit/push completed fixes and checkpoints promptly, and let existing CI cover regressions.
+- Batch fixes by feature area into commits in the corresponding grouped PR. Follow [the PR lifecycle](pr-lifecycle.md) before requesting review. Do not merge main without Jack's approval. Commit/push completed fixes and checkpoints promptly, and let existing CI cover regressions.
 - Report UI and MCP separately: passed/not-run/blocked/recheck counts, newly discovered issues, repaired issues, current CI and the next item. Do not describe the program as fully tested while inventory, blockers or phase gates remain incomplete.
 - The final gate is zero unresolved in-scope functional or polish issues, complete evidence for UI then MCP, and relevant CI passing. Report exact limits and exclusions; never promise coverage of every possible input combination or physical qualification.

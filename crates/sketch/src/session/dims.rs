@@ -706,6 +706,16 @@ impl SketchSession {
         &mut self,
         cid: ConstraintId,
     ) -> Result<AddConstraintResult, SessionError> {
+        // Validate the target before taking a snapshot or changing history.
+        // Stale IDs and geometric relations are not dimension deletions.
+        self.sketch
+            .constraint(cid)
+            .filter(|constraint| {
+                constraint.kind() == crate::constraint::ConstraintKind::Dimensional
+            })
+            .ok_or_else(|| {
+                SessionError::InvalidConstraint("entity is not a dimension".to_string())
+            })?;
         let param = self.sketch.dim_param(&cid);
         let before = self.sketch.snapshot();
         self.sketch.remove_constraint(cid);

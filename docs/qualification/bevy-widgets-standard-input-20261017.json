@@ -300,7 +300,7 @@
     "binary_build_log": "v6/build-widgets.log",
     "package_log": "v6/package-widgets.log"
   },
-  "artifact_root": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
+  "artifact_root": "/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
   "final_build": {
     "recorded_utc": "2026-10-17T07:40:18.391555+00:00",
     "build": {
@@ -312,11 +312,11 @@
     "features": [
       "experimental-ui-widgets"
     ],
-    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v6/widgets/Limo CAD PR420 Widgets V6.app",
+    "application": "/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v6/widgets/Limo CAD PR420 Widgets V6.app",
     "engine_sha256": "ac7f760e574c1671513d1e11093def0dbce7258ef03039283a0c87d350b67c0b",
     "signature": "ad-hoc; deep strict verification passed",
     "bundled_occt_loaded": true,
-    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "source_worktree": "/Users/<user>/.codex/worktrees/pr420-visual-parity/noBS-CAD",
     "baseline": "da44953a6e2d85894d23b48d7fa6c6f294e69ee8",
     "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
     "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"

@@ -7,12 +7,12 @@
   "queries": [
     {
       "image": "cargo.exe",
-      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"cargo.exe\",\"21844\",\"Console\",\"1\",\"10,344 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"24412\",\"Console\",\"1\",\"21,440 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"49092\",\"Console\",\"1\",\"10,476 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"38372\",\"Console\",\"1\",\"66,896 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:01\",\"N/A\"\r\n",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"cargo.exe\",\"21844\",\"Console\",\"1\",\"10,344 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"24412\",\"Console\",\"1\",\"21,440 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"49092\",\"Console\",\"1\",\"10,476 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"38372\",\"Console\",\"1\",\"66,896 K\",\"Unknown\",\"<local-account>\",\"0:00:01\",\"N/A\"\r\n",
       "error": null
     },
     {
       "image": "rustc.exe",
-      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"rustc.exe\",\"13688\",\"Console\",\"1\",\"71,920 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"rustc.exe\",\"13688\",\"Console\",\"1\",\"71,920 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n",
       "error": null
     },
     {

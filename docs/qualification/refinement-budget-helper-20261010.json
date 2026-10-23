@@ -11,7 +11,7 @@
   "method": "Compile the standalone production-header helper check once with clang++ -std=c++17 -Wall -Wextra -Werror, then execute it once.",
   "compile_exit_code": 0,
   "execution_exit_code": 0,
-  "temporary_directory": "D:/limo-cad-maintenance/backlog-autonomous-20261010/refinement-budget-f2f07958",
+  "temporary_directory": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/refinement-budget-f2f07958",
   "scope": "Shared comparison/sample allowances, typed exhaustion and overflow/storage accounting in the standalone budget helper.",
   "limitations": [
     "Does not execute the OCCT shim or prove a native junction-recovery path was reached.",

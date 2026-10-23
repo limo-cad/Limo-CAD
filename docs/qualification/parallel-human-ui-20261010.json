@@ -7,7 +7,7 @@
   "build_pair": "matched",
   "executable_sha256": "45a253fce260fd6d7454d12d62cc037ebe8a6695a237e4f559f8d412bec2681a",
   "operator": "One operator; guarded Rust cad_computer_control individual interactive requests; read-only MCP verification",
-  "fixture": "D:/limo-cad-maintenance/ui-models/Parallel check.limo",
+  "fixture": "<local-root>/limo-cad-maintenance/ui-models/Parallel check.limo",
   "checkpoint": "examples/checkpoints/surface-ui-sketch-parallel-human-ui.limo",
   "reopened_session": "1bf97146-1f5f-49ee-a94a-ce672d4384e8",
   "expected": "Two free sloped lines become parallel; inappropriate geometry rejects safely; retained relation, Undo/Redo and persistence agree with the visible UI.",
@@ -29,7 +29,7 @@
     "A separate newly launched CAD process took foreground ownership. Guarded focus restored the owned test window; the other window was not operated or restarted.",
     "Initial Save filename captures showed partial text. The operator submitted the first incomplete path too early; the dialog remained open. Corrected to Parallel check.limo, verified the complete visible name and exact native text readback, then verified actual saved model content. No unsupported claim about the cause of the earlier partial text is made."
   ],
-  "evidence_root": "D:/limo-cad-maintenance",
+  "evidence_root": "<local-root>/limo-cad-maintenance",
   "evidence": [
     "resume-parallel-empty.png",
     "resume-parallel-baseline.json",

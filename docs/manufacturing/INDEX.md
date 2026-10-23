@@ -14,7 +14,7 @@ definition identity, schema migration, ownership, and target capability limits.
 | [slicer-targets.md](slicer-targets.md) | Standard / Bambu / Orca / Prusa / Cura 3MF |
 | [VALIDATION.md](VALIDATION.md) | Automated + manual validation checklist |
 | `../../crates/export/fixtures/` | KR3.6 smoke `.3mf` samples |
-| [MAINTENANCE.md](MAINTENANCE.md) | How agents maintain these files |
+| [MAINTENANCE.md](MAINTENANCE.md) | Contributor edit order and validation |
 
 ## Code map
 
@@ -23,9 +23,9 @@ definition identity, schema migration, ownership, and target capability limits.
 | `crates/core/src/appearance.rs` | `BodyAppearance` / `Rgba8` (persisted in `.limo`) |
 | `crates/export/` | Writers + catalog + `ExportFacade` + slicer metadata |
 | `crates/export/presets/catalog.json` | **Source of truth** for filament presets |
-| `src/materials/catalog.json` | UI mirror of the same catalog (keep identical) |
-| `src/components/BodyAppearancePanel.tsx` | Brand / preset / slicer target UI |
-| `src/files/projectFiles.ts` | Desktop export orchestration |
+| `crates/export/src/materials.rs` | Embedded catalog shared by native UI and MCP |
+| `desktop/src/session_bridge/native_interface/controller/body_appearance/` | Native material selection and properties |
+| `desktop/src/session_bridge/native_interface/controller/files/io.rs` | Desktop export orchestration |
 | `mcp-server` | `solid_export_3mf` / `_stl`, `material_catalog`, appearance tools |
 
 ## Non-goals (v1)

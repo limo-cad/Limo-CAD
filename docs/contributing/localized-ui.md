@@ -1,9 +1,3 @@
----
-description: Validate localized teaching and UI text in the rendered product, not only in strings.
-globs: desktop/src/**/*.rs,crates/help/**,knowledge/**
-alwaysApply: false
----
-
 # Localized UI and teaching
 
 - Use the existing language catalog and actual localized operation labels. A demo,
