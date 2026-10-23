@@ -1,5 +1,5 @@
 //! Immutable composite model/domain intent for history and publication adapters.
-use crate::{error, ProjectFileError, PROJECT_FORMAT};
+use crate::{error, ProjectFileError, LEGACY_FORMAT, PREVIOUS_FORMAT, PROJECT_FORMAT};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
@@ -37,19 +37,46 @@ struct WireRef<'a> {
     intents: &'a [SnapshotIntent],
 }
 impl ProjectSnapshot {
-    pub fn new(
+    pub fn new(model_json: String, intents: Vec<SnapshotIntent>) -> Result<Self, ProjectFileError> {
+        Self::new_bounded(model_json, intents, false, MAX_SNAPSHOT_BYTES)
+    }
+    /// Normalize supported archive identities before the engine's schema migration.
+    /// Direct snapshots and publication transports still require the current ID.
+    pub(crate) fn from_archive(
         model_json: String,
-        mut intents: Vec<SnapshotIntent>,
+        intents: Vec<SnapshotIntent>,
     ) -> Result<Self, ProjectFileError> {
-        if intents.len() > 64 || model_json.len() > MAX_SNAPSHOT_BYTES {
+        Self::new_bounded(model_json, intents, true, MAX_SNAPSHOT_BYTES)
+    }
+    fn new_bounded(
+        mut model_json: String,
+        mut intents: Vec<SnapshotIntent>,
+        legacy_archive: bool,
+        limit: usize,
+    ) -> Result<Self, ProjectFileError> {
+        let limit = limit.min(MAX_SNAPSHOT_BYTES);
+        if intents.len() > 64 || model_json.len() > limit {
             return Err(error("project snapshot exceeds collection or model limit"));
         }
-        let header: serde_json::Value = serde_json::from_str(&model_json)
+        let mut header: serde_json::Value = serde_json::from_str(&model_json)
             .map_err(|e| error(format!("invalid snapshot model: {e}")))?;
-        if header["format"].as_str() != Some(PROJECT_FORMAT)
+        let legacy_format = legacy_archive
+            && matches!(
+                header["format"].as_str(),
+                Some(LEGACY_FORMAT | PREVIOUS_FORMAT)
+            );
+        if (header["format"].as_str() != Some(PROJECT_FORMAT) && !legacy_format)
             || header["schema_version"].as_u64().is_none_or(|n| n == 0)
         {
             return Err(error("invalid snapshot model header"));
+        }
+        if legacy_format {
+            header["format"] = PROJECT_FORMAT.into();
+            let mut normalized = LimitedOutput(Vec::new(), limit);
+            serde_json::to_writer(&mut normalized, &header)
+                .map_err(|e| error(format!("could not migrate snapshot model header: {e}")))?;
+            model_json = String::from_utf8(normalized.0)
+                .map_err(|e| error(format!("invalid migrated snapshot model: {e}")))?;
         }
         let mut names = BTreeSet::new();
         let mut total = model_json.len();
@@ -62,7 +89,7 @@ impl ProjectSnapshot {
                 .checked_add(intent.payload.len())
                 .and_then(|n| n.checked_add(intent.name.len()))
                 .ok_or_else(|| error("project snapshot size overflow"))?;
-            if total > MAX_SNAPSHOT_BYTES {
+            if total > limit {
                 return Err(error("project snapshot exceeds size limit"));
             }
         }
@@ -95,7 +122,7 @@ impl ProjectSnapshot {
         Self::decode_cbor(&bytes)
     }
     pub fn encode_cbor(&self) -> Result<Vec<u8>, ProjectFileError> {
-        let mut output = LimitedOutput(Vec::new());
+        let mut output = LimitedOutput(Vec::new(), MAX_SNAPSHOT_BYTES);
         ciborium::into_writer(
             &WireRef {
                 format: "limo-cad-project-snapshot",
@@ -124,10 +151,10 @@ impl ProjectSnapshot {
         Self::new(wire.model_json, wire.intents)
     }
 }
-struct LimitedOutput(Vec<u8>);
+struct LimitedOutput(Vec<u8>, usize);
 impl Write for LimitedOutput {
     fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
-        if b.len() > MAX_SNAPSHOT_BYTES.saturating_sub(self.0.len()) {
+        if b.len() > self.1.saturating_sub(self.0.len()) {
             return Err(std::io::Error::other("snapshot exceeds size limit"));
         }
         self.0.extend_from_slice(b);
@@ -260,6 +287,78 @@ mod tests {
         let mut bytes = Vec::new();
         ciborium::into_writer(&wire, &mut bytes).unwrap();
         assert!(ProjectSnapshot::decode_cbor(&bytes).is_err());
+    }
+    #[test]
+    fn legacy_identity_migration_is_restricted_to_archives() {
+        let current = format!("  {}\n", model("Current"));
+        assert_eq!(
+            ProjectSnapshot::from_archive(current.clone(), vec![])
+                .unwrap()
+                .model_json(),
+            current
+        );
+        for format in [LEGACY_FORMAT, PREVIOUS_FORMAT] {
+            let legacy = model("Legacy").replace(PROJECT_FORMAT, format);
+            assert!(ProjectSnapshot::new(legacy.clone(), vec![]).is_err());
+            let wire = Wire {
+                format: "limo-cad-project-snapshot".into(),
+                version: 1,
+                model_json: legacy,
+                intents: vec![],
+            };
+            let mut bytes = Vec::new();
+            ciborium::into_writer(&wire, &mut bytes).unwrap();
+            assert!(ProjectSnapshot::decode_cbor(&bytes).is_err());
+        }
+    }
+    #[test]
+    fn archive_identity_migration_rechecks_growth_and_total_intent_bytes() {
+        for format in [LEGACY_FORMAT, PREVIOUS_FORMAT] {
+            let legacy = model("Bounded").replace(PROJECT_FORMAT, format);
+            let normalized = ProjectSnapshot::from_archive(legacy.clone(), vec![]).unwrap();
+            let model_bytes = normalized.model_json().len();
+            assert!(model_bytes > legacy.len());
+            assert!(
+                ProjectSnapshot::new_bounded(legacy.clone(), vec![], true, legacy.len()).is_err()
+            );
+            let intent = item("intent/a", &[0, 255, 3]);
+            let exact = model_bytes + intent.name.len() + intent.payload.len();
+            assert!(ProjectSnapshot::new_bounded(
+                legacy.clone(),
+                vec![intent.clone()],
+                true,
+                exact - 1,
+            )
+            .is_err());
+            let admitted =
+                ProjectSnapshot::new_bounded(legacy, vec![intent.clone()], true, exact).unwrap();
+            assert_eq!(admitted.model_json(), normalized.model_json());
+            assert_eq!(admitted.intents(), &[intent]);
+        }
+    }
+    #[test]
+    fn archive_identity_migration_keeps_header_and_intent_validation() {
+        for text in ["{", "{}", r#"{"format":"foreign","schema_version":2}"#] {
+            assert!(ProjectSnapshot::from_archive(text.into(), vec![]).is_err());
+        }
+        for format in [LEGACY_FORMAT, PREVIOUS_FORMAT] {
+            for version in [serde_json::Value::Null, 0.into(), (-1).into(), 1.5.into()] {
+                let text =
+                    serde_json::json!({"format":format,"schema_version":version}).to_string();
+                assert!(ProjectSnapshot::from_archive(text, vec![]).is_err());
+            }
+            let legacy = model("Legacy").replace(PROJECT_FORMAT, format);
+            assert!(ProjectSnapshot::from_archive(
+                legacy.clone(),
+                vec![item("intent/../bad", b"x")],
+            )
+            .is_err());
+            assert!(ProjectSnapshot::from_archive(
+                legacy,
+                vec![item("intent/a", b"x"), item("intent/a", b"y")],
+            )
+            .is_err());
+        }
     }
     #[test]
     fn snapshot_rejects_truncation_and_trailing_bytes() {

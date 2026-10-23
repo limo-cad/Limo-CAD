@@ -1,9 +1,3 @@
----
-description: Compare UI work with its reference and qualify visual and performance claims.
-globs: desktop/src/**/*.rs,examples/scripts/**,docs/media/**
-alwaysApply: false
----
-
 # Visual changes and evidence
 
 - Inspect an existing reference before choosing model proportions, orientation or

@@ -2100,13 +2100,36 @@ impl SketchManager {
                 CAM_TOOLPATH_PLANNER_REVISION,
                 setup_intent,
             ))?,
-            upstream: stable_cam_fingerprint(&(
-                "cam-upstream-dependencies",
-                CAM_TOOLPATH_PLANNER_REVISION,
-                upstream_setups,
-                upstream_tools,
-                upstream_linking,
-            ))?,
+            upstream: if upstream_setups.is_empty() {
+                // Preserve independent setups' existing generation evidence.
+                stable_cam_fingerprint(&(
+                    "cam-upstream-dependencies",
+                    CAM_TOOLPATH_PLANNER_REVISION,
+                    upstream_setups,
+                    upstream_tools,
+                    upstream_linking,
+                ))?
+            } else {
+                // Heights are stored outside setup/operation records. Include
+                // every transitive source's intent even before regeneration
+                // updates its cached numerical heights. Version only this key:
+                // old rest stamps cannot prove these inputs were unchanged.
+                let upstream_heights = self
+                    .cam
+                    .height_expressions
+                    .iter()
+                    .filter(|h| upstream_operation_ids.contains(&h.operation_id))
+                    .map(|h| (h.operation_id, h))
+                    .collect::<BTreeMap<_, _>>();
+                stable_cam_fingerprint(&(
+                    "cam-upstream-dependencies-v2",
+                    CAM_TOOLPATH_PLANNER_REVISION,
+                    upstream_setups,
+                    upstream_tools,
+                    upstream_linking,
+                    upstream_heights,
+                ))?
+            },
         })
     }
 

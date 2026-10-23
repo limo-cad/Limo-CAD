@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "label": "before-v3",
-  "executable": "D:\\limo-startup-candidate-no-warmup-runtime\\nbcad.exe",
+  "executable": "<local-root>\\limo-startup-candidate-no-warmup-runtime\\nbcad.exe",
   "executableSha256": "6d6fc31655cb1e5bc1dc78fb6eccc0ffa74aaea9b3465d560291e15aabf8a67c",
   "profile": "dev-app1-debug2-deps3-debug0",
   "cacheCondition": "warm",
@@ -16,7 +16,7 @@
     "memoryBytes": 34266349568
   },
   "startedAt": "2026-10-11T20:26:42.606Z",
-  "userDataDirectory": "D:\\limo-startup-results-compact\\before-v3-empty-en\\webview2-user-data",
+  "userDataDirectory": "<local-root>\\limo-startup-results-compact\\before-v3-empty-en\\webview2-user-data",
   "warmups": [
     {
       "index": 1,

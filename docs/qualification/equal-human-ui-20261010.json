@@ -6,7 +6,7 @@
   "runtime_modified": false,
   "build_pair": "matched",
   "operator": "One operator; guarded Rust individual interactive inputs; read-only MCP verification",
-  "fixture": "D:\\limo-cad-maintenance\\ui-models\\Equal check.limo",
+  "fixture": "<local-root>\\limo-cad-maintenance\\ui-models\\Equal check.limo",
   "checkpoint": "examples/checkpoints/surface-ui-sketch-equal-human-ui.limo",
   "reopened_session": "2d0fdf1f-b324-4e52-b165-7cbd131e9c3e",
   "passed": [
@@ -24,7 +24,7 @@
   "control_observations": [
     "An attempted second-line endpoint landed inside the dynamic Angle popup; capture identified the popup and an unobscured endpoint completed the fixture. No solver or native timing defect inferred."
   ],
-  "evidence_root": "D:\\limo-cad-maintenance",
+  "evidence_root": "<local-root>\\limo-cad-maintenance",
   "evidence": [
     "equal-circle-radius-pick-20261010.png",
     "equal-circles-applied-20261010.json",

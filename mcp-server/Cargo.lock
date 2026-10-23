@@ -800,7 +800,7 @@ checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
 
 [[package]]
 name = "limo-cad-assembly"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "limo-cad-core",
  "limo-cad-solid",
@@ -809,14 +809,14 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-build-info"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "limo-cad-cam"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "limo-cad-core",
  "serde",
@@ -825,7 +825,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-core"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -833,7 +833,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-export"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "limo-cad-assembly",
  "limo-cad-core",
@@ -857,7 +857,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-help"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -865,7 +865,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-interface"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -873,7 +873,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-mcp"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "base64",
  "enigo",
@@ -903,7 +903,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-mcp-mutate"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "limo-cad-export",
  "serde_json",
@@ -911,7 +911,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-occt"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "cxx",
  "cxx-build",
@@ -929,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-print"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "png",
  "serde_json",
@@ -949,7 +949,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-recipes"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "limo-cad-script",
  "serde_json",
@@ -957,7 +957,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-script"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "serde_json",
 ]
@@ -974,14 +974,14 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-session-storage"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "limo-cad-sketch"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "limo-cad-assembly",
  "limo-cad-cam",
@@ -996,7 +996,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-solid"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 dependencies = [
  "limo-cad-core",
  "serde",

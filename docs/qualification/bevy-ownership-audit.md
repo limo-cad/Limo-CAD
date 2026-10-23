@@ -141,7 +141,7 @@ At clean `8352889c`, strict MCP Clippy and the specifically affected existing
 `read_only_snapshot_attach_refresh_detach` and
 `advertised_document_contract_round_trips_empty_and_populated_documents` checks
 passed once. The receipt is
-`D:/limo-cad-maintenance/backlog-autonomous-20261010/mcp-read-borrows-8352889c-results.json`.
+`<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/mcp-read-borrows-8352889c-results.json`.
 These cover real snapshot attachment/refresh/detachment and populated CAM wire
 behavior; they do not qualify deployed UI or measure allocation/latency savings.
 The File shortcut projection received source review and diff/format checks;
@@ -216,7 +216,7 @@ The source checkpoint at `1c0dc76e` passed six exact focused checks once plus
 strict Windows desktop/native/MCP checks, retaining three earlier passes without
 repetition: [detached drawing receipt](detached-drawing-output-20261011.json).
 The CAM retirement receipt is
-`D:/limo-cad-maintenance/backlog-autonomous-20261010/cam-retirement-0bd892bc-results.json`.
+`<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/cam-retirement-0bd892bc-results.json`.
 At clean `9e16fade`, strict Windows desktop/native-engine/OCCT/export checks
 and exactly three new focused filters passed once: real native Bambu WRITE
 operation ownership, portable STL/3MF job ownership and the borrowed panel review

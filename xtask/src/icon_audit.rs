@@ -54,7 +54,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     );
     let brand = fs::read_to_string(root.join("public/app-icon.svg"))?.replace("\r\n", "\n");
     ensure!(
-        brand.contains("Limo CAD NB monogram") && !forbidden.is_match(&brand),
+        brand.contains("Limo CAD wordmark") && !forbidden.is_match(&brand),
         "Canonical mark lacks provenance or embeds executable content"
     );
     let provenance = fs::read_to_string(root.join("docs/ICON_PROVENANCE.md"))?;
