@@ -138,15 +138,21 @@ pub(super) fn write_text(
     fitted_width: Option<f64>,
     layer: &str,
     family: &str,
+    handles: &mut super::dxf_handles::Handles,
+    owner: usize,
 ) -> Result<(), String> {
     let outlines = if value.is_ascii() {
         Vec::new()
     } else {
         shape(value, height, centered, fitted_width, family, fonts())?
     };
+    handles.entity(out, "TEXT", owner, layer);
+    if !outlines.is_empty() {
+        out.push_str("60\n1\n");
+    }
     writeln!(
         out,
-        "0\nTEXT\n8\n{layer}\n7\nSTANDARD\n10\n{:.5}\n20\n{:.5}\n40\n{height}\n1\n{}",
+        "100\nAcDbText\n7\nSTANDARD\n10\n{:.5}\n20\n{:.5}\n40\n{height}\n1\n{}",
         point[0],
         sheet_height - point[1],
         dxf_text(value)
@@ -156,7 +162,7 @@ pub(super) fn write_text(
     if let Some(width) = fitted_width {
         writeln!(
             out,
-            "72\n5\n73\n0\n11\n{:.5}\n21\n{:.5}",
+            "72\n5\n11\n{:.5}\n21\n{:.5}",
             point[0] + width * angle.cos(),
             sheet_height - point[1] - width * angle.sin()
         )
@@ -173,11 +179,10 @@ pub(super) fn write_text(
     if rotation_deg != 0. {
         writeln!(out, "50\n{:.5}", -rotation_deg).unwrap();
     }
-    if !outlines.is_empty() {
-        out.push_str("60\n1\n");
-    }
+    out.push_str("100\nAcDbText\n73\n0\n");
     for loops in outlines {
-        writeln!(out, "0\nHATCH\n100\nAcDbEntity\n8\n{layer}\n100\nAcDbHatch\n10\n0\n20\n0\n30\n0\n210\n0\n220\n0\n230\n1\n2\nSOLID\n70\n1\n71\n0\n91\n{}", loops.len()).unwrap();
+        handles.entity(out, "HATCH", owner, layer);
+        writeln!(out, "100\nAcDbHatch\n10\n0\n20\n0\n30\n0\n210\n0\n220\n0\n230\n1\n2\nSOLID\n70\n1\n71\n0\n91\n{}", loops.len()).unwrap();
         for contour in loops {
             writeln!(out, "92\n2\n72\n0\n73\n1\n93\n{}", contour.len()).unwrap();
             for [x, y] in contour {
@@ -534,10 +539,12 @@ mod tests {
             Some(20.),
             "ANNOTATION",
             "Arial",
+            &mut super::super::dxf_handles::Handles::new(1),
+            0,
         )
         .unwrap();
         assert_eq!(out.matches("0\nTEXT\n").count(), 1);
-        assert!(out.contains("60\n1\n0\nHATCH\n"));
+        assert!(out.contains("60\n1\n100\nAcDbText\n"));
         assert!(out.contains("11\n20.00000\n21\n50.00000"));
         assert!(out.contains("91\n2\n"), "O preserves its hole");
         assert!(!out.contains("NOBS_EMBEDDED_FONT"));

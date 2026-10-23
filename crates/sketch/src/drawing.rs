@@ -10,6 +10,9 @@ use std::collections::HashSet;
 use limo_cad_core::{BodyId, EdgeId};
 use serde::{Deserialize, Serialize};
 
+/// Maximum saved decimal places for primary and secondary drawing dimensions.
+pub const MAX_DRAWING_DIMENSION_PRECISION: u8 = 9;
+
 const MAX_SHEETS: usize = 64;
 const MAX_VIEWS_PER_SHEET: usize = 256;
 const MAX_ANNOTATIONS_PER_SHEET: usize = 2_048;
@@ -1489,9 +1492,9 @@ impl DrawingDocumentDto {
                                 "drawing dimension {annotation_id} has an invalid offset"
                             ));
                         }
-                        if *precision > 6 {
+                        if *precision > MAX_DRAWING_DIMENSION_PRECISION {
                             return Err(format!(
-                                "drawing dimension {annotation_id} precision exceeds 6 decimals"
+                                "drawing dimension {annotation_id} precision exceeds {MAX_DRAWING_DIMENSION_PRECISION} decimals"
                             ));
                         }
                         validate_dimension_presentation(presentation, annotation_id)?;
@@ -2139,9 +2142,9 @@ fn validate_line_ref(feature: &DrawingLineRefDto, annotation_id: u64) -> Result<
 }
 
 fn validate_precision(precision: u8, annotation_id: u64) -> Result<(), String> {
-    if precision > 6 {
+    if precision > MAX_DRAWING_DIMENSION_PRECISION {
         return Err(format!(
-            "drawing annotation {annotation_id} precision exceeds 6 decimals"
+            "drawing annotation {annotation_id} precision exceeds {MAX_DRAWING_DIMENSION_PRECISION} decimals"
         ));
     }
     Ok(())
@@ -2157,7 +2160,7 @@ fn validate_dimension_presentation(
         || presentation
             .dual_units
             .as_ref()
-            .is_some_and(|dual| dual.precision > 6)
+            .is_some_and(|dual| dual.precision > MAX_DRAWING_DIMENSION_PRECISION)
     {
         return Err(format!(
             "drawing dimension {annotation_id} contains invalid tolerance or dual-unit metadata"

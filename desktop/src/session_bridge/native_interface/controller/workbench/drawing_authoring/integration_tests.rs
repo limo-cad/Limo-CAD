@@ -29,7 +29,7 @@ fn presentation_apply_validates_shared_metadata_and_restores_exact_issued_histor
     if let limo_cad_sketch::DrawingAnnotationDto::LinearDimension { presentation, .. } =
         &mut invalid.sheets[0].annotations[2]
     {
-        presentation.dual_units.as_mut().unwrap().precision = 7;
+        presentation.dual_units.as_mut().unwrap().precision = 10;
     }
     assert!(f
         .bridge

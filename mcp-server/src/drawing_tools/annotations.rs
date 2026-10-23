@@ -17,31 +17,34 @@ pub(super) fn schema(
         object_schema(json!({"type":choice(&["circle"]),"reference":circle}), &["type","reference"])
     ]});
     let mut variants = Vec::new();
-    let mut add =
-        |kind: &str, mut properties: Value, fields: &[&str], dimension: bool, attached: bool| {
-            let map = properties.as_object_mut().unwrap();
-            map.insert("kind".into(), choice(&[kind]));
-            map.insert("id".into(), json!({"type":"integer","minimum":1}));
-            let mut required = vec!["kind"];
-            if updating {
-                required.push("id");
-            }
-            if attached {
-                map.insert("view_id".into(), json!({"type":"integer","minimum":1}));
-                required.push("view_id");
-            }
-            if dimension {
-                map.insert("prefix".into(), text.clone());
-                map.insert("suffix".into(), text.clone());
-                map.insert(
+    let mut add = |kind: &str,
+                   mut properties: Value,
+                   fields: &[&str],
+                   dimension: bool,
+                   attached: bool| {
+        let map = properties.as_object_mut().unwrap();
+        map.insert("kind".into(), choice(&[kind]));
+        map.insert("id".into(), json!({"type":"integer","minimum":1}));
+        let mut required = vec!["kind"];
+        if updating {
+            required.push("id");
+        }
+        if attached {
+            map.insert("view_id".into(), json!({"type":"integer","minimum":1}));
+            required.push("view_id");
+        }
+        if dimension {
+            map.insert("prefix".into(), text.clone());
+            map.insert("suffix".into(), text.clone());
+            map.insert(
                     "precision".into(),
-                    json!({"type":"integer","minimum":0,"maximum":6}),
+                    json!({"type":"integer","minimum":0,"maximum":limo_cad_sketch::MAX_DRAWING_DIMENSION_PRECISION}),
                 );
-                map.insert("presentation".into(), presentation.clone());
-            }
-            required.extend_from_slice(fields);
-            variants.push(object_schema(properties, &required));
-        };
+            map.insert("presentation".into(), presentation.clone());
+        }
+        required.extend_from_slice(fields);
+        variants.push(object_schema(properties, &required));
+    };
     add(
         "linear_dimension",
         json!({"first":anchor,"second":anchor,"mode":choice(&["aligned","horizontal","vertical"]),"offset":number}),

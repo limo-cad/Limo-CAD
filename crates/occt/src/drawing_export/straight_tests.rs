@@ -23,25 +23,351 @@ fn export(
     )
 }
 
-fn dxf_entities(dxf: &str, kind: &str) -> Vec<BTreeMap<String, String>> {
-    dxf.split(&format!("0\n{kind}\n"))
-        .skip(1)
-        .map(|entity| {
-            let lines: Vec<_> = entity.split("\n0\n").next().unwrap().lines().collect();
-            lines
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|pair| (pair[0].to_owned(), pair[1].to_owned()))
-                .collect()
-        })
-        .collect()
+pub(super) fn dxf_entities(dxf: &str, kind: &str) -> Vec<BTreeMap<String, String>> {
+    let lines: Vec<_> = dxf.lines().collect();
+    let mut result = Vec::new();
+    let mut current = None;
+    for pair in lines.as_chunks::<2>().0 {
+        if pair[0] == "0" {
+            if let Some(record) = current.take() {
+                result.push(record);
+            }
+            if pair[1] == kind {
+                current = Some(BTreeMap::new());
+            }
+        } else if let Some(record) = &mut current {
+            record.insert(pair[0].to_owned(), pair[1].to_owned());
+        }
+    }
+    if let Some(record) = current {
+        result.push(record);
+    }
+    result
 }
 
 fn replace_annotation(document: &mut DrawingDocumentDto, change: impl FnOnce(&mut Value)) {
     let mut value = serde_json::to_value(&document.sheets[0].annotations[0]).unwrap();
     change(&mut value);
     document.sheets[0].annotations[0] = serde_json::from_value(value).unwrap();
+}
+
+pub(super) fn linear_measurement(dimension: &BTreeMap<String, String>) -> f64 {
+    let num = |key: &str| dimension[key].parse::<f64>().unwrap();
+    let delta = [num("14") - num("13"), num("24") - num("23")];
+    match dimension["70"].parse::<u16>().unwrap() & 7 {
+        0 => {
+            let angle = num("50").to_radians();
+            (delta[0] * angle.cos() + delta[1] * angle.sin()).abs()
+        }
+        1 => delta[0].hypot(delta[1]),
+        kind => panic!("Expected a linear dimension, got {kind}"),
+    }
+}
+
+#[test]
+fn definition_point_edits_preserve_aligned_and_axis_modes_across_annotation_families() {
+    for family in ["line", "linear", "chain", "baseline", "continued"] {
+        for mode in ["aligned", "horizontal", "vertical"] {
+            if family == "line" && mode != "aligned" {
+                continue;
+            }
+            let (mut document, scene, projection) = fixture::fixture("length", 40.);
+            let anchor = |edge_id, edge_key: &str, endpoint: &str| {
+                json!({"body_id":1,"edge_id":edge_id,"edge_key":edge_key,
+                    "topology_signature":"feature:1:rectangle-connectivity",
+                    "endpoint":endpoint,"fallback_point":[999.,999.,999.]})
+            };
+            if family != "line" {
+                let first = anchor(1, "bottom", "start");
+                let second = if mode == "vertical" {
+                    anchor(2, "right", "end")
+                } else {
+                    anchor(1, "bottom", "end")
+                };
+                let annotation = if family == "linear" {
+                    json!({"kind":"linear_dimension","id":1,"view_id":1,
+                        "first":first,"second":second,"mode":mode,"offset":15.})
+                } else {
+                    json!({"kind":"chain_dimension","id":1,"view_id":1,
+                        "anchors":[first,second],"mode":mode,"layout":family,
+                        "offset":15.,"spacing":10.})
+                };
+                document.sheets[0].annotations[0] = serde_json::from_value(annotation).unwrap();
+            }
+            let dxf = export(
+                &document,
+                &scene,
+                &projection,
+                UnitSystem::Mm,
+                DrawingExportFormat::Dxf,
+            )
+            .unwrap();
+            let mut dimensions = dxf_entities(&dxf, "DIMENSION");
+            assert_eq!(dimensions.len(), 1, "{family}/{mode}");
+            let dimension = &mut dimensions[0];
+            assert_eq!(
+                dimension["70"],
+                if mode == "aligned" { "161" } else { "160" }
+            );
+            assert_eq!(dimension.contains_key("50"), mode != "aligned");
+            assert_eq!(
+                dxf.contains("100\nAcDbRotatedDimension\n"),
+                mode != "aligned"
+            );
+            let styles = dxf_entities(&dxf, "DIMSTYLE");
+            let style = styles
+                .iter()
+                .find(|s| s.get("2") == Some(&dimension["3"]))
+                .unwrap();
+            let factor = style["144"].parse::<f64>().unwrap();
+            assert!((factor - 0.5).abs() < 1e-12);
+            let x = dimension["13"].parse::<f64>().unwrap();
+            let y = dimension["23"].parse::<f64>().unwrap();
+            let (dx, dy) = if mode == "vertical" {
+                (60., 80.)
+            } else {
+                (80., 60.)
+            };
+            dimension.insert("14".into(), (x + dx).to_string());
+            dimension.insert("24".into(), (y + dy).to_string());
+            let expected = if mode == "aligned" { 50. } else { 40. };
+            assert!(
+                (linear_measurement(dimension) * factor - expected).abs() < 1e-10,
+                "{family}/{mode} changed measurement semantics"
+            );
+        }
+    }
+}
+
+#[test]
+fn small_scale_dimensions_regenerate_the_saved_precision_in_each_unit() {
+    for scale in [0.001, 0.0001] {
+        for precision in [6, 7, 8] {
+            for (units, unit_mm) in [
+                (UnitSystem::Mm, 1.),
+                (UnitSystem::Cm, 10.),
+                (UnitSystem::In, 25.4),
+            ] {
+                let (mut document, scene, projection) = fixture::fixture("length", 40.12345678);
+                document.sheets[0].views[0].scale = scale;
+                replace_annotation(&mut document, |a| a["precision"] = json!(precision));
+                let dxf = export(
+                    &document,
+                    &scene,
+                    &projection,
+                    units,
+                    DrawingExportFormat::Dxf,
+                )
+                .unwrap();
+                let dimensions = dxf_entities(&dxf, "DIMENSION");
+                assert_eq!(dimensions.len(), 1, "scale={scale}, precision={precision}");
+                let dimension = &dimensions[0];
+                let styles = dxf_entities(&dxf, "DIMSTYLE");
+                let style = styles
+                    .iter()
+                    .find(|s| s.get("2") == Some(&dimension["3"]))
+                    .unwrap();
+                let value = linear_measurement(dimension) * style["144"].parse::<f64>().unwrap();
+                let expected = format!("{:.*}", precision, 40.12345678 / unit_mm);
+                assert_eq!(format!("{value:.precision$}"), expected, "scale={scale}");
+                let label = format!(
+                    "{expected} {}",
+                    crate::drawing_presentation::text::unit_label(units)
+                );
+                assert!(dxf_entities(&dxf, "TEXT").iter().any(|t| t["1"] == label));
+            }
+        }
+    }
+}
+
+#[test]
+fn semantic_radius_and_diameter_preserve_measurement_after_scale_and_leader_changes() {
+    for mode in ["radius", "diameter"] {
+        for scale in [0.25, 1., 5.] {
+            for angle in [-145., 35., 135.] {
+                for (units, unit_mm) in [
+                    (UnitSystem::Mm, 1.),
+                    (UnitSystem::Cm, 10.),
+                    (UnitSystem::In, 25.4),
+                ] {
+                    let (mut document, scene, mut projection) =
+                        super::center_fixture::fixture(mode, scale, false);
+                    replace_annotation(&mut document, |a| {
+                        a["leader_angle_deg"] = json!(angle);
+                        a["prefix"] = json!("QA ");
+                        a["suffix"] = json!(" exact");
+                    });
+                    let dxf = export(
+                        &document,
+                        &scene,
+                        &projection,
+                        units,
+                        DrawingExportFormat::Dxf,
+                    )
+                    .unwrap();
+                    let dimensions = dxf_entities(&dxf, "DIMENSION");
+                    assert_eq!(dimensions.len(), 1);
+                    let d = &dimensions[0];
+                    assert_eq!(d["70"], if mode == "diameter" { "163" } else { "164" });
+                    assert_eq!(d["1"], "QA <>");
+                    let num = |k: &str| d[k].parse::<f64>().unwrap();
+                    let paper = (num("15") - num("10")).hypot(num("25") - num("20"));
+                    let styles = dxf_entities(&dxf, "DIMSTYLE");
+                    let style = styles.iter().find(|s| s.get("2") == Some(&d["3"])).unwrap();
+                    let expected = if mode == "diameter" { 10. } else { 5. } / unit_mm;
+                    assert!((paper * style["144"].parse::<f64>().unwrap() - expected).abs() < 1e-8);
+                    assert!(style["3"].starts_with(if mode == "diameter" {
+                        "\u{00d8}<>"
+                    } else {
+                        "R<>"
+                    }));
+                    projection.circles.clear();
+                    assert!(export(
+                        &document,
+                        &scene,
+                        &projection,
+                        units,
+                        DrawingExportFormat::Dxf
+                    )
+                    .is_err());
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn semantic_angles_keep_degrees_across_scales_units_and_both_reference_families() {
+    for kind in ["angle", "angle-three-point"] {
+        for scale in [0.25, 1., 5.] {
+            for units in [UnitSystem::Mm, UnitSystem::Cm, UnitSystem::In] {
+                let (mut document, scene, projection) = fixture::fixture(kind, 40.);
+                document.sheets[0].views[0].scale = scale;
+                replace_annotation(&mut document, |a| {
+                    a["prefix"] = json!("QA ");
+                    a["suffix"] = json!(" exact");
+                    a["precision"] = json!(3);
+                });
+                let dxf = export(
+                    &document,
+                    &scene,
+                    &projection,
+                    units,
+                    DrawingExportFormat::Dxf,
+                )
+                .unwrap();
+                let dimensions = dxf_entities(&dxf, "DIMENSION");
+                assert_eq!(dimensions.len(), 1);
+                let d = &dimensions[0];
+                assert_eq!(d["70"], "165");
+                assert_eq!(d["1"], "<>");
+                let num = |k: &str| d[k].parse::<f64>().unwrap();
+                let a = (num("23") - num("25")).atan2(num("13") - num("15"));
+                let b = (num("24") - num("25")).atan2(num("14") - num("15"));
+                let expected = if kind == "angle" {
+                    90.
+                } else {
+                    30_f64.atan2(40.).to_degrees()
+                };
+                assert!(((b - a).to_degrees().rem_euclid(360.) - expected).abs() < 1e-7);
+                let styles = dxf_entities(&dxf, "DIMSTYLE");
+                let style = styles.iter().find(|s| s.get("2") == Some(&d["3"])).unwrap();
+                assert_eq!(style["179"], "3");
+                assert_eq!(style["275"], "0");
+                assert_eq!(style["3"], "QA <> exact");
+                fixture::full_presentation(&mut document);
+                let fallback = export(
+                    &document,
+                    &scene,
+                    &projection,
+                    units,
+                    DrawingExportFormat::Dxf,
+                )
+                .unwrap();
+                assert!(dxf_entities(&fallback, "DIMENSION").is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn semantic_linear_dimensions_preserve_model_measurement_at_each_paper_scale_and_unit() {
+    for kind in ["length", "distance", "point-line"] {
+        for scale in [0.25, 1., 2., 5.] {
+            for (units, unit_mm, label) in [
+                (UnitSystem::Mm, 1., "mm"),
+                (UnitSystem::Cm, 10., "cm"),
+                (UnitSystem::In, 25.4, "in"),
+            ] {
+                let (mut document, scene, projection) = fixture::fixture(kind, 40.);
+                document.sheets[0].views[0].scale = scale;
+                replace_annotation(&mut document, |a| {
+                    a["prefix"] = json!("QA ");
+                    a["suffix"] = json!(" exact");
+                    a["precision"] = json!(3);
+                });
+                let dxf = export(
+                    &document,
+                    &scene,
+                    &projection,
+                    units,
+                    DrawingExportFormat::Dxf,
+                )
+                .unwrap();
+                let dimensions = dxf_entities(&dxf, "DIMENSION");
+                assert_eq!(dimensions.len(), 1);
+                let d = &dimensions[0];
+                assert_eq!(
+                    d["1"], "<>",
+                    "Never freeze the measurement in a text override"
+                );
+                let styles = dxf_entities(&dxf, "DIMSTYLE");
+                let style = styles.iter().find(|s| s.get("2") == Some(&d["3"])).unwrap();
+                let paper_measurement = linear_measurement(d);
+                let factor = style["144"].parse::<f64>().unwrap();
+                let expected = if kind == "length" { 40. } else { 30. } / unit_mm;
+                assert!(
+                    (paper_measurement * factor - expected).abs() < 1e-8,
+                    "{kind} {scale} {label}"
+                );
+                assert_eq!(style["3"], format!("QA <> {label} exact"));
+                assert_eq!(style["271"], "3");
+                assert!(dxf.contains(&format!("2\n{}\n", d["2"])));
+            }
+        }
+    }
+}
+
+#[test]
+fn unsupported_dimension_presentation_keeps_its_complete_graphical_output() {
+    for prefix in ["literal <> ", "literal % ", "literal \\", "literal { "] {
+        let (mut document, scene, projection) = fixture::fixture("length", 40.);
+        replace_annotation(&mut document, |a| a["prefix"] = json!(prefix));
+        let dxf = export(
+            &document,
+            &scene,
+            &projection,
+            UnitSystem::Mm,
+            DrawingExportFormat::Dxf,
+        )
+        .unwrap();
+        assert!(dxf_entities(&dxf, "DIMENSION").is_empty());
+        assert!(dxf_entities(&dxf, "TEXT")
+            .iter()
+            .any(|t| t["1"] == dxf_text(&format!("{prefix}40.00 mm"))));
+    }
+    let (mut document, scene, projection) = fixture::fixture("length", 40.);
+    fixture::full_presentation(&mut document);
+    let dxf = export(
+        &document,
+        &scene,
+        &projection,
+        UnitSystem::Mm,
+        DrawingExportFormat::Dxf,
+    )
+    .unwrap();
+    assert!(dxf_entities(&dxf, "DIMENSION").is_empty());
+    assert!(!dxf_entities(&dxf, "TEXT").is_empty());
 }
 
 #[test]
@@ -90,10 +416,7 @@ fn straight_relations_export_current_values_and_graphical_entities_without_mutat
                 .count(),
             2
         );
-        assert!(
-            !dxf.contains("0\nDIMENSION\n"),
-            "This exporter promises graphical DXF only"
-        );
+        assert_eq!(dxf_entities(&dxf, "DIMENSION").len(), 1);
         assert!(
             !svg.contains("999.00000"),
             "diagnostic fallbacks must never be measured"
@@ -364,6 +687,7 @@ fn angular_mask_covers_crossing_art_before_the_basic_box_and_text_in_both_format
     let sheet = &document.sheets[0];
     let projections = BTreeMap::from([(1, projection)]);
     let mut paper = Paper {
+        dimensions: Vec::new(),
         size: [420., 297.],
         items: vec![],
     };
@@ -439,7 +763,11 @@ fn angular_mask_covers_crossing_art_before_the_basic_box_and_text_in_both_format
         .collect::<Vec<_>>();
     assert_eq!(masks.len(), 2);
     assert!(masks.iter().all(|e| e["420"] == "16777215"));
-    assert!(dxf.find("0\nSOLID\n8\nTEXT_MASK\n").unwrap() < dxf.find("0\nTEXT\n").unwrap());
+    assert!(
+        dxf.find("8\nTEXT_MASK\n420\n16777215\n100\nAcDbTrace\n")
+            .unwrap()
+            < dxf.find("0\nTEXT\n").unwrap()
+    );
 }
 
 #[test]
@@ -487,6 +815,7 @@ fn basic_linear_masks_cover_crossing_extensions_before_painting_complete_arrows(
         fixture::full_presentation(&mut document);
         let sheet = &document.sheets[0];
         let mut paper = Paper {
+            dimensions: Vec::new(),
             size: [420., 297.],
             items: vec![],
         };
@@ -579,11 +908,108 @@ fn basic_linear_masks_cover_crossing_extensions_before_painting_complete_arrows(
                     "<polygon data-layer=\"TEXT_MASK\"",
                     "<polygon data-layer=\"DIMENSION\"",
                 ),
-                DrawingExportFormat::Dxf => {
-                    ("0\nSOLID\n8\nTEXT_MASK\n", "0\nSOLID\n8\nDIMENSION\n")
-                }
+                DrawingExportFormat::Dxf => (
+                    "8\nTEXT_MASK\n420\n16777215\n100\nAcDbTrace\n",
+                    "8\nDIMENSION\n100\nAcDbTrace\n",
+                ),
             };
             assert!(output.find(mask).unwrap() < output.find(arrow).unwrap());
+        }
+    }
+}
+
+#[test]
+fn reference_and_fit_labels_keep_live_values_and_literal_presentation() {
+    for kind in [
+        "length",
+        "distance",
+        "angle",
+        "point-line",
+        "angle-three-point",
+        "radius",
+        "diameter",
+    ] {
+        for units in [UnitSystem::Mm, UnitSystem::Cm, UnitSystem::In] {
+            for (reference, fit) in [(true, ""), (false, " H7 "), (true, " H7 ")] {
+                let (mut document, scene, projection) = if matches!(kind, "radius" | "diameter") {
+                    super::center_fixture::fixture(kind, 2., false)
+                } else {
+                    fixture::fixture(kind, 40.)
+                };
+                replace_annotation(&mut document, |a| {
+                    a["prefix"] = json!("QA ");
+                    a["suffix"] = json!(" exact");
+                    a["presentation"] = json!({"reference":reference,"fit_class":fit});
+                });
+                let before = document.clone();
+                let dxf = export(
+                    &document,
+                    &scene,
+                    &projection,
+                    units,
+                    DrawingExportFormat::Dxf,
+                )
+                .unwrap();
+                let dimensions = dxf_entities(&dxf, "DIMENSION");
+                assert_eq!(dimensions.len(), 1, "{kind}");
+                assert!(dimensions[0]["1"].contains("<>"));
+                let styles = dxf_entities(&dxf, "DIMSTYLE");
+                let style = styles
+                    .iter()
+                    .find(|s| s.get("2") == Some(&dimensions[0]["3"]))
+                    .unwrap();
+                assert_eq!(style["3"].contains("(<>"), reference);
+                assert_eq!(style["3"].contains(" H7"), !fit.is_empty());
+                assert_eq!(document, before);
+            }
+        }
+    }
+}
+
+#[test]
+fn high_precision_dimensions_keep_labels_and_respect_dxf_semantic_limit() {
+    for digits in [7, 8, 9] {
+        let (mut document, scene, projection) = fixture::fixture("length", 40.123456789);
+        replace_annotation(&mut document, |a| a["precision"] = json!(digits));
+        document.validate().unwrap();
+        let expected = format!("{:.*}", digits as usize, 40.123456789);
+        let svg = export(
+            &document,
+            &scene,
+            &projection,
+            UnitSystem::Mm,
+            DrawingExportFormat::Svg,
+        )
+        .unwrap();
+        assert!(svg.contains(&expected), "missing {expected} in SVG");
+        let dxf = export(
+            &document,
+            &scene,
+            &projection,
+            UnitSystem::Mm,
+            DrawingExportFormat::Dxf,
+        )
+        .unwrap();
+        let dimensions = dxf_entities(&dxf, "DIMENSION");
+        if digits <= 8 {
+            assert_eq!(dimensions.len(), 1);
+            let styles = dxf_entities(&dxf, "DIMSTYLE");
+            let style = styles
+                .iter()
+                .find(|s| s.get("2") == Some(&dimensions[0]["3"]))
+                .unwrap();
+            assert_eq!(style["271"], digits.to_string());
+        } else {
+            assert!(
+                dimensions.is_empty(),
+                "DXF DIMDEC cannot represent nine decimal places"
+            );
+            assert!(
+                dxf_entities(&dxf, "TEXT")
+                    .iter()
+                    .any(|t| t.get("1").is_some_and(|v| v.contains(&expected))),
+                "graphical fallback must preserve nine-place label"
+            );
         }
     }
 }

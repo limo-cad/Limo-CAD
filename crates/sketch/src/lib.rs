@@ -62,6 +62,7 @@ pub use drawing::{
     DrawingTemplateDto, DrawingTitleBlockDto, DrawingToleranceNoteDto, DrawingTolerancePreset,
     DrawingTopologyAnchorRefDto, DrawingViewAlignment, DrawingViewDerivationDto, DrawingViewDto,
     DrawingViewKind, DrawingViewScope, DrawingWeldContour, DrawingWeldSide, DrawingWeldType,
+    MAX_DRAWING_DIMENSION_PRECISION,
 };
 pub use dto::{
     err_json, ok_json, AddConstraintResult, AddLineResult, Arc3PointRequest, ArcCenterRequest,

@@ -50,6 +50,10 @@ pub fn fixture(
         "angle" => {
             json!({"kind":"line_dimension","id":1,"view_id":1,"first":line(1),"second":line(2),"mode":"angle","position":[210.,175.]})
         }
+        "angle-three-point" => {
+            json!({"kind":"angular_dimension","id":1,"view_id":1,"vertex":anchor(1,"start"),
+                "first":anchor(1,"end"),"second":anchor(2,"end"),"radius":25.})
+        }
         "point-line" => {
             json!({"kind":"point_line_dimension","id":1,"view_id":1,"point":anchor(3,"end"),"line":line(1),"position":[220.,115.]})
         }
