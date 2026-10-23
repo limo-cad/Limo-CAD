@@ -21,6 +21,7 @@ struct TeachingSelection;
 #[derive(Resource, Default)]
 struct Scene {
     active: bool,
+    view_closed: Option<Arc<AtomicBool>>,
     animation: animation::Motion,
     progress: f32,
     geometry_frame: Option<usize>,
@@ -224,6 +225,30 @@ pub(super) fn hide(world: &mut World) {
     {
         camera.is_active = false;
     }
+}
+
+pub(super) fn bind_view(world: &mut World, closed: Arc<AtomicBool>) {
+    world.resource_mut::<Scene>().view_closed = Some(closed);
+}
+
+/// A delayed Close cannot clear a newer view's geometry or fixtures.
+pub(super) fn release_closed(world: &mut World) -> bool {
+    if world
+        .resource::<Scene>()
+        .view_closed
+        .as_ref()
+        .is_some_and(|closed| closed.load(Ordering::Acquire))
+    {
+        release(world);
+        true
+    } else {
+        false
+    }
+}
+
+#[cfg(test)]
+pub(super) fn resident_scene(world: &World) -> Option<std::sync::Weak<SolidSceneDto>> {
+    world.resource::<Scene>().solid.as_ref().map(Arc::downgrade)
 }
 
 fn clear_geometry(world: &mut World) {
@@ -549,5 +574,92 @@ mod tests {
         assert!(world.get_entity(teaching).is_err());
         assert!(!RenderLayers::layer(LAYER).intersects(&RenderLayers::default()));
         assert!(!RenderLayers::layer(LAYER).intersects(&RenderLayers::layer(1)));
+    }
+}
+
+#[cfg(test)]
+mod close_resource_tests {
+    use super::*;
+    #[test]
+    fn native_teaching_close_drops_resident_scene_but_keeps_live_assets_and_new_views() {
+        let mut world = World::new();
+        world.init_resource::<Scene>();
+        world.init_resource::<Assets<Mesh>>();
+        world.init_resource::<Assets<StandardMaterial>>();
+        let live_mesh = world
+            .resource_mut::<Assets<Mesh>>()
+            .add(Mesh::from(Cuboid::default()));
+        let live_material = world
+            .resource_mut::<Assets<StandardMaterial>>()
+            .add(StandardMaterial::default());
+        let live = world
+            .spawn((
+                Mesh3d(live_mesh.clone()),
+                MeshMaterial3d(live_material.clone()),
+                Camera::default(),
+                NativeViewportCamera,
+            ))
+            .id();
+        let mesh = world
+            .resource_mut::<Assets<Mesh>>()
+            .add(Mesh::from(Cuboid::default()));
+        let material = world
+            .resource_mut::<Assets<StandardMaterial>>()
+            .add(StandardMaterial::default());
+        let geometry = world
+            .spawn((
+                TeachingOwned,
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(material.clone()),
+            ))
+            .id();
+        let fixtures = (0..3)
+            .map(|_| world.spawn(TeachingOwned).id())
+            .collect::<Vec<_>>();
+        let solid = Arc::new(SolidSceneDto::default());
+        let witness = Arc::downgrade(&solid);
+        {
+            let mut scene = world.resource_mut::<Scene>();
+            scene.geometry = vec![geometry];
+            scene.fixtures = fixtures.clone();
+            scene.meshes = vec![mesh];
+            scene.materials = vec![material];
+            scene.solid = Some(solid);
+            scene.key = Some(("private package".into(), 0));
+        }
+        let old_view = Arc::new(AtomicBool::new(false));
+        bind_view(&mut world, Arc::clone(&old_view));
+        hide(&mut world);
+        assert!(
+            !release_closed(&mut world),
+            "Pausing between frames must keep reusable geometry"
+        );
+        let current_view = Arc::new(AtomicBool::new(false));
+        bind_view(&mut world, Arc::clone(&current_view));
+        old_view.store(true, Ordering::Release);
+        assert!(
+            !release_closed(&mut world),
+            "An old Close must not release a newer view"
+        );
+        current_view.store(true, Ordering::Release);
+        assert!(release_closed(&mut world));
+        assert!(witness.upgrade().is_none());
+        assert!(world.get_entity(geometry).is_err());
+        assert!(fixtures
+            .into_iter()
+            .all(|entity| world.get_entity(entity).is_err()));
+        assert!(world.resource::<Scene>().key.is_none());
+        assert!(world.resource::<Scene>().view_closed.is_none());
+        assert_eq!(world.resource::<Assets<Mesh>>().len(), 1);
+        assert_eq!(world.resource::<Assets<StandardMaterial>>().len(), 1);
+        assert!(world.resource::<Assets<Mesh>>().contains(live_mesh.id()));
+        assert!(world
+            .resource::<Assets<StandardMaterial>>()
+            .contains(live_material.id()));
+        assert!(world.get::<Camera>(live).unwrap().is_active);
+        assert!(
+            !release_closed(&mut world),
+            "Repeated cleanup must be a no-op"
+        );
     }
 }

@@ -701,6 +701,21 @@ fn render_worker(
                 }
                 snapshot
             }
+            Job::RetireTeaching => {
+                #[cfg(test)]
+                let resident = teaching_scene::resident_scene(app.world());
+                let retired = retire_teaching(&mut app);
+                #[cfg(test)]
+                if retired {
+                    *jobs.retired_scene.lock().unwrap() = resident;
+                }
+                #[cfg(not(test))]
+                let _ = retired;
+                if app.should_exit().is_some() {
+                    return Err("CAD viewport reported a rendering error".into());
+                }
+                continue;
+            }
             Job::Teaching(job) => {
                 if teaching_disabled {
                     let _ = job
@@ -940,6 +955,34 @@ fn render_worker(
     Ok(())
 }
 
+// Close is demand work on the existing worker, never an idle timer. Flush
+// entity/asset removals through the render world even without a later frame.
+// Keep every live camera inactive for this cleanup-only extraction.
+fn retire_teaching(app: &mut App) -> bool {
+    if !teaching_scene::release_closed(app.world_mut()) {
+        return false;
+    }
+    let cameras: Vec<_> = {
+        let world = app.world_mut();
+        world
+            .query::<(Entity, &mut Camera)>()
+            .iter_mut(world)
+            .map(|(entity, mut camera)| {
+                let active = camera.is_active;
+                camera.is_active = false;
+                (entity, active)
+            })
+            .collect()
+    };
+    app.update();
+    for (entity, active) in cameras {
+        if let Some(mut camera) = app.world_mut().get_mut::<Camera>(entity) {
+            camera.is_active = active;
+        }
+    }
+    true
+}
+
 fn render_teaching(
     app: &mut App,
     job: &crate::native_viewport::script_preview::RenderJob,
@@ -975,6 +1018,7 @@ fn render_teaching(
         target_handle.clone(),
         job.progress,
     )?;
+    teaching_scene::bind_view(app.world_mut(), Arc::clone(&job.view_closed));
     let cameras: Vec<_> = {
         let world = app.world_mut();
         world

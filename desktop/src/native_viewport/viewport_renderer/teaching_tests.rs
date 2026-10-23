@@ -225,6 +225,51 @@ fn shared_worker_regression(shader_failure: bool) {
         }
     }
     service.close_view(&view);
+    if !shader_failure {
+        service.release(&descriptor.preview_id);
+        let queue = app
+            .world()
+            .resource::<Worker>()
+            .requests
+            .as_ref()
+            .unwrap()
+            .clone();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        // Do not update the host or request another frame while waiting. Close
+        // itself must wake the shared worker and flush the resident scene.
+        loop {
+            if let Some(scene) = queue.retired_scene.lock().unwrap().as_ref() {
+                assert!(
+                    scene.upgrade().is_none(),
+                    "Close retained the package's CPU scene"
+                );
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "Close did not retire its worker scene"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(
+            held.len(),
+            5,
+            "External GPU image leases cannot block scene cleanup"
+        );
+        assert!(Arc::ptr_eq(
+            &original_document,
+            &app.world().resource::<ModelResource>().document
+        ));
+        app.world_mut().resource_mut::<CameraResource>().revision += 1;
+        app.update();
+        tests::ready(&mut app);
+        let after_close = tests::capture(&mut app, &target, "shared-main-after-close");
+        assert_eq!(
+            tests::changed(&restored, &after_close),
+            0,
+            "Close changed live model pixels"
+        );
+    }
     let started = Instant::now();
     drop(app);
     assert!(

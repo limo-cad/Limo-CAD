@@ -184,11 +184,29 @@ impl RenderRequest {
 #[derive(Default)]
 struct ServiceState {
     documents: VecDeque<(String, Arc<PreviewDocument>)>,
-    views: HashMap<String, (u64, Arc<AtomicBool>)>,
+    views: HashMap<String, ViewState>,
     worker: Option<Submit>,
+    retire: Option<Retire>,
 }
 
 type Submit = Arc<dyn Fn(Box<RenderJob>) -> Result<(), String> + Send + Sync>;
+type Retire = Arc<dyn Fn() + Send + Sync>;
+
+struct ViewState {
+    revision: u64,
+    cancelled: Arc<AtomicBool>,
+    // Stable across revisions: superseding a sample must not retire a view.
+    closed: Arc<AtomicBool>,
+}
+impl Default for ViewState {
+    fn default() -> Self {
+        Self {
+            revision: 0,
+            cancelled: Arc::new(AtomicBool::new(false)),
+            closed: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct PreviewService(Mutex<ServiceState>);
@@ -200,6 +218,7 @@ pub(crate) struct RenderedTexture {
 }
 
 pub(super) struct RenderJob {
+    pub view_closed: Arc<AtomicBool>,
     pub document: Arc<PreviewDocument>,
     pub request: RenderRequest,
     pub progress: f32,
@@ -269,9 +288,10 @@ pub(super) fn check_request(cancelled: &AtomicBool, deadline: Instant) -> Result
 }
 
 impl PreviewService {
-    pub(super) fn connect(&self, submit: Submit) {
+    pub(super) fn connect(&self, submit: Submit, retire: Retire) {
         if let Ok(mut state) = self.0.lock() {
             state.worker = Some(submit);
+            state.retire = Some(retire);
         }
     }
 
@@ -281,9 +301,7 @@ impl PreviewService {
             return Err("Too many feature preview views are open".into());
         }
         let id = uuid::Uuid::new_v4().to_string();
-        state
-            .views
-            .insert(id.clone(), (0, Arc::new(AtomicBool::new(false))));
+        state.views.insert(id.clone(), ViewState::default());
         Ok(id)
     }
 
@@ -372,10 +390,20 @@ impl PreviewService {
     }
 
     pub fn close_view(&self, view_id: &str) {
-        if let Ok(mut state) = self.0.lock() {
-            if let Some((_, cancelled)) = state.views.remove(view_id) {
-                cancelled.store(true, Ordering::Release);
-            }
+        let retire = {
+            // Closing remains effective even if an earlier submitter panicked.
+            let mut state = self.0.lock().unwrap_or_else(|error| error.into_inner());
+            let Some(view) = state.views.remove(view_id) else {
+                return;
+            };
+            view.cancelled.store(true, Ordering::Release);
+            view.closed.store(true, Ordering::Release);
+            state.retire.clone()
+        };
+        // Wake the existing worker once, without holding the service lock.
+        // Its coalesced cleanup slot fences both queued and in-flight work.
+        if let Some(retire) = retire {
+            retire();
         }
     }
 
@@ -402,11 +430,11 @@ impl PreviewService {
         if request.frame_index >= document.frames.len() {
             return Err("Unknown feature preview frame".into());
         }
-        let (revision, _) = state
+        let view = state
             .views
             .get(&request.view_id)
             .ok_or("Feature preview view is closed")?;
-        if request.revision <= *revision {
+        if request.revision <= view.revision {
             return Err("Superseded feature preview request".into());
         }
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -414,7 +442,9 @@ impl PreviewService {
         let deadline = Instant::now() + REQUEST_LIFETIME;
         let view_id = request.view_id.clone();
         let revision = request.revision;
+        let view_closed = Arc::clone(&view.closed);
         let command = Box::new(RenderJob {
+            view_closed,
             document,
             request,
             progress,
@@ -423,14 +453,69 @@ impl PreviewService {
             deadline,
         });
         state.worker.as_ref().ok_or("CAD renderer is not ready")?(command)?;
-        if let Some((_, previous)) = state.views.insert(view_id, (revision, cancelled.clone())) {
-            previous.store(true, Ordering::Release);
-        }
+        let view = state.views.get_mut(&view_id).unwrap();
+        view.revision = revision;
+        let previous = std::mem::replace(&mut view.cancelled, cancelled.clone());
+        previous.store(true, Ordering::Release);
         Ok(PendingRender {
             response,
             cancelled,
             deadline,
         })
+    }
+}
+
+#[cfg(test)]
+mod close_lifetime_tests {
+    use super::*;
+
+    #[test]
+    fn native_preview_close_has_one_stable_view_lifetime_and_one_retirement_signal() {
+        let service = PreviewService::default();
+        let descriptor = service.retain(vec![Frame::default()]).unwrap();
+        let (send, receive) = mpsc::channel();
+        let retirements = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&retirements);
+        service.connect(
+            Arc::new(move |job| send.send(job).map_err(|e| e.to_string())),
+            Arc::new(move || {
+                counted.fetch_add(1, Ordering::AcqRel);
+            }),
+        );
+        let view = service.open_view().unwrap();
+        let request = |revision| RenderRequest {
+            palette: None,
+            preview_id: descriptor.preview_id.clone(),
+            view_id: view.clone(),
+            revision,
+            frame_index: 0,
+            width: 300,
+            height: 176,
+            yaw: 0.5,
+            pitch: 0.5,
+        };
+        let _first = service.render(request(1)).unwrap();
+        let first = receive.recv().unwrap();
+        let _second = service.render(request(2)).unwrap();
+        let second = receive.recv().unwrap();
+        assert!(first.cancelled.load(Ordering::Acquire));
+        assert!(
+            !first.view_closed.load(Ordering::Acquire),
+            "Superseding a sample keeps its view resident"
+        );
+        assert!(Arc::ptr_eq(&first.view_closed, &second.view_closed));
+        service.close_view(&view);
+        service.close_view(&view);
+        assert!(second.cancelled.load(Ordering::Acquire));
+        assert!(second.view_closed.load(Ordering::Acquire));
+        assert_eq!(retirements.load(Ordering::Acquire), 1);
+        let reopened = service.open_view().unwrap();
+        let state = service.0.lock().unwrap();
+        assert!(!Arc::ptr_eq(
+            &state.views[&reopened].closed,
+            &second.view_closed
+        ));
+        assert!(!state.views[&reopened].closed.load(Ordering::Acquire));
     }
 }
 
@@ -1014,9 +1099,10 @@ mod tests {
         let descriptor = service.retain(vec![frame(0.0)]).unwrap();
 
         let (worker, jobs) = mpsc::sync_channel(2);
-        service.connect(Arc::new(move |job| {
-            worker.try_send(job).map_err(|_| "busy".into())
-        }));
+        service.connect(
+            Arc::new(move |job| worker.try_send(job).map_err(|_| "busy".into())),
+            Arc::new(|| {}),
+        );
         let view = service.open_view().unwrap();
         let first = request(descriptor.preview_id.clone(), view.clone(), 1);
         let _first_reply = service.render(first.clone()).unwrap();

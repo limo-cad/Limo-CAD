@@ -8,6 +8,7 @@ struct Pending {
     main: Option<Snapshot>,
     teaching: Option<Box<RenderJob>>,
     closed: bool,
+    retire_teaching: bool,
 }
 #[derive(Default)]
 pub(super) struct JobQueue {
@@ -15,10 +16,13 @@ pub(super) struct JobQueue {
     changed: Condvar,
     #[cfg(test)]
     pub(super) inject_shader_failure: std::sync::atomic::AtomicU8,
+    #[cfg(test)]
+    pub(super) retired_scene: Mutex<Option<std::sync::Weak<SolidSceneDto>>>,
 }
 pub(super) enum Job {
     Main(Box<Snapshot>),
     Teaching(Box<RenderJob>),
+    RetireTeaching,
 }
 impl JobQueue {
     pub(super) fn try_send(
@@ -41,6 +45,11 @@ impl JobQueue {
         if pending.closed {
             return Err("CAD renderer stopped".into());
         }
+        // Close can race a main-priority deferral of an in-flight job. Never
+        // put its document back behind a stream of main requests.
+        if job.view_closed.load(Ordering::Acquire) {
+            return Err("Feature preview closed".into());
+        }
         // A changed view drops its receipt immediately. Reclaim that canceled
         // slot even when continuous main work prevents the worker draining it.
         if pending.teaching.as_ref().is_some_and(|queued| {
@@ -52,6 +61,25 @@ impl JobQueue {
         self.changed.notify_one();
         Ok(())
     }
+    pub(super) fn retire_closed(&self) {
+        let mut pending = self
+            .pending
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if pending.closed {
+            return;
+        }
+        if pending
+            .teaching
+            .as_ref()
+            .is_some_and(|job| job.view_closed.load(Ordering::Acquire))
+        {
+            pending.teaching = None;
+        }
+        // One bit bounds any number of closes while the worker is busy.
+        pending.retire_teaching = true;
+        self.changed.notify_one();
+    }
     pub(super) fn has_main(&self) -> bool {
         self.pending.lock().unwrap().main.is_some()
     }
@@ -60,6 +88,11 @@ impl JobQueue {
         loop {
             if pending.closed {
                 return None;
+            }
+            // Constant-time retirement cannot starve behind continuous main
+            // work. It submits no teaching render and preserves main priority.
+            if std::mem::take(&mut pending.retire_teaching) {
+                return Some(Job::RetireTeaching);
             }
             if let Some(main) = pending.main.take() {
                 return Some(Job::Main(Box::new(main)));
@@ -79,6 +112,7 @@ impl JobQueue {
         pending.closed = true;
         pending.main = None;
         pending.teaching = None;
+        pending.retire_teaching = false;
         self.changed.notify_all();
     }
 }
@@ -88,13 +122,21 @@ pub(crate) fn connect_preview(world: &World, service: &PreviewService) -> Result
         .get_resource::<Worker>()
         .and_then(|worker| worker.requests.as_ref())
         .ok_or("CAD renderer is not ready")?;
-    let queue = Arc::downgrade(queue);
-    service.connect(Arc::new(move |job| {
-        queue
-            .upgrade()
-            .ok_or_else(|| "CAD renderer stopped".to_owned())?
-            .teaching(job)
-    }));
+    let render_queue = Arc::downgrade(queue);
+    let retire_queue = Arc::downgrade(queue);
+    service.connect(
+        Arc::new(move |job| {
+            render_queue
+                .upgrade()
+                .ok_or_else(|| "CAD renderer stopped".to_owned())?
+                .teaching(job)
+        }),
+        Arc::new(move || {
+            if let Some(queue) = retire_queue.upgrade() {
+                queue.retire_closed();
+            }
+        }),
+    );
     Ok(())
 }
 
@@ -132,6 +174,7 @@ mod tests {
         })).unwrap();
         let (reply, _) = mpsc::sync_channel(1);
         Box::new(RenderJob {
+            view_closed: Arc::new(AtomicBool::new(false)),
             progress: 1.0,
             document: Arc::new(
                 crate::native_viewport::script_preview::PreviewDocument::new(vec![frame]).unwrap(),
@@ -245,6 +288,75 @@ mod tests {
         });
         queue.close();
         completion.recv_timeout(Duration::from_secs(2)).unwrap();
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn native_teaching_close_releases_queued_document_before_continuous_main_work() {
+        let queue = JobQueue::default();
+        let (reply, response) = mpsc::sync_channel(1);
+        let mut job = teaching();
+        job.reply = reply;
+        let document = Arc::downgrade(&job.document);
+        let closed = Arc::clone(&job.view_closed);
+        queue.teaching(job).unwrap();
+        queue.try_send(snapshot()).unwrap();
+        closed.store(true, Ordering::Release);
+        for _ in 0..1000 {
+            queue.retire_closed();
+        }
+        assert!(
+            document.upgrade().is_none(),
+            "Close must drop the queued CPU payload immediately"
+        );
+        assert!(matches!(
+            response.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected)
+        ));
+        assert!(matches!(queue.next(), Some(Job::RetireTeaching)));
+        assert!(matches!(queue.next(), Some(Job::Main(_))));
+        assert!(
+            !queue.pending.lock().unwrap().retire_teaching,
+            "Closes coalesce into one demand wake"
+        );
+        queue.close();
+        assert!(queue.next().is_none());
+    }
+
+    #[test]
+    fn native_teaching_close_fences_deferred_work_without_cancelling_a_new_view() {
+        let queue = JobQueue::default();
+        let old = teaching();
+        let old_document = Arc::downgrade(&old.document);
+        old.view_closed.store(true, Ordering::Release);
+        queue.retire_closed();
+        assert!(queue.teaching(old).unwrap_err().contains("closed"));
+        assert!(old_document.upgrade().is_none());
+        let current = teaching();
+        let closed = Arc::clone(&current.view_closed);
+        queue.teaching(current).unwrap();
+        queue.retire_closed();
+        assert!(matches!(queue.next(), Some(Job::RetireTeaching)));
+        let Some(Job::Teaching(current)) = queue.next() else {
+            panic!("new view lost")
+        };
+        assert!(Arc::ptr_eq(&current.view_closed, &closed));
+        assert!(!closed.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn native_teaching_retirement_wakes_a_parked_worker_without_a_render_request() {
+        let queue = Arc::new(JobQueue::default());
+        let worker = Arc::clone(&queue);
+        let (finished, completion) = mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            assert!(matches!(worker.next(), Some(Job::RetireTeaching)));
+            finished.send(()).unwrap();
+            assert!(worker.next().is_none());
+        });
+        queue.retire_closed();
+        completion.recv_timeout(Duration::from_secs(2)).unwrap();
+        queue.close();
         thread.join().unwrap();
     }
 }
