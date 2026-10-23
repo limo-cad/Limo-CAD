@@ -590,8 +590,19 @@ fn native_preview_blend_layer_preserves_model_input_and_retires_on_completion_an
     widgets.begin();
     panel::paint(&mut world, camera, &mut widgets, 432., 600., theme).unwrap();
     widgets.finish(&mut world);
+    // Painting warms shared UI icons; Close owns only the preview textures.
+    let shared_images: std::collections::HashSet<_> =
+        world.resource::<Assets<Image>>().ids().collect();
+    assert!(!shared_images.is_empty());
     let source = begin_static(&mut world);
     publish_current(&mut world);
+    let target = world
+        .resource::<Files>()
+        .script
+        .preview
+        .image
+        .clone()
+        .unwrap();
     widgets.begin();
     panel::paint(&mut world, camera, &mut widgets, 432., 600., theme).unwrap();
     widgets.finish(&mut world);
@@ -646,7 +657,16 @@ fn native_preview_blend_layer_preserves_model_input_and_retires_on_completion_an
     widgets.begin();
     widgets.finish(&mut world);
     assert!(world.get_entity(model).is_err());
-    assert!(world.resource::<Assets<Image>>().is_empty());
+    let images = world.resource::<Assets<Image>>();
+    assert!(!images.contains(source.id()));
+    assert!(!images.contains(target.id()));
+    assert_eq!(
+        images.ids().collect::<std::collections::HashSet<_>>(),
+        shared_images
+    );
+    let preview = &world.resource::<Files>().script.preview;
+    assert_eq!(preview.images.footprint(), (0, 0));
+    assert!(preview.image.is_none() && preview.blend.is_none() && preview.wake.is_none());
 }
 
 #[test]

@@ -66,7 +66,7 @@ pub(super) fn geometry_motion(frames: &[Frame]) -> Vec<bool> {
                                         .scene
                                         .bodies
                                         .iter()
-                                        .flat_map(|body| body.mesh.positions.chunks_exact(3))
+                                        .flat_map(|body| body.mesh.positions.as_chunks::<3>().0)
                                         .map(|p| (p[axis] - origin).abs())
                                         .fold(0_f32, f32::max)
                                 };
@@ -115,7 +115,7 @@ fn circle_depth(frame: &Frame, profile: &limo_cad_sketch::SketchDto) -> Option<f
         .scene
         .bodies
         .iter()
-        .flat_map(|body| body.mesh.positions.chunks_exact(3))
+        .flat_map(|body| body.mesh.positions.as_chunks::<3>().0)
     {
         let p = [point[0] as f64, point[1] as f64, point[2] as f64];
         let uv = profile.basis.to_2d(p);

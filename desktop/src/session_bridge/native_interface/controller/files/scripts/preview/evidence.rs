@@ -384,8 +384,10 @@ fn changed_pixels(a: &[u8], b: &[u8]) -> usize {
         b.len(),
         "Motion samples need identical native model bounds"
     );
-    a.chunks_exact(3)
-        .zip(b.chunks_exact(3))
+    a.as_chunks::<3>()
+        .0
+        .iter()
+        .zip(b.as_chunks::<3>().0)
         .filter(|(a, b)| a != b)
         .count()
 }
