@@ -89,6 +89,7 @@ fn hole_export_uses_current_circle_filled_leader_mask_style_and_shared_multiline
     }
     let before = serde_json::to_value((&document, &scene, &projection)).unwrap();
     let mut paper = Paper {
+        dimensions: Vec::new(),
         size: [297., 210.],
         items: vec![],
     };
