@@ -99,7 +99,7 @@ jobs:
           set -euo pipefail
           failed=0
           for sbom in security-reports/release/*.sbom.cdx.json; do
-            if ! grype "sbom:$sbom" --fail-on high --output json > "$sbom.grype.json"; then
+            if ! grype "sbom:$sbom" --fail-on high --output json --config .github/grype/exceptions.yaml > "$sbom.grype.json"; then
               echo "::error::Release advisory scan failed; inspect $sbom.grype.json."
               failed=1
             fi

@@ -1,0 +1,15 @@
+# Release advisory exceptions for grype. Every rule must match one entry in
+# docs/security/dependencies.md that records the evidence, owner and review
+# date, and must name the vulnerability, package, version and location so it
+# cannot hide a different finding. Remove a rule when its package changes.
+ignore:
+  - vulnerability: CVE-2026-85091
+    reason: >-
+      Windows z.dll is zlib 1.3.2; gz_vacate() is only reachable through
+      gzprintf/gzvprintf, and the packaged binaries import only inflate,
+      deflate and crc32. See docs/security/dependencies.md.
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-*-windows-*/z.dll"

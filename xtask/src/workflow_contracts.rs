@@ -435,6 +435,67 @@ fn check_package_gates(source: &Value) -> Result<()> {
     Ok(())
 }
 
+const GRYPE_EXCEPTIONS: &str = ".github/grype/exceptions.yaml";
+
+// An exception must stay narrower than a finding: one advisory on one package
+// version at one location, with its evidence recorded in the review record.
+fn check_grype_exceptions(config: &Value, record: &str) -> Result<()> {
+    let rules = config["ignore"]
+        .as_sequence()
+        .context("grype ignore rules")?;
+    for rule in rules {
+        let id = rule["vulnerability"]
+            .as_str()
+            .context("ignore rule vulnerability")?;
+        for field in ["name", "version", "location"] {
+            ensure!(
+                rule["package"][field]
+                    .as_str()
+                    .is_some_and(|v| !v.trim().is_empty()),
+                "{id} exception must name its package {field}"
+            );
+        }
+        ensure!(
+            rule["reason"]
+                .as_str()
+                .is_some_and(|v| !v.trim().is_empty()),
+            "{id} exception must give a reason"
+        );
+        ensure!(
+            record.lines().any(|line| line.starts_with("| ")
+                && line.contains(id)
+                && line.contains(GRYPE_EXCEPTIONS)
+                && line.contains("Review by")),
+            "{id} exception needs a dependency review row with evidence and a review date"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn grype_exceptions_are_scoped_documented_and_shared_by_both_scans() {
+    let config = workflow(GRYPE_EXCEPTIONS);
+    let record = read("docs/security/dependencies.md");
+    check_grype_exceptions(&config, &record).unwrap();
+    let rescan = workflow(".github/workflows/dependency-security.yml");
+    let (_, step) = named_step(
+        &rescan["jobs"]["released-native-dependencies"],
+        "Check newly disclosed native vulnerabilities",
+    )
+    .unwrap();
+    assert!(step["run"].as_str().unwrap().contains(&format!(
+        "grype \"sbom:$sbom\" --fail-on high --output json --config {GRYPE_EXCEPTIONS} >"
+    )));
+    let mut broad = config.clone();
+    broad["ignore"][0]["package"]
+        .as_mapping_mut()
+        .unwrap()
+        .remove("location");
+    assert!(check_grype_exceptions(&broad, &record).is_err());
+    let undocumented = record.replace(GRYPE_EXCEPTIONS, "an ignore file");
+    assert!(check_grype_exceptions(&config, &undocumented).is_err());
+}
+
 fn check_release_sbom_gates(source: &Value) -> Result<()> {
     for (id, upload, glob) in [
         (
@@ -525,10 +586,12 @@ fn check_release_sbom_gates(source: &Value) -> Result<()> {
     ensure!(
         scan["run"]
             .as_str()
-            .is_some_and(|run| run.lines().any(|line| line
-                .trim()
-                .starts_with("if grype \"sbom:$sbom\" --fail-on high --output json"))),
-        "retain all findings and block high/critical advisories"
+            .is_some_and(
+                |run| run.lines().any(|line| line.trim().starts_with(&format!(
+                "if grype \"sbom:$sbom\" --fail-on high --output json --config {GRYPE_EXCEPTIONS} >"
+            )))
+            ),
+        "retain all findings, block high/critical advisories and apply only reviewed exceptions"
     );
     requires_command(scan, "test \"$checked\" -eq 5")?;
     requires_command(scan, "exit \"$failed\"")?;
