@@ -58,12 +58,7 @@ fn decode(bytes: &[u8], source: &str, id: lesson::Id) -> Result<Vec<Frame>, Stri
     if bundle.source_sha256_lf != hash {
         return Err("Bundled lesson is stale; regenerate the authored snapshots".into());
     }
-    let count = match id {
-        lesson::Id::Sketch | lesson::Id::Extrude => 5,
-        lesson::Id::Cut => 6,
-        lesson::Id::Fillet => 4,
-    };
-    if bundle.frames.len() != count {
+    if bundle.frames.len() != id.frame_count() {
         return Err("Bundled lesson has an unexpected number of frames".into());
     }
     // PreviewService::retain checks geometry/mesh/point/selection budgets before

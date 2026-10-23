@@ -12,15 +12,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     if args.next().is_some() {
         return Err("Unexpected argument".into());
     }
-    let source = limo_cad_recipes::find("extrude-basics")?.source;
-    let source_hash = Sha256::digest(source.replace("\r\n", "\n").as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    let mut report = limo_cad_mcp::preview_script(source)?;
+    let mut ids = limo_cad_mcp::lessons::ALL.to_vec();
+    ids.sort_by_key(|id| id.recipe());
+    let mut recipe = None;
+    let mut source_hash = String::new();
+    let mut report = Value::Null;
     let mut assets = Vec::new();
     let mut total = 0;
-    for (lesson, count) in [("sketch", 5), ("extrude", 5), ("cut", 6), ("fillet", 4)] {
+    for id in ids {
+        if recipe != Some(id.recipe()) {
+            let source = limo_cad_recipes::find(id.recipe())?.source;
+            source_hash = Sha256::digest(source.replace("\r\n", "\n").as_bytes())
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+            report = limo_cad_mcp::preview_script(source)?;
+            recipe = Some(id.recipe());
+        }
+        let lesson = id.key();
         let mut frames = report["exports"]["lessons"][lesson].take();
         let frames = frames.as_array_mut().ok_or("Missing lesson frames")?;
         if lesson == "cut" {
@@ -31,7 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             frames.extend_from_slice(&measured[2..]);
         }
-        if frames.len() != count {
+        if frames.len() != id.frame_count() {
             return Err(format!("Unexpected {lesson} frame count").into());
         }
         for frame in frames.iter_mut() {
@@ -59,6 +68,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         std::fs::write(&path, &bytes)?;
         println!("{}: {} bytes", path.display(), bytes.len());
     }
-    println!("Source SHA-256 (LF): {source_hash}; total {total} bytes");
+    println!("Total authored geometry: {total} bytes");
     Ok(())
 }

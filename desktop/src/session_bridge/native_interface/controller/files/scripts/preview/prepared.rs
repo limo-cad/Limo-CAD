@@ -96,7 +96,7 @@ fn authored(source: &str, id: Option<lesson::Id>) -> Option<lesson::Id> {
     (source.len() <= MAX_SOURCE_BYTES
         && catalog::examples()
             .iter()
-            .any(|example| example.id == lesson::RECIPE && example.source == source))
+            .any(|example| example.id == id.recipe() && example.source == source))
     .then_some(id)
 }
 

@@ -44,6 +44,18 @@ impl CutScenario {
     }
 }
 impl Id {
+    /// The editable build that authored this guide's immutable geometry.
+    /// Keep this per guide so related parts can use a suitable construction.
+    pub const fn recipe(self) -> &'static str {
+        RECIPE
+    }
+    pub const fn frame_count(self) -> usize {
+        match self {
+            Self::Sketch | Self::Extrude => 5,
+            Self::Cut => 6,
+            Self::Fillet => 4,
+        }
+    }
     pub const fn key(self) -> &'static str {
         match self {
             Self::Sketch => "sketch",
@@ -125,7 +137,7 @@ pub fn page(locale: &str, id: Id) -> Page {
         keywords: vec!["bracket".into(), id.key().into()],
         description: id.summary(locale).into(),
         body,
-        related_recipes: vec![RECIPE.into()],
+        related_recipes: vec![id.recipe().into()],
         status: "stable".into(),
     }
 }

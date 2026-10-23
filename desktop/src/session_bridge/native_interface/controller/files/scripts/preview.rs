@@ -43,6 +43,7 @@ pub(crate) enum Action {
     Scenario(limo_cad_mcp::lessons::CutScenario),
     Read(limo_cad_mcp::lessons::Id),
     Index,
+    IndexPage(bool),
     FullBuild,
     Help,
     HelpBody,
@@ -190,6 +191,7 @@ pub(crate) struct State {
     lesson: Option<lesson::Id>,
     scenario: lesson::CutScenario,
     index_open: bool,
+    index_page: usize,
     transition: Option<Retained>,
     focus_owner: Option<DocumentContext>,
 }
@@ -239,6 +241,7 @@ impl Default for State {
             lesson: None,
             scenario: lesson::CutScenario::default(),
             index_open: false,
+            index_page: 0,
             transition: None,
             focus_owner: None,
         }
@@ -412,8 +415,8 @@ fn open_lesson(
     }
     let example = catalog::examples()
         .iter()
-        .find(|example| example.id == lesson::RECIPE)
-        .ok_or("The Extrude example is unavailable")?;
+        .find(|example| example.id == id.map_or(lesson::RECIPE, lesson::Id::recipe))
+        .ok_or("The guided example is unavailable")?;
     let files = world.resource::<Files>();
     let previous = files.script.preview.return_to.unwrap_or((
         files.scripts,
@@ -445,6 +448,7 @@ fn open_lesson(
     files.script.preview.lesson = id;
     files.script.preview.scenario = lesson::CutScenario::default();
     files.script.preview.index_open = id.is_none();
+    files.script.preview.index_page = 0;
     files.script.preview.transition = if id.is_none() { None } else { transition };
     files.script.preview.help_view = feature::HelpView::default();
     files.script.preview.focus_owner = handle.presented_context();
@@ -575,8 +579,14 @@ pub(crate) fn command(
     } else if action == Action::Index {
         open_lesson(world, handle, None, true)?;
     } else if action == Action::FullBuild {
+        let recipe = world
+            .resource::<Files>()
+            .script
+            .preview
+            .lesson
+            .map_or(lesson::RECIPE, lesson::Id::recipe);
         let _ = command(world, handle, Action::Close, &ControlInput::Click)?;
-        super::catalog::open_recipe(world, lesson::RECIPE)?;
+        super::catalog::open_recipe(world, recipe)?;
     } else if action == Action::Extrude {
         open_extrude(world, handle)?;
     } else if action == Action::Close {
@@ -597,6 +607,17 @@ pub(crate) fn command(
             return Err("Open the lesson preview first".into());
         }
         match action {
+            Action::IndexPage(next) => {
+                if !preview.index_open {
+                    return Err("Open the guide list before changing its page".into());
+                }
+                preview.index_page = if next {
+                    preview.index_page.saturating_add(1)
+                } else {
+                    preview.index_page.saturating_sub(1)
+                };
+                preview.focus_owner = handle.presented_context();
+            }
             Action::Help | Action::Demo => {
                 preview.steps_open = false;
                 preview.steps_return_focus = false;

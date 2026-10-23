@@ -461,29 +461,49 @@ pub(super) fn paint_instructions(
     Ok(())
 }
 
+/// Keep the catalog bounded by the actual logical window height, including at
+/// large UI scales. Only the visible page creates controls or shapes text.
+fn index_range(page: usize, count: usize, height: f32) -> (usize, std::ops::Range<usize>) {
+    let capacity = ((height - 124.).max(62.) / 62.).floor() as usize;
+    let page = page.min(count.saturating_sub(1) / capacity);
+    let start = page * capacity;
+    (page, start..(start + capacity).min(count))
+}
+
 pub(super) fn paint_index(
     world: &mut World,
     camera: Entity,
     widgets: &mut chrome::Widgets,
     width: f32,
-    _height: f32,
+    height: f32,
     theme: ViewportUiTheme,
 ) -> Result<(), String> {
     let language = lesson::language(world);
     let t = |key: &str| limo_cad_mcp::lessons::text(language, key);
     let card = card::Card::new(width);
     let (x, y, w) = (card.x, card.y, card.width);
+    let available = (height - y - 12.).max(186.);
+    let (page, range) = index_range(
+        world.resource::<Files>().script.preview.index_page,
+        lesson::ALL.len(),
+        available,
+    );
+    world.resource_mut::<Files>().script.preview.index_page = page;
+    let paged = range.start > 0 || range.end < lesson::ALL.len();
+    let rows = range.len();
+    let footer = y + 48. + rows as f32 * 62.;
     card.paint(
         world,
         camera,
         widgets,
         "index",
-        124. + lesson::ALL.len() as f32 * 62.,
+        88. + rows as f32 * 62. + if paged { 36. } else { 0. },
         t("ui.guidedExamples"),
         theme,
     )?;
-    for (index, id) in lesson::ALL.into_iter().enumerate() {
-        let top = y + 44. + index as f32 * 62.;
+    for (row, index) in range.clone().enumerate() {
+        let id = lesson::ALL[index];
+        let top = y + 44. + row as f32 * 62.;
         let entry = widgets.button(
             world,
             camera,
@@ -505,8 +525,55 @@ pub(super) fn paint_index(
             61,
             theme.mute,
         );
-        if index == 0 {
+        if row == 0 {
             focus_control(world, entry);
+        }
+    }
+    if paged {
+        let label = format!(
+            "{}\u{2013}{} / {}",
+            range.start + 1,
+            range.end,
+            lesson::ALL.len()
+        );
+        widgets.text(
+            world,
+            camera,
+            "help-index-page",
+            rect(x + 68., footer, w - 136., 28.),
+            &label,
+            12.,
+            61,
+        );
+        for (next, key, caption, left, disabled) in [
+            (
+                false,
+                "help-index-previous",
+                "ui.previous",
+                x + 8.,
+                range.start == 0,
+            ),
+            (
+                true,
+                "help-index-next",
+                "ui.next",
+                x + w - 56.,
+                range.end == lesson::ALL.len(),
+            ),
+        ] {
+            let mut control = InterfaceControl::button("document/scripts", t(caption));
+            control.disabled = disabled;
+            widgets.button(
+                world,
+                camera,
+                key,
+                control,
+                Some(if next { ">" } else { "<" }),
+                NativeCommand::File(FileCommand::ScriptPreview(Action::IndexPage(next))),
+                rect(left, footer, 48., 28.),
+                None,
+                61,
+            )?;
         }
     }
     widgets.button(
@@ -516,12 +583,7 @@ pub(super) fn paint_index(
         InterfaceControl::button("document/scripts", t("ui.fullBuild")),
         Some(t("ui.fullBuild")),
         NativeCommand::File(FileCommand::ScriptPreview(Action::FullBuild)),
-        rect(
-            x + 8.,
-            y + 66. + lesson::ALL.len() as f32 * 62.,
-            w - 16.,
-            32.,
-        ),
+        rect(x + 8., footer + if paged { 36. } else { 0. }, w - 16., 32.),
         None,
         61,
     )?;
@@ -530,6 +592,28 @@ pub(super) fn paint_index(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_script_preview_catalog_pages_every_guide_at_small_logical_heights() {
+        for height in [186., 240., 330., 600.] {
+            for count in [0, 1, 4, 17, 200] {
+                let mut visited = Vec::new();
+                let mut page = 0;
+                loop {
+                    let (actual, range) = index_range(page, count, height);
+                    assert_eq!(actual, page);
+                    assert!(124. + range.len() as f32 * 62. <= height);
+                    visited.extend(range.clone());
+                    if range.end == count {
+                        break;
+                    }
+                    page += 1;
+                }
+                assert_eq!(visited, (0..count).collect::<Vec<_>>());
+                let (_, tail) = index_range(usize::MAX, count, height);
+                assert_eq!(tail.end, count);
+            }
+        }
+    }
     #[test]
     fn native_script_preview_long_hover_waits_and_cancels_without_repeated_wakes() {
         let now = Instant::now();
