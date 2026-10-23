@@ -1,4 +1,11 @@
 {
+  "namedViews": {
+    "activate": "Ansicht aktivieren",
+    "edit": "Gespeicherte Ansicht {name} bearbeiten",
+    "discard": "Änderungen verwerfen",
+    "finishEdits": "Speichere oder verwirf deine Änderungen, bevor du die Ansicht wechselst.",
+    "finishOperation": "Beende den aktuellen Vorgang, bevor du eine gespeicherte Ansicht aktivierst."
+  },
   "runtimeActivity": {
     "title": "Aktivität",
     "current": "In Bearbeitung",

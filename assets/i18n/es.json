@@ -1,4 +1,11 @@
 {
+  "namedViews": {
+    "activate": "Activar vista",
+    "edit": "Editar vista guardada {name}",
+    "discard": "Descartar cambios",
+    "finishEdits": "Guarda o descarta los cambios antes de cambiar de vista.",
+    "finishOperation": "Termina la operación actual antes de activar una vista guardada."
+  },
   "runtimeActivity": {
     "title": "Actividad",
     "current": "En curso",

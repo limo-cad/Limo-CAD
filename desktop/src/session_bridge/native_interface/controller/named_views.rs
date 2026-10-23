@@ -35,6 +35,7 @@ pub(crate) enum Command {
     Rename,
     Delete,
     Recall,
+    Discard,
     Reset,
     Preview,
     Check,
@@ -55,6 +56,7 @@ struct State {
     selected: Option<String>,
     original: Option<NamedViewConfigurationDto>,
     draft: Option<NamedViewConfigurationDto>,
+    draft_baseline: Option<NamedViewConfigurationDto>,
     target: String,
     placement: Option<assembly::TransformDraft>,
     placement_dirty: bool,
@@ -100,6 +102,7 @@ pub(crate) fn cancel(
         state.visible = false;
         state.previewing = false;
         state.draft = state.original.clone();
+        state.draft_baseline = state.original.clone();
         state.placement_dirty = false;
         state.placement = None;
         state.error = None;
@@ -345,6 +348,7 @@ pub(super) fn inspect(
 fn select(state: &mut State, view: NamedViewConfigurationDto, saved: bool) {
     state.selected = saved.then(|| view.name.clone());
     state.original = saved.then(|| view.clone());
+    state.draft_baseline = Some(view.clone());
     state.draft = Some(view);
     state.placement = None;
     state.target.clear();
@@ -353,6 +357,72 @@ fn select(state: &mut State, view: NamedViewConfigurationDto, saved: bool) {
     state.error = None;
     state.scroll = 0;
     state.generation = state.generation.saturating_add(1);
+}
+
+fn has_unsaved_changes(state: &State) -> bool {
+    state.previewing || state.placement_dirty || state.draft != state.draft_baseline
+}
+
+fn ensure_switchable(world: &mut World, owner: &DocumentContext) -> Result<(), String> {
+    let message =
+        native_viewport::localization::translate(world, "namedViews.finishEdits").to_owned();
+    if let Some(mut state) = world
+        .get_resource_mut::<State>()
+        .filter(|state| state.owner.as_ref() == Some(owner) && has_unsaved_changes(state))
+    {
+        state.visible = true;
+        state.error = Some(message.clone());
+        return Err(message);
+    }
+    Ok(())
+}
+
+/// Browser rows and the editor share one ordered, owner-fenced recall operation.
+/// There is no per-frame engine query or alternate camera/visibility path.
+pub(crate) fn activate(
+    world: &mut World,
+    engine: &AppState,
+    bridge: &SessionBridgeState,
+    owner: &DocumentContext,
+    name: &str,
+) -> Result<Value, String> {
+    let receipt = bridge.native_document_receipt(engine, owner)?;
+    if presentation_locked(world) || crate::native_editor::active(engine)?.is_some() {
+        return Err(
+            native_viewport::localization::translate(world, "namedViews.finishOperation").into(),
+        );
+    }
+    ensure_switchable(world, owner)?;
+    let name = name.to_owned();
+    worker::enqueue_operation(
+        world,
+        receipt.owner,
+        receipt.revision,
+        "recall_named_view".into(),
+        json!({"name":name}),
+        move |world, services, result| {
+            let result = result?;
+            let owner = result.context.clone();
+            let value = finish_mutation(
+                &services.engine,
+                &services.bridge,
+                world,
+                "recall_named_view",
+                result,
+            );
+            if value["render_error"].is_null() {
+                if let Some(mut state) = world
+                    .get_resource_mut::<State>()
+                    .filter(|state| state.owner.as_ref() == Some(&owner))
+                {
+                    if let Some(view) = state.views.iter().find(|view| view.name == name).cloned() {
+                        select(&mut state, view, true);
+                    }
+                }
+            }
+            Ok(value)
+        },
+    )
 }
 
 pub(crate) fn open(
@@ -373,6 +443,17 @@ pub(crate) fn open(
         return Err("Finish the sketch before editing named views".into());
     }
     world.init_resource::<State>();
+    if let Some(mut state) = world.get_resource_mut::<State>().filter(|state| {
+        state.owner.as_ref() == Some(owner)
+            && state.draft.is_some()
+            && (name.is_none()
+                || name == state.selected.as_deref()
+                || (name == Some("") && state.selected.is_none()))
+    }) {
+        state.visible = true;
+        return Ok(json!({"named_views_visible":true}));
+    }
+    ensure_switchable(world, owner)?;
     let views = read_views(engine)?;
     let selected = name
         .or(views.active.as_deref())
@@ -659,6 +740,7 @@ fn reduce_inner(
     if matches!(
         command,
         Command::Recall
+            | Command::Discard
             | Command::Preview
             | Command::Save
             | Command::Rename
@@ -740,6 +822,21 @@ fn reduce_inner(
         }
         Command::Create => {
             return open(world, engine, &action.context, Some(""));
+        }
+        Command::Discard => {
+            let baseline = world.resource::<State>().draft_baseline.clone();
+            let saved = world.resource::<State>().selected.is_some();
+            cancel(world, engine, bridge, &action.context)?;
+            let mut state = world.resource_mut::<State>();
+            if let Some(view) = baseline {
+                select(&mut state, view, saved);
+            }
+            state.visible = true;
+            return Ok(json!({"discarded":true}));
+        }
+        Command::Recall => {
+            let name = state.selected.clone().ok_or("Select a saved view")?;
+            return activate(world, engine, bridge, &action.context, &name);
         }
         Command::Capture => {
             let name = world
@@ -881,13 +978,6 @@ fn reduce_inner(
                 arguments =
                     json!({"name":state.selected.as_ref().ok_or("Select a saved view to delete")?});
             }
-            Command::Recall => {
-                if state.placement_dirty || state.draft != state.original {
-                    return Err("Save or reselect the named view before recalling it".into());
-                }
-                operation = "recall_named_view";
-                arguments = json!({"name":state.selected.as_ref().ok_or("Save this view before recalling it")?});
-            }
             Command::Reset => {
                 operation = "clear_named_view";
                 arguments = json!({});
@@ -916,6 +1006,11 @@ fn reduce_inner(
                         state.selected = None;
                         state.original = None;
                         state.draft = None;
+                        state.draft_baseline = None;
+                        state.placement = None;
+                        state.placement_dirty = false;
+                        state.target.clear();
+                        state.report = None;
                     }
                 }
             }
@@ -937,6 +1032,14 @@ fn edit(
     value: &str,
     units: UnitSystem,
 ) -> Result<(), String> {
+    if field == Field::Saved {
+        let state = world.resource::<State>();
+        if state.selected.as_deref() == Some(value) {
+            return Ok(());
+        }
+        let owner = state.owner.clone().ok_or("Open Named Views")?;
+        ensure_switchable(world, &owner)?;
+    }
     let mut state = world.resource_mut::<State>();
     state.error = None;
     match field {
@@ -1034,7 +1137,13 @@ pub(super) fn synchronize(
     let result = (|| {
         if state.owner.as_ref() != Some(owner) {
             state.visible = false;
+            state.selected = None;
+            state.original = None;
             state.draft = None;
+            state.draft_baseline = None;
+            state.placement = None;
+            state.placement_dirty = false;
+            state.target.clear();
             state.previewing = false;
             state.preview_origin = None;
             state.owner = Some(owner.clone());
