@@ -10,6 +10,7 @@ use std::{
 };
 
 #[cfg(any(target_os = "macos", test))]
+#[path = "process_evidence/macos_sample.rs"]
 mod macos_sample;
 
 pub(super) const DISCONNECTED_EXIT_GRACE: Duration = Duration::from_millis(250);
