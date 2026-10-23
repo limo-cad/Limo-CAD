@@ -1021,6 +1021,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cargo xtask advisory-exceptions
           failed=0
           checked=0
           while IFS= read -r sbom; do

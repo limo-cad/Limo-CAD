@@ -1,7 +1,8 @@
-# Release advisory exceptions for grype. Every rule must match one entry in
-# docs/security/dependencies.md that records the evidence, owner and review
-# date, and must name the vulnerability, package, version and location so it
-# cannot hide a different finding. Remove a rule when its package changes.
+# Release advisory exceptions for grype. `cargo xtask advisory-exceptions`
+# runs before every scan that loads this file and fails unless each rule
+# equals one unexpired entry in reviews.yaml (advisory, package name, version,
+# type and location) and has a row in docs/security/dependencies.md. No other
+# grype option or rule field is accepted here.
 ignore:
   - vulnerability: CVE-2026-85091
     reason: >-

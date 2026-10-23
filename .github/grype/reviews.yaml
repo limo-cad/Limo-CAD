@@ -1,0 +1,14 @@
+# Reviewed scope for every rule in exceptions.yaml. `cargo xtask
+# advisory-exceptions` runs before each release and scheduled scan and fails
+# unless each rule equals exactly one entry here, that entry's review date has
+# not passed and is at most 90 days away, and docs/security/dependencies.md
+# has a row naming the advisory, owner and date.
+reviews:
+  - vulnerability: CVE-2026-85091
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-*-windows-*/z.dll"
+    owner: "@jackControls"
+    review-by: "2026-11-06"

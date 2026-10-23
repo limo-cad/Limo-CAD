@@ -91,7 +91,9 @@ carriers disagree with `VERSION`.
    Ubuntu DEB and AppImage with `LIMO_CAD_BUILD_CHANNEL` set to the tag name. When all
    builders and the newer-host AppImage check succeed, the release security job
    verifies all five final-package SBOMs and checks current RustSec/native
-   advisories. Its `publish_release` job then:
+   advisories. It applies only reviewed, unexpired exceptions (see
+   [the dependency review record](security/dependencies.md)); an expired review
+   blocks the tag until it is renewed or removed. Its `publish_release` job then:
 
    - checks every package against its `.sha256` and fails if any of the five is
      missing, so a release cannot go out with a gap;
