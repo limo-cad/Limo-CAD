@@ -400,6 +400,11 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
             manager.set_document_name(name)
         }),
         "project_prepare_new" => to_json(manager.prepare_new_project()),
+        "project_prepare_load_snapshot" => with_payload(payload, |encoded: String| {
+            let snapshot = limo_cad_project_file::ProjectSnapshot::decode_base64(&encoded)
+                .map_err(|error| SessionError::Solid(error.to_string()))?;
+            manager.prepare_load_project_snapshot(&snapshot)
+        }),
         "project_prepare_load" => {
             with_payload(payload, |model: String| manager.prepare_load_project(model))
         }
@@ -429,7 +434,7 @@ pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> Strin
         "set_named_views" => with_payload(payload, |request: SetNamedViewsPayload| {
             limo_cad_solid::check_export_model_snapshot(
                 request.expected_model_json.as_deref(),
-                &manager.export_project_model()?,
+                &manager.project_model_projection()?,
             )
             .map_err(|e| crate::SessionError::Solid(e.into()))?;
             manager.set_named_views(request.views)

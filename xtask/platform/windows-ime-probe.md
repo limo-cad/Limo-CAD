@@ -8,7 +8,7 @@ It requires no native CAD build. Inspect the uploaded `report.json`, including
 per-query errors; `inventory-complete` does not mean an IME is ready.
 
 ```powershell
-gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref feat/bevy-interface -f ime-probe-only=true
+gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref main -f ime-probe-only=true
 ```
 
 All IME inputs default to false for dispatch and reusable calls. Ordinary
@@ -48,7 +48,7 @@ The registered Microsoft Japanese profile alone permits diagnosis; it does not
 prove working IME input.
 
 ```powershell
-gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref feat/bevy-interface -f ime-probe-only=true -f ime-profile-diagnosis=true
+gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref main -f ime-probe-only=true -f ime-profile-diagnosis=true
 ```
 
 Run `36348814600` failed before activation because the probe's ThreadMgr CLSID
@@ -64,7 +64,7 @@ The next controlled comparison provisions those same two capabilities before
 the identical no-key diagnosis:
 
 ```powershell
-gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref feat/bevy-interface -f ime-probe-only=true -f ime-provision-japanese=true -f ime-profile-diagnosis=true
+gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref main -f ime-probe-only=true -f ime-provision-japanese=true -f ime-profile-diagnosis=true
 ```
 
 The diagnostic retains exact legacy enablement, modern profile flags, active
@@ -132,7 +132,7 @@ After reviewing the inventory, explicitly request provisioning and the separate
 stock-control exercise on a fresh disposable runner:
 
 ```powershell
-gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref feat/bevy-interface -f ime-probe-only=true -f ime-provision-japanese=true -f ime-exercise=true
+gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref main -f ime-probe-only=true -f ime-provision-japanese=true -f ime-exercise=true
 ```
 
 Provisioning and input require repository ID `1313334315` on an explicitly

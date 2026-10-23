@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "source_revision": "f01555cfbb9384c4f035d3bc785d04d8624173e4",
+  "desktop_build": {
+    "version": "0.3.0-rc.1",
+    "channel": "development",
+    "modified": false
+  },
+  "workflow_run": "https://github.com/limo-cad/Limo-CAD/actions/runs/39696532990",
+  "artifact": {
+    "id": 12394410295,
+    "sha256": "1f7fcdd7fb60c33141a6713b6c15c56c61772e1a385fbd7220b2c61ea6986555"
+  },
+  "platform": "Linux X11 on a private Xvfb display",
+  "appearance": "light",
+  "scales": [
+    1,
+    2
+  ],
+  "state_checks_passed": true,
+  "capture_scope": "Native controls drive editor actions; owned OS input drives script Open/Save choosers. GIFs show ordered actual native-window/chooser checkpoints. X11 images sample the owned main window before Bevy capture.",
+  "qualification_limits": [
+    "Physical source typing/IME and continuous pointer recording remain unqualified.",
+    "Wayland, monitor DPI transitions and macOS/Windows UI flows are outside this finite capture run.",
+    "Broad UI/manual MCP qualification remains paused.",
+    "The separate shutdown investigation remains open in issue374."
+  ],
+  "clips": [
+    {
+      "file": "portable-source-100.gif",
+      "bytes": 414825,
+      "sha256": "6ed955e12ad11fffe00e48f3bbfaa1c6d883f1abf640a0e4710f4957b80c5b67",
+      "artifact_path": "native-input-linux-scripts-1/evidence/replay-source/portable-source.gif",
+      "frames": 13,
+      "frame_duration_ms": 1000,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "portable-source-200.gif",
+      "bytes": 377534,
+      "sha256": "a74819ac81e774c2bc942ecac8191d55745e7b4ae24e90b29f37bc2ea88d7256",
+      "artifact_path": "native-input-linux-scripts-2/evidence/replay-source/portable-source.gif",
+      "frames": 13,
+      "frame_duration_ms": 1000,
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "native-viewport-100.png",
+      "bytes": 476042,
+      "sha256": "578b595f6ace830a2e843fb01cc0593233017ce37bb406316e0aadb510e3237d",
+      "artifact_path": "native-input-linux-scripts-1/evidence/native-lessons.x11-before-bevy.png"
+    },
+    {
+      "file": "native-viewport-200.png",
+      "bytes": 1120463,
+      "sha256": "f9ced5003ecf0117fe8a9269ade500a1208087e380bb6e0b1763807f4a9ff0b1",
+      "artifact_path": "native-input-linux-scripts-2/evidence/native-lessons.x11-before-bevy.png"
+    }
+  ]
+}

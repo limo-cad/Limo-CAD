@@ -1,7 +1,7 @@
 //! Application-level solid history policy, independent of the interface host.
 //!
 //! At the latest timeline marker, Undo deletes the last feature after exporting
-//! a complete model, and Redo loads that model
+//! a complete model/domain snapshot, and Redo loads that snapshot
 //! through ordinary project replacement. Earlier timeline markers move by one.
 //! Destructive feature edits retain a bounded pre-edit snapshot, so Undo restores
 //! a deleted or edited feature instead of deleting an unrelated earlier feature.
@@ -14,6 +14,7 @@
 //! publisher and its history, not reauthorize snapshots against unknown state.
 
 use limo_cad_interface::DocumentContext;
+use limo_cad_project_file::ProjectSnapshot;
 use std::sync::Arc;
 
 const SOLID_REDO_LIMIT: usize = 32;
@@ -41,7 +42,7 @@ struct Ticket {
     identity: Arc<()>,
     serial: u64,
     expected: HistoryState,
-    model_json: Arc<str>,
+    snapshot: Arc<ProjectSnapshot>,
 }
 
 #[derive(Clone, Debug)]
@@ -53,22 +54,22 @@ pub(crate) struct RedoTicket(Ticket);
 #[derive(Clone, Debug)]
 pub(crate) struct EditUndoTicket(Ticket);
 impl EditUndoTicket {
-    pub(crate) fn model_json(&self) -> &str {
-        &self.0.model_json
+    pub(crate) fn snapshot(&self) -> &ProjectSnapshot {
+        &self.0.snapshot
     }
 }
 
 #[derive(Clone, Debug)]
 struct RedoEntry {
-    model: Arc<str>,
+    model: Arc<ProjectSnapshot>,
     /// Destructive edits restore a snapshot in both directions. Feature-create
     /// Undo retains its established delete-latest behavior.
-    edit_before: Option<Arc<str>>,
+    edit_before: Option<Arc<ProjectSnapshot>>,
 }
 
 impl RedoTicket {
-    pub(crate) fn model_json(&self) -> &str {
-        &self.0.model_json
+    pub(crate) fn snapshot(&self) -> &ProjectSnapshot {
+        &self.0.snapshot
     }
 }
 
@@ -81,7 +82,7 @@ pub(crate) struct SolidHistory {
     serial: u64,
     authorized: Option<HistoryState>,
     redo: Vec<RedoEntry>,
-    edits: Vec<Arc<str>>,
+    edits: Vec<Arc<ProjectSnapshot>>,
     preserve_visibility: bool,
 }
 
@@ -186,17 +187,14 @@ impl SolidHistory {
     pub(crate) fn prepare_undo(
         &self,
         state: &HistoryState,
-        model_json: String,
+        snapshot: ProjectSnapshot,
     ) -> Result<UndoTicket, &'static str> {
         self.next_serial()?;
-        if model_json.is_empty() {
-            return Err("Undo needs a complete engine model export");
-        }
         Ok(UndoTicket(Ticket {
             identity: self.identity.clone(),
             serial: self.serial,
             expected: state.clone(),
-            model_json: model_json.into(),
+            snapshot: snapshot.into(),
         }))
     }
 
@@ -218,7 +216,7 @@ impl SolidHistory {
             self.redo.clear();
         }
         self.redo.push(RedoEntry {
-            model: ticket.0.model_json,
+            model: ticket.0.snapshot,
             edit_before: None,
         });
         if self.redo.len() > SOLID_REDO_LIMIT {
@@ -238,7 +236,7 @@ impl SolidHistory {
             identity: self.identity.clone(),
             serial: self.serial,
             expected: state.clone(),
-            model_json: self.redo.last()?.model.clone(),
+            snapshot: self.redo.last()?.model.clone(),
         }))
     }
 
@@ -254,7 +252,7 @@ impl SolidHistory {
             || !self
                 .redo
                 .last()
-                .is_some_and(|entry| Arc::ptr_eq(&entry.model, &ticket.0.model_json))
+                .is_some_and(|entry| Arc::ptr_eq(&entry.model, &ticket.0.snapshot))
         {
             return Err("Redo no longer belongs to the current model branch");
         }
@@ -286,13 +284,10 @@ impl SolidHistory {
     pub(crate) fn record_edit(
         &mut self,
         before: &HistoryState,
-        model: String,
+        model: ProjectSnapshot,
         after: HistoryState,
     ) -> Result<(), &'static str> {
-        if before.context != after.context
-            || after.engine_revision <= before.engine_revision
-            || model.is_empty()
-        {
+        if before.context != after.context || after.engine_revision <= before.engine_revision {
             return Err("Edit history requires a newer revision and a complete owned model");
         }
         self.observe(before)?;
@@ -314,13 +309,13 @@ impl SolidHistory {
             identity: self.identity.clone(),
             serial: self.serial,
             expected: state.clone(),
-            model_json: self.edits.last()?.clone(),
+            snapshot: self.edits.last()?.clone(),
         }))
     }
     pub(crate) fn commit_edit_undo(
         &mut self,
         ticket: EditUndoTicket,
-        current_model: String,
+        current_model: ProjectSnapshot,
         after: HistoryState,
     ) -> Result<(), &'static str> {
         self.check_ticket(&ticket.0)?;
@@ -329,8 +324,7 @@ impl SolidHistory {
             || !self
                 .edits
                 .last()
-                .is_some_and(|model| Arc::ptr_eq(model, &ticket.0.model_json))
-            || current_model.is_empty()
+                .is_some_and(|model| Arc::ptr_eq(model, &ticket.0.snapshot))
             || before.window_id != after.context.window_id
             || before.document_id != after.context.document_id
             || before.epoch == after.context.epoch
@@ -342,7 +336,7 @@ impl SolidHistory {
         self.edits.pop();
         self.redo.push(RedoEntry {
             model: current_model.into(),
-            edit_before: Some(ticket.0.model_json),
+            edit_before: Some(ticket.0.snapshot),
         });
         if self.redo.len() > SOLID_REDO_LIMIT {
             self.redo.remove(0);

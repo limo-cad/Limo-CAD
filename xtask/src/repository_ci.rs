@@ -27,7 +27,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "desktop-changes" => return crate::desktop_changes::run(args),
         "native-ignored-test" => {
             let suite = args.next().context(
-                "missing native ignored suite (fonts, sketch-visual, grid-redraw, sketch-commit, extrude-preview or show-me-ui)",
+                "missing native ignored suite (fonts, sketch-visual, grid-redraw, sketch-commit, composition, extrude-preview, show-me-ui or show-me-lifecycle)",
             )?;
             ensure!(
                 args.next().is_none(),
@@ -141,6 +141,10 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             "committed_sketch_primitives_render_without_a_followup_pointer_frame",
             &["committed_sketch_primitives_render_without_a_followup_pointer_frame"],
         )),
+        "composition" => Ok((
+            "native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_frames",
+            &["native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_frames"],
+        )),
         "extrude-preview" => Ok((
             "extrude_preview_renders_selected_profile_and_real_solid",
             &["extrude_preview_renders_selected_profile_and_real_solid"],
@@ -160,7 +164,7 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             ],
         )),
         _ => bail!(
-            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit, extrude-preview, show-me-ui or show-me-lifecycle"
+            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit, composition, extrude-preview, show-me-ui or show-me-lifecycle"
         ),
     }
 }
@@ -358,6 +362,7 @@ mod tests {
             "sketch-visual",
             "grid-redraw",
             "sketch-commit",
+            "composition",
             "extrude-preview",
             "show-me-ui",
             "show-me-lifecycle",

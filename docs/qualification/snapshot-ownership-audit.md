@@ -177,7 +177,7 @@ dispatch, aliases and derived-output consumers were inspected by the groups
 below, rather than assumed absent because they lack a literal API name.
 
 The exact source excerpts remain outside the repository at
-`D:/limo-cad-maintenance/backlog-autonomous-20261010/issue333-native-entrypoint-census-278-source.json`.
+`<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/issue333-native-entrypoint-census-278-source.json`.
 The covered native entrypoint groups and their lifetime dispositions follow.
 Unresolved projection suggestions from that historical census are inspection
 leads, not proof of a remaining current defect. The repaired paths are updated

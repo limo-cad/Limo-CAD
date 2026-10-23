@@ -54,6 +54,11 @@ pub(crate) struct NativeMutationResult {
     pub value: Value,
 }
 
+enum NativeMutation<'a> {
+    Command(&'a str),
+    Snapshot(&'a limo_cad_project_file::ProjectSnapshot),
+}
+
 #[derive(Resource, Clone)]
 pub(crate) struct NativeRenderedDocument {
     pub owner: DocumentContext,
@@ -164,11 +169,7 @@ pub(super) fn prepare_edit_history(
     if presentation {
         history.advance_visibility(&before, after)?;
     } else {
-        let model = super::parse_engine_envelope(engine.engine_call("project_export_model", ""))?;
-        let model = model
-            .as_str()
-            .ok_or("Engine did not return a complete edit snapshot")?;
-        history.record_edit(&before, model.into(), after)?;
+        history.record_edit(&before, engine.project_snapshot()?, after)?;
     }
     Ok(Some(history))
 }
@@ -297,7 +298,7 @@ impl SessionBridgeState {
             engine,
             expected,
             None,
-            operation,
+            NativeMutation::Command(operation),
             arguments,
             validate_control,
         )
@@ -318,8 +319,28 @@ impl SessionBridgeState {
             engine,
             expected,
             Some(expected_revision),
-            operation,
+            NativeMutation::Command(operation),
             || Ok(arguments.clone()),
+            validate_control,
+        )
+    }
+
+    /// File Open carries paired intent without routing it through model-only JSON.
+    /// It uses exactly the same owner, revision and publisher retirement fence.
+    pub(crate) fn apply_native_snapshot_at(
+        &self,
+        engine: &AppState,
+        expected: &DocumentContext,
+        expected_revision: u64,
+        snapshot: &limo_cad_project_file::ProjectSnapshot,
+        validate_control: impl FnOnce() -> Result<(), String>,
+    ) -> Result<NativeMutationResult, String> {
+        self.apply_native_mutation_guarded(
+            engine,
+            expected,
+            Some(expected_revision),
+            NativeMutation::Snapshot(snapshot),
+            || Ok(Value::Null),
             validate_control,
         )
     }
@@ -329,7 +350,7 @@ impl SessionBridgeState {
         engine: &AppState,
         expected: &DocumentContext,
         expected_revision: Option<u64>,
-        operation: &str,
+        operation: NativeMutation<'_>,
         arguments: impl FnOnce() -> Result<Value, String>,
         validate_control: impl FnOnce() -> Result<(), String>,
     ) -> Result<NativeMutationResult, String> {
@@ -351,8 +372,18 @@ impl SessionBridgeState {
         validate_control()?;
         let arguments = arguments()?;
 
+        let (operation, snapshot) = match operation {
+            NativeMutation::Command(name) => (name, None),
+            NativeMutation::Snapshot(snapshot) => ("cad_load_project_model", Some(snapshot)),
+        };
         let result = if is_project_replacement(operation) {
-            let (outcome, changed) = dispatch_project_replacement(engine, operation, &arguments);
+            let (outcome, changed) = if let Some(snapshot) = snapshot {
+                let raw = engine.project_load_snapshot(snapshot);
+                let changed = !super::project_replacement_is_unchanged(&raw);
+                (super::parse_engine_envelope(raw), changed)
+            } else {
+                dispatch_project_replacement(engine, operation, &arguments)
+            };
             if changed {
                 retire_project_publisher(
                     publisher,

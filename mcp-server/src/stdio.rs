@@ -1,8 +1,8 @@
 //! One stdio transport for rendered and headless CAD. The desktop owns its
 //! lifetime: a disconnected client never exits or closes the application.
-use std::io::{self, BufRead, Write};
+use std::io::{self, Write};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
@@ -11,8 +11,11 @@ use serde_json::Value;
 
 use crate::{error_response, handle_message, idle_due_messages, CadServer, DesktopBinding};
 
+#[path = "stdio_input.rs"]
+mod input_pipe;
 #[path = "stdio_output.rs"]
 mod output_pipe;
+use input_pipe::{read_lines, StdinEvent};
 
 /// What the desktop title bar can say about the stdio agent.
 ///
@@ -217,36 +220,14 @@ pub(super) fn independent_of_default_document(name: &str, arguments: &Value) -> 
     }
 }
 
-enum StdinEvent {
-    Line(String),
-    Error(String),
-    Eof,
-}
-
-fn read_lines(reader: impl BufRead, tx: Sender<StdinEvent>) {
-    for line in reader.lines() {
-        let event = match line {
-            Ok(line) => StdinEvent::Line(line),
-            Err(error) => {
-                let _ = tx.send(StdinEvent::Error(format!("MCP stdin: {error}")));
-                return;
-            }
-        };
-        if tx.send(event).is_err() {
-            return;
-        }
-    }
-    let _ = tx.send(StdinEvent::Eof);
-}
-
 fn run(
     create: impl FnOnce() -> Result<CadServer, String>,
     desktop: Option<&DesktopTransport>,
 ) -> Result<(), String> {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::sync_channel(input_pipe::QUEUED_REQUESTS);
     thread::Builder::new()
         .name("limo-cad-mcp-input".into())
-        .spawn(move || read_lines(io::stdin().lock(), tx))
+        .spawn(move || read_lines(io::stdin().lock(), |event| tx.send(event).is_ok()))
         .map_err(|error| format!("MCP input worker: {error}"))?;
     serve_events(rx, &mut io::stdout().lock(), create, desktop)
 }
@@ -354,10 +335,11 @@ fn serve_events(
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::sync::mpsc::Sender;
 
     fn events(input: &[u8]) -> Receiver<StdinEvent> {
         let (tx, rx) = mpsc::channel();
-        read_lines(io::Cursor::new(input), tx);
+        read_lines(io::Cursor::new(input), |event| tx.send(event).is_ok());
         rx
     }
 

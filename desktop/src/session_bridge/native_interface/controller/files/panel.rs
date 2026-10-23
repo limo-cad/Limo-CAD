@@ -1681,13 +1681,20 @@ fn paint_scripts(
         61,
     );
     if let Some(loaded) = loaded {
-        let summary = format!(
-            "{}{}\n{} steps, {} checks",
-            if validated { "" } else { "Last validated: " },
-            loaded.name,
-            loaded.steps,
-            loaded.checks
-        );
+        let summary = match loaded.counts {
+            Some((steps, checks)) => format!(
+                "{}{}\n{} steps, {} checks",
+                if validated { "" } else { "Last validated: " },
+                loaded.name,
+                steps,
+                checks,
+            ),
+            None => format!(
+                "{}\n{}",
+                loaded.name,
+                crate::native_viewport::localization::translate(world, "projectReplay.needsRepair")
+            ),
+        };
         state.chrome.text(
             world,
             camera,

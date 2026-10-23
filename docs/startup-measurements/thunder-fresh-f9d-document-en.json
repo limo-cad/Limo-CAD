@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "label": "thunder-fresh-process-profile",
-  "executable": "D:\\limo-startup-candidate-compact-poll-runtime\\nbcad.exe",
+  "executable": "<local-root>\\limo-startup-candidate-compact-poll-runtime\\nbcad.exe",
   "executableSha256": "f9d476b25c3d5a37effd2ff3990d0c93bd5d22c3a71fe847102cd6307a220ebb",
   "profile": "dev-app1-debug2-deps3-debug0",
   "cacheCondition": "first",
@@ -13,7 +13,7 @@
     "compilationIncluded": false
   },
   "locale": "en",
-  "document": "C:\\Users\\jeffg\\.t3\\worktrees\\noBS-CAD\\t3code-028ff4c7\\examples\\testPiece.nbcad",
+  "document": "<local-root>\\Users\\<user>\\.t3\\worktrees\\noBS-CAD\\t3code-028ff4c7\\examples\\testPiece.nbcad",
   "documentSha256": "d7e65fb222a0bb59f0ac82c3f3143a3437a487f3bbacf3a1f314b989b96de609",
   "inputVerification": {
     "policy": "after-batch",
@@ -30,14 +30,14 @@
   },
   "hostUptimeSeconds": 326947.078,
   "startedAt": "2026-10-11T20:50:48.432Z",
-  "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data",
+  "userDataDirectory": "<local-root>\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data",
   "warmups": [],
   "runs": [
     {
       "index": 1,
       "pid": 38504,
       "launchUnixMs": 1791751848433,
-      "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data\\run-01",
+      "userDataDirectory": "<local-root>\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data\\run-01",
       "events": [
         {
           "detail": null,
@@ -147,7 +147,7 @@
       "index": 2,
       "pid": 26252,
       "launchUnixMs": 1791751851285,
-      "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data\\run-02",
+      "userDataDirectory": "<local-root>\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data\\run-02",
       "events": [
         {
           "detail": null,
@@ -257,7 +257,7 @@
       "index": 3,
       "pid": 43188,
       "launchUnixMs": 1791751853915,
-      "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data\\run-03",
+      "userDataDirectory": "<local-root>\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data\\run-03",
       "events": [
         {
           "detail": null,
@@ -367,7 +367,7 @@
       "index": 4,
       "pid": 51608,
       "launchUnixMs": 1791751856732,
-      "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data\\run-04",
+      "userDataDirectory": "<local-root>\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data\\run-04",
       "events": [
         {
           "detail": null,
@@ -477,7 +477,7 @@
       "index": 5,
       "pid": 18504,
       "launchUnixMs": 1791751859457,
-      "userDataDirectory": "D:\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data\\run-05",
+      "userDataDirectory": "<local-root>\\limo-startup-results-thunder-fresh-20261011\\document-en\\webview2-user-data\\run-05",
       "events": [
         {
           "detail": null,

@@ -138,7 +138,7 @@ impl NativeEngineHost {
             .check_model_snapshot(
                 &inner
                     .manager
-                    .export_project_model()
+                    .project_model_projection()
                     .map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?;
@@ -243,7 +243,7 @@ impl NativeEngineHost {
         let inner = workspace.active();
         if inner
             .manager
-            .export_project_model()
+            .project_model_projection()
             .map_err(|e| e.to_string())?
             != finished.model
         {
@@ -313,7 +313,7 @@ impl NativeEngineHost {
             request.expected_model_json.as_deref(),
             &inner
                 .manager
-                .export_project_model()
+                .project_model_projection()
                 .map_err(|e| e.to_string())?,
         )?;
         if !inner.manager.solid_scene_ref().errors.is_empty() {

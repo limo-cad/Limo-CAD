@@ -777,7 +777,7 @@ fn load_document(
     Ok(json!({
         "height_context": height_layout.map(|layout|heights::load_context(engine,body,layout)).transpose()?,
         "document":parse_engine_envelope(engine.engine_call("print_intent_get", ""))?,
-        "model":parse_engine_envelope(engine.engine_call("project_export_model", ""))?,
+        "model":engine.project_model_projection()?,
         "effective":parse_engine_envelope(engine.engine_call("print_intent_effective",
             &json!({"body_ids":[body],"target":target}).to_string()))?
     }))

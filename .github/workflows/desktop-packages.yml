@@ -806,6 +806,18 @@ jobs:
       - name: Fetch and verify embedded printer profiles
         run: cargo xtask printer-profiles --fetch --check
 
+      - name: Verify bounded macOS shutdown sampler
+        shell: bash
+        env:
+          LIMO_CAD_MACOS_SAMPLER_PROOF_DIR: ${{ runner.temp }}/limo-cad-macos-sampler
+        run: |
+          set -euo pipefail
+          sampler_test='replay::process_evidence::macos_sample::tests::owned_sampler_adapter_smoke'
+          # Fail if the macOS-only test disappears; zero matching tests is not a pass.
+          cargo test --locked -p xtask "$sampler_test" -- --list |
+            grep -Fx "$sampler_test: test"
+          cargo test --locked -p xtask "$sampler_test" -- --exact --test-threads=1
+
       - name: Build ad-hoc signed DMG
         if: env.MACOS_DISTRIBUTION_BUILD != 'true'
         shell: bash
@@ -885,12 +897,29 @@ jobs:
           test ! -e "$hidden_stage"
           mkdir -p "$mount"
           stage_moved=false
+          mounted=false
           cleanup_mcp_package() {
-            if [[ "$stage_moved" == true ]]; then mv "$hidden_stage" "$stage"; fi
-            hdiutil detach "$mount" || true
+            local status=$?
+            trap - EXIT
+            if [[ "$stage_moved" == true ]]; then
+              if mv "$hidden_stage" "$stage"; then :; else
+                local restore_status=$?
+                echo "SDK stage restoration failed (exit $restore_status)" >&2
+                if [[ "$status" -eq 0 ]]; then status=$restore_status; fi
+              fi
+            fi
+            if [[ "$mounted" == true ]]; then
+              if cargo xtask package detach-dmg "$mount"; then :; else
+                local detach_status=$?
+                echo "DMG detach failed (exit $detach_status)" >&2
+                if [[ "$status" -eq 0 ]]; then status=$detach_status; fi
+              fi
+            fi
+            exit "$status"
           }
           trap cleanup_mcp_package EXIT
           hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount"
+          mounted=true
           python3 - "$mount/Limo CAD.app/Contents/Info.plist" "$RUNNER_TEMP/limo-cad-macos-uri.json" <<'PY'
           import json, plistlib, sys
           with open(sys.argv[1], 'rb') as file:
@@ -919,6 +948,7 @@ jobs:
             ${{ runner.temp }}/limo-cad-mcp-macos.json
             ${{ runner.temp }}/limo-cad-mcp-macos.json.lifecycle
             ${{ runner.temp }}/limo-cad-macos-uri.json
+            ${{ runner.temp }}/limo-cad-macos-sampler
           if-no-files-found: warn
           retention-days: 7
 

@@ -10,6 +10,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "replay/bounded_log.rs"]
+mod bounded_log;
+#[path = "replay/process_evidence.rs"]
 mod process_evidence;
 
 const DEFAULT_INITIALIZATION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -22,6 +25,7 @@ pub(crate) struct Client {
     request_timeout: Option<Duration>,
     initialization: Value,
     process_evidence: Option<process_evidence::Evidence>,
+    stderr_log: Option<Receiver<std::io::Result<()>>>,
     cleanup_finished: bool,
 }
 impl Client {
@@ -91,20 +95,39 @@ impl Client {
         logs: Option<(fs::File, fs::File, process_evidence::Evidence)>,
     ) -> Result<Self> {
         crate::deploy_native::configure_runtime_environment(&mut command)?;
-        let (mut stdout_log, stderr, process_evidence) = match logs {
-            Some((stdout, stderr, evidence)) => (Some(stdout), Stdio::from(stderr), Some(evidence)),
-            None => (None, Stdio::inherit(), None),
+        let (mut stdout_log, stderr_log, process_evidence) = match logs {
+            Some((stdout, stderr, evidence)) => (
+                Some(bounded_log::BoundedLog::new(
+                    stdout,
+                    bounded_log::MAX_LOG_BYTES,
+                )),
+                Some(stderr),
+                Some(evidence),
+            ),
+            None => (None, None, None),
         };
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(stderr);
+            .stderr(if stderr_log.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::inherit()
+            });
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x08000000);
         }
         let mut child = command.spawn().context("Start MCP server")?;
+        let stderr_log = stderr_log.map(|log| {
+            let stderr = child.stderr.take().unwrap();
+            let (done, completion) = mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = done.send(bounded_log::drain(stderr, log));
+            });
+            completion
+        });
         let input = child.stdin.take().unwrap();
         let output = child.stdout.take().unwrap();
         let (sender, replies) = mpsc::channel();
@@ -132,6 +155,7 @@ impl Client {
             request_timeout: Some(initialization_timeout),
             initialization: Value::Null,
             process_evidence,
+            stderr_log,
             cleanup_finished: false,
         };
         let spawned = process_evidence::observe(&mut client.child, Duration::ZERO);
@@ -303,6 +327,7 @@ impl Client {
                 }
 
                 self.require_stdout_eof(deadline.saturating_duration_since(Instant::now()))?;
+                self.finish_stderr_log(deadline.saturating_duration_since(Instant::now()))?;
                 return self
                     .terminate()
                     .context("Retain owned process exit receipt");
@@ -313,20 +338,32 @@ impl Client {
             std::thread::sleep(Duration::from_millis(10));
         }
     }
+    fn finish_stderr_log(&mut self, timeout: Duration) -> Result<()> {
+        if let Some(completion) = self.stderr_log.take() {
+            completion
+                .recv_timeout(timeout)
+                .context("Owned MCP stderr log did not finish before the deadline")?
+                .context("Retain owned MCP stderr")?;
+        }
+        Ok(())
+    }
     fn terminate(&mut self) -> Result<()> {
         drop(self.input.take());
         if self.cleanup_finished {
             return Ok(());
         }
         let before = process_evidence::observe(&mut self.child, Duration::ZERO);
-        let kill_attempted = !matches!(before, process_evidence::Observation::Exited(_));
         let thread_evidence_error = if matches!(before, process_evidence::Observation::Running) {
             self.process_evidence
                 .as_ref()
-                .and_then(|evidence| evidence.capture_threads(self.process_id()).err())
+                .and_then(|evidence| evidence.capture_threads(&mut self.child).err())
         } else {
             None
         };
+        // Sampling may observe/reap a natural exit. Use the current owned child
+        // status so that exit is not recorded as a forced cleanup.
+        let before = process_evidence::observe(&mut self.child, Duration::ZERO);
+        let kill_attempted = !matches!(before, process_evidence::Observation::Exited(_));
         let kill_error = if kill_attempted {
             self.child.kill().err().map(|error| error.to_string())
         } else {
@@ -335,6 +372,9 @@ impl Client {
         let after = process_evidence::Observation::from_wait(self.child.wait().map(Some));
         self.cleanup_finished = matches!(after, process_evidence::Observation::Exited(_));
         let mut errors = Vec::new();
+        if let Err(error) = self.finish_stderr_log(process_evidence::DISCONNECTED_EXIT_GRACE) {
+            errors.push(format!("finish owned stderr log: {error:#}"));
+        }
         if let Some(error) = thread_evidence_error {
             errors.push(format!("retain owned thread wait states: {error}"));
         }
@@ -1316,6 +1356,7 @@ mod tests {
                 request_timeout: timeout,
                 initialization: Value::Null,
                 process_evidence: None,
+                stderr_log: None,
                 cleanup_finished: false,
             },
             sender,
@@ -1517,6 +1558,29 @@ cat >/dev/null"#]);
             .contains("owned renderer diagnostic"));
         assert!(Client::start_command_logged(Command::new("sh"), None, &root.0).is_err());
         assert_eq!(fs::read(root.0.join("host-stdout.jsonl")).unwrap(), stdout);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn oversized_owned_stderr_is_capped_without_blocking_protocol_or_process_exit() {
+        let root = TestDirectory::new();
+        let mut command = Command::new("sh");
+        command.args(["-c", r#"read request
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"noisy-owned-fixture","version":"1"}}}'
+dd if=/dev/zero bs=65536 count=34 >&2 2>/dev/null
+cat >/dev/null"#]);
+        let client =
+            Client::start_command_logged(command, Some(Duration::from_secs(5)), &root.0).unwrap();
+        assert_eq!(
+            client.initialization()["serverInfo"]["name"],
+            "noisy-owned-fixture"
+        );
+        client.finish(Duration::from_secs(5)).unwrap();
+        let stderr = fs::read(root.0.join("host-stderr.log")).unwrap();
+        assert_eq!(stderr.len(), bounded_log::MAX_LOG_BYTES);
+        assert!(stderr.ends_with(b"\n[diagnostic log truncated]\n"));
+        let stdout = fs::read(root.0.join("host-stdout.jsonl")).unwrap();
+        assert_eq!(serde_json::from_slice::<Value>(&stdout).unwrap()["id"], 1);
     }
 
     struct TestDirectory(PathBuf);

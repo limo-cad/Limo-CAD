@@ -267,7 +267,7 @@ packaged paths. A standalone `limo-cad-mcp` server needs no `--server-arg`.
 For an AppImage without FUSE, pass each argument explicitly:
 
 ```sh
-cargo xtask run-script --recipe fillet-basics --server /absolute/path/to/Limo.CAD_0.3.0-rc.1_amd64.AppImage --server-arg --appimage-extract-and-run --server-arg --headless
+cargo xtask run-script --recipe fillet-basics --server /absolute/path/to/Limo.CAD_0.3.0-rc.2_amd64.AppImage --server-arg --appimage-extract-and-run --server-arg --headless
 ```
 
 `--repeat 2` compares independent headless runs. To watch in an existing CAD

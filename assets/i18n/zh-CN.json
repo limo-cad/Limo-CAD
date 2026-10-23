@@ -1,4 +1,15 @@
 {
+  "projectReplay": {
+    "needsRepair": "源码需要修复；运行前请验证。",
+    "filter": "Limo CAD 项目回放 (.limo.replay.cbor)",
+    "savePath": "请将项目回放保存到绝对 .limo.replay.cbor 路径",
+    "openPath": "请从绝对路径打开项目回放",
+    "saved": "项目回放已保存，初始项目已保留。运行前请验证。",
+    "changed": "脚本在准备好的运行开始前已更改",
+    "handoff": "无法交接已准备的脚本",
+    "retired": "脚本准备交接已终止",
+    "validSource": "回放源码有效。运行将使用此源码和保留的初始项目；验证不会保存编辑。"
+  },
   "runtimeActivity": {
     "title": "任务",
     "current": "正在进行",

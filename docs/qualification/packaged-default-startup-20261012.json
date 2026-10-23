@@ -80,7 +80,7 @@
     "All ten required stderr/process/stdout/stage logs have exactly one complete retention record, with integer original/retained/regular ZIP sizes equal and actual truncated=false; no ancestor skip covers a required log.",
     "Complete retained stderr for both GUI children has no SurfaceNotConfigured, Surface is not configured for presentation, Surface::get_current_texture_view or panicked at signature. Observer stderr corroborates the fixture outcome."
   ],
-  "evidence_storage": "Authenticated original archives, relative indexes, scoped original commands and independent review receipts are retained outside the source tree under D:/limo-cad-maintenance/backlog-autonomous-20261010. Artifact IDs and hashes above bind that evidence without embedding fixture models or raw responses here.",
+  "evidence_storage": "Authenticated original archives, relative indexes, scoped original commands and independent review receipts are retained outside the source tree under <local-root>/limo-cad-maintenance/backlog-autonomous-20261010. Artifact IDs and hashes above bind that evidence without embedding fixture models or raw responses here.",
   "limits": [
     "No separate model, document, recovery, profile or inbox file was opened for acceptance. Original CI reports contain inline fixture fields; those are not used as model or human UI acceptance.",
     "The normal release ZIPs were not retained by this observer, so the conditional package-manifest/executable hash inspection is unavailable. No native-computer-control flag is inferred from BuildInfo or controlled-source-host evidence.",

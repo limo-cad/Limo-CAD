@@ -10,6 +10,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process::Stdio,
+    time::Duration,
 };
 
 const ENTRY_LIBRARIES: &[&str] = &[
@@ -33,6 +34,57 @@ const ENTRY_LIBRARIES: &[&str] = &[
     "TKMath",
     "TKernel",
 ];
+
+/// Apple's ticket service can drop the connection after notarization succeeds.
+/// Retry only stapler's observed host/network failure, never signing or submission.
+fn staple_with_retry(
+    path: &Path,
+    mut staple: impl FnMut(&Path) -> Result<Option<i32>>,
+    mut wait: impl FnMut(Duration),
+) -> Result<()> {
+    for attempt in 1..=4 {
+        let code = staple(path)?;
+        if code == Some(0) {
+            return Ok(());
+        }
+        ensure!(
+            code == Some(68) && attempt < 4,
+            "stapler staple {} failed (exit {code:?}, attempt {attempt})",
+            path.display()
+        );
+        let delay = Duration::from_secs(5 * (1 << (attempt - 1)));
+        eprintln!(
+            "Apple ticket service unavailable for {}; retrying in {} seconds",
+            path.display(),
+            delay.as_secs()
+        );
+        wait(delay);
+    }
+    unreachable!()
+}
+
+fn staple(package: &Package, path: &Path) -> Result<()> {
+    staple_with_retry(
+        path,
+        |path| {
+            Ok(package
+                .command("xcrun")
+                .args(["stapler", "staple"])
+                .arg(path)
+                .status()
+                .context("start stapler staple")?
+                .code())
+        },
+        std::thread::sleep,
+    )?;
+    common::run(
+        package
+            .command("xcrun")
+            .args(["stapler", "validate"])
+            .arg(path),
+    )
+}
+
 fn system(name: &str) -> bool {
     name.starts_with("/usr/lib/") || name.starts_with("/System/Library/")
 }
@@ -327,12 +379,7 @@ pub(super) fn build(package: &Package, options: &Options) -> Result<()> {
                 .arg(&archive),
         )?;
         notarize(&archive)?;
-        common::run(
-            package
-                .command("xcrun")
-                .args(["stapler", "staple"])
-                .arg(&app),
-        )?;
+        staple(package, &app)?;
     }
     if options.bundle.as_deref() == Some("app") {
         println!("Native app: {}", app.display());
@@ -380,12 +427,7 @@ pub(super) fn build(package: &Package, options: &Options) -> Result<()> {
     if production {
         sign(&dmg)?;
         notarize(&dmg)?;
-        common::run(
-            package
-                .command("xcrun")
-                .args(["stapler", "staple"])
-                .arg(&dmg),
-        )?;
+        staple(package, &dmg)?;
     }
     common::run(package.command("hdiutil").arg("verify").arg(&dmg))?;
     common::checksum(&dmg)?;
@@ -395,6 +437,44 @@ pub(super) fn build(package: &Package, options: &Options) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stapling_retries_only_network_failures_with_a_bounded_backoff() {
+        for (codes, succeeds) in [
+            (vec![Some(0)], true),
+            (vec![Some(68), Some(0)], true),
+            (vec![Some(68), Some(68), Some(68), Some(0)], true),
+            (vec![Some(68); 4], false),
+            (vec![Some(65)], false),
+            (vec![Some(77)], false),
+            (vec![None], false),
+            (vec![Some(68), Some(65)], false),
+        ] {
+            let mut attempts = 0;
+            let mut delays = Vec::new();
+            let path = Path::new("Limo CAD.dmg");
+            let result = staple_with_retry(
+                path,
+                |actual| {
+                    assert_eq!(actual, path);
+                    let code = codes[attempts];
+                    attempts += 1;
+                    Ok(code)
+                },
+                |delay| delays.push(delay.as_secs()),
+            );
+            assert_eq!(result.is_ok(), succeeds, "{codes:?}: {result:?}");
+            assert_eq!(attempts, codes.len());
+            assert_eq!(delays, [5, 10, 20][..codes.len() - 1]);
+        }
+        assert!(staple_with_retry(
+            Path::new("Limo CAD.app"),
+            |_| anyhow::bail!("cannot start stapler"),
+            |_| panic!("startup errors must not retry"),
+        )
+        .is_err());
+    }
+
     #[test]
     fn dependency_parser_retains_spaces_and_system_paths() {
         let result = parse_dependencies("/some path/libTK.dylib:\n\t@rpath/libTK.8.0.dylib (compatibility version 8.0.0, current version 8.0.0)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 1.0.0)\n");

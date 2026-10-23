@@ -170,6 +170,8 @@ pub use measurement_snapshot::{FinishedMeasurementReview, PreparedMeasurementRev
 #[path = "section_snapshot.rs"]
 mod section_snapshot;
 pub use section_snapshot::{FinishedSectionReview, PreparedSectionReview};
+#[path = "project_snapshot.rs"]
+mod project_snapshot;
 #[path = "retention.rs"]
 mod retention;
 use retention::NativeProject;
@@ -797,7 +799,7 @@ impl NativeEngineHost {
                 .observe_owned_model(&verification_owner, || {
                     inner
                         .manager
-                        .export_project_model()
+                        .project_model_projection()
                         .map_err(|error| error.to_string())
                 });
         }
@@ -1042,7 +1044,7 @@ impl NativeEngineHost {
                 request.expected_model_json.as_deref(),
                 &inner
                     .manager
-                    .export_project_model()
+                    .project_model_projection()
                     .map_err(|e| e.to_string())?,
             )?;
         }
@@ -1215,7 +1217,7 @@ impl NativeEngineHost {
                 .check_model_snapshot(
                     &inner
                         .manager
-                        .export_project_model()
+                        .project_model_projection()
                         .map_err(|e| e.to_string())?,
                 )
                 .map_err(|e| e.to_string())?;
@@ -1285,7 +1287,7 @@ impl NativeEngineHost {
                 .check_model_snapshot(
                     &inner
                         .manager
-                        .export_project_model()
+                        .project_model_projection()
                         .map_err(|e| e.to_string())?,
                 )
                 .map_err(|e| e.to_string())?;
@@ -1611,7 +1613,7 @@ fn check_layout_request(
             .check_model_snapshot(
                 &inner
                     .manager
-                    .export_project_model()
+                    .project_model_projection()
                     .map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?;

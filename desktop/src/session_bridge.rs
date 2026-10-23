@@ -100,6 +100,10 @@ struct ProjectPublisher {
     /// Latest published generation that replaced `model.json`. Active-sketch
     /// snapshots deliberately retain the previous completed model.
     last_model_generation: Option<u64>,
+    // A durable capsule may precede a failed heartbeat write. Keep these
+    // receipts separate so ordinary heartbeats cannot acknowledge that failure.
+    last_composite_committed: Option<limo_cad_project_file::PublicationReceipt>,
+    last_composite_published: Option<limo_cad_project_file::PublicationReceipt>,
     /// Latest published generation represented by `active-sketch.json`.
     active_sketch_generation: Option<u64>,
     /// Authoritative live-engine revision for inbox OCC (see module docs).
@@ -126,6 +130,8 @@ impl ProjectPublisher {
             last_export_sequence: 0,
             published_generation: 0,
             last_model_generation: None,
+            last_composite_committed: None,
+            last_composite_published: None,
             active_sketch_generation: None,
 
             engine_revision: 1,
@@ -182,7 +188,24 @@ impl WindowPublisher {
         let previous = self.active_key().to_string();
 
         if previous == UNBOUND_PROJECT || previous == BOOTSTRAP_SESSION_ID {
-            if let Some(existing) = self.by_project.remove(&previous) {
+            if let Some(mut existing) = self.by_project.remove(&previous) {
+                if existing.last_composite_committed.is_some() {
+                    // A committed capsule's directory has an immutable document
+                    // owner. Keep the engine/history lineage, but retire the
+                    // bootstrap transport before publishing the real owner.
+                    if let Err(error) = write_closed_tombstone(&existing.session_id) {
+                        eprintln!("session bridge could not retire bootstrap publication: {error}");
+                    }
+                    existing.session_id = Uuid::new_v4().to_string();
+                    existing.next_export_sequence = 0;
+                    existing.last_export_sequence = 0;
+                    existing.published_generation = 0;
+                    existing.last_model_generation = None;
+                    existing.last_composite_committed = None;
+                    existing.last_composite_published = None;
+                    existing.active_sketch_generation = None;
+                    existing.pending_exports.clear();
+                }
                 self.by_project
                     .insert(project_session_id.to_string(), existing);
             }
@@ -228,6 +251,9 @@ impl Default for SessionBridgeState {
 #[derive(Debug, Deserialize)]
 struct PublishPayload {
     focus: String,
+    /// Only native capture can supply the complete typed snapshot.
+    #[serde(skip)]
+    snapshot: Option<limo_cad_project_file::ProjectSnapshot>,
     /// Project export is unavailable while a sketch transaction is active.
     /// In that state retain the last completed model.json and still publish
     /// the live sketch snapshot below.
@@ -248,6 +274,17 @@ struct PublishPayload {
     /// match the reserved project; write never falls back to the active tab.
     #[serde(default)]
     project_session_id: Option<String>,
+}
+
+fn with_composite_receipt(
+    mut heartbeat: Value,
+    receipt: Option<&limo_cad_project_file::PublicationReceipt>,
+) -> Value {
+    if let Some(receipt) = receipt {
+        heartbeat["publication_version"] = json!(1);
+        heartbeat["publication_receipt"] = json!(receipt);
+    }
+    heartbeat
 }
 
 fn now_ms() -> u64 {
@@ -359,7 +396,7 @@ impl SessionBridgeState {
     fn write_for_window(
         &self,
         window_label: &str,
-        parsed: PublishPayload,
+        mut parsed: PublishPayload,
     ) -> Result<serde_json::Value, String> {
         let process_instance_id = self.process_instance_id.clone();
         let _ = self.write_process_instance_file();
@@ -476,12 +513,63 @@ impl SessionBridgeState {
             .map_err(|error| format!("create session dir: {error}"))?;
         let _ = clear_closed_tombstone(&project.session_id);
 
-        let published_generation = captured_revision;
-        let model_generation = if parsed.model_json.is_some() {
-            Some(published_generation)
-        } else {
-            project.last_model_generation
+        if parsed.snapshot.is_none()
+            && parsed.model_json.is_some()
+            && project.last_composite_committed.is_some()
+        {
+            return Err("Legacy model-only publication cannot replace a composite session".into());
+        }
+        let model_json = match parsed.snapshot.as_ref() {
+            Some(snapshot) if snapshot.intents().is_empty() => {
+                Some(snapshot.model_json().to_owned())
+            }
+            Some(_) => Some(
+                r#"{"format":"limo-cad-composite-publication-required","schema_version":1}"#
+                    .to_owned(),
+            ),
+            None => parsed.model_json.take(),
         };
+        if let Some(snapshot) = parsed.snapshot.take() {
+            let receipt = limo_cad_project_file::PublicationReceipt {
+                process_instance_id: process_instance_id.clone(),
+                session_id: project.session_id.clone(),
+                window_id: window_label.to_owned(),
+                document_id: project_session_id
+                    .clone()
+                    .ok_or("Composite publication needs a document owner")?,
+                epoch: project.native_interface_epoch,
+                engine_revision: captured_revision,
+                export_sequence: parsed.generation,
+            };
+            let publication =
+                limo_cad_project_file::ProjectPublication::new(receipt.clone(), snapshot)
+                    .map_err(|error| error.to_string())?;
+            limo_cad_session_publication::commit(
+                &dir,
+                project.last_composite_committed.as_ref(),
+                &publication,
+            )
+            .map_err(|error| format!("publish composite snapshot: {error}"))?;
+            project.last_composite_committed = Some(receipt);
+        }
+        // Write the legacy view only after the capsule is safe, but before
+        // acknowledging this generation. Domain-bearing models explicitly
+        // reject old readers; failed preparation retains the old legacy view.
+        if let Some(model_json) = model_json.as_deref() {
+            atomic_write(&dir.join("model.json"), model_json)?;
+        }
+        let published_generation = captured_revision;
+        let model_generation = project
+            .last_composite_committed
+            .as_ref()
+            .map(|receipt| receipt.engine_revision)
+            .or_else(|| {
+                if model_json.is_some() {
+                    Some(published_generation)
+                } else {
+                    project.last_model_generation
+                }
+            });
         let active_sketch_generation = parsed
             .active_sketch_json
             .as_ref()
@@ -500,26 +588,26 @@ impl SessionBridgeState {
         }))
         .map_err(|error| format!("encode focus.json: {error}"))?;
 
-        let heartbeat_body = serde_json::to_string_pretty(&json!({
-            "interface_version": 1,
-            "updated_ms": now_ms(),
-            "generation": published_generation,
-            "published_generation": published_generation,
-            "model_generation": model_generation,
-            "active_sketch_generation": active_sketch_generation,
-            "session_id": project.session_id,
-            "window_id": window_label,
-            "project_session_id": project_session_id,
-            "document_id": project_session_id,
-            "process_instance_id": process_instance_id,
-            "session_mode": "read_only_snapshot",
-            "kind": "snapshot",
-        }))
+        let heartbeat_body = serde_json::to_string_pretty(&with_composite_receipt(
+            json!({
+                "interface_version": 1,
+                "updated_ms": now_ms(),
+                "generation": published_generation,
+                "published_generation": published_generation,
+                "model_generation": model_generation,
+                "active_sketch_generation": active_sketch_generation,
+                "session_id": project.session_id,
+                "window_id": window_label,
+                "project_session_id": project_session_id,
+                "document_id": project_session_id,
+                "process_instance_id": process_instance_id,
+                "session_mode": "read_only_snapshot",
+                "kind": "snapshot",
+            }),
+            project.last_composite_committed.as_ref(),
+        ))
         .map_err(|error| format!("encode heartbeat.json: {error}"))?;
 
-        if let Some(model_json) = parsed.model_json.as_deref() {
-            atomic_write(&dir.join("model.json"), model_json)?;
-        }
         let active_sketch_path = dir.join("active-sketch.json");
         if let Some(active_sketch_json) = parsed.active_sketch_json.as_deref() {
             atomic_write(&active_sketch_path, active_sketch_json)?;
@@ -530,26 +618,30 @@ impl SessionBridgeState {
         atomic_write(&dir.join("focus.json"), &focus_body)?;
         atomic_write(&dir.join("heartbeat.json"), &heartbeat_body)?;
 
+        project.last_composite_published = project.last_composite_committed.clone();
         project.last_export_sequence = parsed.generation;
         project.published_generation = published_generation;
         project.last_model_generation = model_generation;
         project.active_sketch_generation = active_sketch_generation;
 
-        Ok(json!({
-            "skipped": false,
-            "session_id": project.session_id,
-            "window_id": window_label,
-            "session_dir": dir.display().to_string(),
-            "generation": published_generation,
-            "published_generation": published_generation,
-            "model_generation": model_generation,
-            "active_sketch_generation": active_sketch_generation,
-            "engine_revision": project.engine_revision,
-            "project_session_id": project_session_id,
-            "document_id": project_session_id,
-            "session_mode": "read_only_snapshot",
-            "writeback": false,
-        }))
+        Ok(with_composite_receipt(
+            json!({
+                "skipped": false,
+                "session_id": project.session_id,
+                "window_id": window_label,
+                "session_dir": dir.display().to_string(),
+                "generation": published_generation,
+                "published_generation": published_generation,
+                "model_generation": model_generation,
+                "active_sketch_generation": active_sketch_generation,
+                "engine_revision": project.engine_revision,
+                "project_session_id": project_session_id,
+                "document_id": project_session_id,
+                "session_mode": "read_only_snapshot",
+                "writeback": false,
+            }),
+            project.last_composite_published.as_ref(),
+        ))
     }
 
     fn heartbeat_for_window(&self, window_label: &str) -> Result<serde_json::Value, String> {
@@ -581,21 +673,24 @@ impl SessionBridgeState {
         }
 
         let _ = clear_closed_tombstone(&project.session_id);
-        let heartbeat_body = serde_json::to_string_pretty(&json!({
-            "interface_version": 1,
-            "updated_ms": now_ms(),
-            "generation": project.engine_revision,
-            "published_generation": project.published_generation,
-            "model_generation": project.last_model_generation,
-            "active_sketch_generation": project.active_sketch_generation,
-            "session_id": project.session_id,
-            "window_id": window_label,
-            "project_session_id": project_session_id,
-            "document_id": project_session_id,
-            "process_instance_id": process_instance_id,
-            "session_mode": "read_only_snapshot",
-            "kind": "heartbeat",
-        }))
+        let heartbeat_body = serde_json::to_string_pretty(&with_composite_receipt(
+            json!({
+                "interface_version": 1,
+                "updated_ms": now_ms(),
+                "generation": project.engine_revision,
+                "published_generation": project.published_generation,
+                "model_generation": project.last_model_generation,
+                "active_sketch_generation": project.active_sketch_generation,
+                "session_id": project.session_id,
+                "window_id": window_label,
+                "project_session_id": project_session_id,
+                "document_id": project_session_id,
+                "process_instance_id": process_instance_id,
+                "session_mode": "read_only_snapshot",
+                "kind": "heartbeat",
+            }),
+            project.last_composite_published.as_ref(),
+        ))
         .map_err(|error| format!("encode heartbeat.json: {error}"))?;
         atomic_write(&dir.join("heartbeat.json"), &heartbeat_body)?;
 
@@ -690,6 +785,7 @@ fn engine_envelope_value(mut envelope: Value) -> Result<Value, String> {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn engine_text(value: Value, missing: &str) -> Result<String, String> {
     match value {
         Value::String(text) => Ok(text),
@@ -723,21 +819,24 @@ fn write_project_heartbeat(
     limo_cad_session_storage::create_dir_all(&dir)
         .map_err(|error| format!("create session dir: {error}"))?;
     let _ = clear_closed_tombstone(&project.session_id);
-    let heartbeat_body = serde_json::to_string_pretty(&json!({
-        "interface_version": 1,
-        "updated_ms": now_ms(),
-        "generation": project.engine_revision,
-        "published_generation": project.published_generation,
-        "model_generation": project.last_model_generation,
-        "active_sketch_generation": project.active_sketch_generation,
-        "session_id": project.session_id,
-        "window_id": window_id,
-        "project_session_id": project_session_id,
-        "document_id": project_session_id,
-        "process_instance_id": process_instance_id,
-        "session_mode": "ui_owned_apply",
-        "kind": kind,
-    }))
+    let heartbeat_body = serde_json::to_string_pretty(&with_composite_receipt(
+        json!({
+            "interface_version": 1,
+            "updated_ms": now_ms(),
+            "generation": project.engine_revision,
+            "published_generation": project.published_generation,
+            "model_generation": project.last_model_generation,
+            "active_sketch_generation": project.active_sketch_generation,
+            "session_id": project.session_id,
+            "window_id": window_id,
+            "project_session_id": project_session_id,
+            "document_id": project_session_id,
+            "process_instance_id": process_instance_id,
+            "session_mode": "ui_owned_apply",
+            "kind": kind,
+        }),
+        project.last_composite_published.as_ref(),
+    ))
     .map_err(|error| format!("encode heartbeat.json: {error}"))?;
     atomic_write(&dir.join("heartbeat.json"), &heartbeat_body)
 }
@@ -779,7 +878,10 @@ fn reserve_project_export(
 }
 
 fn is_project_replacement(name: &str) -> bool {
-    matches!(name, "cad_new_project" | "cad_load_project_model")
+    matches!(
+        name,
+        "cad_new_project" | "cad_load_project_model" | "cad_load_project_snapshot"
+    )
 }
 
 /// The native interface and inbox use the same replacement dispatcher and
@@ -801,6 +903,8 @@ fn dispatch_project_replacement(
         Ok(payload) => {
             let raw = if name == "cad_load_project_model" {
                 engine.project_load(&payload)
+            } else if name == "cad_load_project_snapshot" {
+                engine.project_load_snapshot_encoded(&payload)
             } else {
                 engine.project_new()
             };
@@ -2479,6 +2583,7 @@ mod tests {
 
     fn payload(session_id: &str, generation: u64, marker: &str) -> PublishPayload {
         PublishPayload {
+            snapshot: None,
             focus: "solid".to_string(),
             model_json: Some(format!(r#"{{"version":1,"marker":"{marker}"}}"#)),
             active_sketch_json: None,
@@ -4856,6 +4961,7 @@ mod tests {
         );
 
         let no_identity = PublishPayload {
+            snapshot: None,
             focus: "solid".to_string(),
             model_json: Some(r#"{"version":1,"marker":"no-identity"}"#.to_string()),
             active_sketch_json: None,
