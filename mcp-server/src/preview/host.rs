@@ -75,7 +75,13 @@ impl<F: FnMut() -> Result<(), String>> DetachedHost<'_, F> {
     fn capture(&mut self, stage: ProjectPreviewStage) -> Result<(), String> {
         self.ensure_detached()?;
         (self.check)()?;
-        let assembly = self.server.manager.assembly_solution();
+        // Keep hidden instance rows: they are authoritative over legacy body
+        // poses, including when every occurrence of a definition is hidden.
+        let assembly = self
+            .server
+            .manager
+            .named_view_solution(None)
+            .map_err(|error| error.to_string())?;
         (self.check)()?;
         self.frames
             .capture(self.server.manager.solid_scene_ref(), assembly, stage)?;
@@ -90,6 +96,10 @@ impl<F: FnMut() -> Result<(), String>> DetachedHost<'_, F> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "host/visibility_tests.rs"]
+mod visibility_tests;
 impl<F: FnMut() -> Result<(), String>> ProjectReplayHost for DetachedHost<'_, F> {
     fn validate_call(&mut self, group: &str, operation: &str) -> Result<(), String> {
         self.ensure_detached()?;

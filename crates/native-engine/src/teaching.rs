@@ -14,6 +14,8 @@ pub struct Frame {
     pub caption: String,
     pub scene: SolidSceneDto,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Package placement, mutually exclusive with inspection until both use
+    /// one authoritative placement for topology, annotations and visibility.
     pub assembly: Option<limo_cad_sketch::AssemblySolutionDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<limo_cad_sketch::SketchDto>,
@@ -71,6 +73,9 @@ pub fn validate_frames(frames: &[Frame]) -> Result<Bounds, String> {
     let (mut drawn_bodies, mut drawn_triangles, mut drawn_points, mut drawn_faces, mut drawn_edges) =
         (0, 0, 0, 0, 0);
     for frame in frames {
+        if frame.assembly.is_some() && frame.inspection.is_some() {
+            return Err("Keep assembly and inspection in separate preview frames".into());
+        }
         assembly::validate(frame)?;
         if let Some(inspection) = &frame.inspection {
             inspection.validate(frame)?;
@@ -303,3 +308,7 @@ pub fn validate_frames(frames: &[Frame]) -> Result<Bounds, String> {
         bytes,
     })
 }
+
+#[cfg(test)]
+#[path = "teaching/tests.rs"]
+mod tests;

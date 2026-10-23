@@ -109,6 +109,9 @@ fn validate_pose(translation: [f64; 3], rotation: [f64; 4]) -> Result<(), String
 
 /// Apply after Frame validation. Instance poses take precedence over legacy
 /// definition poses; a definition with only hidden instances produces no draws.
+/// A nonempty instance list is authoritative even if every row is hidden or
+/// belongs to another definition. Retain those rows to prevent legacy fallback.
+/// Only a solution without instance rows uses legacy poses (or identity).
 pub fn body_poses(solution: Option<&AssemblySolutionDto>, body: u64) -> Vec<Pose> {
     let Some(solution) = solution else {
         return vec![Pose::IDENTITY];
@@ -185,5 +188,51 @@ mod tests {
     }
     fn poses_reset(value: &mut Frame) {
         *value = frame();
+    }
+
+    #[test]
+    fn hidden_instances_never_fall_back_to_legacy_definition_poses() {
+        let mut frame = frame();
+        let assembly = frame.assembly.as_mut().unwrap();
+        for pose in &mut assembly.instance_body_poses {
+            pose.visible = false;
+        }
+        assert!(!assembly.body_poses.is_empty());
+        assert!(body_poses(Some(assembly), 1).is_empty());
+        assert!(body_poses(Some(assembly), 77).is_empty());
+        let bounds = super::super::validate_frames(std::slice::from_ref(&frame)).unwrap();
+        assert_eq!(bounds.center, [0.; 3]);
+        assert_eq!(bounds.radius, 1.);
+        // Removing this definition's rows must still not reveal it when an
+        // authoritative instance list remains for another retained definition.
+        let assembly = frame.assembly.as_mut().unwrap();
+        for pose in &mut assembly.instance_body_poses {
+            pose.body_id.0 = 77;
+            pose.visible = true;
+        }
+        assert!(body_poses(Some(assembly), 1).is_empty());
+        let mut other = frame.scene.bodies[0].clone();
+        other.id.0 = 77;
+        frame.scene.bodies.push(other);
+        super::super::validate_frames(&[frame]).unwrap();
+    }
+
+    #[test]
+    fn legacy_only_placement_and_unplaced_guides_keep_their_original_behavior() {
+        let mut frame = frame();
+        frame.assembly.as_mut().unwrap().instance_body_poses.clear();
+        let poses = body_poses(frame.assembly.as_ref(), 1);
+        assert_eq!(poses.len(), 1);
+        assert_eq!(poses[0].transform_point([1., 2., 3.]), [9001., 2., 3.]);
+        assert_eq!(
+            body_poses(None, 1)[0].transform_point([1., 2., 3.]),
+            [1., 2., 3.]
+        );
+        assert_eq!(
+            body_poses(frame.assembly.as_ref(), 77)[0].transform_point([1., 2., 3.]),
+            [1., 2., 3.]
+        );
+        let bounds = super::super::validate_frames(&[frame]).unwrap();
+        assert_eq!(bounds.center, [9005., 5., 0.]);
     }
 }
