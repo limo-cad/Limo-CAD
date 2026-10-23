@@ -63,6 +63,11 @@ pub(crate) fn paint(
     let terminal = index + 1 == count && preview.animation_complete();
     let image = preview.image.clone();
     let current = preview.image_ready();
+    let blend = preview
+        .blend
+        .as_ref()
+        .filter(|blend| current && blend.target == preview.frame_index())
+        .map(|blend| (blend.from.clone(), blend.alpha()));
     let ready = preview.retained.is_some();
     let caption = preview.error.clone().unwrap_or_else(|| {
         preview
@@ -224,7 +229,11 @@ pub(crate) fn paint(
         {
             feature::focus_control(world, entity);
         }
-        if let Some(image) = image {
+        let base_image = blend
+            .as_ref()
+            .map(|(from, _)| from.clone())
+            .or_else(|| image.clone());
+        if let Some(image) = base_image {
             if world
                 .get::<ImageNode>(entity)
                 .is_none_or(|node| node.image != image)
@@ -233,6 +242,31 @@ pub(crate) fn paint(
             }
         } else if world.get::<ImageNode>(entity).is_some() {
             world.entity_mut(entity).remove::<ImageNode>();
+        }
+        if let (Some((_, alpha)), Some(image)) = (blend, image) {
+            // Decorative child: the model remains the sole pointer/key/focus
+            // target. The transparent background must not cover its old image.
+            // Model and blend use 61; dimension leaders/labels stay above at 62/63.
+            widgets.panel(
+                world,
+                camera,
+                "scripts-preview-blend",
+                rect(0., 0., image_width, image_height),
+                Color::NONE,
+                61,
+            );
+            let overlay = widgets.entity("scripts-preview-blend").unwrap();
+            world
+                .entity_mut(overlay)
+                .remove::<interface_shell::InterfaceOccluder>()
+                .insert((
+                    ChildOf(entity),
+                    interface_shell::InterfacePointerPassthrough,
+                    ImageNode {
+                        color: Color::srgba(1., 1., 1., alpha),
+                        ..ImageNode::new(image)
+                    },
+                ));
         }
         annotations::paint(
             world,

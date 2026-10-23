@@ -23,7 +23,7 @@ pub(super) fn paint(
     let preview = &world.resource::<Files>().script.preview;
     let Some(retained) = preview.retained.as_ref().filter(|retained| {
         current
-            && preview.animation_complete()
+            && preview.geometry_animation_complete()
             && retained.descriptor.cues[preview.frame_index()]
                 == Some(crate::native_viewport::script_preview::PreviewCue::Dimension)
     }) else {
@@ -51,6 +51,7 @@ pub(super) fn paint(
         pitch: preview.pitch,
     });
     let service = retained.service.clone();
+    let alpha = preview.blend.as_ref().map_or(1., |blend| blend.alpha());
     let mut cache = world.remove_resource::<Cache>().unwrap_or_default();
     if let Some(request) = request {
         cache.projected = service.dimension_annotations(&request, size)?;
@@ -61,12 +62,14 @@ pub(super) fn paint(
         palette.dimension[0],
         palette.dimension[1],
         palette.dimension[2],
-    );
+    )
+    .with_alpha(alpha);
     let background = Color::srgb(
         palette.background[0],
         palette.background[1],
         palette.background[2],
-    );
+    )
+    .with_alpha(alpha);
     for (index, [a, b]) in cache.projected.lines.iter().enumerate() {
         let delta = Vec2::from_array(*b) - Vec2::from_array(*a);
         let key = format!("lesson-dimension-line-{index}");

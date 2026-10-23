@@ -13,6 +13,7 @@ use bevy::{
 use std::time::{Duration, Instant};
 
 mod annotations;
+mod blend;
 mod card;
 mod feature;
 mod hover;
@@ -69,15 +70,18 @@ struct Retained {
     service: Arc<PreviewService>,
     descriptor: PreviewDescriptor,
     view: String,
+    geometry_motion: Vec<bool>,
 }
 impl Retained {
     fn new(service: Arc<PreviewService>, frames: Vec<Frame>) -> Result<Self, String> {
+        let geometry_motion = blend::geometry_motion(&frames);
         let descriptor = service.retain(frames)?;
         match service.open_view() {
             Ok(view) => Ok(Self {
                 service,
                 descriptor,
                 view,
+                geometry_motion,
             }),
             Err(error) => {
                 service.release(&descriptor.preview_id);
@@ -181,6 +185,7 @@ pub(crate) struct State {
     image_index: Option<usize>,
     image_frame: Option<usize>,
     animation_progress: u8,
+    blend: Option<blend::Blend<Handle<Image>>>,
     error: Option<String>,
     playing: bool,
     wake: Option<Wake>,
@@ -231,6 +236,7 @@ impl Default for State {
             image_index: None,
             image_frame: None,
             animation_progress: ANIMATION_STEPS,
+            blend: None,
             error: None,
             playing: false,
             wake: None,
@@ -263,30 +269,42 @@ impl State {
             .filter(|_| self.image.is_some())
             .unwrap_or_else(|| self.frame_index())
     }
-    fn animation_complete(&self) -> bool {
+    fn geometry_animation_complete(&self) -> bool {
         self.animation_progress == ANIMATION_STEPS
     }
+    fn animation_complete(&self) -> bool {
+        self.geometry_animation_complete() && self.blend.is_none()
+    }
     fn begin_animation(&mut self) {
-        use crate::native_viewport::script_preview::PreviewCue;
         let moving = self
             .retained
             .as_ref()
-            .and_then(|r| r.descriptor.cues.get(self.frame_index()))
-            .is_some_and(|cue| {
-                matches!(
-                    cue,
-                    Some(
-                        PreviewCue::Plane
-                            | PreviewCue::Profile
-                            | PreviewCue::Extrude
-                            | PreviewCue::Depth
-                            | PreviewCue::Cut
-                            | PreviewCue::Edges
-                            | PreviewCue::Radius
-                    )
-                )
-            });
+            .and_then(|r| r.geometry_motion.get(self.frame_index()))
+            .copied()
+            .unwrap_or(false);
         self.animation_progress = if moving { 0 } else { ANIMATION_STEPS };
+        self.blend = None;
+        if !moving && self.image_frame != Some(self.frame_index()) {
+            let key = images::Key::current(self);
+            if let Some(from) = self
+                .image
+                .as_ref()
+                .and_then(|image| self.images.promote(image, key))
+            {
+                self.blend = Some(blend::Blend::new(from, self.frame_index()));
+            }
+        }
+    }
+    fn validate_blend(&mut self, target: &Handle<Image>) {
+        let key = images::Key::current(self);
+        let valid = self.blend.as_ref().is_some_and(|blend| {
+            blend.target == self.frame_index()
+                && blend.from != *target
+                && self.images.get_handle(&blend.from, key).is_some()
+        });
+        if !valid {
+            self.blend = None;
+        }
     }
     pub fn contextual(&self) -> bool {
         self.return_to.is_some()
@@ -324,6 +342,8 @@ impl State {
         // Retiring the receipt cancels obsolete work at the worker's next safe
         // boundary; navigation must not wait for that request's deadline.
         self.render = None;
+        self.render_started = None;
+        self.blend = None;
         self.error = None;
         self.wake = None;
         Ok(())
@@ -524,6 +544,7 @@ fn close(world: &mut World) {
         preview.index_open = false;
         preview.playing = false;
         preview.animation_progress = ANIMATION_STEPS;
+        preview.blend = None;
         preview.wake = None;
         preview.drag = None;
         preview.image_index = None;
@@ -672,11 +693,12 @@ pub(crate) fn command(
                     preview.scenario = scenario;
                     preview.index = 0;
                     preview.playing = !preview.help;
+                    preview.changed()?;
                     preview.begin_animation();
                     if preview.help {
                         preview.animation_progress = ANIMATION_STEPS;
+                        preview.blend = None;
                     }
-                    preview.changed()?;
                 }
             }
             Action::Model => {}
@@ -696,8 +718,8 @@ pub(crate) fn command(
                 preview.index = 0;
                 preview.playing = preview.count() > 1;
                 preview.help = false;
-                preview.begin_animation();
                 preview.changed()?;
+                preview.begin_animation();
             }
             Action::Resume => {
                 if preview.retained.is_none() || preview.count() == 0 {
@@ -707,6 +729,7 @@ pub(crate) fn command(
                 preview.steps_open = false;
                 preview.playing = true;
                 preview.wake = None;
+                preview.render_started = None;
             }
             Action::Stop => {
                 preview.playing = false;
@@ -743,7 +766,13 @@ fn publish(world: &mut World, rendered: Rendered) -> Result<(), String> {
     world.resource_scope(|world, mut files: Mut<Files>| {
         let preview = &mut files.script.preview;
         let key = images::Key::current(preview);
+        // The source must be the newest resident before the incoming target is
+        // stored: get() is a probe, and this cache has only two physical images.
+        if let Some(blend) = &preview.blend {
+            preview.images.promote(&blend.from, key);
+        }
         let handle = preview.images.store(world, key, rendered.image)?;
+        preview.validate_blend(&handle);
         preview.image = Some(handle);
         preview.image_index = Some(preview.index);
         preview.image_frame = Some(preview.frame_index());
@@ -767,13 +796,25 @@ fn render(world: &mut World, _handle: &NativeInterfaceHandle) -> Result<(), Stri
             && preview.images.get(images::Key::current(preview)).is_none()
     };
     if needs_connection {
+        world.resource_scope(|world, mut files: Mut<Files>| {
+            let preview = &mut files.script.preview;
+            // Make room before the GPU request, retaining the visible source.
+            // The pending target occupies the other slot, not a third cached image.
+            preview.images.reserve(world, preview.image.as_ref());
+        });
         crate::native_viewport::script_preview::connect(world, &service)?;
     }
     let preview = &mut world.resource_mut::<Files>().script.preview;
     if !preview.open || preview.attempted == preview.revision {
         return Ok(());
     }
-    if let Some(image) = preview.images.get(images::Key::current(preview)) {
+    let key = images::Key::current(preview);
+    if let Some(image) = preview.images.get(key) {
+        if let Some(blend) = &preview.blend {
+            preview.images.promote(&blend.from, key);
+        }
+        preview.images.promote(&image, key);
+        preview.validate_blend(&image);
         preview.render_started = None;
         preview.image = Some(image);
         preview.image_index = Some(preview.index);
@@ -802,7 +843,7 @@ fn render(world: &mut World, _handle: &NativeInterfaceHandle) -> Result<(), Stri
         yaw: preview.yaw,
         pitch: preview.pitch,
     };
-    let pending = if preview.animation_complete() {
+    let pending = if preview.geometry_animation_complete() {
         retained.service.render(request)?
     } else {
         retained.service.render_animated(
@@ -824,22 +865,26 @@ fn render(world: &mut World, _handle: &NativeInterfaceHandle) -> Result<(), Stri
     Ok(())
 }
 
-fn replay(
-    preview: &mut State,
-    _handle: &NativeInterfaceHandle,
-    now: Instant,
-) -> Result<(), String> {
+fn replay(preview: &mut State, handle: &NativeInterfaceHandle, now: Instant) -> Result<(), String> {
     if !preview.open || !preview.playing || preview.rendered != preview.revision {
         return Ok(());
     }
     if preview.wake.as_ref().is_some_and(|wake| now >= wake.due) {
-        if !preview.animation_complete() {
+        // Consume the old deadline before changing only UI opacity. Otherwise
+        // an expired render_started deadline could cause a 1 ms wake loop.
+        preview.wake = None;
+        if let Some(blend) = &mut preview.blend {
+            if blend.advance() {
+                preview.blend = None;
+            }
+            handle.request_redraw();
+        } else if !preview.geometry_animation_complete() {
             preview.animation_progress += 1;
             preview.changed()?;
         } else if preview.index + 1 < preview.count() {
             preview.index += 1;
-            preview.begin_animation();
             preview.changed()?;
+            preview.begin_animation();
         } else {
             preview.playing = false;
             preview.wake = None;
@@ -858,7 +903,9 @@ fn arm_replay(preview: &mut State, now: Instant) {
         && preview.rendered == preview.revision
         && preview.wake.is_none()
     {
-        let delay = if preview.animation_complete() {
+        let delay = if preview.blend.is_some() {
+            ANIMATION_INTERVAL
+        } else if preview.animation_complete() {
             preview
                 .retained
                 .as_ref()
@@ -977,6 +1024,9 @@ pub(super) fn poll(world: &mut World) {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod transition_tests;
 
 #[cfg(test)]
 mod evidence;

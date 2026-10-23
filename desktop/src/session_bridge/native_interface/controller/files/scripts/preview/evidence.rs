@@ -221,7 +221,11 @@ fn capture(app: &mut App, target: &Handle<Image>, path: &Path) {
                             if (0..3).all(|axis| (pixels[offset + axis] as i16 - color[axis]).abs() < 45) { ink += 1; }
                         }
                     }
-                    assert!(ink > 8, "Dimension {} must rasterize inside its own label box", text.0);
+                    // Completed dimension frames keep the existing ink gate.
+                    // Intermediate labels intentionally fade with their image.
+                    if app.world().resource::<Files>().script.preview.animation_complete() {
+                        assert!(ink > 8, "Dimension {} must rasterize inside its own label box", text.0);
+                    }
                 }
                 if app.world().resource::<Files>().script.preview.lesson == Some(lesson::Id::Sketch)
                     && path.file_name().unwrap() == "frame-0.png"
@@ -306,6 +310,7 @@ fn native_show_me_sketch_plane_evidence() {
         lesson::Id::Sketch,
         lesson::CutScenario::ThroughAll,
         &Path::new(&root).join("sketch"),
+        true,
     );
 }
 
@@ -314,20 +319,89 @@ fn native_show_me_sketch_plane_evidence() {
 fn native_show_me_ui_evidence_and_performance() {
     let root = std::env::var("LIMO_CAD_SHOW_ME_PROOF_DIR")
         .expect("Choose a fresh LIMO_CAD_SHOW_ME_PROOF_DIR");
-    for id in lesson::ALL {
+    for (guide_index, id) in lesson::ALL.into_iter().enumerate() {
         capture_lesson(
             id,
             lesson::CutScenario::ThroughAll,
             &Path::new(&root).join(id.key()),
+            guide_index == 0,
         );
     }
     capture_lesson(
         lesson::Id::Cut,
         lesson::CutScenario::MeasuredDepth,
         &Path::new(&root).join("cut-measured"),
+        false,
     );
 }
-fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
+/// Compare only pixels inside the model, excluding captions, focus rings and UI
+/// metadata. A changing step number or PNG encoding cannot qualify motion.
+fn model_pixels(app: &App, model: Entity, path: &Path) -> Vec<u8> {
+    let decoded = Image::from_buffer(
+        &std::fs::read(path).unwrap(),
+        ImageType::Extension("png"),
+        CompressedImageFormats::NONE,
+        true,
+        ImageSampler::Default,
+        RenderAssetUsages::MAIN_WORLD,
+    )
+    .unwrap();
+    let node = app.world().get::<ComputedNode>(model).unwrap();
+    let transform = app
+        .world()
+        .get::<bevy::ui::UiGlobalTransform>(model)
+        .unwrap();
+    let start = transform.translation - node.size / 2.;
+    let size = decoded.texture_descriptor.size;
+    let left = (start.x + 12.).max(0.) as usize;
+    let top = (start.y + 12.).max(0.) as usize;
+    let right = (start.x + node.size.x - 12.).min(size.width as f32) as usize;
+    let bottom = (start.y + node.size.y - 12.).min(size.height as f32) as usize;
+    assert!(right > left && bottom > top);
+    let data = decoded.data.as_ref().unwrap();
+    (top..bottom)
+        .flat_map(|y| {
+            (left..right).flat_map(move |x| {
+                let offset = (y * size.width as usize + x) * 4;
+                data[offset..offset + 3].iter().copied()
+            })
+        })
+        .collect()
+}
+
+fn changed_pixels(a: &[u8], b: &[u8]) -> usize {
+    assert_eq!(
+        a.len(),
+        b.len(),
+        "Motion samples need identical native model bounds"
+    );
+    a.chunks_exact(3)
+        .zip(b.chunks_exact(3))
+        .filter(|(a, b)| a != b)
+        .count()
+}
+
+fn visible_motion(samples: &[Vec<u8>], id: lesson::Id) -> usize {
+    assert!(samples.len() >= 3);
+    let distinct_samples = samples
+        .iter()
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    assert!(
+        distinct_samples >= 3,
+        "{id:?} must show visible progress, not repeated endpoint images"
+    );
+    assert!(
+        samples[1..samples.len() - 1].iter().any(|sample| {
+            changed_pixels(&samples[0], sample) > 16
+                && changed_pixels(sample, samples.last().unwrap()) > 16
+        }),
+        "{id:?} needs actual intermediate model pixels distinct from both endpoints"
+    );
+    distinct_samples
+}
+
+fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path, capture_index: bool) {
     use crate::native_viewport::interface_shell::{InterfaceCamera, InterfaceFrame};
     use limo_cad_interface::{DocumentContext, Rect, Surface};
     std::fs::create_dir_all(out).unwrap();
@@ -468,56 +542,59 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     );
     widgets.finish(app.world_mut());
     capture(&mut app, &target, &out.join("entry.png"));
-    command(
-        app.world_mut(),
-        &handle,
-        Action::Index,
-        &ControlInput::Click,
-    )
-    .unwrap();
-    widgets.begin();
-    panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
-    widgets.finish(app.world_mut());
-    capture(&mut app, &target, &out.join("help-index.png"));
-    let mut index_page = 1;
-    while widgets.entity("help-index-next").is_some_and(|entity| {
-        app.world()
-            .get::<InterfaceControl>(entity)
-            .is_some_and(|control| !control.disabled)
-    }) {
+    // Entry, endpoints and locales remain per guide; walk the complete index once.
+    if capture_index {
         command(
             app.world_mut(),
             &handle,
-            Action::IndexPage(true),
+            Action::Index,
             &ControlInput::Click,
         )
         .unwrap();
         widgets.begin();
         panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
         widgets.finish(app.world_mut());
-        for _ in 0..8 {
-            update(&mut app);
+        capture(&mut app, &target, &out.join("help-index.png"));
+        let mut index_page = 1;
+        while widgets.entity("help-index-next").is_some_and(|entity| {
+            app.world()
+                .get::<InterfaceControl>(entity)
+                .is_some_and(|control| !control.disabled)
+        }) {
+            command(
+                app.world_mut(),
+                &handle,
+                Action::IndexPage(true),
+                &ControlInput::Click,
+            )
+            .unwrap();
+            widgets.begin();
+            panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
+            widgets.finish(app.world_mut());
+            for _ in 0..8 {
+                update(&mut app);
+            }
+            capture(
+                &mut app,
+                &target,
+                &out.join(format!("help-index-page-{index_page}.png")),
+            );
+            index_page += 1;
+            assert!(index_page <= lesson::ALL.len());
         }
-        capture(
-            &mut app,
-            &target,
-            &out.join(format!("help-index-page-{index_page}.png")),
-        );
-        index_page += 1;
-        assert!(index_page <= lesson::ALL.len());
-    }
 
-    assert_eq!(
-        app.world().resource::<Files>().script.preview.render_jobs,
-        0
-    );
-    command(
-        app.world_mut(),
-        &handle,
-        Action::Close,
-        &ControlInput::Click,
-    )
-    .unwrap();
+        assert_eq!(
+            app.world().resource::<Files>().script.preview.render_jobs,
+            0
+        );
+        command(
+            app.world_mut(),
+            &handle,
+            Action::Close,
+            &ControlInput::Click,
+        )
+        .unwrap();
+    }
     let memory_before = process_memory();
     let controller_open = Instant::now();
     command(
@@ -837,40 +914,121 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     widgets.finish(app.world_mut());
     capture(&mut app, &target, &out.join("help.png"));
     command(app.world_mut(), &handle, Action::Demo, &ControlInput::Click).unwrap();
-    // Sample real intermediate presentation states, using the same bounded GPU path.
-    let motion_step = if id == lesson::Id::Sketch { 1 } else { 2 };
-    let mut previous_pixels = None;
-    let mut distinct_samples = 0;
-    for progress in [0, 4, 8, 12, 16, 20] {
+    // Retain geometric motion where the renderer supports the actual payload.
+    // Otherwise qualify an authored before/after pair via the production UI blend.
+    let geometry_motion = app
+        .world()
+        .resource::<Files>()
+        .script
+        .preview
+        .retained
+        .as_ref()
+        .unwrap()
+        .geometry_motion
+        .clone();
+    let frame_for_step = |step| {
+        if id == lesson::Id::Cut {
+            scenario.frame(step)
+        } else {
+            step
+        }
+    };
+    let preferred = if id == lesson::Id::Sketch { 1 } else { 2 };
+    // Do not qualify a static operation with only its animated setup plane.
+    let geometry_step =
+        (geometry_motion.get(frame_for_step(preferred)) == Some(&true)).then_some(preferred);
+    let model = widgets.entity("scripts-preview-model").unwrap();
+    let mut motion_samples = Vec::new();
+    let motion_step;
+    if let Some(step) = geometry_step {
+        motion_step = step;
+        for progress in [0, 4, 8, 12, 16, 20] {
+            command(
+                app.world_mut(),
+                &handle,
+                Action::Step(motion_step),
+                &ControlInput::Click,
+            )
+            .unwrap();
+            {
+                let preview = &mut app.world_mut().resource_mut::<Files>().script.preview;
+                preview.animation_progress = progress;
+                preview.changed().unwrap();
+            }
+            settle(&mut app);
+            widgets.begin();
+            panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
+            widgets.finish(app.world_mut());
+            let path = out.join(format!("motion-{progress:02}.png"));
+            capture(&mut app, &target, &path);
+            motion_samples.push(model_pixels(&app, model, &path));
+        }
+    } else {
+        // Endpoints were already captured for every step. Select a visibly
+        // different static pair without rerendering every candidate pair.
+        motion_step = std::iter::once(preferred)
+            .chain(1..durations.len())
+            .find(|step| {
+                if *step >= durations.len() || geometry_motion[frame_for_step(*step)] {
+                    return false;
+                }
+                let before =
+                    model_pixels(&app, model, &out.join(format!("frame-{}.png", step - 1)));
+                let after = model_pixels(&app, model, &out.join(format!("frame-{step}.png")));
+                changed_pixels(&before, &after) > 16
+            })
+            .unwrap_or_else(|| panic!("{id:?} has no visible authored before/after model pair"));
         command(
             app.world_mut(),
             &handle,
-            Action::Step(motion_step),
+            Action::Step(motion_step - 1),
             &ControlInput::Click,
         )
         .unwrap();
+        settle(&mut app);
         {
             let preview = &mut app.world_mut().resource_mut::<Files>().script.preview;
-            preview.animation_progress = progress;
+            preview.index = motion_step;
             preview.changed().unwrap();
+            preview.begin_animation();
         }
         settle(&mut app);
-        widgets.begin();
-        panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
-        widgets.finish(app.world_mut());
-        let path = out.join(format!("motion-{progress:02}.png"));
-        capture(&mut app, &target, &path);
-        let pixels = std::fs::read(path).unwrap();
-        if previous_pixels.as_ref() != Some(&pixels) {
-            distinct_samples += 1;
+        let preview = &app.world().resource::<Files>().script.preview;
+        assert!(
+            preview.blend.is_some(),
+            "A resident source must blend into its static target"
+        );
+        let (revision, jobs, key) = (
+            preview.revision,
+            preview.render_jobs,
+            images::Key::current(preview),
+        );
+        for progress in 0..=blend::STEPS {
+            if progress != 0 {
+                let preview = &mut app.world_mut().resource_mut::<Files>().script.preview;
+                if preview.blend.as_mut().unwrap().advance() {
+                    preview.blend = None;
+                }
+            }
+            widgets.begin();
+            panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
+            widgets.finish(app.world_mut());
+            let path = out.join(format!("motion-{progress:02}.png"));
+            capture(&mut app, &target, &path);
+            motion_samples.push(model_pixels(&app, model, &path));
+            let preview = &app.world().resource::<Files>().script.preview;
+            assert_eq!((preview.revision, preview.render_jobs), (revision, jobs));
+            assert!(images::Key::current(preview) == key);
+            assert!(
+                preview.images.footprint().0 <= 2
+                    && preview.images.footprint().1 <= 2 * 1024 * 1024
+            );
         }
-        previous_pixels = Some(pixels);
     }
-    assert!(
-        distinct_samples >= 3,
-        "{id:?} must show visible progress, not repeated endpoint images"
-    );
-    if id == lesson::Id::Sketch {
+    let distinct_samples = visible_motion(&motion_samples, id);
+    let mut autoplay_report = Value::Null;
+    let static_autoplay = matches!(id.key(), "sketch_line" | "circular_pattern");
+    if id == lesson::Id::Sketch || static_autoplay {
         command(
             app.world_mut(),
             &handle,
@@ -880,6 +1038,8 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
         .unwrap();
         let begin = Instant::now();
         let jobs = app.world().resource::<Files>().script.preview.render_jobs;
+        let mut autoplay_samples = Vec::new();
+        let mut autoplay_sample_jobs = None;
         loop {
             update(&mut app);
             poll(app.world_mut());
@@ -894,7 +1054,34 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
                 "Autoplay must retain its visible model while a replacement is pending"
             );
             assert!(preview.images.footprint().1 <= 2 * 1024 * 1024);
-            if !preview.playing {
+            let playing = preview.playing;
+            let stage = if static_autoplay && preview.index == motion_step && preview.image_ready()
+            {
+                match &preview.blend {
+                    Some(blend) if blend.alpha() == 0. && autoplay_samples.is_empty() => {
+                        Some("before")
+                    }
+                    Some(blend) if blend.alpha() > 0. && autoplay_samples.len() == 1 => {
+                        Some("intermediate")
+                    }
+                    None if autoplay_samples.len() == 2 => Some("after"),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            if let Some(stage) = stage {
+                let jobs = app.world().resource::<Files>().script.preview.render_jobs;
+                assert_eq!(
+                    *autoplay_sample_jobs.get_or_insert(jobs),
+                    jobs,
+                    "Opacity samples must not enqueue CAD render work"
+                );
+                let path = out.join(format!("autoplay-static-{stage}.png"));
+                capture(&mut app, &target, &path);
+                autoplay_samples.push(model_pixels(&app, model, &path));
+            }
+            if !playing {
                 break;
             }
             assert!(
@@ -910,6 +1097,29 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
             preview.render_jobs - jobs <= 3 * (usize::from(ANIMATION_STEPS) + 1) + 2,
             "Static cues must not generate animation samples"
         );
+        if static_autoplay {
+            assert!(!geometry_motion[frame_for_step(motion_step)]);
+            assert_eq!(
+                autoplay_samples.len(),
+                3,
+                "Autoplay needs real before/intermediate/after captures"
+            );
+            let distinct = visible_motion(&autoplay_samples, id);
+            let job_limit: usize = (0..durations.len())
+                .map(|step| {
+                    if geometry_motion[frame_for_step(step)] {
+                        usize::from(ANIMATION_STEPS) + 1
+                    } else {
+                        1
+                    }
+                })
+                .sum();
+            assert!(preview.render_jobs - jobs <= job_limit,
+                "Static endpoints render at most once; supported setup geometry keeps its bounded samples");
+            autoplay_report = json!({"actual_controller_autoplay":true,"distinct_model_samples":distinct,
+                "total_render_jobs":preview.render_jobs-jobs,"render_job_limit":job_limit,
+                "static_target_step":motion_step,"opacity_render_jobs":0});
+        }
     }
     command(
         app.world_mut(),
@@ -1217,6 +1427,10 @@ fn capture_lesson(id: lesson::Id, scenario: lesson::CutScenario, out: &Path) {
     report["scenario"] = json!(scenario);
     report["scenario_cached_frames"] = json!(scenario_cached_frames);
     report["scenario_gpu_jobs"] = json!(scenario_jobs);
+    report["motion"] = json!({"kind":if geometry_step.is_some() {"geometry"} else {"cached_image_dissolve"},
+        "step":motion_step,"distinct_model_samples":distinct_samples,"dissolve_ui_steps":blend::STEPS,
+        "dissolve_duration_ms":ANIMATION_INTERVAL.as_millis()*u128::from(blend::STEPS)});
+    report["static_autoplay"] = autoplay_report;
     std::fs::write(
         out.join("performance.json"),
         serde_json::to_vec_pretty(&report).unwrap(),
