@@ -100,9 +100,9 @@ installer, gathers the native runtime DLLs and license notices, and writes:
 
 ```text
 desktop/target/<rust-target>/release/bundle/portable/
-├── Limo-CAD-0.3.0-rc.2-windows-<architecture>/
-├── Limo-CAD-0.3.0-rc.2-windows-<architecture>.zip
-└── Limo-CAD-0.3.0-rc.2-windows-<architecture>.zip.sha256
+├── Limo-CAD-0.3.0-rc.3-windows-<architecture>/
+├── Limo-CAD-0.3.0-rc.3-windows-<architecture>.zip
+└── Limo-CAD-0.3.0-rc.3-windows-<architecture>.zip.sha256
 ```
 
 The directory contains `Limo-CAD.exe`, the OCCT dependency DLLs, a runtime
