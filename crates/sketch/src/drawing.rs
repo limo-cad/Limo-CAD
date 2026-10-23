@@ -28,6 +28,10 @@ fn first_id() -> u64 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DrawingDocumentDto {
+    /// Authored model/paper drafting content. Absent in pre-schema-16 projects.
+    /// Existing technical sheet identities are also the drafting layout owners.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drafting: Option<crate::drafting::Document>,
     #[serde(default)]
     pub sheets: Vec<DrawingSheetDto>,
     #[serde(default)]
@@ -53,6 +57,7 @@ pub struct DrawingDocumentDto {
 impl Default for DrawingDocumentDto {
     fn default() -> Self {
         Self {
+            drafting: None,
             sheets: Vec::new(),
             active_sheet_id: None,
             next_sheet_id: 1,
@@ -128,6 +133,28 @@ pub enum DrawingSheetFormat {
 pub enum DrawingSheetOrientation {
     Landscape,
     Portrait,
+}
+
+impl DrawingSheetDto {
+    /// Physical paper bounds shared by authored viewport validation and export.
+    pub fn size_mm(&self) -> [f64; 2] {
+        let (short, long) = match self.format {
+            DrawingSheetFormat::A0 => (841., 1189.),
+            DrawingSheetFormat::A1 => (594., 841.),
+            DrawingSheetFormat::A2 => (420., 594.),
+            DrawingSheetFormat::A3 => (297., 420.),
+            DrawingSheetFormat::A4 => (210., 297.),
+            DrawingSheetFormat::Letter => (215.9, 279.4),
+            DrawingSheetFormat::AnsiB => (279.4, 431.8),
+            DrawingSheetFormat::AnsiC => (431.8, 558.8),
+            DrawingSheetFormat::AnsiD => (558.8, 863.6),
+            DrawingSheetFormat::AnsiE => (863.6, 1117.6),
+        };
+        match self.orientation {
+            DrawingSheetOrientation::Landscape => [long, short],
+            DrawingSheetOrientation::Portrait => [short, long],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1165,6 +1192,41 @@ fn default_dimension_precision() -> u8 {
 }
 
 impl DrawingDocumentDto {
+    /// Current paper adapters implement projected technical views. Until authored
+    /// drafting presentation is integrated, never silently omit its sheet content.
+    /// Definitions and model entities without a viewport do not affect a sheet.
+    pub fn ensure_projected_sheet_supported(&self, sheet_id: u64) -> Result<(), String> {
+        if let Some(objects) = self
+            .drafting
+            .as_ref()
+            .and_then(|drafting| drafting.sheet_dependents(sheet_id))
+        {
+            let name = self
+                .sheets
+                .iter()
+                .find(|sheet| sheet.id == sheet_id)
+                .map_or_else(|| sheet_id.to_string(), |sheet| format!("{:?}", sheet.name));
+            return Err(format!("Sheet {name} contains {objects} that this build cannot display or export. Open it in a client that supports authored drafting to view or remove those objects. The saved content is retained."));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn ensure_sheet_deletable(&self, sheet_id: u64) -> Result<(), String> {
+        if let Some(objects) = self
+            .drafting
+            .as_ref()
+            .and_then(|drafting| drafting.sheet_dependents(sheet_id))
+        {
+            let name = self
+                .sheets
+                .iter()
+                .find(|sheet| sheet.id == sheet_id)
+                .map_or_else(|| sheet_id.to_string(), |sheet| format!("{:?}", sheet.name));
+            return Err(format!("Sheet {name} cannot be deleted while {objects} reference it. Remove those objects in the client that created the drafting content, then retry. No changes were made."));
+        }
+        Ok(())
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if self.sheets.len() > MAX_SHEETS {
             return Err(format!(
@@ -1975,6 +2037,25 @@ impl DrawingDocumentDto {
         {
             return Err("drawing id counters must be greater than existing ids".to_string());
         }
+        if let Some(drafting) = &self.drafting {
+            drafting.validate(&sheet_ids.into_iter().collect::<Vec<_>>())?;
+            for viewport in &drafting.viewports {
+                // Sheet ownership and finite coordinates were checked above.
+                let sheet = self
+                    .sheets
+                    .iter()
+                    .find(|sheet| sheet.id == viewport.sheet_id)
+                    .ok_or("Drafting viewport sheet is missing")?;
+                let [width, height] = sheet.size_mm();
+                let [x, y, w, h] = viewport.clip_mm;
+                if x < 0. || y < 0. || x + w > width + 1e-9 || y + h > height + 1e-9 {
+                    return Err(format!(
+                        "Drafting viewport {} clip lies outside sheet {:?} ({width} x {height} mm)",
+                        viewport.id.0, sheet.name
+                    ));
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -2385,6 +2466,7 @@ mod tests {
             next_bom_item_id: 1,
             templates: vec![],
             next_template_id: 1,
+            drafting: None,
         };
         assert!(drawing.validate().is_err());
     }
