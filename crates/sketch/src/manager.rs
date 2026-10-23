@@ -1901,13 +1901,26 @@ impl SketchManager {
         &mut self,
         drawing: DrawingDocumentDto,
     ) -> Result<DrawingDocumentDto, SessionError> {
+        // Legacy drawing editors must not erase an authored graph simply by
+        // omitting the new field. An empty retained graph can be explicit;
+        // deliberate project replacement uses its separate paired-load path.
+        if self.drawings.drafting.is_some() && drawing.drafting.is_none() {
+            return Err(SessionError::Solid(
+                "Drawing replacement must retain the authored drafting graph".into(),
+            ));
+        }
         drawing.validate().map_err(SessionError::Solid)?;
-        let drawing = crate::drawing_topology::capture_drawing_topology(
+        if let (Some(before), Some(after)) = (&self.drawings.drafting, &drawing.drafting) {
+            crate::drafting::transition::validate_edit(before, after)
+                .map_err(SessionError::Solid)?;
+        }
+        let mut drawing = crate::drawing_topology::capture_drawing_topology(
             drawing,
             self.solid_scene_ref(),
             Some(self.drawings.as_ref()),
         )
         .map_err(SessionError::Solid)?;
+        crate::drafting::transition::invalidate_sheet_releases(&self.drawings, &mut drawing);
         if drawing != *self.drawings {
             self.drawings = std::sync::Arc::new(drawing);
         }
@@ -8337,6 +8350,7 @@ mod project_tests {
             next_bom_item_id: 1,
             templates: vec![],
             next_template_id: 1,
+            drafting: None,
         };
         let mut manager = SketchManager::new();
         manager.set_drawing_document(drawing.clone()).unwrap();

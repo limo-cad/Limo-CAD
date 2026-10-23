@@ -242,6 +242,15 @@ pub(in super::super) fn paint(
             navigation: Navigation::new(owner, sheet.id, sheet_mm, pane(width, height, side))?,
         });
     }
+    if let Err(error) = drawing.ensure_projected_sheet_supported(sheet.id) {
+        state.paper_view.as_mut().unwrap().art_context = None;
+        if let Some(mut cache) = world.get_resource_mut::<edges::EdgeCache>() {
+            cache.retire_sources();
+        }
+        fail(world, state, &error);
+        toolbar(world, state, controls)?;
+        return Ok(());
+    }
     state.paper_view.as_mut().unwrap().art_context = Some((revision, units));
     let view = state.paper_view.as_ref().unwrap();
     let raster = raster(world, view)?;
