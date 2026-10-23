@@ -20,13 +20,19 @@ fn sha256(bytes: &[u8]) -> String {
 }
 
 #[test]
-#[ignore = "requires native graphics; records two finite operational component clips"]
+#[ignore = "requires native graphics; records five finite operational component clips"]
 fn native_show_me_ui_operational_component_recordings() {
     let root = std::env::var("LIMO_CAD_SHOW_ME_PROOF_DIR")
         .expect("Choose a fresh LIMO_CAD_SHOW_ME_PROOF_DIR");
-    // Deliberately independent of ALL: this is two representative recordings,
-    // not another catalog/localization qualification sweep.
-    for id in [lesson::Id::Extrude, lesson::Id::CircularPattern] {
+    // Keep the original Sketch/Extrude/Cut/Fillet processes visible in the PR,
+    // plus one static-step representative. This is not another catalog sweep.
+    for id in [
+        lesson::Id::Sketch,
+        lesson::Id::Extrude,
+        lesson::Id::Cut,
+        lesson::Id::Fillet,
+        lesson::Id::CircularPattern,
+    ] {
         capture_lesson_mode(
             id,
             lesson::CutScenario::ThroughAll,
@@ -307,6 +313,18 @@ impl Recording<'_> {
             .unwrap()
             .source;
         let asset: &[u8] = match self.id {
+            lesson::Id::Sketch => include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/show-me/sketch.cbor"
+            )),
+            lesson::Id::Cut => include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/show-me/cut.cbor"
+            )),
+            lesson::Id::Fillet => include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/show-me/fillet.cbor"
+            )),
             lesson::Id::Extrude => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/assets/show-me/extrude.cbor"
@@ -341,8 +359,8 @@ impl Recording<'_> {
 }
 
 // Read the actual published geometry/dissolve phase; never manufacture a sample.
-fn motion_progress(p: &State) -> Option<f32> {
-    if !p.image_ready() || p.index != 2 {
+fn motion_progress(p: &State, target: usize) -> Option<f32> {
+    if !p.image_ready() || p.index != target {
         return None;
     }
     p.blend.as_ref().map(|blend| blend.alpha()).or_else(|| {
@@ -399,12 +417,15 @@ pub(super) fn record(
         p.playing && p.image_ready() && p.index == 0
     });
     r.capture("autoplay-opening", true);
-    r.wait("automatic_first_step_complete", |p| {
-        p.index == 1 && p.image_ready() && p.animation_complete()
+    // Sketch's drawing motion is step 1. The other representatives teach their
+    // operation at step 2; do not skip the sketch drawing to record only labels.
+    let motion_target = if id == lesson::Id::Sketch { 1 } else { 2 };
+    r.wait("automatic_step_before_motion_complete", |p| {
+        p.index + 1 == motion_target && p.image_ready() && p.animation_complete()
     });
-    r.capture("autoplay-step-1", true);
+    r.capture("autoplay-before-operation", true);
     r.wait("automatic_target_before", |p| {
-        motion_progress(p) == Some(0.)
+        motion_progress(p, motion_target) == Some(0.)
     });
     let p = &r.app.world().resource::<Files>().script.preview;
     if id == lesson::Id::CircularPattern {
@@ -420,7 +441,7 @@ pub(super) fn record(
     let path = r.capture("autoplay-before", true);
     let before = r.model(&path);
     r.wait("automatic_visible_intermediate", |p| {
-        motion_progress(p).is_some_and(|v| (0.25..=0.75).contains(&v))
+        motion_progress(p, motion_target).is_some_and(|v| (0.25..=0.75).contains(&v))
     });
     let path = r.capture("autoplay-intermediate", true);
     let intermediate = r.model(&path);
@@ -460,7 +481,7 @@ pub(super) fn record(
     });
     r.capture("resumed-autoplay", true);
     r.wait("automatic_target_complete", |p| {
-        p.index == 2 && p.image_ready() && p.animation_complete()
+        p.index == motion_target && p.image_ready() && p.animation_complete()
     });
     let path = r.capture("autoplay-after", true);
     let after = r.model(&path);

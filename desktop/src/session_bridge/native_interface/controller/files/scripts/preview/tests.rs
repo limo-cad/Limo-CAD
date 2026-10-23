@@ -507,7 +507,8 @@ fn native_script_preview_help_entry_is_localized_dormant_and_restores_the_draft(
             widgets.finish(&mut world);
             // Match paint_index's actual logical height. No off-page controls
             // may survive cleanup or enter the native keyboard tab order.
-            let available = (440. - card::Card::new(700.).y - 12.).max(186.);
+            let available =
+                (440. - card::Card::new(700.).y - card::navigation_height(&world) - 12.).max(186.);
             let (_, range) = feature::index_range(page, lesson::ALL.len(), available);
             for (index, id) in lesson::ALL.into_iter().enumerate() {
                 let visible = widgets

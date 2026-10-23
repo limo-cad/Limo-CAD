@@ -324,6 +324,41 @@ fn ready_hint(
     hint.open
 }
 
+fn active_scope(world: &World) -> Option<&'static str> {
+    active_scope_with_menu(world, false)
+}
+
+fn active_scope_with_menu(world: &World, detached_menu: bool) -> Option<&'static str> {
+    scope::owner(
+        super::super::super::modal(world),
+        workbench::modal(world),
+        detached_menu,
+        super::super::super::super::history::modal(world),
+        crate::native_editor::panel::modal(world),
+        crate::native_editor::support::modal(world),
+    )
+}
+
+pub(super) fn dismiss_hint_menu(world: &mut World) -> Option<&'static str> {
+    let scope = active_scope(world);
+    let dismissed = match scope {
+        Some("sketch-menu") => {
+            crate::native_editor::panel::escape(world);
+            scope
+        }
+        Some("workbench-menu") => {
+            workbench::dismiss_menu(world);
+            scope
+        }
+        _ => None,
+    };
+    if let Some(mut hint) = world.get_resource_mut::<Hint>() {
+        *hint = Hint::default();
+    }
+    dismissed
+}
+
+#[cfg(test)]
 pub(crate) fn paint_hint(
     world: &mut World,
     camera: Entity,
@@ -331,14 +366,39 @@ pub(crate) fn paint_hint(
     widgets: &mut chrome::Widgets,
     width: f32,
 ) -> Result<(), String> {
+    paint_scoped_hint(world, camera, widgets, width, false)
+}
+
+/// Workbench owns its detached state while painting. Carry just that transient
+/// menu scope, and still require the matching presented owner and anchor scope.
+pub(crate) fn paint_workbench_hint(
+    world: &mut World,
+    camera: Entity,
+    widgets: &mut chrome::Widgets,
+    width: f32,
+    menu_open: bool,
+) -> Result<(), String> {
+    paint_scoped_hint(world, camera, widgets, width, menu_open)
+}
+
+fn paint_scoped_hint(
+    world: &mut World,
+    camera: Entity,
+    widgets: &mut chrome::Widgets,
+    width: f32,
+    detached_menu: bool,
+) -> Result<(), String> {
     world.init_resource::<Hint>();
+    let scope = active_scope_with_menu(world, detached_menu);
     let allowed = !world.resource::<Files>().script.preview.open
-        && super::super::super::modal(world).is_none()
-        && workbench::modal(world).is_none()
+        && scope::allows(scope, scope)
         && world
             .get_resource::<NativeInterfaceHandle>()
-            .and_then(NativeInterfaceHandle::presented_pointer_context)
-            .is_none_or(|(_, empty, _)| empty)
+            .is_none_or(|handle| {
+                handle.presented_context().map_or(scope.is_none(), |owner| {
+                    handle.presented_focus_matches(&owner, scope)
+                })
+            })
         && crate::session_bridge::native_interface::feature::panel(world).is_none();
     if !allowed {
         *world.resource_mut::<Hint>() = Hint::default();
@@ -364,7 +424,10 @@ pub(crate) fn paint_hint(
     // Typed Sketch variants and Solid forms share this scan and hover worker.
     let mut anchors = world.query::<(Entity, &NativeCommandBinding, &InterfaceControl, &Node)>();
     for (entity, binding, control, node) in anchors.iter(world) {
-        if !control.visible || control.disabled {
+        if !control.visible
+            || control.disabled
+            || !scope::allows(scope, control.modal_scope.as_deref())
+        {
             continue;
         }
         let Some(id) = command_lesson(&binding.command) else {
@@ -396,9 +459,13 @@ pub(crate) fn paint_hint(
                 world.resource::<Hint>().anchor == Some(entity) && world.resource::<Hint>().open,
             )
         });
-        if keyboard || hovered {
+        if keyboard
+            || (hovered && (selected.is_none() || world.resource::<Hint>().anchor == Some(entity)))
+        {
             selected = Some((entity, id, cx, cy, cw, keyboard, hovered));
-            break;
+            if keyboard {
+                break;
+            }
         }
     }
     let Some((anchor, id, x, y, w, keyboard, hovered)) = selected else {
@@ -464,6 +531,15 @@ pub(crate) fn paint_hint(
         let caption = t(&format!("{}.example", id.key()));
         let mut control = InterfaceControl::button("document/scripts", caption);
         control.disabled = available(world).is_err();
+        // Book is a sibling of its command in this menu's modal/tab scope.
+        // Background commands and real dialogs keep their normal isolation.
+        if let Some(scope) = scope {
+            control.modal_scope = Some(scope.into());
+            control.role = "menuitem".into();
+            control.owned_keys = ["ArrowUp", "ArrowDown", "Home", "End"]
+                .map(limo_cad_interface::KeyChord::plain)
+                .into();
+        }
         let entry = widgets.button(
             world,
             camera,
@@ -514,12 +590,23 @@ pub(super) fn focus_control(world: &mut World, entity: Entity) {
         return;
     };
     if !handle.presented_focus_matches(&owner, None) {
-        world.resource_mut::<Files>().script.preview.focus_owner = None;
+        let menu = world.resource::<Files>().script.preview.focus_from_menu;
+        if menu.is_some_and(|menu| handle.presented_focus_matches(&owner, Some(menu))) {
+            // The accepted Book command dismissed this menu; its presented
+            // frame can lag the new card by one layout. Do not activate through it.
+            handle.request_redraw();
+            return;
+        }
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.focus_owner = None;
+        preview.focus_from_menu = None;
         return;
     }
     if let Ok(action) = handle.resolve_retained(limo_cad_interface::ControlKey(entity.to_bits())) {
         if action.context == owner && handle.prepare_activation(&action).is_ok() {
-            world.resource_mut::<Files>().script.preview.focus_owner = None;
+            let preview = &mut world.resource_mut::<Files>().script.preview;
+            preview.focus_owner = None;
+            preview.focus_from_menu = None;
             return;
         }
     }
@@ -530,6 +617,7 @@ pub(super) fn focus_control(world: &mut World, entity: Entity) {
 pub(super) struct HelpView {
     pub offset: f32,
     pub(super) return_focus: bool,
+    pub(super) restore_offset: Option<f32>,
     max: f32,
     bounds: [f32; 4],
 }
@@ -546,6 +634,7 @@ pub(super) fn scroll_help_key(
         return Err("Open help before scrolling".into());
     }
     let view = &mut preview.help_view;
+    view.restore_offset = None;
     let page = view.bounds[3] * 0.8;
     view.offset = match key.key.as_str() {
         "ArrowUp" => view.offset - 28.,
@@ -590,6 +679,7 @@ pub(super) fn help_input(
     };
     if amount.is_finite() {
         let view = &mut world.resource_mut::<Files>().script.preview.help_view;
+        view.restore_offset = None;
         view.offset = (view.offset - amount).clamp(0., view.max);
         handle.request_redraw();
     }
@@ -615,6 +705,10 @@ pub(super) fn paint_instructions(
         bounds[2] - 8.,
         (bounds[3] - footer).max(32.),
     ];
+    let matching_text = widgets
+        .entity("extrude-help-text")
+        .and_then(|entity| world.get::<Text>(entity))
+        .is_some_and(|text| text.0 == body);
     let content_height = widgets
         .entity("extrude-help-text")
         .and_then(|entity| world.get::<ComputedNode>(entity))
@@ -622,6 +716,11 @@ pub(super) fn paint_instructions(
     let view = &mut world.resource_mut::<Files>().script.preview.help_view;
     view.bounds = bounds;
     view.max = (content_height - bounds[3]).max(0.);
+    if matching_text && content_height > 0. {
+        if let Some(offset) = view.restore_offset.take() {
+            view.offset = offset;
+        }
+    }
     view.offset = view.offset.clamp(0., view.max);
     let (offset, max) = (view.offset, view.max);
     let mut control = InterfaceControl::button(
@@ -717,7 +816,8 @@ pub(super) fn paint_index(
     let language = lesson::language(world);
     let t = |key: &str| limo_cad_mcp::lessons::text(language, key);
     let card = card::Card::new(width);
-    let (x, y, w) = (card.x, card.y, card.width);
+    let navigation_height = card::navigation_height(world);
+    let (x, y, w) = (card.x, card.y + navigation_height, card.width);
     let available = (height - y - 12.).max(186.);
     let (page, range) = index_range(
         world.resource::<Files>().script.preview.index_page,
@@ -733,10 +833,13 @@ pub(super) fn paint_index(
         camera,
         widgets,
         "index",
-        88. + rows as f32 * 62. + if paged { 36. } else { 0. },
+        88. + rows as f32 * 62. + if paged { 36. } else { 0. } + navigation_height,
         t("ui.guidedExamples"),
         theme,
     )?;
+    let restored_focus = world.resource::<Files>().script.preview.index_focus;
+    let focus_visible =
+        restored_focus.is_some_and(|id| range.clone().any(|i| lesson::ALL[i] == id));
     for (row, index) in range.clone().enumerate() {
         let id = lesson::ALL[index];
         let top = y + 44. + row as f32 * 62.;
@@ -761,7 +864,7 @@ pub(super) fn paint_index(
             61,
             theme.mute,
         );
-        if row == 0 {
+        if restored_focus == Some(id) || (!focus_visible && row == 0) {
             focus_control(world, entry);
         }
     }
@@ -828,6 +931,62 @@ pub(super) fn paint_index(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_script_preview_book_focus_waits_only_for_its_dismissed_menu() {
+        for unrelated in [false, true] {
+            let (mut app, handle, target, _) = interface_shell::tests::fixture();
+            initialize(
+                app.world_mut(),
+                Arc::new(Mutex::new(DocumentWorkspace::default())),
+            );
+            let owner = handle.presented_context().unwrap();
+            {
+                let preview = &mut app.world_mut().resource_mut::<Files>().script.preview;
+                preview.focus_owner = Some(owner.clone());
+                preview.focus_from_menu = Some("sketch-menu");
+            }
+            let mut frame = handle.frame().unwrap();
+            frame.surfaces.push(limo_cad_interface::Surface {
+                name: "sketch-menu".into(),
+                text: None,
+            });
+            frame.modal_stack = vec!["sketch-menu".into()];
+            handle.present(frame.clone()).unwrap();
+            app.update();
+            focus_control(app.world_mut(), target);
+            assert_eq!(
+                app.world()
+                    .resource::<Files>()
+                    .script
+                    .preview
+                    .focus_owner
+                    .as_ref(),
+                Some(&owner)
+            );
+            assert!(
+                handle.focused_key().is_none(),
+                "Never focus through the closing menu"
+            );
+            frame.modal_stack.clear();
+            if unrelated {
+                frame.surfaces.push(limo_cad_interface::Surface {
+                    name: "file-dialog".into(),
+                    text: None,
+                });
+                frame.modal_stack.push("file-dialog".into());
+            }
+            handle.present(frame).unwrap();
+            app.update();
+            focus_control(app.world_mut(), target);
+            let preview = &app.world().resource::<Files>().script.preview;
+            assert!(preview.focus_owner.is_none() && preview.focus_from_menu.is_none());
+            assert_eq!(
+                handle.focused_key(),
+                (!unrelated).then_some(limo_cad_interface::ControlKey(target.to_bits()))
+            );
+        }
+    }
 
     #[test]
     fn native_script_preview_inspection_commands_keep_real_control_identity() {

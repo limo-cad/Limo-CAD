@@ -20,10 +20,14 @@ mod hover;
 mod images;
 mod input;
 mod lesson;
+mod navigation;
 mod panel;
 mod prepared;
+mod scope;
 mod steps;
+#[cfg(test)]
 pub(crate) use feature::paint_hint;
+pub(crate) use feature::paint_workbench_hint;
 pub(crate) use input::input;
 pub(crate) use panel::paint;
 
@@ -45,6 +49,7 @@ pub(crate) enum Action {
     Read(limo_cad_mcp::lessons::Id),
     Index,
     IndexPage(bool),
+    Back,
     FullBuild,
     Help,
     HelpBody,
@@ -197,8 +202,12 @@ pub(crate) struct State {
     scenario: lesson::CutScenario,
     index_open: bool,
     index_page: usize,
+    index_focus: Option<lesson::Id>,
+    history: navigation::History<lesson::Id, lesson::CutScenario>,
+    restore: Option<navigation::Lesson<lesson::Id, lesson::CutScenario>>,
     transition: Option<Retained>,
     focus_owner: Option<DocumentContext>,
+    focus_from_menu: Option<&'static str>,
 }
 pub(in super::super) fn cancel_pointer(world: &mut World) {
     if let Some(mut files) = world.get_resource_mut::<Files>() {
@@ -248,12 +257,59 @@ impl Default for State {
             scenario: lesson::CutScenario::default(),
             index_open: false,
             index_page: 0,
+            index_focus: None,
+            history: navigation::History::default(),
+            restore: None,
             transition: None,
             focus_owner: None,
+            focus_from_menu: None,
         }
     }
 }
 impl State {
+    fn location(&self) -> Option<navigation::Location<lesson::Id, lesson::CutScenario>> {
+        if !self.open {
+            return None;
+        }
+        if self.index_open {
+            return Some(navigation::Location::Index {
+                page: self.index_page,
+                focus: self.index_focus,
+            });
+        }
+        self.lesson.map(|id| {
+            navigation::Location::Lesson(navigation::Lesson {
+                id,
+                step: self.index,
+                scenario: self.scenario,
+                instructions: self.help,
+                scroll: self.help_view.offset,
+                steps_open: self.steps_open,
+                steps_page: self.steps_page,
+                yaw: self.yaw,
+                pitch: self.pitch,
+            })
+        })
+    }
+    fn restore_location(&mut self, location: navigation::Lesson<lesson::Id, lesson::CutScenario>) {
+        self.index = location.step;
+        self.scenario = location.scenario;
+        self.help = location.instructions;
+        self.help_view.offset = location.scroll;
+        self.steps_open = location.steps_open;
+        self.steps_page = location.steps_page;
+        self.yaw = location.yaw;
+        self.pitch = location.pitch;
+        // Back returns to a readable, paused step, never a stale partial dissolve.
+        self.animation_progress = ANIMATION_STEPS;
+        self.pause();
+    }
+    fn pause(&mut self) {
+        self.playing = false;
+        self.blend = None;
+        self.wake = None;
+        self.render_started = None;
+    }
     fn image_ready(&self) -> bool {
         self.image.is_some()
             && self.image_index == Some(self.index)
@@ -352,7 +408,7 @@ impl State {
         if !yaw.is_finite() || !pitch.is_finite() {
             return Err("Invalid preview camera".into());
         }
-        self.playing = false;
+        self.pause();
         self.yaw = yaw.rem_euclid(std::f32::consts::TAU);
         self.pitch = pitch.clamp(-1.3, 1.3);
         self.changed()
@@ -428,14 +484,94 @@ fn open_lesson(
     id: Option<lesson::Id>,
     help: bool,
 ) -> Result<(), String> {
+    let preview = &world.resource::<Files>().script.preview;
+    let mut history = preview.history;
+    if let Some(mut origin) = preview.location() {
+        if let navigation::Location::Index { focus, .. } = &mut origin {
+            *focus = id.or(*focus);
+        }
+        // Opening the same guide's instructions is not another navigation level.
+        if preview.lesson != id || preview.index_open != id.is_none() {
+            history.push(origin);
+        }
+    }
+    let destination = id.map_or(
+        navigation::Location::Index {
+            page: preview.index_page,
+            focus: preview.index_focus,
+        },
+        |id| {
+            navigation::Location::Lesson(navigation::Lesson {
+                id,
+                step: 0,
+                scenario: lesson::CutScenario::default(),
+                instructions: help,
+                scroll: 0.,
+                steps_open: false,
+                steps_page: None,
+                yaw: HOME.0,
+                pitch: HOME.1,
+            })
+        },
+    );
+    open_location(world, handle, destination, history, false)
+}
+
+fn show_index(
+    world: &mut World,
+    handle: &NativeInterfaceHandle,
+    page: usize,
+    focus: Option<lesson::Id>,
+    history: navigation::History<lesson::Id, lesson::CutScenario>,
+) {
+    let files = world.resource::<Files>();
+    let previous = files.script.preview.return_to.unwrap_or((
+        files.scripts,
+        files.script.editor_open,
+        files.script.library.open,
+        files.script.chapters.open,
+    ));
+    let generation = files.script.generation;
+    // Index navigation owns no view or texture. A pending preparation receipt is
+    // still drained by poll, keeping the existing one-worker admission bound.
+    close(world);
+    let files = &mut world.resource_mut::<Files>();
+    files.script.editor_open = false;
+    files.script.library.open = false;
+    files.script.chapters.open = false;
+    let preview = &mut files.script.preview;
+    preview.open = true;
+    preview.help = true;
+    preview.generation = generation;
+    preview.return_to = Some(previous);
+    preview.index_open = true;
+    preview.index_page = page;
+    preview.index_focus = focus;
+    preview.history = history;
+    preview.focus_owner = handle.presented_context();
+}
+
+fn open_location(
+    world: &mut World,
+    handle: &NativeInterfaceHandle,
+    destination: navigation::Location<lesson::Id, lesson::CutScenario>,
+    history: navigation::History<lesson::Id, lesson::CutScenario>,
+    restoring: bool,
+) -> Result<(), String> {
     available(world)?;
     editor::retain_source_error(world);
-    if world.resource::<Files>().script.preview.building() {
-        return Err("Wait for the current example to finish preparing".into());
-    }
+    let navigation::Location::Lesson(location) = destination else {
+        let navigation::Location::Index { page, focus } = destination else {
+            unreachable!()
+        };
+        show_index(world, handle, page, focus, history);
+        let menu = feature::dismiss_hint_menu(world);
+        world.resource_mut::<Files>().script.preview.focus_from_menu = menu;
+        return Ok(());
+    };
     let example = catalog::examples()
         .iter()
-        .find(|example| example.id == id.map_or(lesson::RECIPE, lesson::Id::recipe))
+        .find(|example| example.id == location.id.recipe())
         .ok_or("The guided example is unavailable")?;
     let files = world.resource::<Files>();
     let previous = files.script.preview.return_to.unwrap_or((
@@ -446,32 +582,32 @@ fn open_lesson(
     ));
     let generation = files.script.generation;
     let transition = world.resource_mut::<Files>().script.preview.retained.take();
-    if id.is_none() {
-        close(world);
-        let preview = &mut world.resource_mut::<Files>().script.preview;
-        preview.open = true;
-        preview.help = true;
-        preview.generation = generation;
-    } else {
-        start_lesson(world, handle, example.source.clone(), generation, id)?;
-    }
+    start_lesson(
+        world,
+        handle,
+        example.source.clone(),
+        generation,
+        Some(location.id),
+    )?;
     let files = &mut world.resource_mut::<Files>();
     files.script.editor_open = false;
     files.script.library.open = false;
     files.script.chapters.open = false;
-    files.script.preview.return_to = Some(previous);
-    files.script.preview.help = help;
-    files.script.preview.playing = id.is_some() && !help;
-    files.script.preview.animation_progress = if help { ANIMATION_STEPS } else { 0 };
-    files.script.preview.steps_open = false;
-    files.script.preview.steps_return_focus = false;
-    files.script.preview.lesson = id;
-    files.script.preview.scenario = lesson::CutScenario::default();
-    files.script.preview.index_open = id.is_none();
-    files.script.preview.index_page = 0;
-    files.script.preview.transition = if id.is_none() { None } else { transition };
-    files.script.preview.help_view = feature::HelpView::default();
-    files.script.preview.focus_owner = handle.presented_context();
+    let preview = &mut files.script.preview;
+    preview.return_to = Some(previous);
+    preview.help_view = feature::HelpView::default();
+    preview.restore_location(location);
+    preview.playing = !restoring && !location.instructions;
+    preview.animation_progress = if preview.playing { 0 } else { ANIMATION_STEPS };
+    preview.steps_return_focus = false;
+    preview.lesson = Some(location.id);
+    preview.index_open = false;
+    preview.transition = transition;
+    preview.history = history;
+    preview.restore = restoring.then_some(location);
+    preview.focus_owner = handle.presented_context();
+    let menu = feature::dismiss_hint_menu(world);
+    world.resource_mut::<Files>().script.preview.focus_from_menu = menu;
     Ok(())
 }
 
@@ -538,10 +674,13 @@ fn close(world: &mut World) {
         preview.steps_return_focus = false;
         preview.help = false;
         preview.focus_owner = None;
+        preview.focus_from_menu = None;
         preview.retained = None;
         preview.transition = None;
         preview.lesson = None;
         preview.index_open = false;
+        preview.history = navigation::History::default();
+        preview.restore = None;
         preview.playing = false;
         preview.animation_progress = ANIMATION_STEPS;
         preview.blend = None;
@@ -554,6 +693,20 @@ fn close(world: &mut World) {
     };
     for image in images {
         crate::native_viewport::script_preview::textures::remove(world, image.id());
+    }
+}
+
+fn close_to_origin(world: &mut World) {
+    let previous = world.resource::<Files>().script.preview.return_to;
+    close(world);
+    if let Some((scripts, editor, library, chapters)) = previous {
+        let files = &mut world.resource_mut::<Files>();
+        files.scripts = scripts;
+        files.script.editor_open = editor;
+        files.script.library.open = library;
+        files.script.chapters.open = chapters;
+    } else {
+        world.resource_mut::<Files>().script.editor_open = true;
     }
 }
 
@@ -599,6 +752,12 @@ pub(crate) fn command(
         open_lesson(world, handle, Some(id), matches!(action, Action::Read(_)))?;
     } else if action == Action::Index {
         open_lesson(world, handle, None, true)?;
+    } else if action == Action::Back {
+        let mut history = world.resource::<Files>().script.preview.history;
+        let destination = history
+            .pop()
+            .ok_or("There is no earlier guide to return to")?;
+        open_location(world, handle, destination, history, true)?;
     } else if action == Action::FullBuild {
         let recipe = world
             .resource::<Files>()
@@ -606,22 +765,12 @@ pub(crate) fn command(
             .preview
             .lesson
             .map_or(lesson::RECIPE, lesson::Id::recipe);
-        let _ = command(world, handle, Action::Close, &ControlInput::Click)?;
+        close_to_origin(world);
         super::catalog::open_recipe(world, recipe)?;
     } else if action == Action::Extrude {
         open_extrude(world, handle)?;
     } else if action == Action::Close {
-        let previous = world.resource::<Files>().script.preview.return_to;
-        close(world);
-        if let Some((scripts, editor, library, chapters)) = previous {
-            let files = &mut world.resource_mut::<Files>();
-            files.scripts = scripts;
-            files.script.editor_open = editor;
-            files.script.library.open = library;
-            files.script.chapters.open = chapters;
-        } else {
-            world.resource_mut::<Files>().script.editor_open = true;
-        }
+        close_to_origin(world);
     } else {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         if !preview.open {
@@ -644,9 +793,7 @@ pub(crate) fn command(
                 preview.steps_return_focus = false;
                 preview.help = action == Action::Help && !preview.help;
                 preview.focus_owner = handle.presented_context();
-                preview.playing = false;
-                preview.blend = None;
-                preview.wake = None;
+                preview.pause();
                 preview.help_view = feature::HelpView::default();
                 preview.help_view.return_focus = !preview.help;
             }
@@ -658,9 +805,7 @@ pub(crate) fn command(
                 preview.steps_open = !preview.steps_open;
                 preview.steps_page = None;
                 preview.steps_return_focus = !preview.steps_open;
-                preview.playing = false;
-                preview.blend = None;
-                preview.wake = None;
+                preview.pause();
                 preview.focus_owner = handle.presented_context();
             }
             Action::StepsPage(next) => {
@@ -734,9 +879,7 @@ pub(crate) fn command(
                 preview.render_started = None;
             }
             Action::Stop => {
-                preview.playing = false;
-                preview.blend = None;
-                preview.wake = None;
+                preview.pause();
             }
             Action::Fit => preview.turn(HOME.0, HOME.1)?,
             Action::Left => preview.turn(preview.yaw - 0.15, preview.pitch)?,
@@ -954,11 +1097,14 @@ pub(super) fn poll(world: &mut World) {
     if let Some(result) = receive(&world.resource::<Files>().script.preview.build) {
         let preview = &mut world.resource_mut::<Files>().script.preview;
         preview.build = None;
-        if preview.open {
+        if preview.open && !preview.index_open {
             match result.and_then(|frames| Retained::new(preview.service.clone(), frames)) {
                 Ok(retained) => {
                     preview.retained = Some(retained);
-                    if preview.playing {
+                    if let Some(location) = preview.restore.take() {
+                        preview.index = preview.index.min(preview.count().saturating_sub(1));
+                        preview.help_view.restore_offset = Some(location.scroll);
+                    } else if preview.playing {
                         preview.begin_animation();
                     }
                 }
@@ -1030,6 +1176,9 @@ mod tests;
 
 #[cfg(test)]
 mod transition_tests;
+
+#[cfg(test)]
+mod navigation_tests;
 
 #[cfg(test)]
 mod evidence;

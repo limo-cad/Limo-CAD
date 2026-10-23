@@ -1100,6 +1100,8 @@ mod tests {
                 "ui.instructions",
                 "ui.hideInstructions",
                 "ui.resume",
+                "ui.back",
+                "ui.backToGuides",
                 "sketch.example",
                 "extrude.example",
                 "cut.example",

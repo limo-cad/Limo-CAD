@@ -160,8 +160,7 @@ pub(crate) fn input(
         return Ok(false);
     }
     let preview = &mut world.resource_mut::<Files>().script.preview;
-    preview.playing = false;
-    preview.wake = None;
+    preview.pause();
     preview.drag = Some(Drag {
         owner: action.context,
         start: cursor,
@@ -169,6 +168,7 @@ pub(crate) fn input(
         pitch: preview.pitch,
         moved: false,
     });
+    handle.request_redraw();
     Ok(false)
 }
 

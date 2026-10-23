@@ -19,7 +19,9 @@ pub(super) use editor::{
 };
 pub(super) use exit::guard_exit;
 pub(super) use launch::{command as launch_command, Action as LaunchAction};
+#[cfg(test)]
 pub(crate) use preview::paint_hint as paint_feature_hint;
+pub(crate) use preview::paint_workbench_hint as paint_workbench_feature_hint;
 pub(super) use preview::{
     cancel_pointer as cancel_preview_pointer, command as preview_command, input as preview_input,
     paint as paint_preview, Action as PreviewAction,

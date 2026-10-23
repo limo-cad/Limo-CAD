@@ -19,7 +19,9 @@ mod profile_output;
 mod scripts;
 pub(super) use panel::synchronize;
 pub(super) use printing::message as print_message;
+#[cfg(test)]
 pub(super) use scripts::paint_feature_hint;
+pub(super) use scripts::paint_workbench_feature_hint;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum FileCommand {

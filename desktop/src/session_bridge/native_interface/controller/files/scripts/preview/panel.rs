@@ -16,7 +16,8 @@ pub(crate) fn paint(
     let language = lesson::language(world);
     let t = |key: &str| limo_cad_mcp::lessons::text(language, key);
     let card = card::Card::new(width);
-    let (x, y, w) = (card.x, card.y, card.width);
+    let navigation_height = card::navigation_height(world);
+    let (x, y, w) = (card.x, card.y + navigation_height, card.width);
     let image_width = w - 24.;
     let choices = world.resource::<Files>().script.preview.lesson == Some(lesson::Id::Cut);
     let instructions = world.resource::<Files>().script.preview.help;
@@ -81,11 +82,12 @@ pub(crate) fn paint(
             })
             .unwrap_or_else(|| t("ui.preparing").into())
     });
-    let card_height = image_height + choice_height + trail_height + 192. + instructions_height;
+    let content_height = image_height + choice_height + trail_height + 192. + instructions_height;
+    let card_height = content_height + navigation_height;
     let shell = if side_instructions {
         card::Card {
             x: x - 288.,
-            y,
+            y: card.y,
             width: w + 288.,
         }
     } else {
@@ -108,13 +110,13 @@ pub(crate) fn paint(
                 world,
                 camera,
                 "guide-instructions-divider",
-                rect(x - 8., y + 44., 1., card_height - 56.),
+                rect(x - 8., y + 44., 1., content_height - 56.),
                 theme.edge,
                 61,
             );
-            [shell.x + 12., y + 44., 264., card_height - 56.]
+            [shell.x + 12., y + 44., 264., content_height - 56.]
         } else {
-            let top = y + card_height - instructions_height;
+            let top = y + content_height - instructions_height;
             widgets.panel(
                 world,
                 camera,

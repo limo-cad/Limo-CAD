@@ -156,6 +156,206 @@ fn native_preview_pause_finishes_dissolve_without_changing_render_key_revision_o
 }
 
 #[test]
+fn native_preview_click_without_drag_finishes_dissolve_and_a_real_drag_invalidates_camera() {
+    use bevy::input::ButtonState;
+    use interface_shell::{PointerButton, PointerPhase};
+    for pending in [false, true] {
+        let (mut app, handle, model, _) = interface_shell::tests::fixture();
+        initialize(
+            app.world_mut(),
+            Arc::new(Mutex::new(DocumentWorkspace::default())),
+        );
+        app.world_mut().init_resource::<Assets<Image>>();
+        {
+            let files = &mut app.world_mut().resource_mut::<Files>();
+            files.scripts = true;
+            let preview = &mut files.script.preview;
+            preview.open = true;
+            preview.lesson = Some(lesson::Id::CircularPattern);
+            preview.retained = Some(
+                Retained::new(
+                    preview.service.clone(),
+                    (0..3)
+                        .map(|index| Frame {
+                            caption: format!("Frame {index}"),
+                            ..default()
+                        })
+                        .collect(),
+                )
+                .unwrap(),
+            );
+        }
+        bind_command(
+            app.world_mut(),
+            model,
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Model)),
+        )
+        .unwrap();
+        app.update();
+        begin_static(app.world_mut());
+        let receipt = if pending {
+            let (send, receive) = mpsc::channel();
+            let preview = &mut app.world_mut().resource_mut::<Files>().script.preview;
+            preview.render = Some(InFlight::Fixture(Mutex::new(receive)));
+            preview.attempted = preview.revision;
+            Some(send)
+        } else {
+            publish_current(app.world_mut());
+            let now = Instant::now();
+            let preview = &mut app.world_mut().resource_mut::<Files>().script.preview;
+            arm_replay(preview, now);
+            replay(preview, &handle, now + ANIMATION_INTERVAL).unwrap();
+            arm_replay(preview, now + ANIMATION_INTERVAL);
+            None
+        };
+        let bounds = handle
+            .read_surface(|_, surface| {
+                surface
+                    .controls
+                    .iter()
+                    .find(|c| c.key.0 == model.to_bits())
+                    .unwrap()
+                    .bounds
+            })
+            .unwrap();
+        let point = Vec2::new(
+            (bounds.x + bounds.width / 2.) as f32,
+            (bounds.y + bounds.height / 2.) as f32,
+        );
+        let owner = handle.presented_context().unwrap();
+        let event = |state, point| NativeHostInput {
+            ui_scale: 1.,
+            event: WindowEvent::MouseButtonInput(bevy::input::mouse::MouseButtonInput {
+                window: Entity::PLACEHOLDER,
+                button: MouseButton::Left,
+                state,
+            }),
+            context: Some(owner.clone()),
+            cursor: Some(point),
+            consumed: false,
+            modifiers: default(),
+            actions: vec![],
+        };
+        let before = {
+            let p = &app.world().resource::<Files>().script.preview;
+            assert!(p.blend.is_some());
+            (
+                images::Key::current(p),
+                p.revision,
+                p.render_jobs,
+                p.yaw,
+                p.pitch,
+            )
+        };
+        assert!(!input::input(
+            app.world_mut(),
+            &handle,
+            &event(ButtonState::Pressed, point)
+        )
+        .unwrap());
+        assert!(handle
+            .pointer(
+                PointerPhase::Down,
+                point.as_dvec2().to_array(),
+                PointerButton::Primary
+            )
+            .unwrap());
+        let preview = &app.world().resource::<Files>().script.preview;
+        assert!(
+            !preview.playing
+                && preview.blend.is_none()
+                && preview.wake.is_none()
+                && preview.render_started.is_none()
+        );
+        assert!(images::Key::current(preview) == before.0);
+        assert_eq!(
+            (
+                preview.revision,
+                preview.render_jobs,
+                preview.yaw,
+                preview.pitch
+            ),
+            (before.1, before.2, before.3, before.4)
+        );
+        assert!(!input::input(
+            app.world_mut(),
+            &handle,
+            &event(ButtonState::Released, point)
+        )
+        .unwrap());
+        assert!(handle
+            .pointer(
+                PointerPhase::Up,
+                point.as_dvec2().to_array(),
+                PointerButton::Primary
+            )
+            .unwrap());
+        assert!(app
+            .world()
+            .resource::<Files>()
+            .script
+            .preview
+            .drag
+            .is_none());
+        for action in handle.take_actions().unwrap() {
+            assert_eq!(
+                action.control.key,
+                limo_cad_interface::ControlKey(model.to_bits())
+            );
+            command(
+                app.world_mut(),
+                &handle,
+                Action::Model,
+                &action.control.input,
+            )
+            .unwrap();
+        }
+        if let Some(receipt) = receipt {
+            let p = &app.world().resource::<Files>().script.preview;
+            assert!(
+                p.render.is_some(),
+                "A click retains the pending target receipt"
+            );
+            receipt
+                .send(Ok(Rendered {
+                    view: p.retained.as_ref().unwrap().view.clone(),
+                    revision: p.revision,
+                    image: image(),
+                }))
+                .unwrap();
+            poll(app.world_mut());
+        }
+        let preview = &app.world().resource::<Files>().script.preview;
+        assert!(preview.image_ready() && preview.blend.is_none() && preview.wake.is_none());
+        assert_eq!(preview.display_index(), 1);
+        assert_eq!(
+            (preview.revision, preview.render_jobs),
+            (before.1, before.2)
+        );
+        input::input(
+            app.world_mut(),
+            &handle,
+            &event(ButtonState::Pressed, point),
+        )
+        .unwrap();
+        let moved = point + Vec2::new(20., 10.);
+        let motion = NativeHostInput {
+            event: WindowEvent::CursorMoved(bevy::window::CursorMoved {
+                window: Entity::PLACEHOLDER,
+                position: moved,
+                delta: None,
+            }),
+            cursor: Some(moved),
+            ..event(ButtonState::Pressed, point)
+        };
+        assert!(input::input(app.world_mut(), &handle, &motion).unwrap());
+        let preview = &app.world().resource::<Files>().script.preview;
+        assert!(preview.revision > before.1 && preview.blend.is_none());
+        assert!(images::Key::current(preview) != before.0);
+    }
+}
+
+#[test]
 fn native_preview_cached_static_target_blends_without_connecting_or_scheduling_gpu_work() {
     let (mut world, handle, _) = fixture();
     publish_current(&mut world);

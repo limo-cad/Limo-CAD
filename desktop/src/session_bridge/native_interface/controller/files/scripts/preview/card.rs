@@ -2,6 +2,21 @@
 use super::super::super::super::chrome::{self, rect};
 use super::*;
 
+pub(super) fn navigation_height(world: &World) -> f32 {
+    if world
+        .resource::<Files>()
+        .script
+        .preview
+        .history
+        .peek()
+        .is_some()
+    {
+        36.
+    } else {
+        0.
+    }
+}
+
 pub(super) struct Card {
     pub x: f32,
     pub y: f32,
@@ -68,6 +83,28 @@ impl Card {
             Some(interface_shell::ribbon::Icon::Cancel),
             61,
         )?;
+        if let Some(origin) = world.resource::<Files>().script.preview.history.peek() {
+            let label = lesson::text(
+                world,
+                match origin {
+                    navigation::Location::Index { .. } => "ui.backToGuides",
+                    navigation::Location::Lesson(_) => "ui.back",
+                },
+            );
+            let mut control = InterfaceControl::button("document/scripts", label);
+            control.disabled = world.resource::<Files>().script.preview.building();
+            widgets.button(
+                world,
+                camera,
+                &key("back"),
+                control,
+                Some(&format!("‹  {label}")),
+                NativeCommand::File(FileCommand::ScriptPreview(Action::Back)),
+                rect(x + 12., y + 44., w - 24., 28.),
+                None,
+                61,
+            )?;
+        }
         Ok(())
     }
 }
