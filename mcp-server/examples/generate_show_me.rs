@@ -72,8 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let decoded: Vec<limo_cad_native_engine::teaching::Frame> =
                 serde_json::from_value(json!(frames))?;
             limo_cad_native_engine::teaching::validate_frames(&decoded)?;
-            let envelope =
-                json!({"version":1,"lesson":lesson,"source_sha256_lf":source_hash,"frames":decoded});
+            let envelope = json!({"version":1,"lesson":lesson,"source_sha256_lf":source_hash,"frames":decoded});
             let mut bounded = AssetBytes(Vec::new());
             ciborium::ser::into_writer(&envelope, &mut bounded)?;
             let bytes = bounded.0;

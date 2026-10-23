@@ -477,11 +477,11 @@ impl Id {
     }
     pub const fn cues(self) -> [&'static str; 4] {
         match self {
-            Self::ConstructionVisibility => ["body","body","body","body"],
-            Self::SectionAnalysis => ["body","dimension","dimension","body"],
-            Self::SelectionSolid => ["body","body","edges","body"],
-            Self::SelectionSketch => ["body","body","body","body"],
-            Self::Measure => ["body","body","dimension","body"],
+            Self::ConstructionVisibility => ["body", "body", "body", "body"],
+            Self::SectionAnalysis => ["body", "dimension", "dimension", "body"],
+            Self::SelectionSolid => ["body", "body", "edges", "body"],
+            Self::SelectionSketch => ["body", "body", "body", "body"],
+            Self::Measure => ["body", "body", "dimension", "body"],
 
             Self::Sketch => ["plane", "profile", "dimension", "apply"],
             Self::Extrude => ["profile", "extrude", "depth", "apply"],
@@ -541,11 +541,36 @@ impl Id {
     /// Exact authored captions, including both retained Cut scenarios.
     pub const fn captions(self) -> &'static [&'static str] {
         match self {
-            Self::ConstructionVisibility => &["construction_visibility.inputs","construction_visibility.hide","construction_visibility.isolate","construction_visibility.restore"],
-            Self::SectionAnalysis => &["section_analysis.inputs","section_analysis.plane","section_analysis.reverse","section_analysis.close"],
-            Self::SelectionSolid => &["selection_solid.inputs","selection_solid.face","selection_solid.edge","selection_solid.clear"],
-            Self::SelectionSketch => &["selection_sketch.inputs","selection_sketch.first","selection_sketch.add","selection_sketch.clear"],
-            Self::Measure => &["measure.inputs","measure.first","measure.distance","measure.close"],
+            Self::ConstructionVisibility => &[
+                "construction_visibility.inputs",
+                "construction_visibility.hide",
+                "construction_visibility.isolate",
+                "construction_visibility.restore",
+            ],
+            Self::SectionAnalysis => &[
+                "section_analysis.inputs",
+                "section_analysis.plane",
+                "section_analysis.reverse",
+                "section_analysis.close",
+            ],
+            Self::SelectionSolid => &[
+                "selection_solid.inputs",
+                "selection_solid.face",
+                "selection_solid.edge",
+                "selection_solid.clear",
+            ],
+            Self::SelectionSketch => &[
+                "selection_sketch.inputs",
+                "selection_sketch.first",
+                "selection_sketch.add",
+                "selection_sketch.clear",
+            ],
+            Self::Measure => &[
+                "measure.inputs",
+                "measure.first",
+                "measure.distance",
+                "measure.close",
+            ],
 
             Self::Sketch => &[
                 "sketch.plane",
