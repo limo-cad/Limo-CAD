@@ -1,6 +1,6 @@
 //! Guide coverage is independent of native UI qualification.
 //! Pending guides never become a working entry merely because they are listed.
-use super::{Id, ALL};
+use super::Id;
 use serde::Deserialize;
 use std::sync::OnceLock;
 
@@ -78,6 +78,7 @@ pub fn for_control<'a>(workspace: &'a str, control: &'a str) -> impl Iterator<It
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lessons::ALL;
     use serde_json::Value;
     use std::collections::{BTreeMap, BTreeSet};
 

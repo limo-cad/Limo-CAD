@@ -69,7 +69,7 @@ pub(super) fn meshes(
     }
     let mut plain = Vec::new();
     let mut accent = Vec::new();
-    for (offset, triangle) in body.mesh.indices.chunks_exact(3).enumerate() {
+    for (offset, triangle) in body.mesh.indices.as_chunks::<3>().0.iter().enumerate() {
         let chosen = faces.iter().any(|f| {
             offset * 3 >= f.first_index as usize
                 && offset * 3 < (f.first_index + f.index_count) as usize
